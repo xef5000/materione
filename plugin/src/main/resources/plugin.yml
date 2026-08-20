@@ -1,0 +1,18 @@
+name: Materione
+version: "@materioneVersion@"
+main: dev.materione.plugin.MaterionePlugin
+api-version: "1.21"
+folia-supported: true
+description: Unified content platform - items, blocks, furniture, glyphs, HUDs, menus, packs.
+website: https://materione.dev
+commands:
+  materione:
+    description: Materione root command (version, doctor, reload)
+    usage: /materione <version|doctor|reload>
+permissions:
+  materione.editor:
+    description: Read diagnostics and version info (master architecture 9.2 taxonomy)
+    default: op
+  materione.pipeline:
+    description: Trigger reloads and pipeline runs
+    default: op
