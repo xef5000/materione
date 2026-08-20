@@ -1,0 +1,33 @@
+# Materione version catalog — single source of truth for dependency pins.
+# Version facts verified 2026-08-19 (see docs/architecture/build.md).
+
+[versions]
+junit = "5.14.4"
+junit-launcher = "1.14.4"
+assertj = "3.27.7"
+archunit = "1.5.0"
+# The D10 floor, deliberately not current stable: compiling everything against
+# the floor makes post-floor APIs structurally unreachable outside platform/.
+paper-api = "1.21.4-R0.1-SNAPSHOT"
+# SnakeYAML 2.2 is the exact version Paper 1.21.4 ships at runtime; compileOnly.
+snakeyaml = "2.2"
+
+# Harness server pin — single source of truth for CI + integration tests.
+# The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
+# keep the harness hermetic (zero API calls at test time).
+# Bump with: ./gradlew :harness:printLatestPaperPin
+paper-harness-version = "1.21.4"
+paper-harness-build = "232"
+paper-harness-url = "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar"
+paper-harness-sha256 = "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
+
+[libraries]
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
+snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+
+[bundles]
+materione-test = ["junit-jupiter", "assertj-core", "archunit-junit5"]
