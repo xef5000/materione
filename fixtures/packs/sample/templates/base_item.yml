@@ -1,0 +1,8 @@
+# Shared inheritance base: item definitions pull this in via `template:`
+# and override individual fields. Diamond inheritance is a validation error.
+base_item:
+  # unknown-to-Materione fields round-trip untouched (forward compatibility)
+  future_field: keep me
+  material: PAPER
+  custom_model:
+    parent: item/generated

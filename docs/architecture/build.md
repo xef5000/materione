@@ -86,6 +86,7 @@ is applied two ways: per-module `ArchitectureTest` classes, plus a whole-jar
 | R3 | `api` depends on no internal module. | Master §10. |
 | R4 | Nothing depends on `plugin`. | The assembly leaf. |
 | R5 | No raw `Thread`/`Executors` outside the scheduling gateway. | Harness/testing exempt (build infrastructure). |
+| R6 | Validators are pure: no file I/O in `..validate..` packages or `*Validator` classes. | M1. Validators receive their world as parsed data (`ValidationEnvironment`); the filesystem belongs to parse/compile. Has real subjects since M1 (`core.pipeline.validate`). |
 | — | `MTR-####` codes: format + uniqueness + declared only in `core.diagnostics`. | Unit tests over `DiagnosticCodes`, not ArchUnit. |
 
 Rules are predicate-based (no Bukkit class literals — pure modules have no paper-api on

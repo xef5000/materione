@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
 public record NamespacedId(String namespace, String value) {
 
     private static final Pattern NAMESPACE = Pattern.compile("[a-z0-9_-]+");
-    private static final Pattern VALUE = Pattern.compile("[a-z0-9_.-]+");
+    private static final Pattern VALUE = Pattern.compile("[a-z0-9_./-]+");
 
     /** The namespace Materione never owns. */
     public static final String RESERVED_NAMESPACE = "minecraft";
@@ -31,7 +31,7 @@ public record NamespacedId(String namespace, String value) {
         }
         if (!VALUE.matcher(value).matches()) {
             throw new IllegalArgumentException(
-                    "Invalid id '" + value + "': must match [a-z0-9_.-]+");
+                    "Invalid id '" + value + "': must match [a-z0-9_./-]+");
         }
     }
 

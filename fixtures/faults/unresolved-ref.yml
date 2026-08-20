@@ -1,0 +1,5 @@
+# Deliberately broken: references a template that does not exist.
+# Level-3 validation quarantines this resource with a "did you mean" hint.
+broken_item:
+  template: base_ittm
+  material: PAPER

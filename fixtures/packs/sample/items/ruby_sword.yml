@@ -1,0 +1,10 @@
+# One file, one content type, many keyed resources (§7.2).
+ruby_sword:
+  template: base_item        # resolves in this pack's namespace
+  material: NETHERITE_SWORD
+  model: sample:ruby_sword_model
+  display_name: "Ruby Sword"
+  # a comment inside the definition must survive a round-trip
+  lore:
+    - "Burns with inner fire"
+  future_component: { keep: me }

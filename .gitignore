@@ -29,3 +29,6 @@ example-build/
 
 # Claude Code local state (CLAUDE.md at root IS committed; this dir is not)
 .claude/
+
+# ZCode workspace
+.zcode/

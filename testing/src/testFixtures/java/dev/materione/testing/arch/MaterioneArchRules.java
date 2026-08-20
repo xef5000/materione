@@ -22,7 +22,7 @@ import com.tngtech.archunit.lang.ArchRule;
  *       build infrastructure, never shipped — exempt where relevant.</li>
  * </ul>
  *
- * <p>M0 rule set. Reserved: no-file-IO-in-validators (M1, with the pipeline),
+ * <p>M0 rule set (R1–R5). M1 adds R6 (validators are pure). Reserved:
  * wire-protocol ownership (M4, with the editor transport).
  */
 public final class MaterioneArchRules {
@@ -90,6 +90,21 @@ public final class MaterioneArchRules {
             .and().haveSimpleNameNotEndingWith("Test")
             .should().dependOnClassesThat()
             .belongToAnyOf(java.lang.Thread.class, java.util.concurrent.Executors.class)
+            .allowEmptyShould(true);
+
+    /**
+     * R6 — validators are pure (plugin architecture §4.3): no file I/O.
+     * Binds classes in a {@code ..validate..} package and classes whose name
+     * ends in {@code Validator}. Validators receive their world through
+     * parsed data (e.g. {@code ValidationEnvironment}); the filesystem
+     * belongs to parse and compile.
+     */
+    public static final ArchRule NO_FILE_IO_IN_VALIDATORS = noClasses()
+            .that(DescribedPredicate.or(
+                    com.tngtech.archunit.core.domain.JavaClass.Predicates.resideInAPackage("..validate.."),
+                    com.tngtech.archunit.core.domain.JavaClass.Predicates.simpleNameEndingWith("Validator")))
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("java.io..", "java.nio.file..")
             .allowEmptyShould(true);
 
     private MaterioneArchRules() {}

@@ -1,0 +1,9 @@
+# The sample fixture pack (M1) — valid content, exercised by round-trip,
+# pipeline and fault-injection tests. Comments, blank lines and ordering
+# are deliberate: they are part of the lossless round-trip contract (§5.6).
+id: sample
+version: 1.0.0
+schema_version: 1
+
+# Packs may depend on other packs (resolved at graph build).
+depends: []

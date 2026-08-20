@@ -1,0 +1,9 @@
+ruby_sword:
+  type: shaped
+  pattern:
+    - " R "
+    - " R "
+    - " S "
+  ingredients:
+    R: sample:ruby
+    S: minecraft:stick

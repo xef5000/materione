@@ -1,0 +1,4 @@
+# Deliberately unparsable: tab indentation is illegal in YAML.
+ruby_sword:
+	material: NETHERITE_SWORD
+  model: ruby_sword_model

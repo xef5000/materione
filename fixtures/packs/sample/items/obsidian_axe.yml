@@ -1,0 +1,5 @@
+obsidian_axe:
+  material: NETHERITE_AXE
+  model: sample:obsidian_axe_model
+  display_name: "Obsidian Axe"
+  texture: obsidian/axe

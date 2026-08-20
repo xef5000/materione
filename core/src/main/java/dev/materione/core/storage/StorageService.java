@@ -26,7 +26,12 @@ public final class StorageService {
 
     /** Initialized storage state. */
     public record StorageState(
-            Path storageDir, Path generatedDir, Path logsDir, int formatVersion, List<Diagnostic> diagnostics) {
+            Path contentPacksDir,
+            Path storageDir,
+            Path generatedDir,
+            Path logsDir,
+            int formatVersion,
+            List<Diagnostic> diagnostics) {
         public StorageState {
             diagnostics = List.copyOf(diagnostics);
         }
@@ -35,23 +40,25 @@ public final class StorageService {
     /** Initializes the data layout under the plugin data folder. Never throws. */
     public StorageState init(Path dataFolder) {
         Objects.requireNonNull(dataFolder, "dataFolder");
+        Path contentPacks = dataFolder.resolve("content").resolve("packs");
         Path storage = dataFolder.resolve("storage");
         Path generated = dataFolder.resolve("generated");
         Path logs = dataFolder.resolve("logs");
 
         try {
+            Files.createDirectories(contentPacks);
             Files.createDirectories(storage);
             Files.createDirectories(generated);
             Files.createDirectories(logs);
         } catch (IOException e) {
-            return new StorageState(storage, generated, logs, FORMAT_VERSION, List.of(new Diagnostic(
+            return new StorageState(contentPacks, storage, generated, logs, FORMAT_VERSION, List.of(new Diagnostic(
                     DiagnosticCodes.STORAGE_INIT_FAILED, Severity.ERROR,
                     "could not create storage directories: " + e.getMessage(),
                     null, null, "check permissions on " + dataFolder)));
         }
 
         int formatVersion = ensureFormatMarker(storage);
-        return new StorageState(storage, generated, logs, formatVersion, List.of());
+        return new StorageState(contentPacks, storage, generated, logs, formatVersion, List.of());
     }
 
     private static int ensureFormatMarker(Path storageDir) {
