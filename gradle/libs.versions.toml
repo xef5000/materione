@@ -11,6 +11,9 @@ archunit = "1.5.0"
 paper-api = "1.21.4-R0.1-SNAPSHOT"
 # SnakeYAML 2.2 is the exact version Paper 1.21.4 ships at runtime; compileOnly.
 snakeyaml = "2.2"
+# Resource-pack output emitter (MIT; what Nexo builds on). Shaded + relocated
+# under materione.libs.team.unnamed.creative — see plugin-conventions.
+creative = "1.7.3"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -24,6 +27,9 @@ paper-harness-sha256 = "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b681
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
+creative-api = { module = "team.unnamed:creative-api", version.ref = "creative" }
+creative-serializer-minecraft = { module = "team.unnamed:creative-serializer-minecraft", version.ref = "creative" }
+creative-server = { module = "team.unnamed:creative-server", version.ref = "creative" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

@@ -1,5 +1,6 @@
-// Pure-JVM content module: compiles against api+core only, no Paper types
-// visible (master §10). Code lands with its milestone (see docs/roadmap.md).
+// Pack module: allocation table + pack compiler. The creative library
+// (MIT) is the output emitter — serialized assets and the deterministic
+// ZIP — behind our own graph, validation and staging logic (D6/D7).
 plugins {
     id("materione.library-conventions")
 }
@@ -7,4 +8,9 @@ plugins {
 dependencies {
     api(project(":api"))
     api(project(":core"))
+    implementation(libs.creative.api)
+    implementation(libs.creative.serializer.minecraft)
+    // core's lossless layer runs SnakeYAML (compileOnly via paper-conventions,
+    // provided by Paper at runtime); tests need it on the classpath.
+    testImplementation(libs.snakeyaml)
 }

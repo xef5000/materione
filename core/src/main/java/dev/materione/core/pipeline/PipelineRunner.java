@@ -50,7 +50,13 @@ public final class PipelineRunner {
         return lastGraph;
     }
 
+    /** The packs parsed by the last run (empty before the first run). */
+    public java.util.List<ContentPack> lastPacks() {
+        return lastPacks;
+    }
+
     private volatile ContentGraph lastGraph = new ContentGraph();
+    private volatile java.util.List<ContentPack> lastPacks = java.util.List.of();
 
     /**
      * Requests a run. If one is in flight the scope coalesces into the next
@@ -85,6 +91,7 @@ public final class PipelineRunner {
                 null, null, null));
         try {
             parseStage.run(context);
+            lastPacks = java.util.List.copyOf(context.packs());
             validateStage.run(context);
             graphStage.run(context);
             lastGraph = context.graph();

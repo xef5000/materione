@@ -55,4 +55,10 @@ tasks.withType<Test>().configureEach {
         "materione.fixtures.root",
         rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath,
     )
+    // Golden regeneration opt-in (-Dmaterione.golden.regen=true): review the
+    // diff, then commit; CI never passes it (build.md §6).
+    systemProperty(
+        "materione.golden.regen",
+        System.getProperty("materione.golden.regen") ?: "false",
+    )
 }

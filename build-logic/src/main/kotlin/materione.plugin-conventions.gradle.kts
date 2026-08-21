@@ -66,5 +66,8 @@ tasks.named<ShadowJar>("shadowJar") {
             "Implementation-Version" to project.version.toString(),
         )
     }
-    // Future shaded deps relocate under materione.libs.* — none at M0.
+    // Shaded deps relocate under materione.libs.* — creative is the first
+    // (M1): the resource-pack emitter. Keeps its API out of the classpath
+    // other plugins see, and ours stable across creative upgrades.
+    relocate("team.unnamed", "materione.libs.team.unnamed")
 }
