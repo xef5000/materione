@@ -69,7 +69,11 @@ public final class ItemType implements ContentType {
         var merged = new LinkedHashMap<String, Object>();
         String templateRef = text(definition, "template");
         if (templateRef != null) {
-            Optional<Map<String, Object>> base = resolveTemplate(templateRef, templates, new HashSet<>());
+            // short refs resolve against the item's own namespace (sample:)
+            String templateKey = templateRef.contains(":")
+                    ? templateRef
+                    : id.namespace() + ":" + templateRef;
+            Optional<Map<String, Object>> base = resolveTemplate(templateKey, templates, new HashSet<>());
             if (base.isEmpty()) {
                 return Optional.empty(); // unknown or diamond template — quarantine upstream
             }

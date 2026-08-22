@@ -17,7 +17,8 @@ public record HarnessOptions(
         Duration bootTimeout,
         Duration commandTimeout,
         Duration stopTimeout,
-        String brokenSettingsYaml) {
+        String brokenSettingsYaml,
+        Path contentPacksDir) {
 
     public static HarnessOptions fromProperties() {
         return new HarnessOptions(
@@ -29,13 +30,14 @@ public record HarnessOptions(
                 seconds("boot", 300),
                 seconds("command", 60),
                 seconds("stop", 60),
-                null);
+                null,
+                optionalPath("harness.contentPacks"));
     }
 
     public HarnessOptions withScenario(Path scenarioWorkRoot, String brokenSettings) {
         return new HarnessOptions(
                 paperJar, pluginJar, javaExecutable, scenarioWorkRoot, expectedVersion,
-                bootTimeout, commandTimeout, stopTimeout, brokenSettings);
+                bootTimeout, commandTimeout, stopTimeout, brokenSettings, contentPacksDir);
     }
 
     private static boolean isWindows() {
@@ -53,6 +55,11 @@ public record HarnessOptions(
     private static String optional(String key, String fallback) {
         String value = System.getProperty(key);
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private static Path optionalPath(String key) {
+        String value = System.getProperty(key);
+        return value == null || value.isBlank() ? null : Path.of(value);
     }
 
     private static Duration seconds(String name, int defaultSeconds) {

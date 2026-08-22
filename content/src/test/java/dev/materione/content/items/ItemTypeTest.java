@@ -36,6 +36,19 @@ class ItemTypeTest {
     }
 
     @Test
+    void shortFormTemplateRefResolvesAgainstOwnNamespace() {
+        // fixture shape: `template: base_item` with pool keys `sample:base_item`
+        var templates = new LinkedHashMap<String, Map<String, Object>>();
+        templates.put("sample:base_item", map("material", "PAPER"));
+        var parsed = type.parse(
+                NamespacedId.parse("sample:thing"),
+                map("template", "base_item", "material", "STONE"),
+                templates);
+        assertThat(parsed).isPresent();
+        assertThat(((ItemDefinition) parsed.get()).material()).isEqualTo("STONE");
+    }
+
+    @Test
     void diamondInheritanceIsRejected() {
         var templates = new LinkedHashMap<String, Map<String, Object>>();
         templates.put("sample:a", map("template", "sample:b", "material", "DIRT"));

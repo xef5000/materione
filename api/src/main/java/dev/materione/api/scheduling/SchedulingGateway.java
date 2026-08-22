@@ -21,4 +21,11 @@ public interface SchedulingGateway {
 
     /** Runs a task off the main/region threads. */
     void executeAsync(Plugin plugin, Runnable task);
+
+    /**
+     * Runs a task on the global region/main thread — the apply stage's
+     * shadow-swap entry point (plugin.md §4.5: apply is the only pipeline
+     * stage allowed on the main thread).
+     */
+    void executeGlobal(Plugin plugin, Runnable task);
 }

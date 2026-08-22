@@ -47,7 +47,31 @@ public final class ServerWorkspace {
             Files.createDirectories(settings);
             Files.writeString(settings.resolve("settings.yml"), options.brokenSettingsYaml());
         }
+        if (options.contentPacksDir() != null && Files.isDirectory(options.contentPacksDir())) {
+            // optional content packs (fixture corpus) copied verbatim under
+            // plugins/Materione/content/packs/ — D1: files are the source of truth
+            Path packs = root.resolve("plugins").resolve("Materione").resolve("content").resolve("packs");
+            try (var packDirs = Files.list(options.contentPacksDir())) {
+                for (Path pack : packDirs.filter(Files::isDirectory).toList()) {
+                    copyRecursively(pack, packs.resolve(pack.getFileName()));
+                }
+            }
+        }
         return workspace;
+    }
+
+    private static void copyRecursively(Path source, Path target) throws IOException {
+        try (var walk = Files.walk(source)) {
+            for (Path file : walk.toList()) {
+                Path destination = target.resolve(source.relativize(file).toString());
+                if (Files.isDirectory(file)) {
+                    Files.createDirectories(destination);
+                } else {
+                    Files.createDirectories(destination.getParent());
+                    Files.copy(file, destination, StandardCopyOption.REPLACE_EXISTING);
+                }
+            }
+        }
     }
 
     /**

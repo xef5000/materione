@@ -32,3 +32,5 @@ example-build/
 
 # ZCode workspace
 .zcode/
+
+nexo-reference/

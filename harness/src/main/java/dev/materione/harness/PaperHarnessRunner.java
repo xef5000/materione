@@ -62,11 +62,17 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=2")) {
+                problems.add("MATERIONE-CONTENT-OK items=2 missing after boot "
+                        + "(fixture sample pack: ruby_sword + obsidian_axe should be live)");
+            }
 
             problems.addAll(drive(console, log, options, "materione version",
                     "MATERIONE-VERSION " + options.expectedVersion()));
             problems.addAll(drive(console, log, options, "materione doctor",
                     "MATERIONE-DOCTOR-OK"));
+            problems.addAll(drive(console, log, options, "materione reload",
+                    "MATERIONE-RELOAD-OK"));
 
             console.send("stop");
             String bye = await(log, "MATERIONE-BYE", options.stopTimeout());

@@ -67,7 +67,10 @@ tasks.named<ShadowJar>("shadowJar") {
         )
     }
     // Shaded deps relocate under materione.libs.* — creative is the first
-    // (M1): the resource-pack emitter. Keeps its API out of the classpath
-    // other plugins see, and ours stable across creative upgrades.
+    // (M1): the resource-pack emitter, plus its transitive gson (Paper ships
+    // its own gson; shading ours unrelocated would risk class conflicts).
+    // Keeps external APIs out of the classpath other plugins see, and ours
+    // stable across upgrades.
     relocate("team.unnamed", "materione.libs.team.unnamed")
+    relocate("com.google.gson", "materione.libs.com.google.gson")
 }

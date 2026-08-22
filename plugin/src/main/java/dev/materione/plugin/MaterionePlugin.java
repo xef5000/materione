@@ -3,6 +3,7 @@ package dev.materione.plugin;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.platform.ProbeResult;
+import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.core.bootstrap.BootstrapPhase;
 import dev.materione.core.bootstrap.BootstrapPhaseRunner;
 import dev.materione.core.diagnostics.DiagnosticCodes;
@@ -13,8 +14,11 @@ import dev.materione.core.settings.SettingsService;
 import dev.materione.core.settings.SettingsService.SettingsState;
 import dev.materione.core.storage.StorageService;
 import dev.materione.core.storage.StorageService.StorageState;
+import dev.materione.core.scheduling.SchedulingGatewayImpl;
 import dev.materione.platform.probe.PlatformProbe;
 import dev.materione.plugin.command.MaterioneCommand;
+import dev.materione.plugin.runtime.ItemAutoUpdater;
+import dev.materione.plugin.runtime.PipelineService;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.command.PluginCommand;
@@ -39,6 +43,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private SettingsState settings;
     private StorageState storage;
     private ProbeResult probeResult;
+    private SchedulingGateway scheduling;
+    private PipelineService pipeline;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -64,6 +70,10 @@ public final class MaterionePlugin extends JavaPlugin {
         return probeResult;
     }
 
+    public PipelineService pipeline() {
+        return pipeline;
+    }
+
     /** The descriptor, once the probe passed; null before/when unsupported. */
     public PlatformDescriptor descriptorOrNull() {
         return probeResult instanceof ProbeResult.Supported supported ? supported.descriptor() : null;
@@ -77,6 +87,8 @@ public final class MaterionePlugin extends JavaPlugin {
                 BootstrapPhase.degrade("core-services", this::startCoreServices),
                 BootstrapPhase.disable("platform-probe", this::probePlatform),
                 BootstrapPhase.degrade("storage-init", this::initStorage),
+                BootstrapPhase.degrade("built-in-registration", this::registerBuiltins),
+                BootstrapPhase.degrade("content-load", this::loadContent),
                 BootstrapPhase.degrade("commands", this::registerCommands)));
 
         if (result.disabled()) {
@@ -142,6 +154,31 @@ public final class MaterionePlugin extends JavaPlugin {
         storage = new StorageService().init(getDataFolder().toPath());
         settingsDiagnostics.addAll(storage.diagnostics());
         settingsDiagnostics.forEach(diagnostics::publish);
+        scheduling = new SchedulingGatewayImpl();
+    }
+
+    private void registerBuiltins() {
+        pipeline = new PipelineService(
+                this, diagnostics, quarantine, registries, scheduling, descriptorOrNull());
+        pipeline.registerBuiltins();
+    }
+
+    private void loadContent() {
+        var summary = pipeline.reload(
+                storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+        if (summary.skipped()) {
+            diagnostics.publish(Diagnostic.warn(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "initial content load skipped (pipeline unavailable or aborted)"));
+            return;
+        }
+        getLogger().info("content loaded: " + summary.itemsLive() + " item(s) live, "
+                + summary.quarantined() + " quarantined"
+                + (summary.packSha256() == null ? ", pack unchanged" : ""));
+        // Stable harness marker: the M1 content pipeline ran to apply.
+        getLogger().info("MATERIONE-CONTENT-OK items=" + summary.itemsLive()
+                + " defs=" + summary.itemDefinitions()
+                + " pack=" + (summary.packSha256() == null ? "noop" : summary.packSha256().substring(0, 12)));
     }
 
     private void registerCommands() {
@@ -155,6 +192,8 @@ public final class MaterionePlugin extends JavaPlugin {
         MaterioneCommand executor = new MaterioneCommand(this);
         command.setExecutor(executor);
         command.setTabCompleter(executor);
+        getServer().getPluginManager().registerEvents(
+                new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
     }
 
     private String disableReason() {

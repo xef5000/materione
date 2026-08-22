@@ -56,11 +56,29 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(Component.text("no permission (materione.pipeline)", NamedTextColor.RED));
                     return true;
                 }
-                // M0: nothing to reload yet — the pipeline arrives with M1.
-                sender.sendMessage(Component.text(
-                        "reload acknowledged (no-op at M0; the content pipeline arrives with M1)",
-                        NamedTextColor.YELLOW));
-                plugin.getLogger().info("reload requested (M0 no-op)");
+                var storage = plugin.storage();
+                var summary = plugin.pipeline().reload(
+                        storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+                // re-open → re-check → re-freeze (D5): windows reopen around the run
+                plugin.registries().reopenAllWindows();
+                if (summary.skipped()) {
+                    sender.sendMessage(Component.text(
+                            "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                            NamedTextColor.RED));
+                } else if (summary.packSha256() == null) {
+                    sender.sendMessage(Component.text(
+                            "reload complete — pack unchanged (no-op: apply and delivery skipped)",
+                            NamedTextColor.GREEN));
+                } else {
+                    sender.sendMessage(Component.text(
+                            "reload complete — " + summary.itemsLive() + " item(s) live, "
+                                    + summary.quarantined() + " quarantined, pack "
+                                    + summary.packSha256().substring(0, 12) + "…",
+                            NamedTextColor.GREEN));
+                }
+                plugin.registries().freezeAll();
+                // Stable harness marker: a real reload ran.
+                plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
             }
             default -> sender.sendMessage(Component.text(
                     "usage: /materione <version|doctor|reload>", NamedTextColor.RED));
@@ -102,8 +120,20 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                         ? "not initialized"
                         : "format v" + storage.formatVersion()),
                 NamedTextColor.GRAY));
+        var allocation = plugin.pipeline() == null ? null : plugin.pipeline().allocation();
         sender.sendMessage(Component.text(
-                "allocation table: not yet created (arrives with M1)",
+                "allocation table: " + (allocation == null
+                        ? "not loaded"
+                        : allocation.liveCount() + " live"
+                                + (allocation.isCorrupt() ? " (CORRUPT — rebuild available)" : "")
+                                + ", " + (plugin.storage() == null ? "?" : "format v" + plugin.storage().formatVersion())),
+                allocation != null && allocation.isCorrupt() ? NamedTextColor.RED : NamedTextColor.GRAY));
+
+        var runtime = plugin.pipeline() == null ? null : plugin.pipeline().runtime();
+        sender.sendMessage(Component.text(
+                "runtime: " + (runtime == null ? "not started"
+                        : runtime.registries().itemCount() + " item(s), pack "
+                                + (runtime.livePackSha256().isBlank() ? "none" : runtime.livePackSha256().substring(0, 12) + "…")),
                 NamedTextColor.GRAY));
 
         sender.sendMessage(Component.text(

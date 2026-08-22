@@ -48,4 +48,10 @@ val integrationTest by tasks.registering(Test::class) {
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
+    // The fixture corpus (grow-only, roadmap rule 2): sample packs boot on
+    // real Paper with the plugin (M1 exit criterion).
+    systemProperty(
+        "harness.contentPacks",
+        rootProject.layout.projectDirectory.dir("fixtures/packs").asFile.absolutePath,
+    )
 }

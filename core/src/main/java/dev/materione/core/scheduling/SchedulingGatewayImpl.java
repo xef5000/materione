@@ -29,4 +29,9 @@ public final class SchedulingGatewayImpl implements SchedulingGateway {
     public void executeAsync(Plugin plugin, Runnable task) {
         Bukkit.getAsyncScheduler().runNow(plugin, scheduledTask -> task.run());
     }
+
+    @Override
+    public void executeGlobal(Plugin plugin, Runnable task) {
+        Bukkit.getGlobalRegionScheduler().execute(plugin, task);
+    }
 }
