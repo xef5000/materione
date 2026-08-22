@@ -65,6 +65,18 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode MANIFEST_INVALID =
             new DiagnosticCode("MTR-0013", Severity.ERROR, "Pack manifest invalid");
 
+    /** Pack delivery failed; apply is NOT rolled back (plugin.md §4.6). */
+    public static final DiagnosticCode DELIVERY_FAILED =
+            new DiagnosticCode("MTR-0014", Severity.ERROR, "Pack delivery failed (apply not rolled back)");
+
+    /** A player declined or failed the resource pack download. */
+    public static final DiagnosticCode PACK_DECLINED =
+            new DiagnosticCode("MTR-0015", Severity.WARN, "Player declined or failed the resource pack");
+
+    /** The pack was published to the delivery backend. */
+    public static final DiagnosticCode DELIVERY_PUBLISHED =
+            new DiagnosticCode("MTR-0016", Severity.INFO, "Pack published to the delivery backend");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -78,7 +90,10 @@ public final class DiagnosticCodes {
             CONTENT_QUARANTINED,
             PIPELINE_STAGE_FAILED,
             SCOPE_EXPANDED,
-            MANIFEST_INVALID);
+            MANIFEST_INVALID,
+            DELIVERY_FAILED,
+            PACK_DECLINED,
+            DELIVERY_PUBLISHED);
 
     private DiagnosticCodes() {}
 

@@ -1,0 +1,4 @@
+ruby:
+  material: PAPER
+  texture: item/ruby
+  display_name: "Ruby"

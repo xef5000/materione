@@ -13,9 +13,11 @@ import java.util.Optional;
 public final class RuntimeRegistries {
 
     private final Map<NamespacedId, RuntimeItem> items;
+    private final Map<NamespacedId, RuntimeRecipe> recipes;
 
-    private RuntimeRegistries(Map<NamespacedId, RuntimeItem> items) {
+    private RuntimeRegistries(Map<NamespacedId, RuntimeItem> items, Map<NamespacedId, RuntimeRecipe> recipes) {
         this.items = items;
+        this.recipes = recipes;
     }
 
     public static Builder builder() {
@@ -24,7 +26,7 @@ public final class RuntimeRegistries {
 
     /** Empty registries (boot state before the first successful apply). */
     public static RuntimeRegistries empty() {
-        return new RuntimeRegistries(Map.of());
+        return new RuntimeRegistries(Map.of(), Map.of());
     }
 
     /** Registry-map hit — the &lt;1 µs budget path (plugin.md §9). */
@@ -32,24 +34,42 @@ public final class RuntimeRegistries {
         return Optional.ofNullable(items.get(id));
     }
 
+    public Optional<RuntimeRecipe> recipe(NamespacedId id) {
+        return Optional.ofNullable(recipes.get(id));
+    }
+
     public Collection<RuntimeItem> items() {
         return items.values();
+    }
+
+    public Collection<RuntimeRecipe> recipes() {
+        return recipes.values();
     }
 
     public int itemCount() {
         return items.size();
     }
 
+    public int recipeCount() {
+        return recipes.size();
+    }
+
     public static final class Builder {
         private final Map<NamespacedId, RuntimeItem> items = new java.util.LinkedHashMap<>();
+        private final Map<NamespacedId, RuntimeRecipe> recipes = new java.util.LinkedHashMap<>();
 
         public Builder item(RuntimeItem item) {
             items.put(item.id(), item);
             return this;
         }
 
+        public Builder recipe(RuntimeRecipe recipe) {
+            recipes.put(recipe.id(), recipe);
+            return this;
+        }
+
         public RuntimeRegistries build() {
-            return new RuntimeRegistries(Map.copyOf(items));
+            return new RuntimeRegistries(Map.copyOf(items), Map.copyOf(recipes));
         }
     }
 }

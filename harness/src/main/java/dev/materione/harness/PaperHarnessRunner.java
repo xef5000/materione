@@ -62,9 +62,12 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=2")) {
-                problems.add("MATERIONE-CONTENT-OK items=2 missing after boot "
-                        + "(fixture sample pack: ruby_sword + obsidian_axe should be live)");
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=3")) {
+                problems.add("MATERIONE-CONTENT-OK items=3 missing after boot "
+                        + "(fixture sample pack: ruby, ruby_sword, obsidian_axe should be live)");
+            }
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
+                problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
             }
 
             problems.addAll(drive(console, log, options, "materione version",

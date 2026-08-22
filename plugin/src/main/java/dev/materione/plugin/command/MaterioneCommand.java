@@ -56,9 +56,8 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(Component.text("no permission (materione.pipeline)", NamedTextColor.RED));
                     return true;
                 }
-                var storage = plugin.storage();
-                var summary = plugin.pipeline().reload(
-                        storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+                // composed reload: pipeline → compile → apply → deliver (§4)
+                var summary = plugin.reloadContent();
                 // re-open → re-check → re-freeze (D5): windows reopen around the run
                 plugin.registries().reopenAllWindows();
                 if (summary.skipped()) {

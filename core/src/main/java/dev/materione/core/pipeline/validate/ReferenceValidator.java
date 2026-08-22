@@ -9,6 +9,7 @@ import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.graph.ContentEdgeType;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Level-3 semantic validation: reference resolution with edit-distance
@@ -34,6 +35,9 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                     "wrap the definition: '" + resource.id().value() + ":' followed by indented fields"));
             return problems;
         }
+        if ("recipe".equals(resource.contentType())) {
+            return validateRecipe(resource, definition, environment, problems);
+        }
         for (String field : REFERENCE_FIELDS) {
             Object value = definition.get(field);
             if (!(value instanceof String target) || target.isBlank()) {
@@ -51,7 +55,70 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         return problems;
     }
 
-public static NamespacedId resolve(String defaultNamespace, String raw) {
+    /**
+     * Recipes: result + every ingredient must resolve to an item (or a
+     * vanilla {@code minecraft:} id). One bad reference quarantines the
+     * recipe only — never its neighbors (runtime-systems §9).
+     */
+    private static List<Diagnostic> validateRecipe(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        checkRecipeReference(resource, "result", definition.get("result"), environment, problems);
+        if (definition.get("input") != null) {
+            checkRecipeReference(resource, "input", definition.get("input"), environment, problems);
+        }
+        if (definition.get("ingredients") instanceof Map<?, ?> map) {
+            for (var entry : map.entrySet()) {
+                checkRecipeReference(resource, "ingredient", entry.getValue(), environment, problems);
+            }
+        } else if (definition.get("ingredients") instanceof List<?> list) {
+            for (Object entry : list) {
+                checkRecipeReference(resource, "ingredient", entry, environment, problems);
+            }
+        }
+        return problems;
+    }
+
+    private static void checkRecipeReference(
+            ContentResource resource,
+            String field,
+            Object value,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(value instanceof String target) || target.isBlank()) {
+            return;
+        }
+        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        if (!exists(environment, targetId) && !isItem(environment, targetId)) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                    "recipe " + resource.id() + ": unresolved " + field + " '" + target + "'",
+                    resource.id(), null,
+                    "recipe references must be materione items or vanilla minecraft: ids"));
+        }
+    }
+
+    /** True when {@code id} names an item resource (recipe endpoints). */
+    private static boolean isItem(ValidationEnvironment environment, NamespacedId id) {
+        if (id.isReservedNamespace()) {
+            return true; // vanilla item id — legality checked at apply by the platform
+        }
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(id.namespace())) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if ("item".equals(resource.contentType()) && resource.id().equals(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public static NamespacedId resolve(String defaultNamespace, String raw) {
         return raw.contains(":")
                 ? NamespacedId.parse(raw)
                 : NamespacedId.of(defaultNamespace, raw);

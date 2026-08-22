@@ -17,6 +17,7 @@ import dev.materione.core.storage.StorageService.StorageState;
 import dev.materione.core.scheduling.SchedulingGatewayImpl;
 import dev.materione.platform.probe.PlatformProbe;
 import dev.materione.plugin.command.MaterioneCommand;
+import dev.materione.plugin.runtime.DeliveryService;
 import dev.materione.plugin.runtime.ItemAutoUpdater;
 import dev.materione.plugin.runtime.PipelineService;
 import java.util.ArrayList;
@@ -45,6 +46,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private ProbeResult probeResult;
     private SchedulingGateway scheduling;
     private PipelineService pipeline;
+    private DeliveryService delivery;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -72,6 +74,10 @@ public final class MaterionePlugin extends JavaPlugin {
 
     public PipelineService pipeline() {
         return pipeline;
+    }
+
+    public DeliveryService delivery() {
+        return delivery;
     }
 
     /** The descriptor, once the probe passed; null before/when unsupported. */
@@ -111,6 +117,9 @@ public final class MaterionePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         try {
+            if (delivery != null) {
+                delivery.stop();
+            }
             if (diagnostics != null) {
                 getLogger().info("diagnostics: " + diagnostics.count(dev.materione.api.diagnostics.Severity.ERROR)
                         + " error(s), " + diagnostics.count(dev.materione.api.diagnostics.Severity.WARN)
@@ -164,8 +173,10 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     private void loadContent() {
-        var summary = pipeline.reload(
-                storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+        delivery = new DeliveryService(this, diagnostics, scheduling);
+        delivery.start(settings);
+        getServer().getPluginManager().registerEvents(delivery, this);
+        var summary = reloadContent();
         if (summary.skipped()) {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
@@ -179,6 +190,21 @@ public final class MaterionePlugin extends JavaPlugin {
         getLogger().info("MATERIONE-CONTENT-OK items=" + summary.itemsLive()
                 + " defs=" + summary.itemDefinitions()
                 + " pack=" + (summary.packSha256() == null ? "noop" : summary.packSha256().substring(0, 12)));
+        if (!delivery.currentUrl().isEmpty()) {
+            // Stable harness marker: the pack HTTP backend serves the new pack.
+            getLogger().info("MATERIONE-DELIVERY-OK " + delivery.currentUrl());
+        }
+    }
+
+    /** One composed reload: pipeline → compile → apply → deliver (§4). */
+    public PipelineService.ReloadSummary reloadContent() {
+        var summary = pipeline.reload(
+                storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+        if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {
+            // deliver after apply — delivery failure never rolls apply back (§4.6)
+            delivery.publish(summary.packZip(), summary.packSha256());
+        }
+        return summary;
     }
 
     private void registerCommands() {

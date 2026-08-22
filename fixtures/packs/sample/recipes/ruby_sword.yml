@@ -1,9 +1,10 @@
 ruby_sword:
   type: shaped
-  pattern:
+  result: ruby_sword
+  shape:
     - " R "
     - " R "
     - " S "
   ingredients:
-    R: sample:ruby
+    R: ruby
     S: minecraft:stick

@@ -52,6 +52,11 @@ public final class SettingsService {
             Object value = values.get(key);
             return value instanceof Boolean b ? b : fallback;
         }
+
+        public int getInt(String key, int fallback) {
+            Object value = values.get(key);
+            return value instanceof Number n ? n.intValue() : fallback;
+        }
     }
 
     private static final String FILE_NAME = "settings.yml";
@@ -61,6 +66,9 @@ public final class SettingsService {
         Map<String, Object> defaults = new LinkedHashMap<>();
         defaults.put("version", CURRENT_VERSION);
         defaults.put("debug", false);
+        defaults.put("delivery_host", "0.0.0.0");
+        defaults.put("delivery_port", 8090);
+        defaults.put("delivery_public_host", "");
         return defaults;
     }
 

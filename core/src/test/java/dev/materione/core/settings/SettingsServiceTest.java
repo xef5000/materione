@@ -60,7 +60,8 @@ class SettingsServiceTest {
                 });
         // The broken file is preserved, a fresh default written.
         assertThat(tempDir.resolve("settings.yml.broken-1")).exists();
-        assertThat(tempDir.resolve("settings.yml")).hasContent("version: 1\ndebug: false\n");
+        assertThat(tempDir.resolve("settings.yml"))
+                .hasContent(SettingsService.dump(SettingsService.defaults()));
     }
 
     @Test

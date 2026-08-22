@@ -8,4 +8,5 @@ dependencies {
     api(project(":platform"))
     api(project(":content"))
     api(project(":pack"))
+    api(project(":delivery"))
 }

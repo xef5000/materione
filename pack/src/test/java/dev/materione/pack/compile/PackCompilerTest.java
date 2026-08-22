@@ -102,7 +102,7 @@ class PackCompilerTest {
     void compilesFixturePackToStagedZip(@TempDir Path tempDir) throws IOException {
         var outcome = compileFixtures(tempDir);
         assertThat(outcome).isNotNull();
-        assertThat(outcome.itemDefinitions()).isEqualTo(2); // ruby_sword + obsidian_axe
+        assertThat(outcome.itemDefinitions()).isEqualTo(3); // ruby + ruby_sword + obsidian_axe
         assertThat(outcome.sha256()).isNotBlank();
 
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {

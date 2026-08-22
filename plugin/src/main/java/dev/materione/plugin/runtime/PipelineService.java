@@ -8,6 +8,7 @@ import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
+import dev.materione.content.recipes.RecipeType;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
@@ -20,9 +21,11 @@ import dev.materione.api.registry.RegistryKey;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.core.runtime.RuntimeItem;
+import dev.materione.core.runtime.RuntimeRecipe;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.pack.compile.PackCompiler;
+import dev.materione.platform.recipes.RecipeApplier;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,6 +54,7 @@ public final class PipelineService {
     private final PipelineRunner runner;
     private final PackCompiler compiler = new PackCompiler();
     private final ContentRuntime runtime = new ContentRuntime();
+    private final RecipeApplier recipeApplier = new RecipeApplier();
     private AllocationTable allocation;
 
     public PipelineService(
@@ -74,6 +78,8 @@ public final class PipelineService {
         var registry = registries.registry(CONTENT_TYPES, ContentType.class);
         ItemType items = new ItemType();
         registry.register(NamespacedId.of("materione", "item"), items, items.describe(), "materione");
+        RecipeType recipes = new RecipeType();
+        registry.register(NamespacedId.of("materione", "recipe"), recipes, recipes.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -104,7 +110,7 @@ public final class PipelineService {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
                     "reload skipped: another run is in flight or the run aborted"));
-            return new ReloadSummary(result == null, 0, 0, 0, 0, null);
+            return new ReloadSummary(result == null, 0, 0, 0, 0, null, null);
         }
 
         PackCompiler.Outcome outcome = compiler.compile(
@@ -124,13 +130,14 @@ public final class PipelineService {
                 result.resourcesQuarantined(),
                 shadow == null ? runtime.registries().itemCount() : shadow.itemCount(),
                 outcome == null ? 0 : outcome.itemDefinitions(),
-                noop ? null : sha);
+                noop ? null : sha,
+                noop ? null : outcome.stagedZip());
     }
 
     /** Reload outcome for the operator. */
     public record ReloadSummary(
             boolean skipped, int resourcesValid, int quarantined,
-            int itemsLive, int itemDefinitions, String packSha256) {}
+            int itemsLive, int itemDefinitions, String packSha256, java.nio.file.Path packZip) {}
 
     private void applyShadow(RuntimeRegistries shadow, String sha) {
         RuntimeRegistries previous = runtime.registries();
@@ -140,10 +147,12 @@ public final class PipelineService {
         scheduling.executeGlobal(plugin, () -> {
             try {
                 var report = runtime.apply(shadow, sha);
+                var recipes = recipeApplier.apply(shadow);
                 diagnostics.publish(new Diagnostic(
                         DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
                         "applied: +" + report.added() + " -" + report.removed()
-                                + " ~" + report.changed() + " items",
+                                + " ~" + report.changed() + " items, "
+                                + recipes.registered() + " recipe(s)",
                         null, null, null));
             } catch (RuntimeException e) {
                 runtime.rollback(previous, previousSha);
@@ -156,9 +165,8 @@ public final class PipelineService {
     }
 
     private RuntimeRegistries buildShadow(List<ContentPack> packs) {
-        var itemType = contentTypes().stream()
-                .filter(t -> t.name().equals("item"))
-                .findFirst();
+        var itemType = contentTypes().stream().filter(t -> t.name().equals("item")).findFirst();
+        var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var builder = RuntimeRegistries.builder();
         if (itemType.isEmpty()) {
             return builder.build();
@@ -181,18 +189,25 @@ public final class PipelineService {
                 continue;
             }
             for (ContentResource resource : pack.resources()) {
-                if (!"item".equals(resource.contentType())) {
-                    continue;
-                }
                 Object definition = resource.document().data().get(resource.id().value());
                 if (!(definition instanceof Map<?, ?> mapping)) {
                     continue;
                 }
                 @SuppressWarnings("unchecked")
                 var raw = (Map<String, Object>) mapping;
-                Optional<Object> parsed = itemType.get().parse(resource.id(), raw, templates);
-                if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
-                    builder.item(toRuntimeItem(item));
+                if ("item".equals(resource.contentType())) {
+                    Optional<Object> parsed = itemType.get().parse(resource.id(), raw, templates);
+                    if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
+                        builder.item(toRuntimeItem(item));
+                    }
+                } else if ("recipe".equals(resource.contentType()) && recipeType.isPresent()) {
+                    Optional<Object> parsed = recipeType.get().parse(resource.id(), raw, templates);
+                    if (parsed.isPresent() && parsed.get() instanceof RecipeType.Recipe recipe) {
+                        builder.recipe(new RuntimeRecipe(
+                                recipe.id(), recipe.kind(), recipe.result(), recipe.shape(),
+                                recipe.shapedIngredients(), recipe.ingredients(),
+                                recipe.experience(), recipe.cookingTime()));
+                    }
                 }
             }
         }
