@@ -4,7 +4,7 @@ How the Materione codebase is built — and how the build itself enforces the ar
 Traces to master §10 (codebase division) and §11 (enforced, not aspirational); the module
 boundaries here are the same ones described there, made mechanical.
 
-Status: **as shipped for M0** (roadmap rule 1 — this doc reflects what exists, not what's
+Status: **as shipped for M0 + M1** (roadmap rule 1 — this doc reflects what exists, not what's
 planned). Anything marked *M-later* is reserved, not built.
 
 ---
@@ -20,6 +20,7 @@ planned). Anything marked *M-later* is reserved, not built.
 | ArchUnit | 1.5.0 | Powers the ban tests (§5). |
 | paper-api | 1.21.4-R0.1-SNAPSHOT | **Compile against the floor**, `compileOnly`. Post-floor APIs are structurally unreachable outside `platform/` — plugin.md §8.2 enforcement becomes a compile error. `platform/` may add a newer pin when a second implementation exists (M-later). |
 | SnakeYAML | 2.2 | `compileOnly` — the server provides it at runtime; never shaded. |
+| creative | 1.7.3 | MIT, Maven Central (`team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins
@@ -30,17 +31,27 @@ under `build-logic/` (named `build-logic`, not `build` — `build/` is Gradle's 
 ```
                  ┌───────────────────────────── product (shaded) ─────────────────────────────┐
                  │                                                                            │
-  api ◄──── core ◄── platform          plugin ──► (api, core, platform — the assembly leaf)
-   ▲          ▲
-   │          │        content, behavior, pack, delivery, web, importers, integrations
-   └──────────┴──────► (skeletons at M0; they may depend on api + core, never on each other's
-                        internals, never on platform internals — master §10 rules)
+  api ◄──── core ◄── platform          plugin ──► (api, core, platform, content, pack, delivery
+   ▲          ▲     ▲                             — the assembly leaf; nothing depends on it)
+   │          │     │
+   │          │     │        content ──► api, core          (item + recipe content types)
+   └──────────┴─────┴─────► pack ──► api, core, (creative, SnakeYAML-testOnly)
+                             delivery ──► api, core + creative-server
+                             behavior, web, importers, integrations — skeletons until their
+                             milestones; they may depend on api + core, never on each other's
+                             internals, never on platform internals (master §10 rules)
 
   testing ──► testFixtures consumed by every module's tests (build infrastructure, not shipped)
   harness  ──► standalone: boots the real server, copies the shaded jar in (no product deps)
   fixtures ──► data only, not a Gradle module
   webui    ──► placeholder; its build lands M4/M5
 ```
+
+As-built amendment (M1, recorded): `platform` exposes `core` as an `api` dependency — the
+platform layer builds runtime stacks (`MaterioneStacks`, `RecipeApplier`) from core's runtime
+types (`RuntimeItem`, `RuntimeRegistries`). Master §10 forbids depending on *internals* of
+siblings; core's `runtime` package is api-grade by design, so the composition is documented
+here rather than routed around.
 
 Enforcement is two-layered: Gradle dependency declarations (a module literally cannot see
 another's classes) plus ArchUnit ban tests over the compiled result (§5). The shaded jar is
@@ -50,10 +61,10 @@ assembled by `plugin/` via Shadow; **nothing depends on `plugin`** (the leaf, ru
 
 | Plugin | Applied by | What it adds |
 |---|---|---|
-| `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, integration-tag exclusion on unit `Test` tasks. |
+| `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, `fixtures/` declared as a test **input** (a corpus change invalidates test tasks — path references are invisible to Gradle otherwise), `materione.golden.regen` passthrough, integration-tag exclusion on unit `Test` tasks. |
 | `materione.library-conventions` | library modules | Test bundle (JUnit, AssertJ, ArchUnit) + `testing` testFixtures. |
 | `materione.paper-conventions` | api, core, platform, plugin | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. |
-| `materione.plugin-conventions` | plugin only | Shadow wiring, `plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
+| `materione.plugin-conventions` | plugin only | Shadow wiring (M1: relocations for creative + Gson), `plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
 
 Custom tasks in `build-logic/src/main/kotlin`: `GenerateVersionSourceTask` (version class
 from the Gradle version — one source of truth), `DownloadPaperServerTask` (pinned-jar
@@ -62,16 +73,26 @@ helper, §7).
 
 ## 4. Shading policy
 
-**Zero shaded runtime dependencies at M0.** The Shadow wiring exists from day one so the
-first shaded dependency lands correct-by-construction: relocate under `materione.libs.*`,
+**Zero shaded runtime dependencies at M0.** The Shadow wiring existed from day one so the
+first shaded dependency would land correct-by-construction: relocate under `materione.libs.*`,
 `mergeServiceFiles`, no minimize-by-hint (breaks reflection).
+
+**M1 amendment (user-approved, recorded here): the first shaded dependency is [creative]
+1.7.3** (MIT) plus its transitive Gson — both relocated under `materione.libs.team.unnamed` /
+`materione.libs.com.google.gson` by `materione.plugin-conventions`. Relocation is verified in
+the shaded jar (zero unrelocated classes of either root). Scope discipline: creative types
+appear only in `pack/` (compiler) and `delivery/` (the self-host backend on creative's
+`ResourcePackServer`); everything upstream of the compiler stays library-free — the graph,
+allocation, validation, determinism (D7 sha-compare), and diagnostics are ours. SnakeYAML
+stays `compileOnly` (the server provides it; the lossless YAML layer loads it reflectively
+from the server at runtime).
 
 Deviation from the original M0 plan, recorded here: **FoliaLib was dropped.** The scheduling
 gateway (`core/…/scheduling/SchedulingGatewayImpl`) calls Paper's native `RegionScheduler`,
 `EntityScheduler`, and `AsyncScheduler` directly — present since Paper 1.20.1+ Folia support
-and safe on both flavors at our floor. This removes the only planned shaded dependency and
+and safe on both flavors at our floor. This removed the only M0-planned shaded dependency and
 the JitPack availability risk entirely. Folia *support* is still detection + gateway shape
-only at M0 (plugin.md §1.3).
+only (plugin.md §1.3).
 
 ## 5. Ban tests — boundaries enforced by the build (plugin.md §11)
 
@@ -110,9 +131,11 @@ Two false-green traps already caught and closed, worth remembering:
 
 | Tier | Task | What | Where |
 |---|---|---|---|
-| Unit | `test` (part of `build`) | Pure-JVM services: bootstrap runner, registries, diagnostics, settings round-trip, probe parsing, harness-internal logic. | every module |
-| Architecture | `test` | R1–R5 per module + whole-jar in `plugin`. | every module |
-| Integration | `:harness:integrationTest` | Real headless Paper 1.21.4 boot of the **shaded** jar; marker assertions. | `harness/` |
+| Unit | `test` (part of `build`) | Pure-JVM services: bootstrap runner, registries, diagnostics, settings round-trip, probe parsing, harness-internal logic; M1 adds lossless-YAML round-trip, pipeline stages, allocation-table invariants, compiler determinism + golden lock, runtime shadow-swap, delivery backend. | every module |
+| Fault injection | `test` | Stage-pair matrix (`plugin` `StagePairFaultInjectionTest`): a fault at any stage boundary stays contained to one resource and never crosses into the previous stage's output. | `plugin/` |
+| Perf budgets | `test` | plugin.md §9 budgets against the fixture corpus (`plugin` `ContentPerfBudgetTest`): regressions block merge. | `plugin/` |
+| Architecture | `test` | R1–R6 per module + whole-jar in `plugin`. | every module |
+| Integration | `:harness:integrationTest` | Real headless Paper 1.21.4 boot of the **shaded** jar; marker assertions, hot-reload sequence, live fault injection. | `harness/` |
 
 Fixtures live in `fixtures/` (never a Gradle module; grow-only per roadmap rule 2), reached
 via the `materione.fixtures.root` property. Golden files regenerate with
@@ -123,19 +146,27 @@ via the `materione.fixtures.root` property. Golden files regenerate with
 `./gradlew :harness:integrationTest` downloads the pinned Paper jar once
 (content-addressed cache at `~/.gradle/caches/materione-paper/<sha256>/paper.jar`),
 builds the shaded jar, prepares a fresh workspace under `harness/build/work/` (eula,
-offline flat world, plugin dropped into `plugins/`), boots the server, drives the console,
+offline flat world, plugin dropped into `plugins/`, fixture packs copied into
+`plugins/Materione/content/packs/`), boots the server, drives the console,
 and asserts the stable log markers:
 
 ```
-MATERIONE-BOOT-OK <version>    MATERIONE-VERSION <version>
-MATERIONE-DOCTOR-OK            MATERIONE-BYE
+MATERIONE-BOOT-OK <version>          MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12|noop>
+MATERIONE-VERSION <version>          MATERIONE-DELIVERY-OK <url>
+MATERIONE-DOCTOR-OK                  MATERIONE-RELOAD-OK items=<n>
+MATERIONE-BYE
 ```
 
 These markers are test API — treat changes to them like changes to `MTR-####` codes
-(plugin.md §5). A fail-soft variant (`PaperFailSoftIT`) injects a broken `settings.yml`
+(plugin.md §5). The standard scenario (`PaperBootstrapIT`) is the M1 exit gate: boot with
+the fixture corpus (53 live items), then the hot-reload sequence — no-op reload, add an
+item → 54, drop a syntactically broken file → still 54 with `MTR-0007` in the log,
+remove both → 53. A fail-soft variant (`PaperFailSoftIT`) injects a broken `settings.yml`
 and asserts the server still boots and the diagnostic is reported. Timeouts
 (boot 300 s / command 60 s / stop 60 s) are env-overridable; on failure the assertion
-includes missing markers, the log tail, and the workspace path.
+includes missing markers, the log tail, and the workspace path. Marker waits are
+cursor-based (`LogWatcher#mark`): a repeated command cannot match its own stale marker
+from a previous occurrence.
 
 **Bumping the Paper pin:** run `./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.x`
 (it queries the live v3 fill API and prints the absolute URL + sha256), then update

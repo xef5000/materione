@@ -52,7 +52,7 @@ asserts the `MATERIONE-*` log markers, including a fail-soft variant with a brok
 all at M0); `build/` renamed `build-logic/`; assembly lives in a new `plugin/` module.
 Project license still open (master §14) — deliberate, not forgotten.
 
-## M1 — Content pipeline & items (the spine carries real weight)
+## M1 — Content pipeline & items (the spine carries real weight) — ✅ shipped 2026-08-22
 
 **Goal:** define an item in YAML, see it in game with a custom model.
 
@@ -68,6 +68,23 @@ Project license still open (master §14) — deliberate, not forgotten.
 - Recipes: shaped + shapeless + furnace (the rest wait for M7).
 
 **Exit:** a 50-item fixture pack loads, hot-reloads, and survives fault-injection tests.
+
+**Shipped (as-built notes; details in [`architecture/build.md`](architecture/build.md)):**
+the lossless YAML layer is hand-rolled over SnakeYAML (byte-identical round-trips proven per
+fixture, CRLF-aware, one-field-touch → one-line diff); the pipeline runs parse → validate →
+graph in `core` with fail-soft quarantine throughout, compile in `pack`, and the shadow-swap
+apply through the scheduling gateway with rollback. The pack emitter is **creative 1.7.3**
+(MIT, shaded + relocated — the documented amendment to M0's zero-shaded-deps state; the D7
+determinism guarantee is ours: sorted hand-rolled JSON, creative's epoch-0 ZIP timestamps,
+sha-compare no-op detection). Delivery is the self-host backend on creative's
+`ResourcePackServer` (versioned cache-busting URLs, 4-version retention). Diagnostics
+`MTR-0007..0016`; ban rule R6 (validators pure) has real subjects. Exit gate proven live:
+the harness boots real Paper with sample + a generated 50-item corpus pack (53 live items),
+runs the hot-reload sequence (add → 54, broken file → still 54 + `MTR-0007`, remove → 53),
+and the stage-pair fault-injection matrix plus §9 perf budgets run in CI (`plugin` module).
+Fault injection found and fixed a real fail-soft gap (a throwing content-type emitter could
+crash a whole reload). Deferred with owners: targeted reload < 1 s and fingerprint skipping
+(M2), cold item detect (M3), inventory-scan throttling (M2 mechanics).
 
 ## M2 — Blocks & furniture (the world-facing systems)
 

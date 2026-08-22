@@ -142,6 +142,15 @@ Unresolved model ref → quarantine (works server-side, renders as base material
 hash unknown (removed pack) → renders vanilla + flagged for admin; unsupported component →
 platform-gate diagnostic ("needs 1.21.x").
 
+**As shipped (M1):** `RuntimeItem`/`RuntimeRegistries` (immutable maps, definition hash =
+SHA-256 over identity+material+model+name+lore), the `ContentRuntime` shadow-swap with
+pre-apply diff and rollback, `MaterioneStacks` (PDC `{materione:id}` + 1.21.4
+`item_model` component, volatile-state-preserving refresh), the join-time auto-updater
+(throttled inventory scans arrive with M2's mechanics work), template inheritance with
+cycle/diamond rejection, and the auto-model + hand-authored-model compile paths. The
+declarative `model_tree` surface and `components`/`behavior` fields are parsed-but-inert
+until M2+; `range_dispatch`/`select`/`condition` authoring waits for it.
+
 ---
 
 ## 4. Custom blocks
@@ -322,6 +331,12 @@ other — referencable from menus, items, furniture, NPCs.
   dogfooding the menu/dialog systems).
 - Failure: unresolvable ingredient → quarantine recipe only; vanilla conflict → rename with
   namespaced id (never collide with `minecraft:`).
+
+**As shipped (M1):** shaped, shapeless, and furnace only (the M1 scope above the fold);
+results and ingredients resolve through the graph, Materione results become `ExactChoice`,
+vanilla ingredients `MaterialChoice`; managed keys are removed then re-registered per swap
+with a recipe-book resync. The remaining types (blasting, smoking, stonecutting, smithing,
+brewing), disable-vanilla settings, and the in-game builder wait for M7.
 
 ---
 

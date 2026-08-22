@@ -315,6 +315,13 @@ throttled, batched across players, and skipped entirely when a content hash hasn
 (the common case). Budgets are CI-tracked with a fixture corpus; regressions block merge, not
 "warn".
 
+**Enforcement status (M1):** full-reload wall time, pack build, no-op decision, apply-swap
+stall proxy, and registry-map resolve are measured against the 53-item fixture corpus by
+`plugin`'s `ContentPerfBudgetTest` on every `build`; the "0 main-thread stalls > 50 ms" row is
+proxied by the timed apply swap plus the live harness run. Not yet owned: targeted reload
+< 1 s (needs the M2 fingerprint cache — today every reload is a full recompile + D7 sha
+compare), and cold item detect (needs live PDC reads; harness player scenarios from M3).
+
 ---
 
 ## 10. Testing strategy
