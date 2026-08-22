@@ -1,0 +1,9 @@
+ring_red:
+  type: shaped
+  result: ring_red
+  shape:
+    - " R "
+    - "R R"
+    - " R "
+  ingredients:
+    R: gem_red

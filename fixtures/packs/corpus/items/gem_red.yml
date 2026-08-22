@@ -1,0 +1,4 @@
+gem_red:
+  material: QUARTZ
+  texture: corpus/red
+  display_name: "Red Gem"

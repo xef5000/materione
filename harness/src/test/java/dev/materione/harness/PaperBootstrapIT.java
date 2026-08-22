@@ -7,16 +7,18 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * Happy path: a real (pinned) Paper server boots the built plugin jar and
- * answers every console command with its stable marker. This is the M0 exit
- * gate's "plugin loads on Paper" proof.
+ * The M1 exit gate, live on Paper: boot with the fixture corpus (53 items),
+ * the full hot-reload sequence (add → 54, broken file → still 54 with
+ * MTR-0007, remove → 53), delivery serving, and a clean stop.
  */
 @Tag("integration")
 class PaperBootstrapIT {
 
     @Test
     void bootsAnswersAndStopsCleanly() {
-        HarnessResult result = new PaperHarnessRunner().run(HarnessOptions.fromProperties(), Set.of());
+        // MTR-0007 is the deliberately injected broken-item diagnostic
+        HarnessResult result = new PaperHarnessRunner().run(
+                HarnessOptions.fromProperties(), Set.of("MTR-0007"));
         assertThat(result.summary()).contains("harness run OK");
         assertThat(result.ok()).as(result.summary()).isTrue();
     }

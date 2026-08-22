@@ -1,0 +1,9 @@
+# Deliberately invalid: no material (required by the item schema).
+# The parse-empty path quarantines with MTR-0008; the sibling in the same
+# file must survive untouched (one file, many keyed resources — §7.2).
+no_material:
+  display_name: "Ghost"
+healthy_sibling:
+  material: PAPER
+  model: minecraft:item/diamond
+  display_name: "Fine, Actually"

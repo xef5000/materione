@@ -1,0 +1,6 @@
+amulet_pink:
+  material: GOLD_NUGGET
+  texture: corpus/pink
+  display_name: "Pink Amulet"
+  lore:
+    - "Hums faintly"

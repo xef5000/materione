@@ -1,0 +1,4 @@
+charm_cool:
+  template: corpus_base
+  material: SNOWBALL
+  display_name: "Cool Charm"

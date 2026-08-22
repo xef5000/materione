@@ -150,15 +150,21 @@ class PackCompilerTest {
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir, AllocationTable allocation) {
-        var runner = new PipelineRunner(diagnostics, new QuarantineTracker());
+        var quarantine = new QuarantineTracker();
+        var runner = new PipelineRunner(diagnostics, quarantine);
         runner.request(new ReloadScope.Everything(), GoldenFiles.fixturesRoot().resolve("packs"));
+        // the golden locks the sample pack's bytes only; the corpus pack has
+        // its own compile coverage (harness perf budget test)
+        var samplePacks = runner.lastPacks().stream()
+                .filter(p -> p.id().equals("sample")).toList();
         var compiler = new PackCompiler();
         var result = compiler.compile(
-                runner.lastPacks(),
+                samplePacks,
                 List.of(new StubItemType()),
                 allocation,
                 tempDir.resolve("generated"),
-                diagnostics);
+                diagnostics,
+                quarantine);
         assertThat(diagnostics.recent(64).stream()
                 .filter(d -> d.severity() == Severity.ERROR)
                 .findAny())

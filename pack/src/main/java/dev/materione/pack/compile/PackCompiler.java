@@ -20,6 +20,7 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import team.unnamed.creative.ResourcePack;
 import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
@@ -79,16 +80,18 @@ public final class PackCompiler {
     }
 
     /**
-     * Compiles the packs of one pipeline run. Never throws — compile
-     * problems surface as diagnostics and the affected resource's output is
-     * skipped (fail-soft, D6); a broken resource never poisons the pack.
+     * Compiles the packs of one pipeline run. Never throws — parse or
+     * compile problems of a single resource surface as diagnostics and that
+     * resource's output is skipped (fail-soft, D6); a broken or throwing
+     * content type never poisons the rest of the pack.
      */
     public Outcome compile(
             List<ContentPack> packs,
             List<ContentType> contentTypes,
             AllocationTable allocation,
             Path generatedDir,
-            dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
+            dev.materione.core.diagnostics.QuarantineTracker quarantine) {
         var byDirectory = new LinkedHashMap<String, ContentType>();
         for (ContentType type : contentTypes) {
             byDirectory.put(type.directory(), type);
@@ -126,7 +129,13 @@ public final class PackCompiler {
                 }
                 @SuppressWarnings("unchecked")
                 var rawDefinition = (Map<String, Object>) mapping;
-                var parsed = type.parse(resource.id(), rawDefinition, templates);
+                Optional<Object> parsed;
+                try {
+                    parsed = type.parse(resource.id(), rawDefinition, templates);
+                } catch (RuntimeException e) {
+                    quarantineResource(resource, e, diagnostics, quarantine);
+                    continue;
+                }
                 if (parsed.isEmpty()) {
                     diagnostics.publish(new Diagnostic(
                             DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
@@ -138,7 +147,11 @@ public final class PackCompiler {
                 NamespacedId modelId = NamespacedId.of(
                         resource.id().namespace(),
                         resource.id().value() + "_model");
-                type.compile(parsed.get(), modelId, emitter);
+                try {
+                    type.compile(parsed.get(), modelId, emitter);
+                } catch (RuntimeException e) {
+                    quarantineResource(resource, e, diagnostics, quarantine);
+                }
             }
         }
 
@@ -153,6 +166,24 @@ public final class PackCompiler {
         }
 
         return writeStaged(emitter, generatedDir);
+    }
+
+    /**
+     * A throwing parse/compile is contained to its resource: diagnostic
+     * MTR-0011, quarantine entry, output skipped — the pack survives (D6).
+     */
+    private static void quarantineResource(
+            ContentResource resource,
+            RuntimeException e,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
+            dev.materione.core.diagnostics.QuarantineTracker quarantine) {
+        Diagnostic crash = new Diagnostic(
+                DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
+                "content type crashed on " + resource.id() + ": " + e,
+                resource.id(), null,
+                "this resource was skipped; if it worked before, a recent edit is the cause");
+        diagnostics.publish(crash);
+        quarantine.add(resource.id(), crash);
     }
 
     private static void copyPackAssets(Emitter emitter, ContentPack pack) {

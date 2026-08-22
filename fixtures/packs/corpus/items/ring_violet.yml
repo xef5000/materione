@@ -1,0 +1,4 @@
+ring_violet:
+  material: IRON_NUGGET
+  texture: corpus/violet
+  display_name: "Violet Ring"

@@ -1,0 +1,4 @@
+ring_pink:
+  material: IRON_NUGGET
+  texture: corpus/pink
+  display_name: "Pink Ring"

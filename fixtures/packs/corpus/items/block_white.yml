@@ -1,0 +1,4 @@
+block_white:
+  material: COAL_BLOCK
+  texture: corpus/white
+  display_name: "White Block"

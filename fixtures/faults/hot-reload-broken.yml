@@ -1,0 +1,6 @@
+# Dropped into a live server by the harness mid-run: tab indentation is
+# illegal in YAML, so the file must quarantine with MTR-0007 and the reload
+# must keep every other item live (D6).
+gem_extra_broken:
+	material: DIAMOND
+  texture: corpus/red

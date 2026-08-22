@@ -10,9 +10,16 @@ Materione's internals, only these markers.
 | Marker | Emitted when |
 |---|---|
 | `MATERIONE-BOOT-OK <version>` | bootstrap phases completed (even degraded) |
+| `MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12\|noop>` | content pipeline ran to apply (M1) |
+| `MATERIONE-DELIVERY-OK <url>` | the pack HTTP backend serves the live pack |
 | `MATERIONE-VERSION <version>` | `/materione version` executed |
 | `MATERIONE-DOCTOR-OK` | `/materione doctor` completed |
+| `MATERIONE-RELOAD-OK items=<n>` | `/materione reload` completed (live item count) |
 | `MATERIONE-BYE` | clean disable (shutdown reached the end) |
+
+The standard scenario boots with the fixture packs under `fixtures/packs/`
+(sample 3 items + the 50-item corpus pack), so the expected live count is
+**53**; the hot-reload scenario below moves it to 54 and back.
 
 ## Running
 
@@ -34,7 +41,13 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 
 ## Scenarios
 
-- `PaperBootstrapIT` — happy path: boot, version, doctor, stop.
+- `PaperBootstrapIT` — the M1 exit gate, live on Paper: boot with the
+  fixture corpus (53 items), then the hot-reload sequence —
+  1. no-op reload (nothing changed since boot),
+  2. add `gem_extra` to the corpus pack → reload → 54 items,
+  3. drop a syntactically broken item file → reload → still 54 items and
+     `MTR-0007` in the log (fault injection, fail-soft D6),
+  4. remove both files → reload → back to 53.
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.

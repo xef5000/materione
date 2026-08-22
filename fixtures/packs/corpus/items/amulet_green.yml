@@ -1,0 +1,6 @@
+amulet_green:
+  material: GOLD_NUGGET
+  texture: corpus/green
+  display_name: "Green Amulet"
+  lore:
+    - "Hums faintly"

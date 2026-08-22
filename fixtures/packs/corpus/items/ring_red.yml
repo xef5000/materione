@@ -1,0 +1,4 @@
+ring_red:
+  material: IRON_NUGGET
+  texture: corpus/red
+  display_name: "Red Ring"

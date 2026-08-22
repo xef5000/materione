@@ -1,0 +1,6 @@
+amulet_violet:
+  material: GOLD_NUGGET
+  texture: corpus/violet
+  display_name: "Violet Amulet"
+  lore:
+    - "Hums faintly"

@@ -55,6 +55,10 @@ tasks.withType<Test>().configureEach {
         "materione.fixtures.root",
         rootProject.layout.projectDirectory.dir("fixtures").asFile.absolutePath,
     )
+    // The fixtures are test INPUTS by path (not by dependency): without this,
+    // a corpus change leaves test tasks falsely up-to-date / cache-hittable.
+    inputs.dir(rootProject.layout.projectDirectory.dir("fixtures"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
     // Golden regeneration opt-in (-Dmaterione.golden.regen=true): review the
     // diff, then commit; CI never passes it (build.md §6).
     systemProperty(

@@ -135,6 +135,13 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                                 + (runtime.livePackSha256().isBlank() ? "none" : runtime.livePackSha256().substring(0, 12) + "…")),
                 NamedTextColor.GRAY));
 
+        var delivery = plugin.delivery();
+        sender.sendMessage(Component.text(
+                "delivery: " + (delivery == null || delivery.currentUrl().isEmpty()
+                        ? "not started"
+                        : delivery.currentUrl()),
+                NamedTextColor.GRAY));
+
         sender.sendMessage(Component.text(
                 "registries: " + plugin.registries().registryCount()
                         + " (" + plugin.registries().totalEntries() + " entries)",

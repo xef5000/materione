@@ -114,7 +114,7 @@ public final class PipelineService {
         }
 
         PackCompiler.Outcome outcome = compiler.compile(
-                runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics);
+                runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine);
         String sha = outcome == null ? "" : outcome.sha256();
         boolean noop = sha.equals(runtime.livePackSha256());
         RuntimeRegistries shadow = null;
@@ -196,12 +196,30 @@ public final class PipelineService {
                 @SuppressWarnings("unchecked")
                 var raw = (Map<String, Object>) mapping;
                 if ("item".equals(resource.contentType())) {
-                    Optional<Object> parsed = itemType.get().parse(resource.id(), raw, templates);
+                    Optional<Object> parsed;
+                    try {
+                        parsed = itemType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        // mirror the compiler's containment: a throwing parser
+                        // skips the resource, never the run (D6)
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
                     if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
                         builder.item(toRuntimeItem(item));
                     }
                 } else if ("recipe".equals(resource.contentType()) && recipeType.isPresent()) {
-                    Optional<Object> parsed = recipeType.get().parse(resource.id(), raw, templates);
+                    Optional<Object> parsed;
+                    try {
+                        parsed = recipeType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
                     if (parsed.isPresent() && parsed.get() instanceof RecipeType.Recipe recipe) {
                         builder.recipe(new RuntimeRecipe(
                                 recipe.id(), recipe.kind(), recipe.result(), recipe.shape(),

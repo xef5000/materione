@@ -23,7 +23,9 @@ class PaperFailSoftIT {
         HarnessOptions scenario = base.withScenario(
                 base.workRoot().resolve("failsoft"), "{ [ this is: not valid yaml");
 
-        HarnessResult result = new PaperHarnessRunner().run(scenario, Set.of("MTR-0004"));
+        // MTR-0004: the injected settings fault; MTR-0007: the scenario's
+        // standard broken-item fault injection
+        HarnessResult result = new PaperHarnessRunner().run(scenario, Set.of("MTR-0004", "MTR-0007"));
         assertThat(result.ok()).as(result.summary()).isTrue();
 
         // Read the log from the run's actual workspace (result.workDir), not a

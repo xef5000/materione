@@ -1,0 +1,7 @@
+# Deliberate template cycle: tpl_a -> tpl_b -> tpl_a. Items inheriting
+# from either template fail to resolve (visited-set rejection) and
+# quarantine; the pack and other resources survive.
+cyclic_item:
+  template: tpl_a
+  material: PAPER
+  display_name: "Ouroboros"

@@ -1,0 +1,4 @@
+gem_green:
+  material: EMERALD
+  texture: corpus/green
+  display_name: "Green Gem"

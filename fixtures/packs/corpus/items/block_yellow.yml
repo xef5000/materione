@@ -1,0 +1,4 @@
+block_yellow:
+  material: GOLD_BLOCK
+  texture: corpus/yellow
+  display_name: "Yellow Block"

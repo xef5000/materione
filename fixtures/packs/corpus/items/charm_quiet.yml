@@ -1,0 +1,4 @@
+charm_quiet:
+  template: corpus_base
+  material: PAPER
+  display_name: "Quiet Charm"

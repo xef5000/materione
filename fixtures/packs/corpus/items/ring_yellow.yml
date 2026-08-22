@@ -1,0 +1,4 @@
+ring_yellow:
+  material: IRON_NUGGET
+  texture: corpus/yellow
+  display_name: "Yellow Ring"

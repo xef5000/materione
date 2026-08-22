@@ -1,0 +1,4 @@
+gem_black:
+  material: EMERALD
+  texture: corpus/black
+  display_name: "Black Gem"

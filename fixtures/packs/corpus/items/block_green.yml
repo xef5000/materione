@@ -1,0 +1,4 @@
+block_green:
+  material: EMERALD_BLOCK
+  texture: corpus/green
+  display_name: "Green Block"

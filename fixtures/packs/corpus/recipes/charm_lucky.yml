@@ -1,0 +1,10 @@
+charm_lucky:
+  type: shaped
+  result: charm_lucky
+  shape:
+    - " S "
+    - "SLS"
+    - " S "
+  ingredients:
+    S: minecraft:string
+    L: minecraft:leather

@@ -1,0 +1,4 @@
+charm_swift:
+  template: corpus_base
+  material: SUGAR
+  display_name: "Swift Charm"

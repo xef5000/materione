@@ -1,6 +1,7 @@
 package dev.materione.harness;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -62,9 +63,9 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=3")) {
-                problems.add("MATERIONE-CONTENT-OK items=3 missing after boot "
-                        + "(fixture sample pack: ruby, ruby_sword, obsidian_axe should be live)");
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=53")) {
+                problems.add("MATERIONE-CONTENT-OK items=53 missing after boot "
+                        + "(fixture packs: 3 sample + 50 corpus items should be live)");
             }
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
@@ -74,8 +75,10 @@ public final class PaperHarnessRunner {
                     "MATERIONE-VERSION " + options.expectedVersion()));
             problems.addAll(drive(console, log, options, "materione doctor",
                     "MATERIONE-DOCTOR-OK"));
+            // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK"));
+                    "MATERIONE-RELOAD-OK items=53"));
+            hotReloadScenario(console, log, workspace, options, problems);
 
             console.send("stop");
             String bye = await(log, "MATERIONE-BYE", options.stopTimeout());
@@ -102,15 +105,69 @@ public final class PaperHarnessRunner {
         return new HarnessResult(problems.isEmpty(), problems, exit, workspace.root, tails(log, stdout));
     }
 
+    /**
+     * The M1 exit-gate scenario, live on Paper: add an item → reload (hot
+     * reload with a real file change), drop a syntactically broken file →
+     * reload (fault injection: MTR-0007, everything else stays live), remove
+     * both → reload (back to the boot state). The 1s pauses let each
+     * scheduled apply swap land before the next reload's no-op check.
+     */
+    private void hotReloadScenario(ConsoleDriver console, LogWatcher log, ServerWorkspace workspace,
+            HarnessOptions options, List<String> problems) throws IOException, InterruptedException {
+        Path corpusItems = workspace.root
+                .resolve("plugins").resolve("Materione")
+                .resolve("content").resolve("packs").resolve("corpus").resolve("items");
+        Path faultSource = options.contentPacksDir() == null
+                ? null
+                : options.contentPacksDir().getParent().resolve("faults").resolve("hot-reload-broken.yml");
+        if (faultSource == null || !Files.isDirectory(corpusItems) || !Files.isRegularFile(faultSource)) {
+            problems.add("hot-reload scenario skipped: corpus pack or fault fixture missing");
+            return;
+        }
+
+        Path extra = corpusItems.resolve("gem_extra.yml");
+        Path broken = corpusItems.resolve("gem_extra_broken.yml");
+
+        Files.writeString(extra, """
+                gem_extra:
+                  material: DIAMOND
+                  texture: corpus/red
+                  display_name: "Extra Gem"
+                """);
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=54"));
+
+        Thread.sleep(1000);
+        Files.writeString(broken, Files.readString(faultSource));
+        int beforeFaultReload = log.mark();
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=54"));
+        if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
+            problems.add("fault injection: MTR-0007 missing after reloading a broken item file");
+        }
+
+        Thread.sleep(1000);
+        Files.deleteIfExists(extra);
+        Files.deleteIfExists(broken);
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=53"));
+    }
+
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
             String command, String marker) throws IOException, InterruptedException {
+        int cursor = log.mark(); // only lines from now on may satisfy the marker
         console.send(command);
-        String line = await(log, marker, options.commandTimeout());
+        String line = await(log, marker, options.commandTimeout(), cursor);
         if (line == null) {
             return List.of("marker '" + marker + "' missing after '" + command
                     + "' (" + options.commandTimeout().toSeconds() + "s)");
         }
         return List.of();
+    }
+
+    private static String await(LogWatcher log, String marker, java.time.Duration timeout, int cursor)
+            throws InterruptedException {
+        return log.awaitLine(marker, timeout, cursor);
     }
 
     /**

@@ -1,0 +1,4 @@
+charm_sturdy:
+  template: corpus_base
+  material: STRING
+  display_name: "Sturdy Charm"

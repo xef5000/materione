@@ -1,0 +1,4 @@
+gem_pink:
+  material: DIAMOND
+  texture: corpus/pink
+  display_name: "Pink Gem"

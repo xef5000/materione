@@ -1,0 +1,7 @@
+amulet_blue:
+  type: shapeless
+  result: amulet_blue
+  ingredients:
+    - gem_blue
+    - gem_blue
+    - minecraft:gold_nugget

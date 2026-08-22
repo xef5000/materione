@@ -1,0 +1,4 @@
+ring_white:
+  material: IRON_NUGGET
+  texture: corpus/white
+  display_name: "White Ring"

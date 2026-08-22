@@ -1,0 +1,4 @@
+charm_glossy:
+  template: corpus_base
+  material: LEATHER
+  display_name: "Glossy Charm"

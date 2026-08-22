@@ -1,0 +1,4 @@
+charm_warm:
+  template: corpus_base
+  material: SLIME_BALL
+  display_name: "Warm Charm"

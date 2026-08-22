@@ -27,10 +27,21 @@ public final class LogWatcher {
      * @return the matched line, or null on timeout
      */
     public String awaitLine(String marker, Duration timeout) throws InterruptedException {
+        return awaitLine(marker, timeout, 0);
+    }
+
+    /**
+     * Waits for {@code marker} occurring at or beyond {@code fromIndex} —
+     * the cursor from {@link #mark()}. Without the cursor, a repeat command
+     * (a second reload producing the same marker) would instantly match the
+     * stale first occurrence.
+     */
+    public String awaitLine(String marker, Duration timeout, int fromIndex)
+            throws InterruptedException {
         long deadline = System.nanoTime() + timeout.toNanos();
         while (System.nanoTime() < deadline) {
             String content = readAll();
-            if (content != null) {
+            if (content != null && content.indexOf(marker, Math.min(fromIndex, content.length())) >= 0) {
                 for (String line : content.split("\n", -1)) {
                     if (line.contains(marker)) {
                         return line;
@@ -40,6 +51,16 @@ public final class LogWatcher {
             Thread.sleep(200);
         }
         return null;
+    }
+
+    /**
+     * The current end of the log content: pass to
+     * {@link #awaitLine(String, Duration, int)} so only lines written after
+     * this point can match.
+     */
+    public int mark() {
+        String content = readAll();
+        return content == null ? 0 : content.length();
     }
 
     /** The last {@code n} non-blank lines of the file (empty if absent). */

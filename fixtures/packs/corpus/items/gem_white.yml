@@ -1,0 +1,4 @@
+gem_white:
+  material: AMETHYST_SHARD
+  texture: corpus/white
+  display_name: "White Gem"

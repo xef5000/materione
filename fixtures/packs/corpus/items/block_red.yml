@@ -1,0 +1,4 @@
+block_red:
+  material: REDSTONE_BLOCK
+  texture: corpus/red
+  display_name: "Red Block"

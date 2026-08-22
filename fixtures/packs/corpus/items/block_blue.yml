@@ -1,0 +1,4 @@
+block_blue:
+  material: LAPIS_BLOCK
+  texture: corpus/blue
+  display_name: "Blue Block"

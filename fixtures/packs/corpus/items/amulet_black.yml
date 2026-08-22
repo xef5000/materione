@@ -1,0 +1,6 @@
+amulet_black:
+  material: GOLD_NUGGET
+  texture: corpus/black
+  display_name: "Black Amulet"
+  lore:
+    - "Hums faintly"

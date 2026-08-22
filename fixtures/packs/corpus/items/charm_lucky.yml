@@ -1,0 +1,4 @@
+charm_lucky:
+  template: corpus_base
+  material: BONE
+  display_name: "Lucky Charm"

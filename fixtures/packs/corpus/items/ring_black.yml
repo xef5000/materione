@@ -1,0 +1,4 @@
+ring_black:
+  material: IRON_NUGGET
+  texture: corpus/black
+  display_name: "Black Ring"

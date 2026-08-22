@@ -1,0 +1,4 @@
+block_violet:
+  material: DIAMOND_BLOCK
+  texture: corpus/violet
+  display_name: "Violet Block"

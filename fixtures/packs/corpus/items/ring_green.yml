@@ -1,0 +1,4 @@
+ring_green:
+  material: IRON_NUGGET
+  texture: corpus/green
+  display_name: "Green Ring"

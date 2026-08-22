@@ -1,0 +1,4 @@
+charm_dull:
+  template: corpus_base
+  material: GLOWSTONE_DUST
+  display_name: "Dull Charm"

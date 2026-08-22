@@ -1,0 +1,4 @@
+ring_blue:
+  material: IRON_NUGGET
+  texture: corpus/blue
+  display_name: "Blue Ring"

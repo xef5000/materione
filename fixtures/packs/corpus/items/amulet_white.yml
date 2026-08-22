@@ -1,0 +1,6 @@
+amulet_white:
+  material: GOLD_NUGGET
+  texture: corpus/white
+  display_name: "White Amulet"
+  lore:
+    - "Hums faintly"

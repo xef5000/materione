@@ -1,0 +1,14 @@
+# Deliberately broken recipe: the result references an item that does not
+# exist anywhere (level-3 validation). The recipe quarantines alone — its
+# neighbors in the same file stay live (runtime-systems §9).
+broken_recipe:
+  type: shapeless
+  result: no_such_item_anywhere
+  ingredients:
+    - minecraft:stick
+fine_recipe:
+  type: shapeless
+  result: fine_recipe_result
+  ingredients:
+    - minecraft:stick
+    - minecraft:stick

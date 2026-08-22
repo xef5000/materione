@@ -1,0 +1,4 @@
+gem_blue:
+  material: AMETHYST_SHARD
+  texture: corpus/blue
+  display_name: "Blue Gem"

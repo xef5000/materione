@@ -1,0 +1,6 @@
+scroll_07:
+  material: BOOK
+  display_name: "Scroll 07"
+  lore:
+    - "Written in a steady hand"
+    - "Sealed with wax"

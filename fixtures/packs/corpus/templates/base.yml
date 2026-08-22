@@ -1,0 +1,4 @@
+# Inheritance base for the charm family.
+corpus_base:
+  material: PAPER
+  display_name: "Unnamed Charm"

@@ -1,0 +1,6 @@
+gem_white_smelt:
+  type: furnace
+  input: gem_white
+  result: gem_black
+  experience: 0.1
+  cookingtime: 100
