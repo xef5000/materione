@@ -115,9 +115,72 @@ class PackCompilerTest {
             // hand-authored asset is copied verbatim
             assertThat(zip.getEntry("assets/sample/models/obsidian_axe_model.json")).isNotNull();
             assertThat(zip.getEntry("assets/sample/textures/obsidian/axe.png")).isNotNull();
-            String mcmeta = new String(zip.getInputStream(zip.getEntry("pack.mcmeta")).readAllBytes());
-            assertThat(mcmeta).contains("\"pack_format\":46");
+
+            // atlas coverage: obsidian/ is outside vanilla's item|block scan and
+            // must get a directory source; item/ is vanilla-covered and must not
+            String atlas = entryText(zip, "assets/minecraft/atlases/blocks.json");
+            assertThat(atlas)
+                    .contains("\"source\":\"obsidian\"")
+                    .doesNotContain("\"source\":\"item\"")
+                    .doesNotContain("\"source\":\"block\"");
+
+            // mcmeta: floor base plus a supported range reaching past newer clients
+            String mcmeta = entryText(zip, "pack.mcmeta");
+            assertThat(mcmeta)
+                    .contains("\"pack_format\":46")
+                    .contains("supported_formats")
+                    .contains(String.valueOf(PackFormats.MAX_KNOWN_FORMAT));
         }
+    }
+
+    @Test
+    void uncoveredRootTextureWarnsAndShipsNoAtlas(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/atlaswarn");
+        writePackSkeleton(packsRoot, "atlaswarn");
+        writeFile(packsRoot.resolve("assets/textures/root.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        // texture at the textures/ root — no directory source can reach it
+        writeFile(packsRoot.resolve("items/t.yml"), "t:\n  material: STICK\n  texture: root\n".getBytes());
+
+        var outcome = compilePack(tempDir, "atlaswarn");
+
+        assertThat(outcome).isNotNull();
+        assertThat(diagnostics.recent(64).stream()
+                .filter(d -> "MTR-0017".equals(d.code().code()))
+                .findFirst())
+                .as("root-level texture must raise MTR-0017")
+                .isPresent();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            assertThat(zip.getEntry("assets/minecraft/atlases/blocks.json")).isNull();
+        }
+    }
+
+    @Test
+    void userShippedAtlasIsMergedNotClobbered(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/minecraft");
+        writePackSkeleton(packsRoot, "minecraft");
+        // pack assets are namespace-rooted, so assets/atlases/blocks.json in a
+        // pack named "minecraft" is the one way user content reaches the
+        // vanilla-loaded atlas path today
+        writeFile(packsRoot.resolve("assets/atlases/blocks.json"),
+                "{\"sources\":[{\"type\":\"single\",\"resource\":\"minecraft:block/dirt\"}]}".getBytes());
+        writeFile(packsRoot.resolve("assets/textures/custom/t.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(packsRoot.resolve("items/t.yml"), "t:\n  material: STICK\n  texture: custom/t\n".getBytes());
+
+        var outcome = compilePack(tempDir, "minecraft");
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            String atlas = entryText(zip, "assets/minecraft/atlases/blocks.json");
+            // the user's source survives alongside the generated directory source
+            assertThat(atlas)
+                    .contains("minecraft:block/dirt")
+                    .contains("\"source\":\"custom\"");
+        }
+        assertThat(diagnostics.recent(64).stream()
+                .filter(d -> d.severity() == Severity.ERROR)
+                .findAny())
+                .as("no errors compiling the merged-atlas pack")
+                .isEmpty();
     }
 
     @Test
@@ -171,5 +234,35 @@ class PackCompilerTest {
                 .as("no errors compiling the fixture pack")
                 .isEmpty();
         return result;
+    }
+
+    /** Compiles one pack from a temp packs root (atlas/merge scenarios). */
+    private PackCompiler.Outcome compilePack(Path tempDir, String packId) {
+        var quarantine = new QuarantineTracker();
+        var runner = new PipelineRunner(diagnostics, quarantine);
+        runner.request(new ReloadScope.Everything(), tempDir.resolve("packs"));
+        var packs = runner.lastPacks().stream()
+                .filter(p -> p.id().equals(packId)).toList();
+        return new PackCompiler().compile(
+                packs,
+                List.of(new StubItemType()),
+                AllocationTable.load(tempDir.resolve("storage-" + packId + "/allocation.bin")),
+                tempDir.resolve("generated-" + packId),
+                diagnostics,
+                quarantine);
+    }
+
+    private static void writePackSkeleton(Path packDir, String id) throws IOException {
+        writeFile(packDir.resolve("pack.yml"), ("id: " + id
+                + "\nversion: 1.0.0\nschema_version: 1\ndepends: []\n").getBytes());
+    }
+
+    private static void writeFile(Path file, byte[] bytes) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.write(file, bytes);
+    }
+
+    private static String entryText(ZipFile zip, String entry) throws IOException {
+        return new String(zip.getInputStream(zip.getEntry(entry)).readAllBytes());
     }
 }

@@ -7,7 +7,8 @@ import java.util.List;
 /**
  * <p>The diagnostic-code registry. Codes are API: users search them, docs
  * document them, addons emit them — never renumber, never reuse. Ranges:
- * M0 bootstrap MTR-0001..0006, M1 pipeline MTR-0007..0013.
+ * M0 bootstrap MTR-0001..0006, M1 pipeline MTR-0007..0016, pack output
+ * MTR-0017..0018.
  */
 public final class DiagnosticCodes {
 
@@ -77,6 +78,16 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode DELIVERY_PUBLISHED =
             new DiagnosticCode("MTR-0016", Severity.INFO, "Pack published to the delivery backend");
 
+    // Pack output hardening
+
+    /** An emitted texture sits outside the vanilla atlas conventions and no atlas source covers it — it renders as missing in game. */
+    public static final DiagnosticCode TEXTURE_NOT_IN_ATLAS =
+            new DiagnosticCode("MTR-0017", Severity.WARN, "Emitted texture not covered by any atlas source");
+
+    /** The running Minecraft version is not in the known pack-format table; floor assumptions are advertised. */
+    public static final DiagnosticCode PACK_FORMAT_UNKNOWN_VERSION =
+            new DiagnosticCode("MTR-0018", Severity.WARN, "Server version not in the pack-format table");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -93,7 +104,9 @@ public final class DiagnosticCodes {
             MANIFEST_INVALID,
             DELIVERY_FAILED,
             PACK_DECLINED,
-            DELIVERY_PUBLISHED);
+            DELIVERY_PUBLISHED,
+            TEXTURE_NOT_IN_ATLAS,
+            PACK_FORMAT_UNKNOWN_VERSION);
 
     private DiagnosticCodes() {}
 

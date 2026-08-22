@@ -1,5 +1,7 @@
 package dev.materione.pack.compile;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
@@ -21,7 +23,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
+import net.kyori.adventure.text.Component;
 import team.unnamed.creative.ResourcePack;
 import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
 
@@ -40,13 +45,25 @@ import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
  * output never overwrites hand-authored files: content-type emitters write
  * under their generated namespaces, asset copies land at their verbatim
  * source paths (§7.2).
+ *
+ * <p>Atlas coverage: textures a pack ships outside vanilla's {@code item}/
+ * {@code block} conventions never reach the client's block atlas on their
+ * own — the compiler emits one merged {@code blocks.json} covering them
+ * (MTR-0017 flags what remains uncovered).
  */
 public final class PackCompiler {
 
-    /** Pack format for the 1.21.4 floor (bumped by the platform layer later). */
-    public static final int PACK_FORMAT = 46;
-
     private static final String DEFAULT_DESCRIPTION = "Materione";
+
+    /** The one atlas file vanilla loads for item/block model textures. */
+    private static final String ATLAS_PATH = "assets/minecraft/atlases/blocks.json";
+
+    /** Texture dirs vanilla's block atlas already scans for every namespace. */
+    private static final Set<String> VANILLA_COVERED_DIRS = Set.of("item", "block");
+
+    /** Dirs with their own atlas or special loading path — not block-atlas content. */
+    private static final Set<String> NON_BLOCK_ATLAS_DIRS = Set.of(
+            "font", "particle", "environment", "colormap", "entity");
 
     /** One compile's outcome. */
     public record Outcome(Path stagedZip, String sha256, int itemDefinitions, int generatedModels) {}
@@ -57,6 +74,7 @@ public final class PackCompiler {
         final Map<String, Map<String, Object>> models = new TreeMap<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
         String description = DEFAULT_DESCRIPTION;
+        String atlasJson;
 
         @Override
         public void itemDefinition(NamespacedId id, Map<String, Object> itemModelJson) {
@@ -155,6 +173,8 @@ public final class PackCompiler {
             }
         }
 
+        buildAtlas(emitter, diagnostics);
+
         try {
             allocation.flush(); // allocation persists before dependent outputs
         } catch (IOException e) {
@@ -203,9 +223,147 @@ public final class PackCompiler {
         }
     }
 
+    /**
+     * Emits the block-atlas source list: every texture directory shipped
+     * outside vanilla's {@code item}/{@code block} conventions gets a
+     * directory source, merged into one {@code blocks.json} — without it
+     * the client never stitches those textures and every model referencing
+     * them renders missing. A user-shipped {@code blocks.json} is merged,
+     * never clobbered; if it cannot be parsed it ships verbatim and the
+     * generated sources are dropped (fail-soft, MTR-0017).
+     */
+    private static void buildAtlas(Emitter emitter, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        var dirs = new TreeSet<String>();
+        var uncovered = new ArrayList<String>();
+        String userAtlasSource = null;
+        for (String[] copy : emitter.assetCopies) {
+            String dest = copy[1];
+            if (dest.equals(ATLAS_PATH)) {
+                userAtlasSource = copy[0];
+                continue;
+            }
+            if (!dest.endsWith(".png")) {
+                continue;
+            }
+            // assets/<namespace>/textures/<rest>
+            String[] segments = dest.split("/");
+            if (segments.length < 4 || !"textures".equals(segments[2])) {
+                continue;
+            }
+            String rest = dest.substring(("assets/" + segments[1] + "/textures/").length());
+            int slash = rest.indexOf('/');
+            if (slash < 0) {
+                uncovered.add(dest); // directly under textures/ — no directory source reaches it
+                continue;
+            }
+            String dir = rest.substring(0, slash);
+            if (!VANILLA_COVERED_DIRS.contains(dir) && !NON_BLOCK_ATLAS_DIRS.contains(dir)) {
+                dirs.add(dir);
+            }
+        }
+        if (!uncovered.isEmpty()) {
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.TEXTURE_NOT_IN_ATLAS, Severity.WARN,
+                    "texture(s) not covered by any atlas source: " + summarize(uncovered),
+                    null, null,
+                    "place textures under textures/item or textures/block, or ship an atlas json"));
+        }
+        if (dirs.isEmpty() && userAtlasSource == null) {
+            return;
+        }
+        var sources = new ArrayList<Object>();
+        var seen = new TreeSet<String>();
+        if (userAtlasSource != null) {
+            JsonElement parsed;
+            try {
+                parsed = JsonParser.parseString(Files.readString(Path.of(userAtlasSource)));
+            } catch (IOException | RuntimeException e) {
+                diagnostics.publish(new Diagnostic(
+                        DiagnosticCodes.TEXTURE_NOT_IN_ATLAS, Severity.WARN,
+                        "user-shipped " + ATLAS_PATH + " could not be parsed (" + e.getMessage()
+                                + "); shipping it verbatim without generated sources",
+                        null, null, "check the atlas json syntax"));
+                return;
+            }
+            for (Object entry : jsonSources(parsed)) {
+                seen.add(sourceKey(entry));
+                sources.add(entry);
+            }
+        }
+        for (String dir : dirs) {
+            if (seen.add("directory:" + dir + ":" + dir + "/")) {
+                var source = new LinkedHashMap<String, Object>();
+                source.put("type", "directory");
+                source.put("source", dir);
+                source.put("prefix", dir + "/");
+                sources.add(source);
+            }
+        }
+        var root = new LinkedHashMap<String, Object>();
+        root.put("sources", sources);
+        emitter.assetCopies.removeIf(copy -> copy[1].equals(ATLAS_PATH));
+        emitter.atlasJson = toJson(root);
+    }
+
+    /** The {@code sources} array of a parsed user atlas, or an empty list. */
+    private static List<Object> jsonSources(JsonElement parsed) {
+        var out = new ArrayList<Object>();
+        if (parsed.isJsonObject() && parsed.getAsJsonObject().has("sources")
+                && parsed.getAsJsonObject().get("sources").isJsonArray()) {
+            for (JsonElement entry : parsed.getAsJsonObject().getAsJsonArray("sources")) {
+                out.add(fromGson(entry));
+            }
+        }
+        return out;
+    }
+
+    private static Object fromGson(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (element.isJsonObject()) {
+            var map = new LinkedHashMap<String, Object>();
+            for (var entry : element.getAsJsonObject().entrySet()) {
+                map.put(entry.getKey(), fromGson(entry.getValue()));
+            }
+            return map;
+        }
+        if (element.isJsonArray()) {
+            var list = new ArrayList<Object>();
+            for (JsonElement entry : element.getAsJsonArray()) {
+                list.add(fromGson(entry));
+            }
+            return list;
+        }
+        var primitive = element.getAsJsonPrimitive();
+        if (primitive.isBoolean()) {
+            return primitive.getAsBoolean();
+        }
+        if (primitive.isNumber()) {
+            return primitive.getAsNumber();
+        }
+        return primitive.getAsString();
+    }
+
+    private static String sourceKey(Object source) {
+        if (source instanceof Map<?, ?> map) {
+            return map.get("type") + ":" + map.get("source") + ":" + map.get("prefix");
+        }
+        return String.valueOf(source);
+    }
+
+    /** First entries of the list, with a count of the remainder. */
+    private static String summarize(List<String> paths) {
+        int limit = 8;
+        if (paths.size() <= limit) {
+            return String.join(", ", paths);
+        }
+        return String.join(", ", paths.subList(0, limit)) + " …(+" + (paths.size() - limit) + " more)";
+    }
+
     private static Outcome writeStaged(Emitter emitter, Path generatedDir) {
         ResourcePack pack = ResourcePack.resourcePack();
-        pack.packMeta(PACK_FORMAT, emitter.description);
+        pack.packMeta(PackFormats.spec(), Component.text(emitter.description));
         emitter.itemDefinitions.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         emitter.models.forEach((path, json) ->
@@ -213,6 +371,9 @@ public final class PackCompiler {
         for (String[] copy : emitter.assetCopies) {
             // verbatim asset copy: binary content as-is (textures, sounds…)
             pack.unknownFile(copy[1], team.unnamed.creative.base.Writable.path(java.nio.file.Path.of(copy[0])));
+        }
+        if (emitter.atlasJson != null) {
+            pack.unknownFile(ATLAS_PATH, team.unnamed.creative.base.Writable.stringUtf8(emitter.atlasJson));
         }
 
         Path staging = generatedDir.resolve("pack");

@@ -25,6 +25,7 @@ import dev.materione.core.runtime.RuntimeRecipe;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.pack.compile.PackCompiler;
+import dev.materione.pack.compile.PackFormats;
 import dev.materione.platform.recipes.RecipeApplier;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -104,6 +105,16 @@ public final class PipelineService {
             java.nio.file.Path storageDir) {
         if (allocation == null) {
             allocation = AllocationTable.load(storageDir.resolve("allocation.bin"));
+        }
+        if (!PackFormats.isKnown(descriptor.minecraftVersion())) {
+            // output is unchanged — the advertised range still covers
+            // intermediate formats — but a server newer than everything we
+            // know would reject its own pack until the table is raised
+            diagnostics.publish(Diagnostic.warn(
+                    DiagnosticCodes.PACK_FORMAT_UNKNOWN_VERSION,
+                    "server version '" + descriptor.minecraftVersion()
+                            + "' is not in the known pack-format table; the pack advertises formats "
+                            + PackFormats.FLOOR + ".." + PackFormats.MAX_KNOWN_FORMAT));
         }
         PipelineResult result = runner.request(new ReloadScope.Everything(), packsRoot);
         if (result == null || !result.completed()) {
