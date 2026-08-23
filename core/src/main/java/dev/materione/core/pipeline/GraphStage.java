@@ -45,6 +45,13 @@ public final class GraphStage {
                             }
                         }
                     }
+                    if ("block".equals(resource.contentType())
+                            && mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
+                        context.graph().addEdge(
+                                resource.id(),
+                                ReferenceValidator.resolve(resource.id().namespace(), placedBy),
+                                dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+                    }
                 }
             }
         }

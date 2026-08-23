@@ -16,10 +16,17 @@ Materione's internals, only these markers.
 | `MATERIONE-DOCTOR-OK` | `/materione doctor` completed |
 | `MATERIONE-RELOAD-OK items=<n>` | `/materione reload` completed (live item count) |
 | `MATERIONE-BYE` | clean disable (shutdown reached the end) |
+| `MATERIONE-DEV-PLACE ok=<bool> <status>` | `/materione dev place` landed (M2 world runtime) |
+| `MATERIONE-DEV-REMOVE ok=<bool> <status>` | `/materione dev remove` landed |
+| `MATERIONE-DEV-INSPECT found=<bool> <block\|none …>` | `/materione dev inspect` answered |
+| `MATERIONE-DEV-SWEEP indexed=<n> …` | `/materione dev sweep` validated the index |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 (sample 3 items + the 50-item corpus pack), so the expected live count is
-**53**; the hot-reload scenario below moves it to 54 and back.
+**53**; the hot-reload scenario below moves it to 54 and back. The world
+smoke between doctor and reload force-loads chunk (0, 0) — a headless boot
+has no players to keep chunks warm — then drives `dev place → inspect →
+sweep → remove` against `sample:amethyst_lamp` at `0 200 0`.
 
 ## Running
 

@@ -18,6 +18,8 @@ public enum ContentEdgeType {
     RECIPE_RESULT,
     /** block → item dropped when broken. */
     DROPS_ITEM,
+    /** block → the item that places it ({@code item:}). */
+    PLACED_BY_ITEM,
     /** pack → pack dependency (manifest {@code depends}). */
     PACK_DEPENDENCY
 }

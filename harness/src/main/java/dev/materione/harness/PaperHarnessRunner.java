@@ -75,6 +75,27 @@ public final class PaperHarnessRunner {
                     "MATERIONE-VERSION " + options.expectedVersion()));
             problems.addAll(drive(console, log, options, "materione doctor",
                     "MATERIONE-DOCTOR-OK"));
+            // M2 slice 3: world-runtime smoke — force-load the target chunk
+            // (headless boots have no players, so nothing else keeps it warm),
+            // then place → inspect → remove → sweep through the dev driver
+            console.send("forceload add 0 0");
+            Thread.sleep(500);
+            problems.addAll(drive(console, log, options,
+                    "materione dev place sample:amethyst_lamp 0 200 0 world",
+                    "MATERIONE-DEV-PLACE ok=true"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev inspect 0 200 0 world",
+                    "MATERIONE-DEV-INSPECT found=true sample:amethyst_lamp"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev sweep",
+                    "MATERIONE-DEV-SWEEP indexed=1 ok=1 stale=0 orphans=0 drifted=0 unloaded=0"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev remove 0 200 0 world",
+                    "MATERIONE-DEV-REMOVE ok=true"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev sweep",
+                    "MATERIONE-DEV-SWEEP indexed=0 ok=0"));
+            console.send("forceload remove all");
             // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",
                     "MATERIONE-RELOAD-OK items=53"));

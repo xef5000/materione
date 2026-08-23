@@ -54,8 +54,31 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         }
         if ("block".equals(resource.contentType())) {
             validateDrops(resource, definition, environment, problems);
+            validatePlacedBy(resource, definition, environment, problems);
         }
         return problems;
+    }
+
+    /**
+     * A block's {@code item:} placement link must resolve to an item
+     * resource — a bad link quarantines the block only.
+     */
+    private static void validatePlacedBy(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("item") instanceof String target) || target.isBlank()) {
+            return;
+        }
+        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        if (!isItem(environment, targetId)) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                    "block " + resource.id() + ": item '" + target + "' is not an item",
+                    resource.id(), null,
+                    "the item: field names the materione item that places this block"));
+        }
     }
 
     /**

@@ -67,7 +67,11 @@ public final class BlockType implements ContentType {
                                 "Whether explosions leave the block intact", null, null),
                         new ParameterSchema("move_policy", ParameterType.ENUM, false, "keep",
                                 "What pistons do to this block",
-                                List.of("keep", "break"), null)),
+                                List.of("keep", "break"), null),
+                        new ParameterSchema("item", ParameterType.REFERENCE, false, null,
+                                "Item that places this block (the placement link)", null, null),
+                        new ParameterSchema("behavior", ParameterType.LIST, false, null,
+                                "ECA rules fired on place/break/interact (runtime-systems 2)", null, null)),
                 "1.0.0");
     }
 
@@ -95,6 +99,12 @@ public final class BlockType implements ContentType {
         if (!"keep".equals(movePolicy) && !"break".equals(movePolicy)) {
             return Optional.empty();
         }
+        String itemRef = Templates.text(merged, "item");
+        NamespacedId placedBy = itemRef == null
+                ? null
+                : itemRef.contains(":")
+                        ? NamespacedId.parse(itemRef)
+                        : NamespacedId.of(id.namespace(), itemRef);
         return Optional.of(new BlockDefinition(
                 id,
                 technique,
@@ -106,7 +116,24 @@ public final class BlockType implements ContentType {
                 refs(id.namespace(), merged.get("drops")),
                 Boolean.TRUE.equals(merged.get("blast_resistant")),
                 movePolicy,
+                placedBy,
+                behaviorMaps(merged.get("behavior")),
                 merged));
+    }
+
+    /** The raw {@code behavior:} rule list; non-list shapes yield empty (fail-soft). */
+    @SuppressWarnings("unchecked")
+    private static List<Map<String, Object>> behaviorMaps(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        var out = new ArrayList<Map<String, Object>>();
+        for (Object entry : list) {
+            if (entry instanceof Map<?, ?> mapping) {
+                out.add((Map<String, Object>) mapping);
+            }
+        }
+        return out;
     }
 
     @Override

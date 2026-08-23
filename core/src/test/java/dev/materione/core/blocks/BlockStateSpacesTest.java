@@ -105,4 +105,35 @@ class BlockStateSpacesTest {
         assertThatThrownBy(() -> BlockStateSpaces.variantKey(Technique.CHORUS, 64))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    /**
+     * The runtime's decode side must be the exact inverse of the encode
+     * formula across the whole note-block space — a drift here silently
+     * rewrites placed worlds (runtime-systems §4.2).
+     */
+    @Test
+    void noteSlotAndNotePartsRoundTripTheWholeSpace() {
+        for (int slot = 0; slot < BlockStateSpaces.capacity(Technique.NOTE_BLOCK); slot++) {
+            int[] parts = BlockStateSpaces.noteParts(slot);
+            assertThat(BlockStateSpaces.noteSlot(parts[0], parts[1], parts[2] == 1))
+                    .as("slot %d", slot)
+                    .isEqualTo(slot);
+            assertThat(parts[1]).isBetween(0, 24);
+        }
+        int[] powered = BlockStateSpaces.noteParts(25);
+        assertThat(powered).containsExactly(0, 0, 1);
+    }
+
+    @Test
+    void inRangeMatchesEachTechniqueSpace() {
+        assertThat(BlockStateSpaces.inRange(Technique.NOTE_BLOCK, 0)).isTrue();
+        assertThat(BlockStateSpaces.inRange(Technique.NOTE_BLOCK, 1099)).isTrue();
+        assertThat(BlockStateSpaces.inRange(Technique.NOTE_BLOCK, 1100)).isFalse();
+        assertThat(BlockStateSpaces.inRange(Technique.STRING, 1)).isTrue();
+        assertThat(BlockStateSpaces.inRange(Technique.STRING, 127)).isTrue();
+        assertThat(BlockStateSpaces.inRange(Technique.STRING, 0)).isFalse();
+        assertThat(BlockStateSpaces.inRange(Technique.CHORUS, 63)).isTrue();
+        assertThat(BlockStateSpaces.inRange(Technique.CHORUS, 64)).isFalse();
+        assertThat(BlockStateSpaces.inRange(Technique.TECHNICAL, 0)).isFalse();
+    }
 }

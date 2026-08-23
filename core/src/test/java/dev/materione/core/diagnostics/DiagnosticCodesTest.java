@@ -20,6 +20,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(23);
+        assertThat(DiagnosticCodes.all()).hasSize(26);
     }
 }

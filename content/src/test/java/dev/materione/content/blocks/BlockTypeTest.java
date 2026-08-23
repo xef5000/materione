@@ -157,6 +157,39 @@ class BlockTypeTest {
         assertThat(block.texture()).isEqualTo("block/lamp");       // definition wins
     }
 
+    @Test
+    void parsesThePlacementLinkAndBehaviorSection() {
+        Optional<Object> parsed = type.parse(id, Map.of(
+                "texture", "block/lamp",
+                "item", "lamp_item",
+                "behavior", List.of(
+                        Map.<String, Object>of(
+                                "on", "interact",
+                                "do", List.<Object>of(Map.<String, Object>of("type", "message",
+                                        "text", "hi"))))),
+                Map.of());
+
+        assertThat(parsed).isPresent();
+        BlockDefinition block = (BlockDefinition) parsed.get();
+        assertThat(block.placedBy()).isEqualTo(NamespacedId.of("sample", "lamp_item"));
+        assertThat(block.behavior()).hasSize(1);
+    }
+
+    @Test
+    void behaviorAndItemFieldsAreOptionalAndFailSoft() {
+        Optional<Object> parsed = type.parse(id, Map.of("texture", "block/lamp"), Map.of());
+        assertThat(parsed).isPresent();
+        BlockDefinition block = (BlockDefinition) parsed.get();
+        assertThat(block.placedBy()).isNull();
+        assertThat(block.behavior()).isEmpty();
+
+        // non-list behavior shapes degrade to empty rather than rejecting the block
+        Optional<Object> odd = type.parse(id,
+                Map.of("texture", "block/lamp", "behavior", "oops"), Map.of());
+        assertThat(odd).isPresent();
+        assertThat(((BlockDefinition) odd.get()).behavior()).isEmpty();
+    }
+
     private PackEmitterOf emitterOf() {
         return new PackEmitterOf();
     }

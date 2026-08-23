@@ -138,6 +138,43 @@ public final class BlockStateSpaces {
         return "attached=false,disarmed=false,powered=false,north=false,east=false,south=false,west=false";
     }
 
+    /**
+     * Splits a note-block slot into {@code [instrumentOrdinal, note, powered]}
+     * — the runtime's decode side of the allocation formula. Tripwire and
+     * chorus need no splitter: their slot <em>is</em> the identity bit
+     * pattern (§4.1), validated by {@link #inRange}.
+     *
+     * @throws IllegalArgumentException when the slot is outside the space
+     */
+    public static int[] noteParts(int slot) {
+        if (slot < 0 || slot >= capacity(Technique.NOTE_BLOCK)) {
+            throw outOfRange("note_block", slot);
+        }
+        int rest = slot % SLOTS_PER_INSTRUMENT;
+        return new int[] {slot / SLOTS_PER_INSTRUMENT, rest % NOTES_PER_INSTRUMENT, rest >= NOTES_PER_INSTRUMENT ? 1 : 0};
+    }
+
+    /** Inverse of {@link #noteParts} — the encode side used when placing. */
+    public static int noteSlot(int instrumentOrdinal, int note, boolean powered) {
+        if (instrumentOrdinal < 0 || instrumentOrdinal >= NOTE_BLOCK_INSTRUMENTS.size()) {
+            throw new IllegalArgumentException("instrument ordinal " + instrumentOrdinal + " outside the table");
+        }
+        if (note < 0 || note >= NOTES_PER_INSTRUMENT) {
+            throw outOfRange("note", note);
+        }
+        return instrumentOrdinal * SLOTS_PER_INSTRUMENT + note + (powered ? NOTES_PER_INSTRUMENT : 0);
+    }
+
+    /** True when {@code slot} is allocatable for {@code technique}. */
+    public static boolean inRange(Technique technique, int slot) {
+        return switch (technique) {
+            case NOTE_BLOCK -> slot >= 0 && slot < capacity(Technique.NOTE_BLOCK);
+            case STRING -> slot >= TRIPWIRE_MIN && slot <= TRIPWIRE_MAX;
+            case CHORUS -> slot >= 0 && slot <= CHORUS_MAX;
+            case TECHNICAL -> false;
+        };
+    }
+
     private static String bit(int value, int mask) {
         return (value & mask) != 0 ? "true" : "false";
     }

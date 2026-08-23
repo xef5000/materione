@@ -10,6 +10,7 @@ import dev.materione.content.blocks.BlockType;
 import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
+import dev.materione.plugin.runtime.behavior.BlockBehaviors;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.diagnostics.DiagnosticCodes;
@@ -182,10 +183,15 @@ public final class PipelineService {
     private RuntimeRegistries buildShadow(List<ContentPack> packs) {
         var itemType = contentTypes().stream().filter(t -> t.name().equals("item")).findFirst();
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
+        var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
         var builder = RuntimeRegistries.builder();
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var runtimeBlocks = dev.materione.core.runtime.RuntimeBlocks.builder();
         if (itemType.isEmpty()) {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
+            builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
+            builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -244,11 +250,75 @@ public final class PipelineService {
                                 recipe.shapedIngredients(), recipe.ingredients(),
                                 recipe.experience(), recipe.cookingTime()));
                     }
+                } else if ("block".equals(resource.contentType()) && blockType.isPresent()) {
+                    Optional<Object> parsed;
+                    try {
+                        parsed = blockType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
+                    if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.blocks.BlockDefinition block) {
+                        compileBlock(block, runtimeBlocks, blockBehaviors);
+                    }
                 }
             }
         }
         builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
+        builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
+        builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
         return builder.build();
+    }
+
+    /**
+     * Turns one parsed block definition into its runtime form. The state slot
+     * comes from the durable allocation table — the compiler claimed it during
+     * this run's compile stage, and slots never shift (D7). Definitions whose
+     * slot is missing or out of range are diagnosed and skipped.
+     */
+    private void compileBlock(
+            dev.materione.content.blocks.BlockDefinition block,
+            dev.materione.core.runtime.RuntimeBlocks.Builder runtimeBlocks,
+            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> blockBehaviors) {
+        String host = dev.materione.core.blocks.BlockStateSpaces.hostOf(
+                block.technique(), block.host());
+        int slot = -1;
+        if (dev.materione.core.blocks.BlockStateSpaces.allocatesState(block.technique())) {
+            Optional<String> value = allocation == null
+                    ? Optional.empty()
+                    : allocation.allocationOf(
+                            block.id(), dev.materione.content.blocks.BlockType.ALLOCATION_KIND_PREFIX + host);
+            if (value.isEmpty()) {
+                diagnostics.publish(Diagnostic.warn(
+                        DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                        "shadow build skipped " + block.id() + ": no allocated state slot"));
+                return;
+            }
+            slot = Integer.parseInt(value.get());
+            if (slot >= dev.materione.core.blocks.BlockStateSpaces.capacity(block.technique())) {
+                diagnostics.publish(Diagnostic.warn(
+                        DiagnosticCodes.BLOCK_STATE_EXHAUSTED,
+                        "shadow build skipped " + block.id() + ": slot " + slot + " outside "
+                                + host + " space"));
+                return;
+            }
+        }
+        runtimeBlocks.block(new dev.materione.core.runtime.RuntimeBlock(
+                block.id(), block.technique(), host, slot,
+                block.drops(), block.blastResistant(), block.movePolicy()));
+        if (block.placedBy() != null) {
+            runtimeBlocks.placedBy(block.placedBy(), block.id());
+        }
+        if (!block.behavior().isEmpty()) {
+            dev.materione.behavior.rule.ParsedRules parsedRules =
+                    dev.materione.behavior.rule.RuleParser.compile(block.id(), block.behavior());
+            parsedRules.problems().forEach(diagnostics::publish);
+            if (!parsedRules.isEmpty()) {
+                blockBehaviors.put(block.id(), parsedRules.rules());
+            }
+        }
     }
 
     /**

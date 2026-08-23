@@ -24,10 +24,13 @@ public record BlockDefinition(
         List<NamespacedId> drops,
         boolean blastResistant,
         String movePolicy,        // keep | break
+        NamespacedId placedBy,    // item that places this block, if declared
+        List<Map<String, Object>> behavior, // ECA rules (runtime-systems §2), empty when none
         Map<String, Object> raw) {
 
     public BlockDefinition {
         drops = List.copyOf(drops);
+        behavior = behavior == null ? List.of() : List.copyOf(behavior);
         raw = Map.copyOf(raw);
     }
 

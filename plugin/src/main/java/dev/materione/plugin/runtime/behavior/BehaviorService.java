@@ -75,6 +75,37 @@ public final class BehaviorService {
         }
     }
 
+    /**
+     * Fires {@code eventType}/{@code detail} for a custom block at {@code
+     * location} — place/break/interact from the world runtime. Rules resolve
+     * from the live shadow at event entry; cancellation applies after the
+     * chain. Player-less causes (explosions, pistons) fire no events.
+     */
+    public void fireBlockEvent(
+            String eventType,
+            String detail,
+            Player player,
+            Location location,
+            NamespacedId blockId,
+            String techniqueName,
+            Cancellable cancellable) {
+        BlockBehaviors behaviors = registries.get().view(BlockBehaviors.KEY);
+        if (behaviors == null) {
+            return;
+        }
+        List<dev.materione.behavior.rule.Rule> rules = behaviors.forBlock(blockId).orElse(List.of());
+        if (rules.isEmpty()) {
+            return;
+        }
+        BehaviorEvent event = new BehaviorEvent(
+                eventType, detail, buildBlockContext(player, location, blockId, techniqueName),
+                cancellable, player);
+        engine.fire(rules, event);
+        if (event.isCancelRequested() && cancellable != null) {
+            cancellable.setCancelled(true);
+        }
+    }
+
     /** Rules attached to the stack's Materione identity, resolved at event entry. */
     private List<dev.materione.behavior.rule.Rule> rulesFor(ItemStack stack) {
         Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);
@@ -130,6 +161,51 @@ public final class BehaviorService {
         itemVars.put("material", stack == null ? "" : stack.getType().name().toLowerCase(java.util.Locale.ROOT));
         itemVars.put("amount", stack == null ? 0 : stack.getAmount());
         root.put("item", itemVars);
+
+        var serverVars = new LinkedHashMap<String, Object>();
+        serverVars.put("online", Bukkit.getOnlinePlayers().size());
+        serverVars.put("max", Bukkit.getMaxPlayers());
+        root.put("server", serverVars);
+
+        root.put("vars", new LinkedHashMap<String, Object>());
+        return new EvaluationContext(root);
+    }
+
+    /**
+     * The block-event tree: {@code player.*} only when a player caused the
+     * event (explosions and pistons fire no events), plus
+     * {@code location/world/block/vars}.
+     */
+    private EvaluationContext buildBlockContext(
+            Player player, Location location, NamespacedId blockId, String techniqueName) {
+        var root = new LinkedHashMap<String, Object>();
+        if (player != null) {
+            var playerVars = new LinkedHashMap<String, Object>();
+            playerVars.put("name", player.getName());
+            playerVars.put("uuid", player.getUniqueId().toString());
+            playerVars.put("gamemode", player.getGameMode().name().toLowerCase(java.util.Locale.ROOT));
+            playerVars.put("sneaking", player.isSneaking());
+            playerVars.put("op", player.isOp());
+            root.put("player", playerVars);
+        }
+
+        World world = location.getWorld();
+        var locationVars = new LinkedHashMap<String, Object>();
+        locationVars.put("x", location.getBlockX());
+        locationVars.put("y", location.getBlockY());
+        locationVars.put("z", location.getBlockZ());
+        locationVars.put("world", world == null ? "" : world.getName());
+        root.put("location", locationVars);
+
+        var worldVars = new LinkedHashMap<String, Object>();
+        worldVars.put("name", world == null ? "" : world.getName());
+        worldVars.put("time", world == null ? 0L : world.getTime());
+        root.put("world", worldVars);
+
+        var blockVars = new LinkedHashMap<String, Object>();
+        blockVars.put("id", blockId.toString());
+        blockVars.put("technique", techniqueName);
+        root.put("block", blockVars);
 
         var serverVars = new LinkedHashMap<String, Object>();
         serverVars.put("online", Bukkit.getOnlinePlayers().size());

@@ -22,12 +22,14 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = List.of("version", "doctor", "reload");
+    private static final List<String> SUBCOMMANDS = List.of("version", "doctor", "reload", "dev");
 
     private final MaterionePlugin plugin;
+    private final DevCommands devCommands;
 
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
+        this.devCommands = new DevCommands(plugin);
     }
 
     @Override
@@ -79,8 +81,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                 // Stable harness marker: a real reload ran.
                 plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
             }
+            case "dev" -> devCommands.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev>", NamedTextColor.RED));
         }
         return true;
     }
@@ -175,6 +178,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
             return SUBCOMMANDS.stream().filter(s -> s.startsWith(prefix)).toList();
+        }
+        if (args.length >= 2 && "dev".equals(args[0].toLowerCase())) {
+            return devCommands.complete(args);
         }
         return List.of();
     }

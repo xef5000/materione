@@ -3,3 +3,10 @@ amethyst_lamp:
   texture: block/amethyst_lamp
   display_name: Amethyst Lamp
   blast_resistant: true
+  # the placement link: this item places the block (M2 slice 3)
+  item: ruby
+  behavior:
+    - on: interact
+      do:
+        - type: message
+          text: "&dThe lamp hums softly."

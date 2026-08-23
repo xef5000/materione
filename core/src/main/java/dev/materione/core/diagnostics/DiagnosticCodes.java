@@ -110,6 +110,18 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode ACTION_FAILED =
             new DiagnosticCode("MTR-0023", Severity.WARN, "Behavior action failed; chain continues");
 
+    /** A placed block's state decodes to one custom block but its chunk PDC records another (or nothing). */
+    public static final DiagnosticCode BLOCK_DATA_MISMATCH =
+            new DiagnosticCode("MTR-0024", Severity.WARN, "Placement data does not match its recorded block");
+
+    /** Paper's block-update suppression flags are off (or unreadable); fallback listeners cover the gaps. */
+    public static final DiagnosticCode PHYSICS_SUPPRESSION_INACTIVE =
+            new DiagnosticCode("MTR-0025", Severity.WARN, "Paper block-update suppression inactive");
+
+    /** A recorded placement references a definition that no longer exists (or a stale index entry). */
+    public static final DiagnosticCode ORPHANED_PLACEMENT =
+            new DiagnosticCode("MTR-0026", Severity.INFO, "Placement references an unknown definition");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -133,7 +145,10 @@ public final class DiagnosticCodes {
             VANILLA_OVERRIDE_CONFLICT,
             BEHAVIOR_RULE_INVALID,
             EXPRESSION_INVALID,
-            ACTION_FAILED);
+            ACTION_FAILED,
+            BLOCK_DATA_MISMATCH,
+            PHYSICS_SUPPRESSION_INACTIVE,
+            ORPHANED_PLACEMENT);
 
     private DiagnosticCodes() {}
 

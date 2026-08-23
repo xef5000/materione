@@ -50,6 +50,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private PipelineService pipeline;
     private DeliveryService delivery;
     private BehaviorService behavior;
+    private dev.materione.core.storage.PlacementIndex placements;
+    private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -81,6 +83,16 @@ public final class MaterionePlugin extends JavaPlugin {
 
     public DeliveryService delivery() {
         return delivery;
+    }
+
+    /** The placement index (disposable, generated/); null before content-load. */
+    public dev.materione.core.storage.PlacementIndex placements() {
+        return placements;
+    }
+
+    /** The custom-block world runtime; null before the commands phase. */
+    public dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks() {
+        return customBlocks;
     }
 
     /** The descriptor, once the probe passed; null before/when unsupported. */
@@ -122,6 +134,9 @@ public final class MaterionePlugin extends JavaPlugin {
         try {
             if (delivery != null) {
                 delivery.stop();
+            }
+            if (placements != null) {
+                placements.close();
             }
             if (diagnostics != null) {
                 getLogger().info("diagnostics: " + diagnostics.count(dev.materione.api.diagnostics.Severity.ERROR)
@@ -227,6 +242,14 @@ public final class MaterionePlugin extends JavaPlugin {
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(this, diagnostics, scheduling, pipeline.runtime());
         getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
+        // custom-block world runtime (runtime-systems §4): placement index is
+        // disposable generated state — rebuilt from chunk scans if lost
+        placements = dev.materione.core.storage.PlacementIndex.load(
+                storage.generatedDir().resolve("index").resolve("placements.jsonl"));
+        customBlocks = new dev.materione.plugin.runtime.blocks.CustomBlockService(
+                this, diagnostics, scheduling, pipeline.runtime(), behavior, placements);
+        getServer().getPluginManager().registerEvents(customBlocks, this);
+        dev.materione.plugin.runtime.blocks.PhysicsProbe.enforceOrReport(diagnostics);
     }
 
     private String disableReason() {
