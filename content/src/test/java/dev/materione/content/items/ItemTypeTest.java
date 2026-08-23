@@ -83,6 +83,32 @@ class ItemTypeTest {
         assertThat(description.parameters()).isNotEmpty();
         assertThat(description.parameters())
                 .anySatisfy(p -> assertThat(p.id()).isEqualTo("material"));
+        assertThat(description.parameters())
+                .anySatisfy(p -> assertThat(p.id()).isEqualTo("mechanics"));
+    }
+
+    @Test
+    void parsesMechanicsDeclarations() {
+        var definition = map(
+                "material", "NETHERITE_SWORD",
+                "mechanics", List.of(
+                        map("soulbound", Map.of()),
+                        map("durability", map("max", 500)),
+                        map("food", map("nutrition", 6, "saturation", 8.0))));
+        var parsed = type.parse(NamespacedId.parse("sample:talisman"), definition, Map.of());
+        assertThat(parsed).isPresent();
+        var item = (ItemDefinition) parsed.get();
+        assertThat(item.mechanics()).hasSize(3);
+        assertThat(item.mechanics().get(0)).containsEntry("soulbound", Map.of());
+        assertThat(item.mechanics().get(1)).containsKey("durability");
+    }
+
+    @Test
+    void missingMechanicsYieldsEmptyList() {
+        var parsed = type.parse(
+                NamespacedId.parse("sample:plain"), map("material", "PAPER"), Map.of());
+        assertThat(parsed).isPresent();
+        assertThat(((ItemDefinition) parsed.get()).mechanics()).isEmpty();
     }
 
     @Test

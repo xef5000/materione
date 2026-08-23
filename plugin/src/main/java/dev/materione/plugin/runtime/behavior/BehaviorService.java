@@ -206,6 +206,18 @@ public final class BehaviorService {
         itemVars.put("id", identity.map(NamespacedId::toString).orElse(""));
         itemVars.put("material", stack == null ? "" : stack.getType().name().toLowerCase(java.util.Locale.ROOT));
         itemVars.put("amount", stack == null ? 0 : stack.getAmount());
+        if (stack != null && stack.getItemMeta() != null) {
+            // custom-durability counters (MechanicsService writes them together)
+            var pdc = stack.getItemMeta().getPersistentDataContainer();
+            Integer used = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-used"),
+                    org.bukkit.persistence.PersistentDataType.INTEGER);
+            Integer max = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-max"),
+                    org.bukkit.persistence.PersistentDataType.INTEGER);
+            if (used != null && max != null) {
+                itemVars.put("durability_used", used);
+                itemVars.put("durability_max", max);
+            }
+        }
         root.put("item", itemVars);
 
         var serverVars = new LinkedHashMap<String, Object>();

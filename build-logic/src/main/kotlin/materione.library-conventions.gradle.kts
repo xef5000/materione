@@ -14,6 +14,10 @@ plugins {
 val libs = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
 
 dependencies {
+    // Test runtime needs snakeyaml: LosslessYaml (core) imports it, so any
+    // test touching the data view loads those classes — still never shipped
+    // (compileOnly in paper-conventions + testImplementation here).
+    "testImplementation"(libs.findLibrary("snakeyaml").get())
     "testImplementation"(libs.findBundle("materione-test").get())
     "testImplementation"(testFixtures(project(":testing")))
 }

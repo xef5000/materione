@@ -19,11 +19,27 @@ public record RuntimeItem(
         NamespacedId modelId,
         String displayName,
         List<String> lore,
-        String definitionHash) {
+        String definitionHash,
+        Food food) {
 
     public RuntimeItem {
         lore = List.copyOf(lore);
     }
+
+    /** Pre-mechanics arity kept for tests and simple builders. */
+    public RuntimeItem(
+            NamespacedId id, String material, NamespacedId modelId,
+            String displayName, List<String> lore, String definitionHash) {
+        this(id, material, modelId, displayName, lore, definitionHash, null);
+    }
+
+    /**
+     * The food mechanic's stack-level projection (null without the
+     * mechanic): applied as the vanilla food component when stacks are
+     * built, so every factory path (recipes, drops, auto-update) yields an
+     * edible stack with the same values.
+     */
+    public record Food(int nutrition, float saturation, boolean canAlwaysEat) {}
 
     /**
      * Hash of everything players see — the auto-updater rebuilds a stack

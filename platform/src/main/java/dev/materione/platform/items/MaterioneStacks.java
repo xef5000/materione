@@ -27,6 +27,14 @@ public final class MaterioneStacks {
     public static final String ID_KEY = "id";
 
     /**
+     * The food-mechanic projection: applied as the vanilla food component
+     * at build time so the stack is edible with these values (1.21.4 API
+     * surface — {@code ItemMeta#setFood}). Consume-side effects ride the
+     * mechanic listener, not the component.
+     */
+    public record StackFood(int nutrition, float saturation, boolean canAlwaysEat) {}
+
+    /**
      * Everything the factory needs for one item appearance — the
      * version-agnostic projection of a runtime item.
      */
@@ -35,7 +43,19 @@ public final class MaterioneStacks {
             String material,
             NamespacedId modelId,
             String displayName,
-            List<String> lore) {}
+            List<String> lore,
+            StackFood food) {
+
+        /** Pre-food arity kept for callers that carry no mechanic state. */
+        public StackSpec(
+                NamespacedId id,
+                String material,
+                NamespacedId modelId,
+                String displayName,
+                List<String> lore) {
+            this(id, material, modelId, displayName, lore, null);
+        }
+    }
 
     private MaterioneStacks() {}
 
@@ -101,6 +121,13 @@ public final class MaterioneStacks {
                         lore.add(legacy(line));
                     }
                     meta.lore(lore);
+                }
+                if (item.food() != null) {
+                    org.bukkit.inventory.meta.components.FoodComponent food = meta.getFood();
+                    food.setNutrition(item.food().nutrition());
+                    food.setSaturation(item.food().saturation());
+                    food.setCanAlwaysEat(item.food().canAlwaysEat());
+                    meta.setFood(food);
                 }
             };
         }

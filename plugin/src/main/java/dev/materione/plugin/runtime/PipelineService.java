@@ -194,12 +194,15 @@ public final class PipelineService {
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var furnitureBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var itemMechanics = new LinkedHashMap<NamespacedId, List<dev.materione.plugin.runtime.mechanics.ActiveMechanic>>();
         var runtimeBlocks = dev.materione.core.runtime.RuntimeBlocks.builder();
         var runtimeFurnitures = dev.materione.core.runtime.RuntimeFurnitures.builder();
         if (itemType.isEmpty()) {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
             builder.view(FurnitureBehaviors.KEY, FurnitureBehaviors.empty());
+            builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
+                    dev.materione.plugin.runtime.mechanics.ItemMechanics.empty());
             builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
             builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
             return builder.build();
@@ -241,8 +244,16 @@ public final class PipelineService {
                         continue;
                     }
                     if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
-                        builder.item(toRuntimeItem(item));
+                        List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> active =
+                                mechanicsResolver().resolve(item.id(), item.mechanics(), (name, reason) ->
+                                        diagnostics.publish(new Diagnostic(
+                                                DiagnosticCodes.UNKNOWN_MECHANIC, dev.materione.api.diagnostics.Severity.WARN,
+                                                "mechanic '" + name + "' on " + item.id() + ": " + reason,
+                                                item.id(), null,
+                                                "check the name and parameters against the registry self-description")));
+                        builder.item(toRuntimeItem(item, active));
                         compileBehaviors(item, behaviors);
+                        itemMechanics.put(item.id(), active);
                     }
                 } else if ("recipe".equals(resource.contentType()) && recipeType.isPresent()) {
                     Optional<Object> parsed;
@@ -293,6 +304,8 @@ public final class PipelineService {
         builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
         builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
         builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
+        builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
+                new dev.materione.plugin.runtime.mechanics.ItemMechanics(itemMechanics));
         builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
         builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
         return builder.build();
@@ -416,7 +429,9 @@ public final class PipelineService {
         }
     }
 
-    private static RuntimeItem toRuntimeItem(ItemDefinition item) {
+    private static RuntimeItem toRuntimeItem(
+            ItemDefinition item,
+            List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> mechanics) {
         NamespacedId modelId = null;
         if (item.wantsGeneratedModel() || item.model() != null) {
             String raw = item.wantsGeneratedModel()
@@ -426,13 +441,34 @@ public final class PipelineService {
                     item.id().namespace(),
                     raw.contains(":") ? raw.substring(raw.indexOf(':') + 1) : raw);
         }
+        RuntimeItem.Food food = null;
+        for (dev.materione.plugin.runtime.mechanics.ActiveMechanic mechanic : mechanics) {
+            if ("food".equals(mechanic.name())) {
+                food = new RuntimeItem.Food(
+                        dev.materione.plugin.runtime.mechanics.ActiveMechanic.intParam(
+                                mechanic.params(), "nutrition", 1),
+                        (float) dev.materione.plugin.runtime.mechanics.ActiveMechanic.doubleParam(
+                                mechanic.params(), "saturation", 0),
+                        dev.materione.plugin.runtime.mechanics.ActiveMechanic.boolParam(
+                                mechanic.params(), "can_always_eat", false));
+            }
+        }
         return new RuntimeItem(
                 item.id(),
                 item.material(),
                 modelId,
                 item.displayName(),
                 item.lore(),
-                RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore()));
+                RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore()),
+                food);
+    }
+
+    /** Resolves mechanics against the frozen-at-apply registry snapshot. */
+    private dev.materione.plugin.runtime.mechanics.MechanicsResolver mechanicsResolver() {
+        return new dev.materione.plugin.runtime.mechanics.MechanicsResolver(
+                registries.byKey(
+                        dev.materione.plugin.runtime.mechanics.MechanicsResolver.REGISTRY_KEY,
+                        dev.materione.api.mechanics.Mechanic.class));
     }
 
     private List<ContentType> contentTypes() {

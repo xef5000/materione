@@ -126,7 +126,11 @@ public final class RecipeApplier {
 
     private static MaterioneStacks.StackSpec toSpec(RuntimeItem item) {
         return new MaterioneStacks.StackSpec(
-                item.id(), item.material(), item.modelId(), item.displayName(), item.lore());
+                item.id(), item.material(), item.modelId(), item.displayName(), item.lore(),
+                item.food() == null ? null
+                        : new MaterioneStacks.StackFood(
+                                item.food().nutrition(), item.food().saturation(),
+                                item.food().canAlwaysEat()));
     }
 
     /** Recipe book resync: players see the new set immediately (§4.5). */

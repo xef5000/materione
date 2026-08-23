@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -105,5 +106,20 @@ class LosslessYamlTest {
         assertThat(quoted.save()).contains("a: \"true story: part 1\"");
         var numeric = LosslessYaml.parse(raw).withScalar(7, "item", "a");
         assertThat(numeric.save()).contains("a: 7");
+    }
+
+    @Test
+    void yaml11BooleanKeysNormalizeToStrings() {
+        // SnakeYAML implements YAML 1.1: a bare `on:` mapping key loads as
+        // boolean true — stringKeyed is the ECA selector's rescue path
+        Map<String, Object> raw = LosslessYaml.parse("rule:\n  on: interact\n  do: x\n")
+                .data()
+                .get("rule") instanceof Map<?, ?> mapping ? LosslessYaml.stringKeyed(mapping) : Map.of();
+        assertThat(raw).containsEntry("on", "interact");
+
+        Map<String, Object> offKey = LosslessYaml.parse("rule:\n  \"off\": 1\n")
+                .data()
+                .get("rule") instanceof Map<?, ?> mapping ? LosslessYaml.stringKeyed(mapping) : Map.of();
+        assertThat(offKey).containsEntry("off", 1);
     }
 }

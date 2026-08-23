@@ -59,7 +59,9 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("lore", ParameterType.LIST, false, null,
                                 "Lore lines", null, null),
                         new ParameterSchema("components", ParameterType.RAW, false, null,
-                                "Vanilla data components (version-aware, platform-gated)", null, null)),
+                                "Vanilla data components (version-aware, platform-gated)", null, null),
+                        new ParameterSchema("mechanics", ParameterType.LIST, false, null,
+                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null)),
                 "1.0.0");
     }
 
@@ -85,6 +87,7 @@ public final class ItemType implements ContentType {
                 stringList(merged.get("lore")),
                 nestedMap(merged.get("components")),
                 behaviorMaps(merged.get("behavior")),
+                behaviorMaps(merged.get("mechanics")),
                 merged));
     }
 
@@ -143,7 +146,11 @@ public final class ItemType implements ContentType {
         return out;
     }
 
-    /** The {@code behavior:} section as raw rule maps (engine compiles at apply). */
+    /**
+     * A {@code behavior:} / {@code mechanics:} section as raw maps (one
+     * entry per rule/mechanic); the engine and mechanic registry compile
+     * them at apply.
+     */
     private static List<Map<String, Object>> behaviorMaps(Object value) {
         if (!(value instanceof List<?> list)) {
             return List.of();
@@ -151,13 +158,8 @@ public final class ItemType implements ContentType {
         var out = new ArrayList<Map<String, Object>>();
         for (Object entry : list) {
             if (entry instanceof Map<?, ?> mapping) {
-                var typed = new LinkedHashMap<String, Object>();
-                for (var ruleEntry : mapping.entrySet()) {
-                    if (ruleEntry.getKey() instanceof String key) {
-                        typed.put(key, ruleEntry.getValue());
-                    }
-                }
-                out.add(typed);
+                // stringKeyed: bare `on:` loads as a YAML-1.1 boolean key
+                out.add(dev.materione.core.document.LosslessYaml.stringKeyed(mapping));
             }
         }
         return out;

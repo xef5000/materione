@@ -22,12 +22,14 @@ public record ItemDefinition(
         List<String> lore,
         Map<String, Object> components,
         List<Map<String, Object>> behavior, // raw ECA rule maps (engine-compiled at apply)
+        List<Map<String, Object>> mechanics, // raw mechanic maps ({name: params}), resolved at apply
         Map<String, Object> raw) {
 
     public ItemDefinition {
         lore = List.copyOf(lore);
         components = Map.copyOf(components);
         behavior = behavior == null ? List.of() : List.copyOf(behavior);
+        mechanics = mechanics == null ? List.of() : List.copyOf(mechanics);
         raw = Map.copyOf(raw);
     }
 

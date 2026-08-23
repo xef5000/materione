@@ -8,5 +8,4 @@ amethyst_lamp:
   behavior:
     - on: interact
       do:
-        - type: message
-          text: "&dThe lamp hums softly."
+        - message: "&dThe lamp hums softly."

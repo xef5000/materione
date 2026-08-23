@@ -51,4 +51,25 @@ public final class LosslessYaml {
         var dataMap = (java.util.Map<String, Object>) (data == null ? java.util.Map.of() : data);
         return new LosslessYamlDocument(raw, dataMap, parseError);
     }
+
+    /**
+     * A data-view mapping with YAML-1.1 boolean keys normalized back to
+     * their canonical text ({@code true}→{@code "on"}, {@code false}→
+     * {@code "off"}); non-string non-boolean keys are dropped. SnakeYAML
+     * implements YAML 1.1, where a bare {@code on:} / {@code off:} /
+     * {@code yes:} / {@code no:} mapping key loads as a boolean — without
+     * this, the ECA selector key {@code on:} would vanish for every author
+     * who writes it unquoted.
+     */
+    public static java.util.Map<String, Object> stringKeyed(java.util.Map<?, ?> source) {
+        var out = new java.util.LinkedHashMap<String, Object>();
+        for (java.util.Map.Entry<?, ?> entry : source.entrySet()) {
+            if (entry.getKey() instanceof Boolean flag) {
+                out.put(flag ? "on" : "off", entry.getValue());
+            } else if (entry.getKey() instanceof String text) {
+                out.put(text, entry.getValue());
+            }
+        }
+        return out;
+    }
 }

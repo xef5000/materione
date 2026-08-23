@@ -8,3 +8,10 @@ ruby_sword:
   lore:
     - "Burns with inner fire"
   future_component: { keep: me }
+  mechanics:
+    - durability:
+        max: 500
+    - soulbound: {}
+    - commands:
+        on_left_click:
+          - "tellraw %player% {\"text\":\"The ruby hums.\",\"color\":\"red\"}"

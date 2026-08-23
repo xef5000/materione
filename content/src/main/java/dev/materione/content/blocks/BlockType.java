@@ -123,7 +123,6 @@ public final class BlockType implements ContentType {
     }
 
     /** The raw {@code behavior:} rule list; non-list shapes yield empty (fail-soft). */
-    @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> behaviorMaps(Object value) {
         if (!(value instanceof List<?> list)) {
             return List.of();
@@ -131,7 +130,8 @@ public final class BlockType implements ContentType {
         var out = new ArrayList<Map<String, Object>>();
         for (Object entry : list) {
             if (entry instanceof Map<?, ?> mapping) {
-                out.add((Map<String, Object>) mapping);
+                // stringKeyed: bare `on:` loads as a YAML-1.1 boolean key
+                out.add(dev.materione.core.document.LosslessYaml.stringKeyed(mapping));
             }
         }
         return out;

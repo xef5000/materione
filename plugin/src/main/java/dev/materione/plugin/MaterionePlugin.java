@@ -53,6 +53,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.core.storage.PlacementIndex placements;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
+    private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -99,6 +100,11 @@ public final class MaterionePlugin extends JavaPlugin {
     /** The furniture cluster runtime; null before the commands phase. */
     public dev.materione.plugin.runtime.furniture.FurnitureService furniture() {
         return furniture;
+    }
+
+    /** The native-mechanics runtime; null before built-in registration. */
+    public dev.materione.plugin.runtime.mechanics.MechanicsService mechanics() {
+        return mechanics;
     }
 
     /** The descriptor, once the probe passed; null before/when unsupported. */
@@ -194,6 +200,11 @@ public final class MaterionePlugin extends JavaPlugin {
         pipeline = new PipelineService(
                 this, diagnostics, quarantine, registries, scheduling, descriptorOrNull());
         pipeline.registerBuiltins();
+        // native mechanics through the identical registry path (D5), before
+        // content load — item definitions reference them by name
+        mechanics = new dev.materione.plugin.runtime.mechanics.MechanicsService(
+                this, diagnostics, scheduling, pipeline.runtime());
+        mechanics.registerNatives(registries);
     }
 
     private void loadContent() {
@@ -260,6 +271,9 @@ public final class MaterionePlugin extends JavaPlugin {
         furniture = new dev.materione.plugin.runtime.furniture.FurnitureService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior);
         getServer().getPluginManager().registerEvents(furniture, this);
+        // mechanic listeners are static wiring: registered once, resolving
+        // the live shadow at event entry (no register/unregister churn)
+        getServer().getPluginManager().registerEvents(mechanics, this);
         dev.materione.plugin.runtime.blocks.PhysicsProbe.enforceOrReport(diagnostics);
     }
 

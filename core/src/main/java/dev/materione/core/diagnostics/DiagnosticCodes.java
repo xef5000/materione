@@ -122,6 +122,10 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode ORPHANED_PLACEMENT =
             new DiagnosticCode("MTR-0026", Severity.INFO, "Placement references an unknown definition");
 
+    /** An item declares a mechanic that is unknown, or parameters the mechanic rejects; it is skipped. */
+    public static final DiagnosticCode UNKNOWN_MECHANIC =
+            new DiagnosticCode("MTR-0027", Severity.WARN, "Item mechanic skipped");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -148,7 +152,8 @@ public final class DiagnosticCodes {
             ACTION_FAILED,
             BLOCK_DATA_MISMATCH,
             PHYSICS_SUPPRESSION_INACTIVE,
-            ORPHANED_PLACEMENT);
+            ORPHANED_PLACEMENT,
+            UNKNOWN_MECHANIC);
 
     private DiagnosticCodes() {}
 
