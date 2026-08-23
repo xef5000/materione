@@ -126,6 +126,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode UNKNOWN_MECHANIC =
             new DiagnosticCode("MTR-0027", Severity.WARN, "Item mechanic skipped");
 
+    /** A change cannot be applied hot; it is staged and applied at the next boot (§4.5). */
+    public static final DiagnosticCode RESTART_STAGED =
+            new DiagnosticCode("MTR-0028", Severity.WARN, "Change staged for restart-required application");
+
+    /** Staged restart-required changes were applied during this boot, before content load. */
+    public static final DiagnosticCode RESTART_APPLIED =
+            new DiagnosticCode("MTR-0029", Severity.INFO, "Staged restart changes applied at boot");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -153,7 +161,9 @@ public final class DiagnosticCodes {
             BLOCK_DATA_MISMATCH,
             PHYSICS_SUPPRESSION_INACTIVE,
             ORPHANED_PLACEMENT,
-            UNKNOWN_MECHANIC);
+            UNKNOWN_MECHANIC,
+            RESTART_STAGED,
+            RESTART_APPLIED);
 
     private DiagnosticCodes() {}
 

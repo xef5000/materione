@@ -11,8 +11,32 @@ import java.util.Objects;
  */
 public final class ContentRuntime {
 
-    /** What one apply changed, for the pre-apply report and doctor. */
-    public record ApplyReport(int added, int removed, int changed, String packSha256) {}
+    /**
+     * The pre-apply report (plugin.md §4.5): change counts per type,
+     * removals by policy (M2 ships one policy — keep-flagged: the placed
+     * instances stay and resolve to orphans, flagged for admin resolution),
+     * and recipe enable/disable counts.
+     */
+    public record ApplyReport(
+            int added, int removed, int changed,
+            int blocksAdded, int blocksRemoved,
+            int furnitureAdded, int furnitureRemoved,
+            int recipesEnabled, int recipesDisabled,
+            String packSha256) {
+
+        /** Operator-facing summary lines (log + doctor). */
+        public void lines(java.util.function.Consumer<String> out) {
+            out.accept("items: +" + added() + " ~" + changed() + " -" + removed()
+                    + " (removed stay keep-flagged)");
+            if (blocksAdded() + blocksRemoved() > 0) {
+                out.accept("blocks: +" + blocksAdded() + " -" + blocksRemoved());
+            }
+            if (furnitureAdded() + furnitureRemoved() > 0) {
+                out.accept("furniture: +" + furnitureAdded() + " -" + furnitureRemoved());
+            }
+            out.accept("recipes: " + recipesEnabled() + " enabled, " + recipesDisabled() + " disabled");
+        }
+    }
 
     private volatile RuntimeRegistries registries = RuntimeRegistries.empty();
     private volatile String livePackSha256 = "";
@@ -23,6 +47,15 @@ public final class ContentRuntime {
 
     public String livePackSha256() {
         return livePackSha256;
+    }
+
+    /**
+     * The pre-apply report against the live state — computable BEFORE any
+     * swap, so an operator surface can show it first (§4.5).
+     */
+    public ApplyReport diffAgainst(RuntimeRegistries shadow, String packSha256) {
+        Objects.requireNonNull(shadow, "shadow");
+        return diff(registries, shadow, packSha256);
     }
 
     /**
@@ -59,6 +92,47 @@ public final class ContentRuntime {
         int removed = (int) live.items().stream()
                 .filter(item -> shadow.item(item.id()).isEmpty())
                 .count();
-        return new ApplyReport(added, removed, changed, packSha256);
+
+        var liveBlocks = live.view(RuntimeBlocks.KEY);
+        var shadowBlocks = shadow.view(RuntimeBlocks.KEY);
+        int blocksAdded = countNew(liveBlocks == null ? null : liveBlocks.ids(),
+                shadowBlocks == null ? null : shadowBlocks.ids());
+        int blocksRemoved = countNew(shadowBlocks == null ? null : shadowBlocks.ids(),
+                liveBlocks == null ? null : liveBlocks.ids());
+
+        var liveFurniture = live.view(RuntimeFurnitures.KEY);
+        var shadowFurniture = shadow.view(RuntimeFurnitures.KEY);
+        int furnitureAdded = countNew(liveFurniture == null ? null : liveFurniture.ids(),
+                shadowFurniture == null ? null : shadowFurniture.ids());
+        int furnitureRemoved = countNew(shadowFurniture == null ? null : shadowFurniture.ids(),
+                liveFurniture == null ? null : liveFurniture.ids());
+
+        int recipesEnabled = 0;
+        for (var recipe : shadow.recipes()) {
+            if (live.recipe(recipe.id()).isEmpty()) {
+                recipesEnabled++;
+            }
+        }
+        int recipesDisabled = 0;
+        for (var recipe : live.recipes()) {
+            if (shadow.recipe(recipe.id()).isEmpty()) {
+                recipesDisabled++;
+            }
+        }
+
+        return new ApplyReport(added, removed, changed,
+                blocksAdded, blocksRemoved, furnitureAdded, furnitureRemoved,
+                recipesEnabled, recipesDisabled, packSha256);
+    }
+
+    /** Entries of {@code next} absent from {@code previous} (either set may be missing). */
+    private static int countNew(java.util.Set<?> previous, java.util.Set<?> next) {
+        if (next == null || next.isEmpty()) {
+            return 0;
+        }
+        if (previous == null) {
+            return next.size();
+        }
+        return (int) next.stream().filter(id -> !previous.contains(id)).count();
     }
 }

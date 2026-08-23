@@ -10,6 +10,7 @@ import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
+import dev.materione.core.pipeline.PipelineResult;
 import dev.materione.core.pipeline.PipelineRunner;
 import dev.materione.core.pipeline.ReloadScope;
 import dev.materione.core.runtime.ContentRuntime;
@@ -33,9 +34,9 @@ import org.junit.jupiter.api.io.TempDir;
  * the 50-item corpus pack) with the real stage classes — the same
  * composition the harness exercises live on Paper.
  *
- * <p>Deferred budgets (documented, not yet owned): targeted reload &lt; 1 s
- * needs the M2 fingerprint cache; cold item detect ~10–50 µs needs a live
- * PDC read (harness-level from M3, when players exist in scenarios).
+ * <p>Deferred budgets (documented, not yet owned): cold item detect
+ * ~10–50 µs needs a live PDC read (harness-level from M3, when players
+ * exist in scenarios).
  */
 class ContentPerfBudgetTest {
 
@@ -43,6 +44,7 @@ class ContentPerfBudgetTest {
     private static final long PACK_BUILD_BUDGET_MS = 30_000;
     private static final long NO_OP_DECISION_BUDGET_MS = 100;
     private static final long APPLY_SWAP_BUDGET_MS = 50;
+    private static final long TARGETED_RELOAD_BUDGET_MS = 1_000;
     private static final long RESOLVE_BUDGET_NS = 1_000;
 
     private final DiagnosticsBusService diagnostics = new DiagnosticsBusService(256);
@@ -132,6 +134,29 @@ class ContentPerfBudgetTest {
         assertThat(elapsedMs)
                 .as("apply swap of 53 items — the main-thread stall proxy (0 stalls > 50 ms)")
                 .isLessThan(APPLY_SWAP_BUDGET_MS);
+    }
+
+    @Test
+    void targetedSingleFileReloadUnderOneSecond(@TempDir Path workDir) throws Exception {
+        Loaded loaded = loadCorpus(workDir);
+        var runner = new PipelineRunner(diagnostics, quarantine);
+        runner.request(new ReloadScope.Everything(), fixturesPacks());
+        Path target = fixturesPacks().resolve("corpus").resolve("items").resolve("amulet_red.yml");
+        assertThat(java.nio.file.Files.exists(target)).isTrue();
+
+        long start = System.nanoTime();
+        var runtime = new ContentRuntime();
+        PipelineResult result = runner.request(
+                new ReloadScope.FileSet(java.util.Set.of(target)), fixturesPacks());
+        RuntimeRegistries shadow = buildShadow(runner.lastPacks());
+        runtime.diffAgainst(shadow, loaded.outcome().sha256());
+        long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+
+        assertThat(result.completed()).isTrue();
+        assertThat(shadow.itemCount()).isEqualTo(53);
+        assertThat(elapsedMs)
+                .as("targeted single-file reload (scoped parse + compile + shadow + pre-apply diff)")
+                .isLessThan(TARGETED_RELOAD_BUDGET_MS);
     }
 
     // --- composition --------------------------------------------------------

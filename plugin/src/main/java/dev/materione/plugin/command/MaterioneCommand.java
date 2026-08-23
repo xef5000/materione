@@ -138,6 +138,23 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                                 + (runtime.livePackSha256().isBlank() ? "none" : runtime.livePackSha256().substring(0, 12) + "…")),
                 NamedTextColor.GRAY));
 
+        var lastReport = plugin.pipeline() == null ? null : plugin.pipeline().lastReport();
+        sender.sendMessage(Component.text(
+                "pre-apply report (last apply): "
+                        + (lastReport == null ? "none yet"
+                                : "+" + lastReport.added() + " ~" + lastReport.changed()
+                                        + " -" + lastReport.removed() + " items, "
+                                        + "+" + lastReport.blocksAdded() + "/-" + lastReport.blocksRemoved()
+                                        + " blocks, +" + lastReport.furnitureAdded() + "/-"
+                                        + lastReport.furnitureRemoved() + " furniture"),
+                NamedTextColor.GRAY));
+
+        var restartStaging = plugin.restartStaging();
+        sender.sendMessage(Component.text(
+                "staged-restart: " + (restartStaging == null ? "not initialized"
+                        : restartStaging.load().size() + " pending change(s)"),
+                NamedTextColor.GRAY));
+
         var delivery = plugin.delivery();
         sender.sendMessage(Component.text(
                 "delivery: " + (delivery == null || delivery.currentUrl().isEmpty()

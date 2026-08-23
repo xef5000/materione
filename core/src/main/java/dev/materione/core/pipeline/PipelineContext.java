@@ -27,6 +27,10 @@ public final class PipelineContext {
     private final List<NamespacedId> excluded = new ArrayList<>();
     /** Assets found under packs' {@code assets/} trees — recorded at parse so validators stay pure (R6). */
     private final Set<NamespacedId> knownAssets = new LinkedHashSet<>();
+    /** The last completed run's packs — targeted scopes splice onto these. Set by the runner. */
+    private volatile List<ContentPack> previousPacks = List.of();
+    /** The persistent fingerprint table — targeted scopes expand on drift. Set by the runner. */
+    private volatile FingerprintCache fingerprints;
 
     public PipelineContext(
             ReloadScope scope,
@@ -37,6 +41,14 @@ public final class PipelineContext {
         this.packsRoot = packsRoot;
         this.diagnostics = diagnostics;
         this.quarantine = quarantine;
+    }
+
+    void previousPacks(List<ContentPack> packs) {
+        this.previousPacks = List.copyOf(packs);
+    }
+
+    void fingerprints(FingerprintCache cache) {
+        this.fingerprints = cache;
     }
 
     public ReloadScope scope() {
@@ -69,5 +81,13 @@ public final class PipelineContext {
 
     public Set<NamespacedId> knownAssets() {
         return knownAssets;
+    }
+
+    public List<ContentPack> previousPacks() {
+        return previousPacks;
+    }
+
+    public FingerprintCache fingerprints() {
+        return fingerprints;
     }
 }

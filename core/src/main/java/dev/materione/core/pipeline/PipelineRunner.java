@@ -30,6 +30,7 @@ public final class PipelineRunner {
     private final ParseStage parseStage = new ParseStage();
     private final ValidateStage validateStage = new ValidateStage();
     private final GraphStage graphStage = new GraphStage();
+    private volatile FingerprintCache fingerprints = FingerprintCache.empty();
 
     private final ReentrantLock runLock = new ReentrantLock();
     private final ConcurrentLinkedQueue<ReloadScope> pendingScopes = new ConcurrentLinkedQueue<>();
@@ -53,6 +54,16 @@ public final class PipelineRunner {
     /** The packs parsed by the last run (empty before the first run). */
     public java.util.List<ContentPack> lastPacks() {
         return lastPacks;
+    }
+
+    /** Replaces the fingerprint table (boot-time load from {@code fingerprints.bin}). */
+    public void replaceFingerprints(FingerprintCache cache) {
+        this.fingerprints = cache == null ? FingerprintCache.empty() : cache;
+    }
+
+    /** Persists the fingerprint table; failures are non-fatal (the next run re-hashes). */
+    public boolean saveFingerprints(java.nio.file.Path file) {
+        return fingerprints.save(file);
     }
 
     private volatile ContentGraph lastGraph = new ContentGraph();
@@ -85,6 +96,8 @@ public final class PipelineRunner {
 
     private PipelineResult run(ReloadScope scope, java.nio.file.Path packsRoot) {
         var context = new PipelineContext(scope, packsRoot, diagnostics, quarantine);
+        context.previousPacks(lastPacks);
+        context.fingerprints(fingerprints);
         diagnostics.publish(new Diagnostic(
                 DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
                 "pipeline run started (scope " + scope + ")",

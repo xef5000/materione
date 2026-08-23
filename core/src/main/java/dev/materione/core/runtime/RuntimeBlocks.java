@@ -43,6 +43,11 @@ public final class RuntimeBlocks {
         return Optional.ofNullable(byId.get(id));
     }
 
+    /** Every defined block id (diff/report surface). */
+    public java.util.Set<NamespacedId> ids() {
+        return java.util.Set.copyOf(byId.keySet());
+    }
+
     /**
      * The custom block whose allocated state slot {@code slot} of host
      * {@code host} (lowercase vanilla id) decodes to — empty for every

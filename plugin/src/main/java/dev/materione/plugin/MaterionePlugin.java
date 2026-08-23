@@ -53,6 +53,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.core.storage.PlacementIndex placements;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
+    private dev.materione.core.storage.RestartStaging restartStaging;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
 
     public DiagnosticsBusService diagnostics() {
@@ -105,6 +106,11 @@ public final class MaterionePlugin extends JavaPlugin {
     /** The native-mechanics runtime; null before built-in registration. */
     public dev.materione.plugin.runtime.mechanics.MechanicsService mechanics() {
         return mechanics;
+    }
+
+    /** The staged-restart queue; null before content load. */
+    public dev.materione.core.storage.RestartStaging restartStaging() {
+        return restartStaging;
     }
 
     /** The descriptor, once the probe passed; null before/when unsupported. */
@@ -208,6 +214,20 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     private void loadContent() {
+        // staged restart-required changes apply BEFORE content load (§4.5):
+        // M2 ships the machinery with no producers, so this drains a queue
+        // that only tests and future classifiers fill
+        restartStaging = dev.materione.core.storage.RestartStaging.open(
+                storage.storageDir().resolve("staged-restart"));
+        var pendingRestart = restartStaging.load();
+        for (var entry : pendingRestart) {
+            diagnostics.publish(Diagnostic.info(
+                    DiagnosticCodes.RESTART_APPLIED,
+                    "staged change applied at boot: " + entry.resource() + " (" + entry.reason() + ")"));
+        }
+        if (!pendingRestart.isEmpty()) {
+            restartStaging.clear();
+        }
         delivery = new DeliveryService(this, diagnostics, scheduling);
         delivery.start(settings);
         getServer().getPluginManager().registerEvents(delivery, this);

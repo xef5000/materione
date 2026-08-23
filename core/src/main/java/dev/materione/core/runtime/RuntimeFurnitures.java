@@ -37,6 +37,11 @@ public final class RuntimeFurnitures {
         return Optional.ofNullable(byId.get(id));
     }
 
+    /** Every defined furniture id (diff/report surface). */
+    public java.util.Set<NamespacedId> ids() {
+        return java.util.Set.copyOf(byId.keySet());
+    }
+
     /** The furniture a held item places, if its definition declared {@code item:}. */
     public Optional<NamespacedId> placedBy(NamespacedId itemId) {
         return Optional.ofNullable(placedByItem.get(itemId));

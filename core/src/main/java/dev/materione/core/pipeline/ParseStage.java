@@ -6,6 +6,7 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.SourceLocation;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.document.LosslessYaml;
+import dev.materione.core.document.LosslessYamlDocument;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -17,33 +18,164 @@ import java.util.List;
  * {@code .yml} file losslessly (§5.6) and produces content resources.
  * Fail-soft (D6): a parse failure in one file is quarantined with file,
  * line and column — it never reads or blocks other files.
+ *
+ * <p>Targeted reloads: a full ({@code Everything}) run parses every pack;
+ * {@code OnePack}/{@code FileSet} scopes parse only their targets and
+ * splice onto the previous run's packs. A targeted scope expands to a
+ * full run whenever there is no previous run to build on — or when any
+ * out-of-scope source drifted from its recorded fingerprint (the cache is
+ * a correctness net first, a speed feature second).
  */
 public final class ParseStage {
 
+    /** Session-scoped document reuse: unchanged files skip read+parse entirely. */
+    private final java.util.concurrent.ConcurrentHashMap<Path, CachedDocument> documentCache =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private record CachedDocument(String sha256, LosslessYamlDocument document) {}
+
+    private static final java.util.function.Predicate<Path> ALL_FILES = file -> true;
+
     /**
-     * Parses every pack under the context's packs root (scope filtering
-     * arrives with targeted reload in slice 3; a full run parses everything
-     * in scope already). Never throws.
+     * Parses per the context's scope. Never throws.
      */
     public void run(PipelineContext context) {
         Path root = context.packsRoot();
+        ReloadScope scope = context.scope();
         if (!Files.isDirectory(root)) {
             return;
         }
+        java.util.List<Path> packDirs;
         try (var packs = Files.list(root)) {
-            var packDirs = packs.filter(Files::isDirectory).sorted().toList();
-            for (Path packDir : packDirs) {
-                parsePack(context, packDir);
-            }
+            packDirs = packs.filter(Files::isDirectory).sorted().toList();
         } catch (IOException e) {
             context.diagnostics().publish(new Diagnostic(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
                     "could not list packs under " + root + ": " + e.getMessage(),
                     null, null, "check permissions on the content directory"));
+            return;
+        }
+
+        if (!(scope instanceof ReloadScope.OnePack one) && !(scope instanceof ReloadScope.FileSet set)) {
+            for (Path packDir : packDirs) {
+                context.packs().add(buildPack(context, packDir, ALL_FILES));
+            }
+            pruneFingerprints(context, root);
+            return;
+        }
+        parseTargeted(context, root, scope instanceof ReloadScope.OnePack p ? p : null,
+                scope instanceof ReloadScope.FileSet f ? f : null, packDirs);
+        pruneFingerprints(context, root);
+    }
+
+    /** Drops fingerprints of files that left the tree, so deletions can't wedge targeted scopes. */
+    private void pruneFingerprints(PipelineContext context, Path root) {
+        var kept = new java.util.HashSet<String>();
+        for (Path packDir : java.util.List.of(root)) {
+            collectRelativeYamls(packDir, root, kept);
+        }
+        FingerprintCache fingerprints = context.fingerprints();
+        if (fingerprints != null && !kept.isEmpty()) {
+            fingerprints.retainAll(kept);
         }
     }
 
-    private void parsePack(PipelineContext context, Path packDir) {
+    /** OnePack/FileSet handling with the drift-based expansion guard. */
+    private void parseTargeted(
+            PipelineContext context, Path root, ReloadScope.OnePack one,
+            ReloadScope.FileSet fileSet, java.util.List<Path> packDirs) {
+        var inScope = new java.util.LinkedHashSet<String>();
+        var touchedPacks = new java.util.LinkedHashSet<String>();
+        if (one != null) {
+            touchedPacks.add(one.packId());
+            Path packDir = root.resolve(one.packId());
+            collectRelativeYamls(packDir, root, inScope);
+        } else {
+            for (Path file : fileSet.files()) {
+                Path normalized = file.toAbsolutePath().normalize();
+                if (!normalized.startsWith(root.toAbsolutePath()) || !Files.isRegularFile(normalized)) {
+                    continue;
+                }
+                inScope.add(relativeOf(root, normalized));
+                touchedPacks.add(firstSegment(root, normalized));
+            }
+        }
+
+        String expandReason = null;
+        if (context.previousPacks().isEmpty()) {
+            expandReason = "no previous run to build on";
+        } else if (one != null && previousPack(context.previousPacks(), one.packId()) == null) {
+            expandReason = "pack '" + one.packId() + "' is new since the last full run";
+        } else {
+            try {
+                if (context.fingerprints() != null
+                        && context.fingerprints().driftedOutside(inScope, root)) {
+                    expandReason = "out-of-scope source files changed";
+                }
+            } catch (IOException e) {
+                expandReason = "packs root could not be scanned for drift";
+            }
+        }
+        if (expandReason != null) {
+            context.diagnostics().publish(new Diagnostic(
+                    dev.materione.core.diagnostics.DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
+                    "targeted scope expanded to everything: " + expandReason,
+                    null, null, null));
+            for (Path packDir : packDirs) {
+                context.packs().add(buildPack(context, packDir, ALL_FILES));
+            }
+            return;
+        }
+
+        // splice: untouched packs ride over untouched, touched ones rebuild scoped
+        var previousById = new java.util.LinkedHashMap<String, ContentPack>();
+        for (ContentPack pack : context.previousPacks()) {
+            previousById.put(pack.id(), pack);
+        }
+        java.util.function.Predicate<Path> filter = one != null
+                ? file -> true
+                : file -> inScope.contains(relativeOf(root, file.toAbsolutePath().normalize()));
+        for (var entry : previousById.entrySet()) {
+            if (!touchedPacks.contains(entry.getKey())) {
+                context.packs().add(entry.getValue());
+            }
+        }
+        for (String packId : touchedPacks.stream().sorted().toList()) {
+            Path packDir = root.resolve(packId);
+            if (Files.isDirectory(packDir)) {
+                context.packs().add(buildPack(context, packDir, filter));
+            }
+        }
+    }
+
+    private static ContentPack previousPack(java.util.List<ContentPack> packs, String id) {
+        return packs.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
+    }
+
+    private static void collectRelativeYamls(Path dir, Path root, java.util.Set<String> out) {
+        if (!Files.isDirectory(dir)) {
+            return;
+        }
+        try (var walk = Files.walk(dir)) {
+            walk.filter(f -> Files.isRegularFile(f) && f.toString().endsWith(".yml"))
+                    .sorted()
+                    .forEach(f -> out.add(relativeOf(root, f)));
+        } catch (IOException e) {
+            // unreadable pack: nothing in scope, expansion guard covers safety
+        }
+    }
+
+    private static String relativeOf(Path root, Path file) {
+        return root.toAbsolutePath()
+                .relativize(file.toAbsolutePath()).toString().replace('\\', '/');
+    }
+
+    private static String firstSegment(Path root, Path file) {
+        Path relative = root.toAbsolutePath().relativize(file.toAbsolutePath());
+        return relative.getNameCount() > 1 ? relative.getName(0).toString() : "";
+    }
+
+    private ContentPack buildPack(PipelineContext context, Path packDir, java.util.function.Predicate<Path> include) {
         String packId = packDir.getFileName().toString();
         Path manifestFile = packDir.resolve(PackLayout.MANIFEST_FILE);
         PackManifest manifest = null;
@@ -64,10 +196,30 @@ public final class ParseStage {
         }
         var resources = new ArrayList<ContentResource>();
         for (String dir : PackLayout.CONTENT_DIRS) {
-            parseDir(context, packDir, packId, dir, resources);
+            parseDir(context, packDir, packId, dir, resources, include);
         }
         indexAssets(context, packDir, packId);
-        context.packs().add(new ContentPack(packId, packDir, manifest, resources));
+        return new ContentPack(packId, packDir, manifest, resources);
+    }
+
+    /**
+     * The document for one file, reusing the cached parse when the file's
+     * content hash is unchanged (session-scoped), and recording its
+     * fingerprint so later targeted scopes can trust out-of-scope state.
+     */
+    private LosslessYamlDocument documentOf(PipelineContext context, Path file) {
+        String sha256 = FingerprintCache.sha256(file);
+        FingerprintCache fingerprints = context.fingerprints();
+        if (fingerprints != null) {
+            fingerprints.record(relativeOf(context.packsRoot(), file), sha256);
+        }
+        CachedDocument cached = documentCache.get(file);
+        if (cached != null && cached.sha256().equals(sha256)) {
+            return cached.document();
+        }
+        LosslessYamlDocument document = LosslessYaml.parse(readFile(file));
+        documentCache.put(file, new CachedDocument(sha256, document));
+        return document;
     }
 
     /** Asset kinds whose files are referenced relative to the kind dir (vanilla convention). */
@@ -112,7 +264,8 @@ public final class ParseStage {
     }
 
     private void parseDir(
-            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
+            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out,
+            java.util.function.Predicate<Path> include) {
         Path dirPath = packDir.resolve(dir);
         if (!Files.isDirectory(dirPath)) {
             return;
@@ -121,7 +274,10 @@ public final class ParseStage {
         try (var files = Files.list(dirPath)) {
             var yamls = files.filter(p -> p.toString().endsWith(".yml")).sorted().toList();
             for (Path file : yamls) {
-                var document = LosslessYaml.parse(readFile(file));
+                if (!include.test(file.toAbsolutePath().normalize())) {
+                    continue; // out of a targeted scope's reach — rides over from the previous run
+                }
+                var document = documentOf(context, file);
                 if (document.parseError().isPresent()) {
                     Diagnostic parseFailure = new Diagnostic(
                             DiagnosticCodes.CONTENT_PARSE_FAILED, Severity.ERROR,

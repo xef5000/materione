@@ -60,6 +60,8 @@ public final class PipelineService {
     private final PackCompiler compiler = new PackCompiler();
     private final ContentRuntime runtime = new ContentRuntime();
     private final RecipeApplier recipeApplier = new RecipeApplier();
+    private volatile dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport;
+    private boolean fingerprintsLoaded;
     private AllocationTable allocation;
 
     public PipelineService(
@@ -97,6 +99,11 @@ public final class PipelineService {
         return runtime;
     }
 
+    /** The last pre-apply report (doctor surface); null before the first apply. */
+    public dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport() {
+        return lastReport;
+    }
+
     public PipelineRunner runner() {
         return runner;
     }
@@ -113,8 +120,21 @@ public final class PipelineService {
      */
     public ReloadSummary reload(java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
             java.nio.file.Path storageDir) {
+        return reload(new dev.materione.core.pipeline.ReloadScope.Everything(),
+                packsRoot, generatedDir, storageDir);
+    }
+
+    /** Targeted variant: {@code OnePack}/{@code FileSet} scopes splice onto the last full run. */
+    public ReloadSummary reload(dev.materione.core.pipeline.ReloadScope scope,
+            java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
+            java.nio.file.Path storageDir) {
         if (allocation == null) {
             allocation = AllocationTable.load(storageDir.resolve("allocation.bin"));
+        }
+        if (!fingerprintsLoaded) {
+            runner.replaceFingerprints(dev.materione.core.pipeline.FingerprintCache.load(
+                    generatedDir.resolve("fingerprints.bin")));
+            fingerprintsLoaded = true;
         }
         if (!PackFormats.isKnown(descriptor.minecraftVersion())) {
             // output is unchanged — the advertised range still covers
@@ -126,7 +146,7 @@ public final class PipelineService {
                             + "' is not in the known pack-format table; the pack advertises formats "
                             + PackFormats.FLOOR + ".." + PackFormats.MAX_KNOWN_FORMAT));
         }
-        PipelineResult result = runner.request(new ReloadScope.Everything(), packsRoot);
+        PipelineResult result = runner.request(scope, packsRoot);
         if (result == null || !result.completed()) {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
@@ -136,6 +156,11 @@ public final class PipelineService {
 
         PackCompiler.Outcome outcome = compiler.compile(
                 runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine);
+        if (outcome != null) {
+            // fingerprints persist after a successful stage: the next targeted
+            // scope can trust out-of-scope state (and expands when it can't)
+            runner.saveFingerprints(generatedDir.resolve("fingerprints.bin"));
+        }
         String sha = outcome == null ? "" : outcome.sha256();
         boolean noop = sha.equals(runtime.livePackSha256());
         RuntimeRegistries shadow = null;
@@ -163,11 +188,25 @@ public final class PipelineService {
     private void applyShadow(RuntimeRegistries shadow, String sha) {
         RuntimeRegistries previous = runtime.registries();
         String previousSha = runtime.livePackSha256();
+        // pre-apply report BEFORE the swap (§4.5): what this apply will do,
+        // including removals by policy and restart-required changes listed
+        // separately (none can be produced yet — M3 owns the producers)
+        var report = runtime.diffAgainst(shadow, sha);
+        lastReport = report;
+        var summary = new StringBuilder("pre-apply: ");
+        report.lines(line -> {
+            if (summary.length() > "pre-apply: ".length()) {
+                summary.append("; ");
+            }
+            summary.append(line);
+        });
+        diagnostics.publish(new Diagnostic(
+                DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO, summary.toString(), null, null, null));
         // the swap itself is atomic and cheap; the gateway hop is the
         // plugin.md §4.5 rule: apply runs on the global thread
         scheduling.executeGlobal(plugin, () -> {
             try {
-                var report = runtime.apply(shadow, sha);
+                runtime.apply(shadow, sha);
                 var recipes = recipeApplier.apply(shadow);
                 diagnostics.publish(new Diagnostic(
                         DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
