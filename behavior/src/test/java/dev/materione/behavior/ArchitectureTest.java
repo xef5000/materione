@@ -16,4 +16,7 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule noRawThreads = MaterioneArchRules.NO_RAW_THREADS;
+
+    @ArchTest
+    static final ArchRule behaviorIsEmbeddable = MaterioneArchRules.BEHAVIOR_IS_EMBEDDABLE;
 }

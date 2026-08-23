@@ -9,15 +9,25 @@ import java.util.Optional;
  * The immutable registry set one apply produced — the "shadow" that swaps
  * atomically (plugin.md §4.5). Readers never lock; a swap publishes a new
  * instance. Rollback is re-publishing the previous instance.
+ *
+ * <p>Typed <em>views</em> carry registry-shaped state that lives outside
+ * this module (behavior rules, later: mechanics/furniture state) but must
+ * swap in the same atomic step — a view is built by its owner module and
+ * retrieved by class key.
  */
 public final class RuntimeRegistries {
 
     private final Map<NamespacedId, RuntimeItem> items;
     private final Map<NamespacedId, RuntimeRecipe> recipes;
+    private final Map<Class<?>, Object> views;
 
-    private RuntimeRegistries(Map<NamespacedId, RuntimeItem> items, Map<NamespacedId, RuntimeRecipe> recipes) {
+    private RuntimeRegistries(
+            Map<NamespacedId, RuntimeItem> items,
+            Map<NamespacedId, RuntimeRecipe> recipes,
+            Map<Class<?>, Object> views) {
         this.items = items;
         this.recipes = recipes;
+        this.views = views;
     }
 
     public static Builder builder() {
@@ -26,7 +36,7 @@ public final class RuntimeRegistries {
 
     /** Empty registries (boot state before the first successful apply). */
     public static RuntimeRegistries empty() {
-        return new RuntimeRegistries(Map.of(), Map.of());
+        return new RuntimeRegistries(Map.of(), Map.of(), Map.of());
     }
 
     /** Registry-map hit — the &lt;1 µs budget path (plugin.md §9). */
@@ -54,9 +64,16 @@ public final class RuntimeRegistries {
         return recipes.size();
     }
 
+    /** The view registered under {@code type} by the shadow builder, if any. */
+    @SuppressWarnings("unchecked")
+    public <T> T view(Class<T> type) {
+        return (T) views.get(type);
+    }
+
     public static final class Builder {
         private final Map<NamespacedId, RuntimeItem> items = new java.util.LinkedHashMap<>();
         private final Map<NamespacedId, RuntimeRecipe> recipes = new java.util.LinkedHashMap<>();
+        private final Map<Class<?>, Object> views = new java.util.LinkedHashMap<>();
 
         public Builder item(RuntimeItem item) {
             items.put(item.id(), item);
@@ -68,8 +85,14 @@ public final class RuntimeRegistries {
             return this;
         }
 
+        /** Attaches owner-module state that must swap atomically with these registries. */
+        public Builder view(Class<?> key, Object value) {
+            views.put(key, value);
+            return this;
+        }
+
         public RuntimeRegistries build() {
-            return new RuntimeRegistries(Map.copyOf(items), Map.copyOf(recipes));
+            return new RuntimeRegistries(Map.copyOf(items), Map.copyOf(recipes), Map.copyOf(views));
         }
     }
 }

@@ -21,11 +21,13 @@ public record ItemDefinition(
         String displayName,
         List<String> lore,
         Map<String, Object> components,
+        List<Map<String, Object>> behavior, // raw ECA rule maps (engine-compiled at apply)
         Map<String, Object> raw) {
 
     public ItemDefinition {
         lore = List.copyOf(lore);
         components = Map.copyOf(components);
+        behavior = behavior == null ? List.of() : List.copyOf(behavior);
         raw = Map.copyOf(raw);
     }
 

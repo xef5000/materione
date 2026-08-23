@@ -84,6 +84,7 @@ public final class ItemType implements ContentType {
                 Templates.text(merged, "display_name"),
                 stringList(merged.get("lore")),
                 nestedMap(merged.get("components")),
+                behaviorMaps(merged.get("behavior")),
                 merged));
     }
 
@@ -137,6 +138,26 @@ public final class ItemType implements ContentType {
         for (Object entry : list) {
             if (entry instanceof String s) {
                 out.add(s);
+            }
+        }
+        return out;
+    }
+
+    /** The {@code behavior:} section as raw rule maps (engine compiles at apply). */
+    private static List<Map<String, Object>> behaviorMaps(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        var out = new ArrayList<Map<String, Object>>();
+        for (Object entry : list) {
+            if (entry instanceof Map<?, ?> mapping) {
+                var typed = new LinkedHashMap<String, Object>();
+                for (var ruleEntry : mapping.entrySet()) {
+                    if (ruleEntry.getKey() instanceof String key) {
+                        typed.put(key, ruleEntry.getValue());
+                    }
+                }
+                out.add(typed);
             }
         }
         return out;

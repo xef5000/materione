@@ -10,6 +10,7 @@ import dev.materione.content.blocks.BlockType;
 import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
+import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
@@ -182,7 +183,9 @@ public final class PipelineService {
         var itemType = contentTypes().stream().filter(t -> t.name().equals("item")).findFirst();
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var builder = RuntimeRegistries.builder();
+        var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         if (itemType.isEmpty()) {
+            builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -223,6 +226,7 @@ public final class PipelineService {
                     }
                     if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
                         builder.item(toRuntimeItem(item));
+                        compileBehaviors(item, behaviors);
                     }
                 } else if ("recipe".equals(resource.contentType()) && recipeType.isPresent()) {
                     Optional<Object> parsed;
@@ -243,7 +247,27 @@ public final class PipelineService {
                 }
             }
         }
+        builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
         return builder.build();
+    }
+
+    /**
+     * Compiles one item's {@code behavior:} section into engine rules
+     * (runtime-systems §2). Broken rules are diagnosed (MTR-0021/0022) and
+     * skipped — their siblings still load.
+     */
+    private void compileBehaviors(
+            ItemDefinition item,
+            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> behaviors) {
+        if (item.behavior().isEmpty()) {
+            return;
+        }
+        dev.materione.behavior.rule.ParsedRules parsedRules =
+                dev.materione.behavior.rule.RuleParser.compile(item.id(), item.behavior());
+        parsedRules.problems().forEach(diagnostics::publish);
+        if (!parsedRules.isEmpty()) {
+            behaviors.put(item.id(), parsedRules.rules());
+        }
     }
 
     private static RuntimeItem toRuntimeItem(ItemDefinition item) {

@@ -20,6 +20,8 @@ import dev.materione.plugin.command.MaterioneCommand;
 import dev.materione.plugin.runtime.DeliveryService;
 import dev.materione.plugin.runtime.ItemAutoUpdater;
 import dev.materione.plugin.runtime.PipelineService;
+import dev.materione.plugin.runtime.behavior.BehaviorService;
+import dev.materione.plugin.runtime.behavior.ItemBehaviorListener;
 import java.util.ArrayList;
 import java.util.List;
 import org.bukkit.command.PluginCommand;
@@ -47,6 +49,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private SchedulingGateway scheduling;
     private PipelineService pipeline;
     private DeliveryService delivery;
+    private BehaviorService behavior;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -220,6 +223,10 @@ public final class MaterionePlugin extends JavaPlugin {
         command.setTabCompleter(executor);
         getServer().getPluginManager().registerEvents(
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
+        // ECA bridge (runtime-systems §2): rules resolve from the live shadow
+        // at event entry, so the listener registers once and never churns
+        behavior = new BehaviorService(this, diagnostics, scheduling, pipeline.runtime());
+        getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
     }
 
     private String disableReason() {

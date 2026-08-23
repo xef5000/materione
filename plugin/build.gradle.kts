@@ -7,6 +7,7 @@ dependencies {
     api(project(":core"))
     api(project(":platform"))
     api(project(":content"))
+    api(project(":behavior"))
     api(project(":pack"))
     api(project(":delivery"))
 }

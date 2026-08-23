@@ -98,6 +98,18 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode VANILLA_OVERRIDE_CONFLICT =
             new DiagnosticCode("MTR-0020", Severity.WARN, "Conflicting vanilla-file override key");
 
+    /** A behavior rule is structurally invalid (missing event, no actions, unknown fields); the rule is skipped. */
+    public static final DiagnosticCode BEHAVIOR_RULE_INVALID =
+            new DiagnosticCode("MTR-0021", Severity.WARN, "Behavior rule invalid; skipped");
+
+    /** A rule condition or interpolation could not be parsed at load; the rule is skipped (MTR-0021's expression case). */
+    public static final DiagnosticCode EXPRESSION_INVALID =
+            new DiagnosticCode("MTR-0022", Severity.WARN, "Expression failed to parse; rule skipped");
+
+    /** A runtime action or evaluation failed; the chain continues, logging is rate-limited (plugin.md §5). */
+    public static final DiagnosticCode ACTION_FAILED =
+            new DiagnosticCode("MTR-0023", Severity.WARN, "Behavior action failed; chain continues");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -118,7 +130,10 @@ public final class DiagnosticCodes {
             TEXTURE_NOT_IN_ATLAS,
             PACK_FORMAT_UNKNOWN_VERSION,
             BLOCK_STATE_EXHAUSTED,
-            VANILLA_OVERRIDE_CONFLICT);
+            VANILLA_OVERRIDE_CONFLICT,
+            BEHAVIOR_RULE_INVALID,
+            EXPRESSION_INVALID,
+            ACTION_FAILED);
 
     private DiagnosticCodes() {}
 

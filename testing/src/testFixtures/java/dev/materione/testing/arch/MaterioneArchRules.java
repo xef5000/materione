@@ -107,6 +107,20 @@ public final class MaterioneArchRules {
             .resideInAnyPackage("java.io..", "java.nio.file..")
             .allowEmptyShould(true);
 
+    /**
+     * R7 — the ECA engine is embeddable (D4): {@code dev.materione.behavior..}
+     * has no Bukkit/Paper dependency. The engine parses rules, evaluates
+     * expressions against opaque context trees and orchestrates action
+     * executors that live outside it; Bukkit bindings live in {@code plugin/}
+     * so addons can reuse the engine on the plain JVM.
+     */
+    public static final ArchRule BEHAVIOR_IS_EMBEDDABLE = noClasses()
+            .that().resideInAPackage("dev.materione.behavior..")
+            .and().haveSimpleNameNotEndingWith("Test")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("org.bukkit..", "io.papermc.paper..")
+            .allowEmptyShould(true);
+
     private MaterioneArchRules() {}
 
     /** Matches calls to {@code org.bukkit.Bukkit#getBukkitVersion()}. */
