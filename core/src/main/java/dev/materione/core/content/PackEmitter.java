@@ -20,6 +20,16 @@ public interface PackEmitter {
     /** Copies a pack asset file verbatim ({@code assets/<kind>/<path>}). */
     void copyAsset(Path sourceFile, String destination);
 
+    /**
+     * Emits (merges into) {@code assets/minecraft/<path>} — the override seam
+     * for vanilla-namespace files the client merges by key ({@code
+     * blockstates/*.json}, {@code sounds.json}). Fragments from every pack
+     * deep-merge deterministically; conflicting values keep the first and are
+     * diagnosed. Vanilla-namespace files that must not merge ship through
+     * {@link #copyAsset} instead.
+     */
+    void vanillaFile(String path, Map<String, Object> json);
+
     /** Sets pack.mcmeta description text (pack format is the platform's). */
     void description(String text);
 }

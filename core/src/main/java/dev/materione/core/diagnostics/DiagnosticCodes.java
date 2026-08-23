@@ -8,7 +8,7 @@ import java.util.List;
  * <p>The diagnostic-code registry. Codes are API: users search them, docs
  * document them, addons emit them — never renumber, never reuse. Ranges:
  * M0 bootstrap MTR-0001..0006, M1 pipeline MTR-0007..0016, pack output
- * MTR-0017..0018.
+ * MTR-0017..0018, M2 world systems MTR-0019...
  */
 public final class DiagnosticCodes {
 
@@ -88,6 +88,16 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode PACK_FORMAT_UNKNOWN_VERSION =
             new DiagnosticCode("MTR-0018", Severity.WARN, "Server version not in the pack-format table");
 
+    // M2 — world systems (runtime-systems §4/§5)
+
+    /** A block definition needs a state slot but its technique's space is exhausted; the resource is skipped. */
+    public static final DiagnosticCode BLOCK_STATE_EXHAUSTED =
+            new DiagnosticCode("MTR-0019", Severity.ERROR, "Block-state allocation space exhausted");
+
+    /** Two sources claim the same key of a vanilla-namespace merged file; the first wins deterministically. */
+    public static final DiagnosticCode VANILLA_OVERRIDE_CONFLICT =
+            new DiagnosticCode("MTR-0020", Severity.WARN, "Conflicting vanilla-file override key");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -106,7 +116,9 @@ public final class DiagnosticCodes {
             PACK_DECLINED,
             DELIVERY_PUBLISHED,
             TEXTURE_NOT_IN_ATLAS,
-            PACK_FORMAT_UNKNOWN_VERSION);
+            PACK_FORMAT_UNKNOWN_VERSION,
+            BLOCK_STATE_EXHAUSTED,
+            VANILLA_OVERRIDE_CONFLICT);
 
     private DiagnosticCodes() {}
 

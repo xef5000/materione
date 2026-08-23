@@ -95,7 +95,7 @@ class ItemTypeTest {
                 templates);
         var emitter = new RecordingEmitter();
         type.compile(parsed.orElseThrow(),
-                NamespacedId.parse("sample:ruby_sword_model"), emitter);
+                NamespacedId.parse("sample:ruby_sword_model"), emitter, NO_ALLOCATIONS);
 
         assertThat(emitter.models).hasSize(1);
         var model = emitter.models.get(0);
@@ -118,7 +118,7 @@ class ItemTypeTest {
                 map("material", "IRON_AXE", "model", "sample:models/custom"),
                 Map.of());
         var emitter = new RecordingEmitter();
-        type.compile(parsed.orElseThrow(), NamespacedId.parse("sample:axe_model"), emitter);
+        type.compile(parsed.orElseThrow(), NamespacedId.parse("sample:axe_model"), emitter, NO_ALLOCATIONS);
         assertThat(emitter.models).isEmpty(); // nothing generated
         var reference = cast(emitter.itemDefinitions.get(0).json().get("model"));
         assertThat(reference).containsEntry("id", "sample:models/custom");
@@ -131,7 +131,7 @@ class ItemTypeTest {
                 map("material", "PAPER"),
                 Map.of());
         var emitter = new RecordingEmitter();
-        type.compile(parsed.orElseThrow(), NamespacedId.parse("sample:plain_model"), emitter);
+        type.compile(parsed.orElseThrow(), NamespacedId.parse("sample:plain_model"), emitter, NO_ALLOCATIONS);
         assertThat(emitter.models).isEmpty();
         assertThat(emitter.itemDefinitions).isEmpty();
     }
@@ -153,6 +153,20 @@ class ItemTypeTest {
 
     private record Emitted(NamespacedId id, Map<String, Object> json) {}
 
+    /** Items allocate nothing; a rejecting stub keeps accidental allocation loud. */
+    private static final dev.materione.core.content.Allocations NO_ALLOCATIONS =
+            new dev.materione.core.content.Allocations() {
+                @Override
+                public String allocate(NamespacedId resource, String kind) {
+                    throw new IllegalStateException("item compilation must not allocate");
+                }
+
+                @Override
+                public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
+                    return java.util.Optional.empty();
+                }
+            };
+
     private static final class RecordingEmitter implements PackEmitter {
         final List<Emitted> itemDefinitions = new ArrayList<>();
         final List<Emitted> models = new ArrayList<>();
@@ -169,6 +183,11 @@ class ItemTypeTest {
 
         @Override
         public void copyAsset(Path sourceFile, String destination) {}
+
+        @Override
+        public void vanillaFile(String path, Map<String, Object> json) {
+            throw new IllegalStateException("items must not emit vanilla-namespace files");
+        }
 
         @Override
         public void description(String text) {}

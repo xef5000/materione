@@ -36,6 +36,13 @@ public interface ContentType {
      * Compiles one definition into pack output through {@link PackEmitter}.
      * The compiler calls this per definition, in graph order; hooks stay
      * deterministic (same definition + allocation → same output, D7).
+     * Stable durable values come from {@link Allocations} — hooks never
+     * derive ids themselves. Expected rejections throw
+     * {@link CompileRejectException}; anything else is treated as a crash.
      */
-    void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter);
+    void compile(
+            Object definition,
+            NamespacedId allocatedModelId,
+            PackEmitter emitter,
+            Allocations allocations);
 }

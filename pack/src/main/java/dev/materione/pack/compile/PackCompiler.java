@@ -68,13 +68,20 @@ public final class PackCompiler {
     /** One compile's outcome. */
     public record Outcome(Path stagedZip, String sha256, int itemDefinitions, int generatedModels) {}
 
+    /** A {@link PackEmitter#vanillaFile} fragment awaiting the deterministic merge. */
+    private record VanillaFragment(String path, Map<String, Object> json) {}
+
     /** Collects emitter output deterministically, then hands it to creative. */
     private static final class Emitter implements PackEmitter {
         final Map<String, Map<String, Object>> itemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> models = new TreeMap<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
+        final List<VanillaFragment> vanillaFragments = new ArrayList<>();
+        /** User-shipped override files; they merge ahead of generated fragments. */
+        final List<VanillaFragment> userVanillaFragments = new ArrayList<>();
         String description = DEFAULT_DESCRIPTION;
         String atlasJson;
+        Map<String, Map<String, Object>> vanillaJson;
 
         @Override
         public void itemDefinition(NamespacedId id, Map<String, Object> itemModelJson) {
@@ -89,6 +96,11 @@ public final class PackCompiler {
         @Override
         public void copyAsset(Path sourceFile, String destination) {
             assetCopies.add(new String[] {sourceFile.toString(), destination});
+        }
+
+        @Override
+        public void vanillaFile(String path, Map<String, Object> json) {
+            vanillaFragments.add(new VanillaFragment(path, json));
         }
 
         @Override
@@ -115,6 +127,17 @@ public final class PackCompiler {
             byDirectory.put(type.directory(), type);
         }
         var emitter = new Emitter();
+        dev.materione.core.content.Allocations allocations = new dev.materione.core.content.Allocations() {
+            @Override
+            public String allocate(NamespacedId resource, String kind) {
+                return allocation.allocate(resource, kind);
+            }
+
+            @Override
+            public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
+                return allocation.allocationOf(resource, kind);
+            }
+        };
 
         // template pool: id → raw definition (template chains resolve at parse)
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -166,7 +189,12 @@ public final class PackCompiler {
                         resource.id().namespace(),
                         resource.id().value() + "_model");
                 try {
-                    type.compile(parsed.get(), modelId, emitter);
+                    type.compile(parsed.get(), modelId, emitter, allocations);
+                } catch (dev.materione.core.content.CompileRejectException e) {
+                    Diagnostic rejected = new Diagnostic(
+                            e.code(), Severity.ERROR, e.getMessage(), resource.id(), null, e.hint());
+                    diagnostics.publish(rejected);
+                    quarantine.add(resource.id(), rejected);
                 } catch (RuntimeException e) {
                     quarantineResource(resource, e, diagnostics, quarantine);
                 }
@@ -174,6 +202,7 @@ public final class PackCompiler {
         }
 
         buildAtlas(emitter, diagnostics);
+        buildVanillaFiles(emitter, diagnostics);
 
         try {
             allocation.flush(); // allocation persists before dependent outputs
@@ -305,6 +334,102 @@ public final class PackCompiler {
         emitter.atlasJson = toJson(root);
     }
 
+    /**
+     * Merges the vanilla-namespace override fragments ({@code
+     * blockstates/*.json}, {@code sounds.json}) into one deterministic JSON
+     * per path, absorbing user-shipped copies of the same files instead of
+     * copying them verbatim (mirrors the atlas merge). Conflicting leaf keys
+     * keep the first value and are diagnosed (MTR-0020).
+     */
+    private static void buildVanillaFiles(Emitter emitter, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        absorbUserVanillaJson(emitter, diagnostics);
+        if (emitter.vanillaFragments.isEmpty() && emitter.userVanillaFragments.isEmpty()) {
+            return;
+        }
+        var merged = new TreeMap<String, Map<String, Object>>();
+        for (VanillaFragment fragment : emitter.userVanillaFragments) {
+            Map<String, Object> dst = merged.computeIfAbsent(fragment.path(), key -> new LinkedHashMap<>());
+            deepMerge(dst, fragment.json(), "assets/minecraft/" + fragment.path(), diagnostics);
+        }
+        for (VanillaFragment fragment : emitter.vanillaFragments) {
+            Map<String, Object> dst = merged.computeIfAbsent(fragment.path(), key -> new LinkedHashMap<>());
+            deepMerge(dst, fragment.json(), "assets/minecraft/" + fragment.path(), diagnostics);
+        }
+        emitter.vanillaJson = merged;
+    }
+
+    /** User-shipped mergeable minecraft-ns files become override fragments; unparseable ones ship verbatim. */
+    private static void absorbUserVanillaJson(Emitter emitter, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        var absorbed = new ArrayList<String[]>();
+        for (String[] copy : emitter.assetCopies) {
+            if (!isMergeableVanillaFile(copy[1])) {
+                continue;
+            }
+            try {
+                Object json = fromGson(JsonParser.parseString(Files.readString(Path.of(copy[0]))));
+                if (json instanceof Map<?, ?> mapping) {
+                    @SuppressWarnings("unchecked")
+                    var typed = (Map<String, Object>) mapping;
+                    emitter.userVanillaFragments.add(new VanillaFragment(
+                            copy[1].substring("assets/minecraft/".length()), typed));
+                    absorbed.add(copy);
+                    continue;
+                }
+                diagnostics.publish(conflictDiagnostic(
+                        copy[1] + " is not a JSON object; shipping it verbatim"));
+            } catch (IOException | RuntimeException e) {
+                diagnostics.publish(conflictDiagnostic(
+                        copy[1] + " could not be parsed (" + e.getMessage() + "); shipping it verbatim"));
+            }
+        }
+        emitter.assetCopies.removeAll(absorbed);
+    }
+
+    /** Paths whose vanilla-namespace overrides merge by key rather than replace wholesale. */
+    private static boolean isMergeableVanillaFile(String destination) {
+        if (!destination.endsWith(".json") || !destination.startsWith("assets/minecraft/")) {
+            return false;
+        }
+        String rest = destination.substring("assets/minecraft/".length());
+        return rest.startsWith("blockstates/") || rest.equals("sounds.json");
+    }
+
+    private static Diagnostic conflictDiagnostic(String message) {
+        return new Diagnostic(
+                DiagnosticCodes.VANILLA_OVERRIDE_CONFLICT, Severity.WARN, message,
+                null, null, "later sources cannot redefine a key another source already claimed");
+    }
+
+    /** Recursive map merge; conflicting leaves keep the first value and warn once per key. */
+    private static void deepMerge(
+            Map<String, Object> dst,
+            Map<String, Object> src,
+            String path,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        for (var entry : src.entrySet()) {
+            Object existing = dst.get(entry.getKey());
+            if (existing instanceof Map<?, ?> && entry.getValue() instanceof Map<?, ?>) {
+                // descend on a writable copy: fragments may carry immutable maps
+                var child = new LinkedHashMap<String, Object>();
+                @SuppressWarnings("unchecked")
+                var typedExisting = (Map<String, Object>) existing;
+                child.putAll(typedExisting);
+                @SuppressWarnings("unchecked")
+                var typedSrc = (Map<String, Object>) entry.getValue();
+                deepMerge(child, typedSrc, path + "#" + entry.getKey(), diagnostics);
+                dst.put(entry.getKey(), child);
+                continue;
+            }
+            if (existing != null && !String.valueOf(existing).equals(String.valueOf(entry.getValue()))) {
+                diagnostics.publish(conflictDiagnostic(
+                        "conflicting value for '" + path + "#" + entry.getKey()
+                                + "'; keeping the first ('" + existing + "')"));
+                continue;
+            }
+            dst.putIfAbsent(entry.getKey(), entry.getValue());
+        }
+    }
+
     /** The {@code sources} array of a parsed user atlas, or an empty list. */
     private static List<Object> jsonSources(JsonElement parsed) {
         var out = new ArrayList<Object>();
@@ -374,6 +499,11 @@ public final class PackCompiler {
         }
         if (emitter.atlasJson != null) {
             pack.unknownFile(ATLAS_PATH, team.unnamed.creative.base.Writable.stringUtf8(emitter.atlasJson));
+        }
+        if (emitter.vanillaJson != null) {
+            emitter.vanillaJson.forEach((path, json) -> pack.unknownFile(
+                    "assets/minecraft/" + path,
+                    team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         }
 
         Path staging = generatedDir.resolve("pack");

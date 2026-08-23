@@ -1,0 +1,5 @@
+amethyst_lamp:
+  technique: note_block
+  texture: block/amethyst_lamp
+  display_name: Amethyst Lamp
+  blast_resistant: true

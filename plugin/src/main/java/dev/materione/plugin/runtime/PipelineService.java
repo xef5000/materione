@@ -6,6 +6,7 @@ import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.content.blocks.BlockType;
 import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
@@ -81,6 +82,8 @@ public final class PipelineService {
         registry.register(NamespacedId.of("materione", "item"), items, items.describe(), "materione");
         RecipeType recipes = new RecipeType();
         registry.register(NamespacedId.of("materione", "recipe"), recipes, recipes.describe(), "materione");
+        BlockType blocks = new BlockType();
+        registry.register(NamespacedId.of("materione", "block"), blocks, blocks.describe(), "materione");
     }
 
     public ContentRuntime runtime() {

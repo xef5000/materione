@@ -35,6 +35,16 @@ public final class GraphStage {
                                     resource.id(), targetId, ReferenceValidator.edgeTypeFor(field));
                         }
                     }
+                    if (mapping.get("drops") instanceof java.util.List<?> drops) {
+                        for (Object drop : drops) {
+                            if (drop instanceof String target && !target.isBlank()) {
+                                context.graph().addEdge(
+                                        resource.id(),
+                                        ReferenceValidator.resolve(resource.id().namespace(), target),
+                                        dev.materione.core.pipeline.graph.ContentEdgeType.DROPS_ITEM);
+                            }
+                        }
+                    }
                 }
             }
         }

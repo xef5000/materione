@@ -140,12 +140,14 @@ class StagePairFaultInjectionTest {
         // throws only for the victim's compile (simulates a broken emitter)
         ContentType poisoned = new DelegatingItemType(new ItemType()) {
             @Override
-            public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter) {
+            public void compile(
+                    Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
+                    dev.materione.core.content.Allocations allocations) {
                 if (definition instanceof ItemDefinition item
                         && item.id().value().equals("victim")) {
                     throw new IllegalStateException("emitter bug: boom");
                 }
-                super.compile(definition, allocatedModelId, emitter);
+                super.compile(definition, allocatedModelId, emitter, allocations);
             }
         };
 
@@ -316,8 +318,10 @@ class StagePairFaultInjectionTest {
         }
 
         @Override
-        public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter) {
-            delegate.compile(definition, allocatedModelId, emitter);
+        public void compile(
+                Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
+                dev.materione.core.content.Allocations allocations) {
+            delegate.compile(definition, allocatedModelId, emitter, allocations);
         }
     }
 }

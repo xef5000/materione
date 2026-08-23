@@ -4,15 +4,15 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.core.content.Allocations;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.content.PackEmitter;
+import dev.materione.content.Templates;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
  * The item content type (M1): parses item YAML (templates resolved, diamond
@@ -66,21 +66,10 @@ public final class ItemType implements ContentType {
     @Override
     public Optional<Object> parse(
             NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
-        var merged = new LinkedHashMap<String, Object>();
-        String templateRef = text(definition, "template");
-        if (templateRef != null) {
-            // short refs resolve against the item's own namespace (sample:)
-            String templateKey = templateRef.contains(":")
-                    ? templateRef
-                    : id.namespace() + ":" + templateRef;
-            Optional<Map<String, Object>> base = resolveTemplate(templateKey, templates, new HashSet<>());
-            if (base.isEmpty()) {
-                return Optional.empty(); // unknown or diamond template — quarantine upstream
-            }
-            merged.putAll(base.get());
+        var merged = Templates.merge(definition, id.namespace(), templates);
+        if (merged == null) {
+            return Optional.empty(); // unknown or diamond template — quarantine upstream
         }
-        merged.putAll(definition); // the definition itself wins
-
         Object material = merged.get("material");
         if (!(material instanceof String materialText) || materialText.isBlank()) {
             return Optional.empty();
@@ -88,41 +77,19 @@ public final class ItemType implements ContentType {
         return Optional.of(new ItemDefinition(
                 id,
                 materialText,
-                templateRef,
-                text(merged, "model"),
-                text(merged, "texture"),
+                Templates.text(definition, "template"),
+                Templates.text(merged, "model"),
+                Templates.text(merged, "texture"),
                 textOrDefault(merged, "model_parent", "item/generated"),
-                text(merged, "display_name"),
+                Templates.text(merged, "display_name"),
                 stringList(merged.get("lore")),
                 nestedMap(merged.get("components")),
                 merged));
     }
 
-    /** Template chains resolve recursively; a diamond (revisited template) is rejected. */
-    private static Optional<Map<String, Object>> resolveTemplate(
-            String ref, Map<String, Map<String, Object>> templates, Set<String> visited) {
-        if (!visited.add(ref)) {
-            return Optional.empty(); // diamond/cycle — validation error per runtime-systems §3
-        }
-        Map<String, Object> template = templates.get(ref);
-        if (template == null) {
-            return Optional.empty();
-        }
-        var merged = new LinkedHashMap<String, Object>();
-        String parentRef = text(template, "template");
-        if (parentRef != null) {
-            Optional<Map<String, Object>> parent = resolveTemplate(parentRef, templates, visited);
-            if (parent.isEmpty()) {
-                return Optional.empty();
-            }
-            merged.putAll(parent.get());
-        }
-        merged.putAll(template);
-        return Optional.of(merged);
-    }
-
     @Override
-    public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter) {
+    public void compile(
+            Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {
         if (!(definition instanceof ItemDefinition item)) {
             return;
         }

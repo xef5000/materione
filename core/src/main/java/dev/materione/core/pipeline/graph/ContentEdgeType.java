@@ -16,6 +16,8 @@ public enum ContentEdgeType {
     RECIPE_INGREDIENT,
     /** recipe → result item. */
     RECIPE_RESULT,
+    /** block → item dropped when broken. */
+    DROPS_ITEM,
     /** pack → pack dependency (manifest {@code depends}). */
     PACK_DEPENDENCY
 }

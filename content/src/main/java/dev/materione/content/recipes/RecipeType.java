@@ -126,7 +126,9 @@ public final class RecipeType implements ContentType {
     }
 
     @Override
-    public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter) {
+    public void compile(
+            Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
+            dev.materione.core.content.Allocations allocations) {
         // recipes contribute no pack output; apply goes through the
         // platform recipe API (RuntimeRecipe → RecipeApplier)
     }

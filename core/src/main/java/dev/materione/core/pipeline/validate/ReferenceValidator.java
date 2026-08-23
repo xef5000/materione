@@ -52,7 +52,38 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                         "did you mean '" + closest(environment, target, field) + "'?"));
             }
         }
+        if ("block".equals(resource.contentType())) {
+            validateDrops(resource, definition, environment, problems);
+        }
         return problems;
+    }
+
+    /**
+     * Block drops: every entry of {@code drops:} must resolve to an item
+     * resource or a vanilla {@code minecraft:} id — a bad entry quarantines
+     * the block only.
+     */
+    private static void validateDrops(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("drops") instanceof List<?> drops)) {
+            return;
+        }
+        for (Object entry : drops) {
+            if (!(entry instanceof String target) || target.isBlank()) {
+                continue;
+            }
+            NamespacedId targetId = resolve(resource.id().namespace(), target);
+            if (!isItem(environment, targetId)) {
+                problems.add(new Diagnostic(
+                        DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                        "block " + resource.id() + ": drop '" + target + "' is not an item",
+                        resource.id(), null,
+                        "drops must reference materione items or vanilla minecraft: ids"));
+            }
+        }
     }
 
     /**

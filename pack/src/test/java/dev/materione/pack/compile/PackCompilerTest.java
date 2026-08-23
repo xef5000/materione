@@ -73,7 +73,9 @@ class PackCompilerTest {
         }
 
         @Override
-        public void compile(Object definition, NamespacedId modelId, PackEmitter emitter) {
+        public void compile(
+                Object definition, NamespacedId modelId, PackEmitter emitter,
+                dev.materione.core.content.Allocations allocations) {
             @SuppressWarnings("unchecked")
             var merged = (Map<String, Object>) definition;
             NamespacedId id = NamespacedId.parse((String) merged.get("__id"));
@@ -93,6 +95,51 @@ class PackCompilerTest {
             emitter.itemDefinition(id, Map.of("model", Map.of(
                     "type", "reference",
                     "id", modelRef.contains(":") ? modelRef : id.namespace() + ":" + modelRef)));
+        }
+    }
+
+    /** Minimal block semantics for blockstate emission (mirrors BlockType's floor). */
+    private static final class StubBlockType implements ContentType {
+        @Override
+        public String name() {
+            return "block";
+        }
+
+        @Override
+        public String directory() {
+            return "blocks";
+        }
+
+        @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Block", "stub", List.of(
+                    new ParameterSchema("texture", ParameterType.STRING, true, null, null, null, null)), "1.0.0");
+        }
+
+        @Override
+        public Optional<Object> parse(
+                NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
+            if (!(definition.get("texture") instanceof String)) {
+                return Optional.empty();
+            }
+            var merged = new LinkedHashMap<String, Object>(definition);
+            merged.put("__id", id.toString());
+            return Optional.of(merged);
+        }
+
+        @Override
+        public void compile(
+                Object definition, NamespacedId modelId, PackEmitter emitter,
+                dev.materione.core.content.Allocations allocations) {
+            @SuppressWarnings("unchecked")
+            var merged = (Map<String, Object>) definition;
+            NamespacedId id = NamespacedId.parse((String) merged.get("__id"));
+            String host = merged.get("host") instanceof String explicit ? explicit : "note_block";
+            int slot = Integer.parseInt(allocations.allocate(id, "block:" + host));
+            emitter.vanillaFile("blockstates/" + host + ".json", Map.of("variants", Map.of(
+                    dev.materione.core.blocks.BlockStateSpaces.variantKey(
+                            dev.materione.core.blocks.BlockStateSpaces.Technique.NOTE_BLOCK, slot),
+                    Map.of("model", modelId.toString()))));
         }
     }
 
@@ -184,6 +231,97 @@ class PackCompilerTest {
     }
 
     @Test
+    void blocksClaimStateSlotsIntoMergedBlockstates(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/blocks");
+        writePackSkeleton(packsRoot, "blocks");
+        writeFile(packsRoot.resolve("assets/textures/block/lamp.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(packsRoot.resolve("blocks/lamp.yml"), "lamp:\n  texture: block/lamp\n".getBytes());
+        writeFile(packsRoot.resolve("blocks/tube.yml"), "tube:\n  texture: block/lamp\n".getBytes());
+
+        var allocation = AllocationTable.load(tempDir.resolve("storage-blocks/allocation.bin"));
+        var outcome = compilePack(tempDir, "blocks", allocation, List.of(new StubItemType(), new StubBlockType()));
+
+        assertThat(outcome).isNotNull();
+        assertThat(allocation.liveCount()).isEqualTo(2); // two durable state slots claimed
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            String noteBlock = entryText(zip, "assets/minecraft/blockstates/note_block.json");
+            assertThat(noteBlock)
+                    .contains("\"instrument=harp,note=1,powered=false\"")
+                    .contains("\"instrument=harp,note=2,powered=false\"");
+            // no host file for techniques nobody used
+            assertThat(zip.getEntry("assets/minecraft/blockstates/tripwire.json")).isNull();
+        }
+    }
+
+    @Test
+    void crossPackBlocksMergeIntoOneBlockstate(@TempDir Path tempDir) throws IOException {
+        writePackSkeleton(tempDir.resolve("packs/alpha"), "alpha");
+        writeFile(tempDir.resolve("packs/alpha/assets/textures/block/a.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(tempDir.resolve("packs/alpha/blocks/a.yml"), "a:\n  texture: block/a\n".getBytes());
+        writePackSkeleton(tempDir.resolve("packs/beta"), "beta");
+        writeFile(tempDir.resolve("packs/beta/assets/textures/block/b.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(tempDir.resolve("packs/beta/blocks/b.yml"), "b:\n  texture: block/b\n".getBytes());
+
+        var quarantine = new QuarantineTracker();
+        var runner = new PipelineRunner(diagnostics, quarantine);
+        runner.request(new ReloadScope.Everything(), tempDir.resolve("packs"));
+        var outcome = new PackCompiler().compile(
+                runner.lastPacks(),
+                List.of(new StubItemType(), new StubBlockType()),
+                AllocationTable.load(tempDir.resolve("storage-merge/allocation.bin")),
+                tempDir.resolve("generated-merge"),
+                diagnostics,
+                quarantine);
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            // one file, two claims — never a clobber
+            String noteBlock = entryText(zip, "assets/minecraft/blockstates/note_block.json");
+            assertThat(noteBlock)
+                    .contains("alpha:a_model")
+                    .contains("beta:b_model");
+        }
+    }
+
+    @Test
+    void userShippedBlockstatesMergeNotClobbered(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/minecraft");
+        writePackSkeleton(packsRoot, "minecraft");
+        // pack assets are namespace-rooted (dest = assets/<packId>/<relative>), so a pack
+        // literally named "minecraft" is how shipped content reaches vanilla's path today;
+        // this file claims slot 1's exact variant key ahead of the generated allocation
+        writeFile(packsRoot.resolve("assets/blockstates/note_block.json"),
+                "{\"variants\":{\"instrument=harp,note=1,powered=false\":{\"model\":\"minecraft:block/user\"}}}"
+                        .getBytes());
+        writeFile(packsRoot.resolve("assets/textures/block/u.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(packsRoot.resolve("blocks/u.yml"), "u:\n  texture: block/u\n".getBytes());
+
+        var quarantine = new QuarantineTracker();
+        var runner = new PipelineRunner(diagnostics, quarantine);
+        runner.request(new ReloadScope.Everything(), tempDir.resolve("packs"));
+        var outcome = new PackCompiler().compile(
+                runner.lastPacks(),
+                List.of(new StubItemType(), new StubBlockType()),
+                AllocationTable.load(tempDir.resolve("storage-minecraft/allocation.bin")),
+                tempDir.resolve("generated-minecraft"),
+                diagnostics,
+                quarantine);
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            String noteBlock = entryText(zip, "assets/minecraft/blockstates/note_block.json");
+            // the user's explicit claim wins the contested key; the generated claim is dropped
+            assertThat(noteBlock).contains("minecraft:block/user");
+            assertThat(noteBlock).doesNotContain("minecraft:u_model");
+        }
+        assertThat(diagnostics.recent(64).stream()
+                .filter(d -> "MTR-0020".equals(d.code().code()))
+                .findFirst())
+                .as("the contested variant key must raise MTR-0020")
+                .isPresent();
+    }
+
+    @Test
     void identicalInputsProduceByteIdenticalPacks(@TempDir Path tempDir) throws IOException {
         var first = compileFixtures(tempDir);
         var second = compileFixtures(tempDir);
@@ -238,6 +376,14 @@ class PackCompilerTest {
 
     /** Compiles one pack from a temp packs root (atlas/merge scenarios). */
     private PackCompiler.Outcome compilePack(Path tempDir, String packId) {
+        return compilePack(
+                tempDir, packId,
+                AllocationTable.load(tempDir.resolve("storage-" + packId + "/allocation.bin")),
+                List.of(new StubItemType()));
+    }
+
+    private PackCompiler.Outcome compilePack(
+            Path tempDir, String packId, AllocationTable allocation, List<ContentType> contentTypes) {
         var quarantine = new QuarantineTracker();
         var runner = new PipelineRunner(diagnostics, quarantine);
         runner.request(new ReloadScope.Everything(), tempDir.resolve("packs"));
@@ -245,8 +391,8 @@ class PackCompilerTest {
                 .filter(p -> p.id().equals(packId)).toList();
         return new PackCompiler().compile(
                 packs,
-                List.of(new StubItemType()),
-                AllocationTable.load(tempDir.resolve("storage-" + packId + "/allocation.bin")),
+                contentTypes,
+                allocation,
                 tempDir.resolve("generated-" + packId),
                 diagnostics,
                 quarantine);
