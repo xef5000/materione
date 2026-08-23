@@ -1,0 +1,21 @@
+# The evolution target of workbench — same members, older look.
+workbench_aged:
+  texture: block/workbench_aged
+  display_name: "Weathered Workbench"
+  rotation: 90
+  hitboxes:
+    - type: barrier
+      offset: [0, 0, 0]
+      width: 1.0
+      height: 0.9
+    - type: interaction
+      offset: [0, 0.4, 0]
+      width: 1.2
+      height: 1.1
+  seats:
+    - offset: [0, 0.3, 0]
+  lights:
+    - offset: [0, 1, 0]
+      level: 10
+  storage: 9
+  label: "&7Weathered Workbench"

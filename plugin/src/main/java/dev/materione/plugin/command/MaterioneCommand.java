@@ -66,15 +66,17 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(Component.text(
                             "reload skipped — a run was already in flight or aborted (see diagnostics)",
                             NamedTextColor.RED));
-                } else if (summary.packSha256() == null) {
+                } else if (summary.noop()) {
                     sender.sendMessage(Component.text(
-                            "reload complete — pack unchanged (no-op: apply and delivery skipped)",
+                            "reload complete — no content changes (apply and delivery skipped)",
                             NamedTextColor.GREEN));
                 } else {
+                    String packText = summary.packSha256() == null
+                            ? "pack bytes unchanged"
+                            : ", pack " + summary.packSha256().substring(0, 12) + "…";
                     sender.sendMessage(Component.text(
                             "reload complete — " + summary.itemsLive() + " item(s) live, "
-                                    + summary.quarantined() + " quarantined, pack "
-                                    + summary.packSha256().substring(0, 12) + "…",
+                                    + summary.quarantined() + " quarantined" + packText,
                             NamedTextColor.GREEN));
                 }
                 plugin.registries().freezeAll();

@@ -764,6 +764,22 @@ public final class FurnitureService implements Listener {
         });
     }
 
+    /** Reports whether a furniture cluster is anchored at the given cell (dev driver). */
+    public void devInspect(World world, int x, int y, int z, Consumer<String> status) {
+        scheduling.executeSync(plugin, new Location(world, x, y, z), () -> {
+            Block block = world.getBlockAt(x, y, z);
+            Optional<UUID> rootId = rootUuidAt(block);
+            if (rootId.isEmpty()) {
+                status.accept("none " + world.getName() + " " + x + " " + y + " " + z);
+                return;
+            }
+            Entity root = nearbyEntityAround(block.getLocation(), rootId.get());
+            status.accept("furniture id=" + (root == null ? "?" : definitionId(root))
+                    + " root=" + rootId.get()
+                    + " " + world.getName() + " " + x + " " + y + " " + z);
+        });
+    }
+
     // --- helpers ----------------------------------------------------------------------
 
     private static final class NamedTextColorHolder {

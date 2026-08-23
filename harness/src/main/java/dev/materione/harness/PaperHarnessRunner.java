@@ -22,7 +22,9 @@ public final class PaperHarnessRunner {
     public HarnessResult run(HarnessOptions options, Set<String> toleratedErrorMarkers) {
         ServerWorkspace workspace;
         try {
-            workspace = ServerWorkspace.create(options, "bootstrap");
+            // sample+corpus only: the bootstrap gate pins 53 live items; the
+            // world pack belongs to the world-persistence scenario
+            workspace = ServerWorkspace.create(options, "bootstrap", Set.of("sample", "corpus"));
         } catch (IOException e) {
             return failed(List.of("could not create workspace: " + e), -1, options.workRoot(), List.of());
         }
@@ -257,7 +259,7 @@ public final class PaperHarnessRunner {
         }
     }
 
-    private static void killTree(Process process) {
+    static void killTree(Process process) {
         process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
         process.destroyForcibly();
     }

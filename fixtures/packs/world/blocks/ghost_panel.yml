@@ -1,0 +1,7 @@
+# Technical technique: PDC-identified on an arbitrary vanilla host, no
+# blockstate bits spent — the host carries the appearance.
+ghost_panel:
+  technique: technical
+  host: bone_block
+  texture: block/ghost_panel
+  display_name: "Ghost Panel"

@@ -151,7 +151,7 @@ public final class PipelineService {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
                     "reload skipped: another run is in flight or the run aborted"));
-            return new ReloadSummary(result == null, 0, 0, 0, 0, null, null);
+            return new ReloadSummary(result == null, false, 0, 0, 0, 0, null, null);
         }
 
         PackCompiler.Outcome outcome = compiler.compile(
@@ -162,36 +162,50 @@ public final class PipelineService {
             runner.saveFingerprints(generatedDir.resolve("fingerprints.bin"));
         }
         String sha = outcome == null ? "" : outcome.sha256();
-        boolean noop = sha.equals(runtime.livePackSha256());
-        RuntimeRegistries shadow = null;
+        // The shadow is always built: identical pack bytes do NOT imply an
+        // unchanged runtime — material-only items carry behavior/mechanics
+        // that never touch pack output, and their rules compile here
+        // (MTR-0021/0022). Only delivery and the swap itself are skippable.
+        RuntimeRegistries shadow = buildShadow(runner.lastPacks());
+        var preApply = runtime.diffAgainst(shadow, sha);
+        boolean packUnchanged = sha.equals(runtime.livePackSha256());
+        boolean noop = packUnchanged && changesNothing(preApply);
         if (!noop) {
-            // the shadow is pure computation — built and counted synchronously;
-            // only the swap itself hops to the global thread (plugin.md §4.5)
-            shadow = buildShadow(runner.lastPacks());
-            applyShadow(shadow, sha);
+            applyShadow(shadow, sha, preApply);
         }
         return new ReloadSummary(
                 false,
+                noop,
                 result.resourcesValid(),
                 result.resourcesQuarantined(),
-                shadow == null ? runtime.registries().itemCount() : shadow.itemCount(),
+                shadow.itemCount(),
                 outcome == null ? 0 : outcome.itemDefinitions(),
-                noop ? null : sha,
-                noop ? null : outcome.stagedZip());
+                packUnchanged ? null : sha,
+                packUnchanged ? null : outcome.stagedZip());
+    }
+
+    /** True when the pre-apply report shows nothing observable changing. */
+    private static boolean changesNothing(dev.materione.core.runtime.ContentRuntime.ApplyReport report) {
+        return report.added() == 0 && report.removed() == 0 && report.changed() == 0
+                && report.blocksAdded() == 0 && report.blocksRemoved() == 0
+                && report.furnitureAdded() == 0 && report.furnitureRemoved() == 0
+                && report.recipesEnabled() == 0 && report.recipesDisabled() == 0;
     }
 
     /** Reload outcome for the operator. */
     public record ReloadSummary(
-            boolean skipped, int resourcesValid, int quarantined,
+            boolean skipped, boolean noop, int resourcesValid, int quarantined,
             int itemsLive, int itemDefinitions, String packSha256, java.nio.file.Path packZip) {}
 
-    private void applyShadow(RuntimeRegistries shadow, String sha) {
+    private void applyShadow(
+            RuntimeRegistries shadow, String sha,
+            dev.materione.core.runtime.ContentRuntime.ApplyReport report) {
         RuntimeRegistries previous = runtime.registries();
         String previousSha = runtime.livePackSha256();
-        // pre-apply report BEFORE the swap (§4.5): what this apply will do,
-        // including removals by policy and restart-required changes listed
-        // separately (none can be produced yet — M3 owns the producers)
-        var report = runtime.diffAgainst(shadow, sha);
+        // the report was computed by the caller BEFORE the swap (§4.5): what
+        // this apply will do, including removals by policy and
+        // restart-required changes listed separately (none can be produced
+        // yet — M3 owns the producers)
         lastReport = report;
         var summary = new StringBuilder("pre-apply: ");
         report.lines(line -> {

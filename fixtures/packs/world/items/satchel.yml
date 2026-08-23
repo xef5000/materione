@@ -1,0 +1,7 @@
+satchel:
+  material: CHEST
+  display_name: "Traveler's Satchel"
+  mechanics:
+    - backpack:
+        rows: 2
+        title: "&6Satchel"

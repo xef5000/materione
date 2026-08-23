@@ -1,0 +1,7 @@
+# The M2 exit-criteria world pack: one block per state technique, shaped
+# stair/slab via the sample pack, furniture with the full member surface,
+# and items carrying all five mechanics plus ECA conditions/cooldown/chance.
+id: world
+version: 1.0.0
+schema_version: 1
+depends: []

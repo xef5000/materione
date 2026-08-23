@@ -594,6 +594,68 @@ public final class CustomBlockService implements Listener {
         scheduling.executeEntity(plugin, player, () -> player.getInventory().setItem(slot, stack));
     }
 
+    // --- index rebuild (§4.2: the accelerator is disposable) ---------------------
+
+    /** This plugin's per-position chunk-PDC keys: {@code x{0-15}y{abs}z{0-15}}. */
+    private static final java.util.regex.Pattern LOCAL_KEY =
+            java.util.regex.Pattern.compile("x(\\d{1,2})y(-?\\d+)z(\\d{1,2})");
+
+    /**
+     * Rebuilds missing index entries when a chunk carrying our records loads
+     * (copied world folder, restored backup, wiped storage): the chunk PDC is
+     * the truth; the placement index only accelerates sweeps.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onChunkLoad(org.bukkit.event.world.ChunkLoadEvent event) {
+        reconcileChunk(event.getChunk());
+    }
+
+    /**
+     * One-pass reconciliation for chunks that loaded before listeners existed
+     * (worlds load before plugins enable, so spawn-area placements never fire
+     * {@link #onChunkLoad}). Cheap when no custom blocks exist: the scan is
+     * one empty-PDC key set per loaded chunk.
+     */
+    public void reconcileLoadedChunks() {
+        for (World world : plugin.getServer().getWorlds()) {
+            for (org.bukkit.Chunk chunk : world.getLoadedChunks()) {
+                reconcileChunk(chunk);
+            }
+        }
+    }
+
+    private void reconcileChunk(org.bukkit.Chunk chunk) {
+        Set<org.bukkit.NamespacedKey> keys;
+        try {
+            keys = chunk.getPersistentDataContainer().getKeys();
+        } catch (RuntimeException e) {
+            return; // chunk unloaded mid-scan: its next load retries
+        }
+        String worldName = chunk.getWorld().getName();
+        int baseX = chunk.getX() << 4;
+        int baseZ = chunk.getZ() << 4;
+        for (org.bukkit.NamespacedKey key : keys) {
+            if (!ChunkBlocks.NAMESPACE.equals(key.getNamespace())) {
+                continue;
+            }
+            var matcher = LOCAL_KEY.matcher(key.getKey());
+            if (!matcher.matches()) {
+                continue;
+            }
+            int x = baseX + Integer.parseInt(matcher.group(1));
+            int y = Integer.parseInt(matcher.group(2));
+            int z = baseZ + Integer.parseInt(matcher.group(3));
+            Optional<NamespacedId> recorded = ChunkBlocks.idAt(chunk, x, y, z);
+            if (recorded.isEmpty()) {
+                continue;
+            }
+            var position = new PlacementIndex.Position(worldName, x, y, z);
+            if (!recorded.get().toString().equals(index.at(position))) {
+                index.add(position, recorded.get().toString());
+            }
+        }
+    }
+
     // --- dev surface (/materione dev …) ------------------------------------------
 
     /** Places by id at explicit coordinates; runs on the target's region thread. */
@@ -724,6 +786,15 @@ public final class CustomBlockService implements Listener {
                     snapshot().blocks.bySlot(hostKey(block.getType()), decodedSlot(block));
             if (decoded.isEmpty() || !decoded.get().id().equals(id)) {
                 drifted.incrementAndGet();
+                reportLimited("drift:" + position.world() + "|" + position.x() + "," + position.y()
+                                + "," + position.z(),
+                        DiagnosticCodes.BLOCK_DATA_MISMATCH, Severity.WARN,
+                        "sweep: placement at " + world.getName() + " " + position.x() + " "
+                                + position.y() + " " + position.z() + " records " + id
+                                + " but its state decodes to "
+                                + decoded.map(RuntimeBlock::id).map(NamespacedId::toString)
+                                        .orElse("nothing")
+                                + "; the chunk record wins, state resynced");
                 resync(block, def.get());
                 return;
             }

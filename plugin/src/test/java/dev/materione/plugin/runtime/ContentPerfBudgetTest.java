@@ -56,7 +56,7 @@ class ContentPerfBudgetTest {
         Loaded loaded = loadCorpus(workDir);
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        assertThat(loaded.shadow.itemCount()).isEqualTo(53);
+        assertThat(loaded.shadow.itemCount()).isEqualTo(57);
         assertThat(elapsedMs)
                 .as("full reload (parse + validate + graph + compile + shadow build) wall time")
                 .isLessThan(FULL_RELOAD_BUDGET_MS);
@@ -75,6 +75,7 @@ class ContentPerfBudgetTest {
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         assertThat(outcome).isNotNull();
+        // world-pack items are material-only (no modelRef) → no definition JSON
         assertThat(outcome.itemDefinitions()).isEqualTo(33);
         assertThat(elapsedMs).as("pack build of the corpus").isLessThan(PACK_BUILD_BUDGET_MS);
     }
@@ -130,9 +131,9 @@ class ContentPerfBudgetTest {
         var report = runtime.apply(loaded.shadow, loaded.outcome().sha256());
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        assertThat(report.added()).isEqualTo(53);
+        assertThat(report.added()).isEqualTo(57);
         assertThat(elapsedMs)
-                .as("apply swap of 53 items — the main-thread stall proxy (0 stalls > 50 ms)")
+                .as("apply swap of 57 items — the main-thread stall proxy (0 stalls > 50 ms)")
                 .isLessThan(APPLY_SWAP_BUDGET_MS);
     }
 
@@ -153,7 +154,7 @@ class ContentPerfBudgetTest {
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         assertThat(result.completed()).isTrue();
-        assertThat(shadow.itemCount()).isEqualTo(53);
+        assertThat(shadow.itemCount()).isEqualTo(57);
         assertThat(elapsedMs)
                 .as("targeted single-file reload (scoped parse + compile + shadow + pre-apply diff)")
                 .isLessThan(TARGETED_RELOAD_BUDGET_MS);

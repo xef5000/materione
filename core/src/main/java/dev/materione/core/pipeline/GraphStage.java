@@ -16,6 +16,9 @@ public final class GraphStage {
         for (dev.materione.api.NamespacedId asset : context.knownAssets()) {
             context.graph().addNode(asset, "asset", null);
         }
+        // all nodes exist before any edge is drawn: definitions reference
+        // siblings declared later in their own pack (evolution stages,
+        // drop tables), so single-pass wiring would record phantom unresolved
         for (ContentPack pack : context.packs()) {
             if (pack.manifest() == null) {
                 continue;
@@ -25,52 +28,67 @@ public final class GraphStage {
                     continue;
                 }
                 context.graph().addNode(resource.id(), resource.contentType(), resource.sourceFile());
+            }
+        }
+        for (ContentPack pack : context.packs()) {
+            if (pack.manifest() == null) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if (context.excluded().contains(resource.id())) {
+                    continue;
+                }
                 Object definition = resource.document().data().get(resource.id().value());
                 if (definition instanceof java.util.Map<?, ?> mapping) {
-                    for (String field : ReferenceValidator.REFERENCE_FIELDS) {
-                        Object value = mapping.get(field);
-                        if (value instanceof String target && !target.isBlank()) {
-                            var targetId = ReferenceValidator.resolve(resource.id().namespace(), target);
-                            context.graph().addEdge(
-                                    resource.id(), targetId, ReferenceValidator.edgeTypeFor(field));
-                        }
-                    }
-                    if (mapping.get("drops") instanceof java.util.List<?> drops) {
-                        for (Object drop : drops) {
-                            if (drop instanceof String target && !target.isBlank()) {
-                                context.graph().addEdge(
-                                        resource.id(),
-                                        ReferenceValidator.resolve(resource.id().namespace(), target),
-                                        dev.materione.core.pipeline.graph.ContentEdgeType.DROPS_ITEM);
-                            }
-                        }
-                    }
-                    if ("block".equals(resource.contentType())
-                            && mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
+                    wireReferences(context, resource, mapping);
+                }
+            }
+        }
+    }
+
+    private static void wireReferences(
+            PipelineContext context, ContentResource resource, java.util.Map<?, ?> mapping) {
+        for (String field : ReferenceValidator.REFERENCE_FIELDS) {
+            Object value = mapping.get(field);
+            if (value instanceof String target && !target.isBlank()) {
+                var targetId = ReferenceValidator.resolve(resource.id().namespace(), target);
+                context.graph().addEdge(
+                        resource.id(), targetId, ReferenceValidator.edgeTypeFor(field));
+            }
+        }
+        if (mapping.get("drops") instanceof java.util.List<?> drops) {
+            for (Object drop : drops) {
+                if (drop instanceof String target && !target.isBlank()) {
+                    context.graph().addEdge(
+                            resource.id(),
+                            ReferenceValidator.resolve(resource.id().namespace(), target),
+                            dev.materione.core.pipeline.graph.ContentEdgeType.DROPS_ITEM);
+                }
+            }
+        }
+        if ("block".equals(resource.contentType())
+                && mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
+            context.graph().addEdge(
+                    resource.id(),
+                    ReferenceValidator.resolve(resource.id().namespace(), placedBy),
+                    dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+        }
+        if ("furniture".equals(resource.contentType())) {
+            if (mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
+                context.graph().addEdge(
+                        resource.id(),
+                        ReferenceValidator.resolve(resource.id().namespace(), placedBy),
+                        dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+            }
+            if (mapping.get("evolution") instanceof java.util.List<?> stages) {
+                for (Object stage : stages) {
+                    if (stage instanceof java.util.Map<?, ?> step
+                            && step.get("target") instanceof String target
+                            && !target.isBlank()) {
                         context.graph().addEdge(
                                 resource.id(),
-                                ReferenceValidator.resolve(resource.id().namespace(), placedBy),
-                                dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
-                    }
-                    if ("furniture".equals(resource.contentType())) {
-                        if (mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
-                            context.graph().addEdge(
-                                    resource.id(),
-                                    ReferenceValidator.resolve(resource.id().namespace(), placedBy),
-                                    dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
-                        }
-                        if (mapping.get("evolution") instanceof java.util.List<?> stages) {
-                            for (Object stage : stages) {
-                                if (stage instanceof java.util.Map<?, ?> step
-                                        && step.get("target") instanceof String target
-                                        && !target.isBlank()) {
-                                    context.graph().addEdge(
-                                            resource.id(),
-                                            ReferenceValidator.resolve(resource.id().namespace(), target),
-                                            dev.materione.core.pipeline.graph.ContentEdgeType.FURNITURE_STAGE);
-                                }
-                            }
-                        }
+                                ReferenceValidator.resolve(resource.id().namespace(), target),
+                                dev.materione.core.pipeline.graph.ContentEdgeType.FURNITURE_STAGE);
                     }
                 }
             }

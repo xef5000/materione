@@ -162,6 +162,16 @@ public final class DevCommands {
             sender.sendMessage(Component.text("dev inspect: " + status,
                     found ? NamedTextColor.GREEN : NamedTextColor.GRAY));
             plugin.getLogger().info("MATERIONE-DEV-INSPECT found=" + found + " " + status);
+            if (!found && plugin.furniture() != null) {
+                // maybe a furniture cluster is anchored here
+                plugin.furniture().devInspect(world, coords[0], coords[1], coords[2], furnitureStatus -> {
+                    boolean furnitureFound = furnitureStatus.startsWith("furniture");
+                    sender.sendMessage(Component.text("dev inspect: " + furnitureStatus,
+                            furnitureFound ? NamedTextColor.GREEN : NamedTextColor.GRAY));
+                    plugin.getLogger().info("MATERIONE-DEV-FURNITURE-INSPECT found="
+                            + furnitureFound + " " + furnitureStatus);
+                });
+            }
         });
     }
 

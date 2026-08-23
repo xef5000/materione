@@ -1,0 +1,4 @@
+chorus_pillar:
+  technique: chorus
+  texture: block/chorus_pillar
+  display_name: "Chorus Pillar"

@@ -176,8 +176,14 @@ public final class MaterionePlugin extends JavaPlugin {
         registries = new RegistryService();
         quarantine = new QuarantineTracker();
         diagnostics.subscribe(d -> {
-            if (d.severity() == dev.materione.api.diagnostics.Severity.ERROR) {
-                getLogger().severe(d.code() + ": " + d.message());
+            // every severity reaches the server log: rules that skip
+            // themselves (MTR-0021/0022) and world-data mismatches
+            // (MTR-0024) are WARNs an operator must see, not swallow
+            var message = d.code() + ": " + d.message();
+            switch (d.severity()) {
+                case ERROR -> getLogger().severe(message);
+                case WARN -> getLogger().warning(message);
+                default -> getLogger().info(message);
             }
         });
     }
@@ -286,6 +292,9 @@ public final class MaterionePlugin extends JavaPlugin {
         customBlocks = new dev.materione.plugin.runtime.blocks.CustomBlockService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior, placements);
         getServer().getPluginManager().registerEvents(customBlocks, this);
+        // spawn-area chunks loaded before this listener existed: rebuild any
+        // index entries they carry now, straight from chunk-PDC truth (§4.2)
+        customBlocks.reconcileLoadedChunks();
         // furniture cluster runtime (runtime-systems §5): entity-carried,
         // so no placement index — roots persist in their chunks
         furniture = new dev.materione.plugin.runtime.furniture.FurnitureService(

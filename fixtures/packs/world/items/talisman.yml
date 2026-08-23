@@ -1,0 +1,9 @@
+talisman:
+  material: NETHERITE_SWORD
+  display_name: "Warden's Talisman"
+  lore:
+    - "Refuses to leave its owner"
+  mechanics:
+    - durability:
+        max: 2000
+    - soulbound: {}

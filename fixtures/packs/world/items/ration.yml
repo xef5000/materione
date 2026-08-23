@@ -1,0 +1,14 @@
+# Food mechanic: the base material is edible (the 1.21.4 API has no
+# consumable component surface yet), the component overrides nutrition.
+ration:
+  material: COOKED_BEEF
+  display_name: "Wayfarer's Ration"
+  mechanics:
+    - food:
+        nutrition: 8
+        saturation: 12
+        can_always_eat: true
+        effects:
+          - type: SPEED
+            amplifier: 0
+            duration_ticks: 400

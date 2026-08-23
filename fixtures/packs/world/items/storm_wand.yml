@@ -1,0 +1,16 @@
+# ECA showcase: a condition, a rule cooldown, and per-action chance —
+# plus the commands mechanic on clicks.
+storm_wand:
+  material: BLAZE_ROD
+  display_name: "Storm Wand"
+  behavior:
+    - on: click:right
+      if:
+        - "player.health > 0"
+      cooldown: 2000
+      do:
+        - message: {text: "&bThe wand crackles.", chance: 0.5}
+  mechanics:
+    - commands:
+        on_left_click:
+          - "tellraw %player% {\"text\":\"The wand sparks.\",\"color\":\"aqua\"}"

@@ -22,15 +22,30 @@ Materione's internals, only these markers.
 | `MATERIONE-DEV-SWEEP indexed=<n> …` | `/materione dev sweep` validated the index |
 | `MATERIONE-DEV-FURNITURE-PLACE ok=<bool> <status>` | furniture cluster placed via the `dev place` fallback |
 | `MATERIONE-DEV-FURNITURE-REMOVE ok=<bool> <status>` | furniture cluster removed via the `dev remove` fallback |
+| `MATERIONE-DEV-FURNITURE-INSPECT found=<bool> <status>` | furniture cluster anchored at the inspected cell |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
-(sample 3 items + the 50-item corpus pack), so the expected live count is
+filtered to sample + corpus (3 + 50 items), so the expected live count is
 **53**; the hot-reload scenario below moves it to 54 and back. The world
 smoke between doctor and reload force-loads chunk (0, 0) — a headless boot
 has no players to keep chunks warm — then drives `dev place → inspect →
 sweep → remove` against `sample:amethyst_lamp` at `0 200 0`, the shaped
 stair/slab pair at `1/2 200 …`, and finally a `sample:chair` furniture
 cluster at `3 200 3` (placed and removed through the same dev commands).
+
+The **world-persistence scenario** (`WorldPersistenceRunner`,
+`PaperWorldPersistenceIT`) is the M2 exit gate: it boots with all three
+fixture packs (**57** items live) and, across five boots in four
+workspaces, proves a placed world — one block per state technique, the
+shaped pair, and a furniture cluster with seat, storage, light, label and
+evolution — survives `reload`, a full restart, and a copy of the `world/`
+folder into a fresh workspace. It also carries the M2 fault injections:
+an item file with a broken rule condition and an empty rule chain
+(MTR-0021/0022 land, everything else stays live), and the corruption
+pair — a block is placed, the disposable allocation table deleted plus a
+first-sorting definition added, and the reboot's rebuilt table hands the
+state slot to another id; the chunk-PDC record wins (MTR-0024 mismatch on
+inspect, `drifted=1` + targeted resync on sweep).
 
 ## Running
 

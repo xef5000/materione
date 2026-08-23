@@ -26,6 +26,17 @@ public final class ServerWorkspace {
     }
 
     public static ServerWorkspace create(HarnessOptions options, String scenarioName) throws IOException {
+        return create(options, scenarioName, null);
+    }
+
+    /**
+     * Creates a workspace carrying only the named packs (null = every pack
+     * directory under the fixture root). Scenarios filter so their expected
+     * live counts stay pinned: bootstrap runs sample+corpus (53 items),
+     * the world-persistence scenario adds {@code world}.
+     */
+    public static ServerWorkspace create(HarnessOptions options, String scenarioName,
+            java.util.Set<String> packNames) throws IOException {
         Path root = options.workRoot().resolve(scenarioName);
         if (Files.exists(root)) {
             deleteRecursively(root);
@@ -53,6 +64,9 @@ public final class ServerWorkspace {
             Path packs = root.resolve("plugins").resolve("Materione").resolve("content").resolve("packs");
             try (var packDirs = Files.list(options.contentPacksDir())) {
                 for (Path pack : packDirs.filter(Files::isDirectory).toList()) {
+                    if (packNames != null && !packNames.contains(pack.getFileName().toString())) {
+                        continue;
+                    }
                     copyRecursively(pack, packs.resolve(pack.getFileName()));
                 }
             }
