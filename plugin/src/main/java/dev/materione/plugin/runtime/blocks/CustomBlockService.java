@@ -78,6 +78,14 @@ public final class CustomBlockService implements Listener {
     private static final Set<Material> STATE_HOSTS = Set.of(
             Material.NOTE_BLOCK, Material.TRIPWIRE, Material.CHORUS_PLANT);
 
+    /**
+     * PDC-identified hosts with a fixed vanilla block: shaped stairs/slabs
+     * (M2 D7). Their state carries facing/half/type functionally, so
+     * identity comes only from the chunk record.
+     */
+    private static final Set<Material> SHAPED_HOSTS = Set.of(
+            Material.WAXED_CUT_COPPER_STAIRS, Material.WAXED_CUT_COPPER_SLAB);
+
     private final org.bukkit.plugin.Plugin plugin;
     private final DiagnosticsBus diagnostics;
     private final SchedulingGateway scheduling;
@@ -147,8 +155,9 @@ public final class CustomBlockService implements Listener {
     public Optional<RuntimeBlock> identify(Block block) {
         Material type = block.getType();
         boolean stateHost = STATE_HOSTS.contains(type);
-        boolean technical = snapshot().technicalHosts.contains(type.name().toLowerCase(Locale.ROOT));
-        if (!stateHost && !technical) {
+        boolean pdcOnly = SHAPED_HOSTS.contains(type)
+                || snapshot().technicalHosts.contains(type.name().toLowerCase(Locale.ROOT));
+        if (!stateHost && !pdcOnly) {
             return Optional.empty();
         }
         Optional<RuntimeBlock> candidate =
@@ -230,16 +239,44 @@ public final class CustomBlockService implements Listener {
                     "item " + itemId.get() + " places unknown block " + blockId.get()));
             return;
         }
-        place(event.getBlockPlaced(), def.get());
+        place(event.getBlockPlaced(), def.get(), orientationOf(event.getPlayer()));
         behavior.fireBlockEvent(dev.materione.behavior.rule.EventTypes.PLACE, null, event.getPlayer(),
                 event.getBlockPlaced().getLocation(), def.get().id(),
                 def.get().technique().name().toLowerCase(Locale.ROOT), null);
     }
 
+    /**
+     * The functional orientation for shaped techniques: stairs back onto the
+     * placer, half/type follow the exact hit point (vanilla convention).
+     * State-space techniques ignore it.
+     */
+    private Orientation orientationOf(Player player) {
+        BlockFace facing = player.getFacing().getOppositeFace();
+        try {
+            org.bukkit.util.RayTraceResult hit = player.rayTraceBlocks(6.0, FluidCollisionMode.NEVER);
+            if (hit != null && hit.getHitPosition() != null) {
+                double y = hit.getHitPosition().getY();
+                return new Orientation(facing, y - Math.floor(y) >= 0.5);
+            }
+        } catch (RuntimeException ignored) {
+            // fall through to the default half
+        }
+        return new Orientation(facing, false);
+    }
+
+    private record Orientation(BlockFace facing, boolean top) {
+        static final Orientation DEFAULT = new Orientation(BlockFace.NORTH, false);
+    }
+
     /** Swaps the host data in and records the placement (PDC + index). */
     public void place(Block block, RuntimeBlock def) {
+        place(block, def, Orientation.DEFAULT);
+    }
+
+    /** Swaps the host data in and records the placement (PDC + index). */
+    public void place(Block block, RuntimeBlock def, Orientation orientation) {
         try {
-            block.setBlockData(encode(def), false);
+            block.setBlockData(encode(def, orientation), false);
         } catch (RuntimeException e) {
             reportLimited("encode:" + def.id(), DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.WARN,
                     "could not encode " + def.id() + ": " + e.getMessage());
@@ -249,8 +286,13 @@ public final class CustomBlockService implements Listener {
         index.add(positionOf(block), def.id().toString());
     }
 
-    /** The host BlockData encoding a definition's allocated slot. */
+    /** The host BlockData encoding a definition's allocated slot (or shaped orientation). */
     public BlockData encode(RuntimeBlock def) {
+        return encode(def, Orientation.DEFAULT);
+    }
+
+    /** The host BlockData encoding a definition's allocated slot (or shaped orientation). */
+    public BlockData encode(RuntimeBlock def, Orientation orientation) {
         return switch (def.technique()) {
             case NOTE_BLOCK -> {
                 NoteBlock data = (NoteBlock) Material.NOTE_BLOCK.createBlockData();
@@ -284,6 +326,23 @@ public final class CustomBlockService implements Listener {
                 yield data;
             }
             case TECHNICAL -> org.bukkit.Bukkit.createBlockData(def.host());
+            case STAIRS -> {
+                org.bukkit.block.data.type.Stairs data =
+                        (org.bukkit.block.data.type.Stairs) Material.WAXED_CUT_COPPER_STAIRS
+                                .createBlockData();
+                data.setFacing(orientation.facing());
+                data.setHalf(orientation.top()
+                        ? org.bukkit.block.data.Bisected.Half.TOP : org.bukkit.block.data.Bisected.Half.BOTTOM);
+                data.setShape(org.bukkit.block.data.type.Stairs.Shape.STRAIGHT);
+                yield data;
+            }
+            case SLAB -> {
+                org.bukkit.block.data.type.Slab data =
+                        (org.bukkit.block.data.type.Slab) Material.WAXED_CUT_COPPER_SLAB.createBlockData();
+                data.setType(orientation.top()
+                        ? org.bukkit.block.data.type.Slab.Type.TOP : org.bukkit.block.data.type.Slab.Type.BOTTOM);
+                yield data;
+            }
         };
     }
 
@@ -382,7 +441,7 @@ public final class CustomBlockService implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPhysics(BlockPhysicsEvent event) {
         Block block = event.getBlock();
-        if (!STATE_HOSTS.contains(block.getType())) {
+        if (!isHostMaterial(block.getType())) {
             return;
         }
         if (identify(block).isPresent()) {
@@ -412,7 +471,7 @@ public final class CustomBlockService implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onFromTo(BlockFromToEvent event) {
         Block to = event.getToBlock();
-        if (!STATE_HOSTS.contains(to.getType())) {
+        if (!isHostMaterial(to.getType())) {
             return;
         }
         if (identify(to).isPresent()) {
@@ -474,7 +533,7 @@ public final class CustomBlockService implements Listener {
         Iterator<Block> it = blocks.iterator();
         while (it.hasNext()) {
             Block block = it.next();
-            if (!STATE_HOSTS.contains(block.getType())) {
+            if (!isHostMaterial(block.getType())) {
                 continue;
             }
             Optional<RuntimeBlock> found = identify(block);
@@ -496,7 +555,7 @@ public final class CustomBlockService implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntityChangeBlock(EntityChangeBlockEvent event) {
         Block block = event.getBlock();
-        if (!STATE_HOSTS.contains(block.getType())) {
+        if (!isHostMaterial(block.getType())) {
             return;
         }
         Optional<RuntimeBlock> found = identify(block);
@@ -692,6 +751,13 @@ public final class CustomBlockService implements Listener {
 
     private static String hostKey(Material type) {
         return type.name().toLowerCase(Locale.ROOT);
+    }
+
+    /** Any material that may carry a placement: state hosts, shaped hosts, technical hosts. */
+    private boolean isHostMaterial(Material type) {
+        return STATE_HOSTS.contains(type)
+                || SHAPED_HOSTS.contains(type)
+                || snapshot().technicalHosts.contains(type.name().toLowerCase(Locale.ROOT));
     }
 
     private static PlacementIndex.Position positionOf(Block block) {

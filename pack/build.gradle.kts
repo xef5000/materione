@@ -13,4 +13,7 @@ dependencies {
     // core's lossless layer runs SnakeYAML (compileOnly via paper-conventions,
     // provided by Paper at runtime); tests need it on the classpath.
     testImplementation(libs.snakeyaml)
+    // the golden lock compiles the fixture pack through the REAL block
+    // content type so pack output stays pinned to actual behavior
+    testImplementation(project(":content"))
 }

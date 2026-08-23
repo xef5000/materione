@@ -92,6 +92,25 @@ public final class PaperHarnessRunner {
             problems.addAll(drive(console, log, options,
                     "materione dev remove 0 200 0 world",
                     "MATERIONE-DEV-REMOVE ok=true"));
+            // shaped techniques (M2 slice 4): PDC-identified stairs/slabs
+            problems.addAll(drive(console, log, options,
+                    "materione dev place sample:marble_stairs 1 200 1 world",
+                    "MATERIONE-DEV-PLACE ok=true"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev place sample:marble_slab 2 200 2 world",
+                    "MATERIONE-DEV-PLACE ok=true"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev sweep",
+                    "MATERIONE-DEV-SWEEP indexed=2 ok=2 stale=0 orphans=0 drifted=0 unloaded=0"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev inspect 1 200 1 world",
+                    "MATERIONE-DEV-INSPECT found=true sample:marble_stairs"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev remove 1 200 1 world",
+                    "MATERIONE-DEV-REMOVE ok=true"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev remove 2 200 2 world",
+                    "MATERIONE-DEV-REMOVE ok=true"));
             problems.addAll(drive(console, log, options,
                     "materione dev sweep",
                     "MATERIONE-DEV-SWEEP indexed=0 ok=0"));

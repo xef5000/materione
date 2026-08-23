@@ -83,6 +83,27 @@ class BlockStateSpacesTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    /**
+     * Shaped techniques (M2 D7): fixed waxed-cut-copper hosts, no state
+     * allocation at all — identity rides chunk PDC while facing/half/type
+     * stay functional vanilla state.
+     */
+    @Test
+    void shapedTechniquesUseFixedHostsWithoutStateAllocation() {
+        assertThat(BlockStateSpaces.hostOf(Technique.STAIRS, null)).isEqualTo("waxed_cut_copper_stairs");
+        assertThat(BlockStateSpaces.hostOf(Technique.SLAB, null)).isEqualTo("waxed_cut_copper_slab");
+        assertThat(BlockStateSpaces.capacity(Technique.STAIRS)).isZero();
+        assertThat(BlockStateSpaces.capacity(Technique.SLAB)).isZero();
+        assertThat(BlockStateSpaces.allocatesState(Technique.STAIRS)).isFalse();
+        assertThat(BlockStateSpaces.allocatesState(Technique.SLAB)).isFalse();
+        assertThat(BlockStateSpaces.inRange(Technique.STAIRS, 0)).isFalse();
+        assertThat(BlockStateSpaces.inRange(Technique.SLAB, 0)).isFalse();
+        assertThatThrownBy(() -> BlockStateSpaces.variantKey(Technique.STAIRS, 0))
+                .isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> BlockStateSpaces.variantKey(Technique.SLAB, 0))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     @Test
     void hostsResolvePerTechniqueAndDemandExplicitTechnicalHosts() {
         assertThat(BlockStateSpaces.hostOf(Technique.NOTE_BLOCK, null)).isEqualTo("note_block");

@@ -1,0 +1,4 @@
+marble_slab:
+  technique: slab
+  texture: block/marble
+  display_name: Marble Slab

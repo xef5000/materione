@@ -190,6 +190,60 @@ class BlockTypeTest {
         assertThat(((BlockDefinition) odd.get()).behavior()).isEmpty();
     }
 
+    /**
+     * Shaped stairs (M2 D7): every host state is claimed with one straight
+     * model, rotated like vanilla's own stair blockstates — top halves flip
+     * x by 180, facings cycle y 0/90/180/270.
+     */
+    @Test
+    void stairsClaimEveryHostStateWithVanillaRotations() {
+        Object block = type.parse(NamespacedId.of("sample", "marble_stairs"),
+                Map.of("technique", "stairs", "texture", "block/marble"), Map.of()).orElseThrow();
+
+        type.compile(block, NamespacedId.of("sample", "marble_stairs_model"), emitterOf(), allocations);
+
+        // no allocation: identity rides chunk PDC
+        assertThat(vanilla).containsOnlyKeys("blockstates/waxed_cut_copper_stairs.json");
+        @SuppressWarnings("unchecked")
+        var variants = (Map<String, Object>) vanilla
+                .get("blockstates/waxed_cut_copper_stairs.json").get("variants");
+        // facing × half × shape = 4 × 2 × 5 — corner shapes render straight
+        assertThat(variants).hasSize(40);
+        assertThat(variants).containsKey("facing=east,half=bottom,shape=straight");
+        assertThat(variants).containsKey("facing=north,half=top,shape=inner_left");
+        @SuppressWarnings("unchecked")
+        var eastBottom = (Map<String, Object>) variants.get("facing=east,half=bottom,shape=straight");
+        assertThat(eastBottom).containsEntry("model", "sample:marble_stairs_model");
+        assertThat(eastBottom).doesNotContainKey("y");
+        @SuppressWarnings("unchecked")
+        var northTop = (Map<String, Object>) variants.get("facing=north,half=top,shape=straight");
+        assertThat(northTop).containsEntry("x", 180);
+        assertThat(northTop).containsEntry("y", 270);
+    }
+
+    @Test
+    void slabsEmitThreeModelsAndClaimAllHostTypes() {
+        Object block = type.parse(NamespacedId.of("sample", "marble_slab"),
+                Map.of("technique", "slab", "texture", "block/marble"), Map.of()).orElseThrow();
+
+        type.compile(block, NamespacedId.of("sample", "marble_slab_model"), emitterOf(), allocations);
+
+        assertThat(models).containsExactly(
+                "sample:marble_slab_model",
+                "sample:marble_slab_model_top",
+                "sample:marble_slab_model_double");
+        assertThat(vanilla).containsOnlyKeys("blockstates/waxed_cut_copper_slab.json");
+        @SuppressWarnings("unchecked")
+        var variants = (Map<String, Object>) vanilla
+                .get("blockstates/waxed_cut_copper_slab.json").get("variants");
+        assertThat(variants).containsOnlyKeys("type=bottom", "type=top", "type=double");
+        assertThat(variants.get("type=bottom")).isEqualTo(Map.of("model", "sample:marble_slab_model"));
+        assertThat(variants.get("type=top"))
+                .isEqualTo(Map.of("model", "sample:marble_slab_model_top"));
+        assertThat(variants.get("type=double"))
+                .isEqualTo(Map.of("model", "sample:marble_slab_model_double"));
+    }
+
     private PackEmitterOf emitterOf() {
         return new PackEmitterOf();
     }

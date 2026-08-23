@@ -48,7 +48,8 @@ public final class BlockType implements ContentType {
                 "A custom block: host technique, appearance, drops and world policy",
                 List.of(
                         new ParameterSchema("technique", ParameterType.ENUM, false, "note_block",
-                                "Host technique", List.of("note_block", "string", "chorus", "technical"), null),
+                                "Host technique", List.of("note_block", "string", "chorus", "technical",
+                                        "stairs", "slab"), null),
                         new ParameterSchema("template", ParameterType.REFERENCE, false, null,
                                 "Template this block inherits from", null, null),
                         new ParameterSchema("host", ParameterType.STRING, false, null,
@@ -142,6 +143,14 @@ public final class BlockType implements ContentType {
         if (!(definition instanceof BlockDefinition block)) {
             return;
         }
+        if (block.technique() == BlockStateSpaces.Technique.STAIRS) {
+            compileStairs(block, allocatedModelId, emitter);
+            return;
+        }
+        if (block.technique() == BlockStateSpaces.Technique.SLAB) {
+            compileSlab(block, allocatedModelId, emitter);
+            return;
+        }
         String modelRef;
         if (block.wantsGeneratedModel()) {
             var textures = new LinkedHashMap<String, Object>();
@@ -188,6 +197,107 @@ public final class BlockType implements ContentType {
 
     // --- helpers -------------------------------------------------------------
 
+    /**
+     * Shaped stairs (M2 D7): identity rides chunk PDC — the host state keeps
+     * facing/half/shape functional, so the pack claims <em>every</em> host
+     * state with our model (corner shapes render as straight models in v1),
+     * rotated exactly like vanilla's own stair blockstates.
+     */
+    private void compileStairs(
+            BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter) {
+        String modelRef = shapedModel(block, allocatedModelId, emitter, "block/stairs");
+        var variants = new LinkedHashMap<String, Object>();
+        for (String facing : List.of("east", "south", "west", "north")) {
+            int y = switch (facing) {
+                case "south" -> 90;
+                case "west" -> 180;
+                case "north" -> 270;
+                default -> 0;
+            };
+            for (String half : List.of("bottom", "top")) {
+                for (String shape : List.of("straight", "inner_left", "inner_right",
+                        "outer_left", "outer_right")) {
+                    var entry = new LinkedHashMap<String, Object>();
+                    entry.put("model", modelRef);
+                    if (half.equals("top")) {
+                        entry.put("x", 180);
+                    }
+                    if (y != 0) {
+                        entry.put("y", y);
+                    }
+                    variants.put("facing=" + facing + ",half=" + half + ",shape=" + shape, entry);
+                }
+            }
+        }
+        emitter.vanillaFile("blockstates/waxed_cut_copper_stairs.json", Map.of("variants", variants));
+    }
+
+    /**
+     * Shaped slabs: three host states claim three models — bottom, top and a
+     * full double cube — mirroring vanilla's own slab blockstate split.
+     */
+    private void compileSlab(
+            BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter) {
+        if (block.wantsGeneratedModel()) {
+            String texture = textureRef(block);
+            var bottom = new LinkedHashMap<String, Object>();
+            bottom.put("parent", "block/slab");
+            bottom.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
+            emitter.model(allocatedModelId, bottom);
+            var top = new LinkedHashMap<String, Object>();
+            top.put("parent", "block/slab_top");
+            top.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
+            emitter.model(sibling(allocatedModelId, "_top"), top);
+            var doubleModel = new LinkedHashMap<String, Object>();
+            doubleModel.put("parent", "block/cube_all");
+            doubleModel.put("textures", Map.<String, Object>of("all", texture));
+            emitter.model(sibling(allocatedModelId, "_double"), doubleModel);
+        }
+        String base = modelReference(block, allocatedModelId);
+        emitter.vanillaFile("blockstates/waxed_cut_copper_slab.json", Map.of("variants", Map.of(
+                "type=bottom", Map.of("model", base),
+                "type=top", Map.of("model", siblingRef(allocatedModelId, "_top")),
+                "type=double", Map.of("model", siblingRef(allocatedModelId, "_double")))));
+    }
+
+    /** Generates (or resolves) the one shaped model; stairs need no orientation siblings. */
+    private static String shapedModel(
+            BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter, String parent) {
+        if (!block.wantsGeneratedModel()) {
+            return modelReference(block, allocatedModelId);
+        }
+        String texture = textureRef(block);
+        var model = new LinkedHashMap<String, Object>();
+        model.put("parent", parent);
+        model.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
+        emitter.model(allocatedModelId, model);
+        return allocatedModelId.toString();
+    }
+
+    private static NamespacedId sibling(NamespacedId id, String suffix) {
+        return NamespacedId.of(id.namespace(), id.value() + suffix);
+    }
+
+    private static String siblingRef(NamespacedId id, String suffix) {
+        return sibling(id, suffix).toString();
+    }
+
+    private static String textureRef(BlockDefinition block) {
+        return block.texture().contains(":")
+                ? block.texture()
+                : block.id().namespace() + ":" + block.texture();
+    }
+
+    /** The hand-authored model ref, or the generated model id when auto-modelling. */
+    private static String modelReference(BlockDefinition block, NamespacedId allocatedModelId) {
+        if (block.wantsGeneratedModel()) {
+            return allocatedModelId.toString();
+        }
+        return block.model().contains(":")
+                ? block.model()
+                : block.id().namespace() + ":" + block.model();
+    }
+
     private static BlockStateSpaces.Technique technique(String text) {
         if (text == null) {
             return BlockStateSpaces.Technique.NOTE_BLOCK;
@@ -197,6 +307,8 @@ public final class BlockType implements ContentType {
             case "string" -> BlockStateSpaces.Technique.STRING;
             case "chorus" -> BlockStateSpaces.Technique.CHORUS;
             case "technical" -> BlockStateSpaces.Technique.TECHNICAL;
+            case "stairs" -> BlockStateSpaces.Technique.STAIRS;
+            case "slab" -> BlockStateSpaces.Technique.SLAB;
             default -> null;
         };
     }

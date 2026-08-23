@@ -1,0 +1,5 @@
+# Shaped blocks (M2 slice 4): fixed waxed-cut-copper hosts, PDC identity.
+marble_stairs:
+  technique: stairs
+  texture: block/marble
+  display_name: Marble Stairs

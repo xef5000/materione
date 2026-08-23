@@ -10,6 +10,7 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.content.PackEmitter;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
+import dev.materione.content.blocks.BlockType;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.PipelineRunner;
 import dev.materione.core.pipeline.ReloadScope;
@@ -339,11 +340,12 @@ class PackCompilerTest {
 
     @Test
     void allocationPersistsBeforeOutputs(@TempDir Path tempDir) throws IOException {
-        var allocation = AllocationTable.load(tempDir.resolve("storage/allocation.bin"));
+        Path allocationFile = tempDir.resolve("storage/allocation.bin");
+        var allocation = AllocationTable.load(allocationFile);
         compileFixtures(tempDir, allocation);
-        // allocation flushed to disk even though nothing asked for a number
-        assertThat(Files.exists(tempDir.resolve("storage/allocation.bin"))).isTrue();
-        assertThat(allocation.liveCount()).isZero();
+        // the lamp's state slot flushed to disk before the pack was written
+        assertThat(Files.exists(allocationFile)).isTrue();
+        assertThat(allocation.liveCount()).isEqualTo(1);
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
@@ -361,7 +363,9 @@ class PackCompilerTest {
         var compiler = new PackCompiler();
         var result = compiler.compile(
                 samplePacks,
-                List.of(new StubItemType()),
+                // the REAL block content type: the golden locks actual block
+                // compile behavior (state allocation, shaped blockstates)
+                List.of(new StubItemType(), new BlockType()),
                 allocation,
                 tempDir.resolve("generated"),
                 diagnostics,

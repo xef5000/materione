@@ -37,7 +37,15 @@ public final class BlockStateSpaces {
          * An author-chosen technical host (mushroom-stem class) rendering one
          * fixed model; identity is chunk-PDC carried, no state is allocated.
          */
-        TECHNICAL
+        TECHNICAL,
+        /**
+         * Shaped stair on the waxed-cut-copper host: facing/half/shape stay
+         * functional vanilla state, identity is chunk-PDC carried (M2 D7) —
+         * corner shapes render as straight models in v1.
+         */
+        STAIRS,
+        /** Shaped slab on the waxed-cut-copper host; PDC-identified like {@link #STAIRS}. */
+        SLAB
     }
 
     /** Note-block instruments in slot order (1.21.4). Order is an API contract. */
@@ -71,6 +79,8 @@ public final class BlockStateSpaces {
             case STRING -> "tripwire";
             case CHORUS -> "chorus_plant";
             case TECHNICAL -> configuredHost;
+            case STAIRS -> "waxed_cut_copper_stairs";
+            case SLAB -> "waxed_cut_copper_slab";
         };
     }
 
@@ -80,13 +90,16 @@ public final class BlockStateSpaces {
             case NOTE_BLOCK -> NOTE_BLOCK_INSTRUMENTS.size() * SLOTS_PER_INSTRUMENT;
             case STRING -> TRIPWIRE_MAX - TRIPWIRE_MIN + 1;
             case CHORUS -> CHORUS_MAX + 1;
-            case TECHNICAL -> 0;
+            case TECHNICAL, STAIRS, SLAB -> 0;
         };
     }
 
     /** True when placements of this technique are identified by their blockstate. */
     public static boolean allocatesState(Technique technique) {
-        return technique != Technique.TECHNICAL;
+        return switch (technique) {
+            case NOTE_BLOCK, STRING, CHORUS -> true;
+            case TECHNICAL, STAIRS, SLAB -> false;
+        };
     }
 
     /**
@@ -130,6 +143,8 @@ public final class BlockStateSpaces {
                         + ",down=" + bit(slot, 2);
             }
             case TECHNICAL -> throw new IllegalStateException("TECHNICAL allocates no state slot");
+            case STAIRS, SLAB -> throw new IllegalStateException(
+                    technique.name() + " allocates no state slot");
         };
     }
 
@@ -171,7 +186,7 @@ public final class BlockStateSpaces {
             case NOTE_BLOCK -> slot >= 0 && slot < capacity(Technique.NOTE_BLOCK);
             case STRING -> slot >= TRIPWIRE_MIN && slot <= TRIPWIRE_MAX;
             case CHORUS -> slot >= 0 && slot <= CHORUS_MAX;
-            case TECHNICAL -> false;
+            case TECHNICAL, STAIRS, SLAB -> false;
         };
     }
 
