@@ -4,8 +4,8 @@ How the Materione codebase is built — and how the build itself enforces the ar
 Traces to master §10 (codebase division) and §11 (enforced, not aspirational); the module
 boundaries here are the same ones described there, made mechanical.
 
-Status: **as shipped for M0 + M1** (roadmap rule 1 — this doc reflects what exists, not what's
-planned). Anything marked *M-later* is reserved, not built.
+Status: **as shipped for M0 + M1 + M2** (roadmap rule 1 — this doc reflects what exists, not
+what's planned). Anything marked *M-later* is reserved, not built.
 
 ---
 
@@ -108,6 +108,7 @@ is applied two ways: per-module `ArchitectureTest` classes, plus a whole-jar
 | R4 | Nothing depends on `plugin`. | The assembly leaf. |
 | R5 | No raw `Thread`/`Executors` outside the scheduling gateway. | Harness/testing exempt (build infrastructure). |
 | R6 | Validators are pure: no file I/O in `..validate..` packages or `*Validator` classes. | M1. Validators receive their world as parsed data (`ValidationEnvironment`); the filesystem belongs to parse/compile. Has real subjects since M1 (`core.pipeline.validate`). |
+| R7 | `behavior` stays Bukkit-free (embeddable engine). | M2. `org.bukkit..` is banned from `dev.materione.behavior..` — the ECA/expression engine is a pure library any host can embed; Bukkit bindings live in `plugin/`. Real subjects since M2 (`behavior..`). |
 | — | `MTR-####` codes: format + uniqueness + declared only in `core.diagnostics`. | Unit tests over `DiagnosticCodes`, not ArchUnit. |
 
 Rules are predicate-based (no Bukkit class literals — pure modules have no paper-api on
@@ -162,7 +163,13 @@ These markers are test API — treat changes to them like changes to `MTR-####` 
 the fixture corpus (53 live items), then the hot-reload sequence — no-op reload, add an
 item → 54, drop a syntactically broken file → still 54 with `MTR-0007` in the log,
 remove both → 53. A fail-soft variant (`PaperFailSoftIT`) injects a broken `settings.yml`
-and asserts the server still boots and the diagnostic is reported. Timeouts
+and asserts the server still boots and the diagnostic is reported. The M2 exit gate is
+`PaperWorldPersistenceIT` (`WorldPersistenceRunner`): boots all three fixture packs
+(57 live items), places one block per state technique plus a full furniture cluster, and
+across five boots in four workspaces proves the world survives reload, restart and world
+copy — with fault injections on both ends (a broken rule file mid-reload; the corruption
+pair that deletes the allocation table and re-sorts definitions so the rebuilt accelerator
+disagrees with chunk-PDC truth, expecting `MTR-0024` + a drifted sweep). Timeouts
 (boot 300 s / command 60 s / stop 60 s) are env-overridable; on failure the assertion
 includes missing markers, the log tail, and the workspace path. Marker waits are
 cursor-based (`LogWatcher#mark`): a repeated command cannot match its own stale marker

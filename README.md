@@ -6,10 +6,12 @@ system: content files on disk are the source of truth, one pipeline takes them t
 and a browser editor (with embedded Blockbench) edits the same files — no port forwarding
 required.
 
-**Status:** M0 shipped — skeleton & spine. The plugin boots on Paper 1.21.4+, enforces
-nothing yet, but every architectural invariant (module boundaries, scheduler gateway,
-diagnostics, lossless settings round-trip) is build-enforced and tested. Content features
-begin at M1. See [`docs/roadmap.md`](docs/roadmap.md).
+**Status:** M0–M2 shipped. The plugin boots on Paper 1.21.4+ and carries real content:
+items with custom models, recipes and mechanics; custom blocks of every state technique
+plus shaped stairs/slabs; furniture clusters (seats, storage, lights, evolution); an ECA
+rule engine — all hot-reloadable, with the world-facing systems proven against a live
+Paper harness (reload, restart, world copy). Next: glyphs, sounds & paintings (M3), then
+the web editor (M4). See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Build & test
 

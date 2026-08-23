@@ -86,7 +86,7 @@ Fault injection found and fixed a real fail-soft gap (a throwing content-type em
 crash a whole reload). Deferred with owners: targeted reload < 1 s and fingerprint skipping
 (M2), cold item detect (M3), inventory-scan throttling (M2 mechanics).
 
-## M2 — Blocks & furniture (the world-facing systems)
+## M2 — Blocks & furniture (the world-facing systems) — ✅ shipped 2026-08-23
 
 **Goal:** place and break custom things.
 
@@ -100,6 +100,41 @@ crash a whole reload). Deferred with owners: targeted reload < 1 s and fingerpri
   of plugin.md §4.5.
 
 **Exit:** a fixture world with blocks and furniture survives reload, restart, and world copy.
+
+**Shipped (as-built notes; details in [`architecture/runtime-systems.md`](architecture/runtime-systems.md)):**
+the ECA engine v1 lives in a new Bukkit-free `behavior` module (new ban rule R7 keeps it
+embeddable): parse-once expression engine over a typed AST, action SPI with universal
+`chance`/`delay`, cooldown/charge rule options, fail-soft chain continuation
+(diagnostics `MTR-0021..0023`), and plugin-side listener bindings for item/block/furniture
+events with a PlaceholderAPI soft-hook. Blocks run the state-as-identity fast path (decoded
+slot → precomputed per-host arrays; vanilla positions cost zero PDC reads) refined by
+**chunk-PDC truth**: a decoded candidate must match the chunk record or it is quarantined
+(`MTR-0024`) — this is what makes the disposable allocation table safe, proven live by the
+corruption-pair fault injection (table deleted + sort order changed → mismatch flagged,
+record wins, state resynced). The placement index really is rebuildable: chunk-load events
+and a boot pass reconcile it from chunk PDC (world-copy survival). Physics suppression
+probes Paper's block-update flags with event-based fallbacks (`MTR-0025`); orphans are
+keep-flagged with `dev sweep`/`inspect` surfacing (`MTR-0026`). Shaped blocks ship as
+waxed-cut-copper stairs/slabs (PDC-identified). Furniture is real persistent entity clusters
+(ItemDisplay + Interaction/barrier hitboxes incl. waterlogged barriers + seats via the
+passenger API + LIGHT cells + TextDisplay labels + persistent storage) reconstructible from
+PDC, with rotation snap, floor-only placing and lazy timestamp-based evolution. Mechanics
+register through the public `mechanics` registry seam exactly like future addons: commands,
+soulbound, food (build-time vanilla FoodComponent — no Consumable API at our floor),
+durability, backpack; unknown mechanics skip with `MTR-0027`. Inventory scans are throttled
+to one per player per second. Apply honesty: the pre-apply report is computed before the
+swap and logged; a reload counts as no-op only when the *runtime* diff is empty (identical
+pack bytes alone proved insufficient live); restart staging runs at boot (`MTR-0028/0029`,
+producers wait for M3); fingerprint caching makes OnePack/FileSet scopes real with a
+drift-based expansion guard. Diagnostics `MTR-0019..0029`. Exit gate proven live by the
+five-boot `PaperWorldPersistenceIT`. Fault injection found and fixed two real gaps: YAML 1.1
+parses bare `on:` keys as booleans (normalized in every behavior map) and WARN diagnostics
+never reached the server log. **Deviations:** stringblocks ship dry — tripwire is not
+waterloggable at the API floor (parity §3.5 aspiration, owner M7); content directories are
+plural (`items/`, `blocks/`, `furnitures/`). Deferred with owners: progressive mining/
+hardness, directional variants, log stripping, furniture states/connectables/wall-roof/
+beds/sliding doors, model_tree builders, full mechanics catalog → M7; glyphs/sounds/discs/
+paintings plus restart-required producers → M3; menus/HUD/dialogs → M6.
 
 ## M3 — Glyphs, fonts, sounds, paintings
 

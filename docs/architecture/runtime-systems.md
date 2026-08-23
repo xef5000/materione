@@ -151,6 +151,16 @@ cycle/diamond rejection, and the auto-model + hand-authored-model compile paths.
 declarative `model_tree` surface and `components`/`behavior` fields are parsed-but-inert
 until M2+; `range_dispatch`/`select`/`condition` authoring waits for it.
 
+**As shipped (M2):** `behavior:` rules compile at apply through the ECA engine
+(invalid rules/expressions skip with `MTR-0021/0022`, siblings stay live) and resolve from
+the shadow-swapped registries at event entry; the `mechanics:` list resolves against the
+public mechanics registry (natives: commands, soulbound, food, durability, backpack —
+unknown entries skip with `MTR-0027`). Food rides a build-time vanilla `FoodComponent`
+(1.21.4 has no Consumable API); durability/soulbound/backpack state persists in stack or
+player PDC. The auto-updater now scans on throttled inventory events (one scan per player
+per second, put-before-check gate) in addition to join. `model_tree` stays parsed-but-inert
+(M7).
+
 ---
 
 ## 4. Custom blocks
@@ -197,6 +207,20 @@ piston/explosion: custom blast resistance honored; move policy per definition
 Allocation exhaustion per technique → build diagnostic with per-technique pressure; unknown
 PDC id after pack removal → Orphan rendering (vanilla base + flag) with an admin sweep
 command; corrupt PDC on chunk load → quarantine that block, diagnostic, world unaffected.
+
+**As shipped (M2):** all four technique families plus shaped stairs/slabs (waxed-cut-copper,
+PDC-identified per decision — no spare state property; doors/trapdoors/grates wait for M7).
+Reads are **state-as-identity**: the host blockstate decodes to a slot int answered by a
+precomputed per-host array, so vanilla positions cost zero PDC accesses; the decoded
+candidate is then confirmed against the chunk-PDC record and a mismatch is quarantined
+(`MTR-0024`) instead of trusted — the accelerator is disposable, the record wins. The
+placement index is rebuilt from chunk PDC on every chunk load plus one boot pass over
+already-loaded chunks (world-copy survival). Physics suppression probes Paper's
+`disable-*-updates` flags with event-based fallback suppressors (`MTR-0025`). One shared
+removal pipeline serves player break, explosions, pistons (move-policy aware) and falling
+blocks; orphans are keep-flagged with targeted client resync via `dev sweep`
+(`MTR-0026`). Dev commands `place/remove/inspect/sweep` double as the harness driver.
+Deviation: stringblocks ship dry — tripwire has no waterlogged state at the API floor.
 
 ---
 
@@ -250,6 +274,18 @@ reload:  PDC id → current definition → respawn entity cluster if model chang
 Missing member entity on chunk load → respawn from placement record; unknown id → Orphan
 (entities kept, flagged); seat passenger desync (player logged out seated) → cleanup on join;
 evolution target missing → hold at stage, diagnostic.
+
+**As shipped (M2):** the parity core — ItemDisplay base + Interaction and barrier hitboxes
+(barriers waterlog-aware), plain-entity seats via the passenger API (no NMS seat entity),
+LIGHT cells, TextDisplay labels, persistent storage (`InventoryHolder` contents carried in
+the root record), 90°-step rotation snap, floor-only placing with a space pre-check, and
+timed evolution evaluated lazily from absolute timestamps in the root PDC — never a global
+scan timer. The root record lives in entity/chunk PDC so a cluster is reconstructible from
+PDC alone; reload rebuilds visuals only and never rewrites stored ids. States cycling,
+connectables, wall/roof placements, beds and sliding doors wait for M7 (§3.6). Furniture
+definitions participate in the content graph (PLACED_BY_ITEM / FURNITURE_STAGE edges) and
+`dev place/remove/inspect` fall through to furniture when no block occupies the position
+(harness markers `MATERIONE-DEV-FURNITURE-*`).
 
 ---
 

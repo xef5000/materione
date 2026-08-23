@@ -2,9 +2,11 @@
 
 One Minecraft plugin + web editor that replaces the content-creation plugin stack
 (ItemsAdder / Oraxen / Nexo / BetterHUD / DeluxeMenus-class tools) with a single unified,
-free, open-source system. **Current repo state: M0 shipped** (skeleton, spine, ban tests,
-headless-Paper harness — see [`docs/roadmap.md`](docs/roadmap.md) and
-[`docs/architecture/build.md`](docs/architecture/build.md)); content features start at M1.
+free, open-source system. **Current repo state: M0–M2 shipped** (spine + ban tests +
+headless-Paper harness; content pipeline & items; blocks, furniture, ECA engine and
+mechanics — see [`docs/roadmap.md`](docs/roadmap.md) and
+[`docs/architecture/build.md`](docs/architecture/build.md)); glyphs/sounds/paintings start
+at M3.
 
 ## Required reading (in order)
 
