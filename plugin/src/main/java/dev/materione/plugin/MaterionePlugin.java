@@ -52,6 +52,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private BehaviorService behavior;
     private dev.materione.core.storage.PlacementIndex placements;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
+    private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -93,6 +94,11 @@ public final class MaterionePlugin extends JavaPlugin {
     /** The custom-block world runtime; null before the commands phase. */
     public dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks() {
         return customBlocks;
+    }
+
+    /** The furniture cluster runtime; null before the commands phase. */
+    public dev.materione.plugin.runtime.furniture.FurnitureService furniture() {
+        return furniture;
     }
 
     /** The descriptor, once the probe passed; null before/when unsupported. */
@@ -249,6 +255,11 @@ public final class MaterionePlugin extends JavaPlugin {
         customBlocks = new dev.materione.plugin.runtime.blocks.CustomBlockService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior, placements);
         getServer().getPluginManager().registerEvents(customBlocks, this);
+        // furniture cluster runtime (runtime-systems §5): entity-carried,
+        // so no placement index — roots persist in their chunks
+        furniture = new dev.materione.plugin.runtime.furniture.FurnitureService(
+                this, diagnostics, scheduling, pipeline.runtime(), behavior);
+        getServer().getPluginManager().registerEvents(furniture, this);
         dev.materione.plugin.runtime.blocks.PhysicsProbe.enforceOrReport(diagnostics);
     }
 

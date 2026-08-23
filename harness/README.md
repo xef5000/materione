@@ -20,13 +20,17 @@ Materione's internals, only these markers.
 | `MATERIONE-DEV-REMOVE ok=<bool> <status>` | `/materione dev remove` landed |
 | `MATERIONE-DEV-INSPECT found=<bool> <block\|none …>` | `/materione dev inspect` answered |
 | `MATERIONE-DEV-SWEEP indexed=<n> …` | `/materione dev sweep` validated the index |
+| `MATERIONE-DEV-FURNITURE-PLACE ok=<bool> <status>` | furniture cluster placed via the `dev place` fallback |
+| `MATERIONE-DEV-FURNITURE-REMOVE ok=<bool> <status>` | furniture cluster removed via the `dev remove` fallback |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 (sample 3 items + the 50-item corpus pack), so the expected live count is
 **53**; the hot-reload scenario below moves it to 54 and back. The world
 smoke between doctor and reload force-loads chunk (0, 0) — a headless boot
 has no players to keep chunks warm — then drives `dev place → inspect →
-sweep → remove` against `sample:amethyst_lamp` at `0 200 0`.
+sweep → remove` against `sample:amethyst_lamp` at `0 200 0`, the shaped
+stair/slab pair at `1/2 200 …`, and finally a `sample:chair` furniture
+cluster at `3 200 3` (placed and removed through the same dev commands).
 
 ## Running
 

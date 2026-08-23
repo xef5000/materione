@@ -11,6 +11,7 @@ import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
 import dev.materione.plugin.runtime.behavior.BlockBehaviors;
+import dev.materione.plugin.runtime.behavior.FurnitureBehaviors;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.core.content.ContentType;
 import dev.materione.core.diagnostics.DiagnosticCodes;
@@ -86,6 +87,10 @@ public final class PipelineService {
         registry.register(NamespacedId.of("materione", "recipe"), recipes, recipes.describe(), "materione");
         BlockType blocks = new BlockType();
         registry.register(NamespacedId.of("materione", "block"), blocks, blocks.describe(), "materione");
+        dev.materione.content.furniture.FurnitureType furniture =
+                new dev.materione.content.furniture.FurnitureType();
+        registry.register(
+                NamespacedId.of("materione", "furniture"), furniture, furniture.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -184,14 +189,19 @@ public final class PipelineService {
         var itemType = contentTypes().stream().filter(t -> t.name().equals("item")).findFirst();
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
+        var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
         var builder = RuntimeRegistries.builder();
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var furnitureBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var runtimeBlocks = dev.materione.core.runtime.RuntimeBlocks.builder();
+        var runtimeFurnitures = dev.materione.core.runtime.RuntimeFurnitures.builder();
         if (itemType.isEmpty()) {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
+            builder.view(FurnitureBehaviors.KEY, FurnitureBehaviors.empty());
             builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
+            builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -263,12 +273,28 @@ public final class PipelineService {
                     if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.blocks.BlockDefinition block) {
                         compileBlock(block, runtimeBlocks, blockBehaviors);
                     }
+                } else if ("furniture".equals(resource.contentType()) && furnitureType.isPresent()) {
+                    Optional<Object> parsed;
+                    try {
+                        parsed = furnitureType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
+                    if (parsed.isPresent()
+                            && parsed.get() instanceof dev.materione.content.furniture.FurnitureDefinition furniture) {
+                        compileFurniture(furniture, runtimeFurnitures, furnitureBehaviors);
+                    }
                 }
             }
         }
         builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
         builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
+        builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
         builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
+        builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
         return builder.build();
     }
 
@@ -317,6 +343,56 @@ public final class PipelineService {
             parsedRules.problems().forEach(diagnostics::publish);
             if (!parsedRules.isEmpty()) {
                 blockBehaviors.put(block.id(), parsedRules.rules());
+            }
+        }
+    }
+
+    /**
+     * Turns one parsed furniture definition into its runtime form — model
+     * ref resolved by the same {@code <id>_model} convention the compiler
+     * emits, behavior rules compiled fail-soft.
+     */
+    private void compileFurniture(
+            dev.materione.content.furniture.FurnitureDefinition furniture,
+            dev.materione.core.runtime.RuntimeFurnitures.Builder runtimeFurnitures,
+            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> furnitureBehaviors) {
+        String modelRef;
+        if (furniture.wantsGeneratedModel()) {
+            modelRef = furniture.id().namespace() + ":" + furniture.id().value() + "_model";
+        } else {
+            modelRef = furniture.model().contains(":")
+                    ? furniture.model()
+                    : furniture.id().namespace() + ":" + furniture.model();
+        }
+        runtimeFurnitures.furniture(new dev.materione.core.runtime.RuntimeFurniture(
+                furniture.id(),
+                modelRef,
+                furniture.displayName(),
+                furniture.rotationSnap(),
+                furniture.hitboxes().stream()
+                        .map(hitbox -> new dev.materione.core.runtime.RuntimeFurniture.Hitbox(
+                                hitbox.type(), hitbox.offset(), hitbox.width(), hitbox.height()))
+                        .toList(),
+                furniture.seats(),
+                furniture.lights().stream()
+                        .map(light -> new dev.materione.core.runtime.RuntimeFurniture.Light(
+                                light.offset(), light.level()))
+                        .toList(),
+                furniture.storage(),
+                furniture.label(),
+                furniture.evolution().stream()
+                        .map(stage -> new dev.materione.core.runtime.RuntimeFurniture.Stage(
+                                stage.target(), stage.afterSeconds()))
+                        .toList()));
+        if (furniture.placedBy() != null) {
+            runtimeFurnitures.placedBy(furniture.placedBy(), furniture.id());
+        }
+        if (!furniture.behavior().isEmpty()) {
+            dev.materione.behavior.rule.ParsedRules parsedRules =
+                    dev.materione.behavior.rule.RuleParser.compile(furniture.id(), furniture.behavior());
+            parsedRules.problems().forEach(diagnostics::publish);
+            if (!parsedRules.isEmpty()) {
+                furnitureBehaviors.put(furniture.id(), parsedRules.rules());
             }
         }
     }

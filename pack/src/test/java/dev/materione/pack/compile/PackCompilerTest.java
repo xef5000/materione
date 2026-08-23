@@ -363,9 +363,11 @@ class PackCompilerTest {
         var compiler = new PackCompiler();
         var result = compiler.compile(
                 samplePacks,
-                // the REAL block content type: the golden locks actual block
-                // compile behavior (state allocation, shaped blockstates)
-                List.of(new StubItemType(), new BlockType()),
+                // the REAL block and furniture content types: the golden locks
+                // actual compile behavior (state allocation, shaped
+                // blockstates, generated display models)
+                List.of(new StubItemType(), new BlockType(),
+                        new dev.materione.content.furniture.FurnitureType()),
                 allocation,
                 tempDir.resolve("generated"),
                 diagnostics,

@@ -1,0 +1,13 @@
+# Furniture core (M2 slice 5): display-entity cluster with seat + hitbox.
+chair:
+  texture: block/marble
+  display_name: Chair
+  item: ruby
+  rotation: 90
+  hitboxes:
+    - type: interaction
+      offset: [0, 0, 0]
+      width: 1.0
+      height: 1.0
+  seats:
+    - offset: [0, 0.3, 0]

@@ -79,10 +79,22 @@ public final class DevCommands {
         }
         World target = world;
         plugin.customBlocks().devPlace(target, coords[0], coords[1], coords[2], blockId, status -> {
+            if (status.startsWith("unknown-block")) {
+                // fall back to the furniture runtime: one id surface for both
+                plugin.furniture().devPlace(target, coords[0], coords[1], coords[2], blockId,
+                        furnitureStatus -> {
+                            boolean ok = furnitureStatus.startsWith("placed");
+                            sender.sendMessage(Component.text("dev place: " + furnitureStatus,
+                                    ok ? NamedTextColor.GREEN : NamedTextColor.RED));
+                            plugin.getLogger().info("MATERIONE-DEV-FURNITURE-PLACE ok=" + ok
+                                    + " " + furnitureStatus);
+                        });
+                return;
+            }
+            boolean ok = status.startsWith("placed");
             sender.sendMessage(Component.text("dev place: " + status,
-                    status.startsWith("placed") ? NamedTextColor.GREEN : NamedTextColor.RED));
-            plugin.getLogger().info("MATERIONE-DEV-PLACE ok=" + status.startsWith("placed")
-                    + " " + status);
+                    ok ? NamedTextColor.GREEN : NamedTextColor.RED));
+            plugin.getLogger().info("MATERIONE-DEV-PLACE ok=" + ok + " " + status);
         });
     }
 
@@ -107,6 +119,17 @@ public final class DevCommands {
             return;
         }
         plugin.customBlocks().devRemove(world, coords[0], coords[1], coords[2], status -> {
+            if (status.startsWith("not-custom")) {
+                // maybe a furniture cluster is anchored here
+                plugin.furniture().devRemove(world, coords[0], coords[1], coords[2], furnitureStatus -> {
+                    boolean furnitureOk = furnitureStatus.startsWith("removed");
+                    sender.sendMessage(Component.text("dev remove: " + furnitureStatus,
+                            furnitureOk ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
+                    plugin.getLogger().info("MATERIONE-DEV-FURNITURE-REMOVE ok=" + furnitureOk
+                            + " " + furnitureStatus);
+                });
+                return;
+            }
             boolean ok = status.startsWith("removed");
             sender.sendMessage(Component.text("dev remove: " + status,
                     ok ? NamedTextColor.GREEN : NamedTextColor.YELLOW));

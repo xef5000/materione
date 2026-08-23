@@ -114,6 +114,13 @@ public final class PaperHarnessRunner {
             problems.addAll(drive(console, log, options,
                     "materione dev sweep",
                     "MATERIONE-DEV-SWEEP indexed=0 ok=0"));
+            // furniture core (M2 slice 5): cluster place + remove via the anchor cell
+            problems.addAll(drive(console, log, options,
+                    "materione dev place sample:chair 3 200 3 world",
+                    "MATERIONE-DEV-FURNITURE-PLACE ok=true placed sample:chair"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev remove 3 200 3 world",
+                    "MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture"));
             console.send("forceload remove all");
             // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",

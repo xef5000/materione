@@ -56,7 +56,55 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             validateDrops(resource, definition, environment, problems);
             validatePlacedBy(resource, definition, environment, problems);
         }
+        if ("furniture".equals(resource.contentType())) {
+            validatePlacedBy(resource, definition, environment, problems);
+            validateEvolution(resource, definition, environment, problems);
+        }
         return problems;
+    }
+
+    /**
+     * A furniture's evolution {@code target} must resolve to another
+     * furniture resource; a bad target quarantines the furniture only.
+     */
+    private static void validateEvolution(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("evolution") instanceof List<?> stages)) {
+            return;
+        }
+        for (Object stage : stages) {
+            if (!(stage instanceof Map<?, ?> mapping)
+                    || !(mapping.get("target") instanceof String target) || target.isBlank()) {
+                continue;
+            }
+            NamespacedId targetId = resolve(resource.id().namespace(), target);
+            if (!isFurniture(environment, targetId)) {
+                problems.add(new Diagnostic(
+                        DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                        "furniture " + resource.id() + ": evolution target '" + target
+                                + "' is not a furniture",
+                        resource.id(), null,
+                        "evolution targets must reference other materione furniture"));
+            }
+        }
+    }
+
+    /** True when {@code id} names a furniture resource. */
+    private static boolean isFurniture(ValidationEnvironment environment, NamespacedId id) {
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(id.namespace())) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if ("furniture".equals(resource.contentType()) && resource.id().equals(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /**

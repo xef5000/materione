@@ -20,6 +20,8 @@ public enum ContentEdgeType {
     DROPS_ITEM,
     /** block → the item that places it ({@code item:}). */
     PLACED_BY_ITEM,
+    /** furniture → the next furniture in its evolution chain. */
+    FURNITURE_STAGE,
     /** pack → pack dependency (manifest {@code depends}). */
     PACK_DEPENDENCY
 }

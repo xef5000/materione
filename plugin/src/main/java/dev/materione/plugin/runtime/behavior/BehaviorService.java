@@ -106,6 +106,52 @@ public final class BehaviorService {
         }
     }
 
+    /**
+     * Fires {@code eventType}/{@code detail} for a furniture cluster —
+     * place/click from the cluster runtime. Same resolution and cancellation
+     * contract as block events.
+     */
+    public void fireFurnitureEvent(
+            String eventType,
+            String detail,
+            Player player,
+            Location location,
+            NamespacedId furnitureId,
+            Cancellable cancellable) {
+        FurnitureBehaviors behaviors = registries.get().view(FurnitureBehaviors.KEY);
+        if (behaviors == null) {
+            return;
+        }
+        List<dev.materione.behavior.rule.Rule> rules = behaviors.forFurniture(furnitureId).orElse(List.of());
+        if (rules.isEmpty()) {
+            return;
+        }
+        var root = new LinkedHashMap<String, Object>();
+        if (player != null) {
+            var playerVars = new LinkedHashMap<String, Object>();
+            playerVars.put("name", player.getName());
+            playerVars.put("uuid", player.getUniqueId().toString());
+            playerVars.put("gamemode", player.getGameMode().name().toLowerCase(java.util.Locale.ROOT));
+            root.put("player", playerVars);
+        }
+        World world = location.getWorld();
+        var locationVars = new LinkedHashMap<String, Object>();
+        locationVars.put("x", location.getBlockX());
+        locationVars.put("y", location.getBlockY());
+        locationVars.put("z", location.getBlockZ());
+        locationVars.put("world", world == null ? "" : world.getName());
+        root.put("location", locationVars);
+        var furnitureVars = new LinkedHashMap<String, Object>();
+        furnitureVars.put("id", furnitureId.toString());
+        root.put("furniture", furnitureVars);
+        root.put("vars", new LinkedHashMap<String, Object>());
+        BehaviorEvent event = new BehaviorEvent(eventType, detail, new EvaluationContext(root), cancellable, player);
+        engine.fire(rules, event);
+        if (event.isCancelRequested() && cancellable != null) {
+            cancellable.setCancelled(true);
+        }
+    }
+
     /** Rules attached to the stack's Materione identity, resolved at event entry. */
     private List<dev.materione.behavior.rule.Rule> rulesFor(ItemStack stack) {
         Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);

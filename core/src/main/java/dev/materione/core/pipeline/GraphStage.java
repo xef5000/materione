@@ -52,6 +52,26 @@ public final class GraphStage {
                                 ReferenceValidator.resolve(resource.id().namespace(), placedBy),
                                 dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
                     }
+                    if ("furniture".equals(resource.contentType())) {
+                        if (mapping.get("item") instanceof String placedBy && !placedBy.isBlank()) {
+                            context.graph().addEdge(
+                                    resource.id(),
+                                    ReferenceValidator.resolve(resource.id().namespace(), placedBy),
+                                    dev.materione.core.pipeline.graph.ContentEdgeType.PLACED_BY_ITEM);
+                        }
+                        if (mapping.get("evolution") instanceof java.util.List<?> stages) {
+                            for (Object stage : stages) {
+                                if (stage instanceof java.util.Map<?, ?> step
+                                        && step.get("target") instanceof String target
+                                        && !target.isBlank()) {
+                                    context.graph().addEdge(
+                                            resource.id(),
+                                            ReferenceValidator.resolve(resource.id().namespace(), target),
+                                            dev.materione.core.pipeline.graph.ContentEdgeType.FURNITURE_STAGE);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
