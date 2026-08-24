@@ -115,7 +115,8 @@ public abstract class PaginatedGui extends PluginGui {
 
     private static ItemStack button(Material material, String name) {
         ItemStack stack = new ItemStack(material);
-        stack.editMeta(meta -> meta.displayName(Component.text(name, NamedTextColor.YELLOW)));
+        stack.editMeta(meta -> meta.displayName(dev.materione.platform.text.ItemText.nonItalic(
+                Component.text(name, NamedTextColor.YELLOW))));
         return stack;
     }
 }

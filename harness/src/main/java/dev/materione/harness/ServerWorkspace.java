@@ -91,10 +91,12 @@ public final class ServerWorkspace {
     /**
      * Minimal offline flat world: fast boot, deterministic, no structures,
      * tiny view/simulation distance. The escaped colon is server.properties
-     * syntax, not a typo.
+     * syntax, not a typo. A dedicated high port keeps harness boots
+     * independent of any live server on the machine's 25565.
      */
     private static String serverProperties() {
         return """
+                server-port=25599
                 online-mode=false
                 level-type=minecraft\\:flat
                 generate-structures=false

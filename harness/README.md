@@ -12,6 +12,7 @@ Materione's internals, only these markers.
 | `MATERIONE-BOOT-OK <version>` | bootstrap phases completed (even degraded) |
 | `MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12\|noop>` | content pipeline ran to apply (M1) |
 | `MATERIONE-DELIVERY-OK <url>` | the pack HTTP backend serves the live pack |
+| `MATERIONE-PACKFORMAT detected=<n\|none> advertising=<min>..<max>` | server-reported resource-pack format read from the server jar's version.json |
 | `MATERIONE-VERSION <version>` | `/materione version` executed |
 | `MATERIONE-DOCTOR-OK` | `/materione doctor` completed |
 | `MATERIONE-RELOAD-OK items=<n>` | `/materione reload` completed (live item count) |

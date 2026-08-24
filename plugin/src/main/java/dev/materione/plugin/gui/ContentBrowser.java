@@ -73,9 +73,10 @@ public final class ContentBrowser {
                 var entry = packs.get(index);
                 ItemStack icon = new ItemStack(Material.CHEST);
                 icon.editMeta(meta -> {
-                    meta.displayName(Component.text(entry.getKey(), NamedTextColor.AQUA));
-                    meta.lore(List.of(Component.text(
-                            entry.getValue().size() + " item(s)", NamedTextColor.GRAY)));
+                    meta.displayName(dev.materione.platform.text.ItemText.nonItalic(
+                            Component.text(entry.getKey(), NamedTextColor.AQUA)));
+                    meta.lore(List.of(dev.materione.platform.text.ItemText.nonItalic(Component.text(
+                            entry.getValue().size() + " item(s)", NamedTextColor.GRAY))));
                 });
                 inv.setItem(slot, icon);
             }

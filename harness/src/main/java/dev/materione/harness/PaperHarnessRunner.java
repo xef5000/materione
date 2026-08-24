@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipFile;
 
 /**
  * Boots the pinned Paper server with the built plugin, drives the console,
@@ -71,6 +72,28 @@ public final class PaperHarnessRunner {
             }
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
+            }
+            // pack-format detection reads the server jar's version.json — the
+            // pinned 1.21.4 server reports 46, the advertised range stays 46..88
+            if (log.readAll() == null
+                    || !log.readAll().contains("MATERIONE-PACKFORMAT detected=46 advertising=46..88")) {
+                problems.add("MATERIONE-PACKFORMAT detected=46 advertising=46..88 missing after boot "
+                        + "(server-reported pack format detection)");
+            }
+            // pack.mcmeta schema: 1.21.9+/26.x clients read min_format/max_format
+            // and ignore supported_formats — both generations must be staged
+            try (ZipFile staged = new ZipFile(
+                    workspace.root.resolve("plugins/Materione/generated/pack/pack.zip").toFile())) {
+                var entry = staged.getEntry("pack.mcmeta");
+                String mcmeta = entry == null ? ""
+                        : new String(staged.getInputStream(entry).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!mcmeta.contains("\"min_format\"") || !mcmeta.contains("\"max_format\"")) {
+                    problems.add("staged pack.mcmeta missing min_format/max_format: " + mcmeta
+                            + " (26.x clients reject packs without them)");
+                }
+            } catch (IOException e) {
+                problems.add("could not read staged pack.zip mcmeta: " + e);
             }
 
             problems.addAll(drive(console, log, options, "materione version",

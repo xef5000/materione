@@ -172,12 +172,41 @@ class PackCompilerTest {
                     .doesNotContain("\"source\":\"item\"")
                     .doesNotContain("\"source\":\"block\"");
 
-            // mcmeta: floor base plus a supported range reaching past newer clients
+            // mcmeta: floor base plus a range reaching past newer clients, in
+            // BOTH schema generations — supported_formats for pre-25w31a
+            // clients, min_format/max_format for 1.21.9+/26.x clients (which
+            // ignore supported_formats entirely)
             String mcmeta = entryText(zip, "pack.mcmeta");
             assertThat(mcmeta)
                     .contains("\"pack_format\":46")
                     .contains("supported_formats")
+                    .contains("min_format")
+                    .contains("max_format")
                     .contains(String.valueOf(PackFormats.MAX_KNOWN_FORMAT));
+        }
+    }
+
+    @Test
+    void detectedServerFormatWidensTheAdvertisedRange(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/widen");
+        writePackSkeleton(packsRoot, "widen");
+        writeFile(packsRoot.resolve("items/t.yml"), "t:\n  material: STICK\n".getBytes());
+
+        // a future server (format 96) reporting itself: the pack must be
+        // acceptable to its own clients without a table bump
+        var outcome = compilePack(
+                tempDir, "widen",
+                AllocationTable.load(tempDir.resolve("storage-widen/allocation.bin")),
+                List.of(new StubItemType()),
+                96);
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            String mcmeta = entryText(zip, "pack.mcmeta");
+            assertThat(mcmeta)
+                    .contains("\"min_format\":46")
+                    .contains("\"max_format\":96")
+                    .contains("\"supported_formats\":[46,96]");
         }
     }
 
@@ -272,7 +301,8 @@ class PackCompilerTest {
                 AllocationTable.load(tempDir.resolve("storage-merge/allocation.bin")),
                 tempDir.resolve("generated-merge"),
                 diagnostics,
-                quarantine);
+                quarantine,
+                -1);
 
         assertThat(outcome).isNotNull();
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
@@ -306,7 +336,8 @@ class PackCompilerTest {
                 AllocationTable.load(tempDir.resolve("storage-minecraft/allocation.bin")),
                 tempDir.resolve("generated-minecraft"),
                 diagnostics,
-                quarantine);
+                quarantine,
+                -1);
 
         assertThat(outcome).isNotNull();
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
@@ -371,7 +402,8 @@ class PackCompilerTest {
                 allocation,
                 tempDir.resolve("generated"),
                 diagnostics,
-                quarantine);
+                quarantine,
+                -1); // table-bounded spec: goldens must not depend on a server
         assertThat(diagnostics.recent(64).stream()
                 .filter(d -> d.severity() == Severity.ERROR)
                 .findAny())
@@ -390,6 +422,12 @@ class PackCompilerTest {
 
     private PackCompiler.Outcome compilePack(
             Path tempDir, String packId, AllocationTable allocation, List<ContentType> contentTypes) {
+        return compilePack(tempDir, packId, allocation, contentTypes, -1);
+    }
+
+    private PackCompiler.Outcome compilePack(
+            Path tempDir, String packId, AllocationTable allocation, List<ContentType> contentTypes,
+            int detectedMaxFormat) {
         var quarantine = new QuarantineTracker();
         var runner = new PipelineRunner(diagnostics, quarantine);
         runner.request(new ReloadScope.Everything(), tempDir.resolve("packs"));
@@ -401,7 +439,8 @@ class PackCompilerTest {
                 allocation,
                 tempDir.resolve("generated-" + packId),
                 diagnostics,
-                quarantine);
+                quarantine,
+                detectedMaxFormat);
     }
 
     private static void writePackSkeleton(Path packDir, String id) throws IOException {

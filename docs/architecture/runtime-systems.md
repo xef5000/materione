@@ -159,7 +159,9 @@ unknown entries skip with `MTR-0027`). Food rides a build-time vanilla `FoodComp
 (1.21.4 has no Consumable API); durability/soulbound/backpack state persists in stack or
 player PDC. The auto-updater now scans on throttled inventory events (one scan per player
 per second, put-before-check gate) in addition to join. `model_tree` stays parsed-but-inert
-(M7).
+(M7). Authored names/lore render non-italic by default — vanilla italicizes `custom_name`
+and lore unless a component opts out; the `ItemText` wrapper opts out at the root while an
+author's `&o` still wins on its own segments.
 
 ---
 

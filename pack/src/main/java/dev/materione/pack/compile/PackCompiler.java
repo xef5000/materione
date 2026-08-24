@@ -113,7 +113,10 @@ public final class PackCompiler {
      * Compiles the packs of one pipeline run. Never throws — parse or
      * compile problems of a single resource surface as diagnostics and that
      * resource's output is skipped (fail-soft, D6); a broken or throwing
-     * content type never poisons the rest of the pack.
+     * content type never poisons the rest of the pack. {@code
+     * detectedMaxFormat} is the running server's self-reported resource
+     * pack format ({@code -1} when unavailable) — see {@link
+     * PackFormats#spec(int)}.
      */
     public Outcome compile(
             List<ContentPack> packs,
@@ -121,7 +124,8 @@ public final class PackCompiler {
             AllocationTable allocation,
             Path generatedDir,
             dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
-            dev.materione.core.diagnostics.QuarantineTracker quarantine) {
+            dev.materione.core.diagnostics.QuarantineTracker quarantine,
+            int detectedMaxFormat) {
         var byDirectory = new LinkedHashMap<String, ContentType>();
         for (ContentType type : contentTypes) {
             byDirectory.put(type.directory(), type);
@@ -214,7 +218,7 @@ public final class PackCompiler {
             return null;
         }
 
-        return writeStaged(emitter, generatedDir);
+        return writeStaged(emitter, generatedDir, detectedMaxFormat);
     }
 
     /**
@@ -486,9 +490,9 @@ public final class PackCompiler {
         return String.join(", ", paths.subList(0, limit)) + " …(+" + (paths.size() - limit) + " more)";
     }
 
-    private static Outcome writeStaged(Emitter emitter, Path generatedDir) {
+    private static Outcome writeStaged(Emitter emitter, Path generatedDir, int detectedMaxFormat) {
         ResourcePack pack = ResourcePack.resourcePack();
-        pack.packMeta(PackFormats.spec(), Component.text(emitter.description));
+        pack.packMeta(PackFormats.spec(detectedMaxFormat), Component.text(emitter.description));
         emitter.itemDefinitions.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         emitter.models.forEach((path, json) ->

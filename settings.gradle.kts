@@ -28,6 +28,14 @@ dependencyResolutionManagement {
                 includeGroup("net.md-5")
             }
         }
+        maven("https://repo.nexomc.com/releases/") {
+            name = "nexomc"
+            // The Nexo-maintained creative fork keeps upstream's coordinates
+            // (team.unnamed) but publishes only here — filter to that group.
+            content {
+                includeGroup("team.unnamed")
+            }
+        }
     }
 }
 

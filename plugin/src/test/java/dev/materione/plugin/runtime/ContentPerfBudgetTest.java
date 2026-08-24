@@ -71,7 +71,7 @@ class ContentPerfBudgetTest {
         var outcome = new PackCompiler().compile(
                 runner.lastPacks(), List.of(new ItemType(), new RecipeType()),
                 AllocationTable.load(workDir.resolve("storage/allocation.bin")),
-                workDir.resolve("generated"), diagnostics, quarantine);
+                workDir.resolve("generated"), diagnostics, quarantine, -1);
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         assertThat(outcome).isNotNull();
@@ -91,7 +91,7 @@ class ContentPerfBudgetTest {
         long start = System.nanoTime();
         var second = new PackCompiler().compile(
                 runner.lastPacks(), List.of(new ItemType(), new RecipeType()),
-                first.allocation(), workDir.resolve("generated"), diagnostics, quarantine);
+                first.allocation(), workDir.resolve("generated"), diagnostics, quarantine, -1);
         boolean noOp = second.sha256().contentEquals(first.outcome().sha256());
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
@@ -174,7 +174,7 @@ class ContentPerfBudgetTest {
         var allocation = AllocationTable.load(workDir.resolve("storage/allocation.bin"));
         var outcome = new PackCompiler().compile(
                 runner.lastPacks(), List.of(new ItemType(), new RecipeType()),
-                allocation, workDir.resolve("generated"), diagnostics, quarantine);
+                allocation, workDir.resolve("generated"), diagnostics, quarantine, -1);
         assertThat(outcome).isNotNull();
         return new Loaded(outcome, allocation, buildShadow(runner.lastPacks()));
     }

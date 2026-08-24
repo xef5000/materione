@@ -174,6 +174,16 @@ suggestion.
 - **Compile is pure & deterministic**: identical graph + allocation → byte-identical pack.
   Output is staged in `generated/pack/` and hashed; hash equals live pack's hash → skip apply
   and delivery entirely (no-op reloads are free and invisible).
+- **Pack-format policy (as built)**: the staged `pack.mcmeta` advertises the 1.21.4 floor
+  (46) through the newest known bound in *both* schema generations — `pack_format` +
+  `supported_formats` for pre-25w31a clients, `min_format`/`max_format` for 1.21.9+/26.x
+  clients (which ignore `supported_formats`; a pack carrying only the old fields shows as
+  incompatible on every current client). The bound comes from the server itself when it can:
+  `ServerPackFormat` reads `pack_version.resource` out of the server jar's `version.json`
+  (`MATERIONE-PACKFORMAT` at boot), so a server newer than this build still accepts its own
+  pack; the known-version table is the fallback, and MTR-0018 is a warning only when *neither*
+  source covers the running version (an informational MTR-0018 when the server reports a
+  format the table doesn't know yet).
 - **Datapack artifacts** (paintings, jukebox songs, optional trims) compile alongside, into the
   world's datapacks folder via atomic replace; each carries the content hash so staleness is
   detectable. **Datapack registry content (paintings, jukebox songs, trim sets, worldgen

@@ -20,7 +20,8 @@ what's planned). Anything marked *M-later* is reserved, not built.
 | ArchUnit | 1.5.0 | Powers the ban tests (§5). |
 | paper-api | 1.21.4-R0.1-SNAPSHOT | **Compile against the floor**, `compileOnly`. Post-floor APIs are structurally unreachable outside `platform/` — plugin.md §8.2 enforcement becomes a compile error. `platform/` may add a newer pin when a second implementation exists (M-later). |
 | SnakeYAML | 2.2 | `compileOnly` — the server provides it at runtime; never shaded. |
-| creative | 1.7.3 | MIT, Maven Central (`team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. |
+| Gson | 2.11.0 | `compileOnly` like SnakeYAML (server-provided); used for the server jar's `version.json` (pack-format detection) and by `pack/` via creative. |
+| creative | 1.14.4 | MIT. The **Nexo-maintained fork** of `team.unnamed/creative` — same coordinates, resolved from `repo.nexomc.com/releases/` (filtered to `team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. The fork (not upstream 1.7.3) because it tracks new Minecraft versions in Nexo production: 1.14.x writes `pack.mcmeta` `min_format`/`max_format`, the only range schema 25w31a+ (1.21.9/26.x) clients honor. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins

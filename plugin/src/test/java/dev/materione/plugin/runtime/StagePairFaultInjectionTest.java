@@ -242,7 +242,7 @@ class StagePairFaultInjectionTest {
                 runner.lastPacks(), List.of(types),
                 AllocationTable.load(workDir.resolve("storage/allocation.bin")),
                 workDir.resolve("generated"),
-                diagnostics, quarantine);
+                diagnostics, quarantine, -1);
         return new Run(runner, result, outcome);
     }
 

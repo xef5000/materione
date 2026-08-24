@@ -60,6 +60,8 @@ public final class PipelineService {
     private final PackCompiler compiler = new PackCompiler();
     private final ContentRuntime runtime = new ContentRuntime();
     private final RecipeApplier recipeApplier = new RecipeApplier();
+    /** Server-reported resource-pack format; -1 when detection failed. */
+    private final int detectedPackFormat;
     private volatile dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport;
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
@@ -78,6 +80,14 @@ public final class PipelineService {
         this.scheduling = scheduling;
         this.descriptor = descriptor;
         this.runner = new PipelineRunner(diagnostics, quarantine);
+        // The server's self-reported format beats the table (a server newer
+        // than this build still names its own format); -1 = detection failed.
+        this.detectedPackFormat = dev.materione.platform.probe.ServerPackFormat
+                .detectResourceFormat().orElse(-1);
+        plugin.getLogger().info("MATERIONE-PACKFORMAT detected="
+                + (detectedPackFormat < 0 ? "none" : detectedPackFormat)
+                + " advertising=" + PackFormats.FLOOR + ".."
+                + Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat));
     }
 
     /** Registers the built-in content types through the registry path (D5). */
@@ -136,15 +146,27 @@ public final class PipelineService {
                     generatedDir.resolve("fingerprints.bin")));
             fingerprintsLoaded = true;
         }
-        if (!PackFormats.isKnown(descriptor.minecraftVersion())) {
+        int maxAdvertised = Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat);
+        if (detectedPackFormat < 0 && !PackFormats.isKnown(descriptor.minecraftVersion())) {
             // output is unchanged — the advertised range still covers
-            // intermediate formats — but a server newer than everything we
-            // know would reject its own pack until the table is raised
+            // intermediate formats — but with neither the table nor the
+            // server's own report covering this version, a server newer
+            // than everything we know would reject its own pack
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PACK_FORMAT_UNKNOWN_VERSION,
                     "server version '" + descriptor.minecraftVersion()
-                            + "' is not in the known pack-format table; the pack advertises formats "
-                            + PackFormats.FLOOR + ".." + PackFormats.MAX_KNOWN_FORMAT));
+                            + "' is not in the known pack-format table and its own pack format could "
+                            + "not be detected; the pack advertises formats "
+                            + PackFormats.FLOOR + ".." + maxAdvertised));
+        } else if (detectedPackFormat >= 0 && !PackFormats.isKnown(descriptor.minecraftVersion())) {
+            // the server named its own format — safe, but the table should
+            // learn the version so future builds keep the range honest
+            diagnostics.publish(Diagnostic.info(
+                    DiagnosticCodes.PACK_FORMAT_UNKNOWN_VERSION,
+                    "server version '" + descriptor.minecraftVersion()
+                            + "' is not in the known pack-format table; using the server-reported "
+                            + "format " + detectedPackFormat + " (advertising "
+                            + PackFormats.FLOOR + ".." + maxAdvertised + ")"));
         }
         PipelineResult result = runner.request(scope, packsRoot);
         if (result == null || !result.completed()) {
@@ -155,7 +177,8 @@ public final class PipelineService {
         }
 
         PackCompiler.Outcome outcome = compiler.compile(
-                runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine);
+                runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine,
+                detectedPackFormat);
         if (outcome != null) {
             // fingerprints persist after a successful stage: the next targeted
             // scope can trust out-of-scope state (and expands when it can't)

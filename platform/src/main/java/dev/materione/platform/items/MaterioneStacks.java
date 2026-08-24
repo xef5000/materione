@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -147,7 +146,7 @@ public final class MaterioneStacks {
         }
 
         private static Component legacy(String text) {
-            return LegacyComponentSerializer.legacyAmpersand().deserialize(text);
+            return dev.materione.platform.text.ItemText.legacy(text);
         }
     }
 }
