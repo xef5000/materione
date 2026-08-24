@@ -121,9 +121,13 @@ public final class MaterioneStacks {
                 meta.getPersistentDataContainer()
                         .set(key(), org.bukkit.persistence.PersistentDataType.STRING, item.id().toString());
                 if (item.modelId() != null) {
-                    // 1.21.4 item_model component (Bukkit surface, ItemMeta#setItemModel)
+                    // 1.21.4 item_model component (Bukkit surface, ItemMeta#setItemModel).
+                    // Its value is the ITEM DEFINITION id — the client resolves it to
+                    // assets/<ns>/items/<value>.json, and the compiler keys definitions
+                    // by the item's own id (ItemType#compile); modelId only gates
+                    // whether a definition exists (material-only items stay vanilla).
                     meta.setItemModel(new org.bukkit.NamespacedKey(
-                            item.modelId().namespace(), item.modelId().value()));
+                            item.id().namespace(), item.id().value()));
                 }
                 if (item.displayName() != null && !item.displayName().isBlank()) {
                     meta.displayName(legacy(item.displayName()));

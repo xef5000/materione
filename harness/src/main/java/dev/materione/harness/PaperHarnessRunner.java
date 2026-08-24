@@ -122,6 +122,17 @@ public final class PaperHarnessRunner {
                     "MATERIONE-GIVE-FAILED reason=no-such-player"));
             problems.addAll(drive(console, log, options, "materione browser",
                     "MATERIONE-BROWSER-DENIED reason=player-only"));
+            // the item_model component must name the ITEM DEFINITION id (what
+            // the compiler writes to assets/<ns>/items/<id>.json), not the pack
+            // model — a real client checkerboarded every modeled item when the
+            // runtime pointed it at <id>_model, where no definition exists
+            problems.addAll(drive(console, log, options,
+                    "materione dev stack corpus:gem_red",
+                    "MATERIONE-STACK id=corpus:gem_red item_model=corpus:gem_red"));
+            // material-only items carry no component at all (vanilla render)
+            problems.addAll(drive(console, log, options,
+                    "materione dev stack corpus:scroll_01",
+                    "MATERIONE-STACK id=corpus:scroll_01 item_model=none"));
             // M2 slice 3: world-runtime smoke — force-load the target chunk
             // (headless boots have no players, so nothing else keeps it warm),
             // then place → inspect → remove → sweep through the dev driver

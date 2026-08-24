@@ -1,6 +1,7 @@
 package dev.materione.plugin.command;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.plugin.MaterionePlugin;
 import java.util.Locale;
 import net.kyori.adventure.text.Component;
@@ -9,14 +10,16 @@ import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 
 /**
- * {@code /materione dev place|remove|inspect|sweep} — the world-runtime
+ * {@code /materione dev place|remove|inspect|sweep|stack} — the world-runtime
  * operator surface and the harness's placement driver (permission
  * {@code materione.dev}). Every subcommand is console-runnable: coordinates
  * are required unless a player sends the command, and all world access is
  * routed through the scheduling gateway so markers always land after the
- * mutation did.
+ * mutation did. {@code stack} is the exception that touches no world at all —
+ * it builds one live item's stack and reports its components.
  */
 public final class DevCommands {
 
@@ -38,10 +41,11 @@ public final class DevCommands {
             case "remove" -> remove(sender, args);
             case "inspect" -> inspect(sender, args);
             case "sweep" -> sweep(sender, args);
+            case "stack" -> stack(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione dev <place|remove|inspect|sweep> — "
+                    "usage: /materione dev <place|remove|inspect|sweep|stack> — "
                             + "place <block> [x y z [world]] · remove <x y z [world]> · "
-                            + "inspect [x y z [world]] · sweep [--fix]",
+                            + "inspect [x y z [world]] · sweep [--fix] · stack <itemId>",
                     NamedTextColor.RED));
         }
     }
@@ -49,7 +53,7 @@ public final class DevCommands {
     /** Tab completion for the {@code dev} branch. */
     public java.util.List<String> complete(String[] args) {
         if (args.length == 2) {
-            return java.util.List.of("place", "remove", "inspect", "sweep").stream()
+            return java.util.List.of("place", "remove", "inspect", "sweep", "stack").stream()
                     .filter(s -> s.startsWith(args[1].toLowerCase(Locale.ROOT))).toList();
         }
         return java.util.List.of();
@@ -181,6 +185,57 @@ public final class DevCommands {
             sender.sendMessage(Component.text("dev sweep: " + status, NamedTextColor.GREEN));
             plugin.getLogger().info("MATERIONE-DEV-SWEEP " + status);
         });
+    }
+
+    /**
+     * {@code /materione dev stack <itemId>} — builds one live item's stack
+     * through the runtime projection and reports its item_model component
+     * (console-runnable, no world or player needed). The harness pins on
+     * this: the component must name the item DEFINITION id (what the
+     * compiler writes to {@code assets/<ns>/items/<id>.json}), not the pack
+     * model — a real client checkerboarded every modeled item when it
+     * pointed at {@code <id>_model}.
+     */
+    private void stack(CommandSender sender, String[] args) {
+        if (args.length < 3) {
+            usage(sender, "/materione dev stack <itemId>");
+            return;
+        }
+        var pipeline = plugin.pipeline();
+        var registries = pipeline == null || pipeline.runtime() == null
+                ? null
+                : pipeline.runtime().registries();
+        if (registries == null) {
+            plugin.getLogger().info("MATERIONE-STACK failed reason=no-content");
+            sender.sendMessage(Component.text("no content is loaded yet", NamedTextColor.RED));
+            return;
+        }
+        dev.materione.plugin.items.ItemIdResolver.Result resolution =
+                dev.materione.plugin.items.ItemIdResolver.resolve(args[2], registries.items());
+        if (resolution.status() == dev.materione.plugin.items.ItemIdResolver.Status.UNKNOWN) {
+            plugin.getLogger().info("MATERIONE-STACK failed reason=unknown-item");
+            sender.sendMessage(Component.text(
+                    "no live item matches '" + args[2] + "'", NamedTextColor.RED));
+            return;
+        }
+        if (resolution.status() == dev.materione.plugin.items.ItemIdResolver.Status.AMBIGUOUS) {
+            plugin.getLogger().info("MATERIONE-STACK failed reason=ambiguous-item");
+            sender.sendMessage(Component.text("'" + args[2] + "' is ambiguous", NamedTextColor.RED));
+            return;
+        }
+        RuntimeItem item = registries.item(resolution.id()).orElse(null);
+        if (item == null) {
+            plugin.getLogger().info("MATERIONE-STACK failed reason=race");
+            return; // raced an apply between resolve and fetch
+        }
+        ItemStack built = dev.materione.platform.items.MaterioneStacks.build(
+                dev.materione.platform.items.MaterioneStacks.specOf(item));
+        var meta = built.getItemMeta();
+        org.bukkit.NamespacedKey model = meta == null ? null : meta.getItemModel();
+        String modelText = model == null ? "none" : model.toString();
+        sender.sendMessage(Component.text(
+                "dev stack: " + item.id() + " item_model=" + modelText, NamedTextColor.GREEN));
+        plugin.getLogger().info("MATERIONE-STACK id=" + item.id() + " item_model=" + modelText);
     }
 
     // --- argument helpers -------------------------------------------------------

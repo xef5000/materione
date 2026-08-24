@@ -28,6 +28,7 @@ Materione's internals, only these markers.
 | `MATERIONE-GIVE-DENIED reason=player-required` | console give without a target player |
 | `MATERIONE-GIVE-FAILED reason=no-such-player\|no-content` | give could not resolve its target |
 | `MATERIONE-BROWSER-DENIED reason=player-only` | `/materione browser` from the console |
+| `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 filtered to sample + corpus (3 + 50 items), so the expected live count is
