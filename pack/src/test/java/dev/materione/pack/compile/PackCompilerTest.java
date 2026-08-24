@@ -94,8 +94,8 @@ class PackCompilerTest {
                 return;
             }
             emitter.itemDefinition(id, Map.of("model", Map.of(
-                    "type", "reference",
-                    "id", modelRef.contains(":") ? modelRef : id.namespace() + ":" + modelRef)));
+                    "type", "minecraft:model",
+                    "model", modelRef.contains(":") ? modelRef : id.namespace() + ":" + modelRef)));
         }
     }
 
@@ -165,12 +165,12 @@ class PackCompilerTest {
             assertThat(zip.getEntry("assets/sample/textures/obsidian/axe.png")).isNotNull();
 
             // atlas coverage: obsidian/ is outside vanilla's item|block scan and
-            // must get a directory source; item/ is vanilla-covered and must not
+            // gets an exact single source; item/ and block/ are vanilla-scanned
             String atlas = entryText(zip, "assets/minecraft/atlases/blocks.json");
             assertThat(atlas)
-                    .contains("\"source\":\"obsidian\"")
-                    .doesNotContain("\"source\":\"item\"")
-                    .doesNotContain("\"source\":\"block\"");
+                    .contains("\"resource\":\"sample:obsidian/axe\"")
+                    .doesNotContain("item/ruby")
+                    .doesNotContain("block/marble");
 
             // mcmeta: floor base plus a range reaching past newer clients, in
             // BOTH schema generations — supported_formats for pre-25w31a
@@ -211,11 +211,12 @@ class PackCompilerTest {
     }
 
     @Test
-    void uncoveredRootTextureWarnsAndShipsNoAtlas(@TempDir Path tempDir) throws IOException {
+    void rootTextureGetsAnExactSingleSource(@TempDir Path tempDir) throws IOException {
         Path packsRoot = tempDir.resolve("packs/atlaswarn");
         writePackSkeleton(packsRoot, "atlaswarn");
         writeFile(packsRoot.resolve("assets/textures/root.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
-        // texture at the textures/ root — no directory source can reach it
+        // texture at the textures/ root — unreachable by directory sources,
+        // but the exact single source names it directly
         writeFile(packsRoot.resolve("items/t.yml"), "t:\n  material: STICK\n  texture: root\n".getBytes());
 
         var outcome = compilePack(tempDir, "atlaswarn");
@@ -224,10 +225,11 @@ class PackCompilerTest {
         assertThat(diagnostics.recent(64).stream()
                 .filter(d -> "MTR-0017".equals(d.code().code()))
                 .findFirst())
-                .as("root-level texture must raise MTR-0017")
-                .isPresent();
+                .as("a coverable texture must not raise MTR-0017")
+                .isEmpty();
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
-            assertThat(zip.getEntry("assets/minecraft/atlases/blocks.json")).isNull();
+            String atlas = entryText(zip, "assets/minecraft/atlases/blocks.json");
+            assertThat(atlas).contains("\"resource\":\"atlaswarn:root\"");
         }
     }
 
@@ -248,10 +250,10 @@ class PackCompilerTest {
         assertThat(outcome).isNotNull();
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
             String atlas = entryText(zip, "assets/minecraft/atlases/blocks.json");
-            // the user's source survives alongside the generated directory source
+            // the user's source survives alongside the generated single source
             assertThat(atlas)
                     .contains("minecraft:block/dirt")
-                    .contains("\"source\":\"custom\"");
+                    .contains("\"resource\":\"minecraft:custom/t\"");
         }
         assertThat(diagnostics.recent(64).stream()
                 .filter(d -> d.severity() == Severity.ERROR)

@@ -48,8 +48,9 @@ import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
  *
  * <p>Atlas coverage: textures a pack ships outside vanilla's {@code item}/
  * {@code block} conventions never reach the client's block atlas on their
- * own — the compiler emits one merged {@code blocks.json} covering them
- * (MTR-0017 flags what remains uncovered).
+ * own — the compiler emits one merged {@code blocks.json} of single-source
+ * entries covering them (MTR-0017 flags a user atlas that cannot be
+ * parsed).
  */
 public final class PackCompiler {
 
@@ -257,17 +258,17 @@ public final class PackCompiler {
     }
 
     /**
-     * Emits the block-atlas source list: every texture directory shipped
-     * outside vanilla's {@code item}/{@code block} conventions gets a
-     * directory source, merged into one {@code blocks.json} — without it
-     * the client never stitches those textures and every model referencing
-     * them renders missing. A user-shipped {@code blocks.json} is merged,
-     * never clobbered; if it cannot be parsed it ships verbatim and the
-     * generated sources are dropped (fail-soft, MTR-0017).
+     * Emits the block-atlas source list: every texture shipped outside
+     * vanilla's {@code item}/{@code block} conventions (and outside the
+     * special-loading directories) gets a {@code single} source naming its
+     * exact sprite id — the same shape Nexo ships, and immune to directory-
+     * source prefix-composition mistakes. All merged into one {@code
+     * blocks.json}. A user-shipped {@code blocks.json} is merged, never
+     * clobbered; if it cannot be parsed it ships verbatim and the generated
+     * sources are dropped (fail-soft, MTR-0017).
      */
     private static void buildAtlas(Emitter emitter, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
-        var dirs = new TreeSet<String>();
-        var uncovered = new ArrayList<String>();
+        var sprites = new TreeSet<String>();
         String userAtlasSource = null;
         for (String[] copy : emitter.assetCopies) {
             String dest = copy[1];
@@ -285,23 +286,13 @@ public final class PackCompiler {
             }
             String rest = dest.substring(("assets/" + segments[1] + "/textures/").length());
             int slash = rest.indexOf('/');
-            if (slash < 0) {
-                uncovered.add(dest); // directly under textures/ — no directory source reaches it
+            String topDir = slash < 0 ? "" : rest.substring(0, slash);
+            if (VANILLA_COVERED_DIRS.contains(topDir) || NON_BLOCK_ATLAS_DIRS.contains(topDir)) {
                 continue;
             }
-            String dir = rest.substring(0, slash);
-            if (!VANILLA_COVERED_DIRS.contains(dir) && !NON_BLOCK_ATLAS_DIRS.contains(dir)) {
-                dirs.add(dir);
-            }
+            sprites.add(segments[1] + ":" + rest.substring(0, rest.length() - ".png".length()));
         }
-        if (!uncovered.isEmpty()) {
-            diagnostics.publish(new Diagnostic(
-                    DiagnosticCodes.TEXTURE_NOT_IN_ATLAS, Severity.WARN,
-                    "texture(s) not covered by any atlas source: " + summarize(uncovered),
-                    null, null,
-                    "place textures under textures/item or textures/block, or ship an atlas json"));
-        }
-        if (dirs.isEmpty() && userAtlasSource == null) {
+        if (sprites.isEmpty() && userAtlasSource == null) {
             return;
         }
         var sources = new ArrayList<Object>();
@@ -323,12 +314,11 @@ public final class PackCompiler {
                 sources.add(entry);
             }
         }
-        for (String dir : dirs) {
-            if (seen.add("directory:" + dir + ":" + dir + "/")) {
+        for (String sprite : sprites) {
+            if (seen.add("single:" + sprite)) {
                 var source = new LinkedHashMap<String, Object>();
-                source.put("type", "directory");
-                source.put("source", dir);
-                source.put("prefix", dir + "/");
+                source.put("type", "single");
+                source.put("resource", sprite);
                 sources.add(source);
             }
         }
@@ -475,20 +465,11 @@ public final class PackCompiler {
     }
 
     private static String sourceKey(Object source) {
-        if (source instanceof Map<?, ?> map) {
-            return map.get("type") + ":" + map.get("source") + ":" + map.get("prefix");
-        }
+        // full-map string: single sources carry their target in "resource",
+        // so type/source/prefix alone would collapse distinct entries
         return String.valueOf(source);
     }
 
-    /** First entries of the list, with a count of the remainder. */
-    private static String summarize(List<String> paths) {
-        int limit = 8;
-        if (paths.size() <= limit) {
-            return String.join(", ", paths);
-        }
-        return String.join(", ", paths.subList(0, limit)) + " …(+" + (paths.size() - limit) + " more)";
-    }
 
     private static Outcome writeStaged(Emitter emitter, Path generatedDir, int detectedMaxFormat) {
         ResourcePack pack = ResourcePack.resourcePack();

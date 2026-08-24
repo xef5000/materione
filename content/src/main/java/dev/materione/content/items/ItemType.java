@@ -113,9 +113,12 @@ public final class ItemType implements ContentType {
         if (modelRef == null || modelRef.isBlank()) {
             return; // material-only item: no pack output (vanilla render)
         }
+        // 1.21.4+ item model definition (minecraft.wiki/w/Items_model_definition):
+        // the basic single-model case is type "minecraft:model" + "model" — the
+        // "reference"/"id" shape is not a valid definition type on any client
         var reference = new LinkedHashMap<String, Object>();
-        reference.put("type", "reference");
-        reference.put("id", modelRef.contains(":") ? modelRef : item.id().namespace() + ":" + modelRef);
+        reference.put("type", "minecraft:model");
+        reference.put("model", modelRef.contains(":") ? modelRef : item.id().namespace() + ":" + modelRef);
         var root = new LinkedHashMap<String, Object>();
         root.put("model", reference);
         emitter.itemDefinition(item.id(), root);

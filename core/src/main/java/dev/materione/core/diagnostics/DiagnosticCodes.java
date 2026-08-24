@@ -80,9 +80,9 @@ public final class DiagnosticCodes {
 
     // Pack output hardening
 
-    /** An emitted texture sits outside the vanilla atlas conventions and no atlas source covers it — it renders as missing in game. */
+    /** A user-shipped atlas json could not be parsed, so generated atlas sources were dropped with it — affected textures render as missing in game. */
     public static final DiagnosticCode TEXTURE_NOT_IN_ATLAS =
-            new DiagnosticCode("MTR-0017", Severity.WARN, "Emitted texture not covered by any atlas source");
+            new DiagnosticCode("MTR-0017", Severity.WARN, "Atlas source could not be generated");
 
     /** The running Minecraft version is not in the known pack-format table; floor assumptions are advertised. */
     public static final DiagnosticCode PACK_FORMAT_UNKNOWN_VERSION =

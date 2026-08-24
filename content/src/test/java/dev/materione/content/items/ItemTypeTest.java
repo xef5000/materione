@@ -133,8 +133,9 @@ class ItemTypeTest {
         var definition = emitter.itemDefinitions.get(0);
         assertThat(definition.id().toString()).isEqualTo("sample:ruby_sword");
         var reference = cast(definition.json().get("model"));
-        assertThat(reference).containsEntry("type", "reference");
-        assertThat(reference).containsEntry("id", "sample:ruby_sword_model");
+        // 1.21.4+ item model definition: the basic single-model case
+        assertThat(reference).containsEntry("type", "minecraft:model");
+        assertThat(reference).containsEntry("model", "sample:ruby_sword_model");
     }
 
     @Test
@@ -147,7 +148,8 @@ class ItemTypeTest {
         type.compile(parsed.orElseThrow(), NamespacedId.parse("sample:axe_model"), emitter, NO_ALLOCATIONS);
         assertThat(emitter.models).isEmpty(); // nothing generated
         var reference = cast(emitter.itemDefinitions.get(0).json().get("model"));
-        assertThat(reference).containsEntry("id", "sample:models/custom");
+        assertThat(reference).containsEntry("type", "minecraft:model");
+        assertThat(reference).containsEntry("model", "sample:models/custom");
     }
 
     @Test

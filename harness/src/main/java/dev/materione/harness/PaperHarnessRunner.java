@@ -92,6 +92,18 @@ public final class PaperHarnessRunner {
                     problems.add("staged pack.mcmeta missing min_format/max_format: " + mcmeta
                             + " (26.x clients reject packs without them)");
                 }
+                // item model definition wire format: only "minecraft:model" +
+                // "model" parses on 1.21.4+ clients (a real client caught the
+                // invalid "reference"/"id" shape the harness never sees)
+                var definition = staged.getEntry("assets/corpus/items/gem_red.json");
+                String definitionJson = definition == null ? ""
+                        : new String(staged.getInputStream(definition).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!definitionJson.contains("\"type\":\"minecraft:model\"")
+                        || !definitionJson.contains("\"model\":\"corpus:gem_red_model\"")) {
+                    problems.add("staged item definition has the wrong wire format: " + definitionJson
+                            + " (clients need {\"model\":{\"type\":\"minecraft:model\",\"model\":…}})");
+                }
             } catch (IOException e) {
                 problems.add("could not read staged pack.zip mcmeta: " + e);
             }
