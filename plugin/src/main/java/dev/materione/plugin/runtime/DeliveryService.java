@@ -52,10 +52,31 @@ public final class DeliveryService implements Listener {
         }
         try {
             backend = new SelfHostBackend(bindHost, port, publicHost);
-        } catch (IOException e) {
+        } catch (IOException primaryFailure) {
+            // configured port busy — typical when several Paper servers run on
+            // one machine. Walk a few nearby ports: the published URL carries
+            // the actually-bound port (SelfHostBackend), so delivery stays
+            // correct wherever we land.
+            for (int candidate = port + 1; candidate <= port + 8 && backend == null; candidate++) {
+                try {
+                    backend = new SelfHostBackend(bindHost, candidate, publicHost);
+                    diagnostics.publish(new Diagnostic(
+                            DiagnosticCodes.DELIVERY_FAILED, Severity.WARN,
+                            "configured delivery port " + port + " is busy ("
+                                    + primaryFailure.getMessage() + "); self-host backend "
+                                    + "bound to " + candidate + " instead — the published "
+                                    + "pack URL reflects it",
+                            null, null, "set delivery_port in settings.yml to pin a port"));
+                } catch (IOException ignored) {
+                    // keep walking
+                }
+            }
+        }
+        if (backend == null) {
             diagnostics.publish(new Diagnostic(
                     DiagnosticCodes.DELIVERY_FAILED, Severity.ERROR,
-                    "self-host backend failed to start on " + bindHost + ":" + port + ": " + e.getMessage(),
+                    "self-host backend failed to start on " + bindHost + ":" + port
+                            + " (and " + port + "+1.." + (port + 8) + "): no free port",
                     null, null, "check the port (delivery_port) — content still applies; "
                             + "players keep whatever pack they already have"));
         }
