@@ -77,6 +77,16 @@ public final class PaperHarnessRunner {
                     "MATERIONE-VERSION " + options.expectedVersion()));
             problems.addAll(drive(console, log, options, "materione doctor",
                     "MATERIONE-DOCTOR-OK"));
+            // give/browser wiring (console has no players, so the denial and
+            // unknown-target paths are exactly what proves the command surface)
+            problems.addAll(drive(console, log, options,
+                    "materione give corpus:gem_red",
+                    "MATERIONE-GIVE-DENIED reason=player-required"));
+            problems.addAll(drive(console, log, options,
+                    "materione give corpus:gem_red ghostplayer",
+                    "MATERIONE-GIVE-FAILED reason=no-such-player"));
+            problems.addAll(drive(console, log, options, "materione browser",
+                    "MATERIONE-BROWSER-DENIED reason=player-only"));
             // M2 slice 3: world-runtime smoke — force-load the target chunk
             // (headless boots have no players, so nothing else keeps it warm),
             // then place → inspect → remove → sweep through the dev driver

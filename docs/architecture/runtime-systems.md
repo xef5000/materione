@@ -346,6 +346,13 @@ free-form canvas mode renders a glyph background + real slots mapped onto it (sh
 layout, as incumbents do). Every click is an ECA `menu.click` — same engine, same actions,
 same conditions as everything else.
 
+**Shipped ahead of it (pre-M3 tooling):** the holder-based gui kit in `plugin/gui/`
+(`PluginGui` identified by `InventoryHolder` identity — never title matching — plus
+`PaginatedGui` page math and one shared click router). Built-in admin surfaces already ride
+it: `/materione give <id> [player] [amount]` and the `/materione browser` pack-picker →
+paginated item grid (permission `materione.give`). MenuDefinition will render author menus
+through this same kit.
+
 ### 8.2 Dialogs (1.21+ server-side)
 
 Thin, faithful wrapper over the vanilla dialog system (NOTICE/CONFIRM/LIST/MULTI/LINK;

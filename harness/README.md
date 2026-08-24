@@ -23,6 +23,10 @@ Materione's internals, only these markers.
 | `MATERIONE-DEV-FURNITURE-PLACE ok=<bool> <status>` | furniture cluster placed via the `dev place` fallback |
 | `MATERIONE-DEV-FURNITURE-REMOVE ok=<bool> <status>` | furniture cluster removed via the `dev remove` fallback |
 | `MATERIONE-DEV-FURNITURE-INSPECT found=<bool> <status>` | furniture cluster anchored at the inspected cell |
+| `MATERIONE-GIVE-OK id=<id> player=<name> amount=<n>` | `/materione give` delivered (console senders only) |
+| `MATERIONE-GIVE-DENIED reason=player-required` | console give without a target player |
+| `MATERIONE-GIVE-FAILED reason=no-such-player\|no-content` | give could not resolve its target |
+| `MATERIONE-BROWSER-DENIED reason=player-only` | `/materione browser` from the console |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 filtered to sample + corpus (3 + 50 items), so the expected live count is

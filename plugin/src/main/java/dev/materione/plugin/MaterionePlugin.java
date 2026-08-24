@@ -17,6 +17,7 @@ import dev.materione.core.storage.StorageService.StorageState;
 import dev.materione.core.scheduling.SchedulingGatewayImpl;
 import dev.materione.platform.probe.PlatformProbe;
 import dev.materione.plugin.command.MaterioneCommand;
+import dev.materione.plugin.gui.GuiListener;
 import dev.materione.plugin.runtime.DeliveryService;
 import dev.materione.plugin.runtime.ItemAutoUpdater;
 import dev.materione.plugin.runtime.PipelineService;
@@ -82,6 +83,11 @@ public final class MaterionePlugin extends JavaPlugin {
 
     public PipelineService pipeline() {
         return pipeline;
+    }
+
+    /** The thread gateway (commands hop to the player/region that owns their target). */
+    public SchedulingGateway scheduling() {
+        return scheduling;
     }
 
     public DeliveryService delivery() {
@@ -281,6 +287,9 @@ public final class MaterionePlugin extends JavaPlugin {
         command.setTabCompleter(executor);
         getServer().getPluginManager().registerEvents(
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
+        // gui click router (holder identity — no title matching): one
+        // listener for every Materione menu, admin browser today, M6 menus later
+        getServer().getPluginManager().registerEvents(new GuiListener(), this);
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(this, diagnostics, scheduling, pipeline.runtime());

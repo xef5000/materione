@@ -1,17 +1,30 @@
 package dev.materione.plugin.command;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.platform.ProbeResult;
 import dev.materione.core.diagnostics.QuarantineTracker;
+import dev.materione.core.runtime.RuntimeItem;
+import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.MaterionePlugin;
 import dev.materione.plugin.MaterioneVersion;
+import dev.materione.plugin.gui.ContentBrowser;
+import dev.materione.plugin.items.Give;
+import dev.materione.plugin.items.ItemIdResolver;
+import dev.materione.plugin.runtime.PipelineService;
+import dev.materione.platform.items.MaterioneStacks;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -22,14 +35,17 @@ import org.jetbrains.annotations.NotNull;
  */
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
-    private static final List<String> SUBCOMMANDS = List.of("version", "doctor", "reload", "dev");
+    private static final List<String> SUBCOMMANDS =
+            List.of("version", "doctor", "reload", "dev", "give", "browser");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
+    private final ContentBrowser browser;
 
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
         this.devCommands = new DevCommands(plugin);
+        this.browser = new ContentBrowser(plugin);
     }
 
     @Override
@@ -83,11 +99,148 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                 // Stable harness marker: a real reload ran.
                 plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
             }
+            case "give" -> give(sender, args);
+            case "browser" -> {
+                if (!sender.hasPermission("materione.give")) {
+                    sender.sendMessage(Component.text("no permission (materione.give)", NamedTextColor.RED));
+                    return true;
+                }
+                if (sender instanceof Player player) {
+                    browser.open(player);
+                } else {
+                    plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=player-only");
+                    sender.sendMessage(Component.text(
+                            "the content browser needs a player — open it in game", NamedTextColor.RED));
+                }
+            }
             case "dev" -> devCommands.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browser>", NamedTextColor.RED));
         }
         return true;
+    }
+
+    /**
+     * {@code /materione give <id> [player] [amount]} — hands out one live
+     * custom item (permission {@code materione.give}). Console senders must
+     * name a target; the hand-out itself hops to the target's region thread.
+     */
+    private void give(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("materione.give")) {
+            sender.sendMessage(Component.text("no permission (materione.give)", NamedTextColor.RED));
+            return;
+        }
+        if (args.length < 2) {
+            sender.sendMessage(Component.text(
+                    "usage: /materione give <itemId> [player] [amount]", NamedTextColor.RED));
+            return;
+        }
+        var registries = liveRegistries();
+        if (registries == null) {
+            plugin.getLogger().info("MATERIONE-GIVE-FAILED reason=no-content");
+            sender.sendMessage(Component.text("no content is loaded yet", NamedTextColor.RED));
+            return;
+        }
+        ItemIdResolver.Result resolution = ItemIdResolver.resolve(args[1], registries.items());
+        if (resolution.status() == ItemIdResolver.Status.UNKNOWN) {
+            plugin.getLogger().info("MATERIONE-GIVE-FAILED reason=unknown-item");
+            sender.sendMessage(Component.text(
+                    "no live item matches '" + args[1] + "' — try /materione browser",
+                    NamedTextColor.RED));
+            return;
+        }
+        if (resolution.status() == ItemIdResolver.Status.AMBIGUOUS) {
+            sender.sendMessage(Component.text(
+                    "'" + args[1] + "' is ambiguous: " + resolution.candidates().stream()
+                            .map(NamespacedId::toString)
+                            .limit(8)
+                            .reduce((a, b) -> a + ", " + b).orElse(""),
+                    NamedTextColor.RED));
+            return;
+        }
+        Player target = resolveTarget(sender, args.length >= 3 ? args[2] : null);
+        if (target == null) {
+            return; // marker + message already sent by resolveTarget
+        }
+        int amount = args.length >= 4 ? Give.clampAmount(args[3]) : 1;
+        RuntimeItem item = registries.item(resolution.id()).orElse(null);
+        if (item == null) {
+            return; // raced an apply between resolve and fetch: next try succeeds
+        }
+        ItemStack template = MaterioneStacks.build(MaterioneStacks.specOf(item));
+        NamespacedId id = item.id();
+        plugin.scheduling().executeEntity(plugin, target, () -> {
+            Give.deliver(target, template, amount);
+            target.sendMessage(Component.text("Given ", NamedTextColor.GREEN)
+                    .append(Component.text(id.toString(), NamedTextColor.AQUA))
+                    .append(Component.text(" ×" + amount, NamedTextColor.GREEN)));
+            if (!(sender instanceof Player)) {
+                plugin.getLogger().info(
+                        "MATERIONE-GIVE-OK id=" + id + " player=" + target.getName()
+                                + " amount=" + amount);
+            }
+        });
+    }
+
+    private Player resolveTarget(CommandSender sender, String name) {
+        if (name != null) {
+            Player named = Bukkit.getPlayerExact(name);
+            if (named == null) {
+                plugin.getLogger().info("MATERIONE-GIVE-FAILED reason=no-such-player player=" + name);
+                sender.sendMessage(Component.text("no online player named '" + name + "'",
+                        NamedTextColor.RED));
+            }
+            return named;
+        }
+        if (sender instanceof Player self) {
+            return self;
+        }
+        plugin.getLogger().info("MATERIONE-GIVE-DENIED reason=player-required");
+        sender.sendMessage(Component.text(
+                "console must name a target: /materione give <id> <player> [amount]",
+                NamedTextColor.RED));
+        return null;
+    }
+
+    private RuntimeRegistries liveRegistries() {
+        PipelineService pipeline = plugin.pipeline();
+        return pipeline == null || pipeline.runtime() == null
+                ? null
+                : pipeline.runtime().registries();
+    }
+
+    /** Tab suggestions for the {@code give} branch. */
+    private List<String> completeGive(String[] args) {
+        if (args.length == 2) {
+            String prefix = args[1].toLowerCase(Locale.ROOT);
+            var registries = liveRegistries();
+            if (registries == null) {
+                return List.of();
+            }
+            var out = new ArrayList<String>();
+            for (RuntimeItem item : registries.items()) {
+                String full = item.id().toString();
+                if (full.startsWith(prefix)) {
+                    out.add(full);
+                } else if (!prefix.contains(":")
+                        && item.id().value().toLowerCase(Locale.ROOT).startsWith(prefix)) {
+                    out.add(item.id().value());
+                }
+            }
+            return out.stream().sorted().limit(60).toList();
+        }
+        if (args.length == 3) {
+            String prefix = args[2].toLowerCase(Locale.ROOT);
+            return Bukkit.getOnlinePlayers().stream()
+                    .map(Player::getName)
+                    .filter(n -> n.toLowerCase(Locale.ROOT).startsWith(prefix))
+                    .toList();
+        }
+        if (args.length == 4) {
+            return List.of("1", "16", "32", "64").stream()
+                    .filter(s -> s.startsWith(args[3])).toList();
+        }
+        return List.of();
     }
 
     private void doctor(CommandSender sender) {
@@ -200,6 +353,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length >= 2 && "dev".equals(args[0].toLowerCase())) {
             return devCommands.complete(args);
+        }
+        if (args.length >= 2 && "give".equals(args[0].toLowerCase())) {
+            return completeGive(args);
         }
         return List.of();
     }

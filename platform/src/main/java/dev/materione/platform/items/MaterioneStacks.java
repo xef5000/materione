@@ -59,6 +59,20 @@ public final class MaterioneStacks {
 
     private MaterioneStacks() {}
 
+    /** The spec for one runtime item — the single RuntimeItem→StackSpec projection. */
+    public static StackSpec specOf(dev.materione.core.runtime.RuntimeItem item) {
+        return new StackSpec(
+                item.id(),
+                item.material(),
+                item.modelId(),
+                item.displayName(),
+                item.lore(),
+                item.food() == null ? null
+                        : new StackFood(
+                                item.food().nutrition(), item.food().saturation(),
+                                item.food().canAlwaysEat()));
+    }
+
     /** Builds the stack for a spec (the apply-stage factory output). */
     public static ItemStack build(StackSpec item) {
         Material material = Material.matchMaterial(item.material());

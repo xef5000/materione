@@ -98,7 +98,7 @@ public final class RecipeApplier {
     private static RecipeChoice choiceOf(NamespacedId id, RuntimeRegistries registries) {
         RuntimeItem item = registries.item(id).orElse(null);
         if (item != null) {
-            return new RecipeChoice.ExactChoice(MaterioneStacks.build(toSpec(item)));
+            return new RecipeChoice.ExactChoice(MaterioneStacks.build(MaterioneStacks.specOf(item)));
         }
         if (id.isReservedNamespace()) {
             Material material = Material.matchMaterial(id.toString());
@@ -113,7 +113,7 @@ public final class RecipeApplier {
     private static ItemStack stackOf(NamespacedId id, RuntimeRegistries registries) {
         RuntimeItem item = registries.item(id).orElse(null);
         if (item != null) {
-            return MaterioneStacks.build(toSpec(item));
+            return MaterioneStacks.build(MaterioneStacks.specOf(item));
         }
         if (id.isReservedNamespace()) {
             Material material = Material.matchMaterial(id.toString());
@@ -122,15 +122,6 @@ public final class RecipeApplier {
             }
         }
         throw new IllegalArgumentException("result " + id + " is not a live item");
-    }
-
-    private static MaterioneStacks.StackSpec toSpec(RuntimeItem item) {
-        return new MaterioneStacks.StackSpec(
-                item.id(), item.material(), item.modelId(), item.displayName(), item.lore(),
-                item.food() == null ? null
-                        : new MaterioneStacks.StackFood(
-                                item.food().nutrition(), item.food().saturation(),
-                                item.food().canAlwaysEat()));
     }
 
     /** Recipe book resync: players see the new set immediately (§4.5). */
