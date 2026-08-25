@@ -217,7 +217,10 @@ public class GenerateCorpus {
     }
 
     static byte[] deflate(byte[] data) {
-        var deflater = new Deflater(9, true); // zlib container, no gzip header
+        // nowrap=false: PNG's IDAT is the ZLIB container (RFC 1950 — 2-byte
+        // header + Adler32). nowrap=true would emit raw deflate (RFC 1951),
+        // which every PNG decoder, including Minecraft's, rejects.
+        var deflater = new Deflater(9, false);
         deflater.setInput(data);
         deflater.finish();
         var compressed = new ByteArrayOutputStream();
