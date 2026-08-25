@@ -23,6 +23,8 @@ class BlockTypeTest {
     /** Records emitted vanilla files: path → fragment. */
     private final Map<String, Map<String, Object>> vanilla = new LinkedHashMap<>();
     private final List<String> models = new java.util.ArrayList<>();
+    /** Records emitted models: id → json. */
+    private final Map<String, Map<String, Object>> modelJsons = new LinkedHashMap<>();
     private final Allocations allocations = new Allocations() {
         private int next = 1;
 
@@ -96,8 +98,41 @@ class BlockTypeTest {
     }
 
     @Test
-    void stringBlocksReserveTheVanillaWireStateAsInvisible() {
-        Object block = type.parse(NamespacedId.of("sample", "grass"),
+    void generatedModelsKeyTheTextureForTheParent() {
+        // block/cube_all reads #all — the item idiom layer0 resolves on
+        // nothing and every face renders the missing texture
+        assertThat(texturesOf("block/cube_all"))
+                .containsEntry("all", "sample:block/lamp")
+                .doesNotContainKey("layer0");
+        assertThat(texturesOf("block/cross")).containsEntry("cross", "sample:block/lamp");
+        assertThat(texturesOf("block/cube"))
+                .containsEntry("particle", "sample:block/lamp")
+                .containsEntry("north", "sample:block/lamp")
+                .containsEntry("down", "sample:block/lamp");
+        assertThat(texturesOf("block/cube_column"))
+                .containsEntry("end", "sample:block/lamp")
+                .containsEntry("side", "sample:block/lamp");
+        assertThat(texturesOf("block/cube_bottom_top"))
+                .containsEntry("bottom", "sample:block/lamp")
+                .containsEntry("top", "sample:block/lamp");
+        assertThat(texturesOf("block/orientable"))
+                .containsEntry("front", "sample:block/lamp")
+                .containsEntry("side", "sample:block/lamp");
+        // unknown parents fall back to the item idiom (author's own model)
+        assertThat(texturesOf("my/custom_parent")).containsEntry("layer0", "sample:block/lamp");
+    }
+
+    /** Compiles one default-technique block with the given parent; returns its model textures. */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> texturesOf(String parent) {
+        Object block = type.parse(
+                id, Map.of("texture", "block/lamp", "model_parent", parent), Map.of()).orElseThrow();
+        type.compile(block, NamespacedId.of("sample", "lamp_model"), emitterOf(), allocations);
+        return (Map<String, Object>) modelJsons.get("sample:lamp_model").get("textures");
+    }
+
+    @Test
+    void stringBlocksReserveTheVanillaWireStateAsInvisible() {        Object block = type.parse(NamespacedId.of("sample", "grass"),
                 Map.of("technique", "string", "texture", "block/grass"), Map.of()).orElseThrow();
 
         type.compile(block, NamespacedId.of("sample", "grass_model"), emitterOf(), allocations);
@@ -256,6 +291,7 @@ class BlockTypeTest {
         @Override
         public void model(NamespacedId modelId, Map<String, Object> modelJson) {
             models.add(modelId.toString());
+            modelJsons.put(modelId.toString(), modelJson);
         }
 
         @Override

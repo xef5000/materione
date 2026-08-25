@@ -109,9 +109,12 @@ public final class BehaviorService {
     /**
      * Fires {@code eventType}/{@code detail} for a furniture cluster —
      * place/click from the cluster runtime. Same resolution and cancellation
-     * contract as block events.
+     * contract as block events. Returns whether a rule requested
+     * cancellation — the caller's "an ECA rule consumed this event" signal
+     * (the cancellable may have been cancelled before the fire, so the
+     * Bukkit flag cannot carry it).
      */
-    public void fireFurnitureEvent(
+    public boolean fireFurnitureEvent(
             String eventType,
             String detail,
             Player player,
@@ -120,11 +123,11 @@ public final class BehaviorService {
             Cancellable cancellable) {
         FurnitureBehaviors behaviors = registries.get().view(FurnitureBehaviors.KEY);
         if (behaviors == null) {
-            return;
+            return false;
         }
         List<dev.materione.behavior.rule.Rule> rules = behaviors.forFurniture(furnitureId).orElse(List.of());
         if (rules.isEmpty()) {
-            return;
+            return false;
         }
         var root = new LinkedHashMap<String, Object>();
         if (player != null) {
@@ -147,9 +150,11 @@ public final class BehaviorService {
         root.put("vars", new LinkedHashMap<String, Object>());
         BehaviorEvent event = new BehaviorEvent(eventType, detail, new EvaluationContext(root), cancellable, player);
         engine.fire(rules, event);
-        if (event.isCancelRequested() && cancellable != null) {
+        boolean cancelRequested = event.isCancelRequested();
+        if (cancelRequested && cancellable != null) {
             cancellable.setCancelled(true);
         }
+        return cancelRequested;
     }
 
     /** Rules attached to the stack's Materione identity, resolved at event entry. */

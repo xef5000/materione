@@ -125,20 +125,44 @@ public final class FurnitureType implements ContentType {
                 merged));
     }
 
-    /** Emits the generated display model; furniture has no blockstate surface. */
+    /**
+     * Emits the display surface: the generated model, plus an item
+     * definition at the model ref. The cluster's ItemDisplay carries
+     * {@code item_model: <modelRef>} and the client resolves that against
+     * {@code assets/<ns>/items/<id>.json} — without the definition the
+     * display renders the missing model. The definition id equals the
+     * model id (items/ and models/ are different directories), for
+     * generated and hand-authored models alike.
+     */
     @Override
     public void compile(
             Object definition, NamespacedId allocatedModelId, PackEmitter emitter, dev.materione.core.content.Allocations allocations) {
-        if (!(definition instanceof FurnitureDefinition furniture) || !furniture.wantsGeneratedModel()) {
+        if (!(definition instanceof FurnitureDefinition furniture)) {
             return;
         }
-        String texture = furniture.texture().contains(":")
-                ? furniture.texture()
-                : furniture.id().namespace() + ":" + furniture.texture();
-        var model = new LinkedHashMap<String, Object>();
-        model.put("parent", "block/cube_all");
-        model.put("textures", Map.<String, Object>of("all", texture));
-        emitter.model(allocatedModelId, model);
+        String modelRef;
+        if (furniture.wantsGeneratedModel()) {
+            String texture = furniture.texture().contains(":")
+                    ? furniture.texture()
+                    : furniture.id().namespace() + ":" + furniture.texture();
+            var model = new LinkedHashMap<String, Object>();
+            model.put("parent", "block/cube_all");
+            model.put("textures", Map.<String, Object>of("all", texture));
+            emitter.model(allocatedModelId, model);
+            modelRef = allocatedModelId.toString();
+        } else if (furniture.model() != null && !furniture.model().isBlank()) {
+            modelRef = furniture.model().contains(":")
+                    ? furniture.model()
+                    : furniture.id().namespace() + ":" + furniture.model();
+        } else {
+            return; // no appearance surface
+        }
+        var reference = new LinkedHashMap<String, Object>();
+        reference.put("type", "minecraft:model");
+        reference.put("model", modelRef);
+        var root = new LinkedHashMap<String, Object>();
+        root.put("model", reference);
+        emitter.itemDefinition(NamespacedId.parse(modelRef), root);
     }
 
     // --- parse helpers ---------------------------------------------------------

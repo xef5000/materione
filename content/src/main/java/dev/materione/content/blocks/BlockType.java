@@ -153,13 +153,9 @@ public final class BlockType implements ContentType {
         }
         String modelRef;
         if (block.wantsGeneratedModel()) {
-            var textures = new LinkedHashMap<String, Object>();
-            textures.put("layer0", block.texture().contains(":")
-                    ? block.texture()
-                    : block.id().namespace() + ":" + block.texture());
             var model = new LinkedHashMap<String, Object>();
             model.put("parent", block.modelParent());
-            model.put("textures", textures);
+            model.put("textures", texturesFor(block.modelParent(), textureRef(block)));
             emitter.model(allocatedModelId, model);
             modelRef = allocatedModelId.toString();
         } else {
@@ -276,6 +272,44 @@ public final class BlockType implements ContentType {
 
     private static NamespacedId sibling(NamespacedId id, String suffix) {
         return NamespacedId.of(id.namespace(), id.value() + suffix);
+    }
+
+    /**
+     * The generated model's texture map: the parent's texture variables all
+     * pointing at the one texture. {@code block/cube_all} reads {@code #all}
+     * — the item idiom {@code layer0} resolves on nothing and every face
+     * renders the missing texture. Unknown parents keep {@code layer0}
+     * (hand-authored parents manage their own references).
+     */
+    private static Map<String, Object> texturesFor(String parent, String texture) {
+        var textures = new LinkedHashMap<String, Object>();
+        switch (parent) {
+            case "block/cube_all" -> textures.put("all", texture);
+            case "block/cross" -> textures.put("cross", texture);
+            case "block/cube" -> {
+                textures.put("particle", texture);
+                for (String face : List.of("north", "east", "south", "west", "up", "down")) {
+                    textures.put(face, texture);
+                }
+            }
+            case "block/cube_column" -> {
+                textures.put("end", texture);
+                textures.put("side", texture);
+            }
+            case "block/cube_bottom_top" -> {
+                textures.put("particle", texture);
+                textures.put("bottom", texture);
+                textures.put("side", texture);
+                textures.put("top", texture);
+            }
+            case "block/orientable" -> {
+                textures.put("front", texture);
+                textures.put("side", texture);
+                textures.put("top", texture);
+            }
+            default -> textures.put("layer0", texture);
+        }
+        return textures;
     }
 
     private static String siblingRef(NamespacedId id, String suffix) {

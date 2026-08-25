@@ -150,13 +150,15 @@ class PackCompilerTest {
     void compilesFixturePackToStagedZip(@TempDir Path tempDir) throws IOException {
         var outcome = compileFixtures(tempDir);
         assertThat(outcome).isNotNull();
-        assertThat(outcome.itemDefinitions()).isEqualTo(3); // ruby + ruby_sword + obsidian_axe
+        assertThat(outcome.itemDefinitions()).isEqualTo(4); // ruby + ruby_sword + obsidian_axe + chair display
         assertThat(outcome.sha256()).isNotBlank();
 
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
             assertThat(zip.getEntry("pack.mcmeta")).isNotNull();
             assertThat(zip.getEntry("assets/sample/items/ruby_sword.json")).isNotNull();
             assertThat(zip.getEntry("assets/sample/items/obsidian_axe.json")).isNotNull();
+            // the chair furniture's display definition (item_model target)
+            assertThat(zip.getEntry("assets/sample/items/chair_model.json")).isNotNull();
             // generated model (auto-model path: texture, no hand-authored model)
             assertThat(zip.getEntry("assets/sample/models/ruby_sword_model.json")).isNotNull();
             // obsidian_axe has a hand-authored model ref — no generated model, and the

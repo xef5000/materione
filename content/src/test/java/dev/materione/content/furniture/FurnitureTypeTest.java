@@ -84,13 +84,16 @@ class FurnitureTypeTest {
     }
 
     @Test
-    void compileEmitsOnlyTheGeneratedDisplayModel() {
+    void compileEmitsTheGeneratedModelPlusItsDisplayDefinition() {
         Object chair = type.parse(id, Map.of("texture", "block/marble"), Map.of()).orElseThrow();
         var models = new java.util.ArrayList<String>();
+        var definitions = new java.util.LinkedHashMap<NamespacedId, Map<String, Object>>();
         var vanilla = new java.util.LinkedHashMap<String, Map<String, Object>>();
         dev.materione.core.content.PackEmitter emitter = new dev.materione.core.content.PackEmitter() {
             @Override
-            public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {}
+            public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {
+                definitions.put(itemId, itemModelJson);
+            }
 
             @Override
             public void model(NamespacedId modelId, Map<String, Object> modelJson) {
@@ -124,5 +127,69 @@ class FurnitureTypeTest {
 
         assertThat(models).containsExactly("sample:chair_model");
         assertThat(vanilla).isEmpty(); // no blockstate surface for entity-carried furniture
+        // the cluster's ItemDisplay carries item_model: sample:chair_model — the
+        // definition at that id is what makes the display resolve at all
+        assertThat(definitions).containsOnlyKeys(NamespacedId.of("sample", "chair_model"));
+        @SuppressWarnings("unchecked")
+        var reference = (Map<String, Object>) definitions.get(NamespacedId.of("sample", "chair_model")).get("model");
+        assertThat(reference).containsEntry("type", "minecraft:model")
+                .containsEntry("model", "sample:chair_model");
+    }
+
+    @Test
+    void handAuthoredModelsGetADefinitionAtTheirOwnRef() {
+        Object chair = type.parse(id, Map.of("model", "sample:block/chair_custom"), Map.of())
+                .orElseThrow();
+        var models = new java.util.ArrayList<String>();
+        var definitions = new java.util.LinkedHashMap<NamespacedId, Map<String, Object>>();
+        type.compile(chair, NamespacedId.of("sample", "chair_model"), capturingEmitter(models, definitions),
+                noAllocations());
+
+        assertThat(models).isEmpty(); // nothing generated
+        assertThat(definitions).containsOnlyKeys(NamespacedId.of("sample", "block/chair_custom"));
+        @SuppressWarnings("unchecked")
+        var reference = (Map<String, Object>)
+                definitions.get(NamespacedId.of("sample", "block/chair_custom")).get("model");
+        assertThat(reference).containsEntry("model", "sample:block/chair_custom");
+    }
+
+    // --- helpers -------------------------------------------------------------
+
+    private static dev.materione.core.content.PackEmitter capturingEmitter(
+            List<String> models, Map<NamespacedId, Map<String, Object>> definitions) {
+        return new dev.materione.core.content.PackEmitter() {
+            @Override
+            public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {
+                definitions.put(itemId, itemModelJson);
+            }
+
+            @Override
+            public void model(NamespacedId modelId, Map<String, Object> modelJson) {
+                models.add(modelId.toString());
+            }
+
+            @Override
+            public void copyAsset(java.nio.file.Path sourceFile, String destination) {}
+
+            @Override
+            public void vanillaFile(String path, Map<String, Object> json) {}
+
+            @Override
+            public void description(String text) {}
+        };
+    }
+
+    private static dev.materione.core.content.Allocations noAllocations() {
+        return new dev.materione.core.content.Allocations() {
+            @Override
+            public String allocate(NamespacedId resource, String kind) {
+                throw new IllegalStateException("furniture allocates nothing");
+            }
+
+            @Override
+            public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
+                return java.util.Optional.empty();
+            }
+        };
     }
 }

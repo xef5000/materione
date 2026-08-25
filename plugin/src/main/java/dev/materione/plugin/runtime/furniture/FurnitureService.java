@@ -301,7 +301,7 @@ public final class FurnitureService implements Listener {
         if (rootId.isEmpty()) {
             return;
         }
-        event.setCancelled(true);
+        event.setCancelled(true); // vanilla never interacts through a furniture member
         Entity root = nearbyEntity(target, rootId.get());
         if (root == null) {
             return;
@@ -310,16 +310,59 @@ public final class FurnitureService implements Listener {
         if (def.isEmpty()) {
             return;
         }
-        behavior.fireFurnitureEvent(dev.materione.behavior.rule.EventTypes.CLICK, "right",
-                event.getPlayer(), root.getLocation(), def.get().id(), event);
-        if (event.isCancelled()) {
-            return; // an ECA rule consumed the click
-        }
-        if (def.get().storage() > 0) {
-            openStorage(event.getPlayer(), root, def.get());
+        interact(event.getPlayer(), root, def.get(), event);
+    }
+
+    /**
+     * Right-clicks on a cluster's barrier cells route to the furniture too:
+     * the barrier is a real block, so the click targets the block (vanilla
+     * no-op) wherever the cell occludes the Interaction entity's box —
+     * for a full-cube cluster that is every click on the visible model.
+     */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onCellInteract(PlayerInteractEvent event) {
+        if (event.getHand() != EquipmentSlot.HAND
+                || event.getAction() != org.bukkit.event.block.Action.RIGHT_CLICK_BLOCK
+                || event.getClickedBlock() == null) {
             return;
         }
-        sitPlayer(event.getPlayer(), root, def.get());
+        Block clicked = event.getClickedBlock();
+        String rootId = clicked.getChunk().getPersistentDataContainer()
+                .get(cellKey(clicked.getX(), clicked.getY(), clicked.getZ()),
+                        PersistentDataType.STRING);
+        if (rootId == null) {
+            return; // not a furniture cell
+        }
+        event.setCancelled(true);
+        Entity root = nearbyEntityAround(clicked.getLocation(), UUID.fromString(rootId));
+        if (root == null) {
+            return;
+        }
+        Optional<RuntimeFurniture> def = definitionOf(root);
+        if (def.isEmpty()) {
+            return;
+        }
+        interact(event.getPlayer(), root, def.get(), event);
+    }
+
+    /**
+     * The shared click flow: ECA rules may consume the click (reported as a
+     * cancel request — the Bukkit flag is already set on both paths to block
+     * the vanilla interaction), then storage, then seat.
+     */
+    private void interact(
+            Player player, Entity root, RuntimeFurniture def, org.bukkit.event.Cancellable event) {
+        boolean consumed = behavior.fireFurnitureEvent(
+                dev.materione.behavior.rule.EventTypes.CLICK, "right",
+                player, root.getLocation(), def.id(), event);
+        if (consumed) {
+            return; // an ECA rule consumed the click
+        }
+        if (def.storage() > 0) {
+            openStorage(player, root, def);
+            return;
+        }
+        sitPlayer(player, root, def);
     }
 
     /**

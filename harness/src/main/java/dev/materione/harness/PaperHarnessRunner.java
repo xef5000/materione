@@ -104,6 +104,29 @@ public final class PaperHarnessRunner {
                     problems.add("staged item definition has the wrong wire format: " + definitionJson
                             + " (clients need {\"model\":{\"type\":\"minecraft:model\",\"model\":…}})");
                 }
+                // block models: the parent's texture variable must carry the
+                // texture — cube_all reads "all"; the item idiom "layer0"
+                // resolves on nothing and every face renders missing-texture
+                var blockModel = staged.getEntry("assets/sample/models/amethyst_lamp_model.json");
+                String blockModelJson = blockModel == null ? ""
+                        : new String(staged.getInputStream(blockModel).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!blockModelJson.contains("\"all\":\"sample:block/amethyst_lamp\"")) {
+                    problems.add("staged block model keys the texture wrong: " + blockModelJson
+                            + " (block/cube_all reads \"all\", not \"layer0\")");
+                }
+                // furniture displays: the ItemDisplay carries item_model — a
+                // definition must exist at the model ref or the client renders
+                // the missing model
+                var furnitureDefinition = staged.getEntry("assets/sample/items/chair_model.json");
+                String furnitureJson = furnitureDefinition == null ? ""
+                        : new String(staged.getInputStream(furnitureDefinition).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!furnitureJson.contains("\"type\":\"minecraft:model\"")
+                        || !furnitureJson.contains("\"model\":\"sample:chair_model\"")) {
+                    problems.add("staged furniture display definition missing/wrong: " + furnitureJson
+                            + " (item_model needs a definition at assets/<ns>/items/<model>.json)");
+                }
             } catch (IOException e) {
                 problems.add("could not read staged pack.zip mcmeta: " + e);
             }
