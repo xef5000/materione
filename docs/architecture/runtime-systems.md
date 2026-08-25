@@ -352,7 +352,9 @@ same conditions as everything else.
 (`PluginGui` identified by `InventoryHolder` identity — never title matching — plus
 `PaginatedGui` page math and one shared click router). Built-in admin surfaces already ride
 it: `/materione give <id> [player] [amount]` and the `/materione browser` pack-picker →
-paginated item grid (permission `materione.give`). MenuDefinition will render author menus
+paginated grid of a pack's items, blocks, and furniture (permission `materione.give`) —
+blocks/furniture hand out their placement item when the definition declares `item:`, and
+point at `/materione dev place` otherwise. MenuDefinition will render author menus
 through this same kit.
 
 ### 8.2 Dialogs (1.21+ server-side)

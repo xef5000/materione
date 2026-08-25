@@ -52,6 +52,11 @@ public final class RuntimeFurnitures {
         return Optional.ofNullable(itemFor.get(furnitureId));
     }
 
+    /** All definitions (browser, reports). */
+    public java.util.Collection<RuntimeFurniture> all() {
+        return byId.values();
+    }
+
     public int count() {
         return byId.size();
     }

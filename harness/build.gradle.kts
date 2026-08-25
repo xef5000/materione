@@ -54,4 +54,9 @@ val integrationTest by tasks.registering(Test::class) {
         "harness.contentPacks",
         rootProject.layout.projectDirectory.dir("fixtures/packs").asFile.absolutePath,
     )
+    // The jars/paths above reach the tests as strings — without these inputs
+    // a rebuilt plugin jar or edited fixture pack would leave the task
+    // up-to-date and report a stale green.
+    inputs.file(shadowJarPath)
+    inputs.dir(rootProject.layout.projectDirectory.dir("fixtures/packs"))
 }
