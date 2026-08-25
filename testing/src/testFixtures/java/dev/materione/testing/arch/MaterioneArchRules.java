@@ -23,7 +23,7 @@ import com.tngtech.archunit.lang.ArchRule;
  * </ul>
  *
  * <p>M0 rule set (R1–R5). M1 adds R6 (validators are pure). Reserved:
- * wire-protocol ownership (M4, with the editor transport).
+ * wire-protocol ownership (M3, with the editor transport).
  */
 public final class MaterioneArchRules {
 

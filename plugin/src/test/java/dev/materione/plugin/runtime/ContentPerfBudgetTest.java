@@ -35,7 +35,7 @@ import org.junit.jupiter.api.io.TempDir;
  * composition the harness exercises live on Paper.
  *
  * <p>Deferred budgets (documented, not yet owned): cold item detect
- * ~10–50 µs needs a live PDC read (harness-level from M3, when players
+ * ~10–50 µs needs a live PDC read (harness-level from M4, when players
  * exist in scenarios).
  */
 class ContentPerfBudgetTest {

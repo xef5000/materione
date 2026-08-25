@@ -45,7 +45,7 @@ under `build-logic/` (named `build-logic`, not `build` — `build/` is Gradle's 
   testing ──► testFixtures consumed by every module's tests (build infrastructure, not shipped)
   harness  ──► standalone: boots the real server, copies the shaded jar in (no product deps)
   fixtures ──► data only, not a Gradle module
-  webui    ──► placeholder; its build lands M4/M5
+  webui    ──► placeholder; its build lands M3/M5
 ```
 
 As-built amendment (M1, recorded): `platform` exposes `core` as an `api` dependency — the

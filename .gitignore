@@ -21,7 +21,7 @@ logs/
 Thumbs.db
 .DS_Store
 
-# Future webui (M4) — ignored from day one so experiments don't leak in
+# Future webui (M3) — ignored from day one so experiments don't leak in
 webui/node_modules/
 
 # Local reference material (not part of the product)

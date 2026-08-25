@@ -59,5 +59,5 @@ include(
     ":harness",
 )
 // Deliberately NOT Gradle modules:
-//   webui/    — TypeScript SPA; build tooling lands with M4/M5.
+//   webui/    — TypeScript SPA; build tooling lands with M3/M5.
 //   fixtures/ — data-only content corpus (roadmap rule 2).

@@ -5,8 +5,8 @@ One Minecraft plugin + web editor that replaces the content-creation plugin stac
 free, open-source system. **Current repo state: M0–M2 shipped** (spine + ban tests +
 headless-Paper harness; content pipeline & items; blocks, furniture, ECA engine and
 mechanics — see [`docs/roadmap.md`](docs/roadmap.md) and
-[`docs/architecture/build.md`](docs/architecture/build.md)); glyphs/sounds/paintings start
-at M3.
+[`docs/architecture/build.md`](docs/architecture/build.md)); the web editor starts at M3,
+glyphs/sounds/paintings at M4.
 
 ## Required reading (in order)
 

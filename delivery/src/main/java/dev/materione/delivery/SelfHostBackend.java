@@ -88,7 +88,7 @@ public final class SelfHostBackend implements PackDeliveryBackend {
     /**
      * Serves the versioned paths; unknown paths (and non-Minecraft clients,
      * per creative's request parsing) get 404. The pack file is public,
-     * read-only data — the editor listener (M4+) is the authenticated one
+     * read-only data — the editor listener (M3+) is the authenticated one
      * (master §9.2).
      */
     private final class VersionedHandler implements ResourcePackRequestHandler {

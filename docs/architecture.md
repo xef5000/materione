@@ -548,7 +548,7 @@ materione/
 │                    clients). The relay services themselves are separate open-source
 │                    deployments, not plugin modules.
 ├─ webui/          ← Frontend SPA (TypeScript) + the Blockbench plugin source.
-│                    Not a Gradle module — its build lands in M4/M5.
+│                    Not a Gradle module — its build lands in M3/M5.
 ├─ importers/      ← ItemsAdder / Oraxen / Nexo converters → native pack layout.
 ├─ integrations/   ← PlaceholderAPI, ModelEngine, MythicMobs, Geyser, anti-cheat bridges.
 ├─ plugin/         ← Assembly module (the leaf): plugin.yml, JavaPlugin bootstrap,

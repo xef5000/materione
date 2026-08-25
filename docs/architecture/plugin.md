@@ -331,7 +331,7 @@ stall proxy, registry-map resolve, **targeted single-file reload < 1 s** (finger
 57-item fixture corpus (sample + corpus + world packs) by `plugin`'s `ContentPerfBudgetTest`
 on every `build`; the "0 main-thread stalls > 50 ms" row is proxied by the timed apply swap
 plus the live harness runs. Not yet owned: cold item detect ~10–50 µs (needs live PDC
-reads; harness player scenarios arrive with M3).
+reads; harness player scenarios arrive with M4).
 
 ---
 

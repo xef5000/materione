@@ -228,7 +228,7 @@ public final class PipelineService {
         // the report was computed by the caller BEFORE the swap (§4.5): what
         // this apply will do, including removals by policy and
         // restart-required changes listed separately (none can be produced
-        // yet — M3 owns the producers)
+        // yet — M4 owns the producers)
         lastReport = report;
         var summary = new StringBuilder("pre-apply: ");
         report.lines(line -> {

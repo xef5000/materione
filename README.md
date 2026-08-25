@@ -10,8 +10,8 @@ required.
 items with custom models, recipes and mechanics; custom blocks of every state technique
 plus shaped stairs/slabs; furniture clusters (seats, storage, lights, evolution); an ECA
 rule engine — all hot-reloadable, with the world-facing systems proven against a live
-Paper harness (reload, restart, world copy). Next: glyphs, sounds & paintings (M3), then
-the web editor (M4). See [`docs/roadmap.md`](docs/roadmap.md).
+Paper harness (reload, restart, world copy). Next: the web editor (M3), then
+glyphs, sounds & paintings (M4). See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Build & test
 

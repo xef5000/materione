@@ -19,8 +19,9 @@ The parity doc's "non-negotiable MVP" is the *union of three mature plugins* —
 As a first release it would be unfundable and untestable. The actual adoption sequence for a
 server owner is: **(1)** it works and doesn't break my server → **(2)** my items look right
 in game → **(3)** I can edit without YAML → **(4)** I can leave the incumbents. The roadmap
-follows that sequence: prove the spine (M0–M2), win on content (M3–M4), win on authoring
-(M5–M6), then close parity gaps (M7–M8).
+deliberately reorders steps (2) and (3): prove the spine (M0–M2), win on authoring early
+(M3 — the web editor, extended to anywhere in M5), fill out the content surface in between
+(M4), differentiate on GUIs (M6), then close parity gaps (M7–M8).
 
 ---
 
@@ -84,7 +85,7 @@ runs the hot-reload sequence (add → 54, broken file → still 54 + `MTR-0007`,
 and the stage-pair fault-injection matrix plus §9 perf budgets run in CI (`plugin` module).
 Fault injection found and fixed a real fail-soft gap (a throwing content-type emitter could
 crash a whole reload). Deferred with owners: targeted reload < 1 s and fingerprint skipping
-(M2), cold item detect (M3), inventory-scan throttling (M2 mechanics).
+(M2), cold item detect (M4), inventory-scan throttling (M2 mechanics).
 
 ## M2 — Blocks & furniture (the world-facing systems) — ✅ shipped 2026-08-23
 
@@ -125,7 +126,7 @@ durability, backpack; unknown mechanics skip with `MTR-0027`. Inventory scans ar
 to one per player per second. Apply honesty: the pre-apply report is computed before the
 swap and logged; a reload counts as no-op only when the *runtime* diff is empty (identical
 pack bytes alone proved insufficient live); restart staging runs at boot (`MTR-0028/0029`,
-producers wait for M3); fingerprint caching makes OnePack/FileSet scopes real with a
+producers wait for M4); fingerprint caching makes OnePack/FileSet scopes real with a
 drift-based expansion guard. Diagnostics `MTR-0019..0029`. Exit gate proven live by the
 five-boot `PaperWorldPersistenceIT`. Fault injection found and fixed two real gaps: YAML 1.1
 parses bare `on:` keys as booleans (normalized in every behavior map) and WARN diagnostics
@@ -134,20 +135,9 @@ waterloggable at the API floor (parity §3.5 aspiration, owner M7); content dire
 plural (`items/`, `blocks/`, `furnitures/`). Deferred with owners: progressive mining/
 hardness, directional variants, log stripping, furniture states/connectables/wall-roof/
 beds/sliding doors, model_tree builders, full mechanics catalog → M7; glyphs/sounds/discs/
-paintings plus restart-required producers → M3; menus/HUD/dialogs → M6.
+paintings plus restart-required producers → M4; menus/HUD/dialogs → M6.
 
-## M3 — Glyphs, fonts, sounds, paintings
-
-**Goal:** the full pack surface beyond items.
-
-- Glyph system (basic/multi-bitmap/animated/grid/reference), shift tags, emoji mode.
-- GLSL text effects. Custom sounds (+ replace-vanilla), music discs, custom paintings
-  (restart-required class proven here).
-- The text pipeline (glyph resolution in chat/lore/signs/books).
-
-**Exit:** pack output covers every asset kind; golden files lock them.
-
-## M4 — The web editor v1 (authoring without YAML)
+## M3 — The web editor v1 (authoring without YAML)
 
 **Goal:** a T2/T3 user builds content with zero YAML knowledge (master §2's promise, tested).
 
@@ -159,6 +149,17 @@ paintings plus restart-required producers → M3; menus/HUD/dialogs → M6.
 - Blockbench integration v1 (pinned build + our plugin + asset save).
 
 **Exit:** a new user creates an item with a custom texture, in the browser, without docs.
+
+## M4 — Glyphs, fonts, sounds, paintings
+
+**Goal:** the full pack surface beyond items.
+
+- Glyph system (basic/multi-bitmap/animated/grid/reference), shift tags, emoji mode.
+- GLSL text effects. Custom sounds (+ replace-vanilla), music discs, custom paintings
+  (restart-required class proven here).
+- The text pipeline (glyph resolution in chat/lore/signs/books).
+
+**Exit:** pack output covers every asset kind; golden files lock them.
 
 ## M5 — Relay mode & the cloud (zero-config editing anywhere)
 

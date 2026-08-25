@@ -19,10 +19,10 @@
 | 3.6 | Display-first furniture: hitboxes, seats, lights, storage, evolution, rotation, text displays; states/connectable/placements/beds/sliding doors as differentiators | `runtime-systems.md` §5 (core in M2; differentiator features M7) | M2, M7 |
 | 3.7 | Component armor default; trim option; animated/emissive; elytra; mob armor/saddles/harness | `runtime-systems.md` §12 | M7 |
 | 3.8 | First-class Java HUD system | `runtime-systems.md` §7 | M6 |
-| 3.9 | Full glyph system + shift tags + emoji + GLSL effects | `runtime-systems.md` §6 | M3 |
+| 3.9 | Full glyph system + shift tags + emoji + GLSL effects | `runtime-systems.md` §6 | M4 |
 | 3.10 | Item browser GUI; **real interactive menu builder**; server-side dialogs | `runtime-systems.md` §8 (+ in-game builder = menus+dialogs dogfooding) | M6 |
 | 3.11 | All vanilla recipe types + in-game builder + disable-vanilla | `runtime-systems.md` §9 | M1 (3 types), M7 (all + builder) |
-| 3.12 | Custom sounds (+replace), music discs, custom paintings, small particle API | `runtime-systems.md` §10 | M3 (sounds/discs/paintings), M7 (particles) |
+| 3.12 | Custom sounds (+replace), music discs, custom paintings, small particle API | `runtime-systems.md` §10 | M4 (sounds/discs/paintings), M7 (particles) |
 | 3.13 | Ore/worldgen + custom fluids (open opportunities); mobs/vehicles delegated | `runtime-systems.md` §11; delegation per master §12 | M8 |
 | 3.14 | Asset-driven generation; external pack merge; obfuscation + PackSquash; hosting backends incl. S3; proxy dedup; pre-join; layering; hosting SPI | `plugin.md` §4.4 (merge + post-steps); master §8.4 (delivery) | M1 (self-host), M7 (rest) |
 | 3.15 | PlaceholderAPI; public API + Maven; ModelEngine/MythicMobs/MMOItems hooks; BlockLocker; anti-cheat bridges; **import converters from all three** | master §10 (`api/`, `integrations/`, `importers/`) | M7 (importers earlier if demand) |

@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * The staged-restart queue: stage → load → boot-apply drain round-trip.
  * M2 has no producers; this stub-level exercise is the proof the machinery
- * works for the M3+ classifiers (MTR-0028/0029 ride these entries).
+ * works for the M4+ classifiers (MTR-0028/0029 ride these entries).
  */
 class RestartStagingTest {
 
