@@ -22,6 +22,8 @@ what's planned). Anything marked *M-later* is reserved, not built.
 | SnakeYAML | 2.2 | `compileOnly` — the server provides it at runtime; never shaded. |
 | Gson | 2.11.0 | `compileOnly` like SnakeYAML (server-provided); used for the server jar's `version.json` (pack-format detection) and by `pack/` via creative. |
 | creative | 1.14.4 | MIT. The **Nexo-maintained fork** of `team.unnamed/creative` — same coordinates, resolved from `repo.nexomc.com/releases/` (filtered to `team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. The fork (not upstream 1.7.3) because it tracks new Minecraft versions in Nexo production: 1.14.x writes `pack.mcmeta` `min_format`/`max_format`, the only range schema 25w31a+ (1.21.9/26.x) clients honor. |
+| undertow | 2.3.26.Final | Apache-2.0. **M3**: the embedded editor listener's HTTP+WS server (`web/` only — ban rule R8). Chosen over Jetty after Jetty 12's reworked websocket API proved unstable ground for a shaded long-term dependency; Undertow's embedded API has been stable across its whole 2.x line. Shaded + relocated with its XNIO/JBoss runtime (§4). |
+| Node / npm | node 22.17.0 | **M3**: provisions hermetically via `com.github.node-gradle.node` 7.1.0 for `:webui` (the SPA build). No local Node required; CI included. The Node distribution resolves through an Ivy repo declared in settings (`org.nodejs:node`). SPA deps pin via committed `package-lock.json`. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins
@@ -45,7 +47,8 @@ under `build-logic/` (named `build-logic`, not `build` — `build/` is Gradle's 
   testing ──► testFixtures consumed by every module's tests (build infrastructure, not shipped)
   harness  ──► standalone: boots the real server, copies the shaded jar in (no product deps)
   fixtures ──► data only, not a Gradle module
-  webui    ──► placeholder; its build lands M3/M5
+  webui    ──► M3: the editor SPA (Node/Svelte build; static output embedded
+                             into the shaded jar under webui/ — not a Java module)
 ```
 
 As-built amendment (M1, recorded): `platform` exposes `core` as an `api` dependency — the
@@ -88,6 +91,9 @@ allocation, validation, determinism (D7 sha-compare), and diagnostics are ours. 
 stays `compileOnly` (the server provides it; the lossless YAML layer loads it reflectively
 from the server at runtime).
 
+**M3 amendment:** the second shaded dependency set is **Undertow 2.3.26.Final** (+ XNIO/JBoss transitive runtime) for the editor listener — relocated under `materione.libs.io.undertow` / `.org.xnio` / `.org.jboss` / `.org.wildfly` by `materione.plugin-conventions`. Referenced only from `dev.materione.web` (ban rule R8), so relocation is invisible to every other module. Gson stays server-provided for our own code; the SPA build toolchain (Node/npm) never ships — only its static output rides in the jar under `webui/`. The settings repository list gains one Ivy entry (nodejs.org dist) so the strict repositories policy survives the node plugin.
+
+
 Deviation from the original M0 plan, recorded here: **FoliaLib was dropped.** The scheduling
 gateway (`core/…/scheduling/SchedulingGatewayImpl`) calls Paper's native `RegionScheduler`,
 `EntityScheduler`, and `AsyncScheduler` directly — present since Paper 1.20.1+ Folia support
@@ -110,6 +116,7 @@ is applied two ways: per-module `ArchitectureTest` classes, plus a whole-jar
 | R5 | No raw `Thread`/`Executors` outside the scheduling gateway. | Harness/testing exempt (build infrastructure). |
 | R6 | Validators are pure: no file I/O in `..validate..` packages or `*Validator` classes. | M1. Validators receive their world as parsed data (`ValidationEnvironment`); the filesystem belongs to parse/compile. Has real subjects since M1 (`core.pipeline.validate`). |
 | R7 | `behavior` stays Bukkit-free (embeddable engine). | M2. `org.bukkit..` is banned from `dev.materione.behavior..` — the ECA/expression engine is a pure library any host can embed; Bukkit bindings live in `plugin/`. Real subjects since M2 (`behavior..`). |
+| R8 | The editor wire protocol lives only in `web/`. | M3. Everything under `dev.materione.web.protocol..` is reachable from nowhere else; hosts use facade types (`EditorListener`, `SessionPush`). Teeth note: constant reads (`Wire.VERSION`) fold away at compile time — the planted violation was a method call. Harness/testing exempt (build infrastructure: the harness plays the browser against the live listener). |
 | — | `MTR-####` codes: format + uniqueness + declared only in `core.diagnostics`. | Unit tests over `DiagnosticCodes`, not ArchUnit. |
 
 Rules are predicate-based (no Bukkit class literals — pure modules have no paper-api on
@@ -175,6 +182,14 @@ disagrees with chunk-PDC truth, expecting `MTR-0024` + a drifted sweep). Timeout
 includes missing markers, the log tail, and the workspace path. Marker waits are
 cursor-based (`LogWatcher#mark`): a repeated command cannot match its own stale marker
 from a previous occurrence.
+
+**M3 — the editor handshake gate (`EditorHandshakeRunner` / `PaperEditorHandshakeIT`):**
+boots with the fixture corpus, opens a session via console, and a JDK HTTP/WebSocket
+client plays the browser end-to-end against the real listener: SPA served from the jar,
+capability blob decrypt, hello, console-driven in-game approval, signed-reply +
+key-confirmation verification, sealed RPC round trip, `edit.put` of a real item watched
+going live (`dev stack sample:editor_gem`), asset upload/list, and the plugin.md §9
+budget — send(save)→push.reload **under 2 s** — then cleanup back to 53 items.
 
 **Bumping the Paper pin:** run `./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.x`
 (it queries the live v3 fill API and prints the absolute URL + sha256), then update

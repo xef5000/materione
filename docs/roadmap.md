@@ -150,6 +150,40 @@ paintings plus restart-required producers → M4; menus/HUD/dialogs → M6.
 
 **Exit:** a new user creates an item with a custom texture, in the browser, without docs.
 
+**Shipped (as-built notes; details in [`architecture/build.md`](architecture/build.md)
+and the editor quickstart):** the transport lives in `web/` on an embedded **Undertow**
+listener (Jetty's 12.x websocket API churn ruled it out empirically; shaded + relocated,
+the M3 shading amendment) serving the SPA from classpath resources, the capability route
+(`GET /s/<code>`) and one WebSocket channel. The wire protocol is exactly web.md §4/§5:
+canonical JSON, Ed25519 sign-after-encrypt frames with strict per-direction sequence
+numbers, AES-256-GCM bodies, P-256 ECDH session keys via HKDF-SHA256, key-confirmation
+digest over a transcript that excludes `confirm`, and the wrapping key riding only in the
+URL fragment — all JDK JCA server-side, all WebCrypto browser-side, pinned together by
+golden fixtures (`fixtures/protocol/editor-protocol-v1.json`) that BOTH sides test against.
+Trust is in-game: `/materione editor open` prints the capability URL, the hello surfaces a
+clickable approve/deny prompt keyed by nonce prefix (`MTR-0030..0037`). The document store
+(core.document) exposes browse/edit ops with per-document revision journals in
+`storage/revisions/`, external-edit detection via content-hash drift journaled as its own
+revision, stale-write conflicts rejected visibly (`MTR-0034`) instead of clobbering, an
+audit log at `storage/audit.log`, and — the authoring trick — `edit.setScalar`: forms patch
+single fields through the lossless YAML layer so comments survive byte-for-byte while raw
+YAML editing stays available beside them. Assets upload/list/delete under a 2 MiB v1 cap
+riding inside sealed frames (the §4.3 manifest+chunk flow is relay-transport machinery and
+lands with M5). The SPA is Svelte 5 + Vite + TypeScript, embedded into the shaded jar by
+the Gradle node toolchain (pinned Node 22, hermetically provisioned); dev loop via Vite
+proxy. The live preview loop closes in CI: the harness handshake scenario creates an item
+through the editor API, watches the targeted reload take it in-game
+(`dev stack sample:editor_gem`), receives the `push.reload` event, uploads a texture, and
+asserts the whole save→applied round trip stays **under 2 s** (plugin.md §9). Ban rule R8
+("no wire protocol outside web/") proven by planted violation — including the discovery
+that constant reads fold away and only method calls leave teeth. Exit criterion exercised
+end-to-end live on Paper.
+
+**Deferred:** Blockbench v1 (pinned web build + bridge plugin + model save-back) moves to
+early M4 — it is UI-integration surface, independent of everything above, and the exit
+criterion does not depend on it. External-file watcher → `document.changed` pushes also
+wait for M4 (edits through the editor already push).
+
 ## M4 — Glyphs, fonts, sounds, paintings
 
 **Goal:** the full pack surface beyond items.
