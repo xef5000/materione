@@ -30,4 +30,8 @@ class AllModulesArchitectureTest {
 
     @ArchTest
     static final ArchRule noFileIoInValidators = MaterioneArchRules.NO_FILE_IO_IN_VALIDATORS;
+
+    /** M3 (R8): the wire protocol is reachable only from {@code dev.materione.web}. */
+    @ArchTest
+    static final ArchRule wireProtocolOnlyInWeb = MaterioneArchRules.WIRE_PROTOCOL_ONLY_IN_WEB;
 }

@@ -7,11 +7,11 @@ description: Unified content platform - items, blocks, furniture, glyphs, HUDs, 
 website: https://materione.dev
 commands:
   materione:
-    description: Materione root command (version, doctor, reload, dev, give, browser)
-    usage: /materione <version|doctor|reload|dev|give|browser>
+    description: Materione root command (version, doctor, reload, dev, give, browser, editor)
+    usage: /materione <version|doctor|reload|dev|give|browser|editor>
 permissions:
   materione.editor:
-    description: Read diagnostics and version info (master architecture 9.2 taxonomy)
+    description: Read diagnostics and open editor sessions (master architecture 9.2 taxonomy)
     default: op
   materione.pipeline:
     description: Trigger reloads and pipeline runs
@@ -21,4 +21,7 @@ permissions:
     default: op
   materione.give:
     description: Hand out live custom items (/materione give, /materione browser)
+    default: op
+  materione.admin:
+    description: Approve editor connections; stop/revoke the editor transport; settings writes
     default: op

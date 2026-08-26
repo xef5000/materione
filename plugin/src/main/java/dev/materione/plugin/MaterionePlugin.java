@@ -56,6 +56,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
+    private dev.materione.plugin.runtime.EditorTransportService editorTransport;
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -119,6 +120,11 @@ public final class MaterionePlugin extends JavaPlugin {
         return restartStaging;
     }
 
+    /** The direct-mode editor transport (phase 10); null when disabled/failed. */
+    public dev.materione.plugin.runtime.EditorTransportService editorTransport() {
+        return editorTransport;
+    }
+
     /** The descriptor, once the probe passed; null before/when unsupported. */
     public PlatformDescriptor descriptorOrNull() {
         return probeResult instanceof ProbeResult.Supported supported ? supported.descriptor() : null;
@@ -134,6 +140,7 @@ public final class MaterionePlugin extends JavaPlugin {
                 BootstrapPhase.degrade("storage-init", this::initStorage),
                 BootstrapPhase.degrade("built-in-registration", this::registerBuiltins),
                 BootstrapPhase.degrade("content-load", this::loadContent),
+                BootstrapPhase.degrade("editor-transport", this::startEditorTransport),
                 BootstrapPhase.degrade("commands", this::registerCommands)));
 
         if (result.disabled()) {
@@ -156,6 +163,10 @@ public final class MaterionePlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         try {
+            // reverse-order shutdown (plugin.md §1.1): transports first
+            if (editorTransport != null) {
+                editorTransport.stop();
+            }
             if (delivery != null) {
                 delivery.stop();
             }
@@ -272,6 +283,13 @@ public final class MaterionePlugin extends JavaPlugin {
             delivery.publish(summary.packZip(), summary.packSha256());
         }
         return summary;
+    }
+
+    /** Phase 10 (plugin.md §1.1): the direct-mode editor listener, if enabled. */
+    private void startEditorTransport() {
+        editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
+                this, diagnostics, scheduling, pipeline);
+        editorTransport.start(settings, storage);
     }
 
     private void registerCommands() {

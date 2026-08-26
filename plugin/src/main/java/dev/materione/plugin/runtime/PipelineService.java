@@ -547,7 +547,7 @@ public final class PipelineService {
                         dev.materione.api.mechanics.Mechanic.class));
     }
 
-    private List<ContentType> contentTypes() {
+    public List<ContentType> contentTypes() {
         var registry = registries.registry(CONTENT_TYPES, ContentType.class);
         var out = new ArrayList<ContentType>();
         registry.entries().forEach(entry -> out.add(entry.entry()));

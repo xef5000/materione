@@ -8,10 +8,20 @@ plugins {
 
 // The harness is deliberately product-independent: it boots a server, drops a
 // jar in plugins/, drives the console, and asserts stable log markers
-// (see harness/README.md). No :api/:core/:plugin dependencies.
+// (see harness/README.md). No :api/:core/:plugin dependencies — with one M3
+// exception: :web's protocol package, because the editor scenario plays the
+// browser side of the wire protocol (R8 exempts harness as build
+// infrastructure; this edge must never grow toward any other product module).
 
 application {
     mainClass.set("dev.materione.harness.PaperHarnessRunner")
+}
+
+dependencies {
+    implementation(project(":web"))
+    // The editor scenario builds JSON on the browser side of the wire; the
+    // harness JVM has no server to provide Gson, so it carries its own.
+    implementation(libs.gson)
 }
 
 val catalog = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
