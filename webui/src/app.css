@@ -1,0 +1,71 @@
+/*
+ * Design tokens — the ONLY place raw colors live. Components reference the
+ * custom properties; nothing else may hardcode a hex value. Palette is the
+ * original Tokyo-Night-ish scheme, extracted verbatim from the first M3 SPA.
+ */
+:root {
+  /* surfaces */
+  --bg-app: #12151b;
+  --bg-panel: #181c24;
+  --bg-raised: #212734;
+  --bg-hover: #1c2129;
+  --bg-input: #0e1116;
+
+  /* lines */
+  --border: #262c37;
+  --border-strong: #3b4453;
+
+  /* text */
+  --fg: #dfe4ec;
+  --fg-code: #c8d3f5;
+  --muted: #8b93a5;
+  --faint: #586074;
+
+  /* semantics */
+  --accent: #7aa2f7;
+  --primary: #2f6fed;
+  --ok: #9ece6a;
+  --warn: #e0af68;
+  --error: #f7768e;
+  --error-bg: #2a1620;
+
+  --radius: 6px;
+  --radius-lg: 12px;
+  --mono: ui-monospace, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-app);
+  color: var(--fg);
+  font:
+    15px/1.5 system-ui,
+    sans-serif;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+*:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Slim, unobtrusive scrollbars for the pane-heavy workbench. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

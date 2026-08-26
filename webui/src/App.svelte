@@ -1,8 +1,10 @@
 <script lang="ts">
   import Login from './lib/components/Login.svelte';
-  import Dashboard from './lib/components/Dashboard.svelte';
+  import Workbench from './lib/components/Workbench.svelte';
   import { EditorChannel } from './lib/protocol/session';
   import type { ChannelState } from './lib/protocol/session';
+  import type { PushFrame } from './lib/events';
+  import { bus, loadWorkspace, logActivity, resetWorkspace, session } from './lib/state.svelte';
 
   type Phase = 'login' | 'connecting' | 'awaiting' | 'active' | 'closed' | 'error';
 
@@ -12,6 +14,14 @@
   let channel = $state<EditorChannel | null>(null);
   let browserLabel = navigator.userAgent.replace(/^.*\)\s*/, '').slice(0, 40) || 'browser';
 
+  // Fires mid-handshake, before EditorChannel.open resolves.
+  function handleHandshakeState(state: ChannelState): void {
+    if (state.kind === 'awaiting-approval') {
+      noncePrefix = state.noncePrefix;
+      phase = 'awaiting';
+    }
+  }
+
   async function connect(code: string, fragmentKey: string) {
     phase = 'connecting';
     error = '';
@@ -19,25 +29,34 @@
       const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
       const wsUrl = `${wsProtocol}://${location.host}/editor/ws`;
       channel = await EditorChannel.open(location.origin, wsUrl, code, fragmentKey, browserLabel, {
-        onState: (state: ChannelState) => {
-          if (state.kind === 'awaiting-approval') {
-            noncePrefix = state.noncePrefix;
-            phase = 'awaiting';
-          }
-        },
+        onState: handleHandshakeState,
       });
-      channel.onState((state) => {
+      session.channel = channel;
+      // The channel allows a single listener per kind; everything below
+      // subscribes through the fan-out signals instead.
+      channel.onState((state: ChannelState) => {
         if (state.kind === 'closed') {
+          resetWorkspace();
           phase = 'closed';
           error = state.reason;
         }
       });
+      channel.onPush((push) => {
+        bus.push.emit({ op: push.op, payload: push.payload as Record<string, unknown> });
+      });
       noncePrefix = '';
+      await loadWorkspace();
       phase = 'active';
     } catch (e) {
+      resetWorkspace();
       phase = 'error';
       error = e instanceof Error ? e.message : String(e);
     }
+  }
+
+  function disconnect() {
+    channel?.close();
+    location.reload();
   }
 
   // Auto-connect when opened straight from the capability URL: /?s=<code>#<key>.
@@ -53,70 +72,39 @@
       void connect(code, key);
     }
   });
-</script>
 
-<header>
-  <h1>Materione <span>editor</span></h1>
-  {#if phase === 'active'}
-    <span class="badge ok">connected · {browserLabel}</span>
-    <button
-      class="ghost"
-      onclick={() => {
-        channel?.close();
-        location.reload();
-      }}>disconnect</button
-    >
-  {/if}
-</header>
+  // Keep the pipeline dock fed with server pushes even before any view cares.
+  $effect(() => {
+    return bus.push.add((frame: PushFrame) => {
+      if (frame.op === 'push.reload') {
+        const accepted = Boolean(frame.payload.accepted);
+        const line =
+          `reload ${accepted ? 'applied' : 'rejected'} — items live: ${String(frame.payload.itemsLive)}` +
+          ` (${String(frame.payload.files)})`;
+        connection.lastReload = line;
+        logActivity('reload', line);
+      }
+    });
+  });
+</script>
 
 <main>
   {#if phase === 'active' && channel}
-    <Dashboard {channel} />
+    <Workbench {browserLabel} onDisconnect={disconnect} />
   {:else}
-    <Login {phase} {error} {noncePrefix} onConnect={connect} />
+    <Login
+      phase={phase === 'active' ? 'login' : phase}
+      {error}
+      {noncePrefix}
+      onConnect={connect}
+    />
   {/if}
 </main>
 
 <style>
-  :global(html) {
-    color-scheme: dark;
-  }
-  :global(body) {
-    margin: 0;
-    background: #12151b;
-    color: #dfe4ec;
-    font:
-      15px/1.5 system-ui,
-      sans-serif;
-  }
-  header {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 18px;
-    border-bottom: 1px solid #262c37;
-  }
-  h1 {
-    font-size: 17px;
-    margin: 0 auto 0 0;
-  }
-  h1 span {
-    color: #7aa2f7;
-    font-weight: 400;
-  }
-  .badge.ok {
-    color: #9ece6a;
-    font-size: 12px;
-  }
-  button.ghost {
-    background: none;
-    border: 1px solid #3b4453;
-    color: inherit;
-    border-radius: 6px;
-    padding: 4px 12px;
-    cursor: pointer;
-  }
   main {
-    padding: 18px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
 </style>

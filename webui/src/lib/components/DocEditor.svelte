@@ -1,17 +1,14 @@
 <script lang="ts">
-  import type { EditorChannel } from '../protocol/session';
-  import type { Response } from '../protocol/wire';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo } from '../api';
+  import { logActivity, session, setTabDirty, workspace } from '../state.svelte';
 
   interface Props {
-    channel: EditorChannel;
     resource: ResourceRef;
-    schema?: TypeInfo;
-    onSaved: (message: string) => void;
+    tabKey: string;
   }
 
-  let { channel, resource, schema, onSaved }: Props = $props();
+  let { resource, tabKey }: Props = $props();
 
   let raw = $state('');
   let rev = $state(0);
@@ -22,17 +19,26 @@
 
   // The first top-level key of the file is the resource this editor targets.
   const rootId = $derived(Object.keys(data)[0] ?? resource.id);
+  const schema = $derived(
+    workspace.types.find((t: TypeInfo) => t.name === resource.type) ??
+      workspace.types.find((t: TypeInfo) => t.name === resource.path.split('/')[0]),
+  );
   const fields = $derived(schema?.parameters ?? []);
+
+  function markDirty(value: boolean) {
+    dirty = value;
+    setTabDirty(tabKey, value);
+  }
 
   async function load() {
     try {
-      const payload = unwrap(await ops.get(channel, resource.pack, resource.path));
+      const payload = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
       raw = String(payload.raw ?? '');
       rev = Number(payload.rev ?? 0);
       // The wire carries `parsed` as a JSON object already — no re-parsing.
       data = (payload.parsed as Record<string, unknown>) ?? {};
       error = '';
-      dirty = false;
+      markDirty(false);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (message.includes('MTR-0009')) {
@@ -41,7 +47,7 @@
         rev = 0;
         data = {};
         error = '';
-        dirty = true;
+        markDirty(true);
       } else {
         raw = '';
         rev = 0;
@@ -55,7 +61,7 @@
     const id = resource.id === '<parse error>' || resource.id.includes(' ') ? 'new_entry' : resource.id;
     const lines = [`# ${resource.pack}:${id}`, `${id}:`];
     for (const field of fields) {
-      lines.push(`  ${field.id}: ${field.default ?? ''}${field.required ? '' : ''}`);
+      lines.push(`  ${field.id}: ${field.default ?? ''}`);
     }
     return lines.join('\n') + '\n';
   }
@@ -63,12 +69,12 @@
   async function saveRaw() {
     saving = true;
     try {
-      const result = unwrap(await ops.put(channel, resource.pack, resource.path, rev, raw));
+      const result = unwrap(await ops.put(session.channel!, resource.pack, resource.path, rev, raw));
       rev = Number(result.rev);
       data = (result.parsed as Record<string, unknown>) ?? {};
-      dirty = false;
+      markDirty(false);
       error = '';
-      onSaved(`saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`);
+      logActivity('save', `saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`);
     } catch (e) {
       error = describe(e);
     } finally {
@@ -80,12 +86,12 @@
   async function setScalar(fieldId: string, value: string | number | boolean) {
     try {
       const result = unwrap(
-        await ops.setScalar(channel, resource.pack, resource.path, rev, [rootId, fieldId], value),
+        await ops.setScalar(session.channel!, resource.pack, resource.path, rev, [rootId, fieldId], value),
       );
       rev = Number(result.rev);
       raw = String(result.raw);
       data = JSON.parse(JSON.stringify(parseYamlView(raw)));
-      onSaved(`${fieldId} updated → rev ${rev}`);
+      logActivity('save', `${resource.pack}/${resource.path} · ${fieldId} updated → rev ${rev}`);
     } catch (e) {
       error = describe(e);
     }
@@ -134,8 +140,7 @@
 
   async function validate() {
     try {
-      const response: Response = await channel.call('validate.dryRun', { content: raw });
-      const payload = unwrap(response);
+      const payload = unwrap(await ops.dryRun(session.channel!, raw));
       error = payload.ok ? '' : `syntax: ${payload.error}`;
     } catch (e) {
       error = describe(e);
@@ -164,7 +169,7 @@
   <div class="columns">
     <textarea
       bind:value={raw}
-      oninput={() => (dirty = true)}
+      oninput={() => markDirty(true)}
       rows="20"
       spellcheck="false"
       aria-label="raw YAML"
@@ -215,7 +220,8 @@
       </div>
     {:else}
       <div class="form muted">
-        <h3>no schema loaded</h3>
+        <h3>no schema for this file type</h3>
+        <p class="hint">edit the YAML directly.</p>
       </div>
     {/if}
   </div>
@@ -227,10 +233,14 @@
 
 <style>
   article {
-    background: #181c24;
-    border: 1px solid #262c37;
-    border-radius: 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 14px 18px;
+    height: 100%;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
   }
   header {
     display: flex;
@@ -242,21 +252,21 @@
     font-size: 16px;
   }
   .meta {
-    color: #8b93a5;
+    color: var(--muted);
     font-size: 12px;
     margin-right: auto;
   }
   button {
-    border: 1px solid #3b4453;
+    border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
-    border-radius: 6px;
+    border-radius: var(--radius);
     padding: 4px 12px;
     cursor: pointer;
   }
   button.primary {
-    background: #2f6fed;
-    border-color: #2f6fed;
+    background: var(--primary);
+    border-color: var(--primary);
     color: white;
   }
   button:disabled {
@@ -268,16 +278,19 @@
     grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
     gap: 14px;
     margin-top: 10px;
+    flex: 1;
+    min-height: 0;
   }
   textarea {
     width: 100%;
     box-sizing: border-box;
+    height: 100%;
     min-height: 380px;
-    background: #0e1116;
-    color: #c8d3f5;
-    border: 1px solid #262c37;
+    background: var(--bg-input);
+    color: var(--fg-code);
+    border: 1px solid var(--border);
     border-radius: 8px;
-    font: 13px/1.55 ui-monospace, monospace;
+    font: 13px/1.55 var(--mono);
     padding: 10px;
     resize: vertical;
   }
@@ -287,7 +300,7 @@
   }
   .form .hint,
   .muted {
-    color: #586074;
+    color: var(--faint);
     font-size: 12px;
   }
   label {
@@ -300,27 +313,27 @@
     font-weight: 600;
   }
   .fid em {
-    color: #e0af68;
+    color: var(--warn);
     font-style: normal;
   }
   input,
   select {
     width: 100%;
     box-sizing: border-box;
-    background: #0e1116;
+    background: var(--bg-input);
     color: inherit;
-    border: 1px solid #3b4453;
-    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     padding: 6px 8px;
-    font: 13px ui-monospace, monospace;
+    font: 13px var(--mono);
   }
   small {
-    color: #8b93a5;
+    color: var(--muted);
     display: block;
   }
   .error {
-    background: #2a1620;
-    color: #f7768e;
+    background: var(--error-bg);
+    color: var(--error);
     border-radius: 8px;
     padding: 8px 12px;
     white-space: pre-wrap;

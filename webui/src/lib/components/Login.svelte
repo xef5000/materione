@@ -70,9 +70,9 @@
   .card {
     max-width: 640px;
     margin: 8vh auto 0;
-    background: #181c24;
-    border: 1px solid #262c37;
-    border-radius: 12px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 22px 26px;
   }
   h2 {
@@ -81,17 +81,17 @@
   textarea {
     width: 100%;
     box-sizing: border-box;
-    background: #0e1116;
+    background: var(--bg-input);
     color: inherit;
-    border: 1px solid #3b4453;
+    border: 1px solid var(--border-strong);
     border-radius: 8px;
-    font: 13px ui-monospace, monospace;
+    font: 13px var(--mono);
     padding: 10px;
     resize: vertical;
   }
   button {
     margin-top: 10px;
-    background: #2f6fed;
+    background: var(--primary);
     border: none;
     color: white;
     border-radius: 8px;
@@ -103,22 +103,22 @@
     cursor: default;
   }
   code {
-    background: #0e1116;
+    background: var(--bg-input);
     border-radius: 4px;
     padding: 1px 6px;
   }
   code.nonce {
-    color: #7aa2f7;
+    color: var(--accent);
     font-size: 15px;
   }
   .status {
-    color: #e0af68;
+    color: var(--warn);
   }
   .error {
-    color: #f7768e;
+    color: var(--error);
   }
   details {
     margin-top: 16px;
-    color: #8b93a5;
+    color: var(--muted);
   }
 </style>

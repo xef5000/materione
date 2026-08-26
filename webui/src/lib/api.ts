@@ -47,6 +47,7 @@ export function unwrap(response: Response): Record<string, unknown> {
 }
 
 export const ops = {
+  sessionInfo: (c: EditorChannel) => c.call('session.info'),
   packs: (c: EditorChannel) => c.call('browse.packs'),
   resources: (c: EditorChannel, pack?: string) =>
     c.call('browse.resources', pack ? { pack } : {}),
@@ -66,6 +67,7 @@ export const ops = {
   createPack: (c: EditorChannel, pack: string) => c.call('edit.createPack', { pack }),
   types: (c: EditorChannel) => c.call('browse.types'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
+  dryRun: (c: EditorChannel, content: string) => c.call('validate.dryRun', { content }),
 };
 
 export const assetOps = {

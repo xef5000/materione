@@ -1,64 +1,59 @@
 <script lang="ts">
-  import type { EditorChannel } from '../protocol/session';
   import { assetOps, unwrap } from '../api';
   import type { AssetRef } from '../api';
+  import { errorMessage, logActivity, session } from '../state.svelte';
 
-  let { channel, pack, onChanged }: { channel: EditorChannel; pack: string; onChanged?: (message: string) => void } =
-    $props();
+  let { pack }: { pack: string } = $props();
 
   let assets = $state<AssetRef[]>([]);
   let previews = $state<Record<string, string>>({});
 
   async function load() {
+    if (!session.channel) return;
     try {
-      assets = (unwrap(await assetOps.list(channel, pack)).assets as AssetRef[]) ?? [];
-      // Inline previews for images small enough to bother with.
+      assets = (unwrap(await assetOps.list(session.channel, pack)).assets as AssetRef[]) ?? [];
+      // Inline previews for images; the wire payload is already base64.
       for (const asset of assets) {
         if (['png', 'jpg', 'jpeg'].includes(asset.kind) && !previews[asset.path]) {
           try {
-            const payload = unwrap(await assetOps.get(channel, pack, asset.path));
-            const bytes = atob(String(payload.data));
-            const binary = Uint8Array.from(bytes, (ch) => ch.charCodeAt(0));
+            const payload = unwrap(await assetOps.get(session.channel, pack, asset.path));
             const mime = asset.kind === 'png' ? 'image/png' : 'image/jpeg';
-            previews = {
-              ...previews,
-              [asset.path]: `data:${mime};base64,` +
-                btoa(Array.from(binary, (b) => String.fromCharCode(b)).join('')),
-            };
+            previews = { ...previews, [asset.path]: `data:${mime};base64,${String(payload.data)}` };
           } catch {
             // preview is best-effort
           }
         }
       }
     } catch (e) {
-      onChanged?.(`⚠ assets.list: ${e instanceof Error ? e.message : String(e)}`);
+      logActivity('error', `assets.list: ${errorMessage(e)}`);
     }
   }
 
   async function upload(event: Event) {
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
-    if (!file) return;
+    if (!file || !session.channel) return;
     const path = `assets/textures/${file.name}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
     try {
-      unwrap(await assetOps.put(channel, pack, path, bytes));
-      onChanged?.(`uploaded ${path} (${bytes.length} B); targeted reload queued`);
+      unwrap(await assetOps.put(session.channel, pack, path, bytes));
+      logActivity('save', `uploaded ${path} (${bytes.length} B); targeted reload queued`);
       await load();
     } catch (e) {
-      onChanged?.(`⚠ upload: ${e instanceof Error ? e.message : String(e)}`);
+      logActivity('error', `upload: ${errorMessage(e)}`);
     }
     input.value = '';
   }
 
   async function remove(path: string) {
+    if (!session.channel) return;
     try {
-      unwrap(await assetOps.remove(channel, pack, path));
+      unwrap(await assetOps.remove(session.channel, pack, path));
       delete previews[path];
       assets = assets.filter((a) => a.path !== path);
-      onChanged?.(`deleted ${path}`);
+      logActivity('info', `deleted ${path}`);
     } catch (e) {
-      onChanged?.(`⚠ delete: ${e instanceof Error ? e.message : String(e)}`);
+      logActivity('error', `delete: ${errorMessage(e)}`);
     }
   }
 
@@ -79,7 +74,6 @@
     {#each assets as asset (asset.path)}
       <li>
         {#if previews[asset.path]}
-          <!--#svelte ignore a11y -->
           <img src={previews[asset.path]} alt={asset.path} width="24" height="24" />
         {:else}
           <span class="dot"></span>
@@ -95,11 +89,11 @@
 </div>
 
 <style>
-  .panel :global(h3) {
+  .panel h3 {
     font-size: 12px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: #8b93a5;
+    color: var(--muted);
     margin: 18px 0 6px;
   }
   ul {
@@ -114,10 +108,10 @@
     align-items: center;
     gap: 8px;
     padding: 3px 4px;
-    border-radius: 6px;
+    border-radius: var(--radius);
   }
   li:hover {
-    background: #1c2129;
+    background: var(--bg-hover);
   }
   img {
     image-rendering: pixelated;
@@ -127,7 +121,7 @@
     width: 24px;
     height: 24px;
     border-radius: 4px;
-    background: #262c37;
+    background: var(--border);
     display: inline-block;
   }
   .path {
@@ -137,14 +131,14 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  button {
+  li button {
     background: none;
     border: none;
-    color: #f7768e;
+    color: var(--error);
     cursor: pointer;
   }
   .empty {
-    color: #586074;
+    color: var(--faint);
     font-style: italic;
   }
   .head {
@@ -154,8 +148,8 @@
   }
   .upload {
     font-size: 11px;
-    border: 1px solid #3b4453;
-    border-radius: 6px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
     padding: 2px 8px;
     cursor: pointer;
   }
