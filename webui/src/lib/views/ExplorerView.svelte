@@ -187,7 +187,7 @@
     }
     const resource: ResourceRef = {
       pack,
-      type: node.kind === 'packfile' ? '' : node.path.split('/')[0],
+      type: node.kind === 'packfile' ? '' : (node.path.split('/')[0] ?? ''),
       path: node.path,
       id: node.resourceIds?.[0] ?? node.name.replace(/\.ya?ml$/, ''),
     };
@@ -294,8 +294,8 @@
           class="label muted"
           onclick={() =>
             openDoc({
-              pack: workspace.activePack!,
-              type: node.path.split('/')[0],
+              pack: workspace.activePack ?? '',
+              type: node.path.split('/')[0] ?? '',
               path: node.path,
               id,
             })}
@@ -325,12 +325,13 @@
 {/if}
 
 {#if dialog}
+  {@const current = dialog}
   <PromptDialog
-    title={dialog.title}
-    label={dialog.label}
-    initial={dialog.initial}
-    hint={dialog.hint}
-    onOk={(value) => void dialog.onOk(value)}
+    title={current.title}
+    label={current.label}
+    initial={current.initial}
+    hint={current.hint}
+    onOk={(value) => void current.onOk(value)}
     onCancel={() => (dialog = null)}
   />
 {/if}

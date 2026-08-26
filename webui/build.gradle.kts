@@ -39,10 +39,15 @@ tasks.named("npmInstall") {
 
 val npmTest = tasks.named("npm_run_test")
 val npmBuild = tasks.named("npm_run_build")
+val npmCheck = tasks.named("npm_run_check")
 
 tasks.named("check") {
     // The protocol fixture spec runs with every build — drift fails both sides.
     dependsOn(npmTest)
+    // svelte-check type-checks components (vite/esbuild only strips types —
+    // an undefined template reference like a missing store import compiles
+    // fine and explodes at render time; this gate catches it).
+    dependsOn(npmCheck)
 }
 
 tasks.register("assembleSpa") {

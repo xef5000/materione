@@ -35,6 +35,7 @@ export interface AssetTab {
 export interface SettingsTab {
   kind: 'settings';
   key: 'settings';
+  dirty: boolean;
 }
 
 export type ActivityKind = 'save' | 'reload' | 'error' | 'info';
@@ -171,14 +172,17 @@ export function openAsset(pack: string, path: string, name: string): void {
 /** Opens the singleton plugin-settings tab. */
 export function openSettings(): void {
   if (!workspace.tabs.some((t) => t.kind === 'settings')) {
-    workspace.tabs.push({ kind: 'settings', key: 'settings' });
+    workspace.tabs.push({ kind: 'settings', key: 'settings', dirty: false });
   }
   workspace.activeKey = 'settings';
 }
 
 export function setTabDirty(key: string, dirty: boolean): void {
   const tab = workspace.tabs.find((t) => t.key === key);
-  if (tab && tab.dirty !== dirty) {
+  if (!tab || tab.kind === 'asset') {
+    return;
+  }
+  if (tab.dirty !== dirty) {
     tab.dirty = dirty;
   }
 }
@@ -186,7 +190,9 @@ export function setTabDirty(key: string, dirty: boolean): void {
 export function closeTab(key: string): void {
   const index = workspace.tabs.findIndex((t) => t.key === key);
   if (index < 0) return;
-  if (workspace.tabs[index]!.dirty && !confirm('Discard unsaved changes in this tab?')) {
+  const tab = workspace.tabs[index]!;
+  const isDirty = tab.kind !== 'asset' && tab.dirty;
+  if (isDirty && !confirm('Discard unsaved changes in this tab?')) {
     return;
   }
   workspace.tabs.splice(index, 1);

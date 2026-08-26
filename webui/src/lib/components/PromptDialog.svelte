@@ -28,19 +28,21 @@
 </script>
 
 <div class="scrim" role="presentation" onclick={onCancel}>
-  <form class="dialog" role="dialog" aria-label={title} onclick={(e) => e.stopPropagation()} onsubmit={submit}>
-    <h3>{title}</h3>
-    <label>
-      <span>{label}</span>
-      <!-- svelte-ignore a11y_autofocus -->
-      <input bind:value {placeholder} autofocus spellcheck="false" />
-    </label>
-    {#if hint}<small>{hint}</small>{/if}
-    <div class="actions">
-      <button type="button" class="ghost" onclick={onCancel}>cancel</button>
-      <button type="submit" class="primary" disabled={!value.trim()}>ok</button>
-    </div>
-  </form>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label={title} onclick={(e) => e.stopPropagation()}>
+    <form onsubmit={submit}>
+      <h3>{title}</h3>
+      <label>
+        <span>{label}</span>
+        <!-- svelte-ignore a11y_autofocus -->
+        <input bind:value {placeholder} autofocus spellcheck="false" />
+      </label>
+      {#if hint}<small>{hint}</small>{/if}
+      <div class="actions">
+        <button type="button" class="ghost" onclick={onCancel}>cancel</button>
+        <button type="submit" class="primary" disabled={!value.trim()}>ok</button>
+      </div>
+    </form>
+  </div>
 </div>
 
 <style>
@@ -59,6 +61,9 @@
     border-radius: var(--radius-lg);
     padding: 16px 18px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+  }
+  .dialog form {
+    margin: 0;
   }
   h3 {
     margin: 0 0 10px;

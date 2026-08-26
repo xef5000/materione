@@ -5,18 +5,21 @@
 {#if workspace.tabs.length > 0}
   <div class="strip" role="tablist">
     {#each workspace.tabs as tab (tab.key)}
+      {@const label = tab.kind === 'doc' ? tab.id : tab.kind === 'asset' ? tab.name : 'settings'}
+      {@const title = tab.kind === 'settings' ? 'plugin settings' : tab.path}
+      {@const dirty = tab.kind !== 'asset' && tab.dirty}
       <div
         class="tab"
         class:active={tab.key === workspace.activeKey}
         role="tab"
         aria-selected={tab.key === workspace.activeKey}
-        title={tab.path}
+        {title}
       >
         <button class="main" onclick={() => (workspace.activeKey = tab.key)}>
-          {#if tab.dirty}<span class="dot" title="unsaved changes"></span>{/if}
-          <span class="label">{tab.id}</span>
+          {#if dirty}<span class="dot" title="unsaved changes"></span>{/if}
+          <span class="label">{label}</span>
         </button>
-        <button class="close" aria-label="close {tab.id}" onclick={() => closeTab(tab.key)}>
+        <button class="close" aria-label="close {label}" onclick={() => closeTab(tab.key)}>
           ✕
         </button>
       </div>

@@ -32,6 +32,8 @@ export interface DiagnosticEntry {
   severity: string;
   message: string;
   resource?: string;
+  /** Source coordinates ("file:line[:column]") when the failure came from a file. */
+  location?: string;
   hint?: string;
 }
 

@@ -7,7 +7,7 @@
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
-  import { activeTab, workspace } from '../state.svelte';
+  import { activeTab, connection, server, workspace } from '../state.svelte';
 
   interface Props {
     browserLabel: string;

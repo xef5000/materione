@@ -18,7 +18,7 @@
    */
   function locationFile(entry: DiagnosticEntry): { pack: string; path: string } | null {
     if (!entry.location) return null;
-    const file = entry.location.split(':')[0]!.replace('\\', '/');
+    const file = (entry.location.split(':')[0] ?? '').replace('\\', '/');
     for (const pack of workspace.packs) {
       if (file.startsWith(pack + '/')) {
         return { pack, path: file.slice(pack.length + 1) };
@@ -31,7 +31,12 @@
     const target = locationFile(entry);
     if (!target || !workspace.activePack) return;
     if (!target.path.endsWith('.yml') && !target.path.endsWith('.yaml')) return;
-    openDoc({ pack: target.pack, type: target.path.split('/')[0], path: target.path, id: '' });
+    openDoc({
+      pack: target.pack,
+      type: target.path.split('/')[0] ?? '',
+      path: target.path,
+      id: '',
+    });
   }
 </script>
 

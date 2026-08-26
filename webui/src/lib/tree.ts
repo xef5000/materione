@@ -28,7 +28,7 @@ const TYPE_ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates'];
 export function buildTree(resources: ResourceRef[], assets: AssetRef[]): TreeNode[] {
   const roots: TreeNode[] = [];
 
-  const findOrCreateDir = (segments: string[], base: TreeNode[]): TreeNode => {
+  const findOrCreateDir = (segments: string[], base: TreeNode[]): TreeNode[] => {
     let layer = base;
     let walked = '';
     for (const segment of segments) {
