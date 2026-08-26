@@ -75,10 +75,12 @@ public final class LosslessYamlDocument {
     }
 
     /**
-     * Returns a copy with the scalar at {@code path} set to {@code value}.
-     * If the key exists its line alone is rewritten (a trailing inline
-     * comment is preserved); if it does not, one line is inserted after the
-     * parent block. Keys inside flow style or sequences are not editable —
+     * Returns a copy with the node at {@code path} set to {@code value}.
+     * Scalars rewrite (or insert) exactly one line — a trailing inline
+     * comment is preserved. Block sequences ({@code List} values) rewrite
+     * the whole owned range as {@code key:} plus {@code - item} lines, so
+     * forms can edit fields like lore without re-serializing anything else.
+     * Keys inside flow style or sequences are not editable —
      * {@link UnsupportedOperationException} says so instead of guessing.
      */
     public LosslessYamlDocument withScalar(Object value, String... path) {
@@ -89,12 +91,36 @@ public final class LosslessYamlDocument {
         Node root = buildTree(lines);
         String[] parentPath = java.util.Arrays.copyOf(path, path.length - 1);
         String key = path[path.length - 1];
+        String newline = dominantTerminator(raw);
 
         Node target = find(root, List.of(path));
         if (target != null) {
-            lines.set(target.lineIndex, rewriteLine(lines.get(target.lineIndex), render(value)));
-            return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed(value, path);
+            String keyLine = rewriteLine(lines.get(target.lineIndex), tailOf(value));
+            if (!(value instanceof java.util.List<?> items)) {
+                lines.set(target.lineIndex, keyLine);
+                return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
+            }
+            List<String> block = new ArrayList<>();
+            block.add(keyLine);
+            int indent = target.childIndent(lines);
+            for (Object item : items) {
+                block.add(" ".repeat(indent) + "- " + render(item) + newline);
+            }
+            // Replace the key line plus its item lines; trailing comments or
+            // blanks after the last element belong to the document, not the
+            // old value, so they survive.
+            int lastItem = target.lineIndex;
+            for (int i = target.lastLineIndex; i > target.lineIndex; i--) {
+                if (lines.get(i).stripLeading().startsWith("-")) {
+                    lastItem = i;
+                    break;
+                }
+            }
+            lines.subList(target.lineIndex, lastItem + 1).clear();
+            lines.addAll(target.lineIndex, block);
+            return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
         }
+
         Node parent = find(root, List.of(parentPath));
         int insertAt;
         int indent;
@@ -108,13 +134,28 @@ public final class LosslessYamlDocument {
             throw new UnsupportedOperationException(
                     "cannot insert '" + String.join(".", path) + "': parent mapping not found");
         }
-        String newline = dominantTerminator(raw);
-        lines.add(insertAt, " ".repeat(indent) + key + ": " + render(value) + newline);
-        return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed(value, path);
+        List<String> inserted = new ArrayList<>();
+        String tail = tailOf(value);
+        inserted.add(" ".repeat(indent) + key + (tail.isEmpty() ? ":" : ": " + tail) + newline);
+        if (value instanceof java.util.List<?> items && !items.isEmpty()) {
+            for (Object item : items) {
+                inserted.add(" ".repeat(indent + 2) + "- " + render(item) + newline);
+            }
+        }
+        lines.addAll(insertAt, inserted);
+        return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
+    }
+
+    /** Value part of the key line: scalars inline, sequences as `key:` / `key: []`. */
+    private static String tailOf(Object value) {
+        if (value instanceof java.util.List<?> items) {
+            return items.isEmpty() ? "[]" : "";
+        }
+        return render(value);
     }
 
     /** Re-derives the data view after an edit (formatting is already correct). */
-    private LosslessYamlDocument reparsed(Object value, String... ignoredPath) {
+    private LosslessYamlDocument reparsed() {
         return LosslessYaml.parse(save());
     }
 
@@ -154,7 +195,9 @@ public final class LosslessYamlDocument {
         // split a trailing " #comment" off the old value
         int commentAt = rest.indexOf(" #");
         String comment = commentAt >= 0 ? rest.substring(commentAt) : "";
-        return indent + dash + key + ": " + rendered + (comment.isEmpty() ? "" : " " + comment) + eol;
+        String sep = rendered.isEmpty() && comment.isEmpty() ? ":" : ": ";
+        return indent + dash + key + sep + rendered
+                + (comment.isEmpty() ? "" : " " + comment) + eol;
     }
 
     private static int lastRootLine(Node root, List<String> lines) {

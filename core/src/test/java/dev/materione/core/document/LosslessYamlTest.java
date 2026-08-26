@@ -122,4 +122,26 @@ class LosslessYamlTest {
                 .get("rule") instanceof Map<?, ?> mapping ? LosslessYaml.stringKeyed(mapping) : Map.of();
         assertThat(offKey).containsEntry("off", 1);
     }
+
+    @Test
+    void listValuesRenderAsBlockSequencesAndReplaceTheirOwnRange() {
+        // Insert where the key does not exist yet.
+        String inserted = LosslessYaml.parse("item:\n  material: PAPER\n")
+                .withScalar(List.of("one", "two"), "item", "lore")
+                .save();
+        assertThat(inserted).isEqualTo("item:\n  material: PAPER\n  lore:\n    - one\n    - two\n");
+
+        // Overwrite an existing longer list — no residue from the old value,
+        // and everything outside the field survives byte-for-byte.
+        String raw = "item:\n  lore:\n    - a\n    - b\n    - c\n  # keep me\n  material: STICK\n";
+        String overwritten = LosslessYaml.parse(raw)
+                .withScalar(List.of("x"), "item", "lore")
+                .save();
+        assertThat(overwritten).isEqualTo("item:\n  lore:\n    - x\n  # keep me\n  material: STICK\n");
+
+        // Empty lists collapse onto the key line.
+        String emptied = LosslessYaml.parse(raw).withScalar(List.of(), "item", "lore").save();
+        assertThat(emptied).contains("lore: []");
+        assertThat(emptied).contains("# keep me");
+    }
 }

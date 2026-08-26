@@ -1,6 +1,7 @@
 <script lang="ts">
+  import AssetPicker from './AssetPicker.svelte';
   import { ops, unwrap } from '../api';
-  import type { ResourceRef, TypeInfo } from '../api';
+  import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import { logActivity, session, setTabDirty, workspace } from '../state.svelte';
 
   interface Props {
@@ -16,18 +17,42 @@
   let error = $state('');
   let dirty = $state(false);
   let saving = $state(false);
+  // Form is the default surface; YAML is the dev-tool view. Files without a
+  // schema (pack.yml) start in YAML directly.
+  let mode = $state<'form' | 'yaml'>('form');
+  let advancedOpen = $state(false);
 
-  // The first top-level key of the file is the resource this editor targets.
-  const rootId = $derived(Object.keys(data)[0] ?? resource.id);
+  const rootId = $derived(String(Object.keys(data)[0] ?? resource.id));
   const schema = $derived(
     workspace.types.find((t: TypeInfo) => t.name === resource.type) ??
       workspace.types.find((t: TypeInfo) => t.name === resource.path.split('/')[0]),
   );
   const fields = $derived(schema?.parameters ?? []);
+  /** The document's own keys inside the root mapping. */
+  const presentKeys = $derived(
+    data[rootId] && typeof data[rootId] === 'object'
+      ? Object.keys(data[rootId] as Record<string, unknown>)
+      : [],
+  );
+  /** Fields the form cannot render safely — they stay in the YAML pane. */
+  const advancedKeys = $derived(
+    presentKeys.filter((key) => {
+      const field = fields.find((candidate) => candidate.id === key);
+      if (!field) return true; // unknown to the schema
+      return field.type === 'raw' || (field.type === 'list' && !isScalarListField(key));
+    }),
+  );
 
   function markDirty(value: boolean) {
     dirty = value;
     setTabDirty(tabKey, value);
+  }
+
+  function isScalarListField(key: string): boolean {
+    const current = (data[rootId] as Record<string, unknown>)?.[key];
+    return Array.isArray(current)
+      ? current.every((item) => typeof item !== 'object' || item === null)
+      : true; // empty/absent lists are safe to create as scalars-per-line
   }
 
   async function load() {
@@ -35,19 +60,19 @@
       const payload = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
       raw = String(payload.raw ?? '');
       rev = Number(payload.rev ?? 0);
-      // The wire carries `parsed` as a JSON object already — no re-parsing.
       data = (payload.parsed as Record<string, unknown>) ?? {};
       error = '';
       markDirty(false);
+      if (!schema) mode = 'yaml';
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       if (message.includes('MTR-0009')) {
-        // Genuinely absent: offer a starter skeleton built from the schema.
         raw = skeleton();
         rev = 0;
         data = {};
         error = '';
         markDirty(true);
+        mode = 'yaml';
       } else {
         raw = '';
         rev = 0;
@@ -58,7 +83,8 @@
   }
 
   function skeleton(): string {
-    const id = resource.id === '<parse error>' || resource.id.includes(' ') ? 'new_entry' : resource.id;
+    const id =
+      resource.id === '<parse error>' || resource.id.includes(' ') ? 'new_entry' : resource.id;
     const lines = [`# ${resource.pack}:${id}`, `${id}:`];
     for (const field of fields) {
       lines.push(`  ${field.id}: ${field.default ?? ''}`);
@@ -66,6 +92,7 @@
     return lines.join('\n') + '\n';
   }
 
+  /** Full-document save (YAML view / advanced pane / new files). */
   async function saveRaw() {
     saving = true;
     try {
@@ -74,7 +101,10 @@
       data = (result.parsed as Record<string, unknown>) ?? {};
       markDirty(false);
       error = '';
-      logActivity('save', `saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`);
+      logActivity(
+        'save',
+        `saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`,
+      );
     } catch (e) {
       error = describe(e);
     } finally {
@@ -82,16 +112,21 @@
     }
   }
 
-  /** Form edits patch ONE scalar through the lossless layer — comments survive. */
-  async function setScalar(fieldId: string, value: string | number | boolean) {
+  /**
+   * Form edits patch ONE node through the lossless layer — comments and
+   * untouched lines survive. The response re-read keeps the JSON view
+   * authoritative instead of re-parsing YAML client-side.
+   */
+  async function patch(fieldId: string, value: string | number | boolean | string[]) {
     try {
       const result = unwrap(
         await ops.setScalar(session.channel!, resource.pack, resource.path, rev, [rootId, fieldId], value),
       );
       rev = Number(result.rev);
-      raw = String(result.raw);
-      data = JSON.parse(JSON.stringify(parseYamlView(raw)));
-      logActivity('save', `${resource.pack}/${resource.path} · ${fieldId} updated → rev ${rev}`);
+      const fresh = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
+      raw = String(fresh.raw);
+      data = (fresh.parsed as Record<string, unknown>) ?? {};
+      logActivity('save', `${resource.pack}:${rootId} · ${fieldId} updated → rev ${rev}`);
     } catch (e) {
       error = describe(e);
     }
@@ -106,36 +141,22 @@
     return String(e);
   }
 
-  /**
-   * A forgiving view of the YAML for form bindings: scalars only, via a
-   * regex-free line walk that understands "key: value" at two levels. The
-   * authoritative parse lives server-side; this only pre-fills inputs.
-   */
-  function parseYamlView(text: string): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
-    let current: Record<string, unknown> | null = null;
-    for (const line of text.split('\n')) {
-      const match = /^(\s*)([A-Za-z_][\w .\-/]*)\s*:\s*(.*?)\s*(?:#.*)?$/.exec(line);
-      if (!match) continue;
-      const [, indent, key, value] = match;
-      if ((indent?.length ?? 0) === 0) {
-        current = {};
-        out[key!] = current;
-      } else if (current && value !== '') {
-        const unquoted = value!.replace(/^"(.*)"$/, '$1');
-        current[key!] =
-          /^\d+$/.test(unquoted) ? Number(unquoted) : unquoted === 'true' ? true : unquoted;
-      }
-    }
-    return out;
+  function textValue(field: TypeParam): string {
+    const current = (data[rootId] as Record<string, unknown> | undefined)?.[field.id];
+    if (current === undefined || current === null) return field.default ?? '';
+    return String(current);
   }
 
-  function currentValue(fieldId: string): string {
-    const root = data[rootId];
-    if (root && typeof root === 'object' && fieldId in (root as Record<string, unknown>)) {
-      return String((root as Record<string, unknown>)[fieldId]);
-    }
-    return schema?.parameters.find((f) => f.id === fieldId)?.default ?? '';
+  function boolValue(field: TypeParam): boolean {
+    const current = (data[rootId] as Record<string, unknown> | undefined)?.[field.id];
+    if (typeof current === 'boolean') return current;
+    return (field.default ?? '').toLowerCase() === 'true';
+  }
+
+  function listValue(field: TypeParam): string {
+    const current = (data[rootId] as Record<string, unknown> | undefined)?.[field.id];
+    if (current === undefined || current === null) return '';
+    return Array.isArray(current) ? current.map((item) => String(item)).join('\n') : String(current);
   }
 
   async function validate() {
@@ -156,6 +177,21 @@
   <header>
     <h2>{resource.pack}:{rootId}</h2>
     <span class="meta">{resource.path} · rev {rev}{dirty ? ' · unsaved changes' : ''}</span>
+    {#if schema}
+      <div class="modes" role="tablist" aria-label="editor mode">
+        <button
+          role="tab"
+          aria-selected={mode === 'form'}
+          class:active={mode === 'form'}
+          onclick={() => (mode = 'form')}>form</button>
+        <button
+          role="tab"
+          aria-selected={mode === 'yaml'}
+          class:active={mode === 'yaml'}
+          title="the underlying file — a dev tool"
+          onclick={() => (mode = 'yaml')}>yaml</button>
+      </div>
+    {/if}
     <button onclick={() => void load()}>reload</button>
     <button class="primary" disabled={saving || !dirty} onclick={() => void saveRaw()}>
       {saving ? 'saving…' : 'save'}
@@ -166,69 +202,112 @@
     <p class="error">{error}</p>
   {/if}
 
-  <div class="columns">
+  {#if mode === 'form' && schema}
+    <div class="form">
+      {#each fields.filter((field) => !advancedKeys.includes(field.id)) as field (field.id)}
+        {@const value = textValue(field)}
+        <label class="field">
+          <span class="fid">
+            {field.id}
+            {#if field.required}<em title="required">*</em>{/if}
+          </span>
+
+          {#if field.uiHint === 'texture' || field.uiHint === 'model'}
+            <AssetPicker
+              pack={resource.pack}
+              hint={field.uiHint}
+              value={value}
+              onChange={(next) => void patch(field.id, next)}
+            />
+          {:else if field.allowedValues && field.allowedValues.length > 0}
+            <select
+              value={value}
+              onchange={(event) => void patch(field.id, event.currentTarget.value)}
+            >
+              <option value=""></option>
+              {#each field.allowedValues as option (option)}
+                <option value={option}>{option}</option>
+              {/each}
+            </select>
+          {:else if field.type === 'boolean'}
+            <input
+              type="checkbox"
+              checked={boolValue(field)}
+              onchange={(event) => void patch(field.id, event.currentTarget.checked)}
+            />
+          {:else if field.type === 'integer' || field.type === 'decimal'}
+            <input
+              type="number"
+              step={field.type === 'decimal' ? 'any' : '1'}
+              value={value}
+              onchange={(event) => void patch(field.id, Number(event.currentTarget.value))}
+            />
+          {:else if field.type === 'list'}
+            <textarea
+              class="list"
+              rows="3"
+              spellcheck="false"
+              value={listValue(field)}
+              placeholder="one entry per line"
+              onchange={(event) =>
+                void patch(
+                  field.id,
+                  event.currentTarget.value.split('\n').map((line) => line.trim()).filter(Boolean),
+                )}
+            ></textarea>
+          {:else}
+            <input
+              value={value}
+              placeholder={field.default ?? ''}
+              title={field.description ?? ''}
+              onchange={(event) => {
+                if (event.currentTarget.value !== value) {
+                  void patch(field.id, event.currentTarget.value);
+                }
+              }}
+            />
+          {/if}
+          {#if field.description}
+            <small>{field.description}</small>
+          {/if}
+        </label>
+      {/each}
+
+      {#if advancedKeys.length > 0}
+        <details class="advanced" bind:open={advancedOpen}>
+          <summary>
+            advanced ({advancedKeys.length}) — edited as YAML:
+            <span class="keys">{advancedKeys.join(', ')}</span>
+          </summary>
+          <textarea
+            class="code"
+            bind:value={raw}
+            oninput={() => markDirty(true)}
+            rows="14"
+            spellcheck="false"
+            aria-label="advanced YAML"
+          ></textarea>
+          <div class="advrow">
+            <button disabled={!dirty} onclick={() => void saveRaw()}>
+              apply advanced changes
+            </button>
+          </div>
+        </details>
+      {/if}
+    </div>
+  {:else}
     <textarea
+      class="code full"
       bind:value={raw}
       oninput={() => markDirty(true)}
-      rows="20"
+      rows="22"
       spellcheck="false"
       aria-label="raw YAML"
     ></textarea>
-
-    {#if schema}
-      <div class="form">
-        <h3>{schema.displayName} · form</h3>
-        <p class="hint">edits patch single values losslessly — comments stay</p>
-        {#each fields as field (field.id)}
-          {@const value = currentValue(field.id)}
-          <label>
-            <span class="fid">
-              {field.id}
-              {#if field.required}<em title="required">*</em>{/if}
-            </span>
-            {#if field.allowedValues && field.allowedValues.length > 0}
-              <select
-                value={value}
-                onchange={(event) => void setScalar(field.id, event.currentTarget.value)}
-              >
-                <option value=""></option>
-                {#each field.allowedValues as option (option)}
-                  <option value={option}>{option}</option>
-                {/each}
-              </select>
-            {:else}
-              <input
-                value={value}
-                placeholder={field.default ?? ''}
-                title={field.description ?? ''}
-                onchange={(event) => {
-                  const input = event.currentTarget.value;
-                  if (input !== value) {
-                    void setScalar(field.id, input);
-                  }
-                }}
-              />
-            {/if}
-            {#if field.description}
-              <small>{field.description}</small>
-            {/if}
-          </label>
-        {/each}
-        <p class="hint">
-          lists & nested structures are edited in the YAML pane; forms cover scalars.
-        </p>
-      </div>
-    {:else}
-      <div class="form muted">
-        <h3>no schema for this file type</h3>
-        <p class="hint">edit the YAML directly.</p>
-      </div>
-    {/if}
-  </div>
-
-  <footer>
-    <button onclick={() => void validate()}>check syntax</button>
-  </footer>
+    <footer>
+      <button onclick={() => void validate()}>check syntax</button>
+    </footer>
+  {/if}
 </article>
 
 <style>
@@ -256,6 +335,24 @@
     font-size: 12px;
     margin-right: auto;
   }
+  .modes {
+    display: flex;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .modes button {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 12px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .modes button.active {
+    background: var(--bg-raised);
+    color: var(--accent);
+  }
   button {
     border: 1px solid var(--border-strong);
     background: none;
@@ -263,6 +360,7 @@
     border-radius: var(--radius);
     padding: 4px 12px;
     cursor: pointer;
+    font-size: 13px;
   }
   button.primary {
     background: var(--primary);
@@ -273,39 +371,16 @@
     opacity: 0.5;
     cursor: default;
   }
-  .columns {
+  .form {
+    margin-top: 12px;
     display: grid;
-    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
-    gap: 14px;
-    margin-top: 10px;
-    flex: 1;
-    min-height: 0;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 4px 20px;
+    align-content: start;
   }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    height: 100%;
-    min-height: 380px;
-    background: var(--bg-input);
-    color: var(--fg-code);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    font: 13px/1.55 var(--mono);
-    padding: 10px;
-    resize: vertical;
-  }
-  .form h3 {
-    margin: 0 0 2px;
-    font-size: 13px;
-  }
-  .form .hint,
-  .muted {
-    color: var(--faint);
-    font-size: 12px;
-  }
-  label {
+  .field {
     display: block;
-    margin: 10px 0;
+    margin: 6px 0;
   }
   .fid {
     display: block;
@@ -316,8 +391,10 @@
     color: var(--warn);
     font-style: normal;
   }
-  input,
-  select {
+  input:not([type='checkbox']),
+  select,
+  textarea.list,
+  textarea.code {
     width: 100%;
     box-sizing: border-box;
     background: var(--bg-input);
@@ -327,9 +404,46 @@
     padding: 6px 8px;
     font: 13px var(--mono);
   }
+  textarea.code {
+    resize: vertical;
+    line-height: 1.55;
+  }
+  textarea.full {
+    margin-top: 12px;
+    flex: 1;
+    min-height: 380px;
+  }
+  textarea.list {
+    font-size: 12.5px;
+  }
   small {
     color: var(--muted);
     display: block;
+    font-size: 11px;
+  }
+  .advanced {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+    border-top: 1px dotted var(--border-strong);
+    padding-top: 8px;
+  }
+  .advanced summary {
+    cursor: pointer;
+    font-size: 12.5px;
+    color: var(--muted);
+  }
+  .advanced .keys {
+    color: var(--faint);
+    font-family: var(--mono);
+    font-size: 11.5px;
+  }
+  .advanced textarea {
+    margin-top: 8px;
+  }
+  .advrow {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
   }
   .error {
     background: var(--error-bg);

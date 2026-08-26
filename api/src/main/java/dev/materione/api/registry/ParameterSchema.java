@@ -33,4 +33,20 @@ public record ParameterSchema(
     public static ParameterSchema of(String id, ParameterType type, boolean required) {
         return new ParameterSchema(id, type, required, null, null, List.of(), List.of());
     }
+
+    /**
+     * UI affordance hint for editor forms, derived from the parameter
+     * identity (single source of truth — plugin.md §3 forbids scattered
+     * per-form knowledge). {@code texture} renders a texture picker,
+     * {@code model} a model picker; null means a plain input.
+     */
+    public String uiHint() {
+        if (type == ParameterType.REFERENCE && id.endsWith("texture")) {
+            return "texture";
+        }
+        if (type == ParameterType.REFERENCE && id.equals("model")) {
+            return "model";
+        }
+        return null;
+    }
 }

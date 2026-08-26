@@ -350,6 +350,9 @@ public final class EditorContentOps {
             param.nested().forEach(param1 -> nested.add(paramJson(param1)));
             object.add("nested", nested);
         }
+        if (param.uiHint() != null) {
+            object.addProperty("uiHint", param.uiHint());
+        }
         return object;
     }
 
@@ -367,15 +370,28 @@ public final class EditorContentOps {
         return path;
     }
 
-    /** Form values arrive as JSON scalars; the store renders them losslessly. */
+    /** Form values arrive as JSON scalars (or arrays of them for lists). */
     private static Object valueOf(com.google.gson.JsonElement element) {
         if (element == null || element.isJsonNull()) {
             throw new IllegalArgumentException("'value' is required");
         }
-        if (!element.isJsonPrimitive()) {
-            throw new IllegalArgumentException("'value' must be a scalar");
+        if (element.isJsonArray()) {
+            List<Object> items = new java.util.ArrayList<>();
+            for (var item : element.getAsJsonArray()) {
+                if (!item.isJsonPrimitive()) {
+                    throw new IllegalArgumentException("list 'value' entries must be scalars");
+                }
+                items.add(primitiveOf(item.getAsJsonPrimitive()));
+            }
+            return items;
         }
-        var primitive = element.getAsJsonPrimitive();
+        if (!element.isJsonPrimitive()) {
+            throw new IllegalArgumentException("'value' must be a scalar or list of scalars");
+        }
+        return primitiveOf(element.getAsJsonPrimitive());
+    }
+
+    private static Object primitiveOf(com.google.gson.JsonPrimitive primitive) {
         if (primitive.isBoolean()) {
             return primitive.getAsBoolean();
         }

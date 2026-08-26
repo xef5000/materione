@@ -19,7 +19,7 @@ public record TypeMeta(
         parameters = parameters == null ? List.of() : List.copyOf(parameters);
     }
 
-    /** One declared parameter of a type's schema. */
+    /** One declared parameter of a type's schema ({@code uiHint} from api uiHint()). */
     public record Param(
             String id,
             String type,
@@ -27,7 +27,8 @@ public record TypeMeta(
             String defaultValue,
             String description,
             List<String> allowedValues,
-            List<Param> nested) {
+            List<Param> nested,
+            String uiHint) {
 
         public Param {
             allowedValues = allowedValues == null ? List.of() : List.copyOf(allowedValues);

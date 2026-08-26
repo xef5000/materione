@@ -168,7 +168,8 @@ public final class EditorTransportService {
                         parameter.defaultValue(),
                         parameter.description(),
                         parameter.allowedValues(),
-                        java.util.List.of()));
+                        java.util.List.of(),
+                        parameter.uiHint()));
             }
             out.add(new dev.materione.web.TypeMeta(
                     type.name(), description.displayName(), description.description(), params));

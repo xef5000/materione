@@ -9,6 +9,8 @@ export interface TypeParam {
   default?: string;
   description?: string;
   allowedValues?: string[];
+  /** Schema-derived affordance: 'texture' | 'model' pickers, else absent. */
+  uiHint?: string;
 }
 
 export interface TypeInfo {
