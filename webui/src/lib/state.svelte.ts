@@ -3,8 +3,8 @@
  * them. Stateless by design per web.md §6 — a refresh refetches everything
  * through loadWorkspace(); only unsaved editor content lives in tab state.
  */
-import type { DiagnosticEntry, ResourceRef, TypeInfo } from './api';
-import { unwrap, ops } from './api';
+import type { AssetRef, DiagnosticEntry, ResourceRef, TypeInfo } from './api';
+import { unwrap, ops, assetOps } from './api';
 import type { PushFrame } from './events';
 import { Signal } from './events';
 import type { EditorChannel } from './protocol/session';
@@ -20,7 +20,16 @@ export interface DocTab {
   dirty: boolean;
 }
 
-export type Tab = DocTab;
+export type Tab = DocTab | AssetTab;
+
+/** A binary asset opened as a read-only preview tab. */
+export interface AssetTab {
+  kind: 'asset';
+  key: string; // `a:${pack}/${path}`
+  pack: string;
+  path: string;
+  name: string;
+}
 
 export type ActivityKind = 'save' | 'reload' | 'error' | 'info';
 
@@ -35,8 +44,11 @@ export const workspace = $state({
   activePack: null as string | null,
   resources: [] as ResourceRef[],
   types: [] as TypeInfo[],
+  assets: [] as AssetRef[],
   tabs: [] as Tab[],
   activeKey: null as string | null,
+  /** Directory paths the explorer has collapsed (default is expanded). */
+  collapsed: {} as Record<string, boolean>,
 });
 
 export const diagnostics = $state({
@@ -97,14 +109,24 @@ export async function loadWorkspace(): Promise<void> {
 export async function selectPack(pack: string): Promise<void> {
   workspace.activePack = pack;
   workspace.resources = [];
+  workspace.assets = [];
+  await refreshPack();
+}
+
+/** Re-fetches resources + assets of the active pack after any mutation. */
+export async function refreshPack(): Promise<void> {
   const channel = session.channel;
-  if (!channel) return;
+  const pack = workspace.activePack;
+  if (!channel || !pack) return;
   try {
-    const resources =
-      (unwrap(await ops.resources(channel, pack)).resources as ResourceRef[]) ?? [];
-    workspace.resources = resources.sort((a, b) => a.path.localeCompare(b.path));
+    const [resourceResult, assetResult] = [
+      (unwrap(await ops.resources(channel, pack)).resources as ResourceRef[]) ?? [],
+      (unwrap(await assetOps.list(channel, pack)).assets as AssetRef[]) ?? [],
+    ];
+    workspace.resources = resourceResult.sort((a, b) => a.path.localeCompare(b.path));
+    workspace.assets = assetResult.sort((a, b) => a.path.localeCompare(b.path));
   } catch (e) {
-    logActivity('error', `browse.resources: ${errorMessage(e)}`);
+    logActivity('error', `browse: ${errorMessage(e)}`);
   }
 }
 
@@ -123,6 +145,15 @@ export function openDoc(resource: ResourceRef): void {
       dirty: false,
     };
     workspace.tabs.push(tab);
+  }
+  workspace.activeKey = key;
+}
+
+/** Opens a read-only asset preview tab. */
+export function openAsset(pack: string, path: string, name: string): void {
+  const key = `a:${pack}/${path}`;
+  if (!workspace.tabs.some((t) => t.kind === 'asset' && t.key === key)) {
+    workspace.tabs.push({ kind: 'asset', key, pack, path, name });
   }
   workspace.activeKey = key;
 }
@@ -157,8 +188,10 @@ export function resetWorkspace(): void {
   workspace.activePack = null;
   workspace.resources = [];
   workspace.types = [];
+  workspace.assets = [];
   workspace.tabs = [];
   workspace.activeKey = null;
+  workspace.collapsed = {};
   diagnostics.entries = [];
   activityLog.entries = [];
   connection.lastReload = '';

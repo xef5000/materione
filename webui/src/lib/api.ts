@@ -64,6 +64,10 @@ export const ops = {
   ) => c.call('edit.setScalar', { pack, path, rev, field, value }),
   remove: (c: EditorChannel, pack: string, path: string, rev: number) =>
     c.call('edit.delete', { pack, path, rev }),
+  create: (c: EditorChannel, pack: string, path: string, id?: string) =>
+    c.call('edit.create', id ? { pack, path, id } : { pack, path }),
+  move: (c: EditorChannel, pack: string, from: string, to: string, rev: number) =>
+    c.call('edit.move', { pack, from, to, rev }),
   createPack: (c: EditorChannel, pack: string) => c.call('edit.createPack', { pack }),
   types: (c: EditorChannel) => c.call('browse.types'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
@@ -76,6 +80,8 @@ export const assetOps = {
     c.call('assets.put', { pack, path, data: b64fromBytes(bytes) }),
   get: (c: EditorChannel, pack: string, path: string) => c.call('assets.get', { pack, path }),
   remove: (c: EditorChannel, pack: string, path: string) => c.call('assets.delete', { pack, path }),
+  move: (c: EditorChannel, pack: string, from: string, to: string) =>
+    c.call('assets.move', { pack, from, to }),
 };
 
 function b64fromBytes(bytes: Uint8Array): string {
