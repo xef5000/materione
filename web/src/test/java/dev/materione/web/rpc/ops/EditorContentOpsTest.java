@@ -95,6 +95,85 @@ class EditorContentOpsTest {
         assertThat(response.error().code()).isEqualTo("MTR-0033");
     }
 
+    @Test
+    void createScaffoldsRefuseDuplicatesAndMoveRejectsGhosts() throws Exception {
+        DocumentStore store = store();
+        AuditLog audit = audit();
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit, temp.resolve("packs"), trigger,
+                java.util.List::of, java.util.List::of);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+
+        // Scaffolded create: valid YAML, rev 1, reload queued.
+        Wire.Response created = dispatcher.dispatch(request("edit.create", "2",
+                object("pack", "demo", "path", "items/gem.yml")));
+        assertThat(created.ok()).isTrue();
+        assertThat(payload(created).get("raw").getAsString()).contains("material:");
+        assertThat(payload(created).get("rev").getAsInt()).isEqualTo(1);
+        assertThat(store.read("demo", "items/gem.yml").revision()).isEqualTo(1);
+
+        // Duplicate create refused — never clobber.
+        Wire.Response duplicate = dispatcher.dispatch(request("edit.create", "3",
+                object("pack", "demo", "path", "items/gem.yml")));
+        assertThat(duplicate.ok()).isFalse();
+        assertThat(duplicate.error().code()).isEqualTo("MTR-0008");
+
+        // No scaffold for files outside the type dirs.
+        Wire.Response wrongDir = dispatcher.dispatch(request("edit.create", "4",
+                object("pack", "demo", "path", "pack.yml")));
+        assertThat(wrongDir.ok()).isFalse();
+
+        // Move: content at the new path, old path gone, both journals truthful.
+        Wire.Response moved = dispatcher.dispatch(request("edit.move", "5",
+                object("pack", "demo", "from", "items/gem.yml", "to", "items/relic.yml",
+                        "rev", "1")));
+        assertThat(moved.ok()).isTrue();
+        assertThat(payload(moved).get("rev").getAsInt()).isEqualTo(1);
+        assertThat(java.nio.file.Files.isRegularFile(
+                temp.resolve("packs/demo/items/relic.yml"))).isTrue();
+        assertThat(java.nio.file.Files.exists(
+                temp.resolve("packs/demo/items/gem.yml"))).isFalse();
+
+        // A stale write against the OLD path must fail — no ghost resurrection.
+        Wire.Response ghost = dispatcher.dispatch(request("edit.put", "6",
+                object("pack", "demo", "path", "items/gem.yml", "rev", "0",
+                        "content", "gem:\n  material: STICK\n")));
+        assertThat(ghost.ok()).isFalse();
+        assertThat(ghost.error().code()).isEqualTo("MTR-0034");
+
+        // Moving onto an existing target is refused.
+        dispatcher.dispatch(request("edit.create", "7",
+                object("pack", "demo", "path", "items/other.yml")));
+        Wire.Response clash = dispatcher.dispatch(request("edit.move", "8",
+                object("pack", "demo", "from", "items/relic.yml", "to", "items/other.yml",
+                        "rev", "1")));
+        assertThat(clash.ok()).isFalse();
+
+        String auditText = java.nio.file.Files.readString(temp.resolve("audit.log"));
+        assertThat(auditText).contains("edit.create");
+        assertThat(auditText).contains("edit.move");
+    }
+
+    @Test
+    void diagnosticsCarrySourceLocationWhenPresent() {
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        var diagnostic = new dev.materione.api.diagnostics.Diagnostic(
+                dev.materione.core.diagnostics.DiagnosticCodes.SETTINGS_PARSE_FAILED,
+                dev.materione.api.diagnostics.Severity.ERROR,
+                "broken line", null,
+                new dev.materione.api.diagnostics.SourceLocation("items/bad.yml", 4, 7),
+                "fix it");
+        EditorContentOps.register(dispatcher, store(), audit(), temp.resolve("packs"),
+                new CapturingTrigger(), java.util.List::of, () -> List.of(diagnostic));
+
+        Wire.Response response = dispatcher.dispatch(request("admin.diagnostics.recent", "1"));
+        assertThat(response.ok()).isTrue();
+        JsonObject entry = payload(response).get("diagnostics")
+                .getAsJsonArray().get(0).getAsJsonObject();
+        assertThat(entry.get("location").getAsString()).isEqualTo("items/bad.yml:4:7");
+    }
+
     // ------------------------------------------------------------------
 
     private DocumentStore store() {

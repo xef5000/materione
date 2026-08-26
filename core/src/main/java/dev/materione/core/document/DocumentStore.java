@@ -295,6 +295,74 @@ public final class DocumentStore {
         }
     }
 
+    /**
+     * Creates a document that must not exist yet (the editor's
+     * {@code edit.create}): the existence check happens under the same lock
+     * as the write, so a double-submit cannot clobber.
+     *
+     * @return the fresh document's revision (always 1)
+     */
+    public int createDocument(String pack, String path, String content, String actor)
+            throws IOException {
+        Objects.requireNonNull(content, "content");
+        Optional<String> parseError = LosslessYaml.parse(content).parseError();
+        if (parseError.isPresent()) {
+            throw new IllegalArgumentException("invalid YAML: " + parseError.get());
+        }
+        synchronized (lock) {
+            Path file = resolve(pack, path);
+            if (Files.exists(file)) {
+                throw new IllegalStateException("document already exists: " + path);
+            }
+            Files.createDirectories(file.getParent());
+            byte[] bytes = content.getBytes(StandardCharsets.UTF_8);
+            Files.write(file, bytes);
+            appendRevision(pack, path, new Revision(
+                    1, System.currentTimeMillis(), actor, "create", Documents.sha256(bytes)));
+            trimJournal(pack, path);
+            return 1;
+        }
+    }
+
+    /**
+     * Moves/renames a document (content unchanged): the target's journal
+     * opens at rev 1 recording where it came from, and the source's journal
+     * closes with a delete entry — so stale writes against either path fail
+     * honestly instead of resurrecting a ghost copy. Same stale-write
+     * semantics as {@link #write} on the source revision.
+     *
+     * @return the moved document at its new path
+     */
+    public Document move(String pack, String from, int expectedRevision, String to, String actor)
+            throws IOException {
+        if (from.equals(to)) {
+            throw new IllegalArgumentException("move source and target are the same: " + from);
+        }
+        synchronized (lock) {
+            Path source = resolve(pack, from);
+            Path target = resolve(pack, to);
+            assertExpectedRevision(pack, from, expectedRevision);
+            if (!Files.isRegularFile(source)) {
+                throw new java.nio.file.NoSuchFileException(from);
+            }
+            if (Files.exists(target)) {
+                throw new IllegalStateException("target already exists: " + to);
+            }
+            byte[] bytes = Files.readAllBytes(source);
+            Files.createDirectories(target.getParent());
+            Files.write(target, bytes);
+            Files.delete(source);
+            String hash = Documents.sha256(bytes);
+            appendRevision(pack, to, new Revision(
+                    1, System.currentTimeMillis(), actor, "move-from:" + from, hash));
+            trimJournal(pack, to);
+            appendRevision(pack, from, new Revision(
+                    currentRevision(pack, from) + 1, System.currentTimeMillis(),
+                    actor, "delete", null));
+            return new Document(pack, to, new String(bytes, StandardCharsets.UTF_8), 1, hash);
+        }
+    }
+
     // ------------------------------------------------------------------
 
     /** Resolves and safety-checks a pack-relative path. */

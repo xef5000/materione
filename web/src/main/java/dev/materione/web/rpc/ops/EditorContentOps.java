@@ -184,6 +184,62 @@ public final class EditorContentOps {
             }
         });
 
+        // Creates a document from the type's curated scaffold; the form takes
+        // over from there. Refuses to clobber an existing file.
+        dispatcher.register("edit.create", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String path = requiredString(body, "path");
+                String content = Scaffolds.forPath(path, optionalString(body, "id"));
+                int rev = documents.createDocument(pack, path, content, actorOf(request));
+                audit.record(actorOf(request), "edit.create", pack + "/" + path);
+                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("rev", rev);
+                payload.addProperty("raw", content);
+                payload.add("parsed", parsedView(content));
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0008", e.getMessage(), safePath(body),
+                        "open the existing document instead"));
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        dispatcher.register("edit.move", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String from = requiredString(body, "from");
+                String to = requiredString(body, "to");
+                DocumentStore.Document moved =
+                        documents.move(pack, from, body.get("rev").getAsInt(), to, actorOf(request));
+                audit.record(actorOf(request), "edit.move", pack + "/" + from + " -> " + to);
+                queueReload(reload, packsRoot.resolve(pack).resolve(from));
+                queueReload(reload, packsRoot.resolve(pack).resolve(to));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("rev", moved.revision());
+                payload.add("parsed", parsedView(moved.raw()));
+                return Wire.Response.success(request, payload);
+            } catch (DocumentConflictException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0034", e.getMessage(), safePath(body),
+                        "re-read the document and retry"));
+            } catch (java.nio.file.NoSuchFileException e) {
+                return Wire.Response.failure(request,
+                        new Wire.Error("MTR-0009", "no such document: " + e.getFile(), null, null));
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
         dispatcher.register("validate.dryRun", request -> {
             // v1: syntax-level gate (what write would reject); semantic
             // validation streams back from the pipeline run that follows.
@@ -248,6 +304,9 @@ public final class EditorContentOps {
                 entry.addProperty("message", diagnostic.message());
                 if (diagnostic.resource() != null) {
                     entry.addProperty("resource", diagnostic.resource().toString());
+                }
+                if (diagnostic.location() != null) {
+                    entry.addProperty("location", diagnostic.location().toString());
                 }
                 if (diagnostic.hint() != null) {
                     entry.addProperty("hint", diagnostic.hint());

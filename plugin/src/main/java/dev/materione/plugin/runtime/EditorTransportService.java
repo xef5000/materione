@@ -91,30 +91,18 @@ public final class EditorTransportService {
                 storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
         var audit = new dev.materione.core.document.AuditLog(
                 storage.storageDir().resolve("audit.log"));
-        ReloadTrigger trigger = files -> {
-            CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
-            scheduling.executeAsync(plugin, () -> {
-                try {
-                    var summary = pipeline.reload(
-                            new dev.materione.core.pipeline.ReloadScope.FileSet(files),
-                            storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
-                    future.complete(new ReloadTrigger.Outcome(
-                            !summary.skipped(), summary.noop(),
-                            summary.itemsLive(), summary.quarantined()));
-                } catch (Exception e) {
-                    // fail-soft: a broken reload never breaks the save reply
-                    future.complete(ReloadTrigger.Outcome.rejected());
-                }
-            });
-            return future.whenComplete((outcome, error) -> {
-                // Live preview loop, last mile: every connected editor hears
-                // how the reload landed (web.md §4.2 "preview" group).
-                if (sessions != null && outcome != null && !outcome.noop()) {
-                    dev.materione.web.SessionPush.reload(
-                            sessions, files.toString(), outcome.accepted(),
-                            outcome.noop(), outcome.itemsLive(), outcome.quarantined());
-                }
-            });
+        ReloadTrigger trigger = new ReloadTrigger() {
+            @Override
+            public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
+                    java.util.Set<java.nio.file.Path> files) {
+                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files), storage);
+            }
+
+            @Override
+            public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
+                    dev.materione.core.pipeline.ReloadScope scope) {
+                return runReload(scope, storage);
+            }
         };
         dev.materione.web.rpc.ops.EditorContentOps.register(
                 dispatcher, documents, audit, storage.contentPacksDir(), trigger,
@@ -122,6 +110,48 @@ public final class EditorTransportService {
                 () -> diagnostics.recent(100));
         dev.materione.web.rpc.ops.AssetOps.register(
                 dispatcher, storage.contentPacksDir(), audit, trigger);
+        dev.materione.web.rpc.ops.AdminOps.register(
+                dispatcher, audit, trigger,
+                plugin.getDataFolder().toPath().resolve("settings").resolve("settings.yml"),
+                dev.materione.core.settings.SettingsService::validateDraft);
+    }
+
+    /**
+     * Runs any scope through the pipeline off the main thread and broadcasts
+     * the outcome to every connected editor — the live preview loop's last
+     * mile, shared by save-triggered and manual reloads.
+     */
+    private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
+            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.core.storage.StorageService.StorageState storage) {
+        CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
+        scheduling.executeAsync(plugin, () -> {
+            try {
+                var summary = pipeline.reload(scope,
+                        storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+                future.complete(new ReloadTrigger.Outcome(
+                        !summary.skipped(), summary.noop(),
+                        summary.itemsLive(), summary.quarantined()));
+            } catch (Exception e) {
+                // fail-soft: a broken reload never breaks the save reply
+                future.complete(ReloadTrigger.Outcome.rejected());
+            }
+        });
+        return future.whenComplete((outcome, error) -> {
+            if (sessions != null && outcome != null && !outcome.noop()) {
+                dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
+                        outcome.noop(), outcome.itemsLive(), outcome.quarantined());
+            }
+        });
+    }
+
+    /** Human-readable scope for push payloads and audit entries. */
+    private static String scopeLabel(dev.materione.core.pipeline.ReloadScope scope) {
+        if (scope instanceof dev.materione.core.pipeline.ReloadScope.OnePack pack) {
+            return "one-pack:" + pack.packId();
+        }
+        return scope instanceof dev.materione.core.pipeline.ReloadScope.Everything
+                ? "everything" : scope.toString();
     }
 
     /** Registry self-description → transport-ready schema records (plugin.md §3). */

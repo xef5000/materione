@@ -113,6 +113,46 @@ public final class AssetOps {
             }
         });
 
+        dispatcher.register("assets.move", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String from = safeAssetPath(body.get("from").getAsString());
+                String to = safeAssetPath(body.get("to").getAsString());
+                if (from.equals(to)) {
+                    throw new IllegalArgumentException("move source and target are the same");
+                }
+                Path source = packsRoot.resolve(pack).resolve(from).normalize();
+                Path target = packsRoot.resolve(pack).resolve(to).normalize();
+                if (!source.startsWith(packsRoot.resolve(pack))
+                        || !target.startsWith(packsRoot.resolve(pack))) {
+                    throw new IllegalArgumentException("asset path escapes its pack");
+                }
+                if (!Files.isRegularFile(source)) {
+                    return Wire.Response.failure(request,
+                            new Wire.Error("MTR-0009", "no such asset: " + from, null, null));
+                }
+                if (Files.exists(target)) {
+                    throw new IllegalStateException("target already exists: " + to);
+                }
+                Files.createDirectories(target.getParent());
+                try {
+                    Files.move(source, target);
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+                audit.record(actorOf(request), "assets.move", pack + "/" + from + " -> " + to);
+                queueReload(reload, packsRoot.resolve(pack));
+                return Wire.Response.success(request, new JsonObject());
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
         dispatcher.register("assets.delete", request -> {
             try {
                 String pack = requiredString(request.payload(), "pack");

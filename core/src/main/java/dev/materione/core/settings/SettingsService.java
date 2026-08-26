@@ -84,6 +84,32 @@ public final class SettingsService {
         return new Yaml(options).dump(new LinkedHashMap<>(values));
     }
 
+    /**
+     * Validates a settings draft WITHOUT touching disk — the editor's
+     * settings write path runs this before saving so a bad edit can never
+     * produce an unbootable server. Empty list means the draft parses as a
+     * mapping; anything else carries the failure the way {@link #load}
+     * would report it (same code, actionable hint).
+     */
+    public static java.util.List<Diagnostic> validateDraft(String content) {
+        try {
+            Object loaded = new Yaml().load(content == null ? "" : content);
+            if (!(loaded instanceof Map<?, ?> map) || map.isEmpty()) {
+                return List.of(new Diagnostic(
+                        DiagnosticCodes.SETTINGS_PARSE_FAILED, dev.materione.api.diagnostics.Severity.ERROR,
+                        "settings must be a non-empty YAML mapping", null, null,
+                        "keep the existing keys and edit values only"));
+            }
+            toStringObjectMap(map);
+            return List.of();
+        } catch (YAMLException e) {
+            return List.of(new Diagnostic(
+                    DiagnosticCodes.SETTINGS_PARSE_FAILED, dev.materione.api.diagnostics.Severity.ERROR,
+                    "settings draft failed to parse: " + e.getMessage(), null, null,
+                    "fix the YAML syntax and retry"));
+        }
+    }
+
     /** Writes values to the settings file (parent dirs created). */
     public static void write(Path settingsFile, Map<String, Object> values) throws IOException {
         Files.createDirectories(settingsFile.getParent());
