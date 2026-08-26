@@ -20,7 +20,7 @@ export interface DocTab {
   dirty: boolean;
 }
 
-export type Tab = DocTab | AssetTab;
+export type Tab = DocTab | AssetTab | SettingsTab;
 
 /** A binary asset opened as a read-only preview tab. */
 export interface AssetTab {
@@ -29,6 +29,12 @@ export interface AssetTab {
   pack: string;
   path: string;
   name: string;
+}
+
+/** The plugin settings editor — a singleton tab. */
+export interface SettingsTab {
+  kind: 'settings';
+  key: 'settings';
 }
 
 export type ActivityKind = 'save' | 'reload' | 'error' | 'info';
@@ -66,6 +72,8 @@ export const connection = $state({
 export const server = $state({
   version: '',
   protocolVersion: 0,
+  editorRunning: false,
+  editorPort: 0,
 });
 
 /** The live channel and its fan-out signals; wired once by App on connect. */
@@ -101,6 +109,8 @@ export async function loadWorkspace(): Promise<void> {
     const info = unwrap(await ops.sessionInfo(channel));
     server.version = String(info.serverVersion ?? '');
     server.protocolVersion = Number(info.protocolVersion ?? 0);
+    server.editorRunning = Boolean(info.editorRunning);
+    server.editorPort = Number(info.editorPort ?? 0);
   } catch (e) {
     logActivity('error', `metadata: ${errorMessage(e)}`);
   }
@@ -156,6 +166,14 @@ export function openAsset(pack: string, path: string, name: string): void {
     workspace.tabs.push({ kind: 'asset', key, pack, path, name });
   }
   workspace.activeKey = key;
+}
+
+/** Opens the singleton plugin-settings tab. */
+export function openSettings(): void {
+  if (!workspace.tabs.some((t) => t.kind === 'settings')) {
+    workspace.tabs.push({ kind: 'settings', key: 'settings' });
+  }
+  workspace.activeKey = 'settings';
 }
 
 export function setTabDirty(key: string, dirty: boolean): void {

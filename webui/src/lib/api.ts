@@ -74,6 +74,12 @@ export const ops = {
   types: (c: EditorChannel) => c.call('browse.types'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
   dryRun: (c: EditorChannel, content: string) => c.call('validate.dryRun', { content }),
+  reloadScope: (c: EditorChannel, scope: 'everything' | 'one-pack', pack?: string) =>
+    c.call('pipeline.reload', pack ? { scope, pack } : { scope }),
+  audit: (c: EditorChannel, limit = 100) => c.call('admin.audit.recent', { limit }),
+  settingsGet: (c: EditorChannel) => c.call('admin.settings.get'),
+  settingsPut: (c: EditorChannel, content: string, sha256: string) =>
+    c.call('admin.settings.put', { content, sha256 }),
 };
 
 export const assetOps = {

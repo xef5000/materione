@@ -69,7 +69,10 @@ public final class EditorTransportService {
         KeyPair identity = new IdentityKeystore(diagnostics, new SecureRandom()).load(storage.storageDir());
         sessions = new EditorSessions(identity, this::prompt, diagnostics);
         RpcDispatcher dispatcher = new RpcDispatcher();
-        BaseOps.register(dispatcher, dev.materione.plugin.MaterioneVersion.VERSION);
+        BaseOps.register(dispatcher, dev.materione.plugin.MaterioneVersion.VERSION,
+                () -> java.util.Map.of(
+                        "editorRunning", listener != null && listener.isRunning(),
+                        "editorPort", boundPort()));
         registerContentOps(dispatcher, storage);
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, dispatcher, diagnostics), dispatcher, diagnostics);

@@ -2,6 +2,7 @@
   import TabBar from './TabBar.svelte';
   import DocEditor from './DocEditor.svelte';
   import AssetPreviewTab from './AssetPreviewTab.svelte';
+  import SettingsTab from './SettingsTab.svelte';
   import ExplorerView from '../views/ExplorerView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
@@ -80,6 +81,8 @@
                 <DocEditor resource={{ pack: t.pack, type: t.type, path: t.path, id: t.id }} tabKey={t.key} />
               {:else if t.kind === 'asset'}
                 <AssetPreviewTab pack={t.pack} path={t.path} name={t.name} />
+              {:else if t.kind === 'settings'}
+                <SettingsTab />
               {/if}
             </div>
           {/each}
