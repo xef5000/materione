@@ -11,6 +11,8 @@ import java.util.List;
  */
 public record TypeMeta(
         String name,
+        /** The pack directory this type's documents live in ("items", …). */
+        String directory,
         String displayName,
         String description,
         List<Param> parameters) {

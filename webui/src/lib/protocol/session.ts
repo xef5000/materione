@@ -47,21 +47,23 @@ export type ChannelState =
 /** Text-transport seam so tests can drive the handshake without sockets. */
 export interface Transport {
   send(text: string): void;
-  onMessage(handler: (text: string) => void): void;
+  /** `null` detaches: incoming frames buffer until the next handler attaches. */
+  onMessage(handler: ((text: string) => void) | null): void;
   onClose(handler: (code: number) => void): void;
   close(): void;
 }
 
 export class WebSocketTransport implements Transport {
-  private readonly socket: WebSocket;
+  private readonly socket: WebSocketLike;
   private messageHandler: ((text: string) => void) | null = null;
-  /** Frames that arrive between handler swaps (handshake → channel) — a
-   * dropped frame would desync the strict receive sequence, so they buffer
-   * until the next handler attaches and drain in order. */
+  /** Frames that arrive with no handler attached — a dropped frame would
+   * desync the strict receive sequence, so they buffer until a handler
+   * attaches and drain in order. */
   private readonly buffered: string[] = [];
 
-  constructor(url: string) {
-    this.socket = new WebSocket(url);
+  /** Injectable socket shape so tests can drive the handover gap. */
+  constructor(socket: WebSocketLike) {
+    this.socket = socket;
   }
 
   /** Resolves once the socket is open and ready to send. */
@@ -78,12 +80,20 @@ export class WebSocketTransport implements Transport {
     });
   }
 
-  static async connect(url: string): Promise<WebSocketTransport> {
-    const transport = new WebSocketTransport(url);
-    await transport.opened;
-    transport.socket.addEventListener('message', (event) =>
+  /** Adopts an already-open socket (test seam); {@link connect} is the real path. */
+  static adopt(socket: WebSocketLike): WebSocketTransport {
+    const transport = new WebSocketTransport(socket);
+    socket.addEventListener('message', (event) =>
       transport.deliver(event.data as string),
     );
+    return transport;
+  }
+
+  static async connect(url: string): Promise<WebSocketTransport> {
+    // Wire the listener at construction (no open-gap), then wait for OPEN —
+    // callers send immediately after this resolves.
+    const transport = WebSocketTransport.adopt(new WebSocket(url) as unknown as WebSocketLike);
+    await transport.opened;
     return transport;
   }
 
@@ -91,8 +101,11 @@ export class WebSocketTransport implements Transport {
     this.socket.send(text);
   }
 
-  onMessage(handler: (text: string) => void): void {
+  onMessage(handler: ((text: string) => void) | null): void {
     this.messageHandler = handler;
+    if (!handler) {
+      return;
+    }
     const backlog = [...this.buffered];
     this.buffered.length = 0;
     for (const text of backlog) {
@@ -101,7 +114,7 @@ export class WebSocketTransport implements Transport {
   }
 
   onClose(handler: (code: number) => void): void {
-    this.socket.addEventListener('close', (event) => handler(event.code));
+    this.socket.addEventListener('close', (event) => handler(event.code ?? 1006));
   }
 
   close(): void {
@@ -115,6 +128,18 @@ export class WebSocketTransport implements Transport {
       this.buffered.push(text);
     }
   }
+}
+
+/** The slice of the WebSocket API the transport actually uses. */
+export interface WebSocketLike {
+  readyState: number;
+  send(text: string): void;
+  close(): void;
+  addEventListener(
+    type: string,
+    listener: (event: { data?: unknown; code?: number }) => void,
+    options?: { once?: boolean },
+  ): void;
 }
 
 interface FrameJson {
@@ -249,8 +274,17 @@ export class EditorChannel {
 
     // First message is the signed plaintext reply; the transcript covers
     // hello + reply WITHOUT confirm (see HelloReplyMessage#transcriptPart).
+    // The one-shot handler detaches itself the moment it fires: key
+    // derivation below spans several awaits, during which the server may
+    // already push frames (MTR-0032's diagnostic broadcast fires the instant
+    // the reply is written). A stale resolve() would swallow them — and a
+    // swallowed frame desyncs the strict receive sequence, killing the
+    // channel on the very next RPC. Detached frames buffer instead.
     const replyText = await new Promise<string>((resolve) => {
-      transport.onMessage(resolve);
+      transport.onMessage((text) => {
+        transport.onMessage(null);
+        resolve(text);
+      });
       transport.send(canonicalJson(hello));
     });
     options.onState?.({

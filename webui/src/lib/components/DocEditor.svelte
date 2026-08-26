@@ -23,9 +23,13 @@
   let advancedOpen = $state(false);
 
   const rootId = $derived(String(Object.keys(data)[0] ?? resource.id));
+  // Schemas are keyed by the type's DIRECTORY (where the file lives) — the
+  // registry name ("item") never equals the path prefix ("items").
+  const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
   const schema = $derived(
-    workspace.types.find((t: TypeInfo) => t.name === resource.type) ??
-      workspace.types.find((t: TypeInfo) => t.name === resource.path.split('/')[0]),
+    workspace.types.find((t: TypeInfo) => t.directory === typeDirectory) ??
+      workspace.types.find((t: TypeInfo) => t.name === resource.type) ??
+      workspace.types.find((t: TypeInfo) => t.name === typeDirectory),
   );
   const fields = $derived(schema?.parameters ?? []);
   /** The document's own keys inside the root mapping. */
@@ -159,6 +163,29 @@
     return Array.isArray(current) ? current.map((item) => String(item)).join('\n') : String(current);
   }
 
+  // Text-like fields commit on BLUR (or Enter), not `change`: blur does not
+  // depend on the browser's dirty-value flag, so every edit path — typing,
+  // paste, programmatic — commits exactly once when focus leaves.
+  function commitText(field: TypeParam, element: HTMLInputElement, rendered: string): void {
+    if (element.value !== rendered) {
+      void patch(field.id, element.value);
+    }
+  }
+
+  function commitNumber(field: TypeParam, element: HTMLInputElement, rendered: string): void {
+    if (element.value !== rendered) {
+      void patch(field.id, Number(element.value));
+    }
+  }
+
+  function commitList(field: TypeParam, element: HTMLTextAreaElement, rendered: string): void {
+    const items = element.value.split('\n').map((line) => line.trim()).filter(Boolean);
+    const before = rendered.split('\n').map((line) => line.trim()).filter(Boolean);
+    if (JSON.stringify(items) !== JSON.stringify(before)) {
+      void patch(field.id, items);
+    }
+  }
+
   async function validate() {
     try {
       const payload = unwrap(await ops.dryRun(session.channel!, raw));
@@ -240,7 +267,12 @@
               type="number"
               step={field.type === 'decimal' ? 'any' : '1'}
               value={value}
-              onchange={(event) => void patch(field.id, Number(event.currentTarget.value))}
+              onblur={(event) => commitNumber(field, event.currentTarget, value)}
+              onkeydown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
+                }
+              }}
             />
           {:else if field.type === 'list'}
             <textarea
@@ -249,20 +281,17 @@
               spellcheck="false"
               value={listValue(field)}
               placeholder="one entry per line"
-              onchange={(event) =>
-                void patch(
-                  field.id,
-                  event.currentTarget.value.split('\n').map((line) => line.trim()).filter(Boolean),
-                )}
+              onblur={(event) => commitList(field, event.currentTarget, listValue(field))}
             ></textarea>
           {:else}
             <input
               value={value}
               placeholder={field.default ?? ''}
               title={field.description ?? ''}
-              onchange={(event) => {
-                if (event.currentTarget.value !== value) {
-                  void patch(field.id, event.currentTarget.value);
+              onblur={(event) => commitText(field, event.currentTarget, value)}
+              onkeydown={(event) => {
+                if (event.key === 'Enter') {
+                  event.currentTarget.blur();
                 }
               }}
             />

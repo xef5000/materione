@@ -15,6 +15,8 @@ export interface TypeParam {
 
 export interface TypeInfo {
   name: string;
+  /** Pack directory this type's documents live in ("items", …). */
+  directory?: string;
   displayName: string;
   description: string;
   parameters: TypeParam[];

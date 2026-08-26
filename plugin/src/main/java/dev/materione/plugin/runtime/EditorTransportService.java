@@ -193,7 +193,8 @@ public final class EditorTransportService {
                         parameter.uiHint()));
             }
             out.add(new dev.materione.web.TypeMeta(
-                    type.name(), description.displayName(), description.description(), params));
+                    type.name(), type.directory(),
+                    description.displayName(), description.description(), params));
         }
         return out;
     }

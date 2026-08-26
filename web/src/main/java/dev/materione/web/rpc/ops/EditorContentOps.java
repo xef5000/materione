@@ -308,6 +308,9 @@ public final class EditorContentOps {
     private static JsonObject typeJson(TypeMeta type) {
         JsonObject object = new JsonObject();
         object.addProperty("name", type.name());
+        if (type.directory() != null) {
+            object.addProperty("directory", type.directory());
+        }
         object.addProperty("displayName", type.displayName());
         object.addProperty("description", type.description());
         var params = new com.google.gson.JsonArray();
