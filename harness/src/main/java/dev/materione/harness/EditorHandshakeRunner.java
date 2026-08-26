@@ -218,6 +218,88 @@ public final class EditorHandshakeRunner {
                 problems.add("assets.list did not return the uploaded texture");
             }
 
+            // Scaffolded creation ("New Item" in the explorer, scripted):
+            // scaffold content lands at rev 1, duplicates are refused, and
+            // the created item goes live through the same preview loop.
+            Wire.Response created = browser.call("edit.create", object(
+                    "pack", "sample",
+                    "path", "items/harness_scaffold.yml",
+                    "id", "harness_scaffold"));
+            if (!created.ok()) {
+                problems.add("edit.create failed: " + created.error());
+            } else if (!created.data().toString().contains("material")) {
+                problems.add("edit.create scaffold lacks required fields");
+            }
+            Wire.Response duplicate = browser.call("edit.create", object(
+                    "pack", "sample", "path", "items/harness_scaffold.yml"));
+            if (duplicate.ok()) {
+                problems.add("edit.create clobbered an existing document");
+            }
+            Thread.sleep(400); // let the queued FileSet apply swap land
+            problems.addAll(drive(console, log, options,
+                    "materione dev stack sample:harness_scaffold",
+                    "MATERIONE-STACK id=sample:harness_scaffold"));
+
+            // Rename via edit.move; the old path must stop resolving.
+            int scaffoldRev = created.ok()
+                    ? created.data().getAsJsonObject().get("rev").getAsInt() : 0;
+            Wire.Response moved = browser.call("edit.move", object(
+                    "pack", "sample",
+                    "from", "items/harness_scaffold.yml",
+                    "to", "items/harness_renamed.yml",
+                    "rev", String.valueOf(scaffoldRev)));
+            if (!moved.ok()) {
+                problems.add("edit.move failed: " + moved.error());
+            }
+            Wire.Response ghost = browser.call("browse.get", object(
+                    "pack", "sample", "path", "items/harness_scaffold.yml"));
+            if (ghost.ok()) {
+                problems.add("old path still readable after edit.move");
+            }
+
+            // Assets rename + manual full reload (the control-center op).
+            Wire.Response assetMoved = browser.call("assets.move", object(
+                    "pack", "sample",
+                    "from", "assets/textures/editor_gem.png",
+                    "to", "assets/textures/editor/renamed_gem.png"));
+            if (!assetMoved.ok()) {
+                problems.add("assets.move failed: " + assetMoved.error());
+            }
+            Wire.Response manual = browser.call("pipeline.reload", object("scope", "everything"));
+            if (!manual.ok()) {
+                problems.add("pipeline.reload everything failed: " + manual.error());
+            }
+            // Fire-and-forget by design: the outcome lands as push.reload
+            // (manual reloads always announce, skipped ones included).
+            Wire.Request manualPush = browser.awaitPush("push.reload", 20, TimeUnit.SECONDS);
+            if (manualPush == null) {
+                problems.add("no push.reload after manual pipeline.reload");
+            }
+
+            // Settings round trip under the hash guard.
+            Wire.Response settingsGet = browser.call("admin.settings.get", new JsonObject());
+            if (!settingsGet.ok()) {
+                problems.add("admin.settings.get failed: " + settingsGet.error());
+            } else {
+                JsonObject settings = settingsGet.data().getAsJsonObject();
+                Wire.Response settingsPut = browser.call("admin.settings.put", object(
+                        "content", settings.get("raw").getAsString(),
+                        "sha256", settings.get("sha256").getAsString()));
+                if (!settingsPut.ok()) {
+                    problems.add("admin.settings.put round trip failed: " + settingsPut.error());
+                }
+            }
+
+            // The audit trail saw all of it.
+            Wire.Response audit = browser.call("admin.audit.recent", object("limit", "100"));
+            String auditText = audit.ok() ? audit.data().toString() : "";
+            for (String expectedOp : List.of("edit.put", "edit.create", "edit.move",
+                    "assets.move", "pipeline.reload", "admin.settings.put")) {
+                if (!auditText.contains("\"op\":\"" + expectedOp + "\"")) {
+                    problems.add("audit trail missing op " + expectedOp);
+                }
+            }
+
             Thread.sleep(500); // let the queued FileSet apply swap land
             problems.addAll(drive(console, log, options,
                     "materione dev stack sample:editor_gem",
@@ -235,6 +317,18 @@ public final class EditorHandshakeRunner {
             if (!deleted.ok()) {
                 problems.add("edit.delete failed: " + deleted.error());
             }
+            // Remove the scaffold+rename artifacts and the moved texture.
+            Wire.Response renamedGet = browser.call("browse.get", object(
+                    "pack", "sample", "path", "items/harness_renamed.yml"));
+            if (renamedGet.ok()) {
+                browser.call("edit.delete", object(
+                        "pack", "sample", "path", "items/harness_renamed.yml",
+                        "rev", renamedGet.data().getAsJsonObject().get("rev").getAsString()));
+            } else {
+                problems.add("renamed document missing before cleanup");
+            }
+            browser.call("assets.delete", object(
+                    "pack", "sample", "path", "assets/textures/editor/renamed_gem.png"));
             Thread.sleep(800);
             ws.abort();
 
@@ -253,7 +347,9 @@ public final class EditorHandshakeRunner {
                 problems.add("MATERIONE-BYE missing after stop");
             }
         } catch (Exception e) {
-            problems.add("handshake scenario error: " + e);
+            java.io.StringWriter stack = new java.io.StringWriter();
+            e.printStackTrace(new java.io.PrintWriter(stack));
+            problems.add("handshake scenario error: " + stack);
         } finally {
             PaperHarnessRunner.killTree(process);
         }
@@ -291,15 +387,21 @@ public final class EditorHandshakeRunner {
                 workspace == null ? null : workspace.root, List.of());
     }
 
-    /** Collects server→browser messages: first the signed reply, then frames. */
+    /** Collects server→browser messages: first the signed reply, then frames.
+     * Frames arriving before the browser client attaches buffer instead of
+     * dropping — a dropped frame would desync the strict receive sequence. */
     private static final class WsClient implements WebSocket.Listener {
         private final CompletableFuture<String> first = new CompletableFuture<>();
         private java.util.function.Consumer<String> frameConsumer;
+        private final java.util.Deque<String> buffered = new java.util.concurrent.ConcurrentLinkedDeque<>();
         private StringBuilder partial = new StringBuilder();
 
         /** Routes every post-handshake frame text to the browser client. */
         void onFrame(java.util.function.Consumer<String> consumer) {
             this.frameConsumer = consumer;
+            while (!buffered.isEmpty()) {
+                consumer.accept(buffered.poll());
+            }
         }
 
         @Override
@@ -312,6 +414,8 @@ public final class EditorHandshakeRunner {
                     first.complete(complete);
                 } else if (frameConsumer != null) {
                     frameConsumer.accept(complete);
+                } else {
+                    buffered.add(complete);
                 }
             }
             webSocket.request(1);

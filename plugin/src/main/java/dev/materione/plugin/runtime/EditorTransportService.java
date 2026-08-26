@@ -112,13 +112,16 @@ public final class EditorTransportService {
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
                     java.util.Set<java.nio.file.Path> files) {
-                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files), storage);
+                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files),
+                        storage, false);
             }
 
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
                     dev.materione.core.pipeline.ReloadScope scope) {
-                return runReload(scope, storage);
+                // Manual reloads always announce, even no-ops/skips — the
+                // control-center button must not fail silently.
+                return runReload(scope, storage, true);
             }
         };
         dev.materione.web.rpc.ops.EditorContentOps.register(
@@ -140,7 +143,8 @@ public final class EditorTransportService {
      */
     private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
             dev.materione.core.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage) {
+            dev.materione.core.storage.StorageService.StorageState storage,
+            boolean announceAlways) {
         CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
         scheduling.executeAsync(plugin, () -> {
             try {
@@ -155,7 +159,7 @@ public final class EditorTransportService {
             }
         });
         return future.whenComplete((outcome, error) -> {
-            if (sessions != null && outcome != null && !outcome.noop()) {
+            if (sessions != null && outcome != null && (announceAlways || !outcome.noop())) {
                 dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
                         outcome.noop(), outcome.itemsLive(), outcome.quarantined());
             }

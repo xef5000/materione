@@ -184,6 +184,38 @@ early M4 — it is UI-integration surface, independent of everything above, and 
 criterion does not depend on it. External-file watcher → `document.changed` pushes also
 wait for M4 (edits through the editor already push).
 
+**Workbench update (M3 closeout):** the SPA's first cut was, bluntly, a glorified YAML
+editor — so it was rebuilt on a proper foundation. The shell is now a VS Code-style
+workbench: activity rail, sidebar views, tabbed editors (documents, asset previews,
+settings), a structured pipeline dock, and a status bar; design tokens live in one
+`app.css` instead of copy-pasted hex. The Explorer is a real file tree over documents
+and assets with right-click menus — scaffolded New Item/Block/Furniture/Recipe
+(`edit.create`, curated starters pinned against the registry schemas by a plugin-module
+test), rename/move across directories (`edit.move` — the moved file's journal opens
+with a `move-from` entry and the old path's closes, so stale writes against either
+fail honestly), delete, upload-here. Document editing is **form-first**: schema-driven
+fields (enums, booleans, numbers, scalar lists as one-entry-per-line), texture/model
+pickers fed by pack assets with inline upload (the picker hint is derived on
+`ParameterSchema.uiHint()` so the knowledge stays in the schema), and an Advanced
+section holding the raw YAML for what forms can't safely render — the full-file YAML
+view remains one click away as a dev tool. `edit.setScalar` now patches whole lists
+losslessly (`withScalar` renders block sequences replacing only the field's own item
+lines). The **control center** (Server view) exposes identity + listener status,
+manual full/per-pack reloads (`pipeline.reload` — fire-and-forget, outcome via
+`push.reload`, always announced for manual triggers), the settings.yml editor
+(hash-guarded, validated through `SettingsService.validateDraft` *before* any bytes
+land on disk, honest restart note), and the audit trail. Diagnostics stream live
+(`push.diagnostic` off the bus's subscribe seam) into a filterable center with
+click-through to files. Two real protocol flaws surfaced under the new concurrent
+pushes and were fixed: frames arriving during the handshake→channel handover were
+dropped (now buffered in both the SPA transport and the harness client — a drop
+desyncs the strict receive sequence), and server frame sealing wasn't thread-safe
+(`EditorSession.sendFrame` now synchronizes seal+write so seq assignment matches
+wire order). Component-level DOM tests (happy-dom et al.) were consciously skipped —
+the pure-logic seams (tree building, signal fan-out, protocol fixtures) are
+vitest-pinned; the UI itself is exercised live by the harness gate, which now also
+drives create/move/assets.move/manual-reload/settings/audit end-to-end on Paper.
+
 ## M4 — Glyphs, fonts, sounds, paintings
 
 **Goal:** the full pack surface beyond items.

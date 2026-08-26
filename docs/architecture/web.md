@@ -223,6 +223,23 @@ Requests carry `{op, id, payload}`; responses `{op, id, ok, data|error}`. Errors
 plugin's structured diagnostic codes. **Protocol version is negotiated at hello**; unknown ops
 return a clean error, never a disconnect.
 
+*As built (M3 + workbench update):* session `ping` / `session.info` (host status
+extras); browse packs / resources (type + query filters) / get / history / types;
+edit put / delete / setScalar (scalars **and scalar lists** through the lossless
+layer) / create (curated per-type scaffolds, duplicate-refusing) / createPack /
+move (journal-truthful renames); validate dryRun (syntax gate); assets
+list / put / get / delete / **move**; pipeline reload (everything / one-pack —
+fire-and-forget, outcome as `push.reload`, always announced for manual triggers);
+admin diagnostics.recent (with source location) / audit.recent / settings.get /
+settings.put (hash-guarded, validated before disk). Pushes: `push.reload` and
+`push.diagnostic` (live, off the bus subscribe seam). Still illustrative-only:
+where-used graph, import pack, pre-apply report / apply confirm, preview renders,
+`close`. Concurrency notes learned the hard way: pushes and RPC replies seal from
+different threads — `EditorSession.sendFrame` synchronizes seal+write so sequence
+assignment matches wire order, and the browser transports buffer frames arriving
+during the handshake→channel handover instead of dropping them (a dropped frame
+desyncs the strict receive sequence).
+
 ### 4.3 Large payloads — manifest + content-addressed chunks
 
 Documents are small (KBs) and ride the WS channel. Assets (textures, models, sounds — tens of

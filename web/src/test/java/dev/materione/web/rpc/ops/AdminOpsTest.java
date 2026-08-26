@@ -39,11 +39,12 @@ class AdminOpsTest {
         AdminOps.register(dispatcher, audit, trigger, settingsFile,
                 SettingsService::validateDraft);
 
-        // Manual full reload: reaches the host as ReloadScope.Everything.
+        // Manual full reload: fire-and-forget — reaches the host as
+        // ReloadScope.Everything, replies immediately, never blocks.
         Wire.Response reload = dispatcher.dispatch(
                 request("pipeline.reload", "1", object("scope", "everything")));
         assertThat(reload.ok()).isTrue();
-        assertThat(payload(reload).get("accepted").getAsBoolean()).isTrue();
+        assertThat(payload(reload).get("queued").getAsBoolean()).isTrue();
         assertThat(trigger.scopes).hasSize(1);
         assertThat(trigger.scopes.get(0)).isInstanceOf(ReloadScope.Everything.class);
 

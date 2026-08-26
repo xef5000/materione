@@ -6,7 +6,6 @@
    */
   import { ops, unwrap } from '../api';
   import {
-    connection,
     errorMessage,
     logActivity,
     openSettings,
@@ -42,13 +41,10 @@
     if (!session.channel) return;
     reloading = true;
     try {
-      const outcome = unwrap(await ops.reloadScope(session.channel, scope, pack));
-      const line =
-        `manual ${scope}${pack ? ':' + pack : ''} — ` +
-        `${outcome.accepted ? 'applied' : 'rejected'}, items live: ${String(outcome.itemsLive)}` +
-        `, quarantined: ${String(outcome.quarantined)}`;
-      logActivity('reload', line);
-      connection.lastReload = line;
+      unwrap(await ops.reloadScope(session.channel, scope, pack));
+      // Fire-and-forget server-side: the outcome lands in the pipeline dock
+      // as push.reload (manual reloads always announce).
+      logActivity('reload', `manual ${scope}${pack ? ':' + pack : ''} reload queued`);
       await refreshPack();
     } catch (e) {
       logActivity('error', `pipeline.reload: ${errorMessage(e)}`);

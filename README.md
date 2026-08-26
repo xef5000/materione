@@ -12,10 +12,13 @@ real content: items with custom models, recipes and mechanics; custom blocks of 
 state technique plus shaped stairs/slabs; furniture clusters (seats, storage, lights,
 evolution); an ECA rule engine — all hot-reloadable. The direct-mode web editor works
 today: `/materione editor` prints a capability URL, the browser completes a signed,
-encrypted handshake after an in-game approval, edits items/blocks/furniture through
-schema-driven forms over the lossless YAML layer, uploads textures, and watches every
-save go live via targeted reload (<2 s round trip enforced in CI). Next: glyphs &
-sounds plus the Blockbench integration (M4), then the relay/cloud path (M5). See
+encrypted handshake after an in-game approval, and lands in a VS Code-style
+workbench — file-tree explorer with scaffolded create/rename/move, form-first type
+editors with texture pickers (YAML stays one click away as a dev tool), live
+diagnostics, and a control center with manual reloads, settings editing and the
+audit trail. Every save goes live via targeted reload (<2 s round trip enforced
+in CI). Next: glyphs & sounds plus the Blockbench integration and the
+external-watcher feed (M4), then the relay/cloud path (M5). See
 [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Build & test

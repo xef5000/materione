@@ -55,6 +55,10 @@ export interface Transport {
 export class WebSocketTransport implements Transport {
   private readonly socket: WebSocket;
   private messageHandler: ((text: string) => void) | null = null;
+  /** Frames that arrive between handler swaps (handshake → channel) — a
+   * dropped frame would desync the strict receive sequence, so they buffer
+   * until the next handler attaches and drain in order. */
+  private readonly buffered: string[] = [];
 
   constructor(url: string) {
     this.socket = new WebSocket(url);
@@ -78,7 +82,7 @@ export class WebSocketTransport implements Transport {
     const transport = new WebSocketTransport(url);
     await transport.opened;
     transport.socket.addEventListener('message', (event) =>
-      transport.messageHandler?.(event.data as string),
+      transport.deliver(event.data as string),
     );
     return transport;
   }
@@ -89,6 +93,11 @@ export class WebSocketTransport implements Transport {
 
   onMessage(handler: (text: string) => void): void {
     this.messageHandler = handler;
+    const backlog = [...this.buffered];
+    this.buffered.length = 0;
+    for (const text of backlog) {
+      handler(text);
+    }
   }
 
   onClose(handler: (code: number) => void): void {
@@ -97,6 +106,14 @@ export class WebSocketTransport implements Transport {
 
   close(): void {
     this.socket.close();
+  }
+
+  private deliver(text: string): void {
+    if (this.messageHandler) {
+      this.messageHandler(text);
+    } else {
+      this.buffered.push(text);
+    }
   }
 }
 

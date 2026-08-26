@@ -80,6 +80,9 @@ public final class EditorSockets {
                         violation(rootMessage(error));
                     } else {
                         send(reply);
+                        // Only NOW may pushes (diagnostics, reloads) start
+                        // racing frames to this socket — see announceActive().
+                        claimed.announceActive();
                     }
                 });
             } catch (ProtocolException e) {

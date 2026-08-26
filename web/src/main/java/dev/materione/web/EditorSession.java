@@ -169,10 +169,23 @@ public final class EditorSession {
                 Wire.canonicalBytes(reply.toJson())));
 
         this.state = State.ACTIVE;
+        return Wire.canonicalJson(payload);
+    }
+
+    /**
+     * Publishes MTR-0032 once the hello-reply has actually been written.
+     * Publishing inside {@link #completeHandshake()} would let the live
+     * diagnostics stream race the reply to the browser: the push frame is
+     * sealed with the just-derived session key and the client would read it
+     * as the handshake message. The transport calls this after send().
+     */
+    public void announceActive() {
+        if (state != State.ACTIVE) {
+            return;
+        }
         diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.info(
                 DiagnosticCodes.EDITOR_PEER_TRUSTED,
                 "editor '" + hello.browser() + "' approved; session active"));
-        return Wire.canonicalJson(payload);
     }
 
     /** The reply as the transcript sees it: ECDH point only, no confirm field. */
@@ -189,8 +202,14 @@ public final class EditorSession {
         return receiveFrames.open(sessionKey, editorSigning, frame);
     }
 
-    /** Seals one outbound frame body and writes it to the connected socket. */
-    public void sendFrame(byte[] body) {
+    /**
+     * Seals one outbound frame body and writes it to the connected socket.
+     * Synchronized: RPC responses (WS worker threads) and pushes (reload /
+     * diagnostics broadcasts from scheduler threads) seal concurrently, and
+     * the receiver rejects anything but strict sequence order — the seq must
+     * be assigned in exactly the order frames hit the wire.
+     */
+    public synchronized void sendFrame(byte[] body) {
         requireActive();
         if (sink == null) {
             throw new ProtocolException(ProtocolException.Kind.HANDSHAKE, "no connected socket");

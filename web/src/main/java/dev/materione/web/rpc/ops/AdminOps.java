@@ -38,14 +38,13 @@ public final class AdminOps {
         dispatcher.register("pipeline.reload", request -> {
             try {
                 ReloadScope scope = scopeOf(request.payload());
-                ReloadTrigger.Outcome outcome = reload.reloadScope(scope)
-                        .get(30, java.util.concurrent.TimeUnit.SECONDS);
+                // Fire-and-forget like every save: the outcome reaches editors
+                // as push.reload. Blocking this dispatch thread on the
+                // pipeline would stall the socket the reply rides on.
+                reload.reloadScope(scope);
                 audit.record(actorOf(request), "pipeline.reload", label(scope));
                 JsonObject payload = new JsonObject();
-                payload.addProperty("accepted", outcome.accepted());
-                payload.addProperty("noop", outcome.noop());
-                payload.addProperty("itemsLive", outcome.itemsLive());
-                payload.addProperty("quarantined", outcome.quarantined());
+                payload.addProperty("queued", true);
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());

@@ -190,6 +190,16 @@ capability blob decrypt, hello, console-driven in-game approval, signed-reply +
 key-confirmation verification, sealed RPC round trip, `edit.put` of a real item watched
 going live (`dev stack sample:editor_gem`), asset upload/list, and the plugin.md §9
 budget — send(save)→push.reload **under 2 s** — then cleanup back to 53 items.
+*Workbench update extension:* the same run now also drives the authoring/ops surface —
+`edit.create` (scaffold lands at rev 1, duplicate refused, item live via `dev stack`),
+`edit.move` (old path unreadable after), `assets.move`, `pipeline.reload` (manual
+outcome awaited as `push.reload`), `admin.settings.get`/`put` under the hash guard,
+`admin.audit.recent` (every op accounted for), then cleanup of all artifacts. The
+extension caught two real concurrency flaws live: the first `push.diagnostic` raced
+the signed hello-reply to the socket (MTR-0032 now publishes only after the reply is
+written — `EditorSession.announceActive`), and concurrent seal+send from WS and
+scheduler threads could desync frame sequences (`sendFrame` is synchronized;
+both browser transports buffer handover-gap frames instead of dropping them).
 
 **Bumping the Paper pin:** run `./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.x`
 (it queries the live v3 fill API and prints the absolute URL + sha256), then update
