@@ -16,4 +16,7 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule noRawThreads = MaterioneArchRules.NO_RAW_THREADS;
+
+    @ArchTest
+    static final ArchRule wireProtocolOnlyInWeb = MaterioneArchRules.WIRE_PROTOCOL_ONLY_IN_WEB;
 }

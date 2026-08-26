@@ -14,9 +14,25 @@ plugins {
 rootProject.name = "materione"
 
 dependencyResolutionManagement {
-    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    // PREFER_SETTINGS rather than FAIL_ON_PROJECT_REPOS: the :webui
+    // node-gradle plugin registers a Node.js-distribution repository on its
+    // project at configure time, which strict mode rejects outright. With
+    // PREFER_SETTINGS that registration is ignored (warning only) and the
+    // identical Ivy layout below does the resolving. Product dependencies
+    // remain pinned by these settings repositories alone.
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
         mavenCentral()
+        // Node.js distribution for :webui's pinned toolchain download.
+        ivy {
+            name = "Node.js distribution"
+            url = uri("https://nodejs.org/dist")
+            patternLayout {
+                artifact("v[revision]/[artifact](-v[revision]-[classifier]).[ext]")
+            }
+            metadataSources { artifact() }
+            content { includeGroup("org.nodejs") }
+        }
         maven("https://repo.papermc.io/repository/maven-public/") {
             name = "papermc"
             // paper-api's transitives (brigadier, bungeecord-chat, ...) live
@@ -57,7 +73,10 @@ include(
 include(
     ":testing",
     ":harness",
+    // M3: the editor SPA. Not a product Java module — a Node/TypeScript build
+    // whose static output is embedded into the shaded jar (plugin resources
+    // under webui/) so direct mode works fully offline.
+    ":webui",
 )
 // Deliberately NOT Gradle modules:
-//   webui/    — TypeScript SPA; build tooling lands with M3/M5.
 //   fixtures/ — data-only content corpus (roadmap rule 2).

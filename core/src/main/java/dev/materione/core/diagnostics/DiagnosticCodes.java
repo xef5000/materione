@@ -8,7 +8,8 @@ import java.util.List;
  * <p>The diagnostic-code registry. Codes are API: users search them, docs
  * document them, addons emit them — never renumber, never reuse. Ranges:
  * M0 bootstrap MTR-0001..0006, M1 pipeline MTR-0007..0016, pack output
- * MTR-0017..0018, M2 world systems MTR-0019...
+ * MTR-0017..0018, M2 world systems MTR-0019..0029, M3 web editor
+ * MTR-0030...
  */
 public final class DiagnosticCodes {
 
@@ -134,6 +135,40 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode RESTART_APPLIED =
             new DiagnosticCode("MTR-0029", Severity.INFO, "Staged restart changes applied at boot");
 
+    // M3 — web editor transport (web.md §4/§5)
+
+    /** The embedded editor listener failed to start or bind its port. */
+    public static final DiagnosticCode EDITOR_LISTENER_FAILED =
+            new DiagnosticCode("MTR-0030", Severity.ERROR, "Editor listener failed to start");
+
+    /** `/materione editor` created a session and printed its capability URL. */
+    public static final DiagnosticCode EDITOR_SESSION_CREATED =
+            new DiagnosticCode("MTR-0031", Severity.INFO, "Editor session created; awaiting browser");
+
+    /** A connecting editor completed the handshake and was approved in game. */
+    public static final DiagnosticCode EDITOR_PEER_TRUSTED =
+            new DiagnosticCode("MTR-0032", Severity.INFO, "Editor peer approved in game; session active");
+
+    /** A frame/envelope failed signature, sequence, or decryption checks; that session is dropped. */
+    public static final DiagnosticCode EDITOR_PROTOCOL_VIOLATION =
+            new DiagnosticCode("MTR-0033", Severity.WARN, "Editor protocol violation; session dropped");
+
+    /** An editor save carried a stale revision; the document changed elsewhere meanwhile. */
+    public static final DiagnosticCode EDITOR_DOCUMENT_CONFLICT =
+            new DiagnosticCode("MTR-0034", Severity.WARN, "Editor save rejected: document changed elsewhere");
+
+    /** An asset upload failed verification (bad manifest, chunk hash, or envelope). */
+    public static final DiagnosticCode EDITOR_ASSET_REJECTED =
+            new DiagnosticCode("MTR-0035", Severity.WARN, "Editor asset transfer rejected");
+
+    /** The editor listener is bound beyond loopback without explicit configuration. */
+    public static final DiagnosticCode EDITOR_BIND_EXPOSED =
+            new DiagnosticCode("MTR-0036", Severity.WARN, "Editor listener bound beyond loopback");
+
+    /** The persisted server identity keypair was unreadable; a new one replaced it. */
+    public static final DiagnosticCode EDITOR_IDENTITY_REBUILT =
+            new DiagnosticCode("MTR-0037", Severity.WARN, "Server editor identity key rebuilt");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -163,7 +198,15 @@ public final class DiagnosticCodes {
             ORPHANED_PLACEMENT,
             UNKNOWN_MECHANIC,
             RESTART_STAGED,
-            RESTART_APPLIED);
+            RESTART_APPLIED,
+            EDITOR_LISTENER_FAILED,
+            EDITOR_SESSION_CREATED,
+            EDITOR_PEER_TRUSTED,
+            EDITOR_PROTOCOL_VIOLATION,
+            EDITOR_DOCUMENT_CONFLICT,
+            EDITOR_ASSET_REJECTED,
+            EDITOR_BIND_EXPOSED,
+            EDITOR_IDENTITY_REBUILT);
 
     private DiagnosticCodes() {}
 

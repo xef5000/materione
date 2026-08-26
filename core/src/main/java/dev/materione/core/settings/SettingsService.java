@@ -69,6 +69,9 @@ public final class SettingsService {
         defaults.put("delivery_host", "0.0.0.0");
         defaults.put("delivery_port", 8090);
         defaults.put("delivery_public_host", "");
+        defaults.put("editor_enabled", true);
+        defaults.put("editor_host", "127.0.0.1");
+        defaults.put("editor_port", 8089);
         return defaults;
     }
 

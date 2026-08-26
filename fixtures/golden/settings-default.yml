@@ -3,3 +3,6 @@ debug: false
 delivery_host: 0.0.0.0
 delivery_port: 8090
 delivery_public_host: ''
+editor_enabled: true
+editor_host: 127.0.0.1
+editor_port: 8089

@@ -20,6 +20,14 @@ gson = "2.11.0"
 # schema 25w31a+ clients require; upstream 1.7.3 predates it). Shaded +
 # relocated under materione.libs.team.unnamed.creative — see plugin-conventions.
 creative = "1.14.4"
+# Embedded HTTP+WS server for the editor transport (Apache-2.0). Undertow's
+# embedded API has been stable across its whole 2.x line, which matters more
+# than feature breadth for a shaded listener we must support for years
+# (Jetty's 12.x websocket API churn ruled it out — verified empirically).
+# Shaded + relocated under materione.libs.* (see plugin-conventions) — M3
+# amendment to the shading policy, recorded in build.md §4. Only the web/
+# module may touch these types (ban rule R8).
+undertow = "2.3.26.Final"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -37,6 +45,7 @@ gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 creative-api = { module = "team.unnamed:creative-api", version.ref = "creative" }
 creative-serializer-minecraft = { module = "team.unnamed:creative-serializer-minecraft", version.ref = "creative" }
 creative-server = { module = "team.unnamed:creative-server", version.ref = "creative" }
+undertow-core = { module = "io.undertow:undertow-core", version.ref = "undertow" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

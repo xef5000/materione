@@ -37,3 +37,7 @@ example-build/
 .commandcode/
 
 nexo-reference/
+
+# Editor SPA build
+webui/node_modules/
+webui/dist/

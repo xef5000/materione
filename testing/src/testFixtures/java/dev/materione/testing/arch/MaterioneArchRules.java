@@ -121,6 +121,33 @@ public final class MaterioneArchRules {
             .resideInAnyPackage("org.bukkit..", "io.papermc.paper..")
             .allowEmptyShould(true);
 
+    /**
+     * R8 — the editor wire protocol lives only in {@code web/} (plugin.md
+     * §11: "no wire protocol outside web/"). Other modules may hold the
+     * facade ({@code dev.materione.web.EditorListener}-grade types) to start
+     * and stop the transport, but frames, envelopes, crypto and message
+     * codecs — everything under {@code ..web.protocol..} — are reachable
+     * from nowhere else. In the shaded jar every package is visible at once,
+     * so this is what keeps the protocol from leaking into handlers,
+     * commands, or (someday) a second transport implementation.
+     *
+     * <p>Teeth note (same spirit as R1's call predicate): constant reads
+     * ({@code Wire.VERSION}) are compile-time folded by javac and leave no
+     * dependency in bytecode — the planted violation that proved this rule
+     * was a method call. A folded-constant leak is harmless by construction.
+     * Harness and testing are exempt (build infrastructure): the harness is
+     * itself a protocol consumer — it plays the browser against the live
+     * listener, exactly like the SPA and the M5 Worker tests.
+     */
+    public static final ArchRule WIRE_PROTOCOL_ONLY_IN_WEB = noClasses()
+            .that().resideOutsideOfPackage("dev.materione.web..")
+            .and().resideOutsideOfPackage("dev.materione.harness..")
+            .and().resideOutsideOfPackage("dev.materione.testing..")
+            .and().haveSimpleNameNotEndingWith("Test")
+            .should().dependOnClassesThat()
+            .resideInAnyPackage("dev.materione.web.protocol..")
+            .allowEmptyShould(true);
+
     private MaterioneArchRules() {}
 
     /** Matches calls to {@code org.bukkit.Bukkit#getBukkitVersion()}. */

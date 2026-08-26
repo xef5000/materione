@@ -1,0 +1,84 @@
+{
+  "ed25519": {
+    "editorPub": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+    "editorSeed": "nWGxne_9WmC6hEr0kuwsxERJxWl7MmkZcDusAxyuf2A",
+    "pluginPub": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw",
+    "pluginSeed": "TM0Imyj_ltqdtsNG7BFOD1uKMZ81q6Yk2oz27U-4pvs"
+  },
+  "frames": {
+    "body0": {
+      "id": "f1",
+      "op": "browse.listPacks",
+      "payload": {}
+    },
+    "body1": {
+      "data": {
+        "packs": [
+          "sample"
+        ]
+      },
+      "id": "f1",
+      "ok": true,
+      "op": "browse.listPacks"
+    },
+    "frame0": {
+      "ct": "TLo2dF_Znwx_Dgjjx-Y1BdUx4BB4lzqoWD1SNVA9c86lkIERAHUDRgfJ-9t3nggxqXUYLLCoMHRZymX906RPHw",
+      "nonce": "AQEBAQEBAQEBAQEB",
+      "seq": 0,
+      "sig": "ODnHigBcTGgvGCvzrZLLP40c751zZijAGsIhz8HyvIrEqXMkHixIPzKsOjpG7bQIa-SqyFFmm7XgTnKBa35MBA"
+    },
+    "frame1": {
+      "ct": "tQdV9kuyuwve3vo7WaoX5iIm3tC82XVllad2K9KwDth0ijO7AOKM4VuCZ6u7nygI-gcmYFVemzUsM-BzVr6p7ETSMNNqOiAb3bLJWEgw_8-G4oNcffFtkc0",
+      "nonce": "AgICAgICAgICAgIC",
+      "seq": 1,
+      "sig": "NfGsP04h88SaF1IicS-OTfPOP2Fy5ofK-XOHAS6YH8z0WUSGLvqF5wwPI0oAtNRjSRg3xCAAQJ8VsEseo3EdCQ"
+    }
+  },
+  "handshake": {
+    "confirmation": "93x9slB_p0sbBnIJI79_h1apHioqvA3wIUchGhOef2g",
+    "hello": {
+      "browser": "golden-fixture",
+      "editorEphemeralPubKey": "BJhCJVhdIoXBOAM9YUDjzvi5GFlwTlPDE_i2NrpPlnZJlzQUT0b9GadnpUUofEOWuXtp3Tj6rqiYGtwaT-2bQB4",
+      "editorSigningPubKey": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+      "nonce": "EBAQEBAQEBAQEBAQEBAQEA",
+      "protocolVersion": 1,
+      "sessionId": "AAECAwQFBgcICQoLDA0ODw",
+      "type": "hello"
+    },
+    "hello-reply": {
+      "confirm": "93x9slB_p0sbBnIJI79_h1apHioqvA3wIUchGhOef2g",
+      "ecdhPub": "BHpZMYCGDEA3yDwSdJhFyO4UJN0pf63LiV41glXSx9KyqMolWA8mJv5XkGL_G5n_kcJKDaBvsytb4gFIySSfVlA",
+      "type": "hello-reply"
+    },
+    "sessionKey": "mW-kLhWi4ZZINViwwCIXJEUt-k8HGkcy6Kfnp3kFKU8",
+    "transcriptHash": "RvDvsM4nZjaUky6hr-nzcISHzW4yuZ0nFwGapAHotEk"
+  },
+  "meta": {
+    "file": "editor-protocol-v1.json",
+    "name": "materione editor wire protocol",
+    "version": 1
+  },
+  "p256": {
+    "editorEphemeralPub": "BJhCJVhdIoXBOAM9YUDjzvi5GFlwTlPDE_i2NrpPlnZJlzQUT0b9GadnpUUofEOWuXtp3Tj6rqiYGtwaT-2bQB4",
+    "editorScalar": "Hx4dHBsaGRgXFhUUExIREA8ODQwLCgkIBwYFBAMCAQA",
+    "pluginEphemeralPub": "BHpZMYCGDEA3yDwSdJhFyO4UJN0pf63LiV41glXSx9KyqMolWA8mJv5XkGL_G5n_kcJKDaBvsytb4gFIySSfVlA",
+    "pluginScalar": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+    "sharedSecret": "E7XzTgyAA2CI-6IURTt2mdbYkG2-xBDivKTii5Pic0M"
+  },
+  "sessionBlob": {
+    "envelope": {
+      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtngv_E-loYbmyYItrRxgcVNWAt3OG-S9C22Nmt1p6hKsyESM64USEC4XGkTzGmyfWVz-W2HCrXvJj688_ed6xq_bWtrP9odlWG3PrA_DLpknkEo7IYvK7KgQE2R5kug2iIKB-y1F5s2JqbtfaZESKgYkMDGhr1SFG2MRTADrlpfIOk",
+      "nonce": "QEBAQEBAQEBAQEBA",
+      "sess": "AAECAwQFBgcICQoLDA0ODw",
+      "v": 1
+    },
+    "plaintext": {
+      "pluginSigningPubKey": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw",
+      "protocolVersions": [
+        1
+      ],
+      "sessionId": "AAECAwQFBgcICQoLDA0ODw"
+    },
+    "wrappingKey": "ICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICA"
+  }
+}

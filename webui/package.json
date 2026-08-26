@@ -1,0 +1,20 @@
+{
+  "name": "materione-editor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "The Materione web editor SPA (M3) — authoring without YAML knowledge.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@types/node": "^22.15.21",
+    "svelte": "^5.30.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.4"
+  }
+}

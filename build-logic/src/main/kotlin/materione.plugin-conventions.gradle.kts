@@ -73,4 +73,11 @@ tasks.named<ShadowJar>("shadowJar") {
     // stable across upgrades.
     relocate("team.unnamed", "materione.libs.team.unnamed")
     relocate("com.google.gson", "materione.libs.com.google.gson")
+    // M3: the embedded editor listener (Undertow + its XNIO/JBoss runtime),
+    // per build.md §4. Only dev.materione.web may reference these (R8), so
+    // relocation is invisible to every other module.
+    relocate("io.undertow", "materione.libs.io.undertow")
+    relocate("org.xnio", "materione.libs.org.xnio")
+    relocate("org.jboss", "materione.libs.org.jboss")
+    relocate("org.wildfly", "materione.libs.org.wildfly")
 }

@@ -20,6 +20,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(29);
+        assertThat(DiagnosticCodes.all()).hasSize(37); // M3 adds the web-editor range (MTR-0030..0037).
     }
 }
