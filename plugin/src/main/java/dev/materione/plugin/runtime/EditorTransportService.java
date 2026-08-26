@@ -42,6 +42,7 @@ public final class EditorTransportService {
 
     private EditorListener listener;
     private EditorSessions sessions;
+    private AutoCloseable diagnosticsSubscription;
     private String advertiseHost = "";
     /** Trust prompts awaiting an in-game answer, keyed by nonce prefix. */
     private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
@@ -73,7 +74,20 @@ public final class EditorTransportService {
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, dispatcher, diagnostics), dispatcher, diagnostics);
         boolean bound = listener.start(new EditorConfig(host, port));
-        if (!bound) {
+        if (bound) {
+            // Live diagnostics stream: every connected editor hears failures
+            // as they happen instead of polling (web.md §4.2 admin feed).
+            try {
+                diagnosticsSubscription = diagnostics.subscribe(diagnostic -> {
+                    EditorSessions current = sessions;
+                    if (current != null) {
+                        dev.materione.web.SessionPush.diagnostic(current, diagnostic);
+                    }
+                });
+            } catch (Exception e) {
+                plugin.getLogger().warning("editor diagnostics stream unavailable: " + e.getMessage());
+            }
+        } else {
             listener = null;
             sessions = null;
         }
@@ -198,6 +212,14 @@ public final class EditorTransportService {
     }
 
     public void stop() {
+        if (diagnosticsSubscription != null) {
+            try {
+                diagnosticsSubscription.close();
+            } catch (Exception e) {
+                // unsubscribing is best-effort (D6)
+            }
+            diagnosticsSubscription = null;
+        }
         if (listener != null) {
             listener.stop();
             listener = null;

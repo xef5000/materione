@@ -298,20 +298,7 @@ public final class EditorContentOps {
             JsonObject payload = new JsonObject();
             var array = new com.google.gson.JsonArray();
             for (dev.materione.api.diagnostics.Diagnostic diagnostic : diagnostics.get()) {
-                JsonObject entry = new JsonObject();
-                entry.addProperty("code", diagnostic.code().code());
-                entry.addProperty("severity", diagnostic.severity().name().toLowerCase(java.util.Locale.ROOT));
-                entry.addProperty("message", diagnostic.message());
-                if (diagnostic.resource() != null) {
-                    entry.addProperty("resource", diagnostic.resource().toString());
-                }
-                if (diagnostic.location() != null) {
-                    entry.addProperty("location", diagnostic.location().toString());
-                }
-                if (diagnostic.hint() != null) {
-                    entry.addProperty("hint", diagnostic.hint());
-                }
-                array.add(entry);
+                array.add(dev.materione.web.SessionPush.entryJson(diagnostic));
             }
             payload.add("diagnostics", array);
             return Wire.Response.success(request, payload);

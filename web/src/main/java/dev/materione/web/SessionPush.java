@@ -9,6 +9,42 @@ public final class SessionPush {
 
     private SessionPush() {}
 
+    /** One diagnostic rendered for the wire — shared by the RPC feed and pushes. */
+    public static com.google.gson.JsonObject entryJson(dev.materione.api.diagnostics.Diagnostic diagnostic) {
+        com.google.gson.JsonObject entry = new com.google.gson.JsonObject();
+        entry.addProperty("code", diagnostic.code().code());
+        entry.addProperty(
+                "severity",
+                diagnostic.severity().name().toLowerCase(java.util.Locale.ROOT));
+        entry.addProperty("message", diagnostic.message());
+        if (diagnostic.resource() != null) {
+            entry.addProperty("resource", diagnostic.resource().toString());
+        }
+        if (diagnostic.location() != null) {
+            entry.addProperty("location", diagnostic.location().toString());
+        }
+        if (diagnostic.hint() != null) {
+            entry.addProperty("hint", diagnostic.hint());
+        }
+        return entry;
+    }
+
+    /** Live diagnostic stream (web.md §4.2 "admin diagnostics feed"). */
+    public static void diagnostic(EditorSessions sessions, dev.materione.api.diagnostics.Diagnostic diagnostic) {
+        com.google.gson.JsonObject push = new com.google.gson.JsonObject();
+        push.addProperty("op", "push.diagnostic");
+        push.addProperty("id", "diag-" + System.nanoTime());
+        push.add("payload", entryJson(diagnostic));
+        byte[] body = dev.materione.web.protocol.Wire.canonicalBytes(push);
+        for (EditorSession session : sessions.active()) {
+            try {
+                session.sendFrame(body);
+            } catch (RuntimeException e) {
+                // one dead socket never blocks the others (D6)
+            }
+        }
+    }
+
     /** Announces one finished targeted reload (the live preview loop's last mile). */
     public static void reload(
             EditorSessions sessions,

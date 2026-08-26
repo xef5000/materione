@@ -4,7 +4,8 @@
   import { EditorChannel } from './lib/protocol/session';
   import type { ChannelState } from './lib/protocol/session';
   import type { PushFrame } from './lib/events';
-  import { bus, loadWorkspace, logActivity, resetWorkspace, session } from './lib/state.svelte';
+  import type { DiagnosticEntry } from './lib/api';
+  import { bus, connection, diagnostics, loadWorkspace, logActivity, resetWorkspace, session } from './lib/state.svelte';
 
   type Phase = 'login' | 'connecting' | 'awaiting' | 'active' | 'closed' | 'error';
 
@@ -83,6 +84,9 @@
           ` (${String(frame.payload.files)})`;
         connection.lastReload = line;
         logActivity('reload', line);
+      } else if (frame.op === 'push.diagnostic') {
+        const entry = frame.payload as unknown as DiagnosticEntry;
+        diagnostics.entries = [entry, ...diagnostics.entries].slice(0, 200);
       }
     });
   });
