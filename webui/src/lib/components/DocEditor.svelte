@@ -29,16 +29,25 @@
       const payload = unwrap(await ops.get(channel, resource.pack, resource.path));
       raw = String(payload.raw ?? '');
       rev = Number(payload.rev ?? 0);
-      data = (JSON.parse(String(payload.parsed ?? '{}')) as Record<string, unknown>) ?? {};
+      // The wire carries `parsed` as a JSON object already — no re-parsing.
+      data = (payload.parsed as Record<string, unknown>) ?? {};
       error = '';
       dirty = false;
     } catch (e) {
-      // New file: offer a starter skeleton built from the schema.
-      raw = skeleton();
-      rev = 0;
-      data = {};
-      error = e instanceof Error ? `new file (${e.message})` : 'new file';
-      dirty = true;
+      const message = e instanceof Error ? e.message : String(e);
+      if (message.includes('MTR-0009')) {
+        // Genuinely absent: offer a starter skeleton built from the schema.
+        raw = skeleton();
+        rev = 0;
+        data = {};
+        error = '';
+        dirty = true;
+      } else {
+        raw = '';
+        rev = 0;
+        data = {};
+        error = message;
+      }
     }
   }
 
@@ -56,7 +65,7 @@
     try {
       const result = unwrap(await ops.put(channel, resource.pack, resource.path, rev, raw));
       rev = Number(result.rev);
-      data = JSON.parse(String(result.parsed ?? '{}'));
+      data = (result.parsed as Record<string, unknown>) ?? {};
       dirty = false;
       error = '';
       onSaved(`saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`);
