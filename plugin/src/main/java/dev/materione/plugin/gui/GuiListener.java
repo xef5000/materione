@@ -3,6 +3,7 @@ package dev.materione.plugin.gui;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 
@@ -13,11 +14,13 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  * was created with — so renames, colors and locales can never break
  * routing.
  *
- * <p>Everything that touches a gui's view is cancelled: clicks in the top
- * inventory are handed to the gui, and clicks/drag in the player's own
- * inventory are suppressed too, so viewers cannot shift items into or out
- * of a menu. Gui handlers run on the viewer's region thread (where the
- * event fired) and see an already-cancelled event.
+ * <p>Clicks in the gui itself are cancelled and handed to the gui (its
+ * handlers see an already-cancelled event, on the viewer's region thread).
+ * The viewer's own inventory stays live — the browser hands items onto the
+ * cursor, and depositing them must work — except the two actions that
+ * would move viewer items into the gui or hoover gui display items out:
+ * shift-clicks and double-click collection. Drags are cancelled when they
+ * touch any gui slot.
  */
 public final class GuiListener implements Listener {
 
@@ -26,10 +29,19 @@ public final class GuiListener implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof PluginGui gui)) {
             return;
         }
-        event.setCancelled(true);
-        if (event.getClickedInventory() != null
-                && event.getClickedInventory().equals(event.getView().getTopInventory())) {
+        if (event.getClickedInventory() == null) {
+            event.setCancelled(true); // clicked outside the window: nothing the gui wants to allow
+            return;
+        }
+        if (event.getClickedInventory().equals(event.getView().getTopInventory())) {
+            event.setCancelled(true);
             gui.onClick(event);
+            return;
+        }
+        // the viewer's own inventory: depositing a picked item must work
+        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY
+                || event.getAction() == InventoryAction.COLLECT_TO_CURSOR) {
+            event.setCancelled(true);
         }
     }
 
