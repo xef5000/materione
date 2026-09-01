@@ -27,6 +27,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -104,6 +105,16 @@ public final class FurnitureService implements Listener {
         return NamespacedKey.fromString("materione:" + name);
     }
 
+    /**
+     * Whether {@code block} is one of any cluster's claimed cells (anchor,
+     * barrier or light). Other runtimes check it before acting on a click so
+     * furniture keeps its interaction semantics.
+     */
+    public static boolean isFurnitureCell(Block block) {
+        return block.getChunk().getPersistentDataContainer()
+                .has(cellKey(block.getX(), block.getY(), block.getZ()), PersistentDataType.STRING);
+    }
+
     private RuntimeFurnitures furnitures() {
         RuntimeRegistries registries = runtime.registries();
         return registries == null ? null : registries.view(RuntimeFurnitures.KEY);
@@ -148,7 +159,9 @@ public final class FurnitureService implements Listener {
             return;
         }
         spawnCluster(anchor.getWorld(), anchor.getX(), anchor.getY(), anchor.getZ(), def.get(), yaw);
-        held.setAmount(held.getAmount() - 1); // interact events do not consume
+        if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
+            held.setAmount(held.getAmount() - 1); // interact events do not consume
+        }
         behavior.fireFurnitureEvent(dev.materione.behavior.rule.EventTypes.PLACE, null,
                 event.getPlayer(), anchor.getLocation(), def.get().id(), null);
     }
@@ -174,9 +187,12 @@ public final class FurnitureService implements Listener {
 
     /** Spawns the whole cluster and records it in the root's entity PDC. */
     public void spawnCluster(World world, int x, int y, int z, RuntimeFurniture def, float yaw) {
-        Location center = new Location(world, x + 0.5, y, z + 0.5);
+        // the anchor cell spans [y, y+1]; displays render their model centered
+        // on the entity position in every axis, so the root sits at the block
+        // center to fill the cell
+        Location origin = new Location(world, x + 0.5, y + 0.5, z + 0.5);
 
-        ItemDisplay root = world.spawn(center, ItemDisplay.class, display -> {
+        ItemDisplay root = world.spawn(origin, ItemDisplay.class, display -> {
             display.setItemStack(displayStack(def));
             display.setRotation(yaw, 0f);
         });
@@ -231,7 +247,10 @@ public final class FurnitureService implements Listener {
             lights.add(cell);
         }
         if (def.label() != null) {
-            TextDisplay label = world.spawn(center.clone().add(0, 1.25, 0), TextDisplay.class, display -> {
+            // anchored to the cell (bottom at y + 1.25), not to the display
+            // origin — it clears the model top by 0.25 either way
+            TextDisplay label = world.spawn(new Location(world, x + 0.5, y + 1.25, z + 0.5),
+                    TextDisplay.class, display -> {
                 display.text(LegacyComponentSerializer.legacyAmpersand().deserialize(def.label()));
                 display.setBillboard(Display.Billboard.CENTER);
             });
@@ -621,7 +640,8 @@ public final class FurnitureService implements Listener {
         }
         if (def.label() != null) {
             TextDisplay label = center.getWorld().spawn(
-                    center.clone().add(0, 1.25, 0), TextDisplay.class, display -> {
+                    new Location(center.getWorld(), x + 0.5, y + 1.25, z + 0.5), TextDisplay.class,
+                    display -> {
                         display.text(LegacyComponentSerializer.legacyAmpersand().deserialize(def.label()));
                         display.setBillboard(Display.Billboard.CENTER);
                     });
@@ -817,7 +837,12 @@ public final class FurnitureService implements Listener {
                 return;
             }
             Entity root = nearbyEntityAround(block.getLocation(), rootId.get());
+            // display= pins the root's render position: the harness asserts the
+            // model centers on the anchor cell (x.5, y.5, z.5)
+            String display = root == null ? "?" : root.getLocation().getX() + "," + root.getLocation().getY()
+                    + "," + root.getLocation().getZ();
             status.accept("furniture id=" + (root == null ? "?" : definitionId(root))
+                    + " display=" + display
                     + " root=" + rootId.get()
                     + " " + world.getName() + " " + x + " " + y + " " + z);
         });
