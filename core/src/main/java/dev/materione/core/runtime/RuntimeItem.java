@@ -12,6 +12,11 @@ import java.util.List;
  * ItemStack factory needs, plus the definition hash the auto-updater
  * compares against stacks in the wild. Immutable; rebuilt wholesale by
  * each apply (shadow-swap), never mutated in place.
+ *
+ * <p>{@code synthetic} marks the auto-generated placement items of blocks
+ * and furniture that declare no {@code item:} link — they live only in the
+ * runtime registries (no file backs them), so browsers skip them as
+ * standalone entries and hand them out through the block/furniture row.
  */
 public record RuntimeItem(
         NamespacedId id,
@@ -20,7 +25,8 @@ public record RuntimeItem(
         String displayName,
         List<String> lore,
         String definitionHash,
-        Food food) {
+        Food food,
+        boolean synthetic) {
 
     public RuntimeItem {
         lore = List.copyOf(lore);
@@ -30,7 +36,14 @@ public record RuntimeItem(
     public RuntimeItem(
             NamespacedId id, String material, NamespacedId modelId,
             String displayName, List<String> lore, String definitionHash) {
-        this(id, material, modelId, displayName, lore, definitionHash, null);
+        this(id, material, modelId, displayName, lore, definitionHash, null, false);
+    }
+
+    /** Pre-synthetic arity: constructs a real (authored) item. */
+    public RuntimeItem(
+            NamespacedId id, String material, NamespacedId modelId,
+            String displayName, List<String> lore, String definitionHash, Food food) {
+        this(id, material, modelId, displayName, lore, definitionHash, food, false);
     }
 
     /**

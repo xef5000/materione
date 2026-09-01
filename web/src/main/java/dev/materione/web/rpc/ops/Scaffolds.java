@@ -56,7 +56,7 @@ public final class Scaffolds {
                 + "  technique: note_block # note_block | string | chorus | technical | stairs | slab\n"
                 + "  texture: block/" + id + "\n"
                 + "  display_name: \"" + display(id) + "\"\n"
-                + "  # item: <item-id> — the item that places this block\n";
+                + "  # item: <item-id> — optional custom placement item; one is generated automatically\n";
     }
 
     private static String furniture(String id) {
@@ -72,7 +72,7 @@ public final class Scaffolds {
                 + "      height: 1.0\n"
                 + "  # seats:\n"
                 + "  #   - offset: [0, 0.3, 0]\n"
-                + "  # item: <item-id> — the item that places this furniture\n";
+                + "  # item: <item-id> — optional custom placement item; one is generated automatically\n";
     }
 
     private static String recipe(String id) {

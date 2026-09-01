@@ -192,6 +192,21 @@ piston/explosion: custom blast resistance honored; move policy per definition
                  (default: block move, keep PDC)
 ```
 
+**Placement items (the itemblock seam).** Every live block or furniture is
+grabbable without authoring a separate item. The placement link resolves in
+this order: the definition's explicit `item:` reference → a live item
+resource with the *same id* (implicit placement facet, §13) → a **synthetic
+placement item** generated at apply: same id as the block/furniture, the
+host's item form for blocks when vanilla has one (note block, chorus plant,
+shaped hosts — placing rides `BlockPlaceEvent`), string for the tripwire
+technique, paper for item-less hosts and furniture, the block/furniture's
+model, flagged `synthetic` in the items registry (browsers
+skip it as a standalone row). The compile stage emits the matching
+`assets/<ns>/items/<id>.json` only when no real item owns the id. A
+placement item whose material is not placeable (an explicit `item:` link to
+a paper item) places through a `PlayerInteractEvent` fallback against the
+clicked face — vanilla `BlockPlaceEvent` never fires for non-block items.
+
 - **Chunk PDC is the truth** for placed blocks (CustomBlockData); the index in `generated/`
   accelerates lookups and is rebuildable by chunk scan (self-healing).
 - **Host-block physics suppressed** (Paper) so hijacked note blocks don't beep and tripwire
@@ -260,6 +275,12 @@ tick:    seats/passenger validation (dismount cleanup), evolution timers, animat
 reload:  PDC id → current definition → respawn entity cluster if model changed; removed →
          Orphan policy (entities kept, flagged)
 ```
+
+Geometry conventions: the anchor cell spans `[y, y+1]`; the root ItemDisplay
+spawns at the **block center** `(x.5, y.5, z.5)` because the client renders a
+display entity's model centered on the entity position in every axis —
+members (hitboxes, seats, cells) use the bottom-of-cell convention, and the
+TextDisplay label sits at `y + 1.25`, clearing the model top by 0.25.
 
 - **Entity cluster coherence** is the furniture runtime's core job: UUIDs of every member
   entity are tracked in the placement record; chunk load replays cluster creation if entities
@@ -350,11 +371,14 @@ same conditions as everything else.
 
 **Shipped ahead of it (pre-M3 tooling):** the holder-based gui kit in `plugin/gui/`
 (`PluginGui` identified by `InventoryHolder` identity — never title matching — plus
-`PaginatedGui` page math and one shared click router). Built-in admin surfaces already ride
+`PaginatedGui` page math and one shared click router; the router cancels only the
+gui's own slots so a picked item can be deposited into the viewer's inventory).
+Built-in admin surfaces already ride
 it: `/materione give <id> [player] [amount]` and the `/materione browser` pack-picker →
 paginated grid of a pack's items, blocks, and furniture (permission `materione.give`) —
-blocks/furniture hand out their placement item when the definition declares `item:`, and
-point at `/materione dev place` otherwise. MenuDefinition will render author menus
+blocks/furniture render as their placement item's real stack, and every placeable
+definition has one: the definition's `item:` link, a same-id item resource, or the
+auto-generated placement item (below). MenuDefinition will render author menus
 through this same kit.
 
 ### 8.2 Dialogs (1.21+ server-side)
@@ -434,7 +458,7 @@ brewing), disable-vanilla settings, and the in-game builder wait for M7.
 
 | Seam | Contract |
 |---|---|
-| Item ↔ Block/Furniture | the same item id may have a block and/or furniture placement facet; placing resolves through the graph |
+| Item ↔ Block/Furniture | the placement link resolves in order: the definition's `item:` reference → a same-id item resource (implicit placement facet — authoring `items/chair.yml` + `furnitures/chair.yml` needs no wiring) → the auto-generated synthetic placement item (§4.2). Every placeable definition is grabbable; synthetic items live only in the runtime registries, never as files |
 | Menu ↔ anything | menu items are graph refs; menu.click is ECA — actions can give items, open dialogs, teleport, etc. |
 | HUD ↔ anything | hud.set/hud.get actions + expression variables — any system can drive HUD values |
 | Dialog ↔ anything | dialog.submit is ECA with input vars; actions consume them |

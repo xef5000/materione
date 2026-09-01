@@ -70,7 +70,8 @@ public final class BlockType implements ContentType {
                                 "What pistons do to this block",
                                 List.of("keep", "break"), null),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
-                                "Item that places this block (the placement link)", null, null),
+                                "Optional custom placement item; auto-generated from this block when omitted",
+                                null, null),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
                                 "ECA rules fired on place/break/interact (runtime-systems 2)", null, null)),
                 "1.0.0");
@@ -145,10 +146,12 @@ public final class BlockType implements ContentType {
         }
         if (block.technique() == BlockStateSpaces.Technique.STAIRS) {
             compileStairs(block, allocatedModelId, emitter);
+            emitPlacementItem(block, emitter);
             return;
         }
         if (block.technique() == BlockStateSpaces.Technique.SLAB) {
             compileSlab(block, allocatedModelId, emitter);
+            emitPlacementItem(block, emitter);
             return;
         }
         String modelRef;
@@ -159,10 +162,9 @@ public final class BlockType implements ContentType {
             emitter.model(allocatedModelId, model);
             modelRef = allocatedModelId.toString();
         } else {
-            modelRef = block.model().contains(":")
-                    ? block.model()
-                    : block.id().namespace() + ":" + block.model();
+            modelRef = block.modelRef();
         }
+        emitPlacementItem(block, emitter);
         if (!BlockStateSpaces.allocatesState(block.technique())) {
             return; // technical: PDC-identified at runtime, no state slot to claim
         }
@@ -192,6 +194,25 @@ public final class BlockType implements ContentType {
     }
 
     // --- helpers -------------------------------------------------------------
+
+    /**
+     * The auto placement item (runtime-systems §13): a block with no
+     * {@code item:} link is grabbable through a synthesized item definition
+     * at the block's own id, referencing the block model. Dropped at merge
+     * time when a real item resource owns the id — the implicit same-id
+     * link rides that item's own definition instead.
+     */
+    private static void emitPlacementItem(BlockDefinition block, PackEmitter emitter) {
+        if (block.placedBy() != null) {
+            return; // explicit link: the linked item owns its own definition
+        }
+        var reference = new LinkedHashMap<String, Object>();
+        reference.put("type", "minecraft:model");
+        reference.put("model", block.modelRef());
+        var root = new LinkedHashMap<String, Object>();
+        root.put("model", reference);
+        emitter.syntheticItemDefinition(block.id(), root);
+    }
 
     /**
      * Shaped stairs (M2 D7): identity rides chunk PDC — the host state keeps
@@ -249,7 +270,7 @@ public final class BlockType implements ContentType {
             doubleModel.put("textures", Map.<String, Object>of("all", texture));
             emitter.model(sibling(allocatedModelId, "_double"), doubleModel);
         }
-        String base = modelReference(block, allocatedModelId);
+        String base = block.modelRef();
         emitter.vanillaFile("blockstates/waxed_cut_copper_slab.json", Map.of("variants", Map.of(
                 "type=bottom", Map.of("model", base),
                 "type=top", Map.of("model", siblingRef(allocatedModelId, "_top")),
@@ -260,7 +281,7 @@ public final class BlockType implements ContentType {
     private static String shapedModel(
             BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter, String parent) {
         if (!block.wantsGeneratedModel()) {
-            return modelReference(block, allocatedModelId);
+            return block.modelRef();
         }
         String texture = textureRef(block);
         var model = new LinkedHashMap<String, Object>();
@@ -320,16 +341,6 @@ public final class BlockType implements ContentType {
         return block.texture().contains(":")
                 ? block.texture()
                 : block.id().namespace() + ":" + block.texture();
-    }
-
-    /** The hand-authored model ref, or the generated model id when auto-modelling. */
-    private static String modelReference(BlockDefinition block, NamespacedId allocatedModelId) {
-        if (block.wantsGeneratedModel()) {
-            return allocatedModelId.toString();
-        }
-        return block.model().contains(":")
-                ? block.model()
-                : block.id().namespace() + ":" + block.model();
     }
 
     private static BlockStateSpaces.Technique technique(String text) {

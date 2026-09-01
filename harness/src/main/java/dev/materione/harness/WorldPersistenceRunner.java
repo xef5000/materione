@@ -64,7 +64,7 @@ public final class WorldPersistenceRunner {
 
         // --- boot A: setup + reload survival ---------------------------------
         ServerWorkspace workspaceA = ServerWorkspace.create(options, "world-a", packs);
-        Boot a1 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=57");
+        Boot a1 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=64");
         if (a1 != null) {
             settleChunk(a1, 0, 0);
             placeWorldSet(a1, options, problems);
@@ -76,23 +76,31 @@ public final class WorldPersistenceRunner {
             drive(a1, options, "materione dev inspect 3 200 3 world",
                     "MATERIONE-DEV-INSPECT found=true world:ghost_panel", problems);
             drive(a1, options, "materione dev inspect 6 200 6 world",
-                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench",
+                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench display=6.5,200.5,6.5",
                     problems);
+            // the workbench declares no item: link — its auto placement item
+            // must be live with a definition at the furniture's own id
+            drive(a1, options, "materione dev stack world:workbench",
+                    "MATERIONE-STACK id=world:workbench item_model=world:workbench", problems);
+            // string technique: the host (tripwire) has no item form — the
+            // auto placement item must carry a usable material (string)
+            drive(a1, options, "materione dev stack world:string_fence",
+                    "MATERIONE-STACK id=world:string_fence item_model=world:string_fence", problems);
 
             // reload must keep every placement (rebuild visuals only)
-            drive(a1, options, "materione reload", "MATERIONE-RELOAD-OK items=57", problems);
+            drive(a1, options, "materione reload", "MATERIONE-RELOAD-OK items=64", problems);
             drive(a1, options, "materione dev sweep",
                     "MATERIONE-DEV-SWEEP indexed=6 ok=6 stale=0 orphans=0 drifted=0 unloaded=0",
                     problems);
             drive(a1, options, "materione dev inspect 6 200 6 world",
-                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench",
+                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench display=6.5,200.5,6.5",
                     problems);
             invalidRuleFault(a1, options, workspaceA, problems);
             stop(a1, options, problems);
         }
 
         // --- boot A again: restart survival -----------------------------------
-        Boot a2 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=57");
+        Boot a2 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=64");
         if (a2 != null) {
             settleChunk(a2, 0, 0);
             drive(a2, options, "materione dev sweep",
@@ -101,7 +109,7 @@ public final class WorldPersistenceRunner {
             drive(a2, options, "materione dev inspect 0 200 0 world",
                     "MATERIONE-DEV-INSPECT found=true sample:amethyst_lamp", problems);
             drive(a2, options, "materione dev inspect 6 200 6 world",
-                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench",
+                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench display=6.5,200.5,6.5",
                     problems);
             stop(a2, options, problems);
         }
@@ -109,7 +117,7 @@ public final class WorldPersistenceRunner {
         // --- boot B: world-copy survival ---------------------------------------
         ServerWorkspace workspaceB = ServerWorkspace.create(options, "world-b", packs);
         copyDirectory(workspaceA.root.resolve("world"), workspaceB.root.resolve("world"));
-        Boot b1 = boot(options, workspaceB, problems, "MATERIONE-CONTENT-OK items=57");
+        Boot b1 = boot(options, workspaceB, problems, "MATERIONE-CONTENT-OK items=64");
         if (b1 != null) {
             settleChunk(b1, 0, 0);
             drive(b1, options, "materione dev sweep",
@@ -118,7 +126,7 @@ public final class WorldPersistenceRunner {
             drive(b1, options, "materione dev inspect 0 200 0 world",
                     "MATERIONE-DEV-INSPECT found=true sample:amethyst_lamp", problems);
             drive(b1, options, "materione dev inspect 6 200 6 world",
-                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench",
+                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench display=6.5,200.5,6.5",
                     problems);
             stop(b1, options, problems);
         }
@@ -176,7 +184,7 @@ public final class WorldPersistenceRunner {
                       do: []
                 """);
         int cursor = boot.log().mark();
-        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=58", problems);
+        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=65", problems);
         if (boot.log().awaitLine("MTR-0022", java.time.Duration.ofSeconds(5), cursor) == null) {
             problems.add("fault injection: MTR-0022 missing for the unparseable condition");
         }
@@ -184,7 +192,7 @@ public final class WorldPersistenceRunner {
             problems.add("fault injection: MTR-0021 missing for the empty rule chain");
         }
         Files.deleteIfExists(broken);
-        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=57", problems);
+        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=64", problems);
     }
 
     /**
@@ -199,7 +207,7 @@ public final class WorldPersistenceRunner {
         var problems = new ArrayList<String>();
         ServerWorkspace workspace = ServerWorkspace.create(options, "world-fault", packs);
 
-        Boot f1 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=57");
+        Boot f1 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=64");
         if (f1 == null) {
             return problems;
         }
@@ -223,7 +231,8 @@ public final class WorldPersistenceRunner {
         Files.deleteIfExists(workspace.root
                 .resolve("plugins").resolve("Materione").resolve("storage").resolve("allocation.bin"));
 
-        Boot f2 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=57");
+        // aaa_crate (a block with no item: link) adds one auto placement item
+        Boot f2 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=65");
         if (f2 == null) {
             return problems;
         }
@@ -255,6 +264,14 @@ public final class WorldPersistenceRunner {
     /** Starts the server and waits for boot plus the expected content marker. */
     private Boot boot(HarnessOptions options, ServerWorkspace workspace, List<String> problems,
             String contentMarker) throws IOException, InterruptedException {
+        LogWatcher log = new LogWatcher(workspace.logFile);
+        LogWatcher stdout = new LogWatcher(workspace.stdoutFile);
+        lastLog = log;
+        lastStdout = stdout;
+        // a reused workspace may still hold the previous boot's latest.log
+        // (Paper rotates it lazily): this boot's markers only count in content
+        // written after the snapshot — appended past it, or in a fresh file
+        String previous = log.readAll();
         Process process = new ProcessBuilder(
                 options.javaExecutable().toString(),
                 "-Xmx2G",
@@ -267,24 +284,61 @@ public final class WorldPersistenceRunner {
                 .redirectErrorStream(true)
                 .redirectOutput(workspace.stdoutFile.toFile())
                 .start();
-        LogWatcher log = new LogWatcher(workspace.logFile);
-        LogWatcher stdout = new LogWatcher(workspace.stdoutFile);
-        lastLog = log;
-        lastStdout = stdout;
-        String done = log.awaitLine("Done (", options.bootTimeout());
+        String done = awaitBootDone(log, previous, options.bootTimeout());
         String name = workspace.root.getFileName().toString();
         if (done == null) {
             problems.add(name + ": boot deadline exceeded (" + options.bootTimeout().toSeconds() + "s)");
             PaperHarnessRunner.killTree(process);
             return null;
         }
-        if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
+        String content = log.readAll();
+        if (!newContentContains(content, previous, "MATERIONE-BOOT-OK")) {
             problems.add(name + ": MATERIONE-BOOT-OK missing after boot");
         }
-        if (contentMarker != null && !contains(log, contentMarker)) {
+        if (contentMarker != null && !newContentContains(content, previous, contentMarker)) {
             problems.add(name + ": '" + contentMarker + "' missing after boot");
         }
         return new Boot(process, new ConsoleDriver(process.getOutputStream()), log, stdout, workspace);
+    }
+
+    /**
+     * Waits for THIS boot's {@code Done (} line: content appended past the
+     * pre-boot snapshot, or any position in a rotation-replaced file.
+     */
+    private String awaitBootDone(LogWatcher log, String previous, java.time.Duration timeout)
+            throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            String content = log.readAll();
+            if (newContentContains(content, previous, "Done (")) {
+                for (String line : content.split("\n", -1)) {
+                    if (line.contains("Done (")) {
+                        return line;
+                    }
+                }
+            }
+            Thread.sleep(200);
+        }
+        return null;
+    }
+
+    /**
+     * True when {@code needle} appears in content written by this boot:
+     * skip a prefix identical to the previous boot's log (append case);
+     * once the file was replaced, any position is this boot's.
+     */
+    private static boolean newContentContains(String content, String previous, String needle) {
+        if (content == null) {
+            return false;
+        }
+        int from = 0;
+        if (previous != null && !previous.isEmpty() && content.startsWith(previous)) {
+            from = previous.length();
+            if (from > content.length()) {
+                return false; // torn rotation read
+            }
+        }
+        return content.indexOf(needle, Math.min(from, content.length())) >= 0;
     }
 
     private void stop(Boot boot, HarnessOptions options, List<String> problems)
@@ -331,11 +385,6 @@ public final class WorldPersistenceRunner {
         // off Paper's own identically-worded startup line
         boot.log().awaitLine("arked", java.time.Duration.ofSeconds(15), cursor);
         Thread.sleep(2000);
-    }
-
-    private static boolean contains(LogWatcher log, String needle) {
-        String content = log.readAll();
-        return content != null && content.contains(needle);
     }
 
     private static void copyDirectory(Path source, Path target) throws IOException {

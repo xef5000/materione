@@ -296,6 +296,38 @@ public final class PipelineService {
                 }
             }
         }
+        // pre-pass: parse every item once — the block/furniture branches need
+        // the live item ids to decide implicit vs synthetic placement links,
+        // whatever order the resources iterate in
+        var parsedItems = new LinkedHashMap<NamespacedId, dev.materione.content.items.ItemDefinition>();
+        for (ContentPack pack : packs) {
+            if (pack.manifest() == null) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if (!"item".equals(resource.contentType())) {
+                    continue;
+                }
+                Object definition = resource.document().data().get(resource.id().value());
+                if (!(definition instanceof Map<?, ?> mapping)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                var raw = (Map<String, Object>) mapping;
+                try {
+                    Optional<Object> parsed = itemType.get().parse(resource.id(), raw, templates);
+                    if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
+                        parsedItems.put(item.id(), item);
+                    }
+                } catch (RuntimeException e) {
+                    // mirror the compiler's containment: a throwing parser
+                    // skips the resource, never the run (D6)
+                    diagnostics.publish(Diagnostic.error(
+                            DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                            "shadow build skipped " + resource.id() + ": " + e));
+                }
+            }
+        }
         for (ContentPack pack : packs) {
             if (pack.manifest() == null) {
                 continue;
@@ -308,18 +340,8 @@ public final class PipelineService {
                 @SuppressWarnings("unchecked")
                 var raw = (Map<String, Object>) mapping;
                 if ("item".equals(resource.contentType())) {
-                    Optional<Object> parsed;
-                    try {
-                        parsed = itemType.get().parse(resource.id(), raw, templates);
-                    } catch (RuntimeException e) {
-                        // mirror the compiler's containment: a throwing parser
-                        // skips the resource, never the run (D6)
-                        diagnostics.publish(Diagnostic.error(
-                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                                "shadow build skipped " + resource.id() + ": " + e));
-                        continue;
-                    }
-                    if (parsed.isPresent() && parsed.get() instanceof ItemDefinition item) {
+                    ItemDefinition item = parsedItems.get(resource.id());
+                    if (item != null) {
                         List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> active =
                                 mechanicsResolver().resolve(item.id(), item.mechanics(), (name, reason) ->
                                         diagnostics.publish(new Diagnostic(
@@ -358,7 +380,12 @@ public final class PipelineService {
                         continue;
                     }
                     if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.blocks.BlockDefinition block) {
-                        compileBlock(block, runtimeBlocks, blockBehaviors);
+                        String host = compileBlock(block, runtimeBlocks, blockBehaviors);
+                        if (host != null) {
+                            linkPlacement(block.id(), block.placedBy(), block.modelRef(),
+                                    block.displayName(), placementMaterial(block),
+                                    parsedItems.keySet(), builder, runtimeBlocks::placedBy);
+                        }
                     }
                 } else if ("furniture".equals(resource.contentType()) && furnitureType.isPresent()) {
                     Optional<Object> parsed;
@@ -373,6 +400,9 @@ public final class PipelineService {
                     if (parsed.isPresent()
                             && parsed.get() instanceof dev.materione.content.furniture.FurnitureDefinition furniture) {
                         compileFurniture(furniture, runtimeFurnitures, furnitureBehaviors);
+                        linkPlacement(furniture.id(), furniture.placedBy(), furniture.modelRef(),
+                                furniture.displayName(), "PAPER",
+                                parsedItems.keySet(), builder, runtimeFurnitures::placedBy);
                     }
                 }
             }
@@ -391,9 +421,10 @@ public final class PipelineService {
      * Turns one parsed block definition into its runtime form. The state slot
      * comes from the durable allocation table — the compiler claimed it during
      * this run's compile stage, and slots never shift (D7). Definitions whose
-     * slot is missing or out of range are diagnosed and skipped.
+     * slot is missing or out of range are diagnosed and skipped (null host).
+     * Returns the resolved host id so the caller can link the placement item.
      */
-    private void compileBlock(
+    private String compileBlock(
             dev.materione.content.blocks.BlockDefinition block,
             dev.materione.core.runtime.RuntimeBlocks.Builder runtimeBlocks,
             Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> blockBehaviors) {
@@ -409,7 +440,7 @@ public final class PipelineService {
                 diagnostics.publish(Diagnostic.warn(
                         DiagnosticCodes.PIPELINE_STAGE_FAILED,
                         "shadow build skipped " + block.id() + ": no allocated state slot"));
-                return;
+                return null;
             }
             slot = Integer.parseInt(value.get());
             if (slot >= dev.materione.core.blocks.BlockStateSpaces.capacity(block.technique())) {
@@ -417,15 +448,12 @@ public final class PipelineService {
                         DiagnosticCodes.BLOCK_STATE_EXHAUSTED,
                         "shadow build skipped " + block.id() + ": slot " + slot + " outside "
                                 + host + " space"));
-                return;
+                return null;
             }
         }
         runtimeBlocks.block(new dev.materione.core.runtime.RuntimeBlock(
                 block.id(), block.technique(), host, slot,
                 block.drops(), block.blastResistant(), block.movePolicy()));
-        if (block.placedBy() != null) {
-            runtimeBlocks.placedBy(block.placedBy(), block.id());
-        }
         if (!block.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
                     dev.materione.behavior.rule.RuleParser.compile(block.id(), block.behavior());
@@ -434,6 +462,7 @@ public final class PipelineService {
                 blockBehaviors.put(block.id(), parsedRules.rules());
             }
         }
+        return host;
     }
 
     /**
@@ -445,14 +474,7 @@ public final class PipelineService {
             dev.materione.content.furniture.FurnitureDefinition furniture,
             dev.materione.core.runtime.RuntimeFurnitures.Builder runtimeFurnitures,
             Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> furnitureBehaviors) {
-        String modelRef;
-        if (furniture.wantsGeneratedModel()) {
-            modelRef = furniture.id().namespace() + ":" + furniture.id().value() + "_model";
-        } else {
-            modelRef = furniture.model().contains(":")
-                    ? furniture.model()
-                    : furniture.id().namespace() + ":" + furniture.model();
-        }
+        String modelRef = furniture.modelRef();
         runtimeFurnitures.furniture(new dev.materione.core.runtime.RuntimeFurniture(
                 furniture.id(),
                 modelRef,
@@ -473,9 +495,6 @@ public final class PipelineService {
                         .map(stage -> new dev.materione.core.runtime.RuntimeFurniture.Stage(
                                 stage.target(), stage.afterSeconds()))
                         .toList()));
-        if (furniture.placedBy() != null) {
-            runtimeFurnitures.placedBy(furniture.placedBy(), furniture.id());
-        }
         if (!furniture.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
                     dev.materione.behavior.rule.RuleParser.compile(furniture.id(), furniture.behavior());
@@ -484,6 +503,80 @@ public final class PipelineService {
                 furnitureBehaviors.put(furniture.id(), parsedRules.rules());
             }
         }
+    }
+
+    /**
+     * The synthetic block item's material: the host when vanilla has an item
+     * form for it (note block, chorus plant, shaped hosts, most technical
+     * hosts — placing rides BlockPlaceEvent), string for the tripwire
+     * technique (vanilla parity), paper otherwise — hosts like tripwire have
+     * no item form, and a non-item material would crash every stack factory.
+     * Anything that is not a block material places through the interact
+     * fallback (CustomBlockService).
+     */
+    private static String placementMaterial(dev.materione.content.blocks.BlockDefinition block) {
+        if (block.technique() == dev.materione.core.blocks.BlockStateSpaces.Technique.STRING) {
+            return "STRING";
+        }
+        String host = dev.materione.core.blocks.BlockStateSpaces.hostOf(
+                block.technique(), block.host()).toUpperCase(java.util.Locale.ROOT);
+        org.bukkit.Material material = org.bukkit.Material.matchMaterial(host);
+        return material != null && material.isItem() ? material.name() : "PAPER";
+    }
+
+    /**
+     * Registers one block/furniture's placement link (runtime-systems §13).
+     * The explicit {@code item:} reference wins; otherwise a live item with
+     * the same id is implicitly the placement item; otherwise the placement
+     * item is synthesized into the items registry (host material for blocks,
+     * paper for furniture) — every placeable definition is grabbable without
+     * authoring a separate item first.
+     */
+    private static void linkPlacement(
+            NamespacedId id,
+            NamespacedId explicitItem,
+            String modelRef,
+            String displayName,
+            String defaultMaterial,
+            java.util.Set<NamespacedId> liveItemIds,
+            RuntimeRegistries.Builder builder,
+            java.util.function.BiConsumer<NamespacedId, NamespacedId> placedBy) {
+        if (explicitItem != null) {
+            placedBy.accept(explicitItem, id);
+            return;
+        }
+        if (liveItemIds.contains(id)) {
+            placedBy.accept(id, id); // implicit same-id placement facet
+            return;
+        }
+        NamespacedId modelId = modelRef == null ? null : NamespacedId.parse(modelRef);
+        String name = displayName != null && !displayName.isBlank()
+                ? displayName : humanize(id.value());
+        builder.item(new RuntimeItem(
+                id,
+                defaultMaterial,
+                modelId,
+                name,
+                List.of(),
+                RuntimeItem.hashOf(id, defaultMaterial, modelId, name, List.of()),
+                null,
+                true));
+        placedBy.accept(id, id);
+    }
+
+    /** {@code amethyst_lamp} → {@code Amethyst Lamp} (synthetic-item tooltips). */
+    private static String humanize(String value) {
+        var out = new StringBuilder();
+        for (String word : value.split("_")) {
+            if (word.isEmpty()) {
+                continue;
+            }
+            if (!out.isEmpty()) {
+                out.append(' ');
+            }
+            out.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+        }
+        return out.toString();
     }
 
     /**

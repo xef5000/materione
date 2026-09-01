@@ -50,6 +50,7 @@ here.
 | **Pack** | The unit of modularity/distribution: namespace + manifest + content files + assets, zippable as-is. | master §5.2 |
 | **Payload store** | The dumb, opaque, TTL'd encrypted-blob HTTP service (`store.` Worker + R2). | web.md §3.1 |
 | **PDC tag** | The `materione:id` (or similar) persistent-data marker on an ItemStack/Entity identifying its custom resource. | runtime-systems.md §3.2 |
+| **Placement item** | The item that places a block or spawns furniture: the definition's `item:` link, a same-id item resource, or the auto-generated synthetic item (runtime-only, flagged `synthetic`). | runtime-systems.md §4.2, §13 |
 | **Pipeline** | The single path from files to runtime: scope → parse → validate → graph → allocate → compile → apply → deliver. | plugin.md §4 |
 | **Placement index** | Acceleration cache in `generated/index/` mapping positions → placed blocks/furniture; rebuildable by chunk scan, never load-bearing truth. | plugin.md §7 |
 | **Platform layer** | The only module aware of server versions; exposes capabilities, hides version churn. | plugin.md §6 |

@@ -39,6 +39,18 @@ public record BlockDefinition(
         return texture != null && !texture.isBlank();
     }
 
+    /**
+     * The model reference the compiler and the runtime agree on: the
+     * generated {@code <id>_model} on the auto-model path, else the
+     * hand-authored ref resolved against the pack namespace.
+     */
+    public String modelRef() {
+        if (wantsGeneratedModel()) {
+            return id.namespace() + ":" + id.value() + "_model";
+        }
+        return model.contains(":") ? model : id.namespace() + ":" + model;
+    }
+
     /** Merged view: raw fields with named accessors on top. */
     public Map<String, Object> merged() {
         var merged = new LinkedHashMap<String, Object>(raw);

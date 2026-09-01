@@ -66,9 +66,10 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=53")) {
-                problems.add("MATERIONE-CONTENT-OK items=53 missing after boot "
-                        + "(fixture packs: 3 sample + 50 corpus items should be live)");
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=55")) {
+                problems.add("MATERIONE-CONTENT-OK items=55 missing after boot "
+                        + "(fixture packs: 3 sample + 50 corpus items + 2 auto placement "
+                        + "items (marble_stairs/slab) should be live)");
             }
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
@@ -156,6 +157,11 @@ public final class PaperHarnessRunner {
             problems.addAll(drive(console, log, options,
                     "materione dev stack corpus:scroll_01",
                     "MATERIONE-STACK id=corpus:scroll_01 item_model=none"));
+            // auto placement items: marble_stairs has no item: link, so the
+            // runtime synthesizes a grabbable item at the block's own id
+            problems.addAll(drive(console, log, options,
+                    "materione dev stack sample:marble_stairs",
+                    "MATERIONE-STACK id=sample:marble_stairs item_model=sample:marble_stairs"));
             // M2 slice 3: world-runtime smoke — force-load the target chunk
             // (headless boots have no players, so nothing else keeps it warm),
             // then place → inspect → remove → sweep through the dev driver
@@ -195,17 +201,23 @@ public final class PaperHarnessRunner {
             problems.addAll(drive(console, log, options,
                     "materione dev sweep",
                     "MATERIONE-DEV-SWEEP indexed=0 ok=0"));
-            // furniture core (M2 slice 5): cluster place + remove via the anchor cell
+            // furniture core (M2 slice 5): cluster place + remove via the anchor cell;
+            // inspect pins the root at the block center — the model must fill
+            // the anchor cell, not sink half a block below it
             problems.addAll(drive(console, log, options,
                     "materione dev place sample:chair 3 200 3 world",
                     "MATERIONE-DEV-FURNITURE-PLACE ok=true placed sample:chair"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev inspect 3 200 3 world",
+                    "MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=sample:chair "
+                            + "display=3.5,200.5,3.5"));
             problems.addAll(drive(console, log, options,
                     "materione dev remove 3 200 3 world",
                     "MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture"));
             console.send("forceload remove all");
             // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=53"));
+                    "MATERIONE-RELOAD-OK items=55"));
             hotReloadScenario(console, log, workspace, options, problems);
 
             console.send("stop");
@@ -263,13 +275,13 @@ public final class PaperHarnessRunner {
                   display_name: "Extra Gem"
                 """);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=54"));
+                "MATERIONE-RELOAD-OK items=56"));
 
         Thread.sleep(1000);
         Files.writeString(broken, Files.readString(faultSource));
         int beforeFaultReload = log.mark();
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=54"));
+                "MATERIONE-RELOAD-OK items=56"));
         if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
             problems.add("fault injection: MTR-0007 missing after reloading a broken item file");
         }
@@ -278,7 +290,7 @@ public final class PaperHarnessRunner {
         Files.deleteIfExists(extra);
         Files.deleteIfExists(broken);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=53"));
+                "MATERIONE-RELOAD-OK items=55"));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,

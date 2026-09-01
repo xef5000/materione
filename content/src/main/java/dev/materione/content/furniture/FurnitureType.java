@@ -62,7 +62,8 @@ public final class FurnitureType implements ContentType {
                         new ParameterSchema("evolution", ParameterType.LIST, false, null,
                                 "Timed stages: {target: furniture-id, after: seconds}", null, null),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
-                                "Item that places this furniture (the placement link)", null, null),
+                                "Optional custom placement item; auto-generated from this furniture when omitted",
+                                null, null),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
                                 "ECA rules fired on place/click", null, null)),
                 "1.0.0");
@@ -151,9 +152,7 @@ public final class FurnitureType implements ContentType {
             emitter.model(allocatedModelId, model);
             modelRef = allocatedModelId.toString();
         } else if (furniture.model() != null && !furniture.model().isBlank()) {
-            modelRef = furniture.model().contains(":")
-                    ? furniture.model()
-                    : furniture.id().namespace() + ":" + furniture.model();
+            modelRef = furniture.modelRef();
         } else {
             return; // no appearance surface
         }
@@ -163,6 +162,13 @@ public final class FurnitureType implements ContentType {
         var root = new LinkedHashMap<String, Object>();
         root.put("model", reference);
         emitter.itemDefinition(NamespacedId.parse(modelRef), root);
+        if (furniture.placedBy() == null) {
+            // the auto placement item (runtime-systems §13): a definition at
+            // the furniture's own id so the synthesized placement item renders
+            // the model; dropped at merge time when a real item resource owns
+            // the id (the implicit same-id link uses that item's definition)
+            emitter.syntheticItemDefinition(furniture.id(), root);
+        }
     }
 
     // --- parse helpers ---------------------------------------------------------

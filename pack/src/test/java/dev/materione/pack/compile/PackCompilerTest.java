@@ -141,6 +141,12 @@ class PackCompilerTest {
                     dev.materione.core.blocks.BlockStateSpaces.variantKey(
                             dev.materione.core.blocks.BlockStateSpaces.Technique.NOTE_BLOCK, slot),
                     Map.of("model", modelId.toString()))));
+            // mirrors the real BlockType floor: a block with no item: link
+            // offers an auto placement item (the merge drops it when a real
+            // item resource owns the id)
+            emitter.syntheticItemDefinition(id, Map.of("model", Map.of(
+                    "type", "minecraft:model",
+                    "model", modelId.toString())));
         }
     }
 
@@ -150,7 +156,9 @@ class PackCompilerTest {
     void compilesFixturePackToStagedZip(@TempDir Path tempDir) throws IOException {
         var outcome = compileFixtures(tempDir);
         assertThat(outcome).isNotNull();
-        assertThat(outcome.itemDefinitions()).isEqualTo(4); // ruby + ruby_sword + obsidian_axe + chair display
+        // ruby + ruby_sword + obsidian_axe + chair display + the auto placement
+        // items of marble_stairs and marble_slab (no item: link)
+        assertThat(outcome.itemDefinitions()).isEqualTo(6);
         assertThat(outcome.sha256()).isNotBlank();
 
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
@@ -159,6 +167,15 @@ class PackCompilerTest {
             assertThat(zip.getEntry("assets/sample/items/obsidian_axe.json")).isNotNull();
             // the chair furniture's display definition (item_model target)
             assertThat(zip.getEntry("assets/sample/items/chair_model.json")).isNotNull();
+            // auto placement items: shaped blocks with no item: link get a
+            // definition at their own id, referencing the block model
+            String stairsPlacement = entryText(zip, "assets/sample/items/marble_stairs.json");
+            assertThat(stairsPlacement)
+                    .contains("\"type\":\"minecraft:model\"")
+                    .contains("\"model\":\"sample:marble_stairs_model\"");
+            assertThat(zip.getEntry("assets/sample/items/marble_slab.json")).isNotNull();
+            // amethyst_lamp links item: ruby — the linked item owns the definition
+            assertThat(zip.getEntry("assets/sample/items/amethyst_lamp.json")).isNull();
             // generated model (auto-model path: texture, no hand-authored model)
             assertThat(zip.getEntry("assets/sample/models/ruby_sword_model.json")).isNotNull();
             // obsidian_axe has a hand-authored model ref — no generated model, and the
@@ -262,6 +279,32 @@ class PackCompilerTest {
                 .findAny())
                 .as("no errors compiling the merged-atlas pack")
                 .isEmpty();
+    }
+
+    @Test
+    void syntheticPlacementItemYieldsToASameIdItem(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/autoitem");
+        writePackSkeleton(packsRoot, "autoitem");
+        writeFile(packsRoot.resolve("assets/textures/block/lamp.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(packsRoot.resolve("assets/textures/item/lamp.png"), new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        // same id in blocks/ and items/, no item: link — the implicit
+        // same-id placement facet rides the ITEM's own definition (its
+        // hand-authored model makes the two definitions distinguishable)
+        writeFile(packsRoot.resolve("blocks/lamp.yml"), "lamp:\n  texture: block/lamp\n".getBytes());
+        writeFile(packsRoot.resolve("items/lamp.yml"), "lamp:\n  material: PAPER\n  model: item/lamp_custom\n".getBytes());
+
+        var outcome = compilePack(tempDir, "autoitem",
+                AllocationTable.load(tempDir.resolve("storage-autoitem/allocation.bin")),
+                List.of(new StubItemType(), new StubBlockType()));
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            // exactly one definition at the shared id — the item's own, never
+            // the block's synthetic offer (either compile order)
+            String definition = entryText(zip, "assets/autoitem/items/lamp.json");
+            assertThat(definition).contains("\"model\":\"autoitem:item/lamp_custom\"");
+            assertThat(definition).doesNotContain("autoitem:lamp_model");
+        }
     }
 
     @Test

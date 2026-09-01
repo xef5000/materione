@@ -60,6 +60,27 @@ class ContentBrowserEntriesTest {
     }
 
     @Test
+    void syntheticPlacementItemsAreNotStandaloneRows() {
+        // the auto-generated placement item of a block/furniture lives in the
+        // items registry; its block/furniture row hands it out, so a same-id
+        // second row would be noise
+        var workbench = item("world", "workbench");
+        var synthetic = new RuntimeItem(
+                NamespacedId.of("world", "workbench"), "PAPER",
+                NamespacedId.of("world", "workbench_model"), "Workbench", List.of(), "hash", null, true);
+        var chair = furniture("world", "chair");
+        var blocks = RuntimeBlocks.builder().build();
+        var furnitures = RuntimeFurnitures.builder().furniture(chair).build();
+
+        var rows = ContentBrowser.entriesFor(
+                "world", List.of(synthetic, workbench), blocks, furnitures);
+
+        assertThat(rows).containsExactly(
+                new ContentBrowser.ItemEntry(workbench),
+                new ContentBrowser.FurnitureEntry(chair, java.util.Optional.empty()));
+    }
+
+    @Test
     void otherPacksRowsAreFilteredOut() {
         var corpusItem = item("corpus", "gem_red");
         var corpusBlock = block("corpus", "block_red");

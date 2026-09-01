@@ -29,11 +29,15 @@ import org.bukkit.inventory.ItemStack;
  * {@code /materione browser} — the admin acquisition surface: one screen
  * per pack (grouped by namespace, which is the pack id by construction),
  * each a paginated grid of that pack's live content — items as their real
- * stacks, blocks and furniture as typed icons. Left-click picks one entry
- * onto the cursor, shift-click hands over a full stack. Blocks and
- * furniture give their placement item when the definition declared
- * {@code item:}; without one, the click points at {@code /materione dev
- * place} instead.
+ * stacks, blocks and furniture as their placement item's real stack (the
+ * pack model renders right in the grid; the typed host icon is only the
+ * fallback when no placement item is live). Left-click picks one entry
+ * onto the cursor, shift-click hands over a full stack. Every block and
+ * furniture has a placement item now: the definition's {@code item:}
+ * link, the same-id item when one exists, or the auto-generated one —
+ * without any of those the click falls back to pointing at
+ * {@code /materione dev place}. Synthetic placement items never appear as
+ * standalone rows; their block/furniture entry represents them.
  *
  * <p>Entries snapshot from the live registries at open time; a reload
  * changes what future opens show (re-open to refresh). Tooling surface —
@@ -58,8 +62,11 @@ public final class ContentBrowser {
         // counts[0]=items, [1]=blocks, [2]=furniture — a pack made of only
         // blocks must still appear, so the union names the packs.
         Map<String, int[]> byPack = new LinkedHashMap<>();
+        // synthetic placement items ride their block/furniture row, not the item count
         for (RuntimeItem item : registries().items()) {
-            byPack.computeIfAbsent(item.id().namespace(), pack -> new int[3])[0]++;
+            if (!item.synthetic()) {
+                byPack.computeIfAbsent(item.id().namespace(), pack -> new int[3])[0]++;
+            }
         }
         RuntimeBlocks blocks = registries().view(RuntimeBlocks.KEY);
         if (blocks != null) {
@@ -165,14 +172,17 @@ public final class ContentBrowser {
                 return MaterioneStacks.build(MaterioneStacks.specOf(item.item()));
             }
             if (entry instanceof BlockEntry block) {
-                ItemStack icon = new ItemStack(switch (block.block().technique()) {
-                    case NOTE_BLOCK -> Material.NOTE_BLOCK;
-                    case STRING -> Material.STRING;
-                    case CHORUS -> Material.CHORUS_PLANT;
-                    case STAIRS -> Material.WAXED_CUT_COPPER_STAIRS;
-                    case SLAB -> Material.WAXED_CUT_COPPER_SLAB;
-                    case TECHNICAL -> Material.CHEST;
-                });
+                ItemStack icon = placementStack(block.placement());
+                if (icon == null) {
+                    icon = new ItemStack(switch (block.block().technique()) {
+                        case NOTE_BLOCK -> Material.NOTE_BLOCK;
+                        case STRING -> Material.STRING;
+                        case CHORUS -> Material.CHORUS_PLANT;
+                        case STAIRS -> Material.WAXED_CUT_COPPER_STAIRS;
+                        case SLAB -> Material.WAXED_CUT_COPPER_SLAB;
+                        case TECHNICAL -> Material.CHEST;
+                    });
+                }
                 icon.editMeta(meta -> {
                     meta.displayName(ItemText.nonItalic(Component.text(
                             humanize(block.block().id().value()), NamedTextColor.AQUA)));
@@ -185,7 +195,10 @@ public final class ContentBrowser {
                 return icon;
             }
             FurnitureEntry furniture = (FurnitureEntry) entry;
-            ItemStack icon = new ItemStack(Material.ARMOR_STAND);
+            ItemStack icon = placementStack(furniture.placement());
+            if (icon == null) {
+                icon = new ItemStack(Material.ARMOR_STAND);
+            }
             icon.editMeta(meta -> {
                 meta.displayName(ItemText.nonItalic(Component.text(
                         humanize(furniture.furniture().id().value()), NamedTextColor.AQUA)));
@@ -198,6 +211,13 @@ public final class ContentBrowser {
                         placementLore(furniture.placement(), furniture.furniture().id())));
             });
             return icon;
+        }
+
+        /** The placement item's real stack — the pack model renders in the grid. */
+        private ItemStack placementStack(Optional<NamespacedId> placement) {
+            return placement.flatMap(id -> registries().item(id))
+                    .map(item -> MaterioneStacks.build(MaterioneStacks.specOf(item)))
+                    .orElse(null);
         }
 
         private Component placementLore(Optional<NamespacedId> placement, NamespacedId id) {
@@ -293,7 +313,9 @@ public final class ContentBrowser {
     /**
      * One pack's browsable rows: items first, then blocks, then furniture,
      * each group id-sorted; placement links resolved from the same
-     * snapshot. Package-private static for the unit test.
+     * snapshot. Synthetic placement items are skipped — their block or
+     * furniture row hands them out. Package-private static for the unit
+     * test.
      */
     static List<Entry> entriesFor(
             String pack,
@@ -302,7 +324,7 @@ public final class ContentBrowser {
             RuntimeFurnitures furnitures) {
         List<Entry> out = new ArrayList<>();
         items.stream()
-                .filter(i -> i.id().namespace().equals(pack))
+                .filter(i -> !i.synthetic() && i.id().namespace().equals(pack))
                 .sorted(Comparator.comparing(i -> i.id().toString()))
                 .map(ItemEntry::new)
                 .forEach(out::add);

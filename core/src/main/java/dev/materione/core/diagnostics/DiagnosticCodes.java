@@ -169,6 +169,10 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode EDITOR_IDENTITY_REBUILT =
             new DiagnosticCode("MTR-0037", Severity.WARN, "Server editor identity key rebuilt");
 
+    /** A block and a furniture share one id: both claim the same auto placement item; the furniture wins on click. */
+    public static final DiagnosticCode AMBIGUOUS_PLACEMENT_ID =
+            new DiagnosticCode("MTR-0038", Severity.WARN, "Block and furniture share an id");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -206,7 +210,8 @@ public final class DiagnosticCodes {
             EDITOR_DOCUMENT_CONFLICT,
             EDITOR_ASSET_REJECTED,
             EDITOR_BIND_EXPOSED,
-            EDITOR_IDENTITY_REBUILT);
+            EDITOR_IDENTITY_REBUILT,
+            AMBIGUOUS_PLACEMENT_ID);
 
     private DiagnosticCodes() {}
 

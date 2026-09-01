@@ -55,10 +55,12 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         if ("block".equals(resource.contentType())) {
             validateDrops(resource, definition, environment, problems);
             validatePlacedBy(resource, definition, environment, problems);
+            validatePlacementIdClash(resource, "furniture", environment, problems);
         }
         if ("furniture".equals(resource.contentType())) {
             validatePlacedBy(resource, definition, environment, problems);
             validateEvolution(resource, definition, environment, problems);
+            validatePlacementIdClash(resource, "block", environment, problems);
         }
         return problems;
     }
@@ -131,8 +133,10 @@ public final class ReferenceValidator implements ValidateStage.Validator {
 
     /**
      * Block drops: every entry of {@code drops:} must resolve to an item
-     * resource or a vanilla {@code minecraft:} id — a bad entry quarantines
-     * the block only.
+     * resource, a vanilla {@code minecraft:} id, or another block/furniture
+     * of the pack — placeable definitions carry an auto placement item, so
+     * a block can drop itself (or any sibling) by id. A bad entry
+     * quarantines the block only.
      */
     private static void validateDrops(
             ContentResource resource,
@@ -147,12 +151,42 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                 continue;
             }
             NamespacedId targetId = resolve(resource.id().namespace(), target);
-            if (!isItem(environment, targetId)) {
+            if (!isItem(environment, targetId) && !isPlaceable(environment, targetId)) {
                 problems.add(new Diagnostic(
                         DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
                         "block " + resource.id() + ": drop '" + target + "' is not an item",
                         resource.id(), null,
-                        "drops must reference materione items or vanilla minecraft: ids"));
+                        "drops must reference materione items, placeable blocks/furniture, "
+                                + "or vanilla minecraft: ids"));
+            }
+        }
+    }
+
+    /**
+     * A block and a furniture sharing one id is ambiguous: both claim the
+     * same auto placement item, and the furniture's interact handler wins
+     * the click. Warned, never quarantined — the content still loads.
+     */
+    private static void validatePlacementIdClash(
+            ContentResource resource,
+            String otherType,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(resource.id().namespace())) {
+                continue;
+            }
+            for (ContentResource other : pack.resources()) {
+                if (otherType.equals(other.contentType()) && other.id().equals(resource.id())) {
+                    problems.add(new Diagnostic(
+                            DiagnosticCodes.AMBIGUOUS_PLACEMENT_ID, Severity.WARN,
+                            resource.contentType() + " " + resource.id()
+                                    + " shares its id with a " + otherType,
+                            resource.id(), null,
+                            "both claim the same auto placement item; give one a different id "
+                                    + "or link it explicitly with 'item:'"));
+                    return;
+                }
             }
         }
     }
@@ -213,6 +247,25 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             }
             for (ContentResource resource : pack.resources()) {
                 if ("item".equals(resource.contentType()) && resource.id().equals(id)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** True when {@code id} names a block or furniture (they carry auto placement items). */
+    private static boolean isPlaceable(ValidationEnvironment environment, NamespacedId id) {
+        if (id.isReservedNamespace()) {
+            return false;
+        }
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(id.namespace())) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if (("block".equals(resource.contentType()) || "furniture".equals(resource.contentType()))
+                        && resource.id().equals(id)) {
                     return true;
                 }
             }

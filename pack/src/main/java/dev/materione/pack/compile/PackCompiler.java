@@ -75,6 +75,7 @@ public final class PackCompiler {
     /** Collects emitter output deterministically, then hands it to creative. */
     private static final class Emitter implements PackEmitter {
         final Map<String, Map<String, Object>> itemDefinitions = new TreeMap<>();
+        final Map<String, Map<String, Object>> syntheticItemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> models = new TreeMap<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
         final List<VanillaFragment> vanillaFragments = new ArrayList<>();
@@ -87,6 +88,12 @@ public final class PackCompiler {
         @Override
         public void itemDefinition(NamespacedId id, Map<String, Object> itemModelJson) {
             itemDefinitions.put("assets/" + id.namespace() + "/items/" + id.value() + ".json", itemModelJson);
+        }
+
+        @Override
+        public void syntheticItemDefinition(NamespacedId id, Map<String, Object> itemModelJson) {
+            syntheticItemDefinitions.put(
+                    "assets/" + id.namespace() + "/items/" + id.value() + ".json", itemModelJson);
         }
 
         @Override
@@ -204,6 +211,13 @@ public final class PackCompiler {
                     quarantineResource(resource, e, diagnostics, quarantine);
                 }
             }
+        }
+
+        // auto placement items: a block/furniture's synthetic definition
+        // ships only when no real item resource owns the same id — the
+        // implicit same-id link rides the item's own definition instead
+        for (var entry : emitter.syntheticItemDefinitions.entrySet()) {
+            emitter.itemDefinitions.putIfAbsent(entry.getKey(), entry.getValue());
         }
 
         buildAtlas(emitter, diagnostics);

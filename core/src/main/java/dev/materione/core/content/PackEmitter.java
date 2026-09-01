@@ -14,6 +14,17 @@ public interface PackEmitter {
     /** Emits {@code assets/<ns>/items/<id>.json} (1.21.4+ item definition). */
     void itemDefinition(dev.materione.api.NamespacedId id, Map<String, Object> itemModelJson);
 
+    /**
+     * Emits {@code assets/<ns>/items/<id>.json} on behalf of a block or
+     * furniture's auto-generated placement item (the definition declares no
+     * {@code item:} link). Collisions resolve toward real content: when an
+     * actual item resource owns the id, its own definition wins and the
+     * synthetic one is dropped.
+     */
+    default void syntheticItemDefinition(dev.materione.api.NamespacedId id, Map<String, Object> itemModelJson) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
     /** Emits {@code assets/<ns>/models/<id>.json}. */
     void model(dev.materione.api.NamespacedId id, Map<String, Object> modelJson);
 
