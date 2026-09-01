@@ -75,8 +75,11 @@ public final class MaterioneStacks {
     /** Builds the stack for a spec (the apply-stage factory output). */
     public static ItemStack build(StackSpec item) {
         Material material = Material.matchMaterial(item.material());
-        if (material == null) {
-            material = Material.PAPER; // validation catches this earlier; fail soft anyway
+        if (material == null || !material.isItem()) {
+            // hosts without an item form (tripwire, technical stems) and bad
+            // authored materials would throw here — paper renders the custom
+            // model just the same, and every placement path is PDC-driven
+            material = Material.PAPER;
         }
         ItemStack stack = new ItemStack(material);
         stack.editMeta(MetaEditors.forSpec(item));

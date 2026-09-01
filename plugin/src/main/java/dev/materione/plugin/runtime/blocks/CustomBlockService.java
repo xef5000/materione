@@ -239,29 +239,96 @@ public final class CustomBlockService implements Listener {
                     "item " + itemId.get() + " places unknown block " + blockId.get()));
             return;
         }
-        place(event.getBlockPlaced(), def.get(), orientationOf(event.getPlayer()));
+        Block placed = event.getBlockPlaced();
+        if (stackSlab(placed, event.getBlockAgainst(), def.get())) {
+            // same-cell stacking: the PDC record already names this id
+        } else {
+            place(placed, def.get(), orientationOf(event.getPlayer(), event.getBlockAgainst(), placed));
+        }
         behavior.fireBlockEvent(dev.materione.behavior.rule.EventTypes.PLACE, null, event.getPlayer(),
-                event.getBlockPlaced().getLocation(), def.get().id(),
+                placed.getLocation(), def.get().id(),
                 def.get().technique().name().toLowerCase(Locale.ROOT), null);
     }
 
     /**
-     * The functional orientation for shaped techniques: stairs back onto the
-     * placer, half/type follow the exact hit point (vanilla convention).
-     * State-space techniques ignore it.
+     * Vanilla slab stacking: the client targets the occupied cell when the
+     * click fills a slab's empty half. Replacing would drop the existing
+     * half, so the state flips to a double instead — identity (chunk PDC,
+     * index) is unchanged, only the rendered state. The compiler emits the
+     * {@code type=double} model, so the cell renders as the full block.
      */
-    private Orientation orientationOf(Player player) {
-        BlockFace facing = player.getFacing().getOppositeFace();
+    private static boolean stackSlab(Block placed, Block against, RuntimeBlock def) {
+        if (def.technique() != BlockStateSpaces.Technique.SLAB || !placed.equals(against)) {
+            return false;
+        }
+        if (!(placed.getBlockData() instanceof org.bukkit.block.data.type.Slab existing)
+                || existing.getType() == org.bukkit.block.data.type.Slab.Type.DOUBLE) {
+            return false;
+        }
+        var data = (org.bukkit.block.data.type.Slab) Material.WAXED_CUT_COPPER_SLAB.createBlockData();
+        data.setType(org.bukkit.block.data.type.Slab.Type.DOUBLE);
+        placed.setBlockData(data, false);
+        return true;
+    }
+
+    /**
+     * The functional orientation for shaped techniques: stairs face the way
+     * the placer looks (vanilla — the tall side away from them), half/type
+     * follow the clicked face (up face → bottom, down face → top) and, for
+     * side faces, the exact hit point (vanilla convention). State-space
+     * techniques ignore it.
+     */
+    private Orientation orientationOf(Player player, Block against, Block placed) {
+        BlockFace face = faceBetween(against, placed);
+        boolean top;
+        if (face == BlockFace.DOWN) {
+            top = true;
+        } else if (face == BlockFace.UP) {
+            top = false;
+        } else {
+            top = hitTopHalf(player);
+        }
+        return new Orientation(player.getFacing(), top);
+    }
+
+    /** The face of {@code against} the placement happened on; null for same-cell. */
+    private static BlockFace faceBetween(Block against, Block placed) {
+        int dx = placed.getX() - against.getX();
+        int dy = placed.getY() - against.getY();
+        int dz = placed.getZ() - against.getZ();
+        if (dx == 1) {
+            return BlockFace.EAST;
+        }
+        if (dx == -1) {
+            return BlockFace.WEST;
+        }
+        if (dy == 1) {
+            return BlockFace.UP;
+        }
+        if (dy == -1) {
+            return BlockFace.DOWN;
+        }
+        if (dz == 1) {
+            return BlockFace.SOUTH;
+        }
+        if (dz == -1) {
+            return BlockFace.NORTH;
+        }
+        return null;
+    }
+
+    /** Whether the crosshair hits the upper half of the targeted block cell. */
+    private boolean hitTopHalf(Player player) {
         try {
             org.bukkit.util.RayTraceResult hit = player.rayTraceBlocks(6.0, FluidCollisionMode.NEVER);
             if (hit != null && hit.getHitPosition() != null) {
                 double y = hit.getHitPosition().getY();
-                return new Orientation(facing, y - Math.floor(y) >= 0.5);
+                return y - Math.floor(y) >= 0.5;
             }
         } catch (RuntimeException ignored) {
             // fall through to the default half
         }
-        return new Orientation(facing, false);
+        return false;
     }
 
     private record Orientation(BlockFace facing, boolean top) {
@@ -406,6 +473,58 @@ public final class CustomBlockService implements Listener {
     }
 
     // --- interact -------------------------------------------------------------
+
+    /**
+     * Placement for non-placeable placement items (runtime-systems §13): a
+     * linked item whose material is not a block (a paper talisman, a ruby)
+     * never produces a BlockPlaceEvent, so right-clicking places the block
+     * against the clicked face directly. Placeable materials keep the
+     * vanilla path — the MONITOR BlockPlaceEvent handler owns them. Custom
+     * blocks and furniture cells are not placement surfaces: their click
+     * semantics (interact events, furniture routing) stay intact.
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onPlaceInteract(PlayerInteractEvent event) {
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK
+                || event.getHand() != EquipmentSlot.HAND
+                || event.getClickedBlock() == null
+                || event.getBlockFace() == null) {
+            return;
+        }
+        ItemStack held = event.getItem();
+        if (held == null || held.getType().isAir() || held.getType().isBlock()) {
+            return; // placeable materials ride BlockPlaceEvent
+        }
+        Optional<NamespacedId> itemId = MaterioneStacks.identityOf(held);
+        if (itemId.isEmpty()) {
+            return;
+        }
+        RuntimeBlocks blocks = snapshot().blocks;
+        if (blocks == null) {
+            return;
+        }
+        Optional<RuntimeBlock> def = blocks.placedBy(itemId.get()).flatMap(blocks::byId);
+        if (def.isEmpty()) {
+            return;
+        }
+        Block clicked = event.getClickedBlock();
+        if (identify(clicked).isPresent()
+                || dev.materione.plugin.runtime.furniture.FurnitureService.isFurnitureCell(clicked)) {
+            return; // the click belongs to the targeted content, not placement
+        }
+        Block target = clicked.getRelative(event.getBlockFace());
+        if (!target.isReplaceable() || identify(target).isPresent()) {
+            return; // no room — vanilla use of the clicked block proceeds
+        }
+        event.setCancelled(true);
+        place(target, def.get(), orientationOf(event.getPlayer(), clicked, target));
+        behavior.fireBlockEvent(dev.materione.behavior.rule.EventTypes.PLACE, null, event.getPlayer(),
+                target.getLocation(), def.get().id(),
+                def.get().technique().name().toLowerCase(Locale.ROOT), null);
+        if (event.getPlayer().getGameMode() != GameMode.CREATIVE) {
+            held.setAmount(held.getAmount() - 1);
+        }
+    }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent event) {
