@@ -267,6 +267,12 @@ public final class PackCompiler {
         }
         for (Path file : files) {
             String relative = assets.relativize(file).toString().replace('\\', '/');
+            if (relative.endsWith(".bbmodel")) {
+                // Blockbench project sources are authoring files, not client
+                // assets — they stay in content/packs (the editor saves them
+                // under assets/models/source/) but never ship in pack.zip
+                continue;
+            }
             emitter.copyAsset(file, "assets/" + pack.id() + "/" + relative);
         }
     }

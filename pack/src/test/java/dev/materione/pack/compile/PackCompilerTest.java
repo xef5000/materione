@@ -253,6 +253,30 @@ class PackCompilerTest {
     }
 
     @Test
+    void bbmodelSourcesStayOutOfTheClientPack(@TempDir Path tempDir) throws IOException {
+        Path packsRoot = tempDir.resolve("packs/bbsrc");
+        writePackSkeleton(packsRoot, "bbsrc");
+        // the Blockbench save-back layout: the exported model + textures ship,
+        // the .bbmodel project source (authoring state) stays in content/packs
+        writeFile(packsRoot.resolve("assets/textures/item/gem.png"),
+                new byte[] {(byte) 0x89, 'P', 'N', 'G'});
+        writeFile(packsRoot.resolve("assets/models/gem.json"),
+                "{\"textures\":{\"layer0\":\"bbsrc:item/gem\"}}".getBytes());
+        writeFile(packsRoot.resolve("assets/models/source/gem.bbmodel"),
+                "{\"meta\":{\"format_version\":\"4.5\"}}".getBytes());
+
+        var outcome = compilePack(tempDir, "bbsrc");
+
+        assertThat(outcome).isNotNull();
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            assertThat(zip.getEntry("assets/bbsrc/models/gem.json")).isNotNull();
+            assertThat(zip.getEntry("assets/bbsrc/textures/item/gem.png")).isNotNull();
+            assertThat(zip.getEntry("assets/bbsrc/models/source/gem.bbmodel")).isNull();
+            assertThat(zip.getEntry("assets/bbsrc/models/source/")).isNull();
+        }
+    }
+
+    @Test
     void userShippedAtlasIsMergedNotClobbered(@TempDir Path tempDir) throws IOException {
         Path packsRoot = tempDir.resolve("packs/minecraft");
         writePackSkeleton(packsRoot, "minecraft");
