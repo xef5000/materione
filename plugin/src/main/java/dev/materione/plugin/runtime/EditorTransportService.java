@@ -13,6 +13,7 @@ import dev.materione.web.IdentityKeystore;
 import dev.materione.web.ReloadTrigger;
 import dev.materione.web.TrustPrompt;
 import dev.materione.web.rpc.RpcDispatcher;
+import java.io.IOException;
 import java.security.KeyPair;
 import java.security.SecureRandom;
 import java.util.Map;
@@ -43,6 +44,7 @@ public final class EditorTransportService {
     private EditorListener listener;
     private EditorSessions sessions;
     private AutoCloseable diagnosticsSubscription;
+    private dev.materione.core.document.PackWatcher packWatcher;
     private String advertiseHost = "";
     /** Trust prompts awaiting an in-game answer, keyed by nonce prefix. */
     private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
@@ -94,7 +96,40 @@ public final class EditorTransportService {
             listener = null;
             sessions = null;
         }
+        if (bound && settings.getBoolean("editor_file_watcher", true)) {
+            startFileWatcher(storage);
+        }
         return bound;
+    }
+
+    /**
+     * External-edit feed: hand-edited YAML (and git pulls) journal an
+     * external revision and reach connected editors as
+     * {@code push.document.changed}, so open tabs flag the change instead of
+     * clobbering on the next save. The watcher is pure JDK on its own daemon
+     * thread; only the push crosses into {@code web} (R8 keeps the protocol
+     * itself inside).
+     */
+    private void startFileWatcher(dev.materione.core.storage.StorageService.StorageState storage) {
+        var documents = new dev.materione.core.document.DocumentStore(
+                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        try {
+            var watcher = new dev.materione.core.document.PackWatcher(
+                    storage.contentPacksDir(), documents,
+                    change -> {
+                        EditorSessions current = sessions;
+                        if (current != null) {
+                            dev.materione.web.SessionPush.documentChanged(
+                                    current, change.pack(), change.path(), change.deleted());
+                        }
+                    });
+            packWatcher = watcher;
+            // the watcher never spawns threads itself (R5): runLoop blocks
+            // until close, parked on an async gateway thread
+            scheduling.executeAsync(plugin, watcher::runLoop);
+        } catch (IOException e) {
+            plugin.getLogger().warning("editor file watcher unavailable: " + e.getMessage());
+        }
     }
 
     /**
@@ -220,6 +255,14 @@ public final class EditorTransportService {
     }
 
     public void stop() {
+        if (packWatcher != null) {
+            try {
+                packWatcher.close();
+            } catch (Exception e) {
+                // closing is best-effort (D6)
+            }
+            packWatcher = null;
+        }
         if (diagnosticsSubscription != null) {
             try {
                 diagnosticsSubscription.close();

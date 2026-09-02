@@ -72,4 +72,28 @@ public final class SessionPush {
             }
         }
     }
+
+    /**
+     * Announces one externally changed document (file watcher): connected
+     * editors refresh the tree and flag open tabs instead of silently
+     * clobbering on the next save.
+     */
+    public static void documentChanged(EditorSessions sessions, String pack, String path, boolean deleted) {
+        com.google.gson.JsonObject push = new com.google.gson.JsonObject();
+        push.addProperty("op", "push.document.changed");
+        push.addProperty("id", "doc-" + System.nanoTime());
+        com.google.gson.JsonObject payload = new com.google.gson.JsonObject();
+        payload.addProperty("pack", pack);
+        payload.addProperty("path", path);
+        payload.addProperty("deleted", deleted);
+        push.add("payload", payload);
+        byte[] body = dev.materione.web.protocol.Wire.canonicalBytes(push);
+        for (EditorSession session : sessions.active()) {
+            try {
+                session.sendFrame(body);
+            } catch (RuntimeException e) {
+                // one dead socket never blocks the others (D6)
+            }
+        }
+    }
 }

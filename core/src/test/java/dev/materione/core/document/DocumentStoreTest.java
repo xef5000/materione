@@ -169,6 +169,78 @@ class DocumentStoreTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 
+    // --- watcher seam (syncExternal) --------------------------------------
+
+    @Test
+    void editorSavesEchoBackUnchanged() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        int rev = store.write("demo", "items/wand.yml", 0,
+                "wand:\n  material: STICK\n", "editor:test");
+
+        DocumentStore.ExternalSync sync = store.syncExternal("demo", "items/wand.yml");
+        assertThat(sync.changed()).isFalse();
+        assertThat(sync.revision()).isEqualTo(rev);
+    }
+
+    @Test
+    void handEditsJournalAnExternalRevision() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        int rev = store.write("demo", "items/wand.yml", 0,
+                "wand:\n  material: STICK\n", "editor:test");
+        Files.writeString(packsPath("demo/items/wand.yml"),
+                "wand:\n  material: BLAZE_ROD\n", StandardCharsets.UTF_8);
+
+        DocumentStore.ExternalSync sync = store.syncExternal("demo", "items/wand.yml");
+        assertThat(sync.changed()).isTrue();
+        assertThat(sync.revision()).isEqualTo(rev + 1);
+        assertThat(store.history("demo", "items/wand.yml", 10))
+                .last()
+                .satisfies(r -> {
+                    assertThat(r.action()).isEqualTo("external");
+                    assertThat(r.actor()).isEqualTo("external");
+                });
+        // the next editor read sees the new revision — a stale save now fails
+        assertThat(store.read("demo", "items/wand.yml").revision()).isEqualTo(rev + 1);
+    }
+
+    @Test
+    void handCreatedDocumentsBaselineAsExternal() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        Files.writeString(packsPath("demo/items/fresh.yml"),
+                "fresh:\n  material: STICK\n", StandardCharsets.UTF_8);
+
+        DocumentStore.ExternalSync sync = store.syncExternal("demo", "items/fresh.yml");
+        assertThat(sync.changed()).isTrue();
+        assertThat(sync.revision()).isEqualTo(1);
+        // baselining is idempotent: a second sighting with the same bytes is quiet
+        assertThat(store.syncExternal("demo", "items/fresh.yml").changed()).isFalse();
+    }
+
+    @Test
+    void deletedDocumentsReportAbsentWithoutJournaling() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        store.write("demo", "items/wand.yml", 0, "wand:\n  material: STICK\n", "editor:test");
+        Files.delete(packsPath("demo/items/wand.yml"));
+
+        DocumentStore.ExternalSync sync = store.syncExternal("demo", "items/wand.yml");
+        assertThat(sync.changed()).isTrue();
+        assertThat(sync.revision()).isEqualTo(-1);
+    }
+
+    @Test
+    void nonDocumentPathsAreRejected() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        Files.createDirectories(packsPath("demo/assets/textures"));
+        Files.writeString(packsPath("demo/assets/textures/gem.png"), "png");
+        assertThatThrownBy(() -> store.syncExternal("demo", "assets/textures/gem.png"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
     private Path packsPath(String relative) {
         return temp.resolve("packs").resolve(relative);
     }

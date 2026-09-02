@@ -2,7 +2,7 @@
   import AssetPicker from './AssetPicker.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
-  import { logActivity, session, setTabDirty, workspace } from '../state.svelte';
+  import { clearDocStale, logActivity, session, setTabDirty, workspace } from '../state.svelte';
 
   interface Props {
     resource: ResourceRef;
@@ -66,6 +66,7 @@
       rev = Number(payload.rev ?? 0);
       data = (payload.parsed as Record<string, unknown>) ?? {};
       error = '';
+      clearDocStale(tabKey);
       markDirty(false);
       if (!schema) mode = 'yaml';
     } catch (e) {
@@ -85,6 +86,17 @@
       }
     }
   }
+
+  const staleOnDisk = $derived(workspace.staleDocs[tabKey] === true);
+
+  // External edits reach open tabs as a flag. A clean tab re-fetches the
+  // authoritative bytes right away; a dirty tab keeps its edits and shows
+  // the banner — the watcher must never clobber unsaved work.
+  $effect(() => {
+    if (staleOnDisk && !dirty) {
+      void load();
+    }
+  });
 
   function skeleton(): string {
     const id =
@@ -224,6 +236,19 @@
       {saving ? 'saving…' : 'save'}
     </button>
   </header>
+
+  {#if staleOnDisk}
+    <div class="stale-banner">
+      changed on disk — your unsaved edits are kept
+      <button onclick={() => {
+        if (dirty && !confirm('Reload this file from disk and discard unsaved changes?')) {
+          return;
+        }
+        clearDocStale(tabKey);
+        void load();
+      }}>reload</button>
+    </div>
+  {/if}
 
   {#if error}
     <p class="error">{error}</p>
@@ -480,6 +505,27 @@
     border-radius: 8px;
     padding: 8px 12px;
     white-space: pre-wrap;
+  }
+  .stale-banner {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--warn-bg, rgba(255, 193, 7, 0.12));
+    color: var(--warn);
+    border-radius: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  .stale-banner button {
+    margin-left: auto;
+    border: 1px solid var(--border-strong);
+    background: none;
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 2px 10px;
+    cursor: pointer;
+    font-size: 12.5px;
   }
   footer {
     margin-top: 10px;

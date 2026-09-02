@@ -56,6 +56,8 @@ export const workspace = $state({
   activeKey: null as string | null,
   /** Directory paths the explorer has collapsed (default is expanded). */
   collapsed: {} as Record<string, boolean>,
+  /** Documents changed on disk (push.document.changed) — keyed like doc tabs. */
+  staleDocs: {} as Record<string, boolean>,
 });
 
 export const diagnostics = $state({
@@ -187,6 +189,16 @@ export function setTabDirty(key: string, dirty: boolean): void {
   }
 }
 
+/** Flags one open document as changed on disk (never auto-clobbers edits). */
+export function markDocStale(pack: string, path: string): void {
+  workspace.staleDocs[`${pack}/${path}`] = true;
+}
+
+/** Clears the on-disk flag once the tab reloaded the authoritative bytes. */
+export function clearDocStale(key: string): void {
+  delete workspace.staleDocs[key];
+}
+
 export function closeTab(key: string): void {
   const index = workspace.tabs.findIndex((t) => t.key === key);
   if (index < 0) return;
@@ -216,6 +228,7 @@ export function resetWorkspace(): void {
   workspace.tabs = [];
   workspace.activeKey = null;
   workspace.collapsed = {};
+  workspace.staleDocs = {};
   diagnostics.entries = [];
   activityLog.entries = [];
   connection.lastReload = '';

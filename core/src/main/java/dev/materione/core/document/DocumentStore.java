@@ -164,6 +164,41 @@ public final class DocumentStore {
         }
     }
 
+    /**
+     * Watcher seam: journals an {@code external} revision when the file's
+     * current bytes drifted from the journal — the same rule {@link #read}
+     * applies, so a hand edit becomes visible history without a full read.
+     * A file with no journal yet is baselined as external on first sighting
+     * (a hand-created document becomes visible history too), while an
+     * editor's own save echoes back as unchanged because its write already
+     * journaled.
+     */
+    public record ExternalSync(int revision, boolean changed) {
+
+        /** File absent: a deletion — pushed to editors, never journaled. */
+        public static ExternalSync absent() {
+            return new ExternalSync(-1, true);
+        }
+    }
+
+    public ExternalSync syncExternal(String pack, String path) throws IOException {
+        Path file = resolve(pack, path);
+        synchronized (lock) {
+            if (!Files.isRegularFile(file)) {
+                return ExternalSync.absent();
+            }
+            String hash = Documents.sha256(Files.readAllBytes(file));
+            Revision last = lastRevision(pack, path);
+            if (last == null) {
+                appendRevision(pack, path, new Revision(
+                        1, System.currentTimeMillis(), "external", "external", hash));
+                return new ExternalSync(1, true);
+            }
+            int revision = syncRevision(pack, path, hash);
+            return new ExternalSync(revision, revision != last.rev());
+        }
+    }
+
     /** The journal tail for one document, newest last. */
     public List<Revision> history(String pack, String path, int limit) throws IOException {
         Path journal = journalFor(pack, path);

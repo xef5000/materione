@@ -5,7 +5,19 @@
   import type { ChannelState } from './lib/protocol/session';
   import type { PushFrame } from './lib/events';
   import type { DiagnosticEntry } from './lib/api';
-  import { bus, connection, diagnostics, loadWorkspace, logActivity, resetWorkspace, session } from './lib/state.svelte';
+  import { documentChangedEffect, type DocumentChanged } from './lib/external';
+  import {
+    bus,
+    connection,
+    diagnostics,
+    loadWorkspace,
+    logActivity,
+    markDocStale,
+    refreshPack,
+    resetWorkspace,
+    session,
+    workspace,
+  } from './lib/state.svelte';
 
   type Phase = 'login' | 'connecting' | 'awaiting' | 'active' | 'closed' | 'error';
 
@@ -87,6 +99,24 @@
       } else if (frame.op === 'push.diagnostic') {
         const entry = frame.payload as unknown as DiagnosticEntry;
         diagnostics.entries = [entry, ...diagnostics.entries].slice(0, 200);
+      } else if (frame.op === 'push.document.changed') {
+        const payload = frame.payload as Record<string, unknown>;
+        const change: DocumentChanged = {
+          pack: String(payload.pack ?? ''),
+          path: String(payload.path ?? ''),
+          deleted: Boolean(payload.deleted),
+        };
+        const openDocKeys = workspace.tabs
+          .filter((t) => t.kind === 'doc')
+          .map((t) => t.key);
+        const effect = documentChangedEffect(change, workspace.activePack, openDocKeys);
+        if (effect.refreshPack) {
+          void refreshPack();
+        }
+        for (const key of effect.staleKeys) {
+          markDocStale(change.pack, change.path);
+        }
+        logActivity('info', effect.log);
       }
     });
   });
