@@ -191,10 +191,13 @@ public final class EditorListener {
                 exchange.endExchange();
                 return;
             }
+            byte[] bytes = in.readAllBytes();
             exchange.getResponseHeaders()
                     .put(io.undertow.util.Headers.CONTENT_TYPE, contentType(path));
             exchange.setStatusCode(StatusCodes.OK);
-            exchange.getResponseSender().send(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            // raw bytes, never a String — the vendored Blockbench build under
+            // webui/blockbench/ ships binary assets (fonts, images)
+            exchange.getResponseSender().send(java.nio.ByteBuffer.wrap(bytes));
         }
     }
 
@@ -217,8 +220,23 @@ public final class EditorListener {
         if (path.endsWith(".png")) {
             return "image/png";
         }
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (path.endsWith(".ico")) {
+            return "image/x-icon";
+        }
         if (path.endsWith(".woff2")) {
             return "font/woff2";
+        }
+        if (path.endsWith(".woff")) {
+            return "font/woff";
+        }
+        if (path.endsWith(".ttf")) {
+            return "font/ttf";
+        }
+        if (path.endsWith(".wasm")) {
+            return "application/wasm";
         }
         return "application/octet-stream";
     }
