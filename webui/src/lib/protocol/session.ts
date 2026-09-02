@@ -211,6 +211,14 @@ export class EditorChannel {
   private transport!: Transport;
   private sendSeq = 0;
   private receiveSeq = 0;
+  /**
+   * Sealing is async (WebCrypto) but the receiver demands strict sequence
+   * order — the seq must be assigned in exactly the order frames hit the
+   * wire. Each send chains onto the previous one, so frame N is fully on
+   * the wire before frame N+1 takes its number (the browser mirror of the
+   * server's synchronized sendFrame).
+   */
+  private sendChain: Promise<void> = Promise.resolve();
   private pending = new Map<
     string,
     { resolve: (r: Response) => void; reject: (e: Error) => void }
@@ -347,7 +355,9 @@ export class EditorChannel {
   // ------------------------------------------------------------------
 
   private deliver(text: string): void {
-    void this.sealAndSend(text).catch((error: unknown) => this.fail(error));
+    this.sendChain = this.sendChain
+      .then(() => this.sealAndSend(text))
+      .catch((error: unknown) => this.fail(error));
   }
 
   private async sealAndSend(text: string): Promise<void> {
@@ -390,7 +400,13 @@ export class EditorChannel {
     }
   }
 
+  private dead = false;
+
   private fail(error: unknown): void {
+    if (this.dead) {
+      return; // one failure report is enough; queued sends land here too
+    }
+    this.dead = true;
     this.close();
     this.pending.forEach((p) => p.reject(error instanceof Error ? error : new Error(String(error))));
     this.pending.clear();
