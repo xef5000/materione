@@ -5,9 +5,21 @@
 {#if workspace.tabs.length > 0}
   <div class="strip" role="tablist">
     {#each workspace.tabs as tab (tab.key)}
-      {@const label = tab.kind === 'doc' ? tab.id : tab.kind === 'asset' ? tab.name : 'settings'}
-      {@const title = tab.kind === 'settings' ? 'plugin settings' : tab.path}
-      {@const dirty = tab.kind !== 'asset' && tab.dirty}
+      {@const label =
+        tab.kind === 'doc'
+          ? tab.id
+          : tab.kind === 'asset'
+            ? tab.name
+            : tab.kind === 'settings'
+              ? 'settings'
+              : 'Blockbench'}
+      {@const title =
+        tab.kind === 'doc' || tab.kind === 'asset'
+          ? tab.path
+          : tab.kind === 'settings'
+            ? 'plugin settings'
+            : 'embedded Blockbench'}
+      {@const dirty = tab.kind === 'doc' && tab.dirty}
       <div
         class="tab"
         class:active={tab.key === workspace.activeKey}

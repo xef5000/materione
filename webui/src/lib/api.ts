@@ -90,10 +90,13 @@ export const assetOps = {
   list: (c: EditorChannel, pack: string) => c.call('assets.list', { pack }),
   put: async (c: EditorChannel, pack: string, path: string, bytes: Uint8Array) =>
     c.call('assets.put', { pack, path, data: b64fromBytes(bytes) }),
+  /** Base64 already in hand (bridge textures) — skips a re-encode. */
+  putBase64: (c: EditorChannel, pack: string, path: string, base64: string) =>
+    c.call('assets.put', { pack, path, data: base64 }),
   get: (c: EditorChannel, pack: string, path: string) => c.call('assets.get', { pack, path }),
   remove: (c: EditorChannel, pack: string, path: string) => c.call('assets.delete', { pack, path }),
   move: (c: EditorChannel, pack: string, from: string, to: string) =>
-    c.call('assets.move', { pack, from, to }),
+    c.call('assets.move', { pack, from: from, to: to }),
 };
 
 function b64fromBytes(bytes: Uint8Array): string {

@@ -3,6 +3,7 @@
   import DocEditor from './DocEditor.svelte';
   import AssetPreviewTab from './AssetPreviewTab.svelte';
   import SettingsTab from './SettingsTab.svelte';
+  import BlockbenchTab from './BlockbenchTab.svelte';
   import ExplorerView from '../views/ExplorerView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
@@ -83,6 +84,8 @@
                 <AssetPreviewTab pack={t.pack} path={t.path} name={t.name} />
               {:else if t.kind === 'settings'}
                 <SettingsTab />
+              {:else if t.kind === 'blockbench'}
+                <BlockbenchTab />
               {/if}
             </div>
           {/each}

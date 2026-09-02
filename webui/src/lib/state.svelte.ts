@@ -20,7 +20,13 @@ export interface DocTab {
   dirty: boolean;
 }
 
-export type Tab = DocTab | AssetTab | SettingsTab;
+export type Tab = DocTab | AssetTab | SettingsTab | BlockbenchTab;
+
+/** The embedded Blockbench workbench (pinned web build in an iframe). */
+export interface BlockbenchTab {
+  kind: 'blockbench';
+  key: 'blockbench';
+}
 
 /** A binary asset opened as a read-only preview tab. */
 export interface AssetTab {
@@ -179,9 +185,17 @@ export function openSettings(): void {
   workspace.activeKey = 'settings';
 }
 
+/** Opens the singleton embedded-Blockbench tab. */
+export function openBlockbench(): void {
+  if (!workspace.tabs.some((t) => t.kind === 'blockbench')) {
+    workspace.tabs.push({ kind: 'blockbench', key: 'blockbench' });
+  }
+  workspace.activeKey = 'blockbench';
+}
+
 export function setTabDirty(key: string, dirty: boolean): void {
   const tab = workspace.tabs.find((t) => t.key === key);
-  if (!tab || tab.kind === 'asset') {
+  if (!tab || (tab.kind !== 'doc' && tab.kind !== 'settings')) {
     return;
   }
   if (tab.dirty !== dirty) {
@@ -203,7 +217,7 @@ export function closeTab(key: string): void {
   const index = workspace.tabs.findIndex((t) => t.key === key);
   if (index < 0) return;
   const tab = workspace.tabs[index]!;
-  const isDirty = tab.kind !== 'asset' && tab.dirty;
+  const isDirty = tab.kind === 'doc' || tab.kind === 'settings' ? tab.dirty : false;
   if (isDirty && !confirm('Discard unsaved changes in this tab?')) {
     return;
   }
