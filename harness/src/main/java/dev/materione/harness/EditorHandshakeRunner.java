@@ -235,14 +235,59 @@ public final class EditorHandshakeRunner {
             if (duplicate.ok()) {
                 problems.add("edit.create clobbered an existing document");
             }
+
+            // Blockbench save-back wire flow (the SPA's "Save to Materione"):
+            // exported model JSON + referenced texture + the .bbmodel project
+            // source land as assets, then quick-attach wires model: onto the
+            // scaffolded item via edit.setScalar — the SPA's exact sequence.
+            String bridgeModelJson = "{\"textures\":{\"layer0\":\"sample:item/bridge_gems\"},"
+                    + "\"elements\":[{\"from\":[0,0,0],\"to\":[16,16,16],"
+                    + "\"faces\":{\"north\":{\"texture\":\"#layer0\"}}}]}";
+            Wire.Response modelPut = browser.call("assets.put", object(
+                    "pack", "sample",
+                    "path", "assets/models/bridge_gems.json",
+                    "data", base64(bridgeModelJson)));
+            if (!modelPut.ok()) {
+                problems.add("assets.put (bridge model) failed: " + modelPut.error());
+            }
+            Wire.Response bridgeTexture = browser.call("assets.put", object(
+                    "pack", "sample",
+                    "path", "assets/textures/item/bridge_gems.png",
+                    "data", ONE_BY_ONE_PNG_BASE64));
+            if (!bridgeTexture.ok()) {
+                problems.add("assets.put (bridge texture) failed: " + bridgeTexture.error());
+            }
+            Wire.Response bridgeSource = browser.call("assets.put", object(
+                    "pack", "sample",
+                    "path", "assets/models/source/bridge_gems.bbmodel",
+                    "data", base64("{\"meta\":{\"format_version\":\"4.5\"},\"model_format\":\"java_block\"}")));
+            if (!bridgeSource.ok()) {
+                problems.add("assets.put (bridge source) failed: " + bridgeSource.error());
+            }
+            int scaffoldRev = created.ok()
+                    ? created.data().getAsJsonObject().get("rev").getAsInt() : 0;
+            com.google.gson.JsonArray attachField = new com.google.gson.JsonArray();
+            attachField.add("harness_scaffold");
+            attachField.add("model");
+            JsonObject attachPayload = object(
+                    "pack", "sample",
+                    "path", "items/harness_scaffold.yml",
+                    "rev", String.valueOf(scaffoldRev),
+                    "value", "sample:bridge_gems");
+            attachPayload.add("field", attachField);
+            Wire.Response attached = browser.call("edit.setScalar", attachPayload);
+            if (!attached.ok()) {
+                problems.add("edit.setScalar (model quick-attach) failed: " + attached.error());
+            } else {
+                scaffoldRev = attached.data().getAsJsonObject().get("rev").getAsInt();
+            }
+
             Thread.sleep(400); // let the queued FileSet apply swap land
             problems.addAll(drive(console, log, options,
                     "materione dev stack sample:harness_scaffold",
                     "MATERIONE-STACK id=sample:harness_scaffold"));
 
             // Rename via edit.move; the old path must stop resolving.
-            int scaffoldRev = created.ok()
-                    ? created.data().getAsJsonObject().get("rev").getAsInt() : 0;
             Wire.Response moved = browser.call("edit.move", object(
                     "pack", "sample",
                     "from", "items/harness_scaffold.yml",
@@ -274,6 +319,29 @@ public final class EditorHandshakeRunner {
             Wire.Request manualPush = browser.awaitPush("push.reload", 20, TimeUnit.SECONDS);
             if (manualPush == null) {
                 problems.add("no push.reload after manual pipeline.reload");
+            }
+
+            // External-edit feed: a hand edit on disk — no editor involved —
+            // must journal an external revision and reach connected editors
+            // as push.document.changed (the file watcher, configurable).
+            java.nio.file.Path handEdited = workspace.pluginsDir
+                    .resolve("Materione").resolve("content").resolve("packs")
+                    .resolve("sample").resolve("items").resolve("editor_gem.yml");
+            java.nio.file.Files.writeString(
+                    handEdited,
+                    java.nio.file.Files.readString(handEdited) + "# hand-edited by the harness\n",
+                    java.nio.charset.StandardCharsets.UTF_8);
+            Wire.Request changedPush = browser.awaitPush(
+                    "push.document.changed", "\"path\":\"items/editor_gem.yml\"", 30, TimeUnit.SECONDS);
+            if (changedPush == null) {
+                problems.add("no push.document.changed after a hand edit on disk");
+            } else if (!changedPush.payload().toString().contains("\"pack\":\"sample\"")) {
+                problems.add("push.document.changed payload wrong: " + changedPush.payload());
+            }
+            Wire.Response history = browser.call("browse.history", object(
+                    "pack", "sample", "path", "items/editor_gem.yml", "limit", "5"));
+            if (!history.ok() || !history.data().toString().contains("\"action\":\"external\"")) {
+                problems.add("hand edit did not journal an external revision: " + history.data());
             }
 
             // Settings round trip under the hash guard.
@@ -329,6 +397,13 @@ public final class EditorHandshakeRunner {
             }
             browser.call("assets.delete", object(
                     "pack", "sample", "path", "assets/textures/editor/renamed_gem.png"));
+            // and the Blockbench save-back artifacts
+            browser.call("assets.delete", object(
+                    "pack", "sample", "path", "assets/models/bridge_gems.json"));
+            browser.call("assets.delete", object(
+                    "pack", "sample", "path", "assets/textures/item/bridge_gems.png"));
+            browser.call("assets.delete", object(
+                    "pack", "sample", "path", "assets/models/source/bridge_gems.bbmodel"));
             Thread.sleep(800);
             ws.abort();
 
@@ -496,6 +571,27 @@ public final class EditorHandshakeRunner {
             }
             return null;
         }
+
+        /**
+         * Waits for a pushed event of the given op whose payload contains
+         * {@code payloadNeedle} — earlier pushes of the same op (e.g. the
+         * deleted notification an edit.move legitimately emits) are skipped.
+         */
+        Wire.Request awaitPush(String op, String payloadNeedle, long timeout, TimeUnit unit)
+                throws InterruptedException {
+            long deadline = System.currentTimeMillis() + unit.toMillis(timeout);
+            while (System.currentTimeMillis() < deadline) {
+                Wire.Request push = awaitPush(op, Math.max(1, deadline - System.currentTimeMillis()),
+                        TimeUnit.MILLISECONDS);
+                if (push == null) {
+                    return null;
+                }
+                if (push.payload().toString().contains(payloadNeedle)) {
+                    return push;
+                }
+            }
+            return null;
+        }
     }
 
     /** Alternating key/value pairs; numeric strings become ints. */
@@ -510,5 +606,11 @@ public final class EditorHandshakeRunner {
             }
         }
         return object;
+    }
+
+    /** UTF-8 text as the base64 payload assets.put expects. */
+    private static String base64(String text) {
+        return java.util.Base64.getEncoder()
+                .encodeToString(text.getBytes(StandardCharsets.UTF_8));
     }
 }
