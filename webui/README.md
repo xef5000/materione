@@ -18,14 +18,23 @@ bar.
 - `src/lib/components/` — the shell (Workbench, TabBar), Login (capability URL),
   DocEditor (form-first: schema-driven fields, texture/model pickers, Advanced
   section with the raw YAML; the full YAML view is an explicit dev tool), AssetPicker,
-  AssetPreviewTab, SettingsTab, ContextMenu, PromptDialog.
+  AssetPreviewTab, SettingsTab, BlockbenchTab (the embedded pinned Blockbench build:
+  save-back with texture mapping + quick-attach, `.bbmodel` import — bridged over
+  postMessage only), ContextMenu, PromptDialog.
 - `src/lib/views/` — ExplorerView (file tree over documents + assets, right-click
-  menus: scaffolded create, rename/move, delete, upload), DiagnosticsView (live
-  `push.diagnostic` feed with filters + click-through), ServerView (control center:
-  status, manual reloads, audit trail).
+  menus: scaffolded create, rename/move, delete, upload, open Blockbench),
+  DiagnosticsView (live `push.diagnostic` feed with filters + click-through),
+  ServerView (control center: status, manual reloads, audit trail).
 - `src/lib/dock/ActivityDock.svelte` — the pipeline log at the bottom.
 - `src/lib/tree.ts` — pure tree building over the flat browse listings
   (vitest-pinned in `test/tree.spec.ts`).
+- `src/lib/blockbench/protocol.ts` — the bridge message shapes and the pure
+  save-back math (texture mapping, model normalization; vitest-pinned in
+  `test/blockbench-bridge.spec.ts`). `src/lib/external.ts` — the
+  `push.document.changed` decision reducer (`test/external.spec.ts`).
+- `public/blockbench/` — the pinned, unmodified Blockbench v5.1.6 web build
+  (see its PIN.md for the pin + build recipe; upgrades are pin bumps).
+  `public/materione-bridge.js` — our injected iframe bridge.
 
 Commands (Node is provisioned by Gradle — `./gradlew :webui:npmInstall` once):
 

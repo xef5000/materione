@@ -151,7 +151,7 @@ paintings plus restart-required producers → M4; menus/HUD/dialogs → M6.
 **Exit:** a new user creates an item with a custom texture, in the browser, without docs.
 
 **Shipped (as-built notes; details in [`architecture/build.md`](architecture/build.md)
-and the editor quickstart):** the transport lives in `web/` on an embedded **Undertow**
+and the [editor quickstart](editor-quickstart.md)):** the transport lives in `web/` on an embedded **Undertow**
 listener (Jetty's 12.x websocket API churn ruled it out empirically; shaded + relocated,
 the M3 shading amendment) serving the SPA from classpath resources, the capability route
 (`GET /s/<code>`) and one WebSocket channel. The wire protocol is exactly web.md §4/§5:
@@ -183,6 +183,24 @@ end-to-end live on Paper.
 early M4 — it is UI-integration surface, independent of everything above, and the exit
 criterion does not depend on it. External-file watcher → `document.changed` pushes also
 wait for M4 (edits through the editor already push).
+
+**M3 closeout (Blockbench + external-edit feed):** both deferred bullets landed anyway, and
+the milestone is now complete. **Blockbench v1** ships the pinned, unmodified Blockbench
+v5.1.6 web build inside the jar (`webui/public/blockbench/`, source recipe + pin in its
+PIN.md — D9 honored: no patches, upgrades are pin bumps), opened as a workbench tab and
+bridged strictly over postMessage: "save to Materione" exports the Java block/item model
+JSON + referenced textures + the `.bbmodel` project source into the pack through
+`assets.put`, with quick-attach scaffolding a new item or wiring `model:` onto an existing
+one via `edit.setScalar`; external `.bbmodel` projects import into the embedded build for
+further editing. `.bbmodel` sources are authoring state and never ship in pack.zip. The
+**external-edit feed** is a WatchService pump over `content/packs/` (parked on an async
+gateway thread, ~500 ms debounce): hand edits journal an *external* revision through
+`DocumentStore.syncExternal` and reach connected editors as `push.document.changed` — the
+explorer refreshes, clean tabs auto-reload, dirty tabs show a "changed on disk" banner
+instead of clobbering. `editor_file_watcher: false` disables it (lazy hash-drift detection
+keeps working). The harness gate drives both flows end to end on Paper: the hand edit's
+push + journaled revision, and the exact save-back asset/setScalar sequence watched going
+live in game.
 
 **Workbench update (M3 closeout):** the SPA's first cut was, bluntly, a glorified YAML
 editor — so it was rebuilt on a proper foundation. The shell is now a VS Code-style

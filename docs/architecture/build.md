@@ -4,8 +4,8 @@ How the Materione codebase is built — and how the build itself enforces the ar
 Traces to master §10 (codebase division) and §11 (enforced, not aspirational); the module
 boundaries here are the same ones described there, made mechanical.
 
-Status: **as shipped for M0 + M1 + M2** (roadmap rule 1 — this doc reflects what exists, not
-what's planned). Anything marked *M-later* is reserved, not built.
+Status: **as shipped for M0 + M1 + M2 + M3** (roadmap rule 1 — this doc reflects what
+exists, not what's planned). Anything marked *M-later* is reserved, not built.
 
 ---
 
@@ -200,6 +200,11 @@ the signed hello-reply to the socket (MTR-0032 now publishes only after the repl
 written — `EditorSession.announceActive`), and concurrent seal+send from WS and
 scheduler threads could desync frame sequences (`sendFrame` is synchronized;
 both browser transports buffer handover-gap frames instead of dropping them).
+*M3 closeout extension:* the run also hand-edits a pack file on disk and asserts
+the `push.document.changed` push plus a journaled *external* revision (the file
+watcher, live), and drives the Blockbench save-back wire flow — `assets.put` of the
+exported model + texture + `.bbmodel` source, `edit.setScalar` quick-attaching
+`model:` onto the scaffold — watched going live in game.
 
 **Bumping the Paper pin:** run `./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.x`
 (it queries the live v3 fill API and prints the absolute URL + sha256), then update

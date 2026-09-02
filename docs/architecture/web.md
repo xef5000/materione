@@ -231,8 +231,13 @@ move (journal-truthful renames); validate dryRun (syntax gate); assets
 list / put / get / delete / **move**; pipeline reload (everything / one-pack —
 fire-and-forget, outcome as `push.reload`, always announced for manual triggers);
 admin diagnostics.recent (with source location) / audit.recent / settings.get /
-settings.put (hash-guarded, validated before disk). Pushes: `push.reload` and
-`push.diagnostic` (live, off the bus subscribe seam). Still illustrative-only:
+settings.put (hash-guarded, validated before disk). Pushes: `push.reload`,
+`push.diagnostic` (live, off the bus subscribe seam), and `push.document.changed`
+(pack, path, deleted — the external-edit feed: a configurable WatchService pump
+over `content/packs/` (~500 ms debounce, R5-clean via the scheduling gateway)
+journals drift as an *external* revision through `DocumentStore.syncExternal` and
+pushes to every editor; editor saves echo back unchanged because their write
+already journaled). Still illustrative-only:
 where-used graph, import pack, pre-apply report / apply confirm, preview renders,
 `close`. Concurrency notes learned the hard way: pushes and RPC replies seal from
 different threads — `EditorSession.sendFrame` synchronizes seal+write so sequence
@@ -359,6 +364,14 @@ cannot read, forge, replay, or reorder anything.
   the same session API. The editor treats Blockbench as an asset-producing subsystem, not a
   peer. The `blockbench/` folder on the server side (master §7.1) is a pinned copy for
   **offline/direct-mode installs** and tooling parity; the SPA ships its own pinned copy.
+  *As built (M3 closeout):* the pinned build is **Blockbench v5.1.6**, vendored unmodified at
+  `webui/public/blockbench/` (recipe + pin in its PIN.md — upgrades are pin bumps; the
+  server-side `blockbench/` folder is not needed because the jar copy already serves offline
+  installs). A workbench tab hosts the same-origin iframe; `materione-bridge.js` is injected
+  after load and communicates **only** via postMessage (`collect` → model JSON + textures +
+  `.bbmodel` source; `importProject` → load an external project). Save-back, texture mapping
+  and quick-attach are pure SPA logic riding `assets.put` / `edit.create` / `edit.setScalar` —
+  no new wire ops.
 - **Versioning**: the SPA declares the protocol versions it speaks; the plugin serves hints if
   the cached SPA is stale ("a newer editor is available — refresh").
 
