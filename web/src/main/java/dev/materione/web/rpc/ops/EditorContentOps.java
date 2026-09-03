@@ -221,10 +221,19 @@ public final class EditorContentOps {
                 if (name.isEmpty() || name.length() > 128) {
                     throw new IllegalArgumentException("display name must be 1..128 characters");
                 }
-                String path = "items/" + id + ".yml";
+                // The content browser creates inside the type tab (and folder)
+                // the author is looking at; items stay the default so older
+                // clients keep working.
+                String type = optionalString(body, "type");
+                String folder = optionalString(body, "folder");
+                String path = documentPath(type == null ? "items" : type, folder, id);
                 String scaffold = Scaffolds.forPath(path, id);
-                String content = dev.materione.core.document.LosslessYaml.parse(scaffold)
-                        .withScalar(name, id, "display_name").save();
+                // Recipes and templates have no display name; forcing one would
+                // invent a field the type's schema does not declare.
+                String content = scaffold.contains("display_name:")
+                        ? dev.materione.core.document.LosslessYaml.parse(scaffold)
+                                .withScalar(name, id, "display_name").save()
+                        : scaffold;
                 String actor = actorOf(request);
                 DocumentStore.Document created =
                         documents.createResource(pack, path, content, createPack, actor);
@@ -240,6 +249,129 @@ public final class EditorContentOps {
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException | IllegalStateException e) {
                 return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        // Copying an entry is one create: the scaffold is the source file's
+        // bytes with its root key re-keyed, so comments and unknown fields
+        // survive the copy exactly like every other authoring write (§5.6).
+        dispatcher.register("authoring.duplicateResource", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String from = requiredString(body, "path");
+                String id = requiredString(body, "id");
+                String folder = optionalString(body, "folder");
+                String type = from.contains("/") ? from.substring(0, from.indexOf('/')) : "";
+                String path = documentPath(type, folder, id);
+                DocumentStore.Document source = documents.read(pack, from);
+                var parsed = dev.materione.core.document.LosslessYaml.parse(source.raw());
+                if (parsed.parseError().isPresent()) {
+                    throw new IllegalArgumentException(
+                            "cannot copy a file that does not parse: " + parsed.parseError().get());
+                }
+                String sourceId = String.valueOf(parsed.data().keySet().iterator().next());
+                String content = source.raw().replaceFirst(
+                        "(?m)^" + java.util.regex.Pattern.quote(sourceId) + ":",
+                        java.util.regex.Matcher.quoteReplacement(id + ":"));
+                String actor = actorOf(request);
+                int revision = documents.createDocument(pack, path, content, actor);
+                audit.record(actor, "authoring.duplicateResource", pack + "/" + path);
+                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("pack", pack);
+                payload.addProperty("path", path);
+                payload.addProperty("id", id);
+                payload.addProperty("rev", revision);
+                payload.addProperty("raw", content);
+                payload.add("parsed", parsedView(content));
+                return Wire.Response.success(request, payload);
+            } catch (java.nio.file.NoSuchFileException e) {
+                return Wire.Response.failure(request,
+                        new Wire.Error("MTR-0009", "no such document", safePath(body), null));
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0008", e.getMessage(), safePath(body),
+                        "choose a different id"));
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        dispatcher.register("browse.folders", request -> {
+            JsonObject payload = new JsonObject();
+            var folders = new com.google.gson.JsonArray();
+            documents.listFolders(requiredString(request.payload(), "pack")).forEach(folders::add);
+            payload.add("folders", folders);
+            return Wire.Response.success(request, payload);
+        });
+
+        dispatcher.register("edit.createFolder", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String path = requiredString(body, "path");
+                documents.createFolder(pack, path);
+                audit.record(actorOf(request), "edit.createFolder", pack + "/" + path);
+                return Wire.Response.success(request, new JsonObject());
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0008", e.getMessage(), safePath(body), null));
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        dispatcher.register("edit.deleteFolder", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String path = requiredString(body, "path");
+                documents.deleteFolder(pack, path);
+                audit.record(actorOf(request), "edit.deleteFolder", pack + "/" + path);
+                return Wire.Response.success(request, new JsonObject());
+            } catch (java.nio.file.NoSuchFileException e) {
+                return Wire.Response.failure(request,
+                        new Wire.Error("MTR-0009", "no such folder", safePath(body), null));
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0008", e.getMessage(), safePath(body),
+                        "empty the folder first"));
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        dispatcher.register("edit.moveFolder", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String from = requiredString(body, "from");
+                String to = requiredString(body, "to");
+                documents.moveFolder(pack, from, to, actorOf(request));
+                audit.record(actorOf(request), "edit.moveFolder", pack + "/" + from + " -> " + to);
+                queueReload(reload, packsRoot.resolve(pack));
+                return Wire.Response.success(request, new JsonObject());
+            } catch (DocumentConflictException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0034", e.getMessage(), safePath(body),
+                        "reload the pack and try again"));
+            } catch (java.nio.file.NoSuchFileException e) {
+                return Wire.Response.failure(request,
+                        new Wire.Error("MTR-0009", "no such folder", safePath(body), null));
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (IllegalStateException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0008", e.getMessage(), safePath(body), null));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -464,6 +596,38 @@ public final class EditorContentOps {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * Builds the pack-relative path for a new document from the type tab and
+     * the folder the author is browsing. Both are validated here so a hostile
+     * client cannot smuggle a path outside the type's directory.
+     */
+    private static String documentPath(String type, String folder, String id) {
+        if (!Scaffolds.SCAFFOLD_TYPES.contains(type)) {
+            throw new IllegalArgumentException(
+                    "unknown content type '" + type + "' — expected one of "
+                            + Scaffolds.SCAFFOLD_TYPES);
+        }
+        if (!id.matches("[a-z0-9_-]{2,64}")) {
+            throw new IllegalArgumentException("id must be 2..64 chars of a-z 0-9 _ -");
+        }
+        String prefix = type;
+        if (folder != null && !folder.isBlank()) {
+            String cleaned = folder.replaceAll("^/+|/+$", "");
+            if (cleaned.startsWith(type + "/")) {
+                cleaned = cleaned.substring(type.length() + 1);
+            } else if (cleaned.equals(type)) {
+                cleaned = "";
+            }
+            if (!cleaned.isEmpty()) {
+                if (!cleaned.matches("[A-Za-z0-9_ -]+(/[A-Za-z0-9_ -]+)*")) {
+                    throw new IllegalArgumentException("bad folder: " + folder);
+                }
+                prefix = type + "/" + cleaned;
+            }
+        }
+        return prefix + "/" + id + ".yml";
+    }
 
     private static void queueReload(ReloadTrigger reload, Path file) {
         // Fire-and-forget at v1: the reload outcome reaches editors through

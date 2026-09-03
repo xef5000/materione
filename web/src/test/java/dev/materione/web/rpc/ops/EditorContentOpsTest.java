@@ -136,6 +136,119 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void createResourceHonoursTheTypeTabAndFolderTheAuthorIsBrowsing() throws Exception {
+        DocumentStore store = store();
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"), trigger,
+                java.util.List::of, java.util.List::of);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+
+        Wire.Response block = dispatcher.dispatch(request("authoring.createResource", "2",
+                object("pack", "demo", "id", "ruby_ore", "name", "Ruby Ore",
+                        "type", "blocks", "folder", "ores/deep")));
+
+        assertThat(block.ok()).isTrue();
+        assertThat(payload(block).get("path").getAsString()).isEqualTo("blocks/ores/deep/ruby_ore.yml");
+        assertThat(store.read("demo", "blocks/ores/deep/ruby_ore.yml").raw())
+                .contains("technique:")
+                .contains("Ruby Ore");
+
+        // A folder already prefixed with its type is accepted once, not twice.
+        Wire.Response prefixed = dispatcher.dispatch(request("authoring.createResource", "3",
+                object("pack", "demo", "id", "ruby_pick", "name", "Ruby Pick",
+                        "type", "items", "folder", "items/tools")));
+        assertThat(payload(prefixed).get("path").getAsString()).isEqualTo("items/tools/ruby_pick.yml");
+
+        // Recipes have no display name; one must not be invented for them.
+        Wire.Response recipe = dispatcher.dispatch(request("authoring.createResource", "4",
+                object("pack", "demo", "id", "ruby_pick_recipe", "name", "Ruby Pick",
+                        "type", "recipes")));
+        assertThat(recipe.ok()).isTrue();
+        assertThat(payload(recipe).get("raw").getAsString()).doesNotContain("display_name");
+
+        // Unknown types and path traversal are refused before touching disk.
+        assertThat(dispatcher.dispatch(request("authoring.createResource", "5",
+                object("pack", "demo", "id", "x2", "name", "X", "type", "assets"))).ok()).isFalse();
+        assertThat(dispatcher.dispatch(request("authoring.createResource", "6",
+                object("pack", "demo", "id", "x2", "name", "X", "type", "items",
+                        "folder", "../../etc"))).ok()).isFalse();
+    }
+
+    @Test
+    void duplicateCopiesBytesUnderANewIdAndKeepsComments() throws Exception {
+        DocumentStore store = store();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"),
+                new CapturingTrigger(), java.util.List::of, java.util.List::of);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+        dispatcher.dispatch(request("edit.put", "2", object(
+                "pack", "demo", "path", "items/wand.yml", "rev", "0",
+                "content", "# a comment worth keeping\nwand:\n  material: STICK\n")));
+
+        Wire.Response copy = dispatcher.dispatch(request("authoring.duplicateResource", "3",
+                object("pack", "demo", "path", "items/wand.yml", "id", "wand_copy")));
+
+        assertThat(copy.ok()).isTrue();
+        String raw = store.read("demo", "items/wand_copy.yml").raw();
+        assertThat(raw).contains("# a comment worth keeping");
+        assertThat(raw).contains("wand_copy:");
+        assertThat(raw).doesNotContain("\nwand:");
+        // The source is untouched and a clashing id is refused.
+        assertThat(store.read("demo", "items/wand.yml").raw()).contains("\nwand:");
+        assertThat(dispatcher.dispatch(request("authoring.duplicateResource", "4",
+                object("pack", "demo", "path", "items/wand.yml", "id", "wand_copy")))
+                .error().code()).isEqualTo("MTR-0008");
+    }
+
+    @Test
+    void foldersAreListedCreatedMovedAndOnlyDeletedWhenEmpty() throws Exception {
+        DocumentStore store = store();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"),
+                new CapturingTrigger(), java.util.List::of, java.util.List::of);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+
+        assertThat(dispatcher.dispatch(request("edit.createFolder", "2",
+                object("pack", "demo", "path", "items/weapons"))).ok()).isTrue();
+        assertThat(payload(dispatcher.dispatch(request("browse.folders", "3",
+                object("pack", "demo")))).get("folders").toString())
+                .contains("items/weapons");
+
+        // An empty folder is a real place to create in.
+        dispatcher.dispatch(request("authoring.createResource", "4",
+                object("pack", "demo", "id", "sabre", "name", "Sabre",
+                        "type", "items", "folder", "items/weapons")));
+        assertThat(store.read("demo", "items/weapons/sabre.yml").revision()).isEqualTo(1);
+
+        // A folder with content is never dropped.
+        Wire.Response occupied = dispatcher.dispatch(request("edit.deleteFolder", "5",
+                object("pack", "demo", "path", "items/weapons")));
+        assertThat(occupied.ok()).isFalse();
+        assertThat(occupied.error().code()).isEqualTo("MTR-0008");
+
+        // Renaming carries the documents along, with honest history at the new path.
+        assertThat(dispatcher.dispatch(request("edit.moveFolder", "6",
+                object("pack", "demo", "from", "items/weapons", "to", "items/blades"))).ok())
+                .isTrue();
+        assertThat(store.read("demo", "items/blades/sabre.yml").raw()).contains("sabre:");
+        assertThat(java.nio.file.Files.exists(temp.resolve("packs/demo/items/weapons"))).isFalse();
+
+        // Type roots are not movable, and folders stay inside their own type.
+        assertThat(dispatcher.dispatch(request("edit.moveFolder", "7",
+                object("pack", "demo", "from", "items", "to", "blocks"))).ok()).isFalse();
+        assertThat(dispatcher.dispatch(request("edit.moveFolder", "8",
+                object("pack", "demo", "from", "items/blades", "to", "blocks/blades"))).ok())
+                .isFalse();
+
+        // Empty is deletable.
+        dispatcher.dispatch(request("edit.delete", "9",
+                object("pack", "demo", "path", "items/blades/sabre.yml", "rev", "1")));
+        assertThat(dispatcher.dispatch(request("edit.deleteFolder", "10",
+                object("pack", "demo", "path", "items/blades"))).ok()).isTrue();
+    }
+
+    @Test
     void unknownOpsGetACleanErrorNotADisconnect() {
         RpcDispatcher dispatcher = new RpcDispatcher(); // nothing registered
         Wire.Response response = dispatcher.dispatch(request("browse.nonexistent", "x"));

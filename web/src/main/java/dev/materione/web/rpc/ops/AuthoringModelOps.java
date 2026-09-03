@@ -75,7 +75,16 @@ public final class AuthoringModelOps {
                 List<StagedAsset> assets = assets(pack, packsRoot, body.getAsJsonArray("assets"));
                 if (createOwner) {
                     String ownerId = required(body, "ownerId");
-                    ownerPath = "items/" + ownerId + ".yml";
+                    // Blocks and furniture own models too; items stay the
+                    // default so older clients keep working.
+                    String ownerType = optional(body, "ownerType");
+                    if (ownerType.isBlank()) {
+                        ownerType = "items";
+                    }
+                    if (!Scaffolds.SCAFFOLD_TYPES.contains(ownerType)) {
+                        throw new IllegalArgumentException("unknown owner type: " + ownerType);
+                    }
+                    ownerPath = ownerType + "/" + ownerId + ".yml";
                     if (Files.exists(packsRoot.resolve(pack).resolve(ownerPath))) {
                         throw new IllegalStateException("document already exists: " + ownerPath);
                     }

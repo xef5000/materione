@@ -505,6 +505,157 @@ public final class DocumentStore {
     }
 
     // ------------------------------------------------------------------
+    // folders
+
+    /**
+     * Pack-relative directories under the type roots — the organisational
+     * skeleton the content browser navigates. Type roots themselves are
+     * included so an empty type still browses as an existing folder.
+     */
+    public List<String> listFolders(String packId) {
+        List<String> folders = new ArrayList<>();
+        Path packDir = packsRoot.resolve(packId);
+        for (String type : TYPES) {
+            Path typeDir = packDir.resolve(type);
+            if (!Files.isDirectory(typeDir)) {
+                continue;
+            }
+            folders.add(type);
+            collectFolders(typeDir, type, folders);
+        }
+        folders.sort(String::compareTo);
+        return folders;
+    }
+
+    private void collectFolders(Path dir, String prefix, List<String> out) {
+        try (Stream<Path> children = Files.list(dir)) {
+            for (Path child : children.filter(Files::isDirectory).sorted().toList()) {
+                String relative = prefix + "/" + child.getFileName();
+                out.add(relative);
+                collectFolders(child, relative, out);
+            }
+        } catch (IOException e) {
+            // unreadable subtree contributes nothing (D6)
+        }
+    }
+
+    /** Creates an empty organisational folder under a type root. */
+    public void createFolder(String pack, String path) throws IOException {
+        synchronized (lock) {
+            Path dir = resolveFolder(pack, path);
+            if (Files.exists(dir)) {
+                throw new IllegalStateException("folder already exists: " + path);
+            }
+            Files.createDirectories(dir);
+        }
+    }
+
+    /** Deletes an empty folder; a folder with content is never dropped. */
+    public void deleteFolder(String pack, String path) throws IOException {
+        synchronized (lock) {
+            Path dir = resolveFolder(pack, path);
+            if (!Files.isDirectory(dir)) {
+                throw new java.nio.file.NoSuchFileException(path);
+            }
+            try (Stream<Path> children = Files.list(dir)) {
+                if (children.findAny().isPresent()) {
+                    throw new IllegalStateException(
+                            "folder is not empty: " + path);
+                }
+            }
+            Files.delete(dir);
+        }
+    }
+
+    /**
+     * Renames/moves a folder by moving every document it holds, so each file
+     * keeps honest revision history at its new path. Validation runs over the
+     * whole set before the first move: a conflicting target or a stale
+     * revision aborts before anything is touched.
+     */
+    public void moveFolder(String pack, String from, String to, String actor) throws IOException {
+        if (from.equals(to)) {
+            throw new IllegalArgumentException("folder source and target are the same: " + from);
+        }
+        synchronized (lock) {
+            Path source = resolveFolder(pack, from);
+            Path target = resolveFolder(pack, to);
+            if (!from.contains("/") || !to.contains("/")) {
+                throw new IllegalArgumentException("type roots cannot be moved: " + from);
+            }
+            if (!source.startsWith(packsRoot.resolve(pack).resolve(typeOf(from)))
+                    || !target.startsWith(packsRoot.resolve(pack).resolve(typeOf(from)))) {
+                throw new IllegalArgumentException("folders move within their own type: " + to);
+            }
+            if (!Files.isDirectory(source)) {
+                throw new java.nio.file.NoSuchFileException(from);
+            }
+            if (Files.exists(target)) {
+                throw new IllegalStateException("target already exists: " + to);
+            }
+            List<String> documents = new ArrayList<>();
+            for (ResourceRef ref : listResources(pack, typeOf(from), null)) {
+                if (ref.path().startsWith(from + "/") && !documents.contains(ref.path())) {
+                    documents.add(ref.path());
+                }
+            }
+            for (String path : documents) {
+                if (Files.exists(resolve(pack, to + path.substring(from.length())))) {
+                    throw new IllegalStateException(
+                            "target already exists: " + to + path.substring(from.length()));
+                }
+            }
+            for (String path : documents) {
+                move(pack, path, currentRevisionOf(pack, path),
+                        to + path.substring(from.length()), actor);
+            }
+            deleteEmptyTree(source);
+        }
+    }
+
+    private int currentRevisionOf(String pack, String path) throws IOException {
+        return read(pack, path).revision();
+    }
+
+    private static String typeOf(String folder) {
+        int slash = folder.indexOf('/');
+        return slash < 0 ? folder : folder.substring(0, slash);
+    }
+
+    private static void deleteEmptyTree(Path root) throws IOException {
+        try (Stream<Path> paths = Files.walk(root)) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                if (Files.isDirectory(path)) {
+                    try (Stream<Path> children = Files.list(path)) {
+                        if (children.findAny().isEmpty()) {
+                            Files.delete(path);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** Resolves and safety-checks a pack-relative folder under a type root. */
+    private Path resolveFolder(String pack, String path) {
+        if (pack == null || !pack.matches("[a-z0-9_-]{2,64}")) {
+            throw new IllegalArgumentException("bad pack id: " + pack);
+        }
+        if (path == null || path.contains("..") || path.startsWith("/") || path.endsWith("/")
+                || !path.matches("[A-Za-z0-9_/ -]+")) {
+            throw new IllegalArgumentException("bad folder path: " + path);
+        }
+        if (TYPES.stream().noneMatch(type -> path.equals(type) || path.startsWith(type + "/"))) {
+            throw new IllegalArgumentException("folders live under a content type: " + path);
+        }
+        Path resolved = packsRoot.resolve(pack).resolve(path).normalize();
+        if (!resolved.startsWith(packsRoot.resolve(pack))) {
+            throw new IllegalArgumentException("path escapes its pack: " + path);
+        }
+        return resolved;
+    }
+
+    // ------------------------------------------------------------------
 
     /** Resolves and safety-checks a pack-relative path. */
     private Path resolve(String pack, String path) {
