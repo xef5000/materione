@@ -249,6 +249,30 @@ promotes exactly the hash that player previewed. Published content-addressed sna
 candidate. This extends master §8.4/§9.3/§9.4 and D1/D6, not the source of truth or pipeline.
 Blocks and furniture can reuse the same metadata and transaction primitives.
 
+**M3 content-workspace rebuild (shipped):** the first cut of that catalog was a flat card wall in
+a sidebar-width column — strictly worse than Advanced Files for anyone with fifty items — so the
+workspace was rebuilt around the way packs are actually browsed. Each rail view now owns the whole
+main area; the pack switcher and release state moved to an app header; the tab host moved inside
+Advanced Files, which keeps the tree, the generic schema form and raw YAML unchanged as the T4
+surface. **Content** is a file explorer per registered type: type tabs from `browse.types`,
+folders, breadcrumbs, details/icon layouts, search, keyboard navigation and the full
+create/rename/duplicate/move/delete set for files and folders (`browse.folders`,
+`edit.createFolder/deleteFolder/moveFolder`, `authoring.createResource` into a chosen type and
+folder, `authoring.duplicateResource`). Opening an entry opens a **studio** — item, block,
+furniture and recipe — built from the same registry metadata, including structured lists whose
+shape the registry now declares (furniture hitboxes, seats, lights, evolution) and a real 3×3
+crafting grid; a studio save is one `authoring.setFields` transaction carrying only changed fields,
+and every key no control covers is reported with a link to Advanced Files rather than rewritten.
+A built-in **pixel editor** (pure `pixels.ts` engine, vitest-pinned) makes a three-pixel texture
+fix a click instead of a 3D session, and creating a texture for a resource that lacks one also
+writes the owning field. Blockbench became contextual: no start screen, no format picker — the
+resource's `.bbmodel` is loaded or a minimal project is synthesised for the pinned build's single
+Java format with the texture attached, inside a workbench over the studio, and the bridge returns
+a render cached under `.materione/thumbnails/` (excluded from the compiled pack exactly like
+`model-links.json`). The layout invariants that failed the first time — shrinkable grid tracks, no
+horizontal scrolling, no filler prose — are now asserted by a test over the surfaces' own CSS, and
+a source-encoding test guards against the mojibake that the same pass introduced.
+
 ## M4 — Glyphs, fonts, sounds, paintings
 
 **Goal:** the full pack surface beyond items.

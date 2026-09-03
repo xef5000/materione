@@ -480,10 +480,13 @@ the admin. It talks only to the documented API, which is therefore also the auto
 for CI (pack repos can drive it).
 
 Screens (product-architecture level): **Dashboard** (server health, published/candidate state,
-pending diagnostics) · **Content browser** (resource-first graph search across all types) ·
-**Type studios** (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting) ·
-**Asset manager** (textures/models/sounds) · **Advanced files** (filesystem/YAML surface for T4)
-· **Diagnostics center** · **Live preview**. Pack creation is a one-time project onboarding step;
+pending diagnostics) · **Content browser** (a file explorer per content type: folders, details and
+icon views, search, create/rename/duplicate/move/delete) · **Type studios** (item, block,
+furniture, glyph, HUD, menu, dialog, recipe, sound, painting) · **Asset manager**
+(textures/models/sounds, including the built-in pixel editor) · **Advanced files**
+(filesystem/YAML surface for T4) · **Diagnostics center** · **Live preview**. Each screen owns the
+whole main area; the pack switcher and release state live in the app header, because they belong
+to the session rather than to any one screen. Pack creation is a one-time project onboarding step;
 normal T2/T3 authoring does not expose content directories or require file operations.
 
 ### 9.2 Auth & trust — the relay is untrusted
@@ -527,11 +530,28 @@ this codebase.
 
 Blockbench is a contextual asset editor, not a top-level application the author organizes
 manually. **Create model** / **Edit model** opens the pinned build from the owning resource's
-appearance field with pack, model, source-project, revision, and return context. Save-back stages
-the model JSON, textures, optional `.bbmodel` source, relationship metadata, and owner-field patch
-as one revision-checked authoring transaction. Existing model references remain valid without
-relationship metadata. The bridge is capability-limited to import/export messages, verifies the
-exact iframe window and origin, and never receives editor session keys or filesystem access.
+appearance field with pack, model, source-project, revision, and return context — as a workspace
+over the resource's studio, never as a peer application. The author never sees a start screen or a
+format picker: the resource's `.bbmodel` source is loaded when it exists, and otherwise a minimal
+project of the correct format is synthesised with the resource's texture pre-attached. Save-back
+stages the model JSON, textures, optional `.bbmodel` source, relationship metadata, and owner-field
+patch as one revision-checked authoring transaction, with every target derived from the owning
+resource (an advanced disclosure covers the rare case where they must differ). Existing model
+references remain valid without relationship metadata. On save the bridge is asked for a render,
+cached as authoring metadata under `.materione/thumbnails/` — excluded from the compiled client
+pack exactly like `model-links.json` — so studios and the content browser can show a model without
+launching Blockbench. Only `Blockbench`, `Codecs`, `Project` and `Texture` are relied on; anything
+else (render capture, project construction) is feature-detected and degrades to a documented
+fallback, so a pin bump cannot break the flow silently. The bridge is capability-limited to
+import/export/render messages, verifies the exact iframe window and origin, and never receives
+editor session keys or filesystem access.
+
+Textures do not require Blockbench at all. The editor ships its own **pixel editor** — pencil,
+eraser, flood fill, eyedropper, line, rectangle, vertical mirror, zoom/pan, bounded undo/redo, PNG
+import/export — opened in place from a studio's texture slot or from the asset manager. It is a
+plain client of `assets.put`; creating a texture for a resource that has none also writes the
+owning field, so a new resource is never left pointing at nothing. Its pixel arithmetic is a pure
+module pinned by tests.
 
 ### 9.4 Editing model & concurrency
 
@@ -545,8 +565,10 @@ The primary editor is resource-first. A short creation flow derives safe ids and
 one visual studio organized by the domain facets in D3 (identity, appearance, gameplay, behavior,
 advanced). Forms render from richer registry self-description -- labels, grouping, constraints,
 reference targets, structured children, and conditional visibility -- rather than from field ids
-or hand-written per-type schemas. Explorer, revisions, paths, and raw YAML remain complete T4
-surfaces under progressive disclosure.
+or hand-written per-type schemas. A studio renders only what it can also write back safely; every
+remaining key is reported to the author ("N fields are only editable in Advanced Files") with a
+direct link, and is never rewritten by a studio save. Explorer, revisions, paths, and raw YAML
+remain complete T4 surfaces under progressive disclosure.
 
 Multi-file authoring actions (resource creation, coherent field batches, and Blockbench save-back)
 are server-side transactions: validate every path and revision, stage all bytes, atomically promote

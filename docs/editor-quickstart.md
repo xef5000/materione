@@ -33,44 +33,63 @@ reverse-proxy pattern — the listener is authenticated end to end either way.
    item document, and display name in one operation; no paths are shown.
 3. The Item Studio groups controls by Identity, Appearance, Gameplay, and
    Behavior. Pick a **material** and choose a **texture** — the picker lists the pack's
-   textures with thumbnails, and the upload button takes a PNG straight
-   from your disk.
-4. Save (single fields patch losslessly, so comments
-   survive). The pipeline dock shows the targeted reload; within ~2 s the
+   textures with thumbnails, the upload button takes a PNG straight
+   from your disk, and **Edit pixels** opens Materione's own pixel editor
+   (pencil, fill, eyedropper, shapes, mirror, undo/redo) without leaving the item.
+4. Save. Only the fields you changed are written, and they are patched
+   losslessly, so comments and anything the studio does not show survive
+   untouched — a footer tells you when a field is only editable in Advanced Files.
+   The pipeline dock shows the targeted reload; within ~2 s the
    item is live on the server. Grab it with
    `/materione dev stack <pack>:<item>` to check the look.
 
-Blocks and furniture work the same way — a placement item is generated
-automatically, so everything you create is grabbable in the item browser.
+Blocks, furniture and recipes work the same way — pick their tab at the top of
+Content. Each type has its own studio, and a placement item is generated
+automatically for blocks and furniture, so everything you create is grabbable in
+the item browser.
 
-## 3. Model with Blockbench
+## 3. Finding things once the pack grows
+
+Content is a file explorer, one tab per content type, with the pack switcher in
+the top-left corner. Make folders if you want them (they are organisational only —
+ids do not change), double-click an entry to open its studio, and use the toolbar
+search, F2 to rename, or the right-click menu to duplicate, move, delete, or reveal
+an entry in Advanced Files. **Advanced Files** keeps the tree, the generic form,
+raw YAML, revisions and assets for everything a studio deliberately does not touch.
+
+## 4. Model with Blockbench
 
 Choose **Create model** or **Edit model** from the item's Appearance section.
-The pinned, unmodified Blockbench build appears contextually inside the editor
-(works offline; the build and its pin are documented in
-`webui/public/blockbench/PIN.md`).
+The pinned, unmodified Blockbench build opens as a workbench over the item you
+are editing — no start screen and no format picker: your existing `.bbmodel` is
+reopened, or a correctly-formatted starter project is created for you with the
+item's texture already attached (works offline; the build and its pin are
+documented in `webui/public/blockbench/PIN.md`).
 
-- **Model → save back:** build your model, click **save to Materione**,
-  set where the exported Java block/item model, its textures and the
-  `.bbmodel` project source land inside the pack, and optionally wire the
-  model onto a new or existing item/block right in the same step. One atomic save
-  triggers the usual targeted reload — the model is in game immediately.
+- **Model → save back:** build your model and click **Save**. Every target — the
+  exported Java model, its textures, the `.bbmodel` project source and the item
+  field that points at it — is derived from the item you opened it from; open
+  **Advanced targets** only if you need to override them. One atomic save
+  triggers the usual targeted reload — the model is in game immediately, and a
+  render is cached so the studio can show it without reopening Blockbench.
 - **Existing project:** use **import .bbmodel** to load an external
   Blockbench project into the embedded build, then save it back as above.
+  Standalone Blockbench, for free modelling unattached to any item, stays in
+  Advanced Files.
 
 `.bbmodel` sources are authoring state: they stay in your pack folder and
 are never shipped to clients.
 
-## 4. Preview and publish
+## 5. Preview and publish
 
 Every valid save updates runtime behavior immediately. A changed resource pack
-is sent only to the player who opened the editor, and Content shows
-**Preview ready** with its hash. Choose **Publish preview** to promote that exact
+is sent only to the player who opened the editor, and the app header shows
+**Preview ready** with its hash. Choose **Publish** to promote that exact
 hash to all players. If another edit built a newer candidate, publish fails
 visibly instead of releasing bytes you did not preview. The published pack
 survives restarts and remains the version sent to joining players.
 
-## 5. Hand-edited files stay welcome
+## 6. Hand-edited files stay welcome
 
 Editing YAML directly (or a `git pull`) is a first-class workflow: the
 plugin watches `content/packs/`, journals the change as an *external*
@@ -80,7 +99,7 @@ with unsaved edits keep them. The feed can be disabled with
 `editor_file_watcher: false` in `settings.yml` (editable in the editor's
 Server view).
 
-## 6. When things go wrong
+## 7. When things go wrong
 
 - **Diagnostics view** — every parse/validation failure streams in live,
   with click-through to the offending file and line.

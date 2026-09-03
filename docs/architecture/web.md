@@ -226,10 +226,15 @@ plugin's structured diagnostic codes. **Protocol version is negotiated at hello*
 return a clean error, never a disconnect.
 
 *As built (M3 + workbench update):* session `ping` / `session.info` (host status
-extras); browse packs / resources (type + query filters) / get / history / types;
+extras); browse packs / resources (type + query filters) / **folders** / get / history / types;
 edit put / delete / setScalar (scalars **and scalar lists** through the lossless
 layer) / create (curated per-type scaffolds, duplicate-refusing) / createPack /
-move (journal-truthful renames); validate dryRun (syntax gate); assets
+move (journal-truthful renames) / **createFolder, deleteFolder, moveFolder** (the
+organisational folders the content browser exposes); authoring **createResource**
+(any registered type, into any folder) / **duplicateResource** / **setFields** (a
+batch of field edits — including structured values such as furniture hitboxes or a
+recipe's ingredient map — as one revision, one journal entry and one reload) /
+commit / saveModel; validate dryRun (syntax gate); assets
 list / put / get / delete / **move**; pipeline reload (everything / one-pack —
 fire-and-forget, outcome as `push.reload`, always announced for manual triggers);
 admin diagnostics.recent (with source location) / audit.recent / settings.get /
@@ -247,10 +252,9 @@ assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
 
-*Planned M3 product redesign:* `authoring.describe`, `authoring.createResource`,
-`authoring.commit`, and `authoring.saveModel` wrap the primitive operations in revision-checked,
-multi-file transactions. `delivery.status` exposes candidate/published hashes and
-`delivery.publish` promotes an expected candidate hash or returns a visible stale error. These are
+*Planned:* `authoring.describe` completes the capability handshake. `delivery.status`
+exposes candidate/published hashes and `delivery.publish` promotes an expected candidate
+hash or returns a visible stale error (as built). These are
 capability-negotiated additions; the primitive M3 operations remain available to Advanced Files
 and older clients. Resource and asset listings gain pagination/filtering before relay mode makes
 eager full-pack traversal a scale boundary.
@@ -369,10 +373,33 @@ cannot read, forge, replay, or reorder anything.
   hand-written per mechanic), a diagnostics center, and the preview surface. The default
   information architecture is resource-first: onboarding → content catalog → type studio.
   Filesystem Explorer and YAML live under Advanced for T4 rather than defining the T2/T3 journey.
+  *As built (M3):* the shell is an app header (pack switcher, new project, release state,
+  publish), a rail, one full-area view per rail entry, the activity dock and the status bar.
+  Tabs are **not** global — they belong to Advanced Files, which owns the pack tree, the generic
+  schema form, YAML, assets, revisions and standalone Blockbench. Content is a file explorer per
+  registered type: horizontal type tabs derived from `browse.types` (unimplemented types render
+  as disabled tabs so the shape of the product stays visible), folders, breadcrumb navigation,
+  details and icon layouts, search, keyboard navigation, and create/rename/duplicate/move/delete
+  for files and folders. Layout invariants that keep a 50+ entry pack usable — every grid track
+  shrinkable, every name ellipsised, no horizontal scrolling, no explanatory prose — are asserted
+  by a test over the surfaces' own CSS, because they were regressed once.
 - **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
   constraints, reference targets, structured children, conditional visibility, widgets, and
   creation capabilities. The UI provides reusable controls and domain previews; it does not
   maintain a second item schema. Unknown fields remain preserved and visible in Advanced.
+  *As built (M3):* a shared studio shell (preview column, registry-driven sections, save, a
+  footer reporting the fields only Advanced Files can edit) with per-type controls: material and
+  reference pickers, texture and model slots, a row editor for structured lists whose shape the
+  registry declares (furniture hitboxes, seats, lights, evolution), and a 3×3 crafting grid that
+  reads and writes `shape` + `ingredients`. A save sends one `authoring.setFields` call carrying
+  only the fields that actually changed, so an untouched resource is never rewritten and the
+  round-trip stays lossless.
+- **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
+  eyedropper, line, rectangle, vertical mirror, zoom/pan, pixel grid, bounded undo/redo, PNG
+  import/export, size presets — opens in place from a studio's texture slot and from the asset
+  preview in Advanced Files, and saves through `assets.put`. Creating a texture for a resource
+  that has none also writes the owning field. All pixel arithmetic lives in a pure module
+  (`pixels.ts`) pinned by vitest, per the repo's pure-seam convention.
 - **Blockbench integration** (master §9.3): the pinned, unmodified Blockbench web build loads
   inside the editor (iframe with a scripting bridge) from **static assets served by the editor
   SPA's own host** — never an inbound connection to the game server (D11 intact); the Materione
@@ -383,18 +410,25 @@ cannot read, forge, replay, or reorder anything.
   *As built (M3):* the pinned build is **Blockbench v5.1.6**, vendored unmodified at
   `webui/public/blockbench/` (recipe + pin in its PIN.md — upgrades are pin bumps; the
   server-side `blockbench/` folder is not needed because the jar copy already serves offline
-  installs). The owning item's model control opens a contextual workbench tab containing the
-  same-origin iframe; `materione-bridge.js` is injected
-  after load and communicates **only** via postMessage (`collect` → model JSON + textures +
-  `.bbmodel` source; `importProject` → load an external project). `authoring.saveModel` receives
+  installs). A resource's model control opens a **contextual workbench over its studio**, with
+  our own header (model · owning resource · Save · Cancel), containing the same-origin iframe;
+  `materione-bridge.js` is injected after load and communicates **only** via postMessage
+  (`collect` → model JSON + textures + `.bbmodel` source; `importProject` → load a project;
+  `thumbnail` → a render, feature-detected). There is no start screen and no format picker: the
+  resource's `.bbmodel` source is loaded if it exists, and otherwise a minimal project is
+  synthesised for the pinned build's single Java format (`java_block`, bbmodel 5.0) with the
+  resource's texture already attached. `authoring.saveModel` receives
   owner/revision context and saves model JSON, textures, optional source, relationship manifest,
-  and owner patch as one bounded transaction. Existing-owner, new-owner, and assets-only saves all
+  and owner patch as one bounded transaction, with every target derived from the owning resource
+  and an advanced disclosure for overrides. Existing-owner, new-owner, and assets-only saves all
   use that operation; conflicts and injected post-promotion failures restore the prior file set.
   Bridge messages target and accept only the exact iframe origin/window and use an allowlisted,
   payload-capped protocol.
   The versioned relationship manifest is `.materione/model-links.json` in the canonical pack. It
   maps `owner-path#field.path` to model and optional source paths, preserves other links on update,
-  and is authoring metadata excluded from the compiled client pack.
+  and is authoring metadata excluded from the compiled client pack. Model renders are cached
+  beside it under `.materione/thumbnails/<model-path>.png` under the same exclusion, so a model
+  can be shown without launching Blockbench.
 - **Versioning**: the SPA declares the protocol versions it speaks; the plugin serves hints if
   the cached SPA is stale ("a newer editor is available — refresh").
 
