@@ -25,7 +25,11 @@ export type Tab = DocTab | AssetTab | SettingsTab | BlockbenchTab;
 /** The embedded Blockbench workbench (pinned web build in an iframe). */
 export interface BlockbenchTab {
   kind: 'blockbench';
-  key: 'blockbench';
+  key: string;
+  pack: string;
+  path: string;
+  rev: number;
+  modelRef: string;
 }
 
 /** A binary asset opened as a read-only preview tab. */
@@ -76,6 +80,12 @@ export const activityLog = $state({
 
 export const connection = $state({
   lastReload: '' as string,
+});
+
+export const delivery = $state({
+  publishedSha256: '',
+  candidateSha256: '',
+  loaded: false,
 });
 
 export const server = $state({
@@ -149,6 +159,20 @@ export async function refreshPack(): Promise<void> {
   }
 }
 
+export async function refreshDelivery(): Promise<void> {
+  if (!session.channel) return;
+  delivery.loaded = false;
+  try {
+    const status = unwrap(await ops.deliveryStatus(session.channel));
+    delivery.publishedSha256 = String(status.publishedSha256 ?? '');
+    delivery.candidateSha256 = String(status.candidateSha256 ?? '');
+  } catch (e) {
+    logActivity('error', `delivery status: ${errorMessage(e)}`);
+  } finally {
+    delivery.loaded = true;
+  }
+}
+
 /** Opens (or focuses) the tab for a resource's FILE and activates it. */
 export function openDoc(resource: ResourceRef): void {
   const key = `${resource.pack}/${resource.path}`;
@@ -186,11 +210,18 @@ export function openSettings(): void {
 }
 
 /** Opens the singleton embedded-Blockbench tab. */
-export function openBlockbench(): void {
-  if (!workspace.tabs.some((t) => t.kind === 'blockbench')) {
-    workspace.tabs.push({ kind: 'blockbench', key: 'blockbench' });
+export function openBlockbench(
+  context: { pack: string; path: string; rev: number; modelRef: string },
+): void {
+  const key = `blockbench:${context.pack}/${context.path}`;
+  const existing = workspace.tabs.find((t) => t.kind === 'blockbench' && t.key === key);
+  if (!existing) {
+    workspace.tabs.push({ kind: 'blockbench', key, ...context });
+  } else if (existing.kind === 'blockbench') {
+    existing.rev = context.rev;
+    existing.modelRef = context.modelRef;
   }
-  workspace.activeKey = 'blockbench';
+  workspace.activeKey = key;
 }
 
 export function setTabDirty(key: string, dirty: boolean): void {
@@ -246,6 +277,9 @@ export function resetWorkspace(): void {
   diagnostics.entries = [];
   activityLog.entries = [];
   connection.lastReload = '';
+  delivery.publishedSha256 = '';
+  delivery.candidateSha256 = '';
+  delivery.loaded = false;
   server.version = '';
   server.protocolVersion = 0;
   session.channel = null;

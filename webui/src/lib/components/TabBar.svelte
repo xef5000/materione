@@ -12,7 +12,7 @@
             ? tab.name
             : tab.kind === 'settings'
               ? 'settings'
-              : 'Blockbench'}
+              : 'Model editor'}
       {@const title =
         tab.kind === 'doc' || tab.kind === 'asset'
           ? tab.path

@@ -45,7 +45,7 @@ function wired(): { transport: WebSocketTransport; socket: FakeSocket } {
 }
 
 describe('WebSocketTransport handover', () => {
-  it('buffers frames arriving while no handler is attached, drains in order', () => {
+  it('buffers frames arriving while no handler is attached, drains in order', async () => {
     const { transport, socket } = wired();
     const got: string[] = [];
 
@@ -62,7 +62,7 @@ describe('WebSocketTransport handover', () => {
     socket.serverSends('push-a');
     socket.serverSends('push-b');
 
-    expect(reply).resolves.toBe('reply');
+    await expect(reply).resolves.toBe('reply');
 
     transport.onMessage((text) => got.push(text));
     expect(got).toEqual(['push-a', 'push-b']);

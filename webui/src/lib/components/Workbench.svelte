@@ -5,6 +5,7 @@
   import SettingsTab from './SettingsTab.svelte';
   import BlockbenchTab from './BlockbenchTab.svelte';
   import ExplorerView from '../views/ExplorerView.svelte';
+  import ContentView from '../views/ContentView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
@@ -17,14 +18,15 @@
 
   let { browserLabel, onDisconnect }: Props = $props();
 
-  type SideView = 'explorer' | 'diagnostics' | 'server';
+  type SideView = 'content' | 'explorer' | 'diagnostics' | 'server';
 
-  let view = $state<SideView>('explorer');
+  let view = $state<SideView>('content');
 
   const views: { id: SideView; label: string; icon: string }[] = [
+    { id: 'content', label: 'Content', icon: 'M4 5.5h16v14H4zM7 2h10v3H7z' },
     {
       id: 'explorer',
-      label: 'Explorer',
+      label: 'Advanced Files',
       icon: 'M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2h9A1.5 1.5 0 0 1 21 6.5v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z',
     },
     {
@@ -62,7 +64,9 @@
     <aside class="sidebar">
       <header>{views.find((entry) => entry.id === view)?.label}</header>
       <div class="viewhost">
-        {#if view === 'explorer'}
+        {#if view === 'content'}
+          <ContentView />
+        {:else if view === 'explorer'}
           <ExplorerView />
         {:else if view === 'diagnostics'}
           <DiagnosticsView />
@@ -85,7 +89,7 @@
               {:else if t.kind === 'settings'}
                 <SettingsTab />
               {:else if t.kind === 'blockbench'}
-                <BlockbenchTab />
+                <BlockbenchTab pack={t.pack} ownerPath={t.path} expectedRev={t.rev} modelRef={t.modelRef} />
               {/if}
             </div>
           {/each}

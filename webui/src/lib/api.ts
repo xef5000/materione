@@ -11,6 +11,12 @@ export interface TypeParam {
   allowedValues?: string[];
   /** Schema-derived affordance: 'texture' | 'model' pickers, else absent. */
   uiHint?: string;
+  label?: string;
+  section?: string;
+  order?: number;
+  advanced?: boolean;
+  referenceKind?: string;
+  example?: string;
 }
 
 export interface TypeInfo {
@@ -68,6 +74,8 @@ export const ops = {
     field: string[],
     value: unknown,
   ) => c.call('edit.setScalar', { pack, path, rev, field, value }),
+  commitDraft: (c: EditorChannel, pack: string, path: string, rev: number, content: string) =>
+    c.call('authoring.commit', { pack, path, rev, content }),
   remove: (c: EditorChannel, pack: string, path: string, rev: number) =>
     c.call('edit.delete', { pack, path, rev }),
   create: (c: EditorChannel, pack: string, path: string, id?: string) =>
@@ -75,6 +83,13 @@ export const ops = {
   move: (c: EditorChannel, pack: string, from: string, to: string, rev: number) =>
     c.call('edit.move', { pack, from, to, rev }),
   createPack: (c: EditorChannel, pack: string) => c.call('edit.createPack', { pack }),
+  createResource: (
+    c: EditorChannel,
+    pack: string,
+    id: string,
+    name: string,
+    createPack: boolean,
+  ) => c.call('authoring.createResource', { pack, id, name, createPack }),
   types: (c: EditorChannel) => c.call('browse.types'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
   dryRun: (c: EditorChannel, content: string) => c.call('validate.dryRun', { content }),
@@ -84,6 +99,24 @@ export const ops = {
   settingsGet: (c: EditorChannel) => c.call('admin.settings.get'),
   settingsPut: (c: EditorChannel, content: string, sha256: string) =>
     c.call('admin.settings.put', { content, sha256 }),
+  deliveryStatus: (c: EditorChannel) => c.call('delivery.status'),
+  publishCandidate: (c: EditorChannel, expectedCandidateSha256: string) =>
+    c.call('delivery.publish', { expectedCandidateSha256 }),
+  saveModel: (
+    c: EditorChannel,
+    payload: {
+      pack: string;
+      ownerPath: string;
+      rev?: number;
+      field?: string[];
+      modelRef?: string;
+      assets: { path: string; data: string }[];
+      createOwner?: boolean;
+      ownerId?: string;
+      ownerName?: string;
+      sourcePath?: string;
+    },
+  ) => c.call('authoring.saveModel', payload),
 };
 
 export const assetOps = {

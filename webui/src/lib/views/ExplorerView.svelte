@@ -12,7 +12,6 @@
     loadWorkspace,
     logActivity,
     openAsset,
-    openBlockbench,
     openDoc,
     refreshPack,
     selectPack,
@@ -246,9 +245,6 @@
     {/each}
   </select>
   <button title="new pack" onclick={newPack}>+ new</button>
-  <button title="embedded Blockbench — model and save back into this pack" onclick={openBlockbench}>
-    Blockbench
-  </button>
 </div>
 
 <input class="filter" placeholder="filter files…" bind:value={filter} spellcheck="false" />

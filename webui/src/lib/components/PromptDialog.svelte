@@ -16,7 +16,11 @@
   let { title, label, initial = '', placeholder = '', hint = '', onOk, onCancel }: Props =
     $props();
 
-  let value = $state(initial);
+  let value = $state('');
+
+  $effect(() => {
+    value = initial;
+  });
 
   function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -27,8 +31,10 @@
   }
 </script>
 
-<div class="scrim" role="presentation" onclick={onCancel}>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label={title} onclick={(e) => e.stopPropagation()}>
+<div class="scrim" role="presentation" onclick={(event) => {
+  if (event.target === event.currentTarget) onCancel();
+}}>
+  <div class="dialog" role="dialog" aria-modal="true" aria-label={title} tabindex="-1">
     <form onsubmit={submit}>
       <h3>{title}</h3>
       <label>

@@ -14,6 +14,7 @@
     logActivity,
     markDocStale,
     refreshPack,
+    refreshDelivery,
     resetWorkspace,
     session,
     workspace,
@@ -59,6 +60,7 @@
       });
       noncePrefix = '';
       await loadWorkspace();
+      await refreshDelivery();
       phase = 'active';
     } catch (e) {
       resetWorkspace();
@@ -96,6 +98,7 @@
           ` (${String(frame.payload.files)})`;
         connection.lastReload = line;
         logActivity('reload', line);
+        void refreshDelivery();
       } else if (frame.op === 'push.diagnostic') {
         const entry = frame.payload as unknown as DiagnosticEntry;
         diagnostics.entries = [entry, ...diagnostics.entries].slice(0, 200);

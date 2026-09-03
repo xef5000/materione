@@ -2,7 +2,7 @@
   import AssetPicker from './AssetPicker.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
-  import { clearDocStale, logActivity, session, setTabDirty, workspace } from '../state.svelte';
+  import { clearDocStale, logActivity, openBlockbench, session, setTabDirty, workspace } from '../state.svelte';
 
   interface Props {
     resource: ResourceRef;
@@ -32,6 +32,9 @@
       workspace.types.find((t: TypeInfo) => t.name === typeDirectory),
   );
   const fields = $derived(schema?.parameters ?? []);
+  const sections = $derived([...new Set(
+    fields.filter((field) => !field.advanced).map((field) => field.section ?? 'general'),
+  )]);
   /** The document's own keys inside the root mapping. */
   const presentKeys = $derived(
     data[rootId] && typeof data[rootId] === 'object'
@@ -256,11 +259,14 @@
 
   {#if mode === 'form' && schema}
     <div class="form">
-      {#each fields.filter((field) => !advancedKeys.includes(field.id)) as field (field.id)}
+      {#each sections as section (section)}
+        <section class="studio-section">
+          <h3>{section}</h3>
+          {#each fields.filter((field) => !field.advanced && !advancedKeys.includes(field.id) && (field.section ?? 'general') === section).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) as field (field.id)}
         {@const value = textValue(field)}
         <label class="field">
           <span class="fid">
-            {field.id}
+            {field.label || field.id}
             {#if field.required}<em title="required">*</em>{/if}
           </span>
 
@@ -271,6 +277,20 @@
               value={value}
               onChange={(next) => void patch(field.id, next)}
             />
+            {#if field.uiHint === 'model'}
+              <button
+                class="model-action"
+                type="button"
+                onclick={() => openBlockbench({
+                  pack: resource.pack,
+                  path: resource.path,
+                  rev,
+                  modelRef: value,
+                })}
+              >
+                {value ? 'Edit model' : 'Create model'}
+              </button>
+            {/if}
           {:else if field.allowedValues && field.allowedValues.length > 0}
             <select
               value={value}
@@ -312,7 +332,7 @@
             <input
               value={value}
               placeholder={field.default ?? ''}
-              title={field.description ?? ''}
+              title={field.description ?? field.example ?? ''}
               onblur={(event) => commitText(field, event.currentTarget, value)}
               onkeydown={(event) => {
                 if (event.key === 'Enter') {
@@ -325,6 +345,8 @@
             <small>{field.description}</small>
           {/if}
         </label>
+          {/each}
+        </section>
       {/each}
 
       {#if advancedKeys.length > 0}
@@ -432,6 +454,9 @@
     gap: 4px 20px;
     align-content: start;
   }
+  .studio-section { display: contents; }
+  .studio-section h3 { grid-column: 1 / -1; margin: 14px 0 2px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .studio-section:first-child h3 { margin-top: 0; }
   .field {
     display: block;
     margin: 6px 0;

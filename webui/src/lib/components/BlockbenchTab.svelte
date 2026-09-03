@@ -6,8 +6,7 @@
    *
    * Save-back: collects the Java block/item model JSON + referenced
    * textures + the .bbmodel source, lets you set the upload targets, then
-   * rides assets.put / edit.create / edit.setScalar — the usual targeted
-   * reload closes the loop in game. Import loads an external .bbmodel into
+   * saves through one authoring transaction. Import loads an external .bbmodel into
    * the embedded Blockbench for further editing.
    */
   import { assetOps, ops, unwrap } from '../api';
@@ -23,12 +22,30 @@
   } from '../blockbench/protocol';
   import { errorMessage, logActivity, refreshPack, session, workspace } from '../state.svelte';
 
+  interface Props {
+    pack: string;
+    ownerPath: string;
+    expectedRev: number;
+    modelRef: string;
+  }
+
+  let { pack: ownerPack, ownerPath, expectedRev, modelRef }: Props = $props();
+  let currentRev = $state(0);
+  let sourceRev = $state(-1);
+  $effect(() => {
+    if (sourceRev !== expectedRev) {
+      sourceRev = expectedRev;
+      currentRev = expectedRev;
+    }
+  });
+
   let frame = $state<HTMLIFrameElement | null>(null);
   let bridgeReady = $state(false);
   let error = $state('');
   let busy = $state(false);
   let saveData = $state<SaveData | null>(null);
   let nextId = 1;
+  let loadedSourceFor = $state('');
 
   // save-back dialog state
   let dialog = $state(false);
@@ -58,7 +75,7 @@
 
   $effect(() => {
     function onMessage(event: MessageEvent) {
-      if (event.source !== frame?.contentWindow || !isBridgeFrame(event.data)) {
+      if (event.origin !== location.origin || event.source !== frame?.contentWindow || !isBridgeFrame(event.data)) {
         return;
       }
       const type = String(event.data.type);
@@ -75,7 +92,30 @@
   });
 
   function send(type: string, extra: Record<string, unknown> = {}): void {
-    frame?.contentWindow?.postMessage({ [BRIDGE_MARK]: true, type, ...extra }, '*');
+    frame?.contentWindow?.postMessage({ [BRIDGE_MARK]: true, type, ...extra }, location.origin);
+  }
+
+  $effect(() => {
+    if (bridgeReady && modelRef && loadedSourceFor !== modelRef) {
+      loadedSourceFor = modelRef;
+      void loadExistingSource();
+    }
+  });
+
+  async function loadExistingSource() {
+    if (!session.channel) return;
+    const modelPath = modelRef.includes(':') ? modelRef.slice(modelRef.indexOf(':') + 1) : modelRef;
+    const name = modelPath.slice(modelPath.lastIndexOf('/') + 1);
+    const source = `assets/models/source/${name}.bbmodel`;
+    try {
+      const asset = unwrap(await assetOps.get(session.channel, ownerPack, source));
+      const binary = atob(String(asset.data ?? ''));
+      const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+      await callBridge('importProject', { project: new TextDecoder().decode(bytes) });
+      logActivity('info', `loaded ${source} for editing`);
+    } catch {
+      // Existing packs and models without canonical .bbmodel sources remain editable from scratch.
+    }
   }
 
   /** One correlated bridge call: resolves with the matching reply frame. */
@@ -88,7 +128,7 @@
       }
       const id = `m${nextId++}`;
       const onMessage = (event: MessageEvent) => {
-        if (event.source !== win || !isBridgeFrame(event.data) || event.data.id !== id) {
+        if (event.origin !== location.origin || event.source !== win || !isBridgeFrame(event.data) || event.data.id !== id) {
           return;
         }
         cleanup();
@@ -107,7 +147,7 @@
         window.removeEventListener('message', onMessage);
       }
       window.addEventListener('message', onMessage);
-      win.postMessage({ [BRIDGE_MARK]: true, id, type, ...extra }, '*');
+      win.postMessage({ [BRIDGE_MARK]: true, id, type, ...extra }, location.origin);
     });
   }
 
@@ -134,7 +174,7 @@
 
   function openDialog(data: SaveData) {
     saveData = data;
-    pack = workspace.activePack ?? '';
+    pack = ownerPack;
     modelPath = `assets/models/${projectName}.json`;
     textureTargets = data.textures.map((texture) => ({
       link: texture.link,
@@ -142,8 +182,8 @@
     }));
     saveSource = data.project.length > 0;
     sourcePath = `assets/models/source/${projectName}.bbmodel`;
-    attach = 'none';
-    attachPath = '';
+    attach = 'existing';
+    attachPath = ownerPath;
     candidates = [];
     dialog = true;
   }
@@ -168,36 +208,31 @@
     saving = true;
     error = '';
     try {
+      if (attach === 'existing' && pack === ownerPack && attachPath === ownerPath) {
+        const owner = unwrap(await ops.get(session.channel, pack, ownerPath));
+        if (Number(owner.rev ?? 0) !== currentRev) {
+          throw new Error('The item changed after Blockbench opened. Return to the item and reopen its model.');
+        }
+      }
       const targetByLink = new Map(
         textureTargets
           .filter((entry) => entry.target.trim() !== '')
           .map((entry) => [entry.link, entry.target.trim()]),
       );
       const targets: TextureTarget[] = [...targetByLink].map(([link, target]) => ({ link, target }));
+      const assets: { path: string; data: string }[] = [];
       for (const texture of saveData.textures) {
         const target = targetByLink.get(texture.link);
         if (!target) continue;
-        await assetOps.putBase64(
-          session.channel,
-          pack,
-          `assets/textures/${target}.png`,
-          dataUrlToBase64(texture.dataUrl),
-        );
+        assets.push({
+          path: `assets/textures/${target}.png`,
+          data: dataUrlToBase64(texture.dataUrl),
+        });
       }
       const normalized = normalizeModel(saveData.model, pack, targets);
-      await assetOps.put(
-        session.channel,
-        pack,
-        modelPath,
-        new TextEncoder().encode(normalized.model),
-      );
+      assets.push({ path: modelPath, data: btoa(unescape(encodeURIComponent(normalized.model))) });
       if (saveSource) {
-        await assetOps.put(
-          session.channel,
-          pack,
-          sourcePath,
-          new TextEncoder().encode(saveData.project),
-        );
+        assets.push({ path: sourcePath, data: btoa(unescape(encodeURIComponent(saveData.project))) });
       }
       if (normalized.unresolved.length > 0) {
         logActivity(
@@ -205,11 +240,40 @@
           `model saved with unresolved texture refs: ${normalized.unresolved.join(', ')}`,
         );
       }
-      const modelRef = `${pack}:${modelPath.slice('assets/models/'.length).replace(/\.json$/i, '')}`;
+      const savedModelRef = `${pack}:${modelPath.slice('assets/models/'.length).replace(/\.json$/i, '')}`;
       if (attach === 'existing') {
-        await attachToExisting(modelRef);
+        const doc = unwrap(await ops.get(session.channel, pack, attachPath));
+        const parsed = (doc.parsed as Record<string, unknown>) ?? {};
+        const rootId = String(Object.keys(parsed)[0] ?? '');
+        const saved = unwrap(await ops.saveModel(session.channel, {
+          pack,
+          ownerPath: attachPath,
+          rev: pack === ownerPack && attachPath === ownerPath ? currentRev : Number(doc.rev ?? 0),
+          field: [rootId, 'model'],
+          modelRef: savedModelRef,
+          sourcePath: saveSource ? sourcePath : undefined,
+          assets,
+        }));
+        if (pack === ownerPack && attachPath === ownerPath) {
+          currentRev = Number(saved.rev ?? currentRev);
+        }
       } else if (attach === 'new') {
-        await attachToNew(modelRef);
+        if (!attachPath.trim()) {
+          throw new Error('Enter an item id before saving.');
+        }
+        const ownerId = sanitizeId(attachPath.replace(/\.yml$/i, ''));
+        unwrap(await ops.saveModel(session.channel, {
+          pack,
+          ownerPath: '',
+          createOwner: true,
+          ownerId,
+          ownerName: saveData.projectName || ownerId,
+          modelRef: savedModelRef,
+          sourcePath: saveSource ? sourcePath : undefined,
+          assets,
+        }));
+      } else {
+        unwrap(await ops.saveModel(session.channel, { pack, ownerPath: '', assets }));
       }
       logActivity('save', `Blockbench model saved to ${pack}/${modelPath}; targeted reload queued`);
       dialog = false;
@@ -220,30 +284,6 @@
     } finally {
       saving = false;
     }
-  }
-
-  async function attachToExisting(modelRef: string) {
-    const doc = unwrap(await ops.get(session.channel!, pack, attachPath));
-    const parsed = (doc.parsed as Record<string, unknown>) ?? {};
-    const rootId = String(Object.keys(parsed)[0] ?? '');
-    await ops.setScalar(session.channel!, pack, attachPath, Number(doc.rev ?? 0), [rootId, 'model'], modelRef);
-  }
-
-  async function attachToNew(modelRef: string) {
-    const path = `items/${attachPath.replace(/\.yml$/i, '')}.yml`;
-    await ops.create(session.channel!, pack, path);
-    const doc = unwrap(await ops.get(session.channel!, pack, path));
-    const rootId = String(Object.keys((doc.parsed as Record<string, unknown>) ?? {})[0] ?? '');
-    await ops.setScalar(
-      session.channel!,
-      pack,
-      path,
-      Number(doc.rev ?? 0),
-      [rootId, 'display_name'],
-      saveData?.projectName ?? rootId,
-    );
-    const fresh = unwrap(await ops.get(session.channel!, pack, path));
-    await ops.setScalar(session.channel!, pack, path, Number(fresh.rev ?? 0), [rootId, 'model'], modelRef);
   }
 
   async function importProject(event: Event) {
