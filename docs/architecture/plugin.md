@@ -217,6 +217,23 @@ and prompts/resends to online players per policy. Failures here never roll back 
 server runs the new content; players just keep the old pack until delivery succeeds (visible in
 `/materione doctor`).
 
+Delivery has three separate operations: **host immutable bytes**, **send a candidate to one
+author**, and **promote an exact hash to published**. An editor-triggered compile hosts a changed
+pack and sends it only to the authenticated player who opened that session; it does not change the
+durable published pointer or prompt other players. Publish takes the candidate hash the editor
+actually previewed and fails stale if a newer candidate exists. A successful promotion atomically
+persists an immutable `storage/delivery/versions/<sha256>.zip` and atomically moves
+`published.sha256` before sending that version to all online players. Startup rehosts the
+pointed-to snapshot before compiling canonical files, so
+unpublished edits can become a candidate but never silently replace the release. Joins always
+receive the published hash. Retention may evict neither the published version nor an active
+candidate.
+
+This is delivery staging, not content staging: canonical files and the complete runtime definition
+still apply globally through §4.5 after every valid editor change. A runtime-only change whose
+compiled pack hash is unchanged needs no promotion. Delivery failure remains fail-soft and cannot
+roll back runtime apply.
+
 ---
 
 ## 5. Diagnostics system (fail-soft backbone)

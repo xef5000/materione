@@ -28,14 +28,14 @@ reverse-proxy pattern — the listener is authenticated end to end either way.
 
 ## 2. Create your first item
 
-1. In the **Explorer**, pick your pack (or `+ new` to scaffold one).
-2. Right-click → **New Item** (or use the + button). A starter document
-   appears with a commented skeleton.
-3. The form is the default surface: pick a **material**, type a
-   **display name**, and choose a **texture** — the picker lists the pack's
+1. Open **Content** and choose **Create your first item**.
+2. Name the project once, then name the item. Materione creates the pack,
+   item document, and display name in one operation; no paths are shown.
+3. The Item Studio groups controls by Identity, Appearance, Gameplay, and
+   Behavior. Pick a **material** and choose a **texture** — the picker lists the pack's
    textures with thumbnails, and the upload button takes a PNG straight
    from your disk.
-4. Save (or edit any field — single fields patch losslessly, so comments
+4. Save (single fields patch losslessly, so comments
    survive). The pipeline dock shows the targeted reload; within ~2 s the
    item is live on the server. Grab it with
    `/materione dev stack <pack>:<item>` to check the look.
@@ -45,14 +45,15 @@ automatically, so everything you create is grabbable in the item browser.
 
 ## 3. Model with Blockbench
 
-The **Blockbench** button in the Explorer opens a pinned, unmodified
-Blockbench build inside the editor (works offline; the build and its pin
-are documented in `webui/public/blockbench/PIN.md`).
+Choose **Create model** or **Edit model** from the item's Appearance section.
+The pinned, unmodified Blockbench build appears contextually inside the editor
+(works offline; the build and its pin are documented in
+`webui/public/blockbench/PIN.md`).
 
 - **Model → save back:** build your model, click **save to Materione**,
   set where the exported Java block/item model, its textures and the
   `.bbmodel` project source land inside the pack, and optionally wire the
-  model onto a new or existing item/block right in the same step. Saving
+  model onto a new or existing item/block right in the same step. One atomic save
   triggers the usual targeted reload — the model is in game immediately.
 - **Existing project:** use **import .bbmodel** to load an external
   Blockbench project into the embedded build, then save it back as above.
@@ -60,7 +61,16 @@ are documented in `webui/public/blockbench/PIN.md`).
 `.bbmodel` sources are authoring state: they stay in your pack folder and
 are never shipped to clients.
 
-## 4. Hand-edited files stay welcome
+## 4. Preview and publish
+
+Every valid save updates runtime behavior immediately. A changed resource pack
+is sent only to the player who opened the editor, and Content shows
+**Preview ready** with its hash. Choose **Publish preview** to promote that exact
+hash to all players. If another edit built a newer candidate, publish fails
+visibly instead of releasing bytes you did not preview. The published pack
+survives restarts and remains the version sent to joining players.
+
+## 5. Hand-edited files stay welcome
 
 Editing YAML directly (or a `git pull`) is a first-class workflow: the
 plugin watches `content/packs/`, journals the change as an *external*
@@ -70,7 +80,7 @@ with unsaved edits keep them. The feed can be disabled with
 `editor_file_watcher: false` in `settings.yml` (editable in the editor's
 Server view).
 
-## 5. When things go wrong
+## 6. When things go wrong
 
 - **Diagnostics view** — every parse/validation failure streams in live,
   with click-through to the offending file and line.

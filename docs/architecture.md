@@ -418,6 +418,22 @@ Versioned pack URLs (cache-busting), proxy-side dedup for Velocity/Bungee networ
 send on 1.21.7+, and optional post-processing (obfuscation, PackSquash) as pipeline steps.
 Pack delivery is observable: who has which pack version, resend failures, etc.
 
+Authoring separates **candidate hosting** from **published delivery** without creating a second
+content or runtime environment. Every successful editor change still updates canonical files and
+runs the one pipeline through the normal shadow-swap (D1/D6). When pack bytes change, the resulting
+immutable hash is the candidate: it is sent immediately only to the player who opened that editor
+session. The durable published hash remains the join/default version for everyone else. An explicit
+publish operation promotes only the exact candidate hash that the author previewed; promotion is
+rejected if a newer candidate exists. Promotion moves a version pointer and sends that version to
+online players -- it never recompiles or substitutes newer bytes. Runtime-only changes with
+identical pack bytes apply normally and need no promotion.
+
+The delivery backend retains every published version and any active candidate within its bounded
+version window. The published pointer lives in `storage/`, survives restart, and is the only
+version sent on join. Candidate sends are bound server-side to the authenticated player that
+opened the session; a browser cannot select an arbitrary recipient. Console-origin sessions may
+author and publish but have no implicit in-game preview recipient.
+
 ### 8.5 Network mode (multi-server)
 
 The plugin is single-instance by design, but real deployments are networks (Velocity/Bungee
@@ -463,10 +479,12 @@ The frontend is a **separate build artifact** (SPA) — no Node on the server, n
 the admin. It talks only to the documented API, which is therefore also the automation surface
 for CI (pack repos can drive it).
 
-Screens (product-architecture level): **Dashboard** (server health, packs, pending
-diagnostics) · **Content browser** (graph search across all types) · **Type editors** (item,
-block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting) · **Asset manager**
-(textures/models/sounds + Blockbench launch) · **Diagnostics center** · **Live preview**.
+Screens (product-architecture level): **Dashboard** (server health, published/candidate state,
+pending diagnostics) · **Content browser** (resource-first graph search across all types) ·
+**Type studios** (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting) ·
+**Asset manager** (textures/models/sounds) · **Advanced files** (filesystem/YAML surface for T4)
+· **Diagnostics center** · **Live preview**. Pack creation is a one-time project onboarding step;
+normal T2/T3 authoring does not expose content directories or require file operations.
 
 ### 9.2 Auth & trust — the relay is untrusted
 
@@ -507,6 +525,14 @@ our editor/API across a message boundary. We never vendor or patch Blockbench so
 Blockbench is a pin bump. If a fork were ever needed, it stays a separate project — never inside
 this codebase.
 
+Blockbench is a contextual asset editor, not a top-level application the author organizes
+manually. **Create model** / **Edit model** opens the pinned build from the owning resource's
+appearance field with pack, model, source-project, revision, and return context. Save-back stages
+the model JSON, textures, optional `.bbmodel` source, relationship metadata, and owner-field patch
+as one revision-checked authoring transaction. Existing model references remain valid without
+relationship metadata. The bridge is capability-limited to import/export messages, verifies the
+exact iframe window and origin, and never receives editor session keys or filesystem access.
+
 ### 9.4 Editing model & concurrency
 
 The API exposes the filesystem as a **document store**: structured reads/writes per resource,
@@ -514,6 +540,19 @@ atomic per-save writes, revision numbers per resource (stale writes are rejected
 wins *with a visible warning*, never silent clobbering). The file watcher feeds external edits
 (hand-edited YAML, git pulls) back into all connected editors in real time. Live preview closes
 the loop: save → pipeline → targeted reload → visible in a connected game client within seconds.
+
+The primary editor is resource-first. A short creation flow derives safe ids and paths, then opens
+one visual studio organized by the domain facets in D3 (identity, appearance, gameplay, behavior,
+advanced). Forms render from richer registry self-description -- labels, grouping, constraints,
+reference targets, structured children, and conditional visibility -- rather than from field ids
+or hand-written per-type schemas. Explorer, revisions, paths, and raw YAML remain complete T4
+surfaces under progressive disclosure.
+
+Multi-file authoring actions (resource creation, coherent field batches, and Blockbench save-back)
+are server-side transactions: validate every path and revision, stage all bytes, atomically promote
+the set, record one audit summary, and enqueue one reload. Failure leaves no partial assets,
+attachments, revisions, or success-shaped response. The stateless SPA may hold a bounded unsaved
+draft, but durable draft, candidate, and publication state remain server/filesystem-owned.
 
 ### 9.5 In-game surface (for tiers without a browser open)
 

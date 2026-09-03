@@ -234,6 +234,21 @@ the pure-logic seams (tree building, signal fan-out, protocol fixtures) are
 vitest-pinned; the UI itself is exercised live by the harness gate, which now also
 drives create/move/assets.move/manual-reload/settings/audit end-to-end on Paper.
 
+**M3 product-polish follow-up (shipped):** the default surface is now one-time project onboarding,
+a resource-first Content catalog, and a schema-driven Item Studio; Explorer/YAML remain under
+Advanced. Creating the first project and item is one `authoring.createResource` transaction with
+one audit event and reload. Explicit registry metadata supplies human labels and the Identity,
+Appearance, Gameplay, and Behavior sections instead of deriving UI from YAML identifiers.
+Blockbench opens contextually from the item's model control; `authoring.saveModel` atomically saves
+all model assets, the optional `.bbmodel`, `.materione/model-links.json`, and the owner field, with
+rollback under revision conflict or failure. Editor changes still write canonical files and
+hot-reload the complete runtime globally. Pack delivery now has a candidate/published release
+channel: only the session-opening player receives candidate downloads, and explicit Publish
+promotes exactly the hash that player previewed. Published content-addressed snapshots and an atomic hash pointer persist under
+`storage/delivery/`; bounded retention pins both the published version and active
+candidate. This extends master §8.4/§9.3/§9.4 and D1/D6, not the source of truth or pipeline.
+Blocks and furniture can reuse the same metadata and transaction primitives.
+
 ## M4 — Glyphs, fonts, sounds, paintings
 
 **Goal:** the full pack surface beyond items.

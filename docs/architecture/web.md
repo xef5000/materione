@@ -213,10 +213,12 @@ A small, versioned RPC set over the established channel:
 | **session** | `hello`, `hello-reply`, `ping`/`pong`, `close`, `session.info` |
 | **browse** | list packs, list resources (type-filtered), get resource, "where used" graph query, search |
 | **edit** | put resource (with revision), delete, move/rename, create pack, import pack |
+| **authoring** | describe capabilities, create resource/project, commit a field batch, save a model transaction |
 | **validate** | dry-run validation of an unsaved resource → diagnostics |
 | **pipeline** | trigger targeted/full reload, pre-apply report, apply confirm |
 | **assets** | upload (chunked via payload store), delete, list |
 | **preview** | subscribe to live preview events, request preview renders |
+| **delivery** | candidate/published status, publish an exact previewed hash |
 | **admin** | diagnostics feed, doctor summary, audit query, settings read (security keys never leave the server) |
 
 Requests carry `{op, id, payload}`; responses `{op, id, ok, data|error}`. Errors reuse the
@@ -244,6 +246,14 @@ different threads — `EditorSession.sendFrame` synchronizes seal+write so seque
 assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
+
+*Planned M3 product redesign:* `authoring.describe`, `authoring.createResource`,
+`authoring.commit`, and `authoring.saveModel` wrap the primitive operations in revision-checked,
+multi-file transactions. `delivery.status` exposes candidate/published hashes and
+`delivery.publish` promotes an expected candidate hash or returns a visible stale error. These are
+capability-negotiated additions; the primitive M3 operations remain available to Advanced Files
+and older clients. Resource and asset listings gain pagination/filtering before relay mode makes
+eager full-pack traversal a scale boundary.
 
 ### 4.3 Large payloads — manifest + content-addressed chunks
 
@@ -353,10 +363,16 @@ cannot read, forge, replay, or reorder anything.
   embed-capable), Vite build, output deployed as static assets.
 - **Stateless by design**: all state lives in the open session; a refresh re-fetches the
   document snapshot from the plugin. Undo/redo is client-side per editor session and bounded.
-- **Layered like the plugin**: an API client (transport-agnostic: relay | direct), a document
-  store cache (resources by id + revisions), editors per content type rendered **from registry
-  self-description** (plugin.md §3 — forms are generated from parameter schemas, never
-  hand-written per mechanic), a diagnostics center, and the preview surface.
+- **Layered like the plugin**: an API client (transport-agnostic: relay | direct), a normalized
+  resource/asset/schema cache, bounded per-resource drafts, editors rendered **from registry
+  self-description** (plugin.md §3 -- forms are generated from parameter schemas, never
+  hand-written per mechanic), a diagnostics center, and the preview surface. The default
+  information architecture is resource-first: onboarding → content catalog → type studio.
+  Filesystem Explorer and YAML live under Advanced for T4 rather than defining the T2/T3 journey.
+- **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
+  constraints, reference targets, structured children, conditional visibility, widgets, and
+  creation capabilities. The UI provides reusable controls and domain previews; it does not
+  maintain a second item schema. Unknown fields remain preserved and visible in Advanced.
 - **Blockbench integration** (master §9.3): the pinned, unmodified Blockbench web build loads
   inside the editor (iframe with a scripting bridge) from **static assets served by the editor
   SPA's own host** — never an inbound connection to the game server (D11 intact); the Materione
@@ -364,14 +380,21 @@ cannot read, forge, replay, or reorder anything.
   the same session API. The editor treats Blockbench as an asset-producing subsystem, not a
   peer. The `blockbench/` folder on the server side (master §7.1) is a pinned copy for
   **offline/direct-mode installs** and tooling parity; the SPA ships its own pinned copy.
-  *As built (M3 closeout):* the pinned build is **Blockbench v5.1.6**, vendored unmodified at
+  *As built (M3):* the pinned build is **Blockbench v5.1.6**, vendored unmodified at
   `webui/public/blockbench/` (recipe + pin in its PIN.md — upgrades are pin bumps; the
   server-side `blockbench/` folder is not needed because the jar copy already serves offline
-  installs). A workbench tab hosts the same-origin iframe; `materione-bridge.js` is injected
+  installs). The owning item's model control opens a contextual workbench tab containing the
+  same-origin iframe; `materione-bridge.js` is injected
   after load and communicates **only** via postMessage (`collect` → model JSON + textures +
-  `.bbmodel` source; `importProject` → load an external project). Save-back, texture mapping
-  and quick-attach are pure SPA logic riding `assets.put` / `edit.create` / `edit.setScalar` —
-  no new wire ops.
+  `.bbmodel` source; `importProject` → load an external project). `authoring.saveModel` receives
+  owner/revision context and saves model JSON, textures, optional source, relationship manifest,
+  and owner patch as one bounded transaction. Existing-owner, new-owner, and assets-only saves all
+  use that operation; conflicts and injected post-promotion failures restore the prior file set.
+  Bridge messages target and accept only the exact iframe origin/window and use an allowlisted,
+  payload-capped protocol.
+  The versioned relationship manifest is `.materione/model-links.json` in the canonical pack. It
+  maps `owner-path#field.path` to model and optional source paths, preserves other links on update,
+  and is authoring metadata excluded from the compiled client pack.
 - **Versioning**: the SPA declares the protocol versions it speaks; the plugin serves hints if
   the cached SPA is stale ("a newer editor is available — refresh").
 
