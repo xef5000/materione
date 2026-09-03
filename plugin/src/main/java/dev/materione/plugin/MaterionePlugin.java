@@ -288,7 +288,7 @@ public final class MaterionePlugin extends JavaPlugin {
     /** Phase 10 (plugin.md §1.1): the direct-mode editor listener, if enabled. */
     private void startEditorTransport() {
         editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
-                this, diagnostics, scheduling, pipeline);
+                this, diagnostics, scheduling, pipeline, delivery);
         editorTransport.start(settings, storage);
     }
 

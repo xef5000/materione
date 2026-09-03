@@ -80,7 +80,7 @@ public final class AssetOps {
                     Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
                 }
                 audit.record(actorOf(request), "assets.put", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack));
+                queueReload(reload, pack);
                 JsonObject payload = new JsonObject();
                 payload.addProperty("bytes", bytes.length);
                 return Wire.Response.success(request, payload);
@@ -142,7 +142,7 @@ public final class AssetOps {
                     Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                 }
                 audit.record(actorOf(request), "assets.move", pack + "/" + from + " -> " + to);
-                queueReload(reload, packsRoot.resolve(pack));
+                queueReload(reload, pack);
                 return Wire.Response.success(request, new JsonObject());
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
@@ -166,7 +166,7 @@ public final class AssetOps {
                 audit.record(actorOf(request), "assets.delete", pack + "/" + request.payload()
                         .get("path").getAsString());
                 if (existed) {
-                    queueReload(reload, packsRoot.resolve(pack));
+                    queueReload(reload, pack);
                 }
                 return Wire.Response.success(request, new JsonObject());
             } catch (IllegalArgumentException e) {
@@ -203,10 +203,10 @@ public final class AssetOps {
         array.add(object);
     }
 
-    private static void queueReload(ReloadTrigger reload, Path packDir) {
+    private static void queueReload(ReloadTrigger reload, String pack) {
         // Whole-pack scope for asset changes: texture edits can affect any
         // referencing item, and the fingerprint cache makes no-op cheap.
-        reload.reloadFiles(Set.of(packDir)).whenComplete((outcome, error) -> { });
+        reload.reloadScope(new dev.materione.core.pipeline.ReloadScope.OnePack(pack)).whenComplete((outcome, error) -> { });
     }
 
     private static Wire.Response failure(Wire.Request request, Exception e) {

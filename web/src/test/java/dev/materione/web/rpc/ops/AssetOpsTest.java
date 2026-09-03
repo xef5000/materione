@@ -1,0 +1,124 @@
+package dev.materione.web.rpc.ops;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import com.google.gson.JsonObject;
+import dev.materione.core.document.AuditLog;
+import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.web.ReloadTrigger;
+import dev.materione.web.protocol.Wire;
+import dev.materione.web.rpc.RpcDispatcher;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+/**
+ * Tests for AssetOps: upload, list, get, move, and delete assets,
+ * ensuring audit entries and OnePack reload scopes are recorded.
+ */
+class AssetOpsTest {
+
+    @TempDir
+    Path temp;
+
+    @Test
+    void assetLifecycleAndReloadQueueing() throws Exception {
+        Path packsRoot = temp.resolve("packs");
+        Files.createDirectories(packsRoot.resolve("demo"));
+        AuditLog audit = new AuditLog(temp.resolve("audit.log"));
+        CapturingTrigger trigger = new CapturingTrigger();
+
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        AssetOps.register(dispatcher, packsRoot, audit, trigger);
+
+        // Initially no assets
+        Wire.Response listEmpty = dispatcher.dispatch(
+                request("assets.list", "1", object("pack", "demo")));
+        assertThat(listEmpty.ok()).isTrue();
+        assertThat(payload(listEmpty).get("assets").getAsJsonArray()).isEmpty();
+
+        // Put an asset (texture)
+        byte[] textureBytes = "sample-png-data".getBytes(StandardCharsets.UTF_8);
+        String base64Data = Base64.getEncoder().encodeToString(textureBytes);
+        Wire.Response put = dispatcher.dispatch(
+                request("assets.put", "2", object("pack", "demo", "path", "assets/textures/ruby.png", "data", base64Data)));
+        assertThat(put.ok()).isTrue();
+        assertThat(payload(put).get("bytes").getAsInt()).isEqualTo(textureBytes.length);
+
+        // Reload queued with OnePack scope
+        assertThat(trigger.scopes).hasSize(1);
+        assertThat(trigger.scopes.get(0)).isEqualTo(new ReloadScope.OnePack("demo"));
+
+        // Get the asset back
+        Wire.Response get = dispatcher.dispatch(
+                request("assets.get", "3", object("pack", "demo", "path", "assets/textures/ruby.png")));
+        assertThat(get.ok()).isTrue();
+        assertThat(payload(get).get("data").getAsString()).isEqualTo(base64Data);
+
+        // List contains the asset
+        Wire.Response list = dispatcher.dispatch(
+                request("assets.list", "4", object("pack", "demo")));
+        assertThat(list.ok()).isTrue();
+        assertThat(payload(list).get("assets").toString()).contains("assets/textures/ruby.png");
+
+        // Move the asset
+        Wire.Response move = dispatcher.dispatch(
+                request("assets.move", "5", object("pack", "demo", "from", "assets/textures/ruby.png", "to", "assets/textures/ruby_gem.png")));
+        assertThat(move.ok()).isTrue();
+        assertThat(trigger.scopes).hasSize(2);
+        assertThat(trigger.scopes.get(1)).isEqualTo(new ReloadScope.OnePack("demo"));
+
+        // Delete the asset
+        Wire.Response delete = dispatcher.dispatch(
+                request("assets.delete", "6", object("pack", "demo", "path", "assets/textures/ruby_gem.png")));
+        assertThat(delete.ok()).isTrue();
+        assertThat(trigger.scopes).hasSize(3);
+        assertThat(trigger.scopes.get(2)).isEqualTo(new ReloadScope.OnePack("demo"));
+
+        // Audit log records
+        String auditText = Files.readString(temp.resolve("audit.log"));
+        assertThat(auditText).contains("assets.put");
+        assertThat(auditText).contains("assets.move");
+        assertThat(auditText).contains("assets.delete");
+    }
+
+    private static final class CapturingTrigger implements ReloadTrigger {
+        final List<ReloadScope> scopes = new ArrayList<>();
+        final List<Path> files = new ArrayList<>();
+
+        @Override
+        public CompletableFuture<Outcome> reloadFiles(Set<Path> paths) {
+            files.addAll(paths);
+            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
+        }
+
+        @Override
+        public CompletableFuture<Outcome> reloadScope(ReloadScope scope) {
+            scopes.add(scope);
+            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
+        }
+    }
+
+    private static Wire.Request request(String op, String id, JsonObject payload) {
+        return new Wire.Request(op, id, payload);
+    }
+
+    private static JsonObject payload(Wire.Response response) {
+        return response.data().getAsJsonObject();
+    }
+
+    private static JsonObject object(String... pairs) {
+        JsonObject object = new JsonObject();
+        for (int i = 0; i < pairs.length; i += 2) {
+            object.addProperty(pairs[i], pairs[i + 1]);
+        }
+        return object;
+    }
+}

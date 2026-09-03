@@ -84,10 +84,12 @@ public final class PipelineService {
         // than this build still names its own format); -1 = detection failed.
         this.detectedPackFormat = dev.materione.platform.probe.ServerPackFormat
                 .detectResourceFormat().orElse(-1);
-        plugin.getLogger().info("MATERIONE-PACKFORMAT detected="
-                + (detectedPackFormat < 0 ? "none" : detectedPackFormat)
-                + " advertising=" + PackFormats.FLOOR + ".."
-                + Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat));
+        if (plugin != null) {
+            plugin.getLogger().info("MATERIONE-PACKFORMAT detected="
+                    + (detectedPackFormat < 0 ? "none" : detectedPackFormat)
+                    + " advertising=" + PackFormats.FLOOR + ".."
+                    + Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat));
+        }
     }
 
     /** Registers the built-in content types through the registry path (D5). */

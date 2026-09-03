@@ -119,7 +119,7 @@ public final class DeliveryService implements Listener {
     }
 
     void resendToOnline() {
-        if (currentUrl.isEmpty() || currentSha1.length == 0) {
+        if (currentUrl.isEmpty() || currentSha1.length == 0 || plugin == null || plugin.getServer() == null) {
             return;
         }
         scheduling.executeGlobal(plugin, () ->

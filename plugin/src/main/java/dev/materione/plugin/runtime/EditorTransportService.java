@@ -50,13 +50,16 @@ public final class EditorTransportService {
     private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
 
     private final PipelineService pipeline;
+    private final DeliveryService delivery;
 
     public EditorTransportService(Plugin plugin, DiagnosticsBus diagnostics,
-            SchedulingGateway scheduling, PipelineService pipeline) {
+            SchedulingGateway scheduling, PipelineService pipeline,
+            DeliveryService delivery) {
         this.plugin = plugin;
         this.diagnostics = diagnostics;
         this.scheduling = scheduling;
         this.pipeline = pipeline;
+        this.delivery = delivery;
     }
 
     /** Starts the listener from settings ({@code editor_*} keys). False when disabled/unbound. */
@@ -176,7 +179,7 @@ public final class EditorTransportService {
      * the outcome to every connected editor — the live preview loop's last
      * mile, shared by save-triggered and manual reloads.
      */
-    private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
+    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
             dev.materione.core.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways) {
@@ -185,6 +188,9 @@ public final class EditorTransportService {
             try {
                 var summary = pipeline.reload(scope,
                         storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+                if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null && delivery != null) {
+                    delivery.publish(summary.packZip(), summary.packSha256());
+                }
                 future.complete(new ReloadTrigger.Outcome(
                         !summary.skipped(), summary.noop(),
                         summary.itemsLive(), summary.quarantined()));
