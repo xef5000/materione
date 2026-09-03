@@ -89,6 +89,42 @@ class AssetOpsTest {
         assertThat(auditText).contains("assets.delete");
     }
 
+    /**
+     * The studio shows a model by reading the render the Blockbench workbench
+     * cached under `.materione/thumbnails/`. Reads reach it; writes must not,
+     * or a free-form upload could rewrite authoring metadata that only
+     * `authoring.saveModel` is allowed to produce.
+     */
+    @Test
+    void readsCachedModelRendersButRefusesToWriteThem() throws Exception {
+        Path packsRoot = temp.resolve("packs");
+        Path thumbnail = packsRoot.resolve("demo/.materione/thumbnails/gem.png");
+        Files.createDirectories(thumbnail.getParent());
+        byte[] bytes = "render".getBytes(StandardCharsets.UTF_8);
+        Files.write(thumbnail, bytes);
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        AssetOps.register(
+                dispatcher, packsRoot, new AuditLog(temp.resolve("audit.log")),
+                new CapturingTrigger());
+
+        Wire.Response get = dispatcher.dispatch(request("assets.get", "1",
+                object("pack", "demo", "path", ".materione/thumbnails/gem.png")));
+        assertThat(get.ok()).isTrue();
+        assertThat(payload(get).get("data").getAsString())
+                .isEqualTo(Base64.getEncoder().encodeToString(bytes));
+
+        Wire.Response put = dispatcher.dispatch(request("assets.put", "2", object(
+                "pack", "demo",
+                "path", ".materione/thumbnails/gem.png",
+                "data", Base64.getEncoder().encodeToString("forged".getBytes(StandardCharsets.UTF_8)))));
+        assertThat(put.ok()).isFalse();
+
+        Wire.Response escape = dispatcher.dispatch(request("assets.get", "3",
+                object("pack", "demo", "path", ".materione/thumbnails/../model-links.json")));
+        assertThat(escape.ok()).isFalse();
+        assertThat(Files.readAllBytes(thumbnail)).isEqualTo(bytes);
+    }
+
     private static final class CapturingTrigger implements ReloadTrigger {
         final List<ReloadScope> scopes = new ArrayList<>();
         final List<Path> files = new ArrayList<>();

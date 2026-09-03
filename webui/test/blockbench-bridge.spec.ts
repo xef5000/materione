@@ -3,6 +3,8 @@
 // exported model is what the client downloads, and a wrong texture ref means
 // a purple-black cube in game. Pure functions, pinned here.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   MODEL_FORMAT,
   dataUrlToBase64,
@@ -156,5 +158,35 @@ describe('modelTargetsFor', () => {
 describe('thumbnailPath', () => {
   it('caches renders as authoring metadata, never inside the shipped pack', () => {
     expect(thumbnailPath('demo:weapons/ruby')).toBe('.materione/thumbnails/weapons/ruby.png');
+  });
+
+  /**
+   * The defect this pins: the editor wrote a path the server's allowlist did
+   * not accept, so every model save died with MTR-0035 after the author had
+   * already done the modelling. The two ends must agree, so the test reads the
+   * server's own pattern rather than restating it.
+   */
+  it('produces paths the server actually accepts', () => {
+    const java = readFileSync(
+      fileURLToPath(
+        new URL(
+          '../../web/src/main/java/dev/materione/web/rpc/ops/AuthoringModelOps.java',
+          import.meta.url,
+        ),
+      ),
+      'utf8',
+    );
+    const literal = /THUMBNAIL_ASSET\s*=\s*java\.util\.regex\.Pattern\.compile\(\s*"([^"]+)"/
+      .exec(java)?.[1];
+    expect(literal, 'THUMBNAIL_ASSET pattern not found in AuthoringModelOps').toBeTruthy();
+    // Java string literal -> regex source: `\\.` in source is one `\.`
+    const accepted = new RegExp(`^${literal!.replace(/\\\\/g, '\\')}$`);
+
+    expect(accepted.test(thumbnailPath('demo:cone_block'))).toBe(true);
+    expect(accepted.test(thumbnailPath('demo:weapons/ruby'))).toBe(true);
+    expect(accepted.test(thumbnailPath('demo:tools/pick_v2'))).toBe(true);
+    // and it stays a narrow allowlist
+    expect(accepted.test('.materione/model-links.json')).toBe(false);
+    expect(accepted.test('.materione/thumbnails/x.yml')).toBe(false);
   });
 });

@@ -26,6 +26,18 @@ public final class AuthoringModelOps {
     private static final int MAX_TRANSACTION_BYTES = 8 * 1024 * 1024;
     private static final Object MODEL_SAVE_LOCK = new Object();
 
+    /** Pack content: everything the compiler ships to clients. */
+    private static final java.util.regex.Pattern SHIPPED_ASSET =
+            java.util.regex.Pattern.compile("assets/[A-Za-z0-9_./ -]+");
+
+    /**
+     * Authoring metadata: the model render cached beside `model-links.json` so
+     * the editor can show a model without booting Blockbench. `.materione/` is
+     * never walked by the compiler, so this stays out of the client pack.
+     */
+    private static final java.util.regex.Pattern THUMBNAIL_ASSET =
+            java.util.regex.Pattern.compile("\\.materione/thumbnails/[A-Za-z0-9_./-]+\\.png");
+
     private AuthoringModelOps() {}
 
     public static void register(
@@ -200,7 +212,9 @@ public final class AuthoringModelOps {
         for (var value : values) {
             JsonObject entry = value.getAsJsonObject();
             String relative = required(entry, "path").replace('\\', '/');
-            if (!relative.matches("assets/[A-Za-z0-9_./ -]+") || relative.contains("..")) {
+            boolean allowed = SHIPPED_ASSET.matcher(relative).matches()
+                    || THUMBNAIL_ASSET.matcher(relative).matches();
+            if (!allowed || relative.contains("..")) {
                 throw new IllegalArgumentException("invalid model asset path: " + relative);
             }
             byte[] bytes = Base64.getDecoder().decode(required(entry, "data"));

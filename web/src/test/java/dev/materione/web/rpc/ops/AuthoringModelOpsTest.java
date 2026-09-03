@@ -138,6 +138,50 @@ class AuthoringModelOpsTest {
         assertThat(trigger.scope).isEqualTo(new ReloadScope.OnePack("demo"));
     }
 
+    @Test
+    void savesTheCachedRenderBesideTheRelationshipManifest() throws Exception {
+        DocumentStore documents = documents();
+        documents.createPack("demo", "test");
+        documents.createDocument(
+                "demo", "items/gem.yml", "gem:\n  material: STICK\n", "test");
+        JsonObject payload = request(1, "new model").payload();
+        JsonObject thumbnail = new JsonObject();
+        thumbnail.addProperty("path", ".materione/thumbnails/gem.png");
+        thumbnail.addProperty(
+                "data", Base64.getEncoder().encodeToString("PNG".getBytes(StandardCharsets.UTF_8)));
+        payload.getAsJsonArray("assets").add(thumbnail);
+
+        Wire.Response response = dispatcher(documents, new Trigger())
+                .dispatch(new Wire.Request("authoring.saveModel", "1", payload), "session-one");
+
+        assertThat(response.ok()).isTrue();
+        // Authoring metadata, so it must land outside assets/, which is the
+        // only tree the compiler walks into the shipped client pack.
+        assertThat(Files.readString(temp.resolve("packs/demo/.materione/thumbnails/gem.png")))
+                .isEqualTo("PNG");
+    }
+
+    @Test
+    void refusesAuthoringPathsOtherThanTheThumbnailCache() throws Exception {
+        DocumentStore documents = documents();
+        documents.createPack("demo", "test");
+        documents.createDocument(
+                "demo", "items/gem.yml", "gem:\n  material: STICK\n", "test");
+        JsonObject payload = request(1, "new model").payload();
+        JsonObject sneaky = new JsonObject();
+        sneaky.addProperty("path", ".materione/model-links.json");
+        sneaky.addProperty(
+                "data", Base64.getEncoder().encodeToString("{}".getBytes(StandardCharsets.UTF_8)));
+        payload.getAsJsonArray("assets").add(sneaky);
+
+        Wire.Response response = dispatcher(documents, new Trigger())
+                .dispatch(new Wire.Request("authoring.saveModel", "1", payload), "session-one");
+
+        assertThat(response.ok()).isFalse();
+        assertThat(response.error().code()).isEqualTo("MTR-0035");
+        assertThat(Files.exists(temp.resolve("packs/demo/assets/models/gem.json"))).isFalse();
+    }
+
     private RpcDispatcher dispatcher(DocumentStore documents, Trigger trigger) {
         RpcDispatcher dispatcher = new RpcDispatcher();
         AuthoringModelOps.register(

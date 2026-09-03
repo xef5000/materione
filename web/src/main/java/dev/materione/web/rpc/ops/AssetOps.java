@@ -95,7 +95,7 @@ public final class AssetOps {
             try {
                 String pack = requiredString(request.payload(), "pack");
                 Path file = packsRoot.resolve(pack)
-                        .resolve(safeAssetPath(request.payload().get("path").getAsString()))
+                        .resolve(readableAssetPath(request.payload().get("path").getAsString()))
                         .normalize();
                 if (!file.startsWith(packsRoot.resolve(pack)) || !Files.isRegularFile(file)) {
                     return Wire.Response.failure(request,
@@ -187,6 +187,22 @@ public final class AssetOps {
                     "asset paths must start with assets/ and stay inside it: " + path);
         }
         return path.replace('\\', '/');
+    }
+
+    /**
+     * Reads may also reach the model renders the Blockbench workbench caches
+     * under {@code .materione/thumbnails/}, so a studio can show a model
+     * without booting Blockbench. Writes deliberately cannot: authoring
+     * metadata is written by the transaction that produces it
+     * ({@code authoring.saveModel}), never by a free-form asset upload.
+     */
+    private static String readableAssetPath(String path) {
+        if (path != null
+                && path.matches("\\.materione/thumbnails/[A-Za-z0-9_./-]+\\.png")
+                && !path.contains("..")) {
+            return path;
+        }
+        return safeAssetPath(path);
     }
 
     private static void entry(com.google.gson.JsonArray array, String relative, Path file) {
