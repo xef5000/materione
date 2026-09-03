@@ -100,7 +100,7 @@ public final class EditorSockets {
                 byte[] body = session.openFrame(Wire.parseObject(text));
                 Wire.Request request = Wire.Request.fromJson(
                         Wire.parseObject(new String(body, java.nio.charset.StandardCharsets.UTF_8)));
-                Wire.Response response = dispatcher.dispatch(request);
+                Wire.Response response = dispatcher.dispatch(request, session.sessionId());
                 session.sendFrame(Wire.canonicalBytes(response.toJson()));
             } catch (ProtocolException e) {
                 violation(e.getMessage());

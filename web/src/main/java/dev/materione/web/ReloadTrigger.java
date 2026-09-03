@@ -16,6 +16,12 @@ public interface ReloadTrigger {
     /** Queues one targeted reload; completes when the apply stage finished. */
     CompletableFuture<Outcome> reloadFiles(Set<java.nio.file.Path> files);
 
+    /** Queues a targeted reload attributed to an authenticated editor session. */
+    default CompletableFuture<Outcome> reloadFilesForPreview(
+            Set<java.nio.file.Path> files, String sessionId) {
+        return reloadFiles(files);
+    }
+
     /**
      * Queues a whole-scope reload (the manual {@code pipeline.reload} op and
      * per-pack actions). Hosts that only implement file-set reloads may leave
@@ -25,6 +31,12 @@ public interface ReloadTrigger {
         CompletableFuture<Outcome> future = new CompletableFuture<>();
         future.complete(Outcome.rejected());
         return future;
+    }
+
+    /** Preview-attributed variant for asset changes that require pack scope. */
+    default CompletableFuture<Outcome> reloadScopeForPreview(
+            ReloadScope scope, String sessionId) {
+        return reloadScope(scope);
     }
 
     /** What a reload did — enough for an activity feed line. */

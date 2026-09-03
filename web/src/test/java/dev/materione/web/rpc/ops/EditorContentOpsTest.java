@@ -88,6 +88,54 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void authoringCommitWritesOneRevisionAndQueuesOneReload() throws Exception {
+        DocumentStore store = store();
+        AuditLog audit = audit();
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit, temp.resolve("packs"), trigger,
+                java.util.List::of, java.util.List::of);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+        dispatcher.dispatch(request("edit.create", "2", object("pack", "demo", "path", "items/wand.yml")));
+        trigger.files.clear();
+
+        Wire.Response committed = dispatcher.dispatch(request("authoring.commit", "3",
+                object("pack", "demo", "path", "items/wand.yml", "rev", "1",
+                        "content", "wand:\n  material: BLAZE_ROD\n  display_name: Wand\n")));
+
+        assertThat(committed.ok()).isTrue();
+        assertThat(payload(committed).get("rev").getAsInt()).isEqualTo(2);
+        assertThat(store.read("demo", "items/wand.yml").raw()).contains("BLAZE_ROD");
+        assertThat(trigger.files).containsExactly(temp.resolve("packs/demo/items/wand.yml"));
+        assertThat(java.nio.file.Files.readString(temp.resolve("audit.log"))).contains("authoring.commit");
+    }
+
+    @Test
+    void createResourceCreatesProjectAndNamedItemAsOneOperation() throws Exception {
+        DocumentStore store = store();
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"), trigger,
+                java.util.List::of, java.util.List::of);
+
+        JsonObject body = object(
+                "pack", "demo", "id", "ruby_wand", "name", "Ruby \"Wand\"");
+        body.addProperty("createPack", true);
+        Wire.Response response =
+                dispatcher.dispatch(request("authoring.createResource", "1", body));
+
+        assertThat(response.ok()).isTrue();
+        assertThat(payload(response).get("rev").getAsInt()).isEqualTo(1);
+        assertThat(store.listPacks()).extracting(DocumentStore.PackSummary::id)
+                .containsExactly("demo");
+        assertThat(store.read("demo", "items/ruby_wand.yml").raw())
+                .contains("display_name: \"Ruby \\\"Wand\\\"\"");
+        assertThat(trigger.files).containsExactly(temp.resolve("packs/demo/items/ruby_wand.yml"));
+        assertThat(java.nio.file.Files.readString(temp.resolve("audit.log")))
+                .contains("authoring.createResource");
+    }
+
+    @Test
     void unknownOpsGetACleanErrorNotADisconnect() {
         RpcDispatcher dispatcher = new RpcDispatcher(); // nothing registered
         Wire.Response response = dispatcher.dispatch(request("browse.nonexistent", "x"));

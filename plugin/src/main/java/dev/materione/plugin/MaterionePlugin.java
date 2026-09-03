@@ -251,10 +251,10 @@ public final class MaterionePlugin extends JavaPlugin {
         if (!pendingRestart.isEmpty()) {
             restartStaging.clear();
         }
-        delivery = new DeliveryService(this, diagnostics, scheduling);
+        delivery = new DeliveryService(this, diagnostics, scheduling, storage.storageDir());
         delivery.start(settings);
         getServer().getPluginManager().registerEvents(delivery, this);
-        var summary = reloadContent();
+        var summary = reloadContent(true);
         if (summary.skipped()) {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
@@ -276,11 +276,19 @@ public final class MaterionePlugin extends JavaPlugin {
 
     /** One composed reload: pipeline → compile → apply → deliver (§4). */
     public PipelineService.ReloadSummary reloadContent() {
+        return reloadContent(false);
+    }
+
+    private PipelineService.ReloadSummary reloadContent(boolean preservePublished) {
         var summary = pipeline.reload(
                 storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
         if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {
             // deliver after apply — delivery failure never rolls apply back (§4.6)
-            delivery.publish(summary.packZip(), summary.packSha256());
+            if (preservePublished && delivery.hasPublishedVersion()) {
+                delivery.stageCandidate(summary.packZip(), summary.packSha256(), null);
+            } else {
+                delivery.publish(summary.packZip(), summary.packSha256());
+            }
         }
         return summary;
     }

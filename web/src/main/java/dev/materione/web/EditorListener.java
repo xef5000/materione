@@ -92,7 +92,12 @@ public final class EditorListener {
 
     /** Creates a session and composes its full capability URL. */
     public String openSessionUrl(String advertiseHost) {
-        EditorSession session = sessions.create();
+        return openSessionUrl(advertiseHost, "");
+    }
+
+    /** Opens a session bound to the initiating player, if any. */
+    public String openSessionUrl(String advertiseHost, String ownerId) {
+        EditorSession session = sessions.create(ownerId);
         String host = advertiseHost == null || advertiseHost.isBlank()
                 ? (boundHost.equals("0.0.0.0") ? "127.0.0.1" : boundHost)
                 : advertiseHost;

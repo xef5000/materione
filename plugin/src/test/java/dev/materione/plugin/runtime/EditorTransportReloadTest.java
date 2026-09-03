@@ -88,6 +88,36 @@ class EditorTransportReloadTest {
         delivery.stop();
     }
 
+    @Test
+    void publishedPackSurvivesServiceRestart() throws IOException {
+        Path pack = temp.resolve("published.zip");
+        byte[] bytes = new byte[] {4, 2};
+        Files.write(pack, bytes);
+        String hash;
+        try {
+            hash = java.util.HexFormat.of().formatHex(
+                    java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new AssertionError(e);
+        }
+        DiagnosticsBus diagnostics = new DiagnosticsBusService(64);
+        SchedulingGateway scheduling = new DirectSchedulingGateway();
+        var settings = new SettingsService().load(temp.resolve("settings"));
+
+        DeliveryService first = new DeliveryService(
+                null, diagnostics, scheduling, temp.resolve("storage"));
+        first.start(settings);
+        first.publish(pack, hash);
+        first.stop();
+
+        DeliveryService restored = new DeliveryService(
+                null, diagnostics, scheduling, temp.resolve("storage"));
+        restored.start(settings);
+        assertThat(restored.releaseStatus().publishedSha256()).isEqualTo(hash);
+        assertThat(restored.currentUrl()).isNotEmpty();
+        restored.stop();
+    }
+
     private static final class DirectSchedulingGateway implements SchedulingGateway {
         @Override
         public void executeSync(Plugin plugin, Location location, Runnable task) {

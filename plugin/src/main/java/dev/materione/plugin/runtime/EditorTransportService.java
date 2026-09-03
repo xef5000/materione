@@ -155,6 +155,27 @@ public final class EditorTransportService {
             }
 
             @Override
+            public java.util.concurrent.CompletableFuture<Outcome> reloadFilesForPreview(
+                    java.util.Set<java.nio.file.Path> files, String sessionId) {
+                String ownerId = ownerForSession(sessionId);
+                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files), storage, false, ownerId);
+            }
+
+            @Override
+            public java.util.concurrent.CompletableFuture<Outcome> reloadScopeForPreview(
+                    dev.materione.core.pipeline.ReloadScope scope, String sessionId) {
+                return runReload(scope, storage, false, ownerForSession(sessionId));
+            }
+
+            private String ownerForSession(String sessionId) {
+                if (sessions == null) {
+                    return "";
+                }
+                var editorSession = sessions.find(sessionId);
+                return editorSession == null ? "" : editorSession.ownerId();
+            }
+
+            @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
                     dev.materione.core.pipeline.ReloadScope scope) {
                 // Manual reloads always announce, even no-ops/skips — the
@@ -166,12 +187,29 @@ public final class EditorTransportService {
                 dispatcher, documents, audit, storage.contentPacksDir(), trigger,
                 this::typeCatalog,
                 () -> diagnostics.recent(100));
+        dev.materione.web.rpc.ops.AuthoringModelOps.register(
+                dispatcher, documents, storage.contentPacksDir(), audit, trigger);
         dev.materione.web.rpc.ops.AssetOps.register(
                 dispatcher, storage.contentPacksDir(), audit, trigger);
         dev.materione.web.rpc.ops.AdminOps.register(
                 dispatcher, audit, trigger,
                 plugin.getDataFolder().toPath().resolve("settings").resolve("settings.yml"),
                 dev.materione.core.settings.SettingsService::validateDraft);
+        dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, new dev.materione.web.DeliveryControl() {
+            @Override
+            public Status status() {
+                if (delivery == null) {
+                    return new Status("", "");
+                }
+                var status = delivery.releaseStatus();
+                return new Status(status.publishedSha256(), status.candidateSha256());
+            }
+
+            @Override
+            public boolean publish(String expectedCandidateSha256) {
+                return delivery != null && delivery.publishCandidate(expectedCandidateSha256);
+            }
+        });
     }
 
     /**
@@ -183,13 +221,35 @@ public final class EditorTransportService {
             dev.materione.core.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways) {
+        return runReload(scope, storage, announceAlways, "", false);
+    }
+
+    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
+            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.core.storage.StorageService.StorageState storage,
+            boolean announceAlways, String previewOwnerId) {
+        return runReload(scope, storage, announceAlways, previewOwnerId, true);
+    }
+
+    private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
+            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.core.storage.StorageService.StorageState storage,
+            boolean announceAlways, String previewOwnerId, boolean stageCandidate) {
         CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
         scheduling.executeAsync(plugin, () -> {
             try {
                 var summary = pipeline.reload(scope,
                         storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
                 if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null && delivery != null) {
-                    delivery.publish(summary.packZip(), summary.packSha256());
+                    if (stageCandidate) {
+                        delivery.stageCandidate(
+                                summary.packZip(),
+                                summary.packSha256(),
+                                previewOwnerId == null || previewOwnerId.isBlank()
+                                        ? null : java.util.UUID.fromString(previewOwnerId));
+                    } else {
+                        delivery.publish(summary.packZip(), summary.packSha256());
+                    }
                 }
                 future.complete(new ReloadTrigger.Outcome(
                         !summary.skipped(), summary.noop(),
@@ -231,7 +291,13 @@ public final class EditorTransportService {
                         parameter.description(),
                         parameter.allowedValues(),
                         java.util.List.of(),
-                        parameter.uiHint()));
+                        parameter.uiHint(),
+                        parameter.editor().label(),
+                        parameter.editor().section(),
+                        parameter.editor().order(),
+                        parameter.editor().advanced(),
+                        parameter.editor().referenceKind(),
+                        parameter.editor().example()));
             }
             out.add(new dev.materione.web.TypeMeta(
                     type.name(), type.directory(),
@@ -248,7 +314,8 @@ public final class EditorTransportService {
                     NamedTextColor.RED));
             return;
         }
-        String url = listener.openSessionUrl(advertiseHost);
+        String ownerId = sender instanceof org.bukkit.entity.Player player ? player.getUniqueId().toString() : "";
+        String url = listener.openSessionUrl(advertiseHost, ownerId);
         // Stable harness marker: the harness scrapes the URL from the log.
         plugin.getLogger().info("MATERIONE-EDITOR " + url);
         sender.sendMessage(Component.text("Editor session ready — open:", NamedTextColor.GREEN));

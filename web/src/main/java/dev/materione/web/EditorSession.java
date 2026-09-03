@@ -42,6 +42,7 @@ public final class EditorSession {
     enum State { NEW, AWAITING_TRUST, ACTIVE, CLOSED }
 
     private final String sessionId;
+    private final String ownerId;
     private final byte[] wrappingKey;
     private final KeyPair pluginSigning;
     private KeyPair pluginEphemeral;
@@ -59,11 +60,13 @@ public final class EditorSession {
 
     EditorSession(
             String sessionId,
+            String ownerId,
             byte[] wrappingKey,
             KeyPair pluginSigning,
             TrustPrompt trustPrompt,
             DiagnosticsBus diagnostics) {
         this.sessionId = sessionId;
+        this.ownerId = ownerId == null ? "" : ownerId;
         this.wrappingKey = wrappingKey.clone();
         this.pluginSigning = pluginSigning;
         this.trustPrompt = trustPrompt;
@@ -73,6 +76,11 @@ public final class EditorSession {
 
     public String sessionId() {
         return sessionId;
+    }
+
+    /** UUID of the player who opened this capability; empty for console sessions. */
+    public String ownerId() {
+        return ownerId;
     }
 
     public boolean isActive() {

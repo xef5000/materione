@@ -25,6 +25,7 @@ public final class RpcDispatcher {
 
     private static final Logger LOG = Logger.getLogger(RpcDispatcher.class.getName());
 
+    private static final ThreadLocal<String> SESSION_ID = new ThreadLocal<>();
     private final Map<String, Handler> handlers = new ConcurrentHashMap<>();
 
     public void register(String op, Handler handler) {
@@ -35,6 +36,19 @@ public final class RpcDispatcher {
     }
 
     /** Dispatches one request; never throws. */
+    public Wire.Response dispatch(Wire.Request request, String sessionId) {
+        SESSION_ID.set(sessionId);
+        try {
+            return dispatch(request);
+        } finally {
+            SESSION_ID.remove();
+        }
+    }
+
+    public static String currentSessionId() {
+        String sessionId = SESSION_ID.get();
+        return sessionId == null ? "" : sessionId;
+    }
     public Wire.Response dispatch(Wire.Request request) {
         Handler handler = handlers.get(request.op());
         if (handler == null) {

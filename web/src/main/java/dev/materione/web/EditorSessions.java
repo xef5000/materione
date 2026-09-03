@@ -31,11 +31,16 @@ public final class EditorSessions {
 
     /** Creates a fresh session and announces it (MTR-0031). */
     public EditorSession create() {
+        return create("");
+    }
+
+    /** Creates a session bound to the initiating Minecraft player UUID. */
+    public EditorSession create(String ownerId) {
         String sessionId = SessionBlob.generateSessionId(random);
         byte[] wrappingKey = new byte[32];
         random.nextBytes(wrappingKey);
         EditorSession session = new EditorSession(
-                sessionId, wrappingKey, serverIdentity, trustPrompt, diagnostics);
+                sessionId, ownerId, wrappingKey, serverIdentity, trustPrompt, diagnostics);
         sessions.put(sessionId, session);
         diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.info(
                 DiagnosticCodes.EDITOR_SESSION_CREATED,

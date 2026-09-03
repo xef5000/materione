@@ -19,6 +19,12 @@ public interface PackDeliveryBackend extends AutoCloseable {
      */
     String publish(Path packZip, String sha256) throws IOException;
 
+    /** Protects a hosted version from bounded-retention eviction. */
+    default void pin(String url) {}
+
+    /** Releases a previously protected hosted version. */
+    default void unpin(String url) {}
+
     @Override
     default void close() {}
 }

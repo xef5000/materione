@@ -206,7 +206,10 @@ public final class AssetOps {
     private static void queueReload(ReloadTrigger reload, String pack) {
         // Whole-pack scope for asset changes: texture edits can affect any
         // referencing item, and the fingerprint cache makes no-op cheap.
-        reload.reloadScope(new dev.materione.core.pipeline.ReloadScope.OnePack(pack)).whenComplete((outcome, error) -> { });
+        reload.reloadScopeForPreview(
+                new dev.materione.core.pipeline.ReloadScope.OnePack(pack),
+                dev.materione.web.rpc.RpcDispatcher.currentSessionId())
+                .whenComplete((outcome, error) -> { });
     }
 
     private static Wire.Response failure(Wire.Request request, Exception e) {

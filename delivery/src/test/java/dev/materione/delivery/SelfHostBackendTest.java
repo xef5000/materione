@@ -50,6 +50,28 @@ class SelfHostBackendTest {
         }
     }
 
+    @Test
+    void retentionNeverEvictsPinnedPublishedOrCandidateVersions(@TempDir Path tempDir)
+            throws IOException {
+        Path zip = tempDir.resolve("pack.zip");
+        Files.write(zip, new byte[] {1});
+        try (SelfHostBackend backend = new SelfHostBackend("127.0.0.1", 0, "127.0.0.1")) {
+            String published = backend.publish(zip, hash('a'));
+            backend.pin(published);
+            String candidate = backend.publish(zip, hash('b'));
+            backend.pin(candidate);
+
+            for (char version = 'c'; version <= 'h'; version++) {
+                Files.write(zip, new byte[] {(byte) version});
+                backend.publish(zip, hash(version));
+            }
+
+            assertThat(httpGet(published)).containsExactly(1);
+            assertThat(httpGet(candidate)).containsExactly(1);
+            assertThat(backend.servedVersions()).isEqualTo(4);
+        }
+    }
+
     private static byte[] httpGet(String url) throws IOException {
         HttpURLConnection connection = (HttpURLConnection) java.net.URI.create(url).toURL().openConnection();
         assertThat(connection.getResponseCode()).isEqualTo(200);
@@ -61,5 +83,9 @@ class SelfHostBackendTest {
         // http://host:port/path
         int colon = url.indexOf(':', "http://".length());
         return Integer.parseInt(url.substring(colon + 1, url.indexOf('/', colon)));
+    }
+
+    private static String hash(char value) {
+        return String.valueOf(value).repeat(64);
     }
 }

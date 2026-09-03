@@ -13,6 +13,8 @@ import java.util.HexFormat;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import team.unnamed.creative.server.ResourcePackServer;
 import team.unnamed.creative.server.handler.ResourcePackRequestHandler;
 
@@ -33,6 +35,7 @@ public final class SelfHostBackend implements PackDeliveryBackend {
     private final String publicBase;
     /** path → pack bytes, insertion-ordered; the current version plus predecessors. */
     private final Map<String, byte[]> served = new LinkedHashMap<>();
+    private final Set<String> pinned = new HashSet<>();
     private volatile String currentPath = "";
 
     public SelfHostBackend(String bindHost, int port, String publicHost) throws IOException {
@@ -51,13 +54,42 @@ public final class SelfHostBackend implements PackDeliveryBackend {
         byte[] bytes = Files.readAllBytes(packZip);
         String path = "/pack-" + sha256.substring(0, Math.min(12, sha256.length())) + "/pack.zip";
         served.put(path, bytes);
-        while (served.size() > RETAINED_VERSIONS) {
-            Iterator<Map.Entry<String, byte[]>> oldest = served.entrySet().iterator();
-            oldest.next();
-            oldest.remove();
-        }
+        trim();
         currentPath = path;
         return publicBase + path;
+    }
+
+    @Override
+    public synchronized void pin(String url) {
+        pinned.add(pathOf(url));
+    }
+
+    @Override
+    public synchronized void unpin(String url) {
+        pinned.remove(pathOf(url));
+        trim();
+    }
+
+    private void trim() {
+        while (served.size() > RETAINED_VERSIONS) {
+            Iterator<Map.Entry<String, byte[]>> entries = served.entrySet().iterator();
+            boolean removed = false;
+            while (entries.hasNext()) {
+                Map.Entry<String, byte[]> entry = entries.next();
+                if (!pinned.contains(entry.getKey())) {
+                    entries.remove();
+                    removed = true;
+                    break;
+                }
+            }
+            if (!removed) {
+                return;
+            }
+        }
+    }
+
+    private String pathOf(String url) {
+        return url.startsWith(publicBase) ? url.substring(publicBase.length()) : url;
     }
 
     /** The current pack URL (empty before the first publish). */

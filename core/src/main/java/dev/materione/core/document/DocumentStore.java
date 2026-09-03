@@ -56,6 +56,15 @@ public final class DocumentStore {
 
     public record Revision(int rev, long timestampMs, String actor, String action, String sha256) {}
 
+    /** Exact owner-file and journal bytes captured for a composite transaction rollback. */
+    public record Checkpoint(
+            String pack,
+            String path,
+            boolean documentExisted,
+            byte[] documentBytes,
+            boolean journalExisted,
+            byte[] journalBytes) {}
+
     // ------------------------------------------------------------------
     // browsing
 
@@ -219,6 +228,45 @@ public final class DocumentStore {
     // ------------------------------------------------------------------
     // writes
 
+    public Checkpoint checkpoint(String pack, String path) throws IOException {
+        synchronized (lock) {
+            Path document = resolve(pack, path);
+            Path journal = journalFor(pack, path);
+            return new Checkpoint(
+                    pack,
+                    path,
+                    Files.isRegularFile(document),
+                    Files.isRegularFile(document) ? Files.readAllBytes(document) : new byte[0],
+                    Files.isRegularFile(journal),
+                    Files.isRegularFile(journal) ? Files.readAllBytes(journal) : new byte[0]);
+        }
+    }
+
+    /** Restores a checkpoint after a composite operation failed. */
+    public void restore(Checkpoint checkpoint) throws IOException {
+        synchronized (lock) {
+            restoreFile(resolve(checkpoint.pack(), checkpoint.path()),
+                    checkpoint.documentExisted(), checkpoint.documentBytes());
+            restoreFile(journalFor(checkpoint.pack(), checkpoint.path()),
+                    checkpoint.journalExisted(), checkpoint.journalBytes());
+        }
+    }
+
+    private static void restoreFile(Path path, boolean existed, byte[] bytes) throws IOException {
+        if (!existed) {
+            Files.deleteIfExists(path);
+            return;
+        }
+        Files.createDirectories(path.getParent());
+        Path temp = path.resolveSibling(path.getFileName() + ".rollback-" + System.nanoTime());
+        Files.write(temp, bytes);
+        try {
+            Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+            Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
     /**
      * Writes one document atomically after a stale-write check. Returns the
      * new revision. Throws {@link DocumentConflictException} when
@@ -308,25 +356,83 @@ public final class DocumentStore {
 
     /** Creates a minimal pack scaffold ({@code pack.yml} + type dirs). */
     public void createPack(String packId, String actor) throws IOException {
-        if (!packId.matches("[a-z0-9_-]{2,32}")) {
-            throw new IllegalArgumentException(
-                    "pack id must be 2..32 chars of a-z 0-9 _ - : " + packId);
+        validatePackId(packId);
+        synchronized (lock) {
+            createPackLocked(packId, actor);
         }
+    }
+
+    /**
+     * Creates an optional pack and its first resource as one store operation.
+     * Validation runs before any write; if a filesystem failure occurs after
+     * creating a new pack, all files and journals from that pack are removed.
+     */
+    public Document createResource(
+            String pack, String path, String content, boolean createPack, String actor)
+            throws IOException {
+        validatePackId(pack);
+        Optional<String> parseError = LosslessYaml.parse(content).parseError();
+        if (parseError.isPresent()) {
+            throw new IllegalArgumentException("invalid YAML: " + parseError.get());
+        }
+        synchronized (lock) {
+            Path packDir = packsRoot.resolve(pack);
+            if (createPack && Files.exists(packDir)) {
+                throw new IllegalStateException("pack already exists: " + pack);
+            }
+            if (!createPack && !Files.isRegularFile(packDir.resolve("pack.yml"))) {
+                throw new IllegalStateException("pack does not exist: " + pack);
+            }
+            try {
+                if (createPack) {
+                    createPackLocked(pack, actor);
+                }
+                createDocument(pack, path, content, actor);
+                return read(pack, path);
+            } catch (IOException | RuntimeException failure) {
+                if (createPack) {
+                    deleteTree(packDir);
+                    deleteTree(revisionsDir.resolve(pack));
+                }
+                throw failure;
+            }
+        }
+    }
+
+    private void createPackLocked(String packId, String actor) throws IOException {
         Path packDir = packsRoot.resolve(packId);
         if (Files.exists(packDir)) {
             throw new IllegalStateException("pack already exists: " + packId);
         }
-        synchronized (lock) {
-            for (String type : TYPES) {
-                Files.createDirectories(packDir.resolve(type));
+        for (String type : TYPES) {
+            Files.createDirectories(packDir.resolve(type));
+        }
+        String manifest = "# created by the Materione editor\n"
+                + "id: " + packId + "\n"
+                + "version: 0.0.1\n"
+                + "schema_version: 1\n"
+                + "\n"
+                + "depends: []\n";
+        write(packId, "pack.yml", 0, manifest, actor);
+    }
+
+    private static void validatePackId(String packId) {
+        if (!packId.matches("[a-z0-9_-]{2,32}")) {
+            throw new IllegalArgumentException(
+                    "pack id must be 2..32 chars of a-z 0-9 _ - : " + packId);
+        }
+    }
+
+    private static void deleteTree(Path root) {
+        if (!Files.exists(root)) {
+            return;
+        }
+        try (Stream<Path> paths = Files.walk(root)) {
+            for (Path path : paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                Files.deleteIfExists(path);
             }
-            String manifest = "# created by the Materione editor\n"
-                    + "id: " + packId + "\n"
-                    + "version: 0.0.1\n"
-                    + "schema_version: 1\n"
-                    + "\n"
-                    + "depends: []\n";
-            write(packId, "pack.yml", 0, manifest, actor);
+        } catch (IOException ignored) {
+            // The original transaction failure remains authoritative.
         }
     }
 

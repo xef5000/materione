@@ -211,6 +211,40 @@ public final class EditorContentOps {
             }
         });
 
+        dispatcher.register("authoring.createResource", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String id = requiredString(body, "id");
+                String name = requiredString(body, "name").trim();
+                boolean createPack = body.has("createPack") && body.get("createPack").getAsBoolean();
+                if (name.isEmpty() || name.length() > 128) {
+                    throw new IllegalArgumentException("display name must be 1..128 characters");
+                }
+                String path = "items/" + id + ".yml";
+                String scaffold = Scaffolds.forPath(path, id);
+                String content = dev.materione.core.document.LosslessYaml.parse(scaffold)
+                        .withScalar(name, id, "display_name").save();
+                String actor = actorOf(request);
+                DocumentStore.Document created =
+                        documents.createResource(pack, path, content, createPack, actor);
+                audit.record(actor, "authoring.createResource", pack + "/" + path);
+                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("pack", pack);
+                payload.addProperty("path", path);
+                payload.addProperty("id", id);
+                payload.addProperty("rev", created.revision());
+                payload.addProperty("raw", created.raw());
+                payload.add("parsed", parsedView(created.raw()));
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
         dispatcher.register("edit.move", request -> {
             JsonObject body = request.payload();
             try {
@@ -284,6 +318,34 @@ public final class EditorContentOps {
             }
         });
 
+        // The Item Studio commits a coherent draft through the same lossless
+        // document store in one revision and queues exactly one reload.
+        dispatcher.register("authoring.commit", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String path = requiredString(body, "path");
+                int revision = body.get("rev").getAsInt();
+                String content = requiredString(body, "content");
+                int newRevision = documents.write(pack, path, revision, content, actorOf(request));
+                audit.record(actorOf(request), "authoring.commit", pack + "/" + path);
+                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("rev", newRevision);
+                payload.addProperty("raw", content);
+                payload.add("parsed", parsedView(content));
+                return Wire.Response.success(request, payload);
+            } catch (DocumentConflictException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0034", e.getMessage(), safePath(body),
+                        "re-read the item and re-apply your changes"));
+            } catch (IllegalArgumentException e) {
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0007", e.getMessage(), safePath(body), null));
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
         dispatcher.register("browse.types", request -> {
             JsonObject payload = new JsonObject();
             var array = new com.google.gson.JsonArray();
@@ -343,6 +405,16 @@ public final class EditorContentOps {
         if (param.uiHint() != null) {
             object.addProperty("uiHint", param.uiHint());
         }
+        object.addProperty("label", param.label());
+        object.addProperty("section", param.section());
+        object.addProperty("order", param.order());
+        object.addProperty("advanced", param.advanced());
+        if (!param.referenceKind().isBlank()) {
+            object.addProperty("referenceKind", param.referenceKind());
+        }
+        if (!param.example().isBlank()) {
+            object.addProperty("example", param.example());
+        }
         return object;
     }
 
@@ -396,7 +468,9 @@ public final class EditorContentOps {
     private static void queueReload(ReloadTrigger reload, Path file) {
         // Fire-and-forget at v1: the reload outcome reaches editors through
         // the activity feed (slice 5's push channel), not through this reply.
-        reload.reloadFiles(Set.of(file)).whenComplete((outcome, error) -> { });
+        reload.reloadFilesForPreview(
+                Set.of(file), RpcDispatcher.currentSessionId())
+                .whenComplete((outcome, error) -> { });
     }
 
     /** The data view for form pre-fill — scalars/maps/lists as JSON. */
