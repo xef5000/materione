@@ -431,7 +431,10 @@ cannot read, forge, replay, or reorder anything.
   maps `owner-path#field.path` to model and optional source paths, preserves other links on update,
   and is authoring metadata excluded from the compiled client pack. Model renders are cached
   beside it under `.materione/thumbnails/<model-path>.png` under the same exclusion, so a model
-  can be shown without launching Blockbench.
+  can be shown without launching Blockbench. That one path is the only authoring location the
+  asset API knows: `assets.get` may read it, `authoring.saveModel` may stage it, and
+  `assets.put/move/delete` may not touch it — metadata is written by the transaction that owns
+  it, never by a free-form upload.
 - **Versioning**: the SPA declares the protocol versions it speaks; the plugin serves hints if
   the cached SPA is stale ("a newer editor is available — refresh").
 
