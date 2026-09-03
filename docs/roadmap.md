@@ -271,7 +271,11 @@ Java format with the texture attached, inside a workbench over the studio, and t
 a render cached under `.materione/thumbnails/` (excluded from the compiled pack exactly like
 `model-links.json`). The layout invariants that failed the first time — shrinkable grid tracks, no
 horizontal scrolling, no filler prose — are now asserted by a test over the surfaces' own CSS, and
-a source-encoding test guards against the mojibake that the same pass introduced.
+a source-encoding test guards against the mojibake that the same pass introduced. A follow-up
+found the same failure one layer down: full-height surfaces stacked their children on positional
+grid rows, so an optional bar that was not rendered slid the filling child into an `auto` track —
+which is how the embedded Blockbench came to render 150 pixels tall. They stack with flex now, and
+the test covers that too.
 
 ## M4 — Glyphs, fonts, sounds, paintings
 

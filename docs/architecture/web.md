@@ -381,8 +381,11 @@ cannot read, forge, replay, or reorder anything.
   as disabled tabs so the shape of the product stays visible), folders, breadcrumb navigation,
   details and icon layouts, search, keyboard navigation, and create/rename/duplicate/move/delete
   for files and folders. Layout invariants that keep a 50+ entry pack usable — every grid track
-  shrinkable, every name ellipsised, no horizontal scrolling, no explanatory prose — are asserted
-  by a test over the surfaces' own CSS, because they were regressed once.
+  shrinkable, every name ellipsised, no horizontal scrolling, no explanatory prose, and the child
+  that fills the view growing to fill it whichever optional bars happen to be showing — are
+  asserted by a test over the surfaces' own CSS, because each of them was regressed once. In
+  particular a full-height surface stacks with flex rather than positional grid rows: an optional
+  error line or toolbar that is absent must not shift every following child into the wrong track.
 - **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
   constraints, reference targets, structured children, conditional visibility, widgets, and
   creation capabilities. The UI provides reusable controls and domain previews; it does not
