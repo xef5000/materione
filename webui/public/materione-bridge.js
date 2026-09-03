@@ -9,6 +9,7 @@
  *   collect        → gather the current project as a Java block/item model
  *                    JSON + referenced textures + the .bbmodel source
  *   importProject  → load an external .bbmodel into Blockbench
+ *   thumbnail      → a render of the current model, when the build offers one
  *
  * Every message carries the __materione marker and an id echoed back, so
  * the parent can correlate replies. Only messages from window.parent are
@@ -80,6 +81,41 @@
     post('imported', { id: id, ok: true });
   }
 
+  /*
+   * A render of the current model, used to show a model in the editor without
+   * booting this application again. Screencam is not a contracted API, so a
+   * build that does not expose it simply reports no thumbnail: the caller
+   * falls back to the texture rather than failing the save.
+   */
+  function thumbnail(id) {
+    var camera = window.Screencam;
+    if (!camera || typeof camera.screenshotPreview !== 'function' || !window.Preview) {
+      post('thumbnail', { id: id, ok: false });
+      return;
+    }
+    var answered = false;
+    try {
+      camera.screenshotPreview(
+        window.Preview.selected,
+        { width: 128, height: 128, crop: true },
+        function (dataUrl) {
+          if (answered) return;
+          answered = true;
+          post('thumbnail', { id: id, ok: true, dataUrl: String(dataUrl || '') });
+        },
+      );
+    } catch (e) {
+      post('thumbnail', { id: id, ok: false });
+      return;
+    }
+    // Some builds render without ever invoking the callback; never hang a save.
+    setTimeout(function () {
+      if (answered) return;
+      answered = true;
+      post('thumbnail', { id: id, ok: false });
+    }, 4000);
+  }
+
   window.addEventListener('message', function (event) {
     if (event.source !== window.parent) {
       return;
@@ -103,6 +139,8 @@
         collect(data.id);
       } else if (data.type === 'importProject') {
         importProject(data.id, String(data.project || ''));
+      } else if (data.type === 'thumbnail') {
+        thumbnail(data.id);
       }
     } catch (e) {
       fail(data.id, e);

@@ -11,6 +11,7 @@
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
+  import ModelWorkbench from './ModelWorkbench.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import { changedFields, sectionsOf, unrenderableKeys } from '../studio';
@@ -19,11 +20,9 @@
     diagnostics,
     errorMessage,
     logActivity,
-    openBlockbench,
     refreshPack,
     revealInAdvanced,
     session,
-    ui,
     workspace,
   } from '../state.svelte';
 
@@ -44,6 +43,9 @@
   let texturing = $state<{ field: string; reference: string } | null>(null);
   /** Bumped when the pixel editor writes, so the preview re-reads the bytes. */
   let textureVersion = $state(0);
+  /** The model field currently open in the Blockbench workbench, if any. */
+  let modelling = $state<string | null>(null);
+  const modelField = $derived(modelling ?? 'model');
 
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
   const schema = $derived(
@@ -135,13 +137,15 @@
   }
 
   function editModel(field: TypeParam) {
-    openBlockbench({
-      pack: resource.pack,
-      path: resource.path,
-      rev,
-      modelRef: String(draft[field.id] ?? ''),
-    });
-    ui.view = 'advanced';
+    modelling = field.id;
+  }
+
+  async function modelSaved(reference: string) {
+    modelling = null;
+    if (draft[modelField] !== reference) {
+      draft = { ...draft, [modelField]: reference };
+    }
+    await load(`${resource.pack}/${resource.path}`);
   }
 
   /**
@@ -176,7 +180,7 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (texturing) return; // the texture editor owns the keyboard while it is open
+    if (texturing || modelling) return; // the overlay owns the keyboard
     if (event.key === 'Escape' && !dirty) onClose();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
@@ -278,6 +282,24 @@
         path={`assets/textures/${texturing.reference}.png`}
         onClose={() => (texturing = null)}
         onSaved={textureSaved}
+      />
+    </div>
+  {/if}
+
+  {#if modelling}
+    <div class="overlay">
+      <ModelWorkbench
+        pack={resource.pack}
+        ownerPath={resource.path}
+        ownerId={resource.id}
+        ownerName={name}
+        {rev}
+        field={[rootId, modelling]}
+        modelRef={String(draft[modelling] ?? '')}
+        textureRef={String(draft.texture ?? '')}
+        {typeDirectory}
+        onClose={() => (modelling = null)}
+        onSaved={modelSaved}
       />
     </div>
   {/if}
