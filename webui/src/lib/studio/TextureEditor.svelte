@@ -521,14 +521,17 @@
 
 <style>
   .texture-editor {
-    display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    /* Flex, not grid tracks: the error line is optional, and positional rows
+       would drop the canvas into an `auto` track and collapse it. */
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-width: 0;
     background: var(--bg-app);
   }
   header {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 6px;
     padding: 6px 10px;
@@ -582,6 +585,8 @@
   }
   .work {
     display: grid;
+    flex: 1 1 0;
+    min-height: 0;
     grid-template-columns: 36px minmax(0, 1fr) minmax(0, 168px);
     min-width: 0;
     overflow: hidden;
@@ -698,6 +703,7 @@
   }
   .error {
     margin: 0;
+    flex: none;
     padding: 6px 10px;
     background: var(--error-bg);
     color: var(--error);

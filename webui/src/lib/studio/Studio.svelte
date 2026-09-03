@@ -307,8 +307,10 @@
 
 <style>
   .studio {
-    display: grid;
-    grid-template-rows: auto auto 1fr auto;
+    /* Flex, not grid tracks: the error line is optional, and positional rows
+       would put the body in an `auto` track and stop it scrolling. */
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-width: 0;
     overflow: hidden;
@@ -324,6 +326,7 @@
   }
   header {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 10px;
     padding: 8px 12px;
@@ -387,6 +390,8 @@
   }
   .body {
     display: grid;
+    flex: 1 1 0;
+    min-height: 0;
     grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
     gap: 20px;
     padding: 16px;
@@ -417,6 +422,7 @@
   }
   footer {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 8px;
     padding: 6px 12px;
@@ -435,6 +441,7 @@
   }
   .error {
     margin: 0;
+    flex: none;
     padding: 6px 12px;
     background: var(--error-bg);
     color: var(--error);

@@ -2,8 +2,12 @@
  * The defect this file exists for: the first Content tab rendered a header
  * whose action cluster could not shrink, inside grids whose columns could not
  * shrink, so the browser grew a horizontal scrollbar and the primary action
- * ("Create item") fell off the right edge. These are the CSS invariants that
- * make that impossible; they are cheap to check and expensive to rediscover.
+ * ("Create item") fell off the right edge. Its sequel: the same surfaces
+ * stacked their children on positional grid rows, so an absent optional bar
+ * shifted the filling child into an `auto` track and collapsed it -- which is
+ * how Blockbench came to be rendered 150 pixels tall. These are the CSS
+ * invariants that make both impossible; they are cheap to check and expensive
+ * to rediscover.
  */
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -48,6 +52,45 @@ describe.each(SURFACES)('%s', (surface) => {
       return tracks.some((track) => track === '1fr' || track === 'auto' || track === 'max-content');
     });
     expect(rigid).toEqual([]);
+  });
+
+  /**
+   * The second defect: a full-height surface stacked its children with
+   * `grid-template-rows`, but an optional bar between them (an error line, the
+   * Blockbench targets row) is only *sometimes* rendered. With one bar missing
+   * every child slides up a track, the filling child lands in an `auto` row,
+   * and it collapses to its intrinsic height -- which for an iframe is 150px,
+   * so Blockbench appeared sliced in half. Positional row tracks and
+   * conditional children cannot coexist: stack with flex, or place the
+   * children explicitly with `grid-row`.
+   */
+  it('does not stack conditional children on positional row tracks', () => {
+    const markup = css.split('<style')[0]!;
+    if (!markup.includes('{#if')) return;
+    const positional = declarations(css, 'grid-template-rows').filter(
+      () => !css.includes('grid-row'),
+    );
+    expect(positional).toEqual([]);
+  });
+});
+
+describe('the surface that fills the rest of the view', () => {
+  const FILLERS: [string, string][] = [
+    ['src/lib/views/ContentView.svelte', '.list'],
+    ['src/lib/studio/Studio.svelte', '.body'],
+    ['src/lib/studio/TextureEditor.svelte', '.work'],
+    ['src/lib/studio/ModelWorkbench.svelte', 'iframe'],
+    ['src/lib/components/Workbench.svelte', '.main'],
+  ];
+
+  it.each(FILLERS)('%s: %s grows and may shrink to nothing', (surface, selector) => {
+    const css = source(surface);
+    const rule = css.slice(css.indexOf(`\n  ${selector} {`));
+    const block = rule.slice(0, rule.indexOf('}'));
+    // `flex: 1 1 0` grows into the leftover space; `min-height: 0` is what lets
+    // an overflowing child scroll instead of pushing the container open.
+    expect(block).toContain('flex: 1 1 0');
+    expect(block).toContain('min-height: 0');
   });
 });
 

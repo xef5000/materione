@@ -334,14 +334,18 @@
 
 <style>
   .workbench {
-    display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    /* Flex, not grid tracks: the targets bar and the error line are optional,
+       and with positional rows the frame silently lands in an `auto` track and
+       collapses to an iframe's intrinsic 150px. */
+    display: flex;
+    flex-direction: column;
     height: 100%;
     min-width: 0;
     background: var(--bg-app);
   }
   header {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
@@ -395,6 +399,7 @@
   }
   .targets {
     display: grid;
+    flex: none;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, auto);
     gap: 8px 14px;
     align-items: end;
@@ -426,13 +431,15 @@
     min-width: 0;
   }
   iframe {
+    flex: 1 1 0;
+    min-height: 0;
     width: 100%;
-    height: 100%;
     border: none;
     background: #1e1e26;
   }
   .error {
     margin: 0;
+    flex: none;
     padding: 6px 10px;
     background: var(--error-bg);
     color: var(--error);

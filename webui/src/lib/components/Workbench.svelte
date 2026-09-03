@@ -100,10 +100,13 @@
   .workbench {
     flex: 1;
     min-height: 0;
-    display: grid;
-    grid-template-rows: auto minmax(0, 1fr) auto auto;
+    /* Flex, not grid tracks: a rail view or the dock rendering nothing must not
+       shift every following child into the wrong track. */
+    display: flex;
+    flex-direction: column;
   }
   .main {
+    flex: 1 1 0;
     min-height: 0;
     min-width: 0;
     display: grid;
@@ -166,6 +169,7 @@
   }
   .statusbar {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 14px;
     border-top: 1px solid var(--border);

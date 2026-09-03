@@ -456,13 +456,17 @@
   .content {
     height: 100%;
     min-width: 0;
-    display: grid;
-    grid-template-rows: auto auto auto minmax(0, 1fr);
+    /* Flex, not grid tracks: the error line is optional, and positional rows
+       would put the list in an `auto` track, where it grows past the view
+       instead of scrolling. */
+    display: flex;
+    flex-direction: column;
   }
 
   /* type tabs */
   .types {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 2px;
     padding: 0 10px;
@@ -513,6 +517,7 @@
   /* toolbar */
   .toolbar {
     display: flex;
+    flex: none;
     align-items: center;
     gap: 6px;
     padding: 7px 10px;
@@ -595,6 +600,7 @@
 
   /* listing */
   .list {
+    flex: 1 1 0;
     min-width: 0;
     min-height: 0;
     overflow-x: hidden;
@@ -700,6 +706,7 @@
   }
   .error {
     margin: 8px 10px 0;
+    flex: none;
     color: var(--error);
     background: var(--error-bg);
     border-radius: var(--radius);
