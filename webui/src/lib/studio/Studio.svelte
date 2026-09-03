@@ -10,6 +10,7 @@
   import StructuredList from './StructuredList.svelte';
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
+  import TextureEditor from './TextureEditor.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import { changedFields, sectionsOf, unrenderableKeys } from '../studio';
@@ -39,6 +40,10 @@
   let rootId = $state('');
   let error = $state('');
   let saving = $state(false);
+  /** The texture slot currently open in the pixel editor, if any. */
+  let texturing = $state<{ field: string; reference: string } | null>(null);
+  /** Bumped when the pixel editor writes, so the preview re-reads the bytes. */
+  let textureVersion = $state(0);
 
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
   const schema = $derived(
@@ -139,14 +144,39 @@
     ui.view = 'advanced';
   }
 
+  /**
+   * Editing a texture that does not exist yet is the common case for a new
+   * item, so the slot proposes a predictable path rather than asking; the
+   * owning field is written the moment the PNG lands, so the entry is never
+   * left pointing at nothing.
+   */
+  function editTexture(field: TypeParam) {
+    const reference = String(draft[field.id] ?? '') || `${typeDirectory}/${resource.id}`;
+    texturing = { field: field.id, reference };
+  }
+
+  async function textureSaved() {
+    if (!texturing) return;
+    textureVersion += 1;
+    const { field, reference } = texturing;
+    if (draft[field] !== reference) {
+      draft = { ...draft, [field]: reference };
+      await save();
+    }
+  }
+
   function actionFor(field: TypeParam) {
     if (field.uiHint === 'model') {
       return { label: 'Edit in Blockbench', run: () => editModel(field) };
+    }
+    if (field.uiHint === 'texture') {
+      return { label: draft[field.id] ? 'Edit' : 'Draw', run: () => editTexture(field) };
     }
     return undefined;
   }
 
   function onKeydown(event: KeyboardEvent) {
+    if (texturing) return; // the texture editor owns the keyboard while it is open
     if (event.key === 'Escape' && !dirty) onClose();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
@@ -187,6 +217,7 @@
         texture={String(draft.texture ?? '')}
         model={String(draft.model ?? '')}
         label={name}
+        nonce={textureVersion}
       />
     </aside>
 
@@ -239,6 +270,17 @@
       <button type="button" class="link" onclick={() => revealInAdvanced(resource)}>Open</button>
     {/if}
   </footer>
+
+  {#if texturing}
+    <div class="overlay">
+      <TextureEditor
+        pack={resource.pack}
+        path={`assets/textures/${texturing.reference}.png`}
+        onClose={() => (texturing = null)}
+        onSaved={textureSaved}
+      />
+    </div>
+  {/if}
 </section>
 
 <style>
@@ -248,6 +290,15 @@
     height: 100%;
     min-width: 0;
     overflow: hidden;
+    position: relative;
+  }
+  /* The pixel editor takes over the studio, not the app: the entry it belongs
+     to is still the thing being edited. */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    background: var(--bg-app);
   }
   header {
     display: flex;

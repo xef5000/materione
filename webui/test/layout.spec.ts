@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 const SURFACES = [
   'src/lib/views/ContentView.svelte',
   'src/lib/studio/Studio.svelte',
+  'src/lib/studio/TextureEditor.svelte',
   'src/lib/components/AppHeader.svelte',
   'src/lib/components/Workbench.svelte',
 ];

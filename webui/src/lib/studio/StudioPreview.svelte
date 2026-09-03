@@ -11,17 +11,19 @@
     texture: string;
     model: string;
     label: string;
+    /** Bumped when the bytes changed but the reference did not. */
+    nonce?: number;
   }
 
-  let { pack, texture, model, label }: Props = $props();
+  let { pack, texture, model, label, nonce = 0 }: Props = $props();
 
   let image = $state('');
 
   $effect(() => {
-    void resolve(texture);
+    void resolve(texture, nonce);
   });
 
-  async function resolve(reference: string) {
+  async function resolve(reference: string, _nonce: number) {
     image = '';
     if (!reference || !session.channel) return;
     const path = `assets/textures/${reference}.png`;

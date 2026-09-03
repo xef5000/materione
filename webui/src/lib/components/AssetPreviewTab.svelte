@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TextureEditor from '../studio/TextureEditor.svelte';
   import { assetOps, unwrap } from '../api';
   import { errorMessage, logActivity, session } from '../state.svelte';
 
@@ -11,8 +12,14 @@
   let { pack, path, name }: Props = $props();
 
   let dataUrl = $state('');
+  let editing = $state(false);
+  /** Re-reads the bytes after the pixel editor wrote them. */
+  let version = $state(0);
+
+  const editable = $derived(path.toLowerCase().endsWith('.png'));
 
   $effect(() => {
+    version;
     const channel = session.channel;
     if (!channel) return;
     void (async () => {
@@ -27,18 +34,29 @@
   });
 </script>
 
-<article>
-  <header>
-    <h2>{name}</h2>
-    <span class="meta">{path}</span>
-  </header>
-  {#if dataUrl}
-    <div class="frame">
-      <img src={dataUrl} alt={path} />
-    </div>
-    <p class="hint">pixel-perfect at 1× — textures are referenced from item/block forms</p>
+<article class:editing>
+  {#if editing}
+    <TextureEditor
+      {pack}
+      {path}
+      onClose={() => (editing = false)}
+      onSaved={() => (version += 1)}
+    />
   {:else}
-    <p class="hint">loading…</p>
+    <header>
+      <h2>{name}</h2>
+      <span class="meta">{path}</span>
+      {#if editable}
+        <button type="button" onclick={() => (editing = true)}>Edit pixels</button>
+      {/if}
+    </header>
+    {#if dataUrl}
+      <div class="frame">
+        <img src={dataUrl} alt={path} />
+      </div>
+    {:else}
+      <p class="hint">loading…</p>
+    {/if}
   {/if}
 </article>
 
@@ -49,10 +67,27 @@
     border-radius: var(--radius-lg);
     padding: 14px 18px;
   }
+  article.editing {
+    padding: 0;
+    overflow: hidden;
+    height: min(70vh, 640px);
+  }
   header {
     display: flex;
     align-items: baseline;
     gap: 12px;
+  }
+  header button {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 3px 10px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  header button:hover {
+    background: var(--bg-hover);
   }
   h2 {
     margin: 0 auto 0 0;
