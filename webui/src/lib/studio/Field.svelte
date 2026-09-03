@@ -1,0 +1,163 @@
+<script lang="ts">
+  /**
+   * One labelled control, chosen by the registry's widget. The studio never
+   * decides what a field means — the type's self-description does (D5).
+   */
+  import AssetPicker from '../components/AssetPicker.svelte';
+  import type { TypeParam } from '../api';
+
+  interface Props {
+    field: TypeParam;
+    value: unknown;
+    pack: string;
+    onChange: (value: unknown) => void;
+    /** Rendered next to a texture/model slot: "Edit", "Edit in Blockbench". */
+    action?: { label: string; run: () => void };
+  }
+
+  let { field, value, pack, onChange, action }: Props = $props();
+
+  const widget = $derived(field.uiHint ?? 'text');
+  const text = $derived(value === undefined || value === null ? '' : String(value));
+  const lines = $derived(Array.isArray(value) ? value.map((item) => String(item)).join('\n') : '');
+
+  function commitLines(raw: string) {
+    onChange(
+      raw
+        .split('\n')
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+  }
+</script>
+
+<label class="field">
+  <span class="label">
+    {field.label || field.id}
+    {#if field.required}<em title="required">*</em>{/if}
+  </span>
+
+  {#if widget === 'texture' || widget === 'model'}
+    <span class="slot">
+      <AssetPicker {pack} hint={widget} value={text} onChange={(next) => onChange(next)} />
+      {#if action}
+        <button type="button" class="action" onclick={action.run}>{action.label}</button>
+      {/if}
+    </span>
+  {:else if field.allowedValues && field.allowedValues.length > 0}
+    <select value={text} onchange={(event) => onChange(event.currentTarget.value)}>
+      {#if !field.required}<option value=""></option>{/if}
+      {#each field.allowedValues as option (option)}
+        <option value={option}>{option.replaceAll('_', ' ')}</option>
+      {/each}
+    </select>
+  {:else if field.type === 'boolean'}
+    <input
+      type="checkbox"
+      checked={value === true || text === 'true'}
+      onchange={(event) => onChange(event.currentTarget.checked)}
+    />
+  {:else if field.type === 'integer' || field.type === 'decimal'}
+    <input
+      type="number"
+      step={field.type === 'decimal' ? 'any' : '1'}
+      value={text}
+      placeholder={field.example ?? ''}
+      onblur={(event) => onChange(Number(event.currentTarget.value))}
+      onkeydown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  {:else if field.type === 'list'}
+    <textarea
+      rows="3"
+      spellcheck="false"
+      value={lines}
+      placeholder={field.example ? `${field.example}` : 'one per line'}
+      onblur={(event) => commitLines(event.currentTarget.value)}
+    ></textarea>
+  {:else}
+    <input
+      type="text"
+      value={text}
+      placeholder={field.example ?? ''}
+      spellcheck="false"
+      onblur={(event) => onChange(event.currentTarget.value)}
+      onkeydown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur();
+      }}
+    />
+  {/if}
+
+  {#if field.description}
+    <small>{field.description}</small>
+  {/if}
+</label>
+
+<style>
+  .field {
+    display: grid;
+    gap: 4px;
+    margin-bottom: 12px;
+    min-width: 0;
+  }
+  .label {
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .label em {
+    color: var(--accent);
+    font-style: normal;
+  }
+  .slot {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  }
+  .slot :global(.picker) {
+    flex: 1;
+    min-width: 0;
+  }
+  input[type='text'],
+  input[type='number'],
+  select,
+  textarea {
+    background: var(--bg-input);
+    color: inherit;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 5px 8px;
+    font-size: 13px;
+    font-family: inherit;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  input[type='checkbox'] {
+    justify-self: start;
+    width: 16px;
+    height: 16px;
+  }
+  textarea {
+    resize: vertical;
+  }
+  .action {
+    background: none;
+    border: 1px solid var(--border-strong);
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 4px 9px;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .action:hover {
+    background: var(--bg-hover);
+  }
+  small {
+    color: var(--faint);
+    font-size: 11px;
+    line-height: 1.4;
+  }
+</style>

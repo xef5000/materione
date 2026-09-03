@@ -9,6 +9,8 @@ export interface TypeParam {
   default?: string;
   description?: string;
   allowedValues?: string[];
+  /** Declared shape of each entry, for list fields the studio can edit. */
+  nested?: TypeParam[];
   /** Schema-derived affordance: 'texture' | 'model' pickers, else absent. */
   uiHint?: string;
   label?: string;
@@ -89,7 +91,29 @@ export const ops = {
     id: string,
     name: string,
     createPack: boolean,
-  ) => c.call('authoring.createResource', { pack, id, name, createPack }),
+    type?: string,
+    folder?: string,
+  ) => c.call('authoring.createResource', {
+    pack, id, name, createPack,
+    ...(type ? { type } : {}),
+    ...(folder ? { folder } : {}),
+  }),
+  duplicateResource: (
+    c: EditorChannel,
+    pack: string,
+    path: string,
+    id: string,
+    folder?: string,
+  ) => c.call('authoring.duplicateResource', {
+    pack, path, id, ...(folder ? { folder } : {}),
+  }),
+  folders: (c: EditorChannel, pack: string) => c.call('browse.folders', { pack }),
+  createFolder: (c: EditorChannel, pack: string, path: string) =>
+    c.call('edit.createFolder', { pack, path }),
+  deleteFolder: (c: EditorChannel, pack: string, path: string) =>
+    c.call('edit.deleteFolder', { pack, path }),
+  moveFolder: (c: EditorChannel, pack: string, from: string, to: string) =>
+    c.call('edit.moveFolder', { pack, from, to }),
   types: (c: EditorChannel) => c.call('browse.types'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
   dryRun: (c: EditorChannel, content: string) => c.call('validate.dryRun', { content }),
@@ -114,9 +138,18 @@ export const ops = {
       createOwner?: boolean;
       ownerId?: string;
       ownerName?: string;
+      ownerType?: string;
       sourcePath?: string;
     },
   ) => c.call('authoring.saveModel', payload),
+  /** One studio save: many fields, one revision, one reload. */
+  setFields: (
+    c: EditorChannel,
+    pack: string,
+    path: string,
+    rev: number,
+    edits: { field: string[]; value: unknown }[],
+  ) => c.call('authoring.setFields', { pack, path, rev, edits }),
 };
 
 export const assetOps = {

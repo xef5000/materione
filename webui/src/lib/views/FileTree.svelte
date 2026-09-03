@@ -9,12 +9,10 @@
   import {
     closeTab,
     errorMessage,
-    loadWorkspace,
     logActivity,
     openAsset,
     openDoc,
     refreshPack,
-    selectPack,
     session,
     workspace,
   } from '../state.svelte';
@@ -134,26 +132,6 @@
     })();
   }
 
-  function newPack() {
-    dialog = {
-      title: 'New pack',
-      label: 'pack id',
-      initial: '',
-      hint: '2..32 chars of a-z 0-9 _ -',
-      onOk: async (id: string) => {
-        dialog = null;
-        try {
-          unwrap(await ops.createPack(session.channel!, id));
-          logActivity('info', `created pack ${id}`);
-          await loadWorkspace();
-          await selectPack(id);
-        } catch (e) {
-          logActivity('error', `edit.createPack: ${errorMessage(e)}`);
-        }
-      },
-    };
-  }
-
   function uploadInto(path: string) {
     uploadTarget = path;
     fileInput.click();
@@ -233,19 +211,6 @@
     workspace.collapsed[node.path] = !workspace.collapsed[node.path];
   }
 </script>
-
-<div class="packrow">
-  <select
-    aria-label="active pack"
-    value={workspace.activePack ?? ''}
-    onchange={(event) => void selectPack(event.currentTarget.value)}
-  >
-    {#each workspace.packs as pack (pack)}
-      <option value={pack}>{pack}</option>
-    {/each}
-  </select>
-  <button title="new pack" onclick={newPack}>+ new</button>
-</div>
 
 <input class="filter" placeholder="filter files…" bind:value={filter} spellcheck="false" />
 
@@ -337,32 +302,6 @@
 {/if}
 
 <style>
-  .packrow {
-    display: flex;
-    gap: 6px;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .packrow select {
-    flex: 1;
-    min-width: 0;
-    background: var(--bg-input);
-    color: inherit;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 4px 6px;
-    font-size: 12.5px;
-  }
-  .packrow button {
-    font-size: 11px;
-    border: 1px solid var(--border-strong);
-    background: none;
-    color: inherit;
-    border-radius: var(--radius);
-    cursor: pointer;
-    padding: 3px 8px;
-    white-space: nowrap;
-  }
   .filter {
     width: 100%;
     box-sizing: border-box;

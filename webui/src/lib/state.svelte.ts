@@ -62,6 +62,8 @@ export const workspace = $state({
   resources: [] as ResourceRef[],
   types: [] as TypeInfo[],
   assets: [] as AssetRef[],
+  /** Pack-relative organisational folders under the type roots. */
+  folders: [] as string[],
   tabs: [] as Tab[],
   activeKey: null as string | null,
   /** Directory paths the explorer has collapsed (default is expanded). */
@@ -69,6 +71,46 @@ export const workspace = $state({
   /** Documents changed on disk (push.document.changed) — keyed like doc tabs. */
   staleDocs: {} as Record<string, boolean>,
 });
+
+/**
+ * Which rail view owns the main area. Lives in the store so any view can send
+ * the author somewhere else ("reveal in Advanced Files") without prop drilling.
+ */
+export const ui = $state({
+  view: 'content' as 'content' | 'advanced' | 'diagnostics' | 'server',
+});
+
+/**
+ * Where the Content tab is standing: which type tab, which folder inside it,
+ * what is selected, and which entry (if any) is open in its studio. Purely
+ * navigational — the documents themselves stay on disk (D1).
+ */
+export const content = $state({
+  type: 'items',
+  folder: '',
+  selected: null as string | null,
+  layout: 'details' as 'details' | 'grid',
+  search: '',
+  open: null as ResourceRef | null,
+});
+
+/** Moves the browser to a folder inside the current type tab. */
+export function browseTo(type: string, folder = ''): void {
+  content.type = type;
+  content.folder = folder;
+  content.selected = null;
+}
+
+/** Opens an entry in its studio; the browser stays where it was. */
+export function openStudio(resource: ResourceRef | null): void {
+  content.open = resource;
+}
+
+/** Sends the author to a file in Advanced Files, tab opened and focused. */
+export function revealInAdvanced(resource: ResourceRef): void {
+  openDoc(resource);
+  ui.view = 'advanced';
+}
 
 export const diagnostics = $state({
   entries: [] as DiagnosticEntry[],
@@ -139,21 +181,27 @@ export async function selectPack(pack: string): Promise<void> {
   workspace.activePack = pack;
   workspace.resources = [];
   workspace.assets = [];
+  workspace.folders = [];
+  content.folder = '';
+  content.selected = null;
+  content.open = null;
   await refreshPack();
 }
 
-/** Re-fetches resources + assets of the active pack after any mutation. */
+/** Re-fetches resources + assets + folders of the active pack after any mutation. */
 export async function refreshPack(): Promise<void> {
   const channel = session.channel;
   const pack = workspace.activePack;
   if (!channel || !pack) return;
   try {
-    const [resourceResult, assetResult] = [
+    const [resourceResult, assetResult, folderResult] = [
       (unwrap(await ops.resources(channel, pack)).resources as ResourceRef[]) ?? [],
       (unwrap(await assetOps.list(channel, pack)).assets as AssetRef[]) ?? [],
+      (unwrap(await ops.folders(channel, pack)).folders as string[]) ?? [],
     ];
     workspace.resources = resourceResult.sort((a, b) => a.path.localeCompare(b.path));
     workspace.assets = assetResult.sort((a, b) => a.path.localeCompare(b.path));
+    workspace.folders = folderResult.sort((a, b) => a.localeCompare(b));
   } catch (e) {
     logActivity('error', `browse: ${errorMessage(e)}`);
   }
@@ -270,10 +318,17 @@ export function resetWorkspace(): void {
   workspace.resources = [];
   workspace.types = [];
   workspace.assets = [];
+  workspace.folders = [];
   workspace.tabs = [];
   workspace.activeKey = null;
   workspace.collapsed = {};
   workspace.staleDocs = {};
+  content.type = 'items';
+  content.folder = '';
+  content.selected = null;
+  content.search = '';
+  content.open = null;
+  ui.view = 'content';
   diagnostics.entries = [];
   activityLog.entries = [];
   connection.lastReload = '';

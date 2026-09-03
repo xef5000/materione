@@ -1,15 +1,16 @@
 <script lang="ts">
-  import TabBar from './TabBar.svelte';
-  import DocEditor from './DocEditor.svelte';
-  import AssetPreviewTab from './AssetPreviewTab.svelte';
-  import SettingsTab from './SettingsTab.svelte';
-  import BlockbenchTab from './BlockbenchTab.svelte';
-  import ExplorerView from '../views/ExplorerView.svelte';
+  /**
+   * The shell: header, rail, and one full-area view. Each rail view owns the
+   * entire main area — the tab bar and editors belong to Advanced Files, not
+   * to the shell, so a browsing surface is not squeezed into a sidebar.
+   */
+  import AppHeader from './AppHeader.svelte';
+  import AdvancedView from '../views/AdvancedView.svelte';
   import ContentView from '../views/ContentView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
-  import { activeTab, connection, server, workspace } from '../state.svelte';
+  import { connection, diagnostics, server, ui } from '../state.svelte';
 
   interface Props {
     browserLabel: string;
@@ -18,14 +19,12 @@
 
   let { browserLabel, onDisconnect }: Props = $props();
 
-  type SideView = 'content' | 'explorer' | 'diagnostics' | 'server';
+  type RailView = 'content' | 'advanced' | 'diagnostics' | 'server';
 
-  let view = $state<SideView>('content');
-
-  const views: { id: SideView; label: string; icon: string }[] = [
+  const views: { id: RailView; label: string; icon: string }[] = [
     { id: 'content', label: 'Content', icon: 'M4 5.5h16v14H4zM7 2h10v3H7z' },
     {
-      id: 'explorer',
+      id: 'advanced',
       label: 'Advanced Files',
       icon: 'M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2h9A1.5 1.5 0 0 1 21 6.5v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z',
     },
@@ -41,66 +40,44 @@
     },
   ];
 
-  const tab = $derived(activeTab());
+  const problems = $derived(
+    diagnostics.entries.filter((entry) => entry.severity === 'ERROR').length,
+  );
 </script>
 
 <div class="workbench">
+  <AppHeader />
+
   <div class="main">
     <nav class="rail" aria-label="views">
       {#each views as entry (entry.id)}
         <button
-          class:active={view === entry.id}
+          class:active={ui.view === entry.id}
           title={entry.label}
           aria-label={entry.label}
-          onclick={() => (view = entry.id)}
+          onclick={() => (ui.view = entry.id)}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
             <path d={entry.icon} />
           </svg>
+          {#if entry.id === 'diagnostics' && problems > 0}
+            <em class="badge">{problems > 9 ? '9+' : problems}</em>
+          {/if}
         </button>
       {/each}
     </nav>
 
-    <aside class="sidebar">
-      <header>{views.find((entry) => entry.id === view)?.label}</header>
-      <div class="viewhost">
-        {#if view === 'content'}
-          <ContentView />
-        {:else if view === 'explorer'}
-          <ExplorerView />
-        {:else if view === 'diagnostics'}
-          <DiagnosticsView />
-        {:else}
-          <ServerView />
-        {/if}
-      </div>
-    </aside>
-
-    <section class="center">
-      <TabBar />
-      <div class="tabhost">
-        {#if tab}
-          {#each workspace.tabs as t (t.key)}
-            <div class="pane" hidden={t.key !== workspace.activeKey}>
-              {#if t.kind === 'doc'}
-                <DocEditor resource={{ pack: t.pack, type: t.type, path: t.path, id: t.id }} tabKey={t.key} />
-              {:else if t.kind === 'asset'}
-                <AssetPreviewTab pack={t.pack} path={t.path} name={t.name} />
-              {:else if t.kind === 'settings'}
-                <SettingsTab />
-              {:else if t.kind === 'blockbench'}
-                <BlockbenchTab pack={t.pack} ownerPath={t.path} expectedRev={t.rev} modelRef={t.modelRef} />
-              {/if}
-            </div>
-          {/each}
-        {:else}
-          <p class="welcome">
-            Open a file from the explorer — or create one.<br />
-            <span>Saves hot-reload the server and show up in the pipeline log below.</span>
-          </p>
-        {/if}
-      </div>
-    </section>
+    <main class="viewhost">
+      {#if ui.view === 'content'}
+        <ContentView />
+      {:else if ui.view === 'advanced'}
+        <AdvancedView />
+      {:else if ui.view === 'diagnostics'}
+        <div class="panel"><DiagnosticsView /></div>
+      {:else}
+        <div class="panel"><ServerView /></div>
+      {/if}
+    </main>
   </div>
 
   <ActivityDock />
@@ -124,12 +101,13 @@
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto minmax(0, 1fr) auto auto;
   }
   .main {
     min-height: 0;
+    min-width: 0;
     display: grid;
-    grid-template-columns: 44px 264px minmax(0, 1fr);
+    grid-template-columns: 44px minmax(0, 1fr);
   }
   .rail {
     background: var(--bg-app);
@@ -140,6 +118,7 @@
     padding-top: 8px;
   }
   .rail button {
+    position: relative;
     background: none;
     border: none;
     border-left: 2px solid transparent;
@@ -161,48 +140,29 @@
     border-left-color: var(--accent);
     background: var(--bg-hover);
   }
-  .sidebar {
-    background: var(--bg-panel);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-  }
-  .sidebar header {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--muted);
-    padding: 10px 14px 8px;
+  .badge {
+    position: absolute;
+    right: 5px;
+    top: 5px;
+    font-style: normal;
+    font-size: 9px;
+    line-height: 1;
+    padding: 2px 3px;
+    border-radius: 6px;
+    background: var(--error, #b4413c);
+    color: white;
   }
   .viewhost {
-    overflow-y: auto;
-    padding: 0 10px 12px;
-    min-height: 0;
-  }
-  .center {
-    display: flex;
-    flex-direction: column;
     min-width: 0;
     min-height: 0;
+    overflow: hidden;
     background: var(--bg-app);
   }
-  .tabhost {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 12px 14px;
-  }
-  .pane {
+  .panel {
     height: 100%;
-  }
-  .welcome {
-    color: var(--faint);
-    text-align: center;
-    margin-top: 12vh;
-  }
-  .welcome span {
-    font-size: 12.5px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 18px;
   }
   .statusbar {
     display: flex;
