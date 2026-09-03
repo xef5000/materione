@@ -47,33 +47,79 @@ public final class BlockType implements ContentType {
                 "Block",
                 "A custom block: host technique, appearance, drops and world policy",
                 List.of(
-                        new ParameterSchema("technique", ParameterType.ENUM, false, "note_block",
-                                "Host technique", List.of("note_block", "string", "chorus", "technical",
-                                        "stairs", "slab"), null),
-                        new ParameterSchema("template", ParameterType.REFERENCE, false, null,
-                                "Template this block inherits from", null, null),
-                        new ParameterSchema("host", ParameterType.STRING, false, null,
-                                "Vanilla host block id (required for technical)", null, null),
-                        new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
-                                "Texture for the generated model (auto-model path)", null, null),
-                        new ParameterSchema("model", ParameterType.REFERENCE, false, null,
-                                "Hand-authored model reference (assets/<ns>/models/<id>.json)", null, null),
-                        new ParameterSchema("model_parent", ParameterType.STRING, false, "block/cube_all",
-                                "Parent for the generated model", null, null),
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
-                                "Display name of the block's item form", null, null),
+                                "Display name of the block's item form", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Display name", "identity", 0, false, "text", "",
+                                        "Ruby ore")),
+                        new ParameterSchema("technique", ParameterType.ENUM, false, "note_block",
+                                "How the block is hosted in the world. note_block: the best "
+                                        + "default, a full solid block. string: plants and thin "
+                                        + "decorations. chorus: directional plants. stairs and "
+                                        + "slab: partial shapes. technical: you pick the host "
+                                        + "block yourself.",
+                                List.of("note_block", "string", "chorus", "technical",
+                                        "stairs", "slab"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Technique", "identity", 10, false, "select", "",
+                                        "note_block")),
+                        new ParameterSchema("host", ParameterType.STRING, false, null,
+                                "Vanilla host block id (required for technical)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Host block", "identity", 20, true, "text", "",
+                                        "minecraft:tripwire")),
+                        new ParameterSchema("template", ParameterType.REFERENCE, false, null,
+                                "Template this block inherits from", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Template", "identity", 30, true, "reference",
+                                        "template", "")),
+                        new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
+                                "Texture for the generated model (auto-model path)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Texture", "appearance", 10, false, "texture", "texture",
+                                        "block/ruby_ore")),
+                        new ParameterSchema("model", ParameterType.REFERENCE, false, null,
+                                "Hand-authored model reference (assets/<ns>/models/<id>.json)",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "3D model", "appearance", 20, false, "model", "model", "")),
+                        new ParameterSchema("model_parent", ParameterType.STRING, false,
+                                "block/cube_all",
+                                "Parent for the generated model", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Model style", "appearance", 30, true, "text", "",
+                                        "block/cube_all")),
                         new ParameterSchema("drops", ParameterType.LIST, false, null,
-                                "Item ids dropped when broken (default: nothing custom)", null, null),
-                        new ParameterSchema("blast_resistant", ParameterType.BOOLEAN, false, "false",
-                                "Whether explosions leave the block intact", null, null),
+                                "Item ids dropped when broken (default: nothing custom)",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Drops", "gameplay", 10, false, "list", "item",
+                                        "myserver:ruby")),
+                        new ParameterSchema("blast_resistant", ParameterType.BOOLEAN, false,
+                                "false",
+                                "Whether explosions leave the block intact", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Survives explosions", "gameplay", 20, false, "toggle",
+                                        "", "")),
                         new ParameterSchema("move_policy", ParameterType.ENUM, false, "keep",
                                 "What pistons do to this block",
-                                List.of("keep", "break"), null),
+                                List.of("keep", "break"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "When a piston pushes it", "gameplay", 30, false,
+                                        "select", "", "keep")),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
-                                "Optional custom placement item; auto-generated from this block when omitted",
-                                null, null),
+                                "Optional custom placement item; auto-generated from this block "
+                                        + "when omitted",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Placement item", "gameplay", 40, true, "reference",
+                                        "item", "")),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
-                                "ECA rules fired on place/break/interact (runtime-systems 2)", null, null)),
+                                "ECA rules fired on place/break/interact (runtime-systems 2)",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Behaviour rules", "behavior", 10, false,
+                                        "structured-list", "", ""))),
                 "1.0.0");
     }
 

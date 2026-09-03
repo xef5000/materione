@@ -50,19 +50,40 @@ public final class RecipeType implements ContentType {
                         + "ingredients and result reference items through the graph",
                 List.of(
                         new ParameterSchema("type", ParameterType.ENUM, true, "shaped",
-                                "Recipe kind", List.of("shaped", "shapeless", "furnace"), null),
+                                "How the recipe is crafted. shaped: the layout matters. "
+                                        + "shapeless: any arrangement. furnace: smelting.",
+                                List.of("shaped", "shapeless", "furnace"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Recipe kind", "identity", 0, false, "select", "",
+                                        "shaped")),
                         new ParameterSchema("result", ParameterType.REFERENCE, true, null,
-                                "Resulting item id", null, null),
+                                "Resulting item id", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Result", "identity", 10, false, "reference", "item",
+                                        "myserver:ruby_sword")),
                         new ParameterSchema("shape", ParameterType.LIST, false, null,
-                                "Shaped rows, one string per row (shaped only)", null, null),
+                                "Shaped rows, one string per row (shaped only)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Grid", "crafting", 10, false, "recipe-grid", "", "")),
                         new ParameterSchema("ingredients", ParameterType.RAW, false, null,
-                                "Char→item map (shaped) or item list (shapeless)", null, null),
+                                "Char→item map (shaped) or item list (shapeless)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Ingredients", "crafting", 20, false, "recipe-grid", "",
+                                        "")),
                         new ParameterSchema("input", ParameterType.REFERENCE, false, null,
-                                "Furnace input item id", null, null),
+                                "Furnace input item id", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Smelts", "crafting", 30, false, "reference", "item",
+                                        "myserver:ruby_ore")),
                         new ParameterSchema("experience", ParameterType.DECIMAL, false, "0",
-                                "Furnace experience", null, null),
+                                "Furnace experience", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Experience", "crafting", 40, false, "number", "", "0.7")),
                         new ParameterSchema("cookingtime", ParameterType.INTEGER, false, "200",
-                                "Furnace cooking time in ticks", null, null)),
+                                "Furnace cooking time in ticks", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Cooking time (ticks)", "crafting", 50, false, "number",
+                                        "", "200"))),
                 "1.0.0");
     }
 

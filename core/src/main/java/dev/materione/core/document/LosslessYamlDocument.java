@@ -146,6 +146,150 @@ public final class LosslessYamlDocument {
         return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
     }
 
+    /**
+     * Returns a copy with the node at {@code path} set to a structured value —
+     * a mapping, or a sequence whose items are mappings. Only the field's own
+     * block is rewritten; every other line, comment and unknown field in the
+     * document is carried over verbatim, so a studio can edit furniture
+     * hitboxes or recipe ingredients without re-serializing the file (§5.6).
+     *
+     * <p>Scalars and sequences of scalars are delegated to {@link #withScalar}
+     * so simple fields keep producing one-line diffs.
+     */
+    public LosslessYamlDocument withNode(Object value, String... path) {
+        if (path.length == 0) {
+            throw new IllegalArgumentException("empty path");
+        }
+        if (isFlat(value)) {
+            return withScalar(value, path);
+        }
+        List<String> lines = splitLines(raw);
+        Node root = buildTree(lines);
+        String newline = dominantTerminator(raw);
+        String key = path[path.length - 1];
+
+        Node target = find(root, List.of(path));
+        int indent;
+        int insertAt;
+        int removeThrough = -1;
+        if (target != null) {
+            indent = target.indent;
+            insertAt = target.lineIndex;
+            removeThrough = lastContentLine(lines, target);
+        } else {
+            Node parent = find(root, List.of(java.util.Arrays.copyOf(path, path.length - 1)));
+            if (parent != null) {
+                insertAt = parent.lastLineIndex + 1;
+                indent = parent.childIndent(lines);
+            } else if (path.length == 1) {
+                insertAt = lastRootLine(root, lines);
+                indent = 0;
+            } else {
+                throw new UnsupportedOperationException(
+                        "cannot insert '" + String.join(".", path) + "': parent mapping not found");
+            }
+        }
+
+        List<String> block = new ArrayList<>();
+        block.add(" ".repeat(indent) + key + ":" + emptyMarker(value) + newline);
+        block.addAll(renderBody(value, indent + 2, newline));
+        if (removeThrough >= 0) {
+            lines.subList(insertAt, removeThrough + 1).clear();
+        }
+        lines.addAll(insertAt, block);
+        return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
+    }
+
+    /** Scalars and sequences of scalars stay on the one-line-diff path. */
+    private static boolean isFlat(Object value) {
+        if (value instanceof Map<?, ?>) {
+            return false;
+        }
+        if (value instanceof List<?> items) {
+            return items.stream().noneMatch(item -> item instanceof Map || item instanceof List);
+        }
+        return true;
+    }
+
+    /** The last line the old value actually owned — trailing blanks/comments survive. */
+    private static int lastContentLine(List<String> lines, Node target) {
+        for (int i = target.lastLineIndex; i > target.lineIndex; i--) {
+            if (!isBlankOrComment(lines.get(i))) {
+                return i;
+            }
+        }
+        return target.lineIndex;
+    }
+
+    private static String emptyMarker(Object value) {
+        if (value instanceof List<?> items && items.isEmpty()) {
+            return " []";
+        }
+        if (value instanceof Map<?, ?> map && map.isEmpty()) {
+            return " {}";
+        }
+        return "";
+    }
+
+    private static List<String> renderBody(Object value, int indent, String newline) {
+        List<String> out = new ArrayList<>();
+        if (value instanceof Map<?, ?> map) {
+            for (var entry : map.entrySet()) {
+                out.addAll(renderEntry(
+                        String.valueOf(entry.getKey()), entry.getValue(), indent, newline));
+            }
+            return out;
+        }
+        for (Object item : (List<?>) value) {
+            if (item instanceof Map<?, ?> map && !map.isEmpty()) {
+                // "- first: value" then the remaining keys aligned under it.
+                List<String> body = renderBody(map, indent + 2, newline);
+                out.add(" ".repeat(indent) + "- " + body.get(0).stripLeading());
+                out.addAll(body.subList(1, body.size()));
+            } else if (item instanceof List<?> nested) {
+                out.add(" ".repeat(indent) + "- " + flow(nested) + newline);
+            } else {
+                out.add(" ".repeat(indent) + "- " + render(item) + newline);
+            }
+        }
+        return out;
+    }
+
+    private static List<String> renderEntry(String key, Object value, int indent, String newline) {
+        String pad = " ".repeat(indent);
+        if (value instanceof Map<?, ?> map) {
+            if (map.isEmpty()) {
+                return List.of(pad + key + ": {}" + newline);
+            }
+            List<String> out = new ArrayList<>();
+            out.add(pad + key + ":" + newline);
+            out.addAll(renderBody(map, indent + 2, newline));
+            return out;
+        }
+        if (value instanceof List<?> items) {
+            if (items.isEmpty()) {
+                return List.of(pad + key + ": []" + newline);
+            }
+            if (isFlat(items)) {
+                // Coordinates read as coordinates: offset: [0, 0.5, 0].
+                return List.of(pad + key + ": " + flow(items) + newline);
+            }
+            List<String> out = new ArrayList<>();
+            out.add(pad + key + ":" + newline);
+            out.addAll(renderBody(items, indent + 2, newline));
+            return out;
+        }
+        return List.of(pad + key + ": " + render(value) + newline);
+    }
+
+    private static String flow(List<?> items) {
+        List<String> rendered = new ArrayList<>();
+        for (Object item : items) {
+            rendered.add(render(item));
+        }
+        return "[" + String.join(", ", rendered) + "]";
+    }
+
     /** Value part of the key line: scalars inline, sequences as `key:` / `key: []`. */
     private static String tailOf(Object value) {
         if (value instanceof java.util.List<?> items) {

@@ -41,31 +41,95 @@ public final class FurnitureType implements ContentType {
                 "Furniture",
                 "A display-entity cluster: hitboxes, seats, lights, storage, evolution",
                 List.of(
-                        new ParameterSchema("model", ParameterType.REFERENCE, false, null,
-                                "Hand-authored model reference (assets/<ns>/models/<id>.json)", null, null),
-                        new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
-                                "Texture for the generated model (auto-model path)", null, null),
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
-                                "Display name (storage title)", null, null),
-                        new ParameterSchema("rotation", ParameterType.DECIMAL, false, "90",
-                                "Rotation snap in degrees: 45, 90, 180, or 0 to disable", null, null),
-                        new ParameterSchema("hitboxes", ParameterType.LIST, false, null,
-                                "Interaction/barrier hitboxes: {type, offset: [x,y,z], width, height}", null, null),
-                        new ParameterSchema("seats", ParameterType.LIST, false, null,
-                                "Seat mount points: {offset: [x,y,z]}", null, null),
-                        new ParameterSchema("lights", ParameterType.LIST, false, null,
-                                "Light blocks: {offset: [x,y,z], level}", null, null),
-                        new ParameterSchema("storage", ParameterType.INTEGER, false, null,
-                                "Storage size in slots (multiple of 9, max 54)", null, null),
+                                "Display name (storage title)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Display name", "identity", 0, false, "text", "",
+                                        "Oak chair")),
+                        new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
+                                "Texture for the generated model (auto-model path)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Texture", "appearance", 10, false, "texture", "texture",
+                                        "furniture/oak_chair")),
+                        new ParameterSchema("model", ParameterType.REFERENCE, false, null,
+                                "Hand-authored model reference (assets/<ns>/models/<id>.json)",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "3D model", "appearance", 20, false, "model", "model", "")),
                         new ParameterSchema("label", ParameterType.STRING, false, null,
-                                "TextDisplay label above the furniture", null, null),
+                                "TextDisplay label above the furniture", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Floating label", "appearance", 30, false, "text", "",
+                                        "Sit down")),
+                        new ParameterSchema("rotation", ParameterType.DECIMAL, false, "90",
+                                "Rotation snap in degrees: 45, 90, 180, or 0 to disable",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Rotation snap", "placement", 10, false, "number", "",
+                                        "90")),
+                        new ParameterSchema("hitboxes", ParameterType.LIST, false, null,
+                                "Interaction/barrier hitboxes: {type, offset: [x,y,z], width, "
+                                        + "height}",
+                                null,
+                                List.of(
+                                        new ParameterSchema("type", ParameterType.ENUM, true,
+                                                "interaction",
+                                                "interaction: clickable. barrier: solid.",
+                                                List.of("interaction", "barrier"), null),
+                                        new ParameterSchema("offset", ParameterType.LIST, false,
+                                                "[0, 0, 0]", "Offset from the placed origin",
+                                                null, null),
+                                        new ParameterSchema("width", ParameterType.DECIMAL, false,
+                                                "1", "Width in blocks", null, null),
+                                        new ParameterSchema("height", ParameterType.DECIMAL, false,
+                                                "1", "Height in blocks", null, null)))
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Hitboxes", "placement", 20, false, "structured-list", "",
+                                        "")),
+                        new ParameterSchema("seats", ParameterType.LIST, false, null,
+                                "Seat mount points: {offset: [x,y,z]}", null,
+                                List.of(new ParameterSchema("offset", ParameterType.LIST, false,
+                                        "[0, 0, 0]", "Where the player sits", null, null)))
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Seats", "placement", 30, false, "structured-list", "",
+                                        "")),
+                        new ParameterSchema("lights", ParameterType.LIST, false, null,
+                                "Light blocks: {offset: [x,y,z], level}", null,
+                                List.of(
+                                        new ParameterSchema("offset", ParameterType.LIST, false,
+                                                "[0, 0, 0]", "Where the light sits", null, null),
+                                        new ParameterSchema("level", ParameterType.INTEGER, false,
+                                                "15", "Light level 0..15", null, null)))
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Lights", "placement", 40, false, "structured-list", "",
+                                        "")),
+                        new ParameterSchema("storage", ParameterType.INTEGER, false, null,
+                                "Storage size in slots (multiple of 9, max 54)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Storage slots", "gameplay", 10, false, "number", "",
+                                        "27")),
                         new ParameterSchema("evolution", ParameterType.LIST, false, null,
-                                "Timed stages: {target: furniture-id, after: seconds}", null, null),
+                                "Timed stages: {target: furniture-id, after: seconds}", null,
+                                List.of(
+                                        new ParameterSchema("target", ParameterType.REFERENCE,
+                                                true, null, "Furniture it becomes", null, null),
+                                        new ParameterSchema("after", ParameterType.INTEGER, true,
+                                                "60", "Seconds before it changes", null, null)))
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Evolution stages", "gameplay", 20, false,
+                                        "structured-list", "", "")),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
-                                "Optional custom placement item; auto-generated from this furniture when omitted",
-                                null, null),
+                                "Optional custom placement item; auto-generated from this "
+                                        + "furniture when omitted",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Placement item", "gameplay", 30, true, "reference",
+                                        "item", "")),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
-                                "ECA rules fired on place/click", null, null)),
+                                "ECA rules fired on place/click", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Behaviour rules", "behavior", 10, false,
+                                        "structured-list", "", ""))),
                 "1.0.0");
     }
 

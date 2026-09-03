@@ -354,6 +354,54 @@ public final class DocumentStore {
         }
     }
 
+    /**
+     * Applies several scalar patches as <em>one</em> write: the studio saves a
+     * whole screen of fields and the author gets one revision, one journal
+     * entry and one reload — not one per keystroke-completed field. Every edit
+     * goes through the same lossless layer as {@link #setScalar}, and the
+     * batch is applied in memory first, so a rejected edit leaves the file
+     * untouched.
+     *
+     * @param edits field path → new value, applied in order
+     */
+    public Document setScalars(String pack, String path, int expectedRevision,
+            List<FieldEdit> edits, String actor) throws IOException {
+        if (edits.isEmpty()) {
+            throw new IllegalArgumentException("no edits to apply");
+        }
+        synchronized (lock) {
+            Path file = resolve(pack, path);
+            assertExpectedRevision(pack, path, expectedRevision);
+            LosslessYamlDocument document =
+                    LosslessYaml.parse(Files.readString(file, StandardCharsets.UTF_8));
+            if (document.parseError().isPresent()) {
+                throw new IllegalStateException(
+                        "document does not parse: " + document.parseError().get());
+            }
+            String updated;
+            try {
+                for (FieldEdit edit : edits) {
+                    document = document.withNode(
+                            edit.value(), edit.field().toArray(String[]::new));
+                }
+                updated = document.save();
+            } catch (UnsupportedOperationException e) {
+                throw new IllegalArgumentException(e.getMessage());
+            }
+            byte[] bytes = updated.getBytes(StandardCharsets.UTF_8);
+            Files.write(file, bytes);
+            appendRevision(pack, path, new Revision(
+                    currentRevision(pack, path) + 1, System.currentTimeMillis(),
+                    actor, "set-scalar", Documents.sha256(bytes)));
+            trimJournal(pack, path);
+            return new Document(pack, path, updated,
+                    currentRevision(pack, path), Documents.sha256(bytes));
+        }
+    }
+
+    /** One field patch inside a batched studio save. */
+    public record FieldEdit(List<String> field, Object value) { }
+
     /** Creates a minimal pack scaffold ({@code pack.yml} + type dirs). */
     public void createPack(String packId, String actor) throws IOException {
         validatePackId(packId);

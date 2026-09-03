@@ -144,4 +144,90 @@ class LosslessYamlTest {
         assertThat(emptied).contains("lore: []");
         assertThat(emptied).contains("# keep me");
     }
+
+    @Test
+    void structuredValuesRenderAsBlockYamlAndLeaveTheRestAlone() {
+        // Furniture hitboxes: a sequence of mappings, coordinates in flow
+        // style because that is how a human writes a coordinate.
+        String raw = """
+                chair:
+                  # authored by hand
+                  model: chair
+                  hitboxes:
+                    - type: interaction
+                      offset: [0, 0, 0]
+                  storage: 27
+                """;
+        String edited = LosslessYaml.parse(raw)
+                .withNode(
+                        List.of(
+                                mapping("type", "interaction", "offset", List.of(0, 0.5, 0),
+                                        "width", 1),
+                                mapping("type", "barrier", "offset", List.of(0, 1, 0))),
+                        "chair", "hitboxes")
+                .save();
+
+        assertThat(edited).isEqualTo("""
+                chair:
+                  # authored by hand
+                  model: chair
+                  hitboxes:
+                    - type: interaction
+                      offset: [0, 0.5, 0]
+                      width: 1
+                    - type: barrier
+                      offset: [0, 1, 0]
+                  storage: 27
+                """);
+        // The result still parses, and re-saving it is byte-identical.
+        var reparsed = LosslessYaml.parse(edited);
+        assertThat(reparsed.parseError()).isEmpty();
+        assertThat(reparsed.save()).isEqualTo(edited);
+    }
+
+    @Test
+    void structuredMappingsInsertAndReplaceWithoutTouchingNeighbours() {
+        String raw = "recipe:\n  type: shaped\n  # ingredients below\n  result: sword\n";
+        var ingredients = mapping("R", "myserver:ruby", "S", "minecraft:stick");
+
+        String inserted = LosslessYaml.parse(raw)
+                .withNode(ingredients, "recipe", "ingredients")
+                .save();
+        // Namespaced ids carry a colon, so they are quoted — still the same value.
+        assertThat(inserted).isEqualTo(
+                "recipe:\n  type: shaped\n  # ingredients below\n  result: sword\n"
+                        + "  ingredients:\n    R: \"myserver:ruby\"\n    S: \"minecraft:stick\"\n");
+
+        // Replacing it drops the old keys entirely — no residue.
+        var replacement = mapping("X", "minecraft:diamond");
+        String replaced = LosslessYaml.parse(inserted)
+                .withNode(replacement, "recipe", "ingredients")
+                .save();
+        assertThat(replaced).isEqualTo(
+                "recipe:\n  type: shaped\n  # ingredients below\n  result: sword\n"
+                        + "  ingredients:\n    X: \"minecraft:diamond\"\n");
+
+        // Empty structures collapse onto the key line.
+        assertThat(LosslessYaml.parse(inserted)
+                .withNode(Map.of(), "recipe", "ingredients").save())
+                .contains("ingredients: {}");
+    }
+
+    @Test
+    void structuredWritesFallBackToTheOneLinePathForFlatValues() {
+        String raw = "item:\n  material: PAPER\n";
+        assertThat(LosslessYaml.parse(raw).withNode("STICK", "item", "material").save())
+                .isEqualTo("item:\n  material: STICK\n");
+        assertThat(LosslessYaml.parse(raw).withNode(List.of("a", "b"), "item", "lore").save())
+                .isEqualTo("item:\n  material: PAPER\n  lore:\n    - a\n    - b\n");
+    }
+
+    /** Ordered map literal — key order is part of what gets written out. */
+    private static Map<String, Object> mapping(Object... pairs) {
+        var map = new java.util.LinkedHashMap<String, Object>();
+        for (int i = 0; i < pairs.length; i += 2) {
+            map.put(String.valueOf(pairs[i]), pairs[i + 1]);
+        }
+        return map;
+    }
 }

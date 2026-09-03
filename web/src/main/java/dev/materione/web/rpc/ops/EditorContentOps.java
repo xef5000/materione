@@ -211,6 +211,58 @@ public final class EditorContentOps {
             }
         });
 
+        // One studio save = one revision, one audit line, one reload. The
+        // edits are applied through the lossless layer, so untouched keys,
+        // comments and fields no studio can render survive verbatim (§5.6).
+        dispatcher.register("authoring.setFields", request -> {
+            JsonObject body = request.payload();
+            try {
+                String pack = requiredString(body, "pack");
+                String path = requiredString(body, "path");
+                int expectedRev = body.get("rev").getAsInt();
+                var element = body.get("edits");
+                if (element == null || !element.isJsonArray() || element.getAsJsonArray().isEmpty()) {
+                    throw new IllegalArgumentException("'edits' must be a non-empty array");
+                }
+                if (element.getAsJsonArray().size() > 256) {
+                    throw new IllegalArgumentException("too many edits in one save");
+                }
+                List<DocumentStore.FieldEdit> edits = new java.util.ArrayList<>();
+                for (var entry : element.getAsJsonArray()) {
+                    if (!entry.isJsonObject()) {
+                        throw new IllegalArgumentException("'edits' entries must be objects");
+                    }
+                    JsonObject edit = entry.getAsJsonObject();
+                    edits.add(new DocumentStore.FieldEdit(
+                            stringList(edit.get("field")), nodeValue(edit.get("value"))));
+                }
+                String actor = actorOf(request);
+                DocumentStore.Document updated =
+                        documents.setScalars(pack, path, expectedRev, edits, actor);
+                audit.record(actor, "authoring.setFields",
+                        pack + "/" + path + " (" + edits.size() + " fields)");
+                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                JsonObject payload = new JsonObject();
+                payload.addProperty("rev", updated.revision());
+                payload.addProperty("raw", updated.raw());
+                payload.add("parsed", parsedView(updated.raw()));
+                return Wire.Response.success(request, payload);
+            } catch (DocumentConflictException e) {
+                JsonObject data = new JsonObject();
+                data.addProperty("currentRev", e.currentRevision());
+                return Wire.Response.failure(request, new Wire.Error(
+                        "MTR-0034", e.getMessage(), safePath(body),
+                        "reopen the entry and re-apply your change"));
+            } catch (java.nio.file.NoSuchFileException e) {
+                return Wire.Response.failure(request,
+                        new Wire.Error("MTR-0009", "no such document", safePath(body), null));
+            } catch (IllegalArgumentException | IllegalStateException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
         dispatcher.register("authoring.createResource", request -> {
             JsonObject body = request.payload();
             try {
@@ -593,6 +645,40 @@ public final class EditorContentOps {
             return primitive.getAsNumber();
         }
         return primitive.getAsString();
+    }
+
+    /**
+     * Studio saves carry structured values too (recipe ingredients, furniture
+     * hitboxes): JSON maps and lists become ordered Java maps and lists, which
+     * the lossless layer renders as block YAML. Depth is bounded so a hostile
+     * client cannot blow the stack.
+     */
+    private static Object nodeValue(com.google.gson.JsonElement element) {
+        return nodeValue(element, 0);
+    }
+
+    private static Object nodeValue(com.google.gson.JsonElement element, int depth) {
+        if (depth > 8) {
+            throw new IllegalArgumentException("value nests too deeply");
+        }
+        if (element == null || element.isJsonNull()) {
+            throw new IllegalArgumentException("'value' is required");
+        }
+        if (element.isJsonArray()) {
+            List<Object> items = new java.util.ArrayList<>();
+            for (var item : element.getAsJsonArray()) {
+                items.add(nodeValue(item, depth + 1));
+            }
+            return items;
+        }
+        if (element.isJsonObject()) {
+            var map = new java.util.LinkedHashMap<String, Object>();
+            for (var entry : element.getAsJsonObject().entrySet()) {
+                map.put(entry.getKey(), nodeValue(entry.getValue(), depth + 1));
+            }
+            return map;
+        }
+        return primitiveOf(element.getAsJsonPrimitive());
     }
 
     // ------------------------------------------------------------------
