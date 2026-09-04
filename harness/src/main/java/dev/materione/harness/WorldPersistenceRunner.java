@@ -201,6 +201,9 @@ public final class WorldPersistenceRunner {
      * and hands the slot to the other id. The chunk-PDC record wins:
      * inspect reports the mismatch (MTR-0024) and sweep drift-counts the
      * position with a targeted resync — nothing is guessed, nothing lost.
+     * {@code sweep --fix} then rewrites the drifted host state from the
+     * record, and the placement identifies and validates as its recorded
+     * definition again.
      */
     private List<String> corruptionPair(HarnessOptions options, Set<String> packs)
             throws IOException, InterruptedException {
@@ -245,6 +248,15 @@ public final class WorldPersistenceRunner {
         }
         drive(f2, options, "materione dev sweep",
                 "MATERIONE-DEV-SWEEP indexed=1 ok=0 stale=0 orphans=0 drifted=1 unloaded=0",
+                problems);
+        // --fix rewrites the drifted host state from the chunk record
+        drive(f2, options, "materione dev sweep --fix",
+                "MATERIONE-DEV-SWEEP indexed=1 ok=0 stale=0 orphans=0 drifted=1 unloaded=0 fixed",
+                problems);
+        drive(f2, options, "materione dev inspect 20 200 20 world",
+                "MATERIONE-DEV-INSPECT found=true sample:amethyst_lamp", problems);
+        drive(f2, options, "materione dev sweep",
+                "MATERIONE-DEV-SWEEP indexed=1 ok=1 stale=0 orphans=0 drifted=0 unloaded=0",
                 problems);
         stop(f2, options, problems);
         return problems;

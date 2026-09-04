@@ -211,6 +211,22 @@ clicked face — vanilla `BlockPlaceEvent` never fires for non-block items.
   accelerates lookups and is rebuildable by chunk scan (self-healing).
 - **Host-block physics suppressed** (Paper) so hijacked note blocks don't beep and tripwire
   doesn't cut.
+- **Host use is denied; placement is ours**: CraftBukkit short-circuits the whole
+  interaction once a `PlayerInteractEvent`'s block result is DENY — vanilla item use
+  (placement) is unreachable against our blocks. So a right-click on an identified (or
+  chunk-recorded) position that carries one of our placement items places that block
+  against the clicked face through the runtime itself (the §13 contract, covering clicks
+  on our own blocks; slab stacking mirrored). A held vanilla block is placed by the
+  runtime too, mirroring vanilla placement for the common shapes (slab/stairs/trapdoor
+  halves from the hit point, log axes from the clicked face, directional fronts toward
+  the placer, waterlogging, support and entity checks) and announcing through a real
+  `BlockPlaceEvent` so protection plugins keep their say; multi-cell structures (doors,
+  beds) stay sneak-only, where vanilla places them itself and never touches the host.
+  Every other right-click is fully cancelled — the host's own behavior (note tuning/play,
+  any interactive technical host) never runs. Non-placement clicks fire ECA `interact`
+  rules once, on the main hand. Left clicks stay vanilla; the break pipeline owns
+  teardown. Quarantined positions (record present, drifted state) are denied too but
+  fire nothing.
 - **Reload migration**: definition changed → placed instances re-render through the new model
   (same blockstate mapping, no world edit); definition removed → Orphan policy (keep-flagged
   default).
@@ -236,7 +252,10 @@ already-loaded chunks (world-copy survival). Physics suppression probes Paper's
 `disable-*-updates` flags with event-based fallback suppressors (`MTR-0025`). One shared
 removal pipeline serves player break, explosions, pistons (move-policy aware) and falling
 blocks; orphans are keep-flagged with targeted client resync via `dev sweep`
-(`MTR-0026`). Dev commands `place/remove/inspect/sweep` double as the harness driver.
+(`MTR-0026`). Reads stay quarantined on state/PDC drift (`MTR-0024`); `dev sweep --fix`
+is the explicit repair — it rewrites the drifted host state from the chunk record, so the
+position renders and identifies as its recorded definition again.
+Dev commands `place/remove/inspect/sweep` double as the harness driver.
 Deviation: stringblocks ship dry — tripwire has no waterlogged state at the API floor.
 
 ---

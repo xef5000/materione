@@ -29,7 +29,10 @@ public record HarnessOptions(
                 optional("materione.version", "unknown"),
                 seconds("boot", 300),
                 seconds("command", 60),
-                seconds("stop", 60),
+                // Paper's own shutdown can spend up to 60s terminating its
+                // Moonrise worker pools after MATERIONE-BYE — a 60s process
+                // window races that and flakes on slow machines
+                seconds("stop", 180),
                 null,
                 optionalPath("harness.contentPacks"));
     }
