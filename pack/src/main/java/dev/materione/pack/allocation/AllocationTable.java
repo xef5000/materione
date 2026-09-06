@@ -1,6 +1,7 @@
 package dev.materione.pack.allocation;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.core.content.AllocatedRange;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -108,6 +109,39 @@ public final class AllocationTable {
         return value;
     }
 
+    /**
+     * Allocates a consecutive run — the primitive glyph codepoints need
+     * (sheet rows and animation frames must occupy adjacent codepoints).
+     * A run whose stored count already covers the ask is returned as-is;
+     * a growing ask rebinds the id to a fresh run from the kind's counter
+     * (values never shift — the orphaned old run stays burned, like a
+     * tombstone). Single-value runs store the plain-int form, so
+     * {@link #allocate} and this share a value space per kind.
+     */
+    public synchronized AllocatedRange range(NamespacedId resource, String kind, int count) {
+        if (count < 1) {
+            throw new IllegalArgumentException("range count must be >= 1: " + count);
+        }
+        String key = key(resource, kind);
+        Entry existing = live.get(key);
+        if (existing == null) {
+            existing = tombstones.get(key);
+        }
+        if (existing != null
+                && AllocatedRange.parse(existing.value()).count() >= count) {
+            return AllocatedRange.parse(existing.value());
+        }
+        int last = counters.getOrDefault(kind, 0);
+        AllocatedRange range =
+                new AllocatedRange(last + 1, count);
+        counters.put(kind, last + count);
+        Entry entry = new Entry(resource, kind, range.toString());
+        live.put(key, entry);
+        tombstones.remove(key);
+        pending.add(record(KIND_ADD, entry));
+        return range;
+    }
+
     /** The live allocation for a resource, if any (tombstones excluded). */
     public synchronized Optional<String> allocationOf(NamespacedId resource, String kind) {
         Entry entry = live.get(key(resource, kind));
@@ -210,7 +244,9 @@ public final class AllocationTable {
                 case KIND_ADD -> {
                     live.put(key(id, kind), entry);
                     tombstones.remove(key(id, kind));
-                    counters.merge(kind, Integer.parseInt(value), Math::max);
+                    // plain ints and "start,count" runs share a value space per kind
+                    counters.merge(kind,
+                            AllocatedRange.parse(value).last(), Math::max);
                 }
                 case KIND_TOMBSTONE -> {
                     live.remove(key(id, kind));

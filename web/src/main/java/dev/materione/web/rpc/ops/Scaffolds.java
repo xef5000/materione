@@ -17,7 +17,7 @@ public final class Scaffolds {
 
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
-            List.of("items", "blocks", "furnitures", "recipes", "templates");
+            List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -32,6 +32,7 @@ public final class Scaffolds {
             case "furnitures" -> furniture(name);
             case "recipes" -> recipe(name);
             case "templates" -> template(name);
+            case "glyphs" -> glyph(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
                             + SCAFFOLD_TYPES);
@@ -94,6 +95,18 @@ public final class Scaffolds {
                 + "# and override individual fields.\n"
                 + id + ":\n"
                 + "  material: PAPER\n";
+    }
+
+    private static String glyph(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  texture: gui/" + id + "\n"
+                + "  ascent: 8\n"
+                + "  height: 8\n"
+                + "  # placeholders:\n"
+                + "  #   - \":" + id + ":\"\n"
+                + "  # emoji: true — chat interception + tab-completion\n"
+                + "  # The codepoint is allocated by the server and shown in the preview.\n";
     }
 
     // ------------------------------------------------------------------

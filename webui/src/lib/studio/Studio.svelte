@@ -10,6 +10,7 @@
   import StructuredList from './StructuredList.svelte';
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
+  import GlyphPreview from './GlyphPreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
   import ModelWorkbench from './ModelWorkbench.svelte';
   import { ops, unwrap } from '../api';
@@ -37,6 +38,8 @@
   let loaded = $state<Record<string, unknown>>({});
   let draft = $state<Record<string, unknown>>({});
   let rootId = $state('');
+  /** Server-computed read-only metadata (a glyph's allocated codepoint). */
+  let computed = $state<Record<string, Record<string, { codepoint: number; count: number }>>>({});
   let error = $state('');
   let saving = $state(false);
   /** The texture slot currently open in the pixel editor, if any. */
@@ -52,6 +55,7 @@
     workspace.types.find((type: TypeInfo) => type.directory === typeDirectory) ??
       workspace.types.find((type: TypeInfo) => type.name === resource.type),
   );
+  const glyphMeta = $derived(computed.glyphs?.[rootId] ?? null);
   const sections = $derived(sectionsOf(schema));
   const advancedOnly = $derived(unrenderableKeys(loaded, schema));
   const dirty = $derived(changedFields(loaded, draft).length > 0);
@@ -93,6 +97,7 @@
       const body = (parsed[rootId] as Record<string, unknown>) ?? {};
       loaded = { ...body };
       draft = structuredClone(body);
+      computed = (payload.computed as typeof computed) ?? {};
       error = '';
       clearDocStale(`${resource.pack}/${resource.path}`);
     } catch (e) {
@@ -216,13 +221,25 @@
 
   <div class="body">
     <aside class="preview">
-      <StudioPreview
-        pack={resource.pack}
-        texture={String(draft.texture ?? '')}
-        model={String(draft.model ?? '')}
-        label={name}
-        nonce={textureVersion}
-      />
+      {#if typeDirectory === 'glyphs'}
+        <GlyphPreview
+          pack={resource.pack}
+          texture={String(draft.texture ?? '')}
+          frames={draft.frames}
+          ascent={Number(draft.ascent ?? 8)}
+          height={Number(draft.height ?? 8)}
+          codepoint={glyphMeta?.codepoint ?? null}
+          nonce={textureVersion}
+        />
+      {:else}
+        <StudioPreview
+          pack={resource.pack}
+          texture={String(draft.texture ?? '')}
+          model={String(draft.model ?? '')}
+          label={name}
+          nonce={textureVersion}
+        />
+      {/if}
     </aside>
 
     <div class="form">

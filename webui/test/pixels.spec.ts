@@ -7,8 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   History,
+  applyRatio,
+  clampSelection,
   colorToHex,
   createBitmap,
+  crop,
   fill,
   getPixel,
   hexToColor,
@@ -155,6 +158,65 @@ describe('resize', () => {
     const bitmap = createBitmap(4, 4);
     rectangle(bitmap, 0, 0, 3, 3, brush(RED), true);
     expect(render(resize(bitmap, 2, 2))).toEqual(['##', '##']);
+  });
+
+  it('accepts non-square sizes — glyphs and paintings are not squares', () => {
+    const bitmap = createBitmap(4, 2);
+    setPixel(bitmap, 3, 1, RED);
+    const wide = resize(bitmap, 8, 2);
+    expect(wide.width).toBe(8);
+    expect(wide.height).toBe(2);
+    // source column 3 lands on destination columns 6-7
+    expect(render(wide)).toEqual(['........', '......##']);
+  });
+});
+
+describe('crop', () => {
+  it('extracts the region without resampling it', () => {
+    const bitmap = createBitmap(4, 4);
+    setPixel(bitmap, 2, 1, RED);
+    setPixel(bitmap, 3, 3, BLUE);
+    const cut = crop(bitmap, 1, 1, 2, 2);
+    expect(render(cut)).toEqual(['.#', '..']);
+    expect(getPixel(cut, 1, 0)).toEqual(RED);
+  });
+
+  it('clamps a selection that starts outside or overhangs the bitmap', () => {
+    const bitmap = createBitmap(4, 4);
+    rectangle(bitmap, 0, 0, 3, 3, brush(RED), true);
+    expect(crop(bitmap, -2, -2, 4, 4).width).toBe(2);
+    expect(render(crop(bitmap, -2, -2, 4, 4))).toEqual(['##', '##']);
+    // overhang past the right/bottom edge stops at the bitmap, never pads
+    const cut = crop(bitmap, 2, 2, 10, 10);
+    expect(cut.width).toBe(2);
+    expect(cut.height).toBe(2);
+  });
+});
+
+describe('crop selections', () => {
+  it('normalizes drags in any direction and clamps to the bitmap', () => {
+    expect(clampSelection(3, 3, 1, 1, 8, 8)).toEqual({ x: 1, y: 1, width: 3, height: 3 });
+    expect(clampSelection(-4, -4, 2, 2, 8, 8)).toEqual({ x: 0, y: 0, width: 3, height: 3 });
+    expect(clampSelection(6, 6, 20, 20, 8, 8)).toEqual({ x: 6, y: 6, width: 2, height: 2 });
+  });
+
+  it('locks the dragged shape to the aspect ratio, anchored top-left', () => {
+    const bitmap = createBitmap(32, 32);
+    expect(applyRatio({ x: 2, y: 3, width: 10, height: 7 }, '1:1', bitmap.width, bitmap.height))
+      .toEqual({ x: 2, y: 3, width: 10, height: 10 });
+    expect(applyRatio({ x: 2, y: 3, width: 20, height: 5 }, '2:1', bitmap.width, bitmap.height))
+      .toEqual({ x: 2, y: 3, width: 20, height: 10 });
+    expect(applyRatio({ x: 2, y: 3, width: 4, height: 9 }, '1:2', bitmap.width, bitmap.height))
+      .toEqual({ x: 2, y: 3, width: 4, height: 8 });
+  });
+
+  it('keeps a locked selection inside the bitmap even near the edges', () => {
+    const bitmap = createBitmap(16, 16);
+    const near = applyRatio({ x: 12, y: 12, width: 8, height: 8 }, '1:1', 16, 16);
+    expect(near).toEqual({ x: 12, y: 12, width: 4, height: 4 });
+    // 2:1 anchored where the height runs out collapses to the tallest even fit
+    const squat = applyRatio({ x: 0, y: 14, width: 16, height: 2 }, '2:1', 16, 16);
+    expect(squat).toEqual({ x: 0, y: 14, width: 4, height: 2 });
   });
 });
 

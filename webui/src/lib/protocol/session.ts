@@ -219,6 +219,8 @@ export class EditorChannel {
    * server's synchronized sendFrame).
    */
   private sendChain: Promise<void> = Promise.resolve();
+  /** Receive-side twin of {@link sendChain}: frames process in arrival order. */
+  private receiveChain: Promise<void> = Promise.resolve();
   private pending = new Map<
     string,
     { resolve: (r: Response) => void; reject: (e: Error) => void }
@@ -328,11 +330,25 @@ export class EditorChannel {
       serverPublic,
     );
     channel.transport = transport;
-    transport.onMessage((text) => void channel.receive(text));
+    // Fire-and-forget, but each frame's processing chains onto the previous
+    // one: the seq check must run in exactly the arrival order, and the
+    // signature verify inside receive() suspends — two frames flushed
+    // back-to-back would otherwise race (frame 2's seq check runs while
+    // frame 1 still awaits verify) and kill the channel (MTR-0033's
+    // receive-side twin).
+    transport.onMessage((text) => {
+      channel.receiveChain = channel.receiveChain
+        .then(() => channel.receive(text))
+        .catch(() => {}); // receive() reports its own failures via fail()
+    });
     transport.onClose((code) => {
       channel.pending.forEach((p) => p.reject(new Error(`channel closed (${code})`)));
       channel.pending.clear();
-      channel.stateListener?.({ kind: 'closed', reason: `closed (${code})` });
+      // A fail() already reported the true reason; the browser's close
+      // event (code 1000 for our own close()) must not overwrite it.
+      if (!channel.isDead()) {
+        channel.stateListener?.({ kind: 'closed', reason: `closed (${code})` });
+      }
     });
     options.onState?.({ kind: 'active' });
     return channel;
@@ -401,6 +417,11 @@ export class EditorChannel {
   }
 
   private dead = false;
+
+  /** True once {@link fail} ran — close events then carry no new information. */
+  isDead(): boolean {
+    return this.dead;
+  }
 
   private fail(error: unknown): void {
     if (this.dead) {

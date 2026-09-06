@@ -1,5 +1,6 @@
 package dev.materione.plugin.runtime;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.scheduling.SchedulingGateway;
@@ -186,7 +187,8 @@ public final class EditorTransportService {
         dev.materione.web.rpc.ops.EditorContentOps.register(
                 dispatcher, documents, audit, storage.contentPacksDir(), trigger,
                 this::typeCatalog,
-                () -> diagnostics.recent(100));
+                () -> diagnostics.recent(100),
+                this::computedMeta);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
                 dispatcher, documents, storage.contentPacksDir(), audit, trigger);
         dev.materione.web.rpc.ops.AssetOps.register(
@@ -210,6 +212,49 @@ public final class EditorTransportService {
                 return delivery != null && delivery.publishCandidate(expectedCandidateSha256);
             }
         });
+    }
+
+    /**
+     * Server-computed metadata for the studio: a glyph's allocated codepoint.
+     * The allocation table owns it (D7) — the form shows it, the file on disk
+     * never contains it.
+     */
+    @SuppressWarnings("unused") // parsed is part of the ComputedMeta contract
+    private com.google.gson.JsonObject computedMeta(
+            String pack, String path, com.google.gson.JsonObject parsed) {
+        if (!path.startsWith("glyphs/") || pipeline.allocation() == null || parsed == null) {
+            return null;
+        }
+        var glyphs = new com.google.gson.JsonObject();
+        for (var entry : parsed.entrySet()) {
+            if (!entry.getValue().isJsonObject()) {
+                continue;
+            }
+            dev.materione.core.content.AllocatedRange run;
+            try {
+                run = pipeline.allocation().allocationOf(
+                        NamespacedId.parse(pack + ":" + entry.getKey()),
+                        dev.materione.content.glyphs.GlyphType.ALLOCATION_KIND)
+                        .map(dev.materione.core.content.AllocatedRange::parse)
+                        .orElse(null);
+            } catch (IllegalArgumentException malformedId) {
+                continue;
+            }
+            if (run == null) {
+                continue;
+            }
+            var info = new com.google.gson.JsonObject();
+            info.addProperty("codepoint", dev.materione.core.text.GlyphCodepoints.of(run.start()));
+            info.addProperty("count", run.count());
+            info.addProperty("char", String.valueOf((char) dev.materione.core.text.GlyphCodepoints.of(run.start())));
+            glyphs.add(entry.getKey(), info);
+        }
+        if (glyphs.size() == 0) {
+            return null;
+        }
+        var out = new com.google.gson.JsonObject();
+        out.add("glyphs", glyphs);
+        return out;
     }
 
     /**

@@ -1,0 +1,6 @@
+banner_sheet:
+  texture: gui/heart
+  rows: 2
+  columns: 3
+  ascent: 8
+  height: 8

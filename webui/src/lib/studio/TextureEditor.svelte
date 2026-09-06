@@ -10,9 +10,12 @@
   import { errorMessage, logActivity, session } from '../state.svelte';
   import {
     History,
+    applyRatio,
+    clampSelection,
     cloneBitmap,
     colorToHex,
     createBitmap,
+    crop,
     fill,
     getPixel,
     hexToColor,
@@ -24,6 +27,8 @@
     usedColors,
     type Bitmap,
     type Color,
+    type Ratio,
+    type Selection,
   } from '../pixels';
 
   interface Props {
@@ -36,16 +41,30 @@
 
   let { pack, path, onClose, onSaved }: Props = $props();
 
-  type Tool = 'pencil' | 'eraser' | 'fill' | 'pick' | 'line' | 'rect';
+  type Tool = 'pencil' | 'eraser' | 'fill' | 'pick' | 'line' | 'rect' | 'crop';
 
-  const TOOLS: { id: Tool; glyph: string; label: string; key: string }[] = [
-    { id: 'pencil', glyph: '✏', label: 'Pencil', key: 'B' },
-    { id: 'eraser', glyph: '⌫', label: 'Eraser', key: 'E' },
-    { id: 'fill', glyph: '▧', label: 'Fill', key: 'G' },
-    { id: 'pick', glyph: '⊙', label: 'Pick colour', key: 'I' },
-    { id: 'line', glyph: '╱', label: 'Line', key: 'L' },
-    { id: 'rect', glyph: '▭', label: 'Rectangle', key: 'R' },
+  /**
+   * The right panel is "tool settings": it shows the colour controls exactly
+   * when the active tool consumes a colour, and per-tool controls otherwise.
+   */
+  const TOOLS: {
+    id: Tool;
+    glyph: string;
+    label: string;
+    key: string;
+    needsColor: boolean;
+  }[] = [
+    { id: 'pencil', glyph: '✏', label: 'Pencil', key: 'B', needsColor: true },
+    { id: 'eraser', glyph: '⌫', label: 'Eraser', key: 'E', needsColor: false },
+    { id: 'fill', glyph: '▧', label: 'Fill', key: 'G', needsColor: true },
+    { id: 'pick', glyph: '⊙', label: 'Pick colour', key: 'I', needsColor: false },
+    { id: 'line', glyph: '╱', label: 'Line', key: 'L', needsColor: true },
+    { id: 'rect', glyph: '▭', label: 'Rectangle', key: 'R', needsColor: true },
+    { id: 'crop', glyph: '⬚', label: 'Crop', key: 'C', needsColor: false },
   ];
+
+  const PAINT_TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'rect'];
+  const RATIOS: Ratio[] = ['free', '1:1', '2:1', '1:2'];
 
   let bitmap = $state<Bitmap>(createBitmap(16, 16));
   let tool = $state<Tool>('pencil');
@@ -62,11 +81,19 @@
   let missing = $state(false);
   let recents = $state<string[]>([]);
   let cursor = $state<{ x: number; y: number } | null>(null);
+  // The crop marquee persists after the drag ends so the panel can adjust it.
+  let selection = $state<Selection | null>(null);
+  let ratio = $state<Ratio>('free');
+  // Free canvas sizing: the inputs track the bitmap, the button applies.
+  let canvasWidth = $state(16);
+  let canvasHeight = $state(16);
   // A shape in progress is drawn on a copy so it can follow the pointer.
   let anchor: { x: number; y: number } | null = null;
   let base: Bitmap | null = null;
   let painting = false;
   let last: { x: number; y: number } | null = null;
+  let marqueeDrag = false;
+  let marqueeFrom: { x: number; y: number } | null = null;
   let panning = false;
   let panFrom = { x: 0, y: 0, panX: 0, panY: 0 };
 
@@ -76,14 +103,28 @@
   const color = $derived(hexToColor(hex, alpha));
   const palette = $derived(usedColors(bitmap, 12).map(colorToHex));
   const name = $derived(path.split('/').pop() ?? path);
+  const toolNeedsColor = $derived(
+    TOOLS.find((entry) => entry.id === tool)?.needsColor ?? false,
+  );
 
   $effect(() => {
     void load(path);
   });
 
-  // Repaint whenever the bitmap, the view or the hover changes.
+  // Repaint whenever the bitmap, the view, the hover or the marquee changes.
   $effect(() => {
-    paint(bitmap, zoom, pan, cursor);
+    paint(bitmap, zoom, pan, cursor, selection);
+  });
+
+  // The canvas inputs mirror the bitmap until the user edits them.
+  $effect(() => {
+    canvasWidth = bitmap.width;
+    canvasHeight = bitmap.height;
+  });
+
+  // A marquee belongs to the crop tool; switching tools dismisses it.
+  $effect(() => {
+    if (tool !== 'crop') selection = null;
   });
 
   async function load(target: string) {
@@ -147,6 +188,7 @@
     scale: number,
     offset: { x: number; y: number },
     hover: { x: number; y: number } | null,
+    mark: Selection | null,
   ) {
     const element = canvas;
     if (!element) return;
@@ -204,6 +246,24 @@
         scale - 1,
       );
     }
+
+    if (mark) {
+      // Dim everything the crop would cut away, then outline the kept region.
+      const markX = offset.x + mark.x * scale;
+      const markY = offset.y + mark.y * scale;
+      const markW = mark.width * scale;
+      const markH = mark.height * scale;
+      context.fillStyle = 'rgba(0,0,0,0.5)';
+      context.beginPath();
+      context.rect(0, 0, element.width, element.height);
+      context.rect(markX, markY, markW, markH);
+      context.fill('evenodd');
+      context.strokeStyle = '#fff';
+      context.lineWidth = 1;
+      context.setLineDash([4, 3]);
+      context.strokeRect(markX + 0.5, markY + 0.5, markW - 1, markH - 1);
+      context.setLineDash([]);
+    }
   }
 
   function brushOf(erase: boolean) {
@@ -232,6 +292,13 @@
       alpha = picked[3];
       return;
     }
+    if (tool === 'crop') {
+      marqueeDrag = true;
+      marqueeFrom = point;
+      selection = clampSelection(point.x, point.y, point.x, point.y, bitmap.width, bitmap.height);
+      canvas!.setPointerCapture(event.pointerId);
+      return;
+    }
     history.push(bitmap);
     canvas!.setPointerCapture(event.pointerId);
     if (tool === 'line' || tool === 'rect') {
@@ -258,6 +325,19 @@
     }
     const point = pointOf(event);
     cursor = point;
+    if (marqueeDrag && marqueeFrom) {
+      let next = clampSelection(
+        marqueeFrom.x,
+        marqueeFrom.y,
+        point.x,
+        point.y,
+        bitmap.width,
+        bitmap.height,
+      );
+      if (ratio !== 'free') next = applyRatio(next, ratio, bitmap.width, bitmap.height);
+      selection = next;
+      return;
+    }
     if (anchor && base) {
       const preview = cloneBitmap(base);
       if (tool === 'line') line(preview, anchor.x, anchor.y, point.x, point.y, brushOf(false));
@@ -277,6 +357,8 @@
     if (anchor) dirty = true;
     painting = false;
     panning = false;
+    marqueeDrag = false;
+    marqueeFrom = null;
     anchor = null;
     base = null;
     last = null;
@@ -309,10 +391,51 @@
   }
 
   function setSize(width: number, height: number) {
+    const nextWidth = Math.max(1, Math.min(1024, Math.round(width)));
+    const nextHeight = Math.max(1, Math.min(1024, Math.round(height)));
+    if (nextWidth === bitmap.width && nextHeight === bitmap.height) return;
     history.push(bitmap);
-    bitmap = resize(bitmap, width, height);
+    bitmap = resize(bitmap, nextWidth, nextHeight);
+    selection = null;
     dirty = true;
     fitToView();
+  }
+
+  /** Applies the marquee: the kept pixels are kept, nothing is resampled. */
+  function applyCrop() {
+    if (!selection) return;
+    history.push(bitmap);
+    bitmap = crop(bitmap, selection.x, selection.y, selection.width, selection.height);
+    selection = null;
+    ratio = 'free';
+    dirty = true;
+    fitToView();
+  }
+
+  function cancelCrop() {
+    selection = null;
+  }
+
+  function lockRatio(next: Ratio) {
+    ratio = next;
+    if (selection) selection = applyRatio(selection, next, bitmap.width, bitmap.height);
+  }
+
+  function moveSelection(axis: 'x' | 'y', raw: number) {
+    if (!selection || !Number.isFinite(raw)) return;
+    const limit =
+      axis === 'x' ? bitmap.width - selection.width : bitmap.height - selection.height;
+    selection = { ...selection, [axis]: Math.max(0, Math.min(limit, Math.round(raw))) };
+  }
+
+  function shapeSelection(axis: 'width' | 'height', raw: number) {
+    if (!selection || !Number.isFinite(raw)) return;
+    selection = applyRatio(
+      { ...selection, [axis]: Math.max(1, Math.round(raw)) },
+      ratio,
+      bitmap.width,
+      bitmap.height,
+    );
   }
 
   function encode(): Promise<Uint8Array> {
@@ -392,7 +515,19 @@
       return;
     }
     if (typing || event.ctrlKey || event.metaKey) return;
-    if (event.key === 'Escape') close();
+    if (event.key === 'Escape') {
+      // Esc cancels an active marquee first; only a bare Escape closes.
+      if (selection) {
+        cancelCrop();
+        return;
+      }
+      close();
+      return;
+    }
+    if (event.key === 'Enter' && selection) {
+      applyCrop();
+      return;
+    }
     const match = TOOLS.find((entry) => entry.key.toLowerCase() === event.key.toLowerCase());
     if (match) tool = match.id;
   }
@@ -435,19 +570,6 @@
           {entry.glyph}
         </button>
       {/each}
-      <button
-        type="button"
-        class:active={mirror}
-        title="mirror across the vertical axis"
-        onclick={() => (mirror = !mirror)}
-      >
-        ⇔
-      </button>
-      {#if tool === 'rect'}
-        <button type="button" class:active={filled} title="filled" onclick={() => (filled = !filled)}>
-          ■
-        </button>
-      {/if}
     </aside>
 
     <div class="stage">
@@ -461,19 +583,98 @@
       ></canvas>
     </div>
 
-    <aside class="colors">
-      <input type="color" bind:value={hex} onchange={() => remember(hex)} title="colour" />
-      <input type="text" class="hex" bind:value={hex} spellcheck="false" />
-      <label class="range" title="alpha">
-        α
-        <input type="range" min="0" max="255" bind:value={alpha} />
-      </label>
-      <label class="range" title="brush size">
-        ⬛
-        <input type="range" min="1" max="8" bind:value={size} />
-      </label>
+    <aside class="settings">
+      {#if toolNeedsColor}
+        <input type="color" bind:value={hex} onchange={() => remember(hex)} title="colour" />
+        <input type="text" class="hex" bind:value={hex} spellcheck="false" />
+        <label class="range" title="alpha">
+          α
+          <input type="range" min="0" max="255" bind:value={alpha} />
+        </label>
+      {:else if tool === 'pick'}
+        <span class="group">Picked</span>
+        <div class="picked">
+          <span class="swatch" style="background:{hex}"></span>
+          <span class="mono">{hex}</span>
+          <span class="mono faint">α {alpha}</span>
+        </div>
+      {/if}
 
-      {#if recents.length > 0}
+      {#if tool === 'crop'}
+        <span class="group">Crop selection</span>
+        {#if selection}
+          <div class="nums">
+            <label>x <input
+                class="num"
+                type="number"
+                min="0"
+                value={selection.x}
+                onchange={(e) => moveSelection('x', (e.currentTarget as HTMLInputElement).valueAsNumber)}
+              /></label>
+            <label>y <input
+                class="num"
+                type="number"
+                min="0"
+                value={selection.y}
+                onchange={(e) => moveSelection('y', (e.currentTarget as HTMLInputElement).valueAsNumber)}
+              /></label>
+            <label>w <input
+                class="num"
+                type="number"
+                min="1"
+                value={selection.width}
+                onchange={(e) =>
+                  shapeSelection('width', (e.currentTarget as HTMLInputElement).valueAsNumber)}
+              /></label>
+            <label>h <input
+                class="num"
+                type="number"
+                min="1"
+                value={selection.height}
+                onchange={(e) =>
+                  shapeSelection('height', (e.currentTarget as HTMLInputElement).valueAsNumber)}
+              /></label>
+          </div>
+          <div class="chips">
+            {#each RATIOS as option (option)}
+              <button
+                type="button"
+                class:active={ratio === option}
+                onclick={() => lockRatio(option)}
+              >
+                {option}
+              </button>
+            {/each}
+          </div>
+          <div class="actions">
+            <button type="button" class="apply" onclick={applyCrop} title="apply (Enter)">
+              Crop
+            </button>
+            <button type="button" class="ghost" onclick={cancelCrop} title="cancel (Esc)">
+              Cancel
+            </button>
+          </div>
+        {:else}
+          <p class="hint">Drag a region on the canvas.</p>
+        {/if}
+      {:else if PAINT_TOOLS.includes(tool)}
+        <label class="range" title="brush size">
+          ⬛
+          <input type="range" min="1" max="8" bind:value={size} />
+        </label>
+        <div class="chips">
+          <button type="button" class:active={mirror} title="mirror across the vertical axis" onclick={() => (mirror = !mirror)}>
+            ⇔ mirror
+          </button>
+          {#if tool === 'rect'}
+            <button type="button" class:active={filled} title="filled" onclick={() => (filled = !filled)}>
+              ■ filled
+            </button>
+          {/if}
+        </div>
+      {/if}
+
+      {#if toolNeedsColor && recents.length > 0}
         <span class="group">Recent</span>
         <div class="swatches">
           {#each recents as swatch (swatch)}
@@ -488,7 +689,7 @@
         </div>
       {/if}
 
-      {#if palette.length > 0}
+      {#if toolNeedsColor && palette.length > 0}
         <span class="group">In this texture</span>
         <div class="swatches">
           {#each palette as swatch (swatch)}
@@ -503,15 +704,43 @@
         </div>
       {/if}
 
-      <span class="group">Size</span>
-      <div class="sizes">
+      <span class="group">Canvas</span>
+      <div class="dims-input">
+        <input
+          class="num"
+          type="number"
+          min="1"
+          max="1024"
+          bind:value={canvasWidth}
+          title="width in pixels"
+        />
+        <span class="faint">×</span>
+        <input
+          class="num"
+          type="number"
+          min="1"
+          max="1024"
+          bind:value={canvasHeight}
+          title="height in pixels"
+        />
+      </div>
+      <button
+        type="button"
+        class="apply"
+        disabled={canvasWidth === bitmap.width && canvasHeight === bitmap.height}
+        onclick={() => setSize(canvasWidth, canvasHeight)}
+        title="resample to the entered size (nearest neighbour)"
+      >
+        Scale
+      </button>
+      <div class="chips">
         {#each [16, 32, 64] as preset (preset)}
           <button
             type="button"
             class:active={bitmap.width === preset && bitmap.height === preset}
             onclick={() => setSize(preset, preset)}
           >
-            {preset}
+            {preset}²
           </button>
         {/each}
       </div>
@@ -622,7 +851,7 @@
     touch-action: none;
     cursor: crosshair;
   }
-  .colors {
+  .settings {
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -632,7 +861,7 @@
     overflow-x: hidden;
     min-width: 0;
   }
-  .colors input[type='color'] {
+  .settings input[type='color'] {
     width: 100%;
     height: 32px;
     padding: 0;
@@ -682,11 +911,43 @@
     cursor: pointer;
     padding: 0;
   }
-  .sizes {
+  .nums {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 4px 6px;
+  }
+  .nums label,
+  .dims-input {
     display: flex;
+    align-items: center;
+    gap: 4px;
+    font: 11px var(--mono);
+    color: var(--faint);
+    min-width: 0;
+  }
+  .num {
+    width: 100%;
+    min-width: 0;
+    background: var(--bg-input);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: inherit;
+    font: 11px var(--mono);
+    padding: 3px 4px;
+    box-sizing: border-box;
+  }
+  .dims-input {
+    justify-content: space-between;
+  }
+  .dims-input .num {
+    flex: 1;
+  }
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
     gap: 4px;
   }
-  .sizes button {
+  .chips button {
     flex: 1;
     min-width: 0;
     background: none;
@@ -694,12 +955,71 @@
     border-radius: var(--radius);
     color: var(--muted);
     font-size: 11px;
-    padding: 3px 0;
+    padding: 3px 4px;
     cursor: pointer;
+    white-space: nowrap;
   }
-  .sizes button.active {
+  .chips button.active {
     color: var(--fg);
     background: var(--bg-raised);
+    border-color: var(--accent);
+  }
+  .actions {
+    display: flex;
+    gap: 4px;
+  }
+  .actions .apply,
+  .apply {
+    flex: 1;
+    background: var(--primary);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 0;
+    cursor: pointer;
+  }
+  .apply:disabled {
+    background: none;
+    border-color: var(--border);
+    color: var(--faint);
+    cursor: default;
+  }
+  .actions .ghost,
+  .settings .ghost {
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .picked {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    min-width: 0;
+  }
+  .picked .swatch {
+    width: 18px;
+    height: 18px;
+    border-radius: 3px;
+    border: 1px solid var(--border-strong);
+    flex: none;
+  }
+  .mono {
+    font-family: var(--mono);
+  }
+  .faint {
+    color: var(--faint);
+  }
+  .hint {
+    margin: 0;
+    font-size: 11px;
+    color: var(--faint);
   }
   .error {
     margin: 0;

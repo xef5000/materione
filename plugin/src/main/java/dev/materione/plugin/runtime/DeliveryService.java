@@ -8,14 +8,18 @@ import dev.materione.core.delivery.PackDeliveryBackend;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.settings.SettingsService.SettingsState;
 import dev.materione.delivery.SelfHostBackend;
+import dev.materione.platform.delivery.PackAcceptance;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
+import java.util.UUID;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerResourcePackStatusEvent;
 import org.bukkit.plugin.Plugin;
 
@@ -41,6 +45,8 @@ public final class DeliveryService implements Listener {
     private volatile String candidateSha256 = "";
     private volatile byte[] candidateBytes = new byte[0];
     private volatile int declined;
+    /** Per-player pack generation state — the gate glyph rendering rides on. */
+    private final PackAcceptance acceptance = new PackAcceptance();
 
     public DeliveryService(Plugin plugin, DiagnosticsBus diagnostics, SchedulingGateway scheduling) {
         this(plugin, diagnostics, scheduling, null);
@@ -164,6 +170,7 @@ public final class DeliveryService implements Listener {
             scheduling.executeGlobal(plugin, () -> {
                 Player player = plugin.getServer().getPlayer(ownerId);
                 if (player != null) {
+                    acceptance.sent(player.getUniqueId());
                     send(player, previewUrl, previewSha1);
                 }
             });
@@ -235,6 +242,7 @@ public final class DeliveryService implements Listener {
         if (currentUrl.isEmpty() || currentSha1.length == 0) {
             return;
         }
+        acceptance.sent(player.getUniqueId());
         player.setResourcePack(currentUrl, currentSha1);
     }
 
@@ -357,17 +365,48 @@ public final class DeliveryService implements Listener {
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
+    public void onQuit(PlayerQuitEvent event) {
+        acceptance.forgot(event.getPlayer().getUniqueId());
+    }
+
+    /**
+     * Tracks which generation of the pack each player holds. Glyph text
+     * resolution gates on {@link #canRenderGlyphs}: a codepoint sent to a
+     * client without the matching font renders as the missing-glyph box.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
     public void onPackStatus(PlayerResourcePackStatusEvent event) {
+        var player = event.getPlayer().getUniqueId();
         var status = event.getStatus();
-        if (status == PlayerResourcePackStatusEvent.Status.DECLINED
-                || status == PlayerResourcePackStatusEvent.Status.FAILED_DOWNLOAD) {
-            declined++;
-            diagnostics.publish(new Diagnostic(
-                    DiagnosticCodes.PACK_DECLINED, Severity.WARN,
-                    event.getPlayer().getName() + ": " + status,
-                    null, null, "the server keeps running the new content; the player "
-                            + "sees the old pack (or none) until they accept"));
+        switch (status) {
+            case SUCCESSFULLY_LOADED -> acceptance.loaded(player);
+            case ACCEPTED -> acceptance.accepted(player); // download in flight
+            case DECLINED, FAILED_DOWNLOAD -> {
+                acceptance.failed(player);
+                declined++;
+                diagnostics.publish(new Diagnostic(
+                        DiagnosticCodes.PACK_DECLINED, Severity.WARN,
+                        event.getPlayer().getName() + ": " + status,
+                        null, null, "the server keeps running the new content; the player "
+                                + "sees the old pack (or none) until they accept"));
+            }
+            case INVALID_URL, DISCARDED -> acceptance.failed(player);
         }
+    }
+
+    /**
+     * Whether the player's client holds a loaded pack able to render the
+     * current content — false while a send is pending and after a decline.
+     * Glyph placeholders stay literal for such players instead of turning
+     * into missing-glyph boxes.
+     */
+    public boolean canRenderGlyphs(UUID player) {
+        return acceptance.canRender(player);
+    }
+
+    /** Per-player pack state for observability ({@code /materione doctor}). */
+    public Map<UUID, PackAcceptance.State> acceptanceSnapshot() {
+        return acceptance.snapshot();
     }
 
     public void stop() {

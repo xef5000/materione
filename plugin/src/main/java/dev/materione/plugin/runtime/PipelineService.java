@@ -105,6 +105,9 @@ public final class PipelineService {
                 new dev.materione.content.furniture.FurnitureType();
         registry.register(
                 NamespacedId.of("materione", "furniture"), furniture, furniture.describe(), "materione");
+        dev.materione.content.glyphs.GlyphType glyphs = new dev.materione.content.glyphs.GlyphType();
+        registry.register(
+                NamespacedId.of("materione", "glyph"), glyphs, glyphs.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -268,6 +271,7 @@ public final class PipelineService {
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
         var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
+        var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
         var builder = RuntimeRegistries.builder();
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
@@ -275,6 +279,7 @@ public final class PipelineService {
         var itemMechanics = new LinkedHashMap<NamespacedId, List<dev.materione.plugin.runtime.mechanics.ActiveMechanic>>();
         var runtimeBlocks = dev.materione.core.runtime.RuntimeBlocks.builder();
         var runtimeFurnitures = dev.materione.core.runtime.RuntimeFurnitures.builder();
+        var glyphEntries = new LinkedHashMap<NamespacedId, dev.materione.core.runtime.RuntimeGlyphs.Entry>();
         if (itemType.isEmpty()) {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
@@ -283,6 +288,8 @@ public final class PipelineService {
                     dev.materione.plugin.runtime.mechanics.ItemMechanics.empty());
             builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
             builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
+            builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
+                    new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -406,6 +413,22 @@ public final class PipelineService {
                                 furniture.displayName(), "PAPER",
                                 parsedItems.keySet(), builder, runtimeFurnitures::placedBy);
                     }
+                } else if ("glyph".equals(resource.contentType()) && glyphType.isPresent()) {
+                    Optional<Object> parsed;
+                    try {
+                        parsed = glyphType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
+                    if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.glyphs.GlyphDefinition glyph) {
+                        dev.materione.core.runtime.RuntimeGlyphs.Entry entry = toGlyphEntry(glyph);
+                        if (entry != null) {
+                            glyphEntries.put(glyph.id(), entry);
+                        }
+                    }
                 }
             }
         }
@@ -416,7 +439,47 @@ public final class PipelineService {
                 new dev.materione.plugin.runtime.mechanics.ItemMechanics(itemMechanics));
         builder.view(dev.materione.core.runtime.RuntimeBlocks.KEY, runtimeBlocks.build());
         builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
+        builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
+                new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
         return builder.build();
+    }
+
+    /**
+     * One parsed glyph as the runtime sees it — the compiler's allocation is
+     * the codepoint truth (D7); a glyph whose run is missing (compiled while
+     * quarantined, or a fresh table) is skipped with a warning, never guessed.
+     */
+    private dev.materione.core.runtime.RuntimeGlyphs.Entry toGlyphEntry(
+            dev.materione.content.glyphs.GlyphDefinition glyph) {
+        int[] codepoints = new int[0];
+        if (!glyph.isReference()) {
+            Optional<String> value = allocation == null
+                    ? Optional.empty()
+                    : allocation.allocationOf(
+                            glyph.id(), dev.materione.content.glyphs.GlyphType.ALLOCATION_KIND);
+            if (value.isEmpty()) {
+                diagnostics.publish(Diagnostic.warn(
+                        DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                        "shadow build skipped " + glyph.id() + ": no allocated codepoint"));
+                return null;
+            }
+            var run = dev.materione.core.content.AllocatedRange.parse(value.get());
+            codepoints = new int[run.count()];
+            for (int i = 0; i < run.count(); i++) {
+                codepoints[i] = dev.materione.core.text.GlyphCodepoints.of(run.start() + i);
+            }
+        }
+        return new dev.materione.core.runtime.RuntimeGlyphs.Entry(
+                glyph.id(),
+                glyph.fontKey(),
+                codepoints,
+                glyph.placeholders(),
+                glyph.permission(),
+                glyph.emoji(),
+                glyph.tabComplete(),
+                glyph.shadowColor(),
+                glyph.reference(),
+                glyph.indexSpec());
     }
 
     /**

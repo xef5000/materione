@@ -181,6 +181,119 @@ export function resize(bitmap: Bitmap, width: number, height: number): Bitmap {
   return next;
 }
 
+/**
+ * Extracts the intersection of the region at `x,y` with the bitmap — the kept
+ * pixels are exactly the pixels that were there, never resampled or shifted.
+ * A region entirely outside yields a 1×1 transparent bitmap (the UI clamps
+ * selections before applying, so this is a totality guard, not a path).
+ */
+export function crop(bitmap: Bitmap, x: number, y: number, width: number, height: number): Bitmap {
+  const left = Math.max(0, x);
+  const top = Math.max(0, y);
+  const right = Math.min(bitmap.width, x + Math.max(1, width));
+  const bottom = Math.min(bitmap.height, y + Math.max(1, height));
+  if (right <= left || bottom <= top) {
+    return createBitmap(1, 1);
+  }
+  const next = createBitmap(right - left, bottom - top);
+  for (let py = top; py < bottom; py++) {
+    for (let px = left; px < right; px++) {
+      setPixel(next, px - left, py - top, getPixel(bitmap, px, py));
+    }
+  }
+  return next;
+}
+
+/** A drag selection rectangle, always positive-width. */
+export interface Selection {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Normalizes a drag selection: positive size, clamped into the bitmap so the
+ * marquee can start outside or drag past an edge without leaving the canvas.
+ */
+export function clampSelection(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  bitmapWidth: number,
+  bitmapHeight: number,
+): Selection {
+  const left = Math.max(0, Math.min(x0, x1));
+  const top = Math.max(0, Math.min(y0, y1));
+  const right = Math.min(bitmapWidth, Math.max(x0, x1) + 1);
+  const bottom = Math.min(bitmapHeight, Math.max(y0, y1) + 1);
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, right - left),
+    height: Math.max(1, bottom - top),
+  };
+}
+
+/** Aspect ratios the crop tool offers; `free` keeps the dragged shape. */
+export type Ratio = 'free' | '1:1' | '2:1' | '1:2';
+
+/**
+ * Reshapes a selection to a locked aspect ratio without moving its top-left
+ * corner, clamped into the bitmap. The width leads; the height follows (a 2:1
+ * lock on a 20-wide drag yields 20×10 — manual W/H entry covers every other
+ * wish).
+ */
+export function applyRatio(
+  selection: Selection,
+  ratio: Ratio,
+  bitmapWidth: number,
+  bitmapHeight: number,
+): Selection {
+  if (ratio === 'free') {
+    return clampSelection(
+      selection.x,
+      selection.y,
+      selection.x + selection.width - 1,
+      selection.y + selection.height - 1,
+      bitmapWidth,
+      bitmapHeight,
+    );
+  }
+  const availWidth = bitmapWidth - selection.x;
+  const availHeight = bitmapHeight - selection.y;
+  let width = Math.max(1, Math.min(selection.width, availWidth));
+  let height: number;
+  if (ratio === '2:1') {
+    height = Math.max(1, Math.round(width / 2));
+    if (height > availHeight) {
+      height = Math.max(1, availHeight);
+      width = height * 2;
+    }
+  } else if (ratio === '1:2') {
+    height = width * 2;
+    if (height > availHeight) height = Math.max(1, availHeight);
+    width = Math.max(1, Math.round(height / 2));
+    if (width > availWidth) {
+      width = Math.max(1, availWidth);
+      height = width * 2;
+    }
+  } else {
+    height = width;
+    if (height > availHeight) {
+      height = Math.max(1, availHeight);
+      width = height;
+    }
+  }
+  return {
+    x: selection.x,
+    y: selection.y,
+    width: Math.min(width, availWidth),
+    height: Math.min(height, availHeight),
+  };
+}
+
 /** Canvas coordinates → pixel coordinates, given zoom and pan. */
 export function toPixel(
   point: { x: number; y: number },

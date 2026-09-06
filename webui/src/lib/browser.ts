@@ -33,7 +33,7 @@ export interface TypeTab {
 }
 
 /** Display order for the tabs an author reaches for most. */
-const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates'];
+const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates', 'glyphs'];
 
 const LABELS: Record<string, { label: string; singular: string }> = {
   items: { label: 'Items', singular: 'item' },
@@ -41,6 +41,7 @@ const LABELS: Record<string, { label: string; singular: string }> = {
   furnitures: { label: 'Furniture', singular: 'furniture' },
   recipes: { label: 'Recipes', singular: 'recipe' },
   templates: { label: 'Templates', singular: 'template' },
+  glyphs: { label: 'Glyphs', singular: 'glyph' },
 };
 
 /** Types not built yet, shown so the shape of the product is visible. */
@@ -76,7 +77,7 @@ export function typeTabs(types: TypeInfo[]): TypeTab[] {
       singular: LABELS[directory]?.singular ?? directory.replace(/s$/, ''),
       enabled: true,
     })),
-    ...PLANNED,
+    ...PLANNED.filter((tab) => !directories.includes(tab.directory)),
   ];
 }
 

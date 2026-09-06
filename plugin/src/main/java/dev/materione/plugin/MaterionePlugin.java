@@ -338,6 +338,16 @@ public final class MaterionePlugin extends JavaPlugin {
         // mechanic listeners are static wiring: registered once, resolving
         // the live shadow at event entry (no register/unregister churn)
         getServer().getPluginManager().registerEvents(mechanics, this);
+        // text pipeline (M4 runtime-systems §6): glyph tags in item text,
+        // chat, signs, books and anvil renames; the supplier reads the live
+        // shadow, so registry swaps apply without listener churn
+        dev.materione.platform.text.GlyphText.register(
+                () -> pipeline.runtime().registries().view(dev.materione.core.runtime.RuntimeGlyphs.KEY));
+        getServer().getPluginManager().registerEvents(
+                new dev.materione.plugin.runtime.text.GlyphTextListeners(
+                        () -> pipeline.runtime().registries().view(dev.materione.core.runtime.RuntimeGlyphs.KEY),
+                        delivery::canRenderGlyphs),
+                this);
         dev.materione.plugin.runtime.blocks.PhysicsProbe.enforceOrReport(diagnostics);
     }
 

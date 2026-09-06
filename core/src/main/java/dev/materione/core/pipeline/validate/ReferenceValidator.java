@@ -62,7 +62,71 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             validateEvolution(resource, definition, environment, problems);
             validatePlacementIdClash(resource, "block", environment, problems);
         }
+        if ("glyph".equals(resource.contentType())) {
+            validateSourceList(resource, definition, "frames", environment, problems);
+            validateGlyphAlias(resource, definition, environment, problems);
+        }
         return problems;
+    }
+
+    /**
+     * Media source lists (glyph {@code frames:}) must point at shipped pack
+     * assets; a missing source breaks the definition's whole output, so it
+     * quarantines only that definition (MTR-0039).
+     */
+    private static void validateSourceList(
+            ContentResource resource,
+            Map<?, ?> definition,
+            String field,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get(field) instanceof List<?> sources)) {
+            return;
+        }
+        for (Object entry : sources) {
+            if (!(entry instanceof String source) || source.isBlank()) {
+                continue;
+            }
+            String cleaned = source.replace('\\', '/');
+            if (cleaned.toLowerCase(java.util.Locale.ROOT).endsWith(".ogg")) {
+                cleaned = cleaned.substring(0, cleaned.length() - 4);
+            }
+            NamespacedId assetId = resolve(resource.id().namespace(), cleaned);
+            if (!assetId.isReservedNamespace() && !environment.knownAssets().contains(assetId)) {
+                problems.add(new Diagnostic(
+                        DiagnosticCodes.GLYPH_TEXTURE_MISSING, Severity.ERROR,
+                        resource.id() + ": " + field + " source '" + source + "' is not a shipped asset",
+                        resource.id(), null,
+                        "upload the file under the pack's assets/ (textures/ for glyph frames)"));
+            }
+        }
+    }
+
+    /** A glyph {@code reference:} must name another glyph. */
+    private static void validateGlyphAlias(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("reference") instanceof String target) || target.isBlank()) {
+            return;
+        }
+        NamespacedId targetId = resolve(resource.id().namespace(), target);
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(targetId.namespace())) {
+                continue;
+            }
+            for (ContentResource candidate : pack.resources()) {
+                if ("glyph".equals(candidate.contentType()) && candidate.id().equals(targetId)) {
+                    return;
+                }
+            }
+        }
+        problems.add(new Diagnostic(
+                DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                resource.id() + ": reference target '" + target + "' is not a glyph",
+                resource.id(), null,
+                "references must name a glyph in the glyphs/ directory"));
     }
 
     /**

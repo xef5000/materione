@@ -173,6 +173,16 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode AMBIGUOUS_PLACEMENT_ID =
             new DiagnosticCode("MTR-0038", Severity.WARN, "Block and furniture share an id");
 
+    // M4 — glyphs (runtime-systems §6)
+
+    /** A glyph references a texture the pack does not ship. */
+    public static final DiagnosticCode GLYPH_TEXTURE_MISSING =
+            new DiagnosticCode("MTR-0039", Severity.ERROR, "Glyph texture asset missing");
+
+    /** The glyph codepoint space is used up (shift font's block reached). */
+    public static final DiagnosticCode GLYPH_CODEPOINT_EXHAUSTED =
+            new DiagnosticCode("MTR-0045", Severity.ERROR, "Glyph codepoint space exhausted");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -211,7 +221,9 @@ public final class DiagnosticCodes {
             EDITOR_ASSET_REJECTED,
             EDITOR_BIND_EXPOSED,
             EDITOR_IDENTITY_REBUILT,
-            AMBIGUOUS_PLACEMENT_ID);
+            AMBIGUOUS_PLACEMENT_ID,
+            GLYPH_TEXTURE_MISSING,
+            GLYPH_CODEPOINT_EXHAUSTED);
 
     private DiagnosticCodes() {}
 

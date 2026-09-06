@@ -82,4 +82,54 @@ class AllocationTableTest {
         table.flush();
         assertThat(AllocationTable.load(file).liveCount()).isOne();
     }
+
+    @Test
+    void rangesAreConsecutiveAndStable(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("allocation.bin");
+        var sheet = NamespacedId.parse("sample:big_emoji");
+        var table = AllocationTable.load(file);
+        assertThat(table.allocate(NamespacedId.parse("sample:plain"), "glyph-codepoint"))
+                .isEqualTo("1");
+        assertThat(table.range(sheet, "glyph-codepoint", 3).toString()).isEqualTo("2,3");
+        assertThat(table.range(sheet, "glyph-codepoint", 3).toString()).isEqualTo("2,3");
+        var next = NamespacedId.parse("sample:next_glyph");
+        assertThat(table.allocate(next, "glyph-codepoint")).isEqualTo("5");
+        table.flush();
+
+        var reloaded = AllocationTable.load(file);
+        assertThat(reloaded.range(sheet, "glyph-codepoint", 3).toString()).isEqualTo("2,3");
+        assertThat(reloaded.allocate(next, "glyph-codepoint")).isEqualTo("5");
+        assertThat(reloaded.range(NamespacedId.parse("sample:more"), "glyph-codepoint", 2).start())
+                .isEqualTo(6);
+    }
+
+    @Test
+    void growingARunRebindsToAFreshRun(@TempDir Path tempDir) throws IOException {
+        var table = AllocationTable.load(tempDir.resolve("allocation.bin"));
+        var sheet = NamespacedId.parse("sample:anim");
+        assertThat(table.range(sheet, "glyph-codepoint", 2).toString()).isEqualTo("1,2");
+        // 2 frames cannot stretch to 4 — values never shift, so the id gets a
+        // fresh consecutive run and the old one stays burned (like a tombstone)
+        var grown = table.range(sheet, "glyph-codepoint", 4);
+        assertThat(grown.toString()).isEqualTo("3,4");
+        assertThat(table.range(sheet, "glyph-codepoint", 4)).isEqualTo(grown);
+        assertThat(table.allocate(NamespacedId.parse("sample:after"), "glyph-codepoint"))
+                .isEqualTo("7");
+    }
+
+    @Test
+    void plainIntRowsStillReplayAfterRangeRows(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("allocation.bin");
+        var table = AllocationTable.load(file);
+        table.allocate(NamespacedId.parse("sample:legacy"), "custom-model-data");
+        table.range(NamespacedId.parse("sample:sheet"), "glyph-codepoint", 2);
+        table.allocate(NamespacedId.parse("sample:mixed"), "glyph-codepoint");
+        table.flush();
+        var reloaded = AllocationTable.load(file);
+        assertThat(reloaded.allocate(NamespacedId.parse("sample:one"), "custom-model-data"))
+                .isEqualTo("2");
+        assertThat(reloaded.allocate(NamespacedId.parse("sample:two"), "glyph-codepoint"))
+                .isEqualTo("4");
+        assertThat(reloaded.isCorrupt()).isFalse();
+    }
 }

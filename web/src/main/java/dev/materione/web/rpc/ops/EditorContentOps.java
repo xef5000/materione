@@ -28,6 +28,15 @@ public final class EditorContentOps {
     private EditorContentOps() {}
 
     /**
+     * Server-computed, read-only document metadata — data the runtime owns
+     * (a glyph's allocated codepoint) that the form should show but the file
+     * must never contain. Returns null when nothing applies.
+     */
+    public interface ComputedMeta {
+        JsonObject compute(String pack, String path, JsonObject parsed);
+    }
+
+    /**
      * Registers the ops. {@code packsRoot} is only needed to hand absolute
      * file paths to the reload trigger; the suppliers feed {@code browse.types}
      * (registry self-description → forms) and the diagnostics center.
@@ -40,6 +49,18 @@ public final class EditorContentOps {
             ReloadTrigger reload,
             java.util.function.Supplier<List<TypeMeta>> types,
             java.util.function.Supplier<List<dev.materione.api.diagnostics.Diagnostic>> diagnostics) {
+        register(dispatcher, documents, audit, packsRoot, reload, types, diagnostics, null);
+    }
+
+    public static void register(
+            RpcDispatcher dispatcher,
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ReloadTrigger reload,
+            java.util.function.Supplier<List<TypeMeta>> types,
+            java.util.function.Supplier<List<dev.materione.api.diagnostics.Diagnostic>> diagnostics,
+            ComputedMeta computedMeta) {
         dispatcher.register("browse.packs", request -> {
             var payload = new JsonObject();
             var packs = new com.google.gson.JsonArray();
@@ -75,7 +96,17 @@ public final class EditorContentOps {
                 payload.addProperty("raw", document.raw());
                 payload.addProperty("rev", document.revision());
                 payload.addProperty("sha256", document.sha256());
-                payload.add("parsed", parsedView(document.raw()));
+                var parsed = parsedView(document.raw());
+                payload.add("parsed", parsed);
+                if (computedMeta != null && parsed instanceof JsonObject parsedObject) {
+                    JsonObject computed = computedMeta.compute(
+                            request.payload().get("pack").getAsString(),
+                            request.payload().get("path").getAsString(),
+                            parsedObject);
+                    if (computed != null) {
+                        payload.add("computed", computed);
+                    }
+                }
                 return Wire.Response.success(request, payload);
             } catch (java.nio.file.NoSuchFileException e) {
                 return Wire.Response.failure(request,

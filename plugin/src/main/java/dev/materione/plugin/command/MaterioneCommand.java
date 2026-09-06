@@ -319,6 +319,21 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                         ? "not started"
                         : delivery.currentUrl()),
                 NamedTextColor.GRAY));
+        if (delivery != null && !delivery.acceptanceSnapshot().isEmpty()) {
+            // why-is-my-glyph-tofu answerable from the server: only players
+            // in the loaded state can render custom glyphs
+            var lines = new java.util.ArrayList<String>();
+            delivery.acceptanceSnapshot().forEach((id, state) -> {
+                var player = plugin.getServer().getPlayer(id);
+                lines.add((player != null ? player.getName() : id.toString().substring(0, 8))
+                        + "=" + state.name().toLowerCase());
+            });
+            java.util.Collections.sort(lines);
+            sender.sendMessage(Component.text(
+                    "pack acceptance: " + String.join(", ", lines)
+                            + " — glyph placeholders stay literal until a player loads the pack",
+                    NamedTextColor.GRAY));
+        }
 
         sender.sendMessage(Component.text(
                 "registries: " + plugin.registries().registryCount()

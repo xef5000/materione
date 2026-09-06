@@ -81,6 +81,8 @@ public final class PackCompiler {
         final List<VanillaFragment> vanillaFragments = new ArrayList<>();
         /** User-shipped override files; they merge ahead of generated fragments. */
         final List<VanillaFragment> userVanillaFragments = new ArrayList<>();
+        /** Font key ({@code ns:name}) → providers in compile order (fonts.json §6). */
+        final Map<String, List<Map<String, Object>>> fontProviders = new TreeMap<>();
         String description = DEFAULT_DESCRIPTION;
         String atlasJson;
         Map<String, Map<String, Object>> vanillaJson;
@@ -109,6 +111,11 @@ public final class PackCompiler {
         @Override
         public void vanillaFile(String path, Map<String, Object> json) {
             vanillaFragments.add(new VanillaFragment(path, json));
+        }
+
+        @Override
+        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
+            fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>()).add(providerJson);
         }
 
         @Override
@@ -148,6 +155,12 @@ public final class PackCompiler {
             @Override
             public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
                 return allocation.allocationOf(resource, kind);
+            }
+
+            @Override
+            public dev.materione.core.content.AllocatedRange range(
+                    NamespacedId resource, String kind, int count) {
+                return allocation.range(resource, kind, count);
             }
         };
 
@@ -233,7 +246,7 @@ public final class PackCompiler {
             return null;
         }
 
-        return writeStaged(emitter, generatedDir, detectedMaxFormat);
+        return writeStaged(emitter, generatedDir, detectedMaxFormat, diagnostics);
     }
 
     /**
@@ -490,14 +503,150 @@ public final class PackCompiler {
         return String.valueOf(source);
     }
 
+    /** Where the shared shift font lives (one copy, referenced everywhere). */
+    static final String SHIFT_FONT_KEY = "materione:shift";
+    static final String SHIFT_FONT_PATH = "assets/materione/font/shift.json";
+    /** The only font file unstyled text renders through (client behavior). */
+    static final String DEFAULT_FONT_PATH = "assets/minecraft/font/default.json";
 
-    private static Outcome writeStaged(Emitter emitter, Path generatedDir, int detectedMaxFormat) {
+    /**
+     * Writes one {@code assets/<ns>/font/<name>.json} per font key (the pack
+     * glyph font {@code <ns>:glyphs} included) and wires everything into the
+     * client's default font: {@link #DEFAULT_FONT_PATH} gains one
+     * {@code type:reference} provider per generated font. Unstyled text —
+     * chat, signs, item names — renders only through the default font, so
+     * without the references codepoints render as missing-glyph boxes. The
+     * shift font's space provider exists once ({@link #SHIFT_FONT_PATH}) and
+     * is referenced from the default font and every generated font —
+     * references load inside any font file, so {@code <shift:N>} still
+     * resolves in styled contexts. A user-shipped default font is absorbed
+     * and kept ahead of ours (atlas-merge pattern).
+     */
+    private static void writeFonts(
+            Emitter emitter, ResourcePack pack, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        if (emitter.fontProviders.isEmpty()) {
+            return;
+        }
+        // the shift font exists once and is referenced everywhere (see writeFonts)
+        var shiftRoot = new LinkedHashMap<String, Object>();
+        shiftRoot.put("providers", List.of(shiftProvider()));
+        pack.unknownFile(SHIFT_FONT_PATH,
+                team.unnamed.creative.base.Writable.stringUtf8(toJson(shiftRoot)));
+        var directProviders = new ArrayList<Object>(); // explicit minecraft:default glyphs
+        var references = new ArrayList<Object>(); // one per generated font file, sorted
+        emitter.fontProviders.forEach((fontKey, providers) -> {
+            if (fontKey.equals("minecraft:default")) {
+                directProviders.addAll(providers);
+                return;
+            }
+            int colon = fontKey.indexOf(':');
+            String namespace = colon < 0 ? "minecraft" : fontKey.substring(0, colon);
+            String name = colon < 0 ? fontKey : fontKey.substring(colon + 1);
+            var list = new ArrayList<Object>(providers);
+            list.add(shiftReference());
+            var root = new LinkedHashMap<String, Object>();
+            root.put("providers", list);
+            pack.unknownFile(
+                    "assets/" + namespace + "/font/" + name + ".json",
+                    team.unnamed.creative.base.Writable.stringUtf8(toJson(root)));
+            var reference = new LinkedHashMap<String, Object>();
+            reference.put("type", "reference");
+            reference.put("id", fontKey);
+            references.add(reference);
+        });
+        var defaultProviders = new ArrayList<Object>();
+        defaultProviders.add(shiftReference());
+        defaultProviders.addAll(references);
+        defaultProviders.addAll(directProviders);
+        writeDefaultFont(emitter, pack, diagnostics, defaultProviders);
+    }
+
+    /** {@code {"type":"reference","id":"materione:shift"}} — the shared shift font. */
+    private static Map<String, Object> shiftReference() {
+        var out = new LinkedHashMap<String, Object>();
+        out.put("type", "reference");
+        out.put("id", SHIFT_FONT_KEY);
+        return out;
+    }
+
+    /**
+     * Writes {@link #DEFAULT_FONT_PATH} with the given providers, keeping
+     * providers from a user-shipped copy ahead of ours; unparseable user
+     * files ship verbatim with a warning (glyphs then stay unreferenced).
+     */
+    private static void writeDefaultFont(
+            Emitter emitter,
+            ResourcePack pack,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
+            List<Object> generatedProviders) {
+        String[] userCopy = null;
+        for (String[] copy : emitter.assetCopies) {
+            if (copy[1].equals(DEFAULT_FONT_PATH)) {
+                userCopy = copy;
+                break;
+            }
+        }
+        if (userCopy == null) {
+            pack.unknownFile(DEFAULT_FONT_PATH,
+                    team.unnamed.creative.base.Writable.stringUtf8(toJson(rootWithProviders(generatedProviders))));
+            return;
+        }
+        JsonElement parsed;
+        try {
+            parsed = JsonParser.parseString(Files.readString(java.nio.file.Path.of(userCopy[0])));
+        } catch (IOException | RuntimeException e) {
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.VANILLA_OVERRIDE_CONFLICT, Severity.WARN,
+                    "user-shipped " + DEFAULT_FONT_PATH + " could not be parsed ("
+                            + e.getMessage() + "); shipping it verbatim without generated font references",
+                    null, null, "check the font json syntax"));
+            return;
+        }
+        Object userJson = fromGson(parsed);
+        if (!(userJson instanceof Map<?, ?>) || !(((Map<?, ?>) userJson).get("providers") instanceof List<?>)) {
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.VANILLA_OVERRIDE_CONFLICT, Severity.WARN,
+                    "user-shipped " + DEFAULT_FONT_PATH + " has no providers list; "
+                            + "shipping it verbatim without generated font references",
+                    null, null, "font jsons need a providers array"));
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        var userProviders = (List<Object>) ((Map<?, ?>) userJson).get("providers");
+        var merged = new ArrayList<Object>(userProviders);
+        merged.addAll(generatedProviders);
+        emitter.assetCopies.remove(userCopy);
+        pack.unknownFile(DEFAULT_FONT_PATH,
+                team.unnamed.creative.base.Writable.stringUtf8(toJson(rootWithProviders(merged))));
+    }
+
+    private static Map<String, Object> rootWithProviders(List<Object> providers) {
+        var root = new LinkedHashMap<String, Object>();
+        root.put("providers", providers);
+        return root;
+    }
+
+    /** The shift font: {@code type:space} provider with power-of-two advances. */
+    private static Map<String, Object> shiftProvider() {
+        var advances = new LinkedHashMap<String, Object>();
+        dev.materione.core.text.ShiftMath.advances().forEach(
+                (character, advance) -> advances.put(String.valueOf(character), advance));
+        var out = new LinkedHashMap<String, Object>();
+        out.put("type", "space");
+        out.put("advances", advances);
+        return out;
+    }
+
+    private static Outcome writeStaged(
+            Emitter emitter, Path generatedDir, int detectedMaxFormat,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
         ResourcePack pack = ResourcePack.resourcePack();
         pack.packMeta(PackFormats.spec(detectedMaxFormat), Component.text(emitter.description));
         emitter.itemDefinitions.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         emitter.models.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
+        writeFonts(emitter, pack, diagnostics);
         for (String[] copy : emitter.assetCopies) {
             // verbatim asset copy: binary content as-is (textures, sounds…)
             pack.unknownFile(copy[1], team.unnamed.creative.base.Writable.path(java.nio.file.Path.of(copy[0])));

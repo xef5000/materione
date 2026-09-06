@@ -153,7 +153,14 @@ public final class MaterioneStacks {
         }
 
         private static Component legacy(String text) {
-            return dev.materione.platform.text.ItemText.legacy(text);
+            // glyph tags resolve author-intent text without a permission gate
+            dev.materione.core.runtime.RuntimeGlyphs glyphs =
+                    dev.materione.platform.text.GlyphText.glyphs();
+            if (glyphs == null || glyphs.isEmpty()) {
+                return dev.materione.platform.text.ItemText.legacy(text);
+            }
+            return dev.materione.platform.text.GlyphText.resolve(
+                    text, glyphs, dev.materione.platform.text.GlyphText.Permissions.ALLOW_ALL);
         }
     }
 }

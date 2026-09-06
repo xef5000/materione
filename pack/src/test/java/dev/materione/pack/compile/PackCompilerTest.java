@@ -441,13 +441,40 @@ class PackCompilerTest {
     }
 
     @Test
+    void glyphFontOutputsAreWellFormed(@TempDir Path tempDir) throws IOException {
+        var outcome = compileFixtures(tempDir);
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            // glyph font: bitmap providers + a reference to the shared shift font
+            String font = entryText(zip, "assets/sample/font/glyphs.json");
+            assertThat(font)
+                    .contains("\"file\":\"sample:gui/heart.png\"")
+                    .contains("\"file\":\"sample:gui/spark_1.png\"")
+                    // the durable codepoint run starts at 42000 (U+A410), row-major sheet
+                    .contains("\"chars\":[\"" + (char) 42000 + (char) 42001 + (char) 42002 + "\",\""
+                            + (char) 42003 + (char) 42004 + (char) 42005 + "\"]")
+                    .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
+                    .doesNotContain("\"type\":\"space\""); // the shift font is shared, not copied
+            // unstyled text renders only through minecraft:default — every
+            // generated font must be referenced there
+            assertThat(entryText(zip, "assets/minecraft/font/default.json"))
+                    .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
+                    .contains("{\"id\":\"sample:glyphs\",\"type\":\"reference\"}");
+            // the shift space provider exists exactly once
+            assertThat(entryText(zip, "assets/materione/font/shift.json"))
+                    .contains("\"type\":\"space\"")
+                    .contains("\"advances\"");
+        }
+    }
+
+    @Test
     void allocationPersistsBeforeOutputs(@TempDir Path tempDir) throws IOException {
         Path allocationFile = tempDir.resolve("storage/allocation.bin");
         var allocation = AllocationTable.load(allocationFile);
         compileFixtures(tempDir, allocation);
         // the lamp's state slot flushed to disk before the pack was written
         assertThat(Files.exists(allocationFile)).isTrue();
-        assertThat(allocation.liveCount()).isEqualTo(1);
+        // 1 block state slot + 3 glyph runs (sheet 6 codepoints, heart 1, frames 2)
+        assertThat(allocation.liveCount()).isEqualTo(4);
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
@@ -465,11 +492,12 @@ class PackCompilerTest {
         var compiler = new PackCompiler();
         var result = compiler.compile(
                 samplePacks,
-                // the REAL block and furniture content types: the golden locks
-                // actual compile behavior (state allocation, shaped
-                // blockstates, generated display models)
+                // the REAL block/furniture/glyph content types: the golden
+                // locks actual compile behavior (state allocation, shaped
+                // blockstates, generated display models, glyph font runs)
                 List.of(new StubItemType(), new BlockType(),
-                        new dev.materione.content.furniture.FurnitureType()),
+                        new dev.materione.content.furniture.FurnitureType(),
+                        new dev.materione.content.glyphs.GlyphType()),
                 allocation,
                 tempDir.resolve("generated"),
                 diagnostics,

@@ -29,9 +29,9 @@ import java.util.stream.Stream;
  */
 public final class DocumentStore {
 
-    /** Pack-relative directories that hold editable documents (§7.2). */
+    /** Pack-relative directories that hold editable documents (§7.2) — derived from the one layout source so new content types are writable by construction. */
     public static final List<String> TYPES =
-            List.of("items", "blocks", "furnitures", "recipes", "templates");
+            dev.materione.core.pipeline.PackLayout.CONTENT_DIRS;
 
     private static final int JOURNAL_CAP = 200;
 

@@ -41,6 +41,16 @@ public interface PackEmitter {
      */
     void vanillaFile(String path, Map<String, Object> json);
 
+    /**
+     * Emits one font provider into the named font key ({@code ns:name}) —
+     * the glyph system's output. Providers from all packs merge into one
+     * {@code assets/<ns>/font/<name>.json} deterministically (compile order
+     * within a font, sorted font keys across the pack).
+     */
+    default void fontProvider(String fontKey, Map<String, Object> providerJson) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
     /** Sets pack.mcmeta description text (pack format is the platform's). */
     void description(String text);
 }

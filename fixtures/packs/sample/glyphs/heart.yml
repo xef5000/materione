@@ -1,0 +1,9 @@
+heart:
+  texture: gui/heart
+  ascent: 8
+  height: 8
+  placeholders:
+    - ":heart:"
+    - "<3"
+  emoji: true
+  tab_complete: true

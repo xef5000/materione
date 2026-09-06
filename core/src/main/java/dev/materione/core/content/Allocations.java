@@ -19,6 +19,18 @@ public interface Allocations {
      */
     String allocate(NamespacedId resource, String kind);
 
+    /**
+     * Allocates a consecutive run of {@code count} values for ({@code
+     * resource}, {@code kind}) — the shape glyph codepoints need, where a
+     * sheet's rows or an animation's frames must occupy adjacent numbers.
+     * Never shifts an existing assignment; a growing ask rebinds to a fresh
+     * run and orphans the old one.
+     */
+    default AllocatedRange range(NamespacedId resource, String kind, int count) {
+        throw new UnsupportedOperationException(
+                "this Allocations implementation predates range allocation");
+    }
+
     /** The live value for ({@code resource}, {@code kind}), if any (tombstones excluded). */
     Optional<String> lookup(NamespacedId resource, String kind);
 }

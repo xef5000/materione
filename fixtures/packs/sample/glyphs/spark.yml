@@ -1,0 +1,6 @@
+spark:
+  ascent: 8
+  height: 8
+  frames:
+    - gui/spark_1
+    - gui/spark_2

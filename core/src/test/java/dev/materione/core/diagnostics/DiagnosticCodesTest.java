@@ -20,6 +20,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(38); // MTR-0038 adds the placement-id clash warning.
+        assertThat(DiagnosticCodes.all()).hasSize(40); // MTR-0039/0045 add the glyph diagnostics.
     }
 }

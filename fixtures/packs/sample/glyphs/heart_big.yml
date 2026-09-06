@@ -1,0 +1,5 @@
+heart_big:
+  reference: sample:heart
+  index: 1
+  ascent: 8
+  height: 8
