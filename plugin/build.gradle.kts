@@ -6,6 +6,10 @@ dependencies {
     api(project(":api"))
     api(project(":core"))
     api(project(":platform"))
+    // The 26.x registry seam (D10 exception): the bootstrap and the
+    // painting/song registrars live here so the floor-compiled module never
+    // references post-floor APIs. Shaded like every other module.
+    api(project(":modern"))
     api(project(":content"))
     api(project(":behavior"))
     api(project(":pack"))

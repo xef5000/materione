@@ -28,6 +28,9 @@ class ScaffoldSchemaConsistencyTest {
         check("furnitures", "garden_bench", new FurnitureType());
         check("recipes", "ruby_amulet_recipe", new RecipeType());
         check("glyphs", "harness_heart", new dev.materione.content.glyphs.GlyphType());
+        check("sounds", "level_jingle", new dev.materione.content.sounds.SoundType());
+        check("paintings", "sunset_wall", new dev.materione.content.paintings.PaintingType());
+        check("effects", "ruby_wave", new dev.materione.content.effects.EffectType());
         // Templates have no registry type — parse-cleanliness only.
         assertParses(Scaffolds.forPath("templates/base_pack.yml", null), "base_pack");
     }

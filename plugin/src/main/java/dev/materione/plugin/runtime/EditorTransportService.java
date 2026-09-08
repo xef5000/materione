@@ -285,6 +285,13 @@ public final class EditorTransportService {
             try {
                 var summary = pipeline.reload(scope,
                         storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+                // the world datapack applies on every reload path, previews
+                // included — its restart-required ledger stays honest either way
+                if (plugin instanceof dev.materione.plugin.MaterionePlugin materione
+                        && materione.datapackService() != null) {
+                    materione.datapackService().apply(
+                            summary.stagedDatapackZip(), summary.datapackSha256());
+                }
                 if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null && delivery != null) {
                     if (stageCandidate) {
                         delivery.stageCandidate(

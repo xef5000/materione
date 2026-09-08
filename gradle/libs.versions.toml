@@ -9,6 +9,12 @@ archunit = "1.5.0"
 # The D10 floor, deliberately not current stable: compiling everything against
 # the floor makes post-floor APIs structurally unreachable outside platform/.
 paper-api = "1.21.4-R0.1-SNAPSHOT"
+# The modern seam (:modern only, the D10 exception): registry-event APIs for
+# painting variants and jukebox songs exist only on Paper 1.21.6+ — 26.x-era
+# coordinates. Pinned to the same build the scratch server runs (26.1.2 b74).
+# Runtime feature detection (RegistryCapabilities), not version strings,
+# decides which seam executes; the floor server never loads these classes.
+paper-api-modern = "26.1.2.build.74-stable"
 # SnakeYAML 2.2 is the exact version Paper 1.21.4 ships at runtime; compileOnly.
 snakeyaml = "2.2"
 # Gson is the exact major Paper ships at runtime (version.json parsing);
@@ -40,6 +46,7 @@ paper-harness-sha256 = "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b681
 
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
+paper-api-modern = { module = "io.papermc.paper:paper-api", version.ref = "paper-api-modern" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
 creative-api = { module = "team.unnamed:creative-api", version.ref = "creative" }

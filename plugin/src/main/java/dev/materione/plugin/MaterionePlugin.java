@@ -25,7 +25,6 @@ import dev.materione.plugin.runtime.behavior.BehaviorService;
 import dev.materione.plugin.runtime.behavior.ItemBehaviorListener;
 import java.util.ArrayList;
 import java.util.List;
-import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -55,6 +54,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
+    private dev.materione.plugin.runtime.DatapackService datapackService;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
 
@@ -251,10 +251,19 @@ public final class MaterionePlugin extends JavaPlugin {
         if (!pendingRestart.isEmpty()) {
             restartStaging.clear();
         }
+        // the world-datapack applier (M4): snapshots what this boot loaded so
+        // painting/jukebox deploys are honestly reported restart-required.
+        // Registry mode (1.21.6+ lifecycle): the bootstrap already registered
+        // paintings/songs — the applier only tracks the registered hash and
+        // keeps the world folder clean. RegistryCapabilities is pure
+        // reflection, safe to load on the 1.21.4 floor.
+        datapackService = new dev.materione.plugin.runtime.DatapackService(
+                this, diagnostics, storage.storageDir(), restartStaging,
+                dev.materione.modern.RegistryCapabilities.hasFullRegistrySeam());
         delivery = new DeliveryService(this, diagnostics, scheduling, storage.storageDir());
         delivery.start(settings);
         getServer().getPluginManager().registerEvents(delivery, this);
-        var summary = reloadContent(true);
+        var summary = reloadContent();
         if (summary.skipped()) {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
@@ -272,25 +281,47 @@ public final class MaterionePlugin extends JavaPlugin {
             // Stable harness marker: the pack HTTP backend serves the new pack.
             getLogger().info("MATERIONE-DELIVERY-OK " + delivery.currentUrl());
         }
+        // the datapack acceptance gate: painting/jukebox content exists only
+        // if the vanilla pack repository actually took the deployed artifact.
+        // A pack in the folder but absent from the manager was ignored by the
+        // server (wrong location, format rejection) — never stay silent.
+        // Registry mode has no artifact to accept; the bootstrap's
+        // MATERIONE-REGISTRY-OK marker is the boot evidence instead.
+        if (datapackService != null && !datapackService.pendingRestartRequired()) {
+            boolean accepted = datapackService.isAcceptedByServer();
+            if (!datapackService.isRegistryMode()) {
+                getLogger().info("MATERIONE-DATAPACK-ACCEPTED " + accepted);
+            }
+            if (!accepted) {
+                diagnostics.publish(Diagnostic.warn(
+                        dev.materione.core.diagnostics.DiagnosticCodes.DATAPACK_NOT_ACCEPTED,
+                        "the deployed content datapack was not accepted by the server's pack"
+                                + " repository — paintings/jukebox content will not exist;"
+                                + " restart once more, then check /materione doctor"));
+            }
+        }
     }
 
     /** One composed reload: pipeline → compile → apply → deliver (§4). */
     public PipelineService.ReloadSummary reloadContent() {
-        return reloadContent(false);
-    }
-
-    private PipelineService.ReloadSummary reloadContent(boolean preservePublished) {
         var summary = pipeline.reload(
                 storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
         if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {
-            // deliver after apply — delivery failure never rolls apply back (§4.6)
-            if (preservePublished && delivery.hasPublishedVersion()) {
-                delivery.stageCandidate(summary.packZip(), summary.packSha256(), null);
-            } else {
-                delivery.publish(summary.packZip(), summary.packSha256());
-            }
+            // deliver after apply — delivery failure never rolls apply back (§4.6).
+            // Changed pack bytes always publish (a boot has no editor flow to
+            // approve a staged candidate — serving the old pack here would
+            // outlive its own content).
+            delivery.publish(summary.packZip(), summary.packSha256());
+        }
+        if (datapackService != null) {
+            datapackService.apply(summary.stagedDatapackZip(), summary.datapackSha256());
         }
         return summary;
+    }
+
+    /** The world-datapack applier; null until content load begins. */
+    public dev.materione.plugin.runtime.DatapackService datapackService() {
+        return datapackService;
     }
 
     /** Phase 10 (plugin.md §1.1): the direct-mode editor listener, if enabled. */
@@ -301,16 +332,21 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     private void registerCommands() {
-        PluginCommand command = getCommand("materione");
-        if (command == null) {
-            diagnostics.publish(Diagnostic.error(
-                    DiagnosticCodes.COMMAND_REGISTRATION_FAILED,
-                    "command 'materione' missing from plugin.yml"));
-            return;
+        // paper plugins ignore the old plugin.yml commands block: the command
+        // registers through the server's command map, delegating to the same
+        // executor/tab-completer pair (MaterioneCommandAdapter)
+        getServer().getCommandMap().register("materione",
+                new dev.materione.plugin.command.MaterioneCommandAdapter(new MaterioneCommand(this)));
+        // permissions were declared in plugin.yml (default: op) — declare them
+        // programmatically so the §9.2 taxonomy stays exactly as documented
+        for (String permission : List.of(
+                "materione.editor", "materione.pipeline", "materione.dev",
+                "materione.give", "materione.admin")) {
+            if (getServer().getPluginManager().getPermission(permission) == null) {
+                getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(
+                        permission, org.bukkit.permissions.PermissionDefault.OP));
+            }
         }
-        MaterioneCommand executor = new MaterioneCommand(this);
-        command.setExecutor(executor);
-        command.setTabCompleter(executor);
         getServer().getPluginManager().registerEvents(
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
         // gui click router (holder identity — no title matching): one
@@ -343,6 +379,8 @@ public final class MaterionePlugin extends JavaPlugin {
         // shadow, so registry swaps apply without listener churn
         dev.materione.platform.text.GlyphText.register(
                 () -> pipeline.runtime().registries().view(dev.materione.core.runtime.RuntimeGlyphs.KEY));
+        dev.materione.platform.text.GlyphText.registerEffects(
+                () -> pipeline.runtime().registries().view(dev.materione.core.runtime.RuntimeEffects.KEY));
         getServer().getPluginManager().registerEvents(
                 new dev.materione.plugin.runtime.text.GlyphTextListeners(
                         () -> pipeline.runtime().registries().view(dev.materione.core.runtime.RuntimeGlyphs.KEY),

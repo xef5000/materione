@@ -313,6 +313,32 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                         : restartStaging.load().size() + " pending change(s)"),
                 NamedTextColor.GRAY));
 
+        var datapack = plugin.datapackService();
+        if (datapack != null && datapack.isRegistryMode()) {
+            // registry mode: content registered at bootstrap, nothing deployed
+            boolean restartPending = datapack.pendingRestartRequired();
+            sender.sendMessage(Component.text(
+                    "registry: paintings/jukebox registered at boot (content "
+                            + datapack.registeredHashOrNone() + ")"
+                            + (restartPending
+                                    ? " — RESTART REQUIRED (a reload changed registered content)"
+                                    : " — current"),
+                    restartPending ? NamedTextColor.YELLOW : NamedTextColor.GRAY));
+        } else if (datapack != null) {
+            boolean restartPending = datapack.pendingRestartRequired();
+            sender.sendMessage(Component.text(
+                    "datapack: deployed " + datapack.deployedHashOrNone()
+                            + ", loaded at boot " + datapack.activeAtBootOrNone()
+                            + (restartPending
+                                    ? " — RESTART REQUIRED (paintings/jukebox stay vanilla until then)"
+                                    : datapack.isAcceptedByServer()
+                                            ? " — current, accepted by the server"
+                                            : " — NOT ACCEPTED by the server's pack repository"
+                                                    + " (paintings/jukebox do not exist)"),
+                    restartPending || !datapack.isAcceptedByServer()
+                            ? NamedTextColor.YELLOW : NamedTextColor.GRAY));
+        }
+
         var delivery = plugin.delivery();
         sender.sendMessage(Component.text(
                 "delivery: " + (delivery == null || delivery.currentUrl().isEmpty()

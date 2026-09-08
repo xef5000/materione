@@ -124,6 +124,7 @@ public final class ItemAutoUpdater implements Listener {
                 item.food() == null ? null
                         : new MaterioneStacks.StackFood(
                                 item.food().nutrition(), item.food().saturation(),
-                                item.food().canAlwaysEat()));
+                                item.food().canAlwaysEat()),
+                item.jukeboxSong());
     }
 }

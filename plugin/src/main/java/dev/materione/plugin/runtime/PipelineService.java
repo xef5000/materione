@@ -62,6 +62,8 @@ public final class PipelineService {
     private final RecipeApplier recipeApplier = new RecipeApplier();
     /** Server-reported resource-pack format; -1 when detection failed. */
     private final int detectedPackFormat;
+    /** Server-reported data-pack format (major.minor); null when detection failed. */
+    private final PackFormats.Version detectedDataFormat;
     private volatile dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport;
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
@@ -82,13 +84,18 @@ public final class PipelineService {
         this.runner = new PipelineRunner(diagnostics, quarantine);
         // The server's self-reported format beats the table (a server newer
         // than this build still names its own format); -1 = detection failed.
-        this.detectedPackFormat = dev.materione.platform.probe.ServerPackFormat
-                .detectResourceFormat().orElse(-1);
+        var detected = dev.materione.platform.probe.ServerPackFormat.detect().orElse(null);
+        this.detectedPackFormat = detected == null ? -1 : detected.resourceMajor();
+        this.detectedDataFormat = detected == null || detected.dataMajor() <= 0
+                ? null
+                : new PackFormats.Version(detected.dataMajor(), detected.dataMinor());
         if (plugin != null) {
             plugin.getLogger().info("MATERIONE-PACKFORMAT detected="
                     + (detectedPackFormat < 0 ? "none" : detectedPackFormat)
                     + " advertising=" + PackFormats.FLOOR + ".."
-                    + Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat));
+                    + Math.max(PackFormats.MAX_KNOWN_FORMAT, detectedPackFormat)
+                    + " datapack=" + (detectedDataFormat == null
+                            ? "none" : detectedDataFormat.major() + "." + detectedDataFormat.minor()));
         }
     }
 
@@ -108,6 +115,16 @@ public final class PipelineService {
         dev.materione.content.glyphs.GlyphType glyphs = new dev.materione.content.glyphs.GlyphType();
         registry.register(
                 NamespacedId.of("materione", "glyph"), glyphs, glyphs.describe(), "materione");
+        dev.materione.content.sounds.SoundType sounds = new dev.materione.content.sounds.SoundType();
+        registry.register(
+                NamespacedId.of("materione", "sound"), sounds, sounds.describe(), "materione");
+        dev.materione.content.paintings.PaintingType paintings =
+                new dev.materione.content.paintings.PaintingType();
+        registry.register(
+                NamespacedId.of("materione", "painting"), paintings, paintings.describe(), "materione");
+        dev.materione.content.effects.EffectType effects = new dev.materione.content.effects.EffectType();
+        registry.register(
+                NamespacedId.of("materione", "effect"), effects, effects.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -178,12 +195,12 @@ public final class PipelineService {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
                     "reload skipped: another run is in flight or the run aborted"));
-            return new ReloadSummary(result == null, false, 0, 0, 0, 0, null, null);
+            return new ReloadSummary(result == null, false, 0, 0, 0, 0, null, null, null, null);
         }
 
         PackCompiler.Outcome outcome = compiler.compile(
                 runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine,
-                detectedPackFormat);
+                detectedPackFormat, detectedDataFormat);
         if (outcome != null) {
             // fingerprints persist after a successful stage: the next targeted
             // scope can trust out-of-scope state (and expands when it can't)
@@ -209,7 +226,12 @@ public final class PipelineService {
                 shadow.itemCount(),
                 outcome == null ? 0 : outcome.itemDefinitions(),
                 packUnchanged ? null : sha,
-                packUnchanged ? null : outcome.stagedZip());
+                packUnchanged ? null : outcome.stagedZip(),
+                // the datapack path rides along even on a noop: the applier
+                // verifies the world folder actually holds these bytes, so a
+                // lost/regenerated world gets repaired at the next reload
+                outcome == null ? null : outcome.stagedDatapackZip(),
+                outcome == null ? null : outcome.datapackSha256());
     }
 
     /** True when the pre-apply report shows nothing observable changing. */
@@ -220,10 +242,11 @@ public final class PipelineService {
                 && report.recipesEnabled() == 0 && report.recipesDisabled() == 0;
     }
 
-    /** Reload outcome for the operator. */
+    /** Reload outcome for the operator. The datapack artifact is null when nothing produced one. */
     public record ReloadSummary(
             boolean skipped, boolean noop, int resourcesValid, int quarantined,
-            int itemsLive, int itemDefinitions, String packSha256, java.nio.file.Path packZip) {}
+            int itemsLive, int itemDefinitions, String packSha256, java.nio.file.Path packZip,
+            java.nio.file.Path stagedDatapackZip, String datapackSha256) {}
 
     private void applyShadow(
             RuntimeRegistries shadow, String sha,
@@ -272,6 +295,7 @@ public final class PipelineService {
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
         var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
         var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
+        var effectType = contentTypes().stream().filter(t -> t.name().equals("effect")).findFirst();
         var builder = RuntimeRegistries.builder();
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
@@ -280,6 +304,7 @@ public final class PipelineService {
         var runtimeBlocks = dev.materione.core.runtime.RuntimeBlocks.builder();
         var runtimeFurnitures = dev.materione.core.runtime.RuntimeFurnitures.builder();
         var glyphEntries = new LinkedHashMap<NamespacedId, dev.materione.core.runtime.RuntimeGlyphs.Entry>();
+        var effectEntries = new LinkedHashMap<NamespacedId, dev.materione.core.runtime.RuntimeEffects.Entry>();
         if (itemType.isEmpty()) {
             builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
             builder.view(BlockBehaviors.KEY, BlockBehaviors.empty());
@@ -396,6 +421,60 @@ public final class PipelineService {
                                     parsedItems.keySet(), builder, runtimeBlocks::placedBy);
                         }
                     }
+                } else if ("glyph".equals(resource.contentType()) && glyphType.isPresent()) {
+                    Optional<Object> parsed;
+                    try {
+                        parsed = glyphType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
+                    if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.glyphs.GlyphDefinition glyph) {
+                        dev.materione.core.runtime.RuntimeGlyphs.Entry entry = toGlyphEntry(glyph);
+                        if (entry != null) {
+                            glyphEntries.put(glyph.id(), entry);
+                        }
+                    }
+                } else if ("effect".equals(resource.contentType()) && effectType.isPresent()) {
+                    Optional<Object> parsed;
+                    try {
+                        parsed = effectType.get().parse(resource.id(), raw, templates);
+                    } catch (RuntimeException e) {
+                        diagnostics.publish(Diagnostic.error(
+                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                "shadow build skipped " + resource.id() + ": " + e));
+                        continue;
+                    }
+                    if (parsed.isPresent()
+                            && parsed.get() instanceof dev.materione.content.effects.EffectDefinition effect) {
+                        // the signal comes from the durable table — the compile
+                        // stage claimed it this run (D7); missing → skipped
+                        Optional<String> signal = allocation == null
+                                ? Optional.empty()
+                                : allocation.allocationOf(
+                                        effect.id(), dev.materione.content.effects.EffectType.ALLOCATION_KIND);
+                        if (signal.isPresent()) {
+                            try {
+                                int slot = Integer.parseInt(signal.get());
+                                effectEntries.put(effect.id(),
+                                        new dev.materione.core.runtime.RuntimeEffects.Entry(
+                                                effect.id(), effect.kind(), effect.speed(),
+                                                effect.amplitude(),
+                                                0xFF0000 | (0xFF - slot)));
+                            } catch (NumberFormatException e) {
+                                diagnostics.publish(Diagnostic.warn(
+                                        DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                        "shadow build skipped " + effect.id()
+                                                + ": corrupt signal allocation"));
+                            }
+                        } else {
+                            diagnostics.publish(Diagnostic.warn(
+                                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                                    "shadow build skipped " + effect.id() + ": no allocated signal"));
+                        }
+                    }
                 } else if ("furniture".equals(resource.contentType()) && furnitureType.isPresent()) {
                     Optional<Object> parsed;
                     try {
@@ -413,22 +492,6 @@ public final class PipelineService {
                                 furniture.displayName(), "PAPER",
                                 parsedItems.keySet(), builder, runtimeFurnitures::placedBy);
                     }
-                } else if ("glyph".equals(resource.contentType()) && glyphType.isPresent()) {
-                    Optional<Object> parsed;
-                    try {
-                        parsed = glyphType.get().parse(resource.id(), raw, templates);
-                    } catch (RuntimeException e) {
-                        diagnostics.publish(Diagnostic.error(
-                                DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                                "shadow build skipped " + resource.id() + ": " + e));
-                        continue;
-                    }
-                    if (parsed.isPresent() && parsed.get() instanceof dev.materione.content.glyphs.GlyphDefinition glyph) {
-                        dev.materione.core.runtime.RuntimeGlyphs.Entry entry = toGlyphEntry(glyph);
-                        if (entry != null) {
-                            glyphEntries.put(glyph.id(), entry);
-                        }
-                    }
                 }
             }
         }
@@ -441,6 +504,8 @@ public final class PipelineService {
         builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
         builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
                 new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
+        builder.view(dev.materione.core.runtime.RuntimeEffects.KEY,
+                new dev.materione.core.runtime.RuntimeEffects(effectEntries));
         return builder.build();
     }
 
@@ -625,7 +690,8 @@ public final class PipelineService {
                 List.of(),
                 RuntimeItem.hashOf(id, defaultMaterial, modelId, name, List.of()),
                 null,
-                true));
+                true,
+                null));
         placedBy.accept(id, id);
     }
 
@@ -694,7 +760,8 @@ public final class PipelineService {
                 item.displayName(),
                 item.lore(),
                 RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore()),
-                food);
+                food,
+                item.jukeboxSong());
     }
 
     /** Resolves mechanics against the frozen-at-apply registry snapshot. */

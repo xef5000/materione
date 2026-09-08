@@ -60,6 +60,7 @@ include(
     ":api",
     ":core",
     ":platform",
+    ":modern",
     ":plugin",
     ":content",
     ":behavior",

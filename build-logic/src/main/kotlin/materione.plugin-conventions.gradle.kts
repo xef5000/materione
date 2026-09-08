@@ -1,5 +1,5 @@
 // Assembly-module conventions: the one module that produces the distributable
-// plugin jar. plugin.yml token replacement, generated version source, Shadow
+// plugin jar. paper-plugin.yml token replacement, generated version source, Shadow
 // wiring. Currently ZERO shaded runtime dependencies — the wiring exists so
 // future deps shade + relocate correctly from day one.
 //
@@ -43,7 +43,7 @@ tasks.named<ProcessResources>("processResources") {
     // filesMatching lambda would serialize the script object. Copy the value
     // into a local first so the stored lambda captures only a Map.
     val versionTokens = mapOf("materioneVersion" to pluginVersion)
-    filesMatching("plugin.yml") {
+    filesMatching("paper-plugin.yml") {
         filter<org.apache.tools.ant.filters.ReplaceTokens>(
             "tokens" to versionTokens,
         )

@@ -67,7 +67,7 @@ class ContentBrowserEntriesTest {
         var workbench = item("world", "workbench");
         var synthetic = new RuntimeItem(
                 NamespacedId.of("world", "workbench"), "PAPER",
-                NamespacedId.of("world", "workbench_model"), "Workbench", List.of(), "hash", null, true);
+                NamespacedId.of("world", "workbench_model"), "Workbench", List.of(), "hash", null, true, null);
         var chair = furniture("world", "chair");
         var blocks = RuntimeBlocks.builder().build();
         var furnitures = RuntimeFurnitures.builder().furniture(chair).build();
