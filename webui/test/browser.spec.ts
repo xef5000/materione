@@ -96,10 +96,17 @@ describe('typeTabs', () => {
       'recipes',
       'exotics',
     ]);
-    expect(tabs.filter((tab) => !tab.enabled).map((tab) => tab.directory)).toEqual([
-      'sounds',
-      'guis',
-    ]);
+    expect(tabs.filter((tab) => !tab.enabled).map((tab) => tab.directory)).toEqual(['guis']);
+  });
+
+  it('replaces a planned placeholder once the type registers', () => {
+    const types: TypeInfo[] = [
+      { name: 'sound', directory: 'sounds', displayName: 'Sound', description: '', parameters: [] },
+    ];
+    const tabs = typeTabs(types);
+    const soundTabs = tabs.filter((tab) => tab.directory === 'sounds');
+    expect(soundTabs).toHaveLength(1);
+    expect(soundTabs[0]).toMatchObject({ label: 'Sounds', enabled: true });
   });
 
   it('replaces a planned placeholder once the type registers', () => {

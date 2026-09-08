@@ -11,6 +11,8 @@
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
   import GlyphPreview from './GlyphPreview.svelte';
+  import AudioPreview from './AudioPreview.svelte';
+  import PaintingPreview from './PaintingPreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
   import ModelWorkbench from './ModelWorkbench.svelte';
   import { ops, unwrap } from '../api';
@@ -229,6 +231,20 @@
           ascent={Number(draft.ascent ?? 8)}
           height={Number(draft.height ?? 8)}
           codepoint={glyphMeta?.codepoint ?? null}
+          nonce={textureVersion}
+        />
+      {:else if typeDirectory === 'sounds'}
+        <AudioPreview
+          pack={resource.pack}
+          sounds={draft.sounds}
+          onChange={(value) => set('sounds', value)}
+        />
+      {:else if typeDirectory === 'paintings'}
+        <PaintingPreview
+          pack={resource.pack}
+          texture={String(draft.texture ?? '')}
+          width={Number(draft.width ?? 1)}
+          height={Number(draft.height ?? 1)}
           nonce={textureVersion}
         />
       {:else}

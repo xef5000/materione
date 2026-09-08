@@ -25,10 +25,25 @@ import java.util.stream.Stream;
  */
 public final class AssetOps {
 
-    /** 2 MiB cap per asset at v1: textures/models are KBs; sounds arrive in M4. */
+    /** Per-asset cap for textures/models: they are KBs to low-MBs at most. */
     public static final int MAX_ASSET_BYTES = 2 * 1024 * 1024;
 
+    /**
+     * Audio rides the same sealed frames but is bulkier — a song-length
+     * .ogg at a sensible bitrate needs more headroom (M4). The wire frame
+     * budget is the real ceiling; larger sources wait for M5's chunk flow.
+     */
+    public static final int MAX_AUDIO_BYTES = 8 * 1024 * 1024;
+
     private static final Set<String> TEXT_TYPES = Set.of("png", "jpg", "jpeg", "json", "ogg", "oga", "mcmeta");
+    private static final Set<String> AUDIO_TYPES = Set.of("ogg", "oga");
+
+    private static int capFor(String path) {
+        String lower = path.toLowerCase(Locale.ROOT);
+        int dot = lower.lastIndexOf('.');
+        String extension = dot < 0 ? "" : lower.substring(dot + 1);
+        return AUDIO_TYPES.contains(extension) ? MAX_AUDIO_BYTES : MAX_ASSET_BYTES;
+    }
 
     private AssetOps() {}
 
@@ -63,9 +78,10 @@ public final class AssetOps {
                 String pack = requiredString(body, "pack");
                 String path = safeAssetPath(body.get("path").getAsString());
                 byte[] bytes = Base64.getDecoder().decode(requiredString(body, "data"));
-                if (bytes.length > MAX_ASSET_BYTES) {
+                int cap = capFor(path);
+                if (bytes.length > cap) {
                     throw new IllegalArgumentException(
-                            "asset exceeds the " + (MAX_ASSET_BYTES / 1024) + " KiB v1 limit");
+                            "asset exceeds the " + (cap / 1024) + " KiB limit");
                 }
                 Path file = packsRoot.resolve(pack).resolve(path).normalize();
                 if (!file.startsWith(packsRoot.resolve(pack))) {

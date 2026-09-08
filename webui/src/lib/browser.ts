@@ -33,7 +33,7 @@ export interface TypeTab {
 }
 
 /** Display order for the tabs an author reaches for most. */
-const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates', 'glyphs'];
+const ORDER = ['items', 'blocks', 'furnitures', 'recipes', 'templates', 'glyphs', 'sounds', 'paintings', 'effects'];
 
 const LABELS: Record<string, { label: string; singular: string }> = {
   items: { label: 'Items', singular: 'item' },
@@ -42,11 +42,13 @@ const LABELS: Record<string, { label: string; singular: string }> = {
   recipes: { label: 'Recipes', singular: 'recipe' },
   templates: { label: 'Templates', singular: 'template' },
   glyphs: { label: 'Glyphs', singular: 'glyph' },
+  sounds: { label: 'Sounds', singular: 'sound' },
+  paintings: { label: 'Paintings', singular: 'painting' },
+  effects: { label: 'Text effects', singular: 'effect' },
 };
 
 /** Types not built yet, shown so the shape of the product is visible. */
 const PLANNED: TypeTab[] = [
-  { directory: 'sounds', label: 'Sounds', singular: 'sound', enabled: false, note: 'coming in M4' },
   { directory: 'guis', label: 'GUIs', singular: 'GUI', enabled: false, note: 'coming in M5' },
 ];
 
@@ -77,6 +79,8 @@ export function typeTabs(types: TypeInfo[]): TypeTab[] {
       singular: LABELS[directory]?.singular ?? directory.replace(/s$/, ''),
       enabled: true,
     })),
+    // planned tabs that no registered type covers yet — once a type registers,
+    // its real tab replaces the placeholder
     ...PLANNED.filter((tab) => !directories.includes(tab.directory)),
   ];
 }

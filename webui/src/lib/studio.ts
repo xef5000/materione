@@ -21,7 +21,7 @@ export interface StudioSection {
   fields: TypeParam[];
 }
 
-const SECTION_ORDER = ['identity', 'appearance', 'crafting', 'placement', 'gameplay', 'behavior'];
+const SECTION_ORDER = ['identity', 'appearance', 'audio', 'crafting', 'placement', 'gameplay', 'behavior'];
 
 const SECTION_LABELS: Record<string, string> = {
   identity: 'Identity',
@@ -30,6 +30,7 @@ const SECTION_LABELS: Record<string, string> = {
   placement: 'Placement',
   gameplay: 'Gameplay',
   behavior: 'Behaviour',
+  audio: 'Audio',
   general: 'General',
 };
 
@@ -171,4 +172,39 @@ export function gridTo(cells: string[]): { shape: string[]; ingredients: Record<
   const ingredients: Record<string, string> = {};
   for (const [item, symbol] of symbols) ingredients[symbol] = item;
   return { shape: rows.map((row) => row.slice(0, width)), ingredients };
+}
+
+// --- sound files -----------------------------------------------------------
+
+/**
+ * The pack asset a sound source resolves to: sources are authored relative to
+ * `assets/sounds/` with an optional namespace prefix and optional `.ogg`, and
+ * the validator strips the `sounds/` kind directory the same way. This is the
+ * upload/replace target for the studio's sound editor.
+ */
+export function soundAssetPath(reference: string): string {
+  let cleaned = reference.replace(/\\/g, '/');
+  if (cleaned.toLowerCase().endsWith('.ogg') || cleaned.toLowerCase().endsWith('.oga')) {
+    cleaned = cleaned.slice(0, -4);
+  }
+  const colon = cleaned.indexOf(':');
+  if (colon >= 0) cleaned = cleaned.slice(colon + 1);
+  return `assets/sounds/${cleaned}.ogg`;
+}
+
+/**
+ * A source ref for an uploaded file's name: the basename, lowercased with
+ * spaces as underscores, keeping only what the asset id grammar allows. Null
+ * when nothing survives — the caller refuses the upload rather than shipping
+ * a reference that can never validate.
+ */
+export function sanitizeSoundName(fileName: string): string | null {
+  const base = fileName.replace(/\.og[ag]$/i, '').replace(/.*[/\\]/, '');
+  const cleaned = base
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9_.-]/g, '')
+    .replace(/^\.+/, '')
+    .replace(/\.+$/, '');
+  return cleaned || null;
 }

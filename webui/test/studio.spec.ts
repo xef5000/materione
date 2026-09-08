@@ -10,7 +10,9 @@ import {
   gridFrom,
   gridTo,
   isRenderable,
+  sanitizeSoundName,
   sectionsOf,
+  soundAssetPath,
   unrenderableKeys,
 } from '../src/lib/studio';
 import type { TypeInfo, TypeParam } from '../src/lib/api';
@@ -159,5 +161,38 @@ describe('recipe grid', () => {
 
   it('ignores symbols the ingredient map does not define', () => {
     expect(gridFrom(['XXX'], {}).cells.every((cell) => cell === '')).toBe(true);
+  });
+});
+
+describe('soundAssetPath', () => {
+  it('lands a bare source under assets/sounds with its extension restored', () => {
+    expect(soundAssetPath('ui/anthem.ogg')).toBe('assets/sounds/ui/anthem.ogg');
+    expect(soundAssetPath('ui/anthem')).toBe('assets/sounds/ui/anthem.ogg');
+  });
+
+  it('strips a namespace prefix, which the validator also ignores', () => {
+    expect(soundAssetPath('sample:ui/anthem')).toBe('assets/sounds/ui/anthem.ogg');
+  });
+
+  it('normalizes backslashes and the .oga variant', () => {
+    expect(soundAssetPath('ui\\anthem.OGA')).toBe('assets/sounds/ui/anthem.ogg');
+  });
+});
+
+describe('sanitizeSoundName', () => {
+  it('reduces an uploaded file name to a valid source ref', () => {
+    expect(sanitizeSoundName('My Sound.ogg')).toBe('my_sound');
+    expect(sanitizeSoundName('C:\\Music\\level-up.OGG')).toBe('level-up');
+  });
+
+  it('takes the basename and drops characters the asset grammar refuses', () => {
+    expect(sanitizeSoundName('boom!.ogg')).toBe('boom');
+    expect(sanitizeSoundName('a//b.ogg')).toBe('b');
+    expect(sanitizeSoundName('v1.2.ogg')).toBe('v1.2');
+  });
+
+  it('refuses a name with nothing left', () => {
+    expect(sanitizeSoundName('???')).toBeNull();
+    expect(sanitizeSoundName('.ogg')).toBeNull();
   });
 });
