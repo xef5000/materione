@@ -66,10 +66,10 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=55")) {
-                problems.add("MATERIONE-CONTENT-OK items=55 missing after boot "
-                        + "(fixture packs: 3 sample + 50 corpus items + 2 auto placement "
-                        + "items (marble_stairs/slab) should be live)");
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=56")) {
+                problems.add("MATERIONE-CONTENT-OK items=56 missing after boot "
+                        + "(fixture packs: 4 sample items (incl. the music disc) + 50 corpus "
+                        + "items + 2 auto placement items (marble_stairs/slab) should be live)");
             }
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
@@ -80,6 +80,15 @@ public final class PaperHarnessRunner {
                     || !log.readAll().contains("MATERIONE-PACKFORMAT detected=46 advertising=46..88")) {
                 problems.add("MATERIONE-PACKFORMAT detected=46 advertising=46..88 missing after boot "
                         + "(server-reported pack format detection)");
+            }
+            // registry seam decision: the pinned 1.21.4 server has no compose
+            // lifecycle and no JUKEBOX_SONG registry event, so the bootstrap
+            // must report the datapack mode — paintings/songs ride the world
+            // datapack here, exactly as on every pre-1.21.6 server
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-REGISTRY-OK")
+                    || !log.readAll().contains("mode=datapack")) {
+                problems.add("MATERIONE-REGISTRY-OK mode=datapack missing after boot "
+                        + "(bootstrap registry-seam capability detection)");
             }
             // pack.mcmeta schema: 1.21.9+/26.x clients read min_format/max_format
             // and ignore supported_formats — both generations must be staged
@@ -128,6 +137,133 @@ public final class PaperHarnessRunner {
                     problems.add("staged furniture display definition missing/wrong: " + furnitureJson
                             + " (item_model needs a definition at assets/<ns>/items/<model>.json)");
                 }
+                // M4 media: the pack glyph font carries the bitmap providers
+                // and references the shared shift font; minecraft:default must
+                // reference both, or unstyled text never renders the glyphs
+                var fontEntry = staged.getEntry("assets/sample/font/glyphs.json");
+                String fontJson = fontEntry == null
+                        ? ""
+                        : new String(staged.getInputStream(fontEntry).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!fontJson.contains("\"type\":\"bitmap\"")
+                        || !fontJson.contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")) {
+                    problems.add("staged glyph font missing bitmap providers or the shift reference: "
+                            + fontJson);
+                }
+                var defaultFontEntry = staged.getEntry("assets/minecraft/font/default.json");
+                String defaultFontJson = defaultFontEntry == null
+                        ? ""
+                        : new String(staged.getInputStream(defaultFontEntry).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!defaultFontJson.contains("{\"id\":\"sample:glyphs\",\"type\":\"reference\"}")) {
+                    problems.add("minecraft:font/default.json does not reference the pack glyph font: "
+                            + defaultFontJson + " (unstyled text would render tofu boxes)");
+                }
+                // every font/atlas texture reference must resolve inside THIS
+                // zip: a dangling bitmap "file" (or atlas "resource") renders
+                // the missing-glyph box on clients — no error anywhere
+                for (var entries = staged.entries(); entries.hasMoreElements(); ) {
+                    var candidate = entries.nextElement();
+                    String name = candidate.getName();
+                    if (!name.startsWith("assets/") || !name.endsWith(".json")
+                            || !(name.contains("/font/") || name.contains("/atlases/"))) {
+                        continue;
+                    }
+                    String json = new String(staged.getInputStream(candidate).readAllBytes(),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    var refs = java.util.regex.Pattern
+                            .compile("\"(?:file|resource)\":\"([A-Za-z0-9_.-]+):([A-Za-z0-9_./-]+)\"")
+                            .matcher(json);
+                    while (refs.find()) {
+                        // font bitmap "file" carries its .png (1.21.2+ format);
+                        // atlas "resource" sprite ids do not
+                        String path = refs.group(2).endsWith(".png")
+                                ? refs.group(2).substring(0, refs.group(2).length() - 4)
+                                : refs.group(2);
+                        String texturePath = "assets/" + refs.group(1) + "/textures/" + path + ".png";
+                        if (staged.getEntry(texturePath) == null) {
+                            problems.add("staged " + name + " references missing texture "
+                                    + texturePath + " (renders as tofu boxes on clients)");
+                        }
+                    }
+                }
+                var soundsEntry = staged.getEntry("assets/sample/sounds.json");
+                String soundsJson = soundsEntry == null ? ""
+                        : new String(staged.getInputStream(soundsEntry).readAllBytes(),
+                                java.nio.charset.StandardCharsets.UTF_8);
+                if (!soundsJson.contains("\"anthem\":") || !soundsJson.contains("\"level_up\":")) {
+                    problems.add("staged sounds.json missing custom events: " + soundsJson);
+                }
+                // no generated painting atlas: vanilla's paintings atlas
+                // (atlases/paintings.json) directory-scans textures/painting/
+                // across all namespaces with an empty prefix, so the sprite id
+                // is <ns>:<path> and any generated atlas file is an orphan
+                // the client never loads
+                if (staged.getEntry("assets/minecraft/atlases/painting.json") != null
+                        || staged.getEntry("assets/minecraft/atlases/paintings.json") != null) {
+                    problems.add("staged pack ships a generated painting atlas — vanilla's"
+                            + " own paintings atlas already registers textures/painting/"
+                            + " sprites for every namespace");
+                }
+                // text-effect shader ladder: the sample pack defines rainbow +
+                // wave, so every verified rung must ride as an overlay — never
+                // the base layer — and the 1.21.4 rung must carry the include
+                // with both effects' signal branches
+                if (staged.getEntry(
+                        "materione_1_21_4/assets/minecraft/shaders/core/rendertype_text.vsh") == null
+                        || staged.getEntry(
+                                "materione_1_21_4/assets/minecraft/shaders/include/materione_text_effects.glsl")
+                                == null) {
+                    problems.add("staged pack missing the 1.21.4 shader overlay — text effects"
+                            + " (effects/*.yml) compile to a version-laddered rendertype_text"
+                            + " replacement");
+                }
+                // the world datapack (paintings + jukebox songs) deploys to the
+                // default world's datapacks folder at compile time — and it
+                // must actually carry the painting variant, because that is
+                // the only thing that makes a custom painting placeable
+                Path deployed = workspace.root.resolve("world/datapacks/materione-content.zip");
+                if (!Files.isRegularFile(deployed)) {
+                    problems.add("world datapack not deployed to " + deployed
+                            + " (painting/jukebox artifacts ride the world datapack)");
+                } else {
+                    try (ZipFile datapack = new ZipFile(deployed.toFile())) {
+                        if (datapack.getEntry("data/sample/painting_variant/sunrise.json") == null) {
+                            problems.add("deployed world datapack is missing the sunrise"
+                                    + " painting variant — custom paintings only exist after"
+                                    + " their datapack loads");
+                        }
+                        var tag = datapack.getEntry(
+                                "data/minecraft/tags/painting_variant/placeable.json");
+                        String tagJson = tag == null ? ""
+                                : new String(datapack.getInputStream(tag).readAllBytes(),
+                                        java.nio.charset.StandardCharsets.UTF_8);
+                        if (!tagJson.contains("sample:sunrise")) {
+                            problems.add("deployed world datapack's placeable tag does not"
+                                    + " name sample:sunrise: " + tagJson);
+                        }
+                        // the variant's asset_id must follow vanilla's sprite
+                        // convention: <ns>:<path> with no painting/ segment,
+                        // because vanilla's paintings atlas registers the
+                        // texture under the directory-stripped id — a prefix
+                        // in the asset_id points at a sprite that never exists
+                        // (invisible checkerboard on every wall)
+                        var variant = datapack.getEntry("data/sample/painting_variant/sunrise.json");
+                        String variantJson = variant == null ? ""
+                                : new String(datapack.getInputStream(variant).readAllBytes(),
+                                        java.nio.charset.StandardCharsets.UTF_8);
+                        int assetIdStart = variantJson.indexOf("\"asset_id\":\"");
+                        String assetId = assetIdStart < 0 ? ""
+                                : variantJson.substring(assetIdStart + "\"asset_id\":\"".length(),
+                                        variantJson.indexOf('"', assetIdStart + "\"asset_id\":\"".length()));
+                        if (!assetId.equals("sample:sunrise")) {
+                            problems.add("painting variant asset_id '" + assetId
+                                    + "' must be sample:sunrise (vanilla atlas sprite convention)");
+                        }
+                    } catch (IOException e) {
+                        problems.add("could not read the deployed world datapack: " + e);
+                    }
+                }
             } catch (IOException e) {
                 problems.add("could not read staged pack.zip mcmeta: " + e);
             }
@@ -162,6 +298,34 @@ public final class PaperHarnessRunner {
             problems.addAll(drive(console, log, options,
                     "materione dev stack sample:marble_stairs",
                     "MATERIONE-STACK id=sample:marble_stairs item_model=sample:marble_stairs"));
+            // M4 media surfaces: the music disc resolves (jukebox component is
+            // silent until the datapack loads at the next restart), and the
+            // dev sound driver answers a console sender with its denial marker
+            problems.addAll(drive(console, log, options,
+                    "materione dev stack sample:ruby_disc",
+                    "MATERIONE-STACK id=sample:ruby_disc item_model=none"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev sound sample:level_up",
+                    "MATERIONE-DEV-SOUND-DENIED reason=player-required"));
+            problems.addAll(drive(console, log, options,
+                    "materione dev painting sample:sunrise",
+                    "MATERIONE-DEV-PAINTING-DENIED reason=player-required"));
+            // the world datapack is self-healing: with the pack bytes unchanged
+            // (a noop reload), deleting the deployed zip still gets repaired —
+            // a regenerated world used to leave the variant missing forever
+            java.nio.file.Files.deleteIfExists(
+                    workspace.root.resolve("world/datapacks/materione-content.zip"));
+            problems.addAll(drive(console, log, options, "materione reload",
+                    "MATERIONE-RELOAD-OK"));
+            for (int wait = 0; wait < 20 && !java.nio.file.Files.isRegularFile(
+                    workspace.root.resolve("world/datapacks/materione-content.zip")); wait++) {
+                Thread.sleep(250);
+            }
+            if (!java.nio.file.Files.isRegularFile(
+                    workspace.root.resolve("world/datapacks/materione-content.zip"))) {
+                problems.add("world datapack was not repaired after deletion + reload"
+                        + " (deploy skips must verify the world folder, not a marker)");
+            }
             // M2 slice 3: world-runtime smoke — force-load the target chunk
             // (headless boots have no players, so nothing else keeps it warm),
             // then place → inspect → remove → sweep through the dev driver
@@ -217,7 +381,7 @@ public final class PaperHarnessRunner {
             console.send("forceload remove all");
             // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=55"));
+                    "MATERIONE-RELOAD-OK items=56"));
             hotReloadScenario(console, log, workspace, options, problems);
 
             console.send("stop");
@@ -275,13 +439,13 @@ public final class PaperHarnessRunner {
                   display_name: "Extra Gem"
                 """);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=56"));
+                "MATERIONE-RELOAD-OK items=57"));
 
         Thread.sleep(1000);
         Files.writeString(broken, Files.readString(faultSource));
         int beforeFaultReload = log.mark();
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=56"));
+                "MATERIONE-RELOAD-OK items=57"));
         if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
             problems.add("fault injection: MTR-0007 missing after reloading a broken item file");
         }
@@ -290,7 +454,7 @@ public final class PaperHarnessRunner {
         Files.deleteIfExists(extra);
         Files.deleteIfExists(broken);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=55"));
+                "MATERIONE-RELOAD-OK items=56"));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,

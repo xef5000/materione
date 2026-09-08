@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * The M1 exit gate, live on Paper: boot with the fixture corpus (53 items),
+ * The M1 exit gate, live on Paper: boot with the fixture corpus (56 items),
  * the full hot-reload sequence (add → 54, broken file → still 54 with
  * MTR-0007, remove → 53), delivery serving, and a clean stop.
  */

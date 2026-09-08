@@ -61,7 +61,9 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("components", ParameterType.RAW, false, null,
                                 "Vanilla data components (version-aware, platform-gated)", null, null).withEditor(new ParameterSchema.EditorMetadata("Vanilla components", "gameplay", 90, true, "advanced", "", "")),
                         new ParameterSchema("mechanics", ParameterType.LIST, false, null,
-                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata("Mechanics", "behavior", 10, false, "structured-list", "mechanic", ""))),
+                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata("Mechanics", "behavior", 10, false, "structured-list", "mechanic", "")),
+                        new ParameterSchema("jukebox_song", ParameterType.REFERENCE, false, null,
+                                "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata("Jukebox song", "gameplay", 20, true, "reference", "sound", ""))),
                 "1.0.0");
     }
 
@@ -88,7 +90,14 @@ public final class ItemType implements ContentType {
                 nestedMap(merged.get("components")),
                 behaviorMaps(merged.get("behavior")),
                 behaviorMaps(merged.get("mechanics")),
+                jukeboxSong(merged, id),
                 merged));
+    }
+
+    /** {@code jukebox_song:} full or pack-relative sound reference. */
+    private static String jukeboxSong(Map<String, Object> merged, NamespacedId id) {
+        String raw = Templates.text(merged, "jukebox_song");
+        return raw == null ? null : Templates.shortRef(id.namespace(), raw);
     }
 
     @Override

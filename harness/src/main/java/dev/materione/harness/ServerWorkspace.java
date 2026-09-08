@@ -32,7 +32,7 @@ public final class ServerWorkspace {
     /**
      * Creates a workspace carrying only the named packs (null = every pack
      * directory under the fixture root). Scenarios filter so their expected
-     * live counts stay pinned: bootstrap runs sample+corpus (53 items),
+     * live counts stay pinned: bootstrap runs sample+corpus (56 items),
      * the world-persistence scenario adds {@code world}.
      */
     public static ServerWorkspace create(HarnessOptions options, String scenarioName,

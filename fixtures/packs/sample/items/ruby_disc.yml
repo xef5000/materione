@@ -1,0 +1,4 @@
+ruby_disc:
+  material: MUSIC_DISC_CAT
+  display_name: "&dRuby disc"
+  jukebox_song: anthem

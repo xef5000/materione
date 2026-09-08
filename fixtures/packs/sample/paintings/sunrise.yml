@@ -1,0 +1,7 @@
+sunrise:
+  texture: painting/sunrise
+  width: 2
+  height: 1
+  author: "Materione"
+  title: "Sunrise"
+  placeable: true

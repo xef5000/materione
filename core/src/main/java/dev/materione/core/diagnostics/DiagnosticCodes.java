@@ -173,15 +173,43 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode AMBIGUOUS_PLACEMENT_ID =
             new DiagnosticCode("MTR-0038", Severity.WARN, "Block and furniture share an id");
 
-    // M4 — glyphs (runtime-systems §6)
+    // M4 — glyphs, fonts, sounds, paintings (runtime-systems §6/§10)
 
     /** A glyph references a texture the pack does not ship. */
     public static final DiagnosticCode GLYPH_TEXTURE_MISSING =
             new DiagnosticCode("MTR-0039", Severity.ERROR, "Glyph texture asset missing");
 
+    /** A sound definition references an .ogg file the pack does not ship. */
+    public static final DiagnosticCode SOUND_SOURCE_MISSING =
+            new DiagnosticCode("MTR-0040", Severity.ERROR, "Custom sound source missing");
+
+    /** A painting texture's pixel size does not match its declared block dimensions. */
+    public static final DiagnosticCode PAINTING_SIZE_MISMATCH =
+            new DiagnosticCode("MTR-0041", Severity.ERROR, "Painting texture size mismatch");
+
+    /** A jukebox song section is invalid (bounds, missing fields, or unplayable reference). */
+    public static final DiagnosticCode JUKEBOX_SONG_INVALID =
+            new DiagnosticCode("MTR-0042", Severity.ERROR, "Jukebox song definition invalid");
+
+    /** The generated world datapack (paintings, jukebox songs) could not be written. */
+    public static final DiagnosticCode DATAPACK_WRITE_FAILED =
+            new DiagnosticCode("MTR-0043", Severity.ERROR, "World datapack artifact write failed");
+
+    /** A text effect cannot be produced for the running client's shader format. */
+    public static final DiagnosticCode TEXT_EFFECT_UNSUPPORTED =
+            new DiagnosticCode("MTR-0044", Severity.ERROR, "Text effect unsupported on this version");
+
     /** The glyph codepoint space is used up (shift font's block reached). */
     public static final DiagnosticCode GLYPH_CODEPOINT_EXHAUSTED =
             new DiagnosticCode("MTR-0045", Severity.ERROR, "Glyph codepoint space exhausted");
+
+    /** The deployed datapack never entered the server's pack repository. */
+    public static final DiagnosticCode DATAPACK_NOT_ACCEPTED =
+            new DiagnosticCode("MTR-0046", Severity.WARN, "World datapack not accepted by the server");
+
+    /** The text-effect signal color band (#FF00FF downward) is used up. */
+    public static final DiagnosticCode EFFECT_SIGNAL_EXHAUSTED =
+            new DiagnosticCode("MTR-0047", Severity.ERROR, "Text effect signal space exhausted");
 
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
@@ -223,7 +251,14 @@ public final class DiagnosticCodes {
             EDITOR_IDENTITY_REBUILT,
             AMBIGUOUS_PLACEMENT_ID,
             GLYPH_TEXTURE_MISSING,
-            GLYPH_CODEPOINT_EXHAUSTED);
+            SOUND_SOURCE_MISSING,
+            PAINTING_SIZE_MISMATCH,
+            JUKEBOX_SONG_INVALID,
+            DATAPACK_WRITE_FAILED,
+            TEXT_EFFECT_UNSUPPORTED,
+            GLYPH_CODEPOINT_EXHAUSTED,
+            DATAPACK_NOT_ACCEPTED,
+            EFFECT_SIGNAL_EXHAUSTED);
 
     private DiagnosticCodes() {}
 

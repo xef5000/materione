@@ -20,6 +20,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(40); // MTR-0039/0045 add the glyph diagnostics.
+        assertThat(DiagnosticCodes.all()).hasSize(47); // MTR-0047 closes the text-effect signal band.
     }
 }

@@ -23,6 +23,7 @@ public record ItemDefinition(
         Map<String, Object> components,
         List<Map<String, Object>> behavior, // raw ECA rule maps (engine-compiled at apply)
         List<Map<String, Object>> mechanics, // raw mechanic maps ({name: params}), resolved at apply
+        String jukeboxSong,       // full sound id whose jukebox song this disc plays
         Map<String, Object> raw) {
 
     public ItemDefinition {

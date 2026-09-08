@@ -22,6 +22,12 @@ public enum ContentEdgeType {
     PLACED_BY_ITEM,
     /** furniture → the next furniture in its evolution chain. */
     FURNITURE_STAGE,
+    /** glyph/sound/painting definition → the asset it renders or plays. */
+    USES_ASSET,
+    /** glyph → the glyph it aliases ({@code reference:}). */
+    GLYPH_REFERENCE,
+    /** item → the sound whose jukebox song it plays ({@code jukebox_song:}). */
+    JUKEBOX_SONG,
     /** pack → pack dependency (manifest {@code depends}). */
     PACK_DEPENDENCY
 }

@@ -51,6 +51,34 @@ public interface PackEmitter {
         // default no-op so addon content types compiled against older cores link
     }
 
+    /**
+     * Emits one sound event definition ({@code sounds.json} entry) under its
+     * full key ({@code ns:event}); events group per namespace into that
+     * namespace's {@code sounds.json}.
+     */
+    default void soundEvent(String soundKey, Map<String, Object> eventJson) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
+    /**
+     * Emits one datapack artifact file ({@code data/<ns>/painting_variant/…},
+     * jukebox songs, tags) — compiled into the world datapack, whose changes
+     * are restart-required (runtime-systems §10).
+     */
+    default void datapackFile(String path, Map<String, Object> json) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
+    /**
+     * Emits one compiled text effect (runtime-systems §6) — the pack
+     * compiler composes the injected text-shader set from all effects and
+     * keys each on its allocated signal color. Only meaningful once the
+     * shader ladder ships; packs without effects never carry shader files.
+     */
+    default void textEffect(EffectSpec spec) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
     /** Sets pack.mcmeta description text (pack format is the platform's). */
     void description(String text);
 }

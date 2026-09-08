@@ -30,6 +30,19 @@ public final class PackFormats {
     /** Pack format of the 1.21.4 Materione floor (D10). */
     public static final int FLOOR = 46;
 
+    /**
+     * A major.minor pack format pair. Formats were plain ints until 25w31a;
+     * since then they carry a minor (26.1's data format is 101.1) and mcmeta
+     * spells a full version as {@code [major, minor]} — a bare int means
+     * {@code minor 0}.
+     */
+    public record Version(int major, int minor) {
+        /** The mcmeta JSON literal for this version. */
+        public String toMcmeta() {
+            return minor == 0 ? String.valueOf(major) : "[" + major + "," + minor + "]";
+        }
+    }
+
     /** Newest Minecraft version whose format is known to this build. */
     public static final String MAX_KNOWN_VERSION = "26.2";
 

@@ -1,5 +1,6 @@
 package dev.materione.platform.text;
 
+import dev.materione.core.runtime.RuntimeEffects;
 import dev.materione.core.runtime.RuntimeGlyphs;
 import dev.materione.core.text.ShiftMath;
 import java.util.ArrayList;
@@ -10,20 +11,28 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.ShadowColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 /**
  * The text pipeline (M4, runtime-systems §6): turns authored strings into
  * components — glyph tags ({@code <glyph:id>}, alias {@code <g:id>}),
  * emoji placeholders ({@code :name:}) and shift tags ({@code <shift:N>})
- * become styled components; everything else passes through as legacy
- * {@code &}-text exactly like {@link ItemText}.
+ * become styled components; effect spans ({@code <effect:id>…</effect>})
+ * color their content with the effect's shader signal; everything else
+ * passes through as legacy {@code &}-text exactly like {@link ItemText}.
  *
  * <p>Glyphs are forced white unless the tag says {@code colorable} — the
  * incumbent trick that stops a chat color bleeding into a bitmap glyph.
  * Viewers without the needed permission (or callers without a registry)
  * see the literal text; components carry their own {@code font} style, so
  * resolved text renders correctly in every vanilla surface it reaches.
+ *
+ * <p>Effect spans color their plain runs with the effect's signal RGB —
+ * the color the injected text vertex shader matches on (the Nexo
+ * magic-color technique). Glyph codepoints inside a span render
+ * unaffected (they force their own color), and clients without the pack
+ * see the signal as plain colored text.
  */
 public final class GlyphText {
 
@@ -35,10 +44,16 @@ public final class GlyphText {
     }
 
     private static volatile Supplier<RuntimeGlyphs> source = () -> null;
+    private static volatile Supplier<RuntimeEffects> effectSource = () -> null;
 
     /** Binds the live registry source once at boot; readers swap atomically. */
     public static void register(Supplier<RuntimeGlyphs> glyphSource) {
         source = glyphSource;
+    }
+
+    /** Binds the live effect registry source once at boot; readers swap atomically. */
+    public static void registerEffects(Supplier<RuntimeEffects> effectsSource) {
+        effectSource = effectsSource;
     }
 
     /** The live registry, or null before the first apply. */
@@ -46,17 +61,30 @@ public final class GlyphText {
         return source.get();
     }
 
+    /** The live effect registry, or null before the first apply. */
+    public static RuntimeEffects effects() {
+        return effectSource.get();
+    }
+
     private GlyphText() {}
 
     /** Resolves author-intent text (item names, lore) — no permission gate. */
     public static Component resolve(String text) {
-        return resolve(text, glyphs(), Permissions.ALLOW_ALL);
+        return resolve(text, glyphs(), effects(), Permissions.ALLOW_ALL);
     }
 
     /** Resolves viewer-dependent text; denied glyphs stay literal. */
     public static Component resolve(String text, RuntimeGlyphs glyphs, Permissions permissions) {
         var builder = Component.text();
-        appendResolved(builder, text, glyphs, permissions);
+        appendResolved(builder, text, glyphs, effects(), permissions);
+        return builder.build();
+    }
+
+    /** Resolves viewer-dependent text against explicit registries (tests, editor previews). */
+    public static Component resolve(
+            String text, RuntimeGlyphs glyphs, RuntimeEffects effects, Permissions permissions) {
+        var builder = Component.text();
+        appendResolved(builder, text, glyphs, effects, permissions);
         return builder.build();
     }
 
@@ -66,7 +94,9 @@ public final class GlyphText {
      * and children preserved.
      */
     public static Component resolveComponent(Component component, RuntimeGlyphs glyphs, Permissions permissions) {
-        if (glyphs == null || glyphs.isEmpty() || component == null) {
+        RuntimeEffects effects = effects();
+        if ((glyphs == null || glyphs.isEmpty()) && (effects == null || effects.isEmpty())
+                || component == null) {
             return component;
         }
         var resolved = new ArrayList<Component>();
@@ -75,7 +105,7 @@ public final class GlyphText {
             String content = text.content();
             if (containsMarker(content)) {
                 var replacement = Component.text().style(text.style());
-                appendResolved(replacement, content, glyphs, permissions);
+                appendResolved(replacement, content, glyphs, effects, permissions);
                 resolved.add(replacement.build());
                 changed = true;
             }
@@ -99,8 +129,11 @@ public final class GlyphText {
     // --- core scanner --------------------------------------------------------
 
     private static void appendResolved(
-            TextComponent.Builder builder, String text, RuntimeGlyphs glyphs, Permissions permissions) {
-        if (glyphs == null || glyphs.isEmpty() || text == null || text.isEmpty()) {
+            TextComponent.Builder builder, String text, RuntimeGlyphs glyphs,
+            RuntimeEffects effects, Permissions permissions) {
+        boolean noGlyphs = glyphs == null || glyphs.isEmpty();
+        boolean noEffects = effects == null || effects.isEmpty();
+        if ((noGlyphs && noEffects) || text == null || text.isEmpty()) {
             builder.append(ItemText.legacy(text == null ? "" : text));
             return;
         }
@@ -110,22 +143,36 @@ public final class GlyphText {
             if (c == '<') {
                 int close = text.indexOf('>', at);
                 if (close > at + 1) {
-                    Component tag = tagComponent(text.substring(at + 1, close), glyphs, permissions);
-                    if (tag != null) {
-                        builder.append(tag);
+                    String tag = text.substring(at + 1, close);
+                    // paired effect span: <effect:pack:id>…</effect> — the
+                    // span's plain runs take the effect's shader signal color
+                    if (isEffectTag(tag) && !noEffects) {
+                        int closeStart = effectSpanEnd(text, close + 1, tag);
+                        if (closeStart > 0) {
+                            String closeTag = effectCloseTag(tag);
+                            builder.append(effectSpan(tag,
+                                    text.substring(close + 1, closeStart),
+                                    glyphs, effects, permissions));
+                            at = closeStart + closeTag.length();
+                            continue;
+                        }
+                    }
+                    Component resolved = tagComponent(tag, glyphs, permissions);
+                    if (resolved != null) {
+                        builder.append(resolved);
                         at = close + 1;
                         continue;
                     }
                 }
             } else if (c == ':') {
-                int close = text.indexOf(':', at + 1);
-                if (close > at + 1) {
-                    String placeholder = text.substring(at, close + 1);
+                int closeColon = text.indexOf(':', at + 1);
+                if (closeColon > at + 1) {
+                    String placeholder = text.substring(at, closeColon + 1);
                     RuntimeGlyphs.Entry entry = glyphs.byPlaceholder(placeholder).orElse(null);
                     Component emoji = emojiComponent(entry, glyphs, permissions);
                     if (emoji != null) {
                         builder.append(emoji);
-                        at = close + 1;
+                        at = closeColon + 1;
                         continue;
                     }
                 }
@@ -134,6 +181,44 @@ public final class GlyphText {
             builder.append(ItemText.legacy(text.substring(at, next)));
             at = next;
         }
+    }
+
+    /** True for {@code effect:…} / {@code e:…} — the paired-span open tag. */
+    private static boolean isEffectTag(String tag) {
+        return tag.startsWith("effect:") || tag.startsWith("e:");
+    }
+
+    /** The close tag matching an effect open tag. */
+    private static String effectCloseTag(String tag) {
+        return "</" + (tag.startsWith("effect:") ? "effect" : "e") + ">";
+    }
+
+    /**
+     * Finds the matching close tag's start from {@code from}; -1 when the
+     * span is unclosed (then the tag stays literal). Spans do not nest.
+     */
+    private static int effectSpanEnd(String text, int from, String tag) {
+        return text.indexOf(effectCloseTag(tag), from);
+    }
+
+    /** The span component: inner content resolved, colored with the effect's signal. */
+    private static Component effectSpan(
+            String tag, String inner, RuntimeGlyphs glyphs, RuntimeEffects effects,
+            Permissions permissions) {
+        String reference = tag.substring(tag.indexOf(':') + 1);
+        RuntimeEffects.Entry entry = effects.byId(reference).orElse(null);
+        if (entry == null) {
+            // unknown effect: keep the whole span literal
+            return ItemText.legacy("<" + tag + ">" + inner + effectCloseTag(tag));
+        }
+        var resolved = Component.text();
+        appendResolved(resolved, inner, glyphs, effects, permissions);
+        // children inherit the parent's color (vanilla component semantics):
+        // plain runs take the signal; glyphs keep their forced white, explicit
+        // &-codes keep theirs
+        return Component.text().color(TextColor.color(entry.signalRgb()))
+                .append(resolved)
+                .build();
     }
 
     private static int nextMarker(String text, int from) {

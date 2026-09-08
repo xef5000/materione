@@ -3,12 +3,14 @@ package dev.materione.platform.text;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.core.runtime.RuntimeEffects;
 import dev.materione.core.runtime.RuntimeGlyphs;
 import java.util.LinkedHashMap;
 import java.util.List;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.Test;
 
@@ -135,6 +137,62 @@ class GlyphTextTest {
         assertThat(cells).containsExactly(11, 12);
         assertThat(GlyphText.select(new int[] {10, 11}, null)).containsExactly(10);
         assertThat(GlyphText.select(new int[] {10, 11}, "9")).containsExactly(10);
+    }
+
+    // --- effect spans --------------------------------------------------------
+
+    private RuntimeEffects effects() {
+        var entries = new LinkedHashMap<NamespacedId, RuntimeEffects.Entry>();
+        entries.put(NamespacedId.parse("sample:rainbow"), new RuntimeEffects.Entry(
+                NamespacedId.parse("sample:rainbow"), "rainbow", 3.0f, 1.0f, 0xFF00FE));
+        return new RuntimeEffects(entries);
+    }
+
+    @Test
+    void effectSpanColorsPlainRunsWithTheSignal() {
+        Component resolved = GlyphText.resolve(
+                "before <effect:rainbow>hi there</effect> after",
+                registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
+        // the span becomes one child colored with the effect's signal
+        TextComponent span = resolved.children().stream()
+                .filter(c -> PlainTextComponentSerializer.plainText().serialize(c).contains("hi there"))
+                .map(c -> (TextComponent) c)
+                .findFirst().orElseThrow();
+        assertThat(span.color()).as("span signal color").isEqualTo(TextColor.color(0xFF00FE));
+        // the text before/after stays uncolored
+        TextComponent plain = (TextComponent) resolved.children().get(0);
+        assertThat(plain.color()).isNull();
+    }
+
+    @Test
+    void shortEffectAliasAndGlyphsInsideSpan() {
+        // <e:…> alias; a glyph inside the span keeps its forced white —
+        // the span wraps one resolved child whose own children carry the text
+        Component resolved = GlyphText.resolve(
+                "<e:rainbow>a<glyph:star></e>",
+                registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
+        TextComponent span = (TextComponent) resolved.children().get(0);
+        assertThat(span.color()).isEqualTo(TextColor.color(0xFF00FE));
+        String plain = PlainTextComponentSerializer.plainText().serialize(span);
+        assertThat(plain).isEqualTo("a" + STAR_CHAR);
+        TextComponent glyph = (TextComponent) span.children().get(0).children().get(1);
+        assertThat(glyph.color()).isEqualTo(NamedTextColor.WHITE);
+    }
+
+    @Test
+    void unknownEffectStaysLiteral() {
+        Component resolved = GlyphText.resolve(
+                "<effect:nope>x</effect>", registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved))
+                .isEqualTo("<effect:nope>x</effect>");
+    }
+
+    @Test
+    void unclosedEffectSpanStaysLiteral() {
+        Component resolved = GlyphText.resolve(
+                "<effect:rainbow>x", registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved))
+                .isEqualTo("<effect:rainbow>x");
     }
 
 }

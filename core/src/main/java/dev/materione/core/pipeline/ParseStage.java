@@ -245,6 +245,7 @@ public final class ParseStage {
                 }
                 String relative = base.toString().replace('\\', '/');
                 int dot = relative.lastIndexOf('.');
+                String extension = dot > 0 ? relative.substring(dot + 1) : "";
                 if (dot > 0) {
                     relative = relative.substring(0, dot);
                 }
@@ -254,6 +255,14 @@ public final class ParseStage {
                     // asset names outside the id grammar surface as unresolved
                     // references at validation, not as index failures here
                 }
+                // painting textures carry their pixel size to the validator —
+                // read here (the IO layer) so validation stays pure (R6)
+                if ("png".equals(extension) && relative.startsWith("painting/")) {
+                    int[] size = pngSize(file);
+                    if (size != null) {
+                        context.recordPaintingSize(packId + ":" + relative, size[0], size[1]);
+                    }
+                }
             });
         } catch (IOException e) {
             context.diagnostics().publish(new Diagnostic(
@@ -262,6 +271,40 @@ public final class ParseStage {
                     null, null, "check file permissions under assets/"));
         }
     }
+
+    /**
+     * The pixel size of a PNG, straight from its IHDR header (bytes 16..24):
+     * big-endian width then height. Null when the file is not a readable
+     * PNG — validation then skips the size check rather than guessing.
+     */
+    private static int[] pngSize(Path file) {
+        byte[] header = new byte[24];
+        int read = 0;
+        try (var in = Files.newInputStream(file)) {
+            while (read < header.length) {
+                int n = in.read(header, read, header.length - read);
+                if (n < 0) {
+                    return null;
+                }
+                read += n;
+            }
+        } catch (IOException e) {
+            return null;
+        }
+        for (int i = 0; i < 8; i++) {
+            if (header[i] != PNG_SIGNATURE[i]) {
+                return null;
+            }
+        }
+        int width = ((header[16] & 0xFF) << 24) | ((header[17] & 0xFF) << 16)
+                | ((header[18] & 0xFF) << 8) | (header[19] & 0xFF);
+        int height = ((header[20] & 0xFF) << 24) | ((header[21] & 0xFF) << 16)
+                | ((header[22] & 0xFF) << 8) | (header[23] & 0xFF);
+        return new int[] {width, height};
+    }
+
+    private static final byte[] PNG_SIGNATURE = {
+            (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 
     private void parseDir(
             PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out,

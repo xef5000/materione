@@ -1,0 +1,5 @@
+rainbow:
+  kind: rainbow
+  speed: 3.0
+  amplitude: 1.0
+  colors: ["#FF0000", "#FFFF00", "#00FF00", "#00FFFF", "#0000FF", "#FF00FF"]

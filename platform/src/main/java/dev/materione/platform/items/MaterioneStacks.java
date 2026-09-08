@@ -43,7 +43,8 @@ public final class MaterioneStacks {
             NamespacedId modelId,
             String displayName,
             List<String> lore,
-            StackFood food) {
+            StackFood food,
+            String jukeboxSong) {
 
         /** Pre-food arity kept for callers that carry no mechanic state. */
         public StackSpec(
@@ -52,7 +53,18 @@ public final class MaterioneStacks {
                 NamespacedId modelId,
                 String displayName,
                 List<String> lore) {
-            this(id, material, modelId, displayName, lore, null);
+            this(id, material, modelId, displayName, lore, null, null);
+        }
+
+        /** Pre-song arity: items without a jukebox song. */
+        public StackSpec(
+                NamespacedId id,
+                String material,
+                NamespacedId modelId,
+                String displayName,
+                List<String> lore,
+                StackFood food) {
+            this(id, material, modelId, displayName, lore, food, null);
         }
     }
 
@@ -69,7 +81,8 @@ public final class MaterioneStacks {
                 item.food() == null ? null
                         : new StackFood(
                                 item.food().nutrition(), item.food().saturation(),
-                                item.food().canAlwaysEat()));
+                                item.food().canAlwaysEat()),
+                item.jukeboxSong());
     }
 
     /** Builds the stack for a spec (the apply-stage factory output). */
@@ -148,6 +161,20 @@ public final class MaterioneStacks {
                     food.setSaturation(item.food().saturation());
                     food.setCanAlwaysEat(item.food().canAlwaysEat());
                     meta.setFood(food);
+                }
+                if (item.jukeboxSong() != null) {
+                    // the song lives in the generated datapack — until the
+                    // restart that loads it, applying the component fails, and
+                    // the disc stays silent rather than breaking the stack
+                    try {
+                        NamespacedId song = NamespacedId.parse(item.jukeboxSong());
+                        var playable = meta.getJukeboxPlayable();
+                        playable.setSongKey(new org.bukkit.NamespacedKey(song.namespace(), song.value()));
+                        playable.setShowInTooltip(true);
+                        meta.setJukeboxPlayable(playable);
+                    } catch (RuntimeException rejected) {
+                        // unknown registry key (datapack not loaded yet): skip quietly
+                    }
                 }
             };
         }

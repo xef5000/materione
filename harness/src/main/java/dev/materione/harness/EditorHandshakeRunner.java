@@ -24,6 +24,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.ZipFile;
 import javax.crypto.SecretKey;
 
 /**
@@ -236,6 +237,91 @@ public final class EditorHandshakeRunner {
                 problems.add("edit.create clobbered an existing document");
             }
 
+            // M4: author a glyph through the editor. Its own texture (the
+            // editor_gem one is renamed later in the scenario — a moved
+            // texture would quarantine the glyph mid-run), the save goes live
+            // through the same preview loop, and the allocated codepoint
+            // surfaces as server-computed browse metadata — never inside the
+            // file itself.
+            Wire.Response glyphTexture = browser.call("assets.put", object(
+                    "pack", "sample",
+                    "path", "assets/textures/harness_heart.png",
+                    "data", ONE_BY_ONE_PNG_BASE64));
+            if (!glyphTexture.ok()) {
+                problems.add("assets.put (glyph texture) failed: " + glyphTexture.error());
+            }
+            Wire.Response glyphCreate = browser.call("edit.create", object(
+                    "pack", "sample",
+                    "path", "glyphs/harness_heart.yml",
+                    "id", "harness_heart"));
+            if (!glyphCreate.ok()) {
+                problems.add("edit.create (glyph) failed: " + glyphCreate.error());
+            }
+            Wire.Response glyphPut = browser.call("edit.put", object(
+                    "pack", "sample",
+                    "path", "glyphs/harness_heart.yml",
+                    "rev", "1",
+                    "content", "# created by the harness\n"
+                            + "harness_heart:\n"
+                            + "  texture: harness_heart\n"
+                            + "  ascent: 8\n"
+                            + "  height: 8\n"
+                            + "  placeholders:\n"
+                            + "    - \":hheart:\"\n"
+                            + "  emoji: true\n"));
+            if (!glyphPut.ok()) {
+                problems.add("glyph edit.put failed: " + glyphPut.error());
+            }
+            Wire.Request glyphReload = browser.awaitPush("push.reload", 15, TimeUnit.SECONDS);
+            if (glyphReload == null) {
+                problems.add("no push.reload after glyph save — the preview loop misses glyphs");
+            }
+            // Pushes buffer (the texture upload's reload push may still be
+            // queued), so the codepoint metadata is polled rather than
+            // assumed: it must appear within a few reload heartbeats.
+            boolean computedSeen = false;
+            String computedData = "";
+            for (int attempt = 0; attempt < 20 && !computedSeen; attempt++) {
+                Wire.Response glyphGet = browser.call("browse.get", object(
+                        "pack", "sample", "path", "glyphs/harness_heart.yml"));
+                if (glyphGet.ok() && glyphGet.data().toString().contains("\"computed\"")) {
+                    computedSeen = true;
+                    computedData = glyphGet.data().toString();
+                } else {
+                    Thread.sleep(500);
+                }
+            }
+            if (!computedSeen) {
+                problems.add("browse.get missing computed glyph metadata (the allocated codepoint)");
+            } else {
+                // runtime↔artifact consistency: the computed codepoint's char
+                // must appear in the staged font's chars — a mismatch means
+                // chat renders the missing-glyph box even though the
+                // placeholder "resolved"
+                var charMatcher = java.util.regex.Pattern
+                        .compile("\"char\":\"(?:\\\\u([0-9a-fA-F]{4})|([\\s\\S]))\"")
+                        .matcher(computedData);
+                if (!charMatcher.find()) {
+                    problems.add("computed glyph metadata carries no char: " + computedData);
+                } else {
+                    char computedChar = charMatcher.group(1) != null
+                            ? (char) Integer.parseInt(charMatcher.group(1), 16)
+                            : charMatcher.group(2).charAt(0);
+                    try (ZipFile stagedGlyphPack = new ZipFile(workspace.root
+                            .resolve("plugins/Materione/generated/pack/pack.zip").toFile())) {
+                        var stagedFont = stagedGlyphPack.getEntry("assets/sample/font/glyphs.json");
+                        String fontChars = stagedFont == null
+                                ? ""
+                                : new String(stagedGlyphPack.getInputStream(stagedFont).readAllBytes(),
+                                        StandardCharsets.UTF_8);
+                        if (!fontChars.contains(String.valueOf(computedChar))) {
+                            problems.add("runtime glyph codepoint " + (int) computedChar
+                                    + " missing from staged font chars (chat would render tofu)");
+                        }
+                    }
+                }
+            }
+
             // Blockbench save-back wire flow (the SPA's "Save to Materione"):
             // exported model JSON + referenced texture + the .bbmodel project
             // source land as assets, then quick-attach wires model: onto the
@@ -404,13 +490,23 @@ public final class EditorHandshakeRunner {
                     "pack", "sample", "path", "assets/textures/item/bridge_gems.png"));
             browser.call("assets.delete", object(
                     "pack", "sample", "path", "assets/models/source/bridge_gems.bbmodel"));
+            // and the M4 glyph document + its texture
+            Wire.Response glyphForDelete = browser.call("browse.get", object(
+                    "pack", "sample", "path", "glyphs/harness_heart.yml"));
+            if (glyphForDelete.ok()) {
+                browser.call("edit.delete", object(
+                        "pack", "sample", "path", "glyphs/harness_heart.yml",
+                        "rev", glyphForDelete.data().getAsJsonObject().get("rev").getAsString()));
+            }
+            browser.call("assets.delete", object(
+                    "pack", "sample", "path", "assets/textures/harness_heart.png"));
             Thread.sleep(800);
             ws.abort();
 
             // 7. prove the pack is back to its boot state, then stop
             // (3 sample + 50 corpus items + 2 auto placement items)
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=55"));
+                    "MATERIONE-RELOAD-OK items=56"));
             problems.addAll(drive(console, log, options, "materione editor status",
                     "editor listener: running"));
             console.send("materione editor stop");

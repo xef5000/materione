@@ -206,6 +206,20 @@ class PackCompilerTest {
     }
 
     @Test
+    void datapackMcmetaFoldsTheServerReportedDataFormat(@TempDir Path tempDir) throws IOException {
+        // a server newer than the ceiling reporting its own data format: the
+        // advertised range widens so the datapack is acceptable to its own server
+        var artifact = DatapackWriter.write(
+                Map.of("data/t/e.json", Map.of("a", 1)), tempDir, diagnostics,
+                new PackFormats.Version(140, 2));
+        try (ZipFile zip = new ZipFile(artifact.zip().toFile())) {
+            assertThat(entryText(zip, "pack.mcmeta"))
+                    .contains("\"min_format\":" + DatapackWriter.DATA_FORMAT_FLOOR)
+                    .contains("\"max_format\":[140,2]");
+        }
+    }
+
+    @Test
     void detectedServerFormatWidensTheAdvertisedRange(@TempDir Path tempDir) throws IOException {
         Path packsRoot = tempDir.resolve("packs/widen");
         writePackSkeleton(packsRoot, "widen");
@@ -436,13 +450,16 @@ class PackCompilerTest {
         var outcome = compileFixtures(tempDir);
         if (GoldenFiles.regenEnabled()) {
             GoldenFiles.writeGolden(outcome.stagedZip(), "m1-sample-pack.zip");
+            GoldenFiles.writeGolden(outcome.stagedDatapackZip(), "m4-sample-datapack.zip");
         }
         GoldenFiles.assertMatchesGolden(outcome.stagedZip(), "m1-sample-pack.zip");
+        GoldenFiles.assertMatchesGolden(outcome.stagedDatapackZip(), "m4-sample-datapack.zip");
     }
 
     @Test
-    void glyphFontOutputsAreWellFormed(@TempDir Path tempDir) throws IOException {
+    void mediaOutputsCoverEveryAssetKind(@TempDir Path tempDir) throws IOException {
         var outcome = compileFixtures(tempDir);
+        assertThat(outcome.stagedDatapackZip()).isNotNull();
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
             // glyph font: bitmap providers + a reference to the shared shift font
             String font = entryText(zip, "assets/sample/font/glyphs.json");
@@ -463,6 +480,56 @@ class PackCompilerTest {
             assertThat(entryText(zip, "assets/materione/font/shift.json"))
                     .contains("\"type\":\"space\"")
                     .contains("\"advances\"");
+            // per-namespace sounds.json + the vanilla override seam
+            assertThat(entryText(zip, "assets/sample/sounds.json"))
+                    .contains("\"level_up\":{").contains("\"anthem\":{");
+            // no generated painting atlas: vanilla's paintings atlas
+            // (atlases/paintings.json) directory-scans textures/painting/
+            // across all namespaces with an empty prefix, so the sprite id is
+            // <ns>:<path> and a generated single-source file would only ever
+            // be an orphan (or a duplicate of vanilla's own sources)
+            assertThat(entryNames(zip)).noneMatch(
+                    name -> name.startsWith("assets/minecraft/atlases/painting"));
+            // text-effect shader ladder: every verified rung carries the
+            // replacement text vertex shader + the generated include, never
+            // the base layer
+            String mcmeta = entryText(zip, "pack.mcmeta");
+            assertThat(mcmeta).contains("\"overlays\"");
+            for (String dir : new String[] {
+                    "materione_1_21_4", "materione_1_21_6", "materione_26_1", "materione_26_2"}) {
+                assertThat(entryNames(zip)).anyMatch(name -> name.startsWith(dir + "/"));
+            }
+            assertThat(entryText(zip, "materione_26_1/assets/minecraft/shaders/core/rendertype_text.vsh"))
+                    .contains("#version 330")
+                    .contains("materionePreTransform();")
+                    .contains("materionePostTransform();");
+            assertThat(entryText(zip,
+                    "materione_26_1/assets/minecraft/shaders/include/materione_text_effects.glsl"))
+                    // the fixture's two effects: rainbow (with baked stops) and wave
+                    .contains("vec3(1.0, 0.0, 0.99607843)")
+                    .contains("vec3(1.0, 0.0, 0.99215686)")
+                    .contains("vertexColor.rgb = (mt < ")
+                    .contains("Position.y += sin(");
+            assertThat(mcmeta).contains("ignored_shaders");
+        }
+        try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
+            assertThat(entryText(datapack, "data/sample/painting_variant/sunrise.json"))
+                    .contains("\"asset_id\":\"sample:sunrise\"")
+                    .contains("\"width\":2");
+            assertThat(entryText(datapack, "data/sample/jukebox_song/anthem.json"))
+                    .contains("\"sound_id\":\"sample:anthem\"")
+                    .contains("\"comparator_output\":7");
+            assertThat(entryText(datapack, "data/minecraft/tags/painting_variant/placeable.json"))
+                    .contains("sample:sunrise");
+            // the datapack advertises its range in BOTH mcmeta generations, like
+            // the resource pack — a single old pack_format reads as incompatible
+            // on 1.21.9+/26.x servers and its content silently never loads
+            String mcmeta = entryText(datapack, "pack.mcmeta");
+            assertThat(mcmeta)
+                    .contains("\"pack_format\":" + DatapackWriter.DATA_FORMAT_FLOOR)
+                    .contains("supported_formats")
+                    .contains("\"min_format\":" + DatapackWriter.DATA_FORMAT_FLOOR)
+                    .contains("\"max_format\":" + DatapackWriter.DATA_FORMAT_CEILING.toMcmeta());
         }
     }
 
@@ -473,8 +540,10 @@ class PackCompilerTest {
         compileFixtures(tempDir, allocation);
         // the lamp's state slot flushed to disk before the pack was written
         assertThat(Files.exists(allocationFile)).isTrue();
+        // 1 block state slot + 9 glyph codepoints (sheet 6, heart 1, frames 2)
         // 1 block state slot + 3 glyph runs (sheet 6 codepoints, heart 1, frames 2)
-        assertThat(allocation.liveCount()).isEqualTo(4);
+        // + 2 effect signals (rainbow, wave)
+        assertThat(allocation.liveCount()).isEqualTo(6);
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
@@ -492,12 +561,17 @@ class PackCompilerTest {
         var compiler = new PackCompiler();
         var result = compiler.compile(
                 samplePacks,
-                // the REAL block/furniture/glyph content types: the golden
-                // locks actual compile behavior (state allocation, shaped
-                // blockstates, generated display models, glyph font runs)
-                List.of(new StubItemType(), new BlockType(),
+                // the REAL content types: the golden locks actual compile
+                // behavior (state allocation, shaped blockstates, generated
+                // display models, glyph font runs, sound events, painting
+                // variants) — never a test double
+                List.of(new dev.materione.content.items.ItemType(),
+                        new BlockType(),
                         new dev.materione.content.furniture.FurnitureType(),
-                        new dev.materione.content.glyphs.GlyphType()),
+                        new dev.materione.content.glyphs.GlyphType(),
+                        new dev.materione.content.sounds.SoundType(),
+                        new dev.materione.content.paintings.PaintingType(),
+                        new dev.materione.content.effects.EffectType()),
                 allocation,
                 tempDir.resolve("generated"),
                 diagnostics,
@@ -554,5 +628,9 @@ class PackCompilerTest {
 
     private static String entryText(ZipFile zip, String entry) throws IOException {
         return new String(zip.getInputStream(zip.getEntry(entry)).readAllBytes());
+    }
+
+    private static java.util.stream.Stream<String> entryNames(ZipFile zip) {
+        return zip.stream().map(java.util.zip.ZipEntry::getName);
     }
 }

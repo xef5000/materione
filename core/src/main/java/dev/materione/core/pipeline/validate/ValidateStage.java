@@ -39,7 +39,7 @@ public final class ValidateStage {
                 pack.resources().forEach(resource -> context.excluded().add(resource.id()));
             }
         }
-        var environment = new ValidationEnvironment(context.packs(), context.knownAssets());
+        var environment = new ValidationEnvironment(context.packs(), context.knownAssets(), context.paintingSizes());
         for (ContentPack pack : context.packs()) {
             if (pack.manifest() == null) {
                 continue;

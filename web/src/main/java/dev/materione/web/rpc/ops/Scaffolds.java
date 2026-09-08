@@ -17,7 +17,7 @@ public final class Scaffolds {
 
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
-            List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs");
+            List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -33,6 +33,9 @@ public final class Scaffolds {
             case "recipes" -> recipe(name);
             case "templates" -> template(name);
             case "glyphs" -> glyph(name);
+            case "sounds" -> sound(name);
+            case "paintings" -> painting(name);
+            case "effects" -> effect(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
                             + SCAFFOLD_TYPES);
@@ -107,6 +110,46 @@ public final class Scaffolds {
                 + "  #   - \":" + id + ":\"\n"
                 + "  # emoji: true — chat interception + tab-completion\n"
                 + "  # The codepoint is allocated by the server and shown in the preview.\n";
+    }
+
+    private static String sound(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  sounds:\n"
+                + "    - " + id + " # upload the .ogg to assets/sounds/\n"
+                + "  # subtitle: \"" + display(id) + "\"\n"
+                + "  # volume: 1.0\n"
+                + "  # pitch: 1.0\n"
+                + "  # jukebox: — turn this sound into a music-disc song\n"
+                + "  #   description: \"" + display(id) + "\"\n"
+                + "  #   duration: 90\n"
+                + "  #   comparator_output: 7\n"
+                + "  #   range: 1.0\n";
+    }
+
+    private static String painting(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  texture: painting/" + id + " # exactly 16 px per block\n"
+                + "  width: 1\n"
+                + "  height: 1\n"
+                + "  # author: \"Unknown\"\n"
+                + "  # title: \"" + display(id) + "\"\n"
+                + "  # placeable: false — join the vanilla random-placement pool\n"
+                + "  # Paintings apply at the next server restart (world datapack).\n";
+    }
+
+    private static String effect(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  kind: rainbow # rainbow | wave | shake | pulse\n"
+                + "  speed: 3.0\n"
+                + "  # colors:\n"
+                + "  #   - \"#FF0000\"\n"
+                + "  #   - \"#0000FF\"\n"
+                + "  # Compiles into the injected text-shader overlay (runtime-systems §6).\n"
+                + "  # Use in text as <effect:" + id + ">…</effect>; test with\n"
+                + "  # /materione dev effect " + id + " hello.\n";
     }
 
     // ------------------------------------------------------------------

@@ -1,0 +1,4 @@
+level_up:
+  sounds:
+    - ui/level_up.ogg
+  subtitle: "Level up!"

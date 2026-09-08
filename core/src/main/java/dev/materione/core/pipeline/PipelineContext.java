@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -27,6 +28,8 @@ public final class PipelineContext {
     private final List<NamespacedId> excluded = new ArrayList<>();
     /** Assets found under packs' {@code assets/} trees — recorded at parse so validators stay pure (R6). */
     private final Set<NamespacedId> knownAssets = new LinkedHashSet<>();
+    /** Painting textures' pixel sizes, read from PNG headers at parse time. */
+    private final java.util.Map<NamespacedId, int[]> paintingSizes = new java.util.LinkedHashMap<>();
     /** The last completed run's packs — targeted scopes splice onto these. Set by the runner. */
     private volatile List<ContentPack> previousPacks = List.of();
     /** The persistent fingerprint table — targeted scopes expand on drift. Set by the runner. */
@@ -81,6 +84,19 @@ public final class PipelineContext {
 
     public Set<NamespacedId> knownAssets() {
         return knownAssets;
+    }
+
+    /** Records a painting texture's pixel size at parse time (pure validators, R6). */
+    public void recordPaintingSize(String assetKey, int width, int height) {
+        try {
+            paintingSizes.put(NamespacedId.parse(assetKey), new int[] {width, height});
+        } catch (IllegalArgumentException ignored) {
+            // the malformed name already surfaces as an unresolved reference
+        }
+    }
+
+    public Map<NamespacedId, int[]> paintingSizes() {
+        return paintingSizes;
     }
 
     public List<ContentPack> previousPacks() {

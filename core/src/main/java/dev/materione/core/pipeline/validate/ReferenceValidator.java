@@ -66,13 +66,105 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             validateSourceList(resource, definition, "frames", environment, problems);
             validateGlyphAlias(resource, definition, environment, problems);
         }
+        if ("sound".equals(resource.contentType())) {
+            validateSourceList(resource, definition, "sounds", environment, problems);
+        }
+        if ("painting".equals(resource.contentType())) {
+            validatePaintingSize(resource, definition, environment, problems);
+        }
+        if ("item".equals(resource.contentType())) {
+            validateJukeboxSong(resource, definition, environment, problems);
+        }
         return problems;
     }
 
     /**
-     * Media source lists (glyph {@code frames:}) must point at shipped pack
-     * assets; a missing source breaks the definition's whole output, so it
-     * quarantines only that definition (MTR-0039).
+     * A painting's texture must measure exactly its block dimensions in
+     * pixels (16 per block) — the client crops or tiles otherwise, and the
+     * wrong size is invisible until someone hangs it (MTR-0041).
+     */
+    private static void validatePaintingSize(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        String texture = definition.get("texture") instanceof String text ? text : null;
+        if (texture == null || texture.isBlank()) {
+            return; // missing texture already diagnosed as unresolved reference
+        }
+        int width = definition.get("width") instanceof Number w ? w.intValue() : 1;
+        int height = definition.get("height") instanceof Number h ? h.intValue() : 1;
+        String cleaned = texture.replace('\\', '/');
+        if (cleaned.toLowerCase(java.util.Locale.ROOT).endsWith(".png")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 4);
+        }
+        // mirror PaintingType.resolveTexture: bare names gain the painting/ prefix
+        int colon = cleaned.indexOf(':');
+        String path = colon >= 0 ? cleaned.substring(colon + 1) : cleaned;
+        if (!path.startsWith("painting/")) {
+            path = "painting/" + path;
+        }
+        NamespacedId assetId = resolve(resource.id().namespace(),
+                colon >= 0 ? cleaned.substring(0, colon + 1) + path : path);
+        int[] size = environment.paintingSizes().get(assetId);
+        if (size == null) {
+            return; // not a readable painting png: nothing to compare
+        }
+        if (size[0] != width * 16 || size[1] != height * 16) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.PAINTING_SIZE_MISMATCH, Severity.ERROR,
+                    "painting " + resource.id() + " texture is " + size[0] + "×" + size[1]
+                            + " px but its " + width + "×" + height + " blocks need "
+                            + (width * 16) + "×" + (height * 16) + " px",
+                    resource.id(), null,
+                    "resize the texture (16 px per block) or set width/height to match the pixels"));
+        }
+    }
+
+    /**
+     * An item's {@code jukebox_song:} must name a sound definition that
+     * declares a {@code jukebox:} section — a plain sound plays nowhere.
+     */
+    private static void validateJukeboxSong(
+            ContentResource resource,
+            Map<?, ?> definition,
+            ValidationEnvironment environment,
+            List<Diagnostic> problems) {
+        if (!(definition.get("jukebox_song") instanceof String target) || target.isBlank()) {
+            return;
+        }
+        NamespacedId soundId = resolve(resource.id().namespace(), target);
+        for (ContentPack pack : environment.packs()) {
+            if (!pack.id().equals(soundId.namespace())) {
+                continue;
+            }
+            for (ContentResource candidate : pack.resources()) {
+                if ("sound".equals(candidate.contentType()) && candidate.id().equals(soundId)) {
+                    if (candidate.document().data().get(candidate.id().value()) instanceof Map<?, ?> sound
+                            && sound.get("jukebox") instanceof Map<?, ?>) {
+                        return;
+                    }
+                    problems.add(new Diagnostic(
+                            DiagnosticCodes.JUKEBOX_SONG_INVALID, Severity.ERROR,
+                            "item " + resource.id() + ": jukebox song '" + target
+                                    + "' is a sound without a jukebox section",
+                            resource.id(), null,
+                            "add a jukebox: section (description, duration, comparator_output) to the sound"));
+                    return;
+                }
+            }
+        }
+        problems.add(new Diagnostic(
+                DiagnosticCodes.JUKEBOX_SONG_INVALID, Severity.ERROR,
+                "item " + resource.id() + ": jukebox song '" + target + "' is not a sound definition",
+                resource.id(), null,
+                "the reference must name a sound in the sounds/ directory"));
+    }
+
+    /**
+     * Media source lists ({@code sounds:}, glyph {@code frames:}) must point
+     * at shipped pack assets; a missing source breaks the definition's whole
+     * output, so it quarantines only that definition (MTR-0039/0040).
      */
     private static void validateSourceList(
             ContentResource resource,
@@ -94,12 +186,20 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             NamespacedId assetId = resolve(resource.id().namespace(), cleaned);
             if (!assetId.isReservedNamespace() && !environment.knownAssets().contains(assetId)) {
                 problems.add(new Diagnostic(
-                        DiagnosticCodes.GLYPH_TEXTURE_MISSING, Severity.ERROR,
+                        assetDiagnostic(field),
+                        Severity.ERROR,
                         resource.id() + ": " + field + " source '" + source + "' is not a shipped asset",
                         resource.id(), null,
-                        "upload the file under the pack's assets/ (textures/ for glyph frames)"));
+                        "upload the file under the pack's assets/ (sounds/ for sound sources, "
+                                + "textures/ for glyph frames)"));
             }
         }
+    }
+
+    private static dev.materione.api.diagnostics.DiagnosticCode assetDiagnostic(String field) {
+        return "frames".equals(field)
+                ? DiagnosticCodes.GLYPH_TEXTURE_MISSING
+                : DiagnosticCodes.SOUND_SOURCE_MISSING;
     }
 
     /** A glyph {@code reference:} must name another glyph. */
@@ -124,9 +224,9 @@ public final class ReferenceValidator implements ValidateStage.Validator {
         }
         problems.add(new Diagnostic(
                 DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
-                resource.id() + ": reference target '" + target + "' is not a glyph",
+                "glyph " + resource.id() + " references unknown glyph '" + target + "'",
                 resource.id(), null,
-                "references must name a glyph in the glyphs/ directory"));
+                "the referenced id must be another glyph in any of the loaded packs"));
     }
 
     /**

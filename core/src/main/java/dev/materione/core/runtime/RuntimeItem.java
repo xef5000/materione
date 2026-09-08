@@ -26,7 +26,8 @@ public record RuntimeItem(
         List<String> lore,
         String definitionHash,
         Food food,
-        boolean synthetic) {
+        boolean synthetic,
+        String jukeboxSong) {
 
     public RuntimeItem {
         lore = List.copyOf(lore);
@@ -36,14 +37,22 @@ public record RuntimeItem(
     public RuntimeItem(
             NamespacedId id, String material, NamespacedId modelId,
             String displayName, List<String> lore, String definitionHash) {
-        this(id, material, modelId, displayName, lore, definitionHash, null, false);
+        this(id, material, modelId, displayName, lore, definitionHash, null, false, null);
     }
 
     /** Pre-synthetic arity: constructs a real (authored) item. */
     public RuntimeItem(
             NamespacedId id, String material, NamespacedId modelId,
             String displayName, List<String> lore, String definitionHash, Food food) {
-        this(id, material, modelId, displayName, lore, definitionHash, food, false);
+        this(id, material, modelId, displayName, lore, definitionHash, food, false, null);
+    }
+
+    /** Full arity without the synthetic flag: real items carry a song ref or null. */
+    public RuntimeItem(
+            NamespacedId id, String material, NamespacedId modelId,
+            String displayName, List<String> lore, String definitionHash, Food food,
+            String jukeboxSong) {
+        this(id, material, modelId, displayName, lore, definitionHash, food, false, jukeboxSong);
     }
 
     /**

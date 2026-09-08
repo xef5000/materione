@@ -64,10 +64,12 @@ public final class PackCompiler {
 
     /** Dirs with their own atlas or special loading path — not block-atlas content. */
     private static final Set<String> NON_BLOCK_ATLAS_DIRS = Set.of(
-            "font", "particle", "environment", "colormap", "entity");
+            "font", "particle", "environment", "colormap", "entity", "painting");
 
-    /** One compile's outcome. */
-    public record Outcome(Path stagedZip, String sha256, int itemDefinitions, int generatedModels) {}
+    /** One compile's outcome. The datapack artifact is null when no content produced datapack files. */
+    public record Outcome(
+            Path stagedZip, String sha256, int itemDefinitions, int generatedModels,
+            Path stagedDatapackZip, String datapackSha256) {}
 
     /** A {@link PackEmitter#vanillaFile} fragment awaiting the deterministic merge. */
     private record VanillaFragment(String path, Map<String, Object> json) {}
@@ -77,12 +79,18 @@ public final class PackCompiler {
         final Map<String, Map<String, Object>> itemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> syntheticItemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> models = new TreeMap<>();
+        /** Font key ({@code ns:name}) → providers in compile order (fonts.json §6). */
+        final Map<String, List<Map<String, Object>>> fontProviders = new TreeMap<>();
+        /** Namespace → event name → event json; written as one sounds.json per namespace. */
+        final Map<String, Map<String, Map<String, Object>>> soundEvents = new TreeMap<>();
+        /** Datapack artifact files ({@code data/...} → json) — paintings, songs, tags. */
+        final Map<String, Map<String, Object>> datapackFiles = new TreeMap<>();
+        /** Compiled text effects, in compile order — the shader ladder's input. */
+        final List<dev.materione.core.content.EffectSpec> textEffects = new ArrayList<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
         final List<VanillaFragment> vanillaFragments = new ArrayList<>();
         /** User-shipped override files; they merge ahead of generated fragments. */
         final List<VanillaFragment> userVanillaFragments = new ArrayList<>();
-        /** Font key ({@code ns:name}) → providers in compile order (fonts.json §6). */
-        final Map<String, List<Map<String, Object>>> fontProviders = new TreeMap<>();
         String description = DEFAULT_DESCRIPTION;
         String atlasJson;
         Map<String, Map<String, Object>> vanillaJson;
@@ -104,6 +112,54 @@ public final class PackCompiler {
         }
 
         @Override
+        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
+            fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>()).add(providerJson);
+        }
+
+        @Override
+        public void soundEvent(String soundKey, Map<String, Object> eventJson) {
+            int colon = soundKey.indexOf(':');
+            String namespace = colon < 0 ? "minecraft" : soundKey.substring(0, colon);
+            String name = colon < 0 ? soundKey : soundKey.substring(colon + 1);
+            soundEvents.computeIfAbsent(namespace, key -> new TreeMap<>()).put(name, eventJson);
+        }
+
+        @Override
+        public void datapackFile(String path, Map<String, Object> json) {
+            Map<String, Object> existing = datapackFiles.get(path);
+            if (existing != null && path.startsWith("data/minecraft/tags/")) {
+                mergeTagValues(existing, json);
+                return;
+            }
+            datapackFiles.putIfAbsent(path, json);
+        }
+
+        @Override
+        public void textEffect(dev.materione.core.content.EffectSpec spec) {
+            textEffects.add(spec);
+        }
+
+        /**
+         * Tag files from many definitions merge additively: their {@code
+         * values} arrays concatenate (deduplicated, first-seen order); the
+         * {@code replace} flag keeps its first value.
+         */
+        private static void mergeTagValues(Map<String, Object> target, Map<String, Object> addition) {
+            var merged = new ArrayList<Object>();
+            Object current = target.get("values");
+            for (Object value : current instanceof List<?> list ? list : List.of()) {
+                merged.add(value);
+            }
+            Object extra = addition.get("values");
+            for (Object value : extra instanceof List<?> list ? list : List.of()) {
+                if (!merged.contains(value)) {
+                    merged.add(value);
+                }
+            }
+            target.put("values", merged);
+        }
+
+        @Override
         public void copyAsset(Path sourceFile, String destination) {
             assetCopies.add(new String[] {sourceFile.toString(), destination});
         }
@@ -111,11 +167,6 @@ public final class PackCompiler {
         @Override
         public void vanillaFile(String path, Map<String, Object> json) {
             vanillaFragments.add(new VanillaFragment(path, json));
-        }
-
-        @Override
-        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
-            fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>()).add(providerJson);
         }
 
         @Override
@@ -141,6 +192,19 @@ public final class PackCompiler {
             dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
             dev.materione.core.diagnostics.QuarantineTracker quarantine,
             int detectedMaxFormat) {
+        return compile(packs, contentTypes, allocation, generatedDir, diagnostics, quarantine,
+                detectedMaxFormat, null);
+    }
+
+    public Outcome compile(
+            List<ContentPack> packs,
+            List<ContentType> contentTypes,
+            AllocationTable allocation,
+            Path generatedDir,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
+            dev.materione.core.diagnostics.QuarantineTracker quarantine,
+            int detectedMaxFormat,
+            PackFormats.Version detectedMaxDataFormat) {
         var byDirectory = new LinkedHashMap<String, ContentType>();
         for (ContentType type : contentTypes) {
             byDirectory.put(type.directory(), type);
@@ -153,14 +217,14 @@ public final class PackCompiler {
             }
 
             @Override
-            public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
-                return allocation.allocationOf(resource, kind);
-            }
-
-            @Override
             public dev.materione.core.content.AllocatedRange range(
                     NamespacedId resource, String kind, int count) {
                 return allocation.range(resource, kind, count);
+            }
+
+            @Override
+            public java.util.Optional<String> lookup(NamespacedId resource, String kind) {
+                return allocation.allocationOf(resource, kind);
             }
         };
 
@@ -246,7 +310,7 @@ public final class PackCompiler {
             return null;
         }
 
-        return writeStaged(emitter, generatedDir, detectedMaxFormat, diagnostics);
+        return writeStaged(emitter, generatedDir, detectedMaxFormat, detectedMaxDataFormat, diagnostics);
     }
 
     /**
@@ -325,6 +389,10 @@ public final class PackCompiler {
             }
             sprites.add(segments[1] + ":" + rest.substring(0, rest.length() - ".png".length()));
         }
+        // painting textures need no atlas source: vanilla's paintings atlas
+        // (atlases/paintings.json) directory-scans textures/painting/ across
+        // all namespaces with an empty prefix, so the sprite id is <ns>:<path>
+        // — exactly the variant's asset_id (PaintingType.resolveTexture).
         if (sprites.isEmpty() && userAtlasSource == null) {
             return;
         }
@@ -503,6 +571,7 @@ public final class PackCompiler {
         return String.valueOf(source);
     }
 
+
     /** Where the shared shift font lives (one copy, referenced everywhere). */
     static final String SHIFT_FONT_KEY = "materione:shift";
     static final String SHIFT_FONT_PATH = "assets/materione/font/shift.json";
@@ -637,15 +706,72 @@ public final class PackCompiler {
         return out;
     }
 
+    /**
+     * Emits the text-effect shader ladder (runtime-systems §6): one overlay
+     * per verified format rung carrying the replacement text vertex shader
+     * plus the generated per-effect include, and the mcmeta overlay
+     * entries + Sodium's ignored-shaders note. Never touches the base
+     * layer — a client matching no rung gets a shader-free pack. Warns
+     * (MTR-0044) when the running server's own client format falls outside
+     * the ladder: the effects compile, but nothing animates there.
+     */
+    private static void writeTextEffectShaders(
+            Emitter emitter, ResourcePack pack, int detectedMaxFormat,
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+        if (emitter.textEffects.isEmpty()) {
+            return;
+        }
+        var entries = new ArrayList<Object>();
+        for (TextEffectShaders.Rung rung : TextEffectShaders.RUNGS) {
+            var overlay = team.unnamed.creative.overlay.Overlay.overlay(rung.overlayDir());
+            overlay.unknownFile(TextEffectShaders.includePath(),
+                    team.unnamed.creative.base.Writable.stringUtf8(
+                            TextEffectShaders.include(emitter.textEffects, rung.bakeFormat())));
+            String core = "assets/minecraft/shaders/core/" + rung.shaderName();
+            overlay.unknownFile(core + ".vsh", team.unnamed.creative.base.Writable.stringUtf8(
+                    TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".vsh")));
+            if (rung.shipJson()) {
+                overlay.unknownFile(core + ".json", team.unnamed.creative.base.Writable.stringUtf8(
+                        TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".json")));
+            }
+            pack.overlay(overlay);
+            entries.add(team.unnamed.creative.metadata.overlays.OverlayEntry.of(
+                    team.unnamed.creative.metadata.pack.PackFormat.format(
+                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.minFormat()),
+                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.maxFormat())),
+                    rung.overlayDir()));
+        }
+        pack.overlaysMeta(team.unnamed.creative.metadata.overlays.OverlaysMeta.of(
+                entries.stream().map(e -> (team.unnamed.creative.metadata.overlays.OverlayEntry) e)
+                        .toList()));
+        pack.sodiumMeta(team.unnamed.creative.metadata.sodium.SodiumMeta.sodium(
+                TextEffectShaders.overriddenShaders()));
+        if (detectedMaxFormat > 0 && !TextEffectShaders.covers(detectedMaxFormat)) {
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.TEXT_EFFECT_UNSUPPORTED, Severity.WARN,
+                    "text effects compiled, but this server's client format " + detectedMaxFormat
+                            + " is outside the verified shader ladder — effects will not animate"
+                            + " for its players",
+                    null, null, "the shader ladder covers formats 46.."
+                            + TextEffectShaders.RUNGS.get(TextEffectShaders.RUNGS.size() - 1).maxFormat()));
+        }
+    }
+
     private static Outcome writeStaged(
             Emitter emitter, Path generatedDir, int detectedMaxFormat,
+            PackFormats.Version detectedMaxDataFormat,
             dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
         ResourcePack pack = ResourcePack.resourcePack();
         pack.packMeta(PackFormats.spec(detectedMaxFormat), Component.text(emitter.description));
+        writeTextEffectShaders(emitter, pack, detectedMaxFormat, diagnostics);
         emitter.itemDefinitions.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         emitter.models.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
+        emitter.soundEvents.forEach((namespace, events) -> pack.unknownFile(
+                "assets/" + namespace + "/sounds.json",
+                team.unnamed.creative.base.Writable.stringUtf8(
+                        toJson(new LinkedHashMap<String, Object>(events)))));
         writeFonts(emitter, pack, diagnostics);
         for (String[] copy : emitter.assetCopies) {
             // verbatim asset copy: binary content as-is (textures, sounds…)
@@ -669,7 +795,16 @@ public final class PackCompiler {
             return null;
         }
         String sha256 = sha256Of(zip);
-        return new Outcome(zip, sha256, emitter.itemDefinitions.size(), emitter.models.size());
+        DatapackWriter.Artifact datapack =
+                DatapackWriter.write(emitter.datapackFiles, generatedDir, diagnostics, detectedMaxDataFormat);
+        return new Outcome(zip, sha256, emitter.itemDefinitions.size(), emitter.models.size(),
+                datapack == null ? null : datapack.zip(),
+                datapack == null ? null : datapack.sha256());
+    }
+
+    /** Shared with {@link DatapackWriter}: deterministic sorted-key JSON. */
+    static String toJsonPublic(Map<String, Object> json) {
+        return toJson(json);
     }
 
     /** Deterministic JSON: sorted keys, no insignificant whitespace. */
