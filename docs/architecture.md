@@ -350,11 +350,13 @@ content/packs/<pack-id>/
   blocks/*.yml
   furniture/*.yml
   glyphs/*.yml
+  sounds/*.yml
+  paintings/*.yml
+  effects/*.yml
   huds/*.yml
   menus/*.yml
   dialogs/*.yml
   recipes/*.yml
-  sounds.yml   paintings.yml
   templates/*.yml            ← shared inheritance bases
   assets/
     textures/  models/  fonts/  sounds/  optifine-legacy/ (if any)
@@ -612,7 +614,7 @@ materione/
 │                    Not a Gradle module — its build lands in M3/M5.
 ├─ importers/      ← ItemsAdder / Oraxen / Nexo converters → native pack layout.
 ├─ integrations/   ← PlaceholderAPI, ModelEngine, MythicMobs, Geyser, anti-cheat bridges.
-├─ plugin/         ← Assembly module (the leaf): plugin.yml, JavaPlugin bootstrap,
+├─ plugin/         ← Assembly module (the leaf): paper-plugin.yml, JavaPlugin bootstrap,
 │                    commands, shaded distributable. Nothing may depend on it.
 ├─ testing/        ← Shared test infrastructure (ArchUnit rule set, golden-file
 │                    support) — build infrastructure, not a product module.

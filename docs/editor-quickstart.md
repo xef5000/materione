@@ -80,7 +80,38 @@ documented in `webui/public/blockbench/PIN.md`).
 `.bbmodel` sources are authoring state: they stay in your pack folder and
 are never shipped to clients.
 
-## 5. Preview and publish
+## 5. Glyphs, emoji, sounds and paintings
+
+**Glyphs** are custom pictures in text — emoji for chat, icons for names.
+Create one under **Glyphs**, pick a texture (the preview shows exactly how
+it renders at its ascent/height) and save. You never pick a codepoint: the
+server allocates one durably and the preview shows it. Add
+**placeholders** (like `:heart:`) and turn on **emoji** to use it in chat —
+permitted players type the placeholder (tab-completion offers it) and it
+renders in chat, item names, signs, books and anvil renames. Glyphs without
+an explicit font are referenced from the client's default font, so they
+render in every text context; `font:` is only for separating glyphs into a
+custom font of your own. Pixel-precise layout composes with `<shift:-4>`
+tags. Players without your pack simply see the placeholder text, never
+empty boxes.
+
+**Sounds** are one event per file: list your `.ogg` files (uploaded under
+`assets/sounds/`, playable right in the studio's preview), set
+volume/pitch/subtitle, then check it in game with
+`/materione dev sound <pack>:<id>`. A sound with a **jukebox** section
+(description, duration, comparator output) becomes a music-disc song: point
+an item's **jukebox song** field at it and discs play it in jukeboxes.
+
+**Paintings** take a texture sized exactly 16 px per block (a 2×1 painting
+needs 32×16 — the compiler checks and tells you) plus author/title. Set
+`placeable: true` to join the vanilla random-placement pool.
+
+Glyph and sound saves go live in about a second like everything else;
+**paintings and jukebox songs apply at the next server restart** (they ride
+the world datapack). Materione says so honestly — a restart-required warning
+appears while changes are pending and clears after the restart loads them.
+
+## 6. Preview and publish
 
 Every valid save updates runtime behavior immediately. A changed resource pack
 is sent only to the player who opened the editor, and the app header shows
@@ -89,7 +120,7 @@ hash to all players. If another edit built a newer candidate, publish fails
 visibly instead of releasing bytes you did not preview. The published pack
 survives restarts and remains the version sent to joining players.
 
-## 6. Hand-edited files stay welcome
+## 7. Hand-edited files stay welcome
 
 Editing YAML directly (or a `git pull`) is a first-class workflow: the
 plugin watches `content/packs/`, journals the change as an *external*
@@ -99,7 +130,7 @@ with unsaved edits keep them. The feed can be disabled with
 `editor_file_watcher: false` in `settings.yml` (editable in the editor's
 Server view).
 
-## 7. When things go wrong
+## 8. When things go wrong
 
 - **Diagnostics view** — every parse/validation failure streams in live,
   with click-through to the offending file and line.
@@ -108,3 +139,10 @@ Server view).
 - **Pipeline log** (bottom dock) — the outcome of every save/reload.
 - A save that hits a file changed elsewhere fails with `MTR-0034` instead
   of clobbering: reload the document and re-apply your edit.
+- **A glyph shows as the missing-glyph box (tofu) for one player** — their
+  client is not running the current pack (declined the prompt, or a newer
+  pack is still downloading). Materione substitutes placeholders only for
+  players whose pack actually loaded; everyone else sees the literal
+  `:heart:` text. `/materione doctor` lists each online player's pack state
+  (`pack acceptance: Name=loaded/…`) — have the player accept the pack
+  prompt and the glyphs appear.

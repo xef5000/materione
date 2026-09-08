@@ -177,7 +177,16 @@
 | Reference glyph (alias) | ✅ | ✅ | ✅ |
 | Pixel-shift tags (`<shift:N>`) | ✅ | ✅ | ✅ |
 | Emoji/chat integration + permissions + tab-complete | ✅ | ✅ | ✅ |
-| **GLSL text effects** (rainbow/wave/shake/pulse) | ⚠️ | ✅ | ✅ (addon, 7 effects) |
+| **GLSL text effects** (rainbow/wave/shake/pulse) | ✅ | ✅ | ✅ (addon, 7 effects) |
+
+*As built in Materione (M4):* all glyph shapes (basic, `rows`/`columns` sheets,
+`frames` animations, `reference` aliases), shift tags (a space provider appended
+to every generated font), and emoji mode (chat decorate interception, per-glyph
+permissions, tab-completion) — with one deliberate divergence: codepoints are
+durable allocation-table runs, never written back into authoring YAML (Nexo and
+Oraxen both mutate the user's file). GLSL text effects inject a version-laddered
+`rendertype_text` vertex-shader overlay keyed on durable per-effect signal colors;
+spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems §6).
 
 ### J. GUIs / menus / dialogs
 
@@ -209,6 +218,16 @@
 | Custom music discs / jukebox songs | ✅ | ✅ | ✅ |
 | **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ |
 | Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native |
+
+*As built in Materione (M4):* custom sounds (`sounds/` definitions → per-namespace
+`sounds.json`, `replace_vanilla:` overrides through the merge seam, inline studio
+playback, `/materione dev sound` for in-game checks), music discs (a sound's
+`jukebox:` section → datapack song; an item's `jukebox_song:` field → the disc
+component, fail-soft until the datapack loads), and custom paintings
+(`paintings/` → `painting_variant` datapack entries + painting-atlas sprites +
+pixel-size validation + the `placeable` tag). All three are first-class editor
+types with studios, validation and goldens; paintings/jukebox apply restart-required
+through the M2 staging ledger.
 
 ### M. World & environment
 

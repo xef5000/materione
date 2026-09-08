@@ -277,7 +277,7 @@ grid rows, so an optional bar that was not rendered slid the filling child into 
 which is how the embedded Blockbench came to render 150 pixels tall. They stack with flex now, and
 the test covers that too.
 
-## M4 — Glyphs, fonts, sounds, paintings
+## M4 — Glyphs, fonts, sounds, paintings ✅ shipped 2026-09-04
 
 **Goal:** the full pack surface beyond items.
 
@@ -287,6 +287,31 @@ the test covers that too.
 - The text pipeline (glyph resolution in chat/lore/signs/books).
 
 **Exit:** pack output covers every asset kind; golden files lock them.
+
+**As built:** four new content types — `glyphs/`, `sounds/`, `paintings/`, `effects/` —
+registered through the same registry path (D5) with schema-driven editor studios (glyph
+preview shows the server-allocated codepoint; audio and painting previews render inline).
+Codepoints come from a new consecutive-run allocation (`AllocationTable.range`, kind
+`glyph-codepoint`, origin 42000) — a deliberate divergence from Nexo/Oraxen, which write
+the char back into the user's YAML; materione's table is the durable record and hand-authored
+files stay allocation-free. Every generated font carries the shift space provider
+(power-of-two advances, U+E10x/E11x), so `<glyph:id>`, `<g:id>`, `<shift:N>` and `:placeholder:`
+resolve anywhere the text pipeline renders — chat decorate, signs, books, anvil renames, item
+names/lore — with per-glyph permission gating and pack-acceptance awareness in chat. Sounds
+group per namespace into `sounds.json`; `replace_vanilla:` entries ride the vanilla-override
+merge seam; `jukebox:` sections and painting variants compile into a deterministic
+`datapack.zip` deployed atomically to the world's datapacks folder with its content hash —
+the first producers of the M2 restart-staging ledger (MTR-0028/0029 prove the class).
+Music discs are items with `jukebox_song:` (the component applies fail-soft until the datapack
+loads). Goldens lock the full media pack and datapack bytes; the harness drives glyphs through
+the live editor loop and asserts every staged artifact on real Paper.
+
+**As built (shader-injection slice):** `effects/` compiles into the injected
+`rendertype_text` vertex-shader ladder — per-version overlays keyed on each effect's durable
+signal color (runtime-systems §6). Use `<effect:pack:id>…</effect>` in any resolved text;
+`/materione dev effect <pack>:<id> <text>` is the in-game test. Remaining deferred here:
+animated glyphs emit all frames and render frame 1; per-surface frame cycling arrives with
+M6 HUDs.
 
 ## M5 — Relay mode & the cloud (zero-config editing anywhere)
 

@@ -244,7 +244,12 @@ settings.put (hash-guarded, validated before disk). Pushes: `push.reload`,
 over `content/packs/` (~500 ms debounce, R5-clean via the scheduling gateway)
 journals drift as an *external* revision through `DocumentStore.syncExternal` and
 pushes to every editor; editor saves echo back unchanged because their write
-already journaled). Still illustrative-only:
+already journaled). *M4 media addition:* `browse.get` responses for glyph
+documents carry a read-only `computed` block — the server-allocated codepoint
+(the durable allocation table is the truth; the file on disk never contains it,
+and the studio preview renders it). Asset uploads are capped per extension:
+2 MiB for textures/models, 8 MiB for audio (`ogg`/`oga`) — bigger sources wait
+for M5's chunk flow. Still illustrative-only:
 where-used graph, import pack, pre-apply report / apply confirm, preview renders,
 `close`. Concurrency notes learned the hard way: pushes and RPC replies seal from
 different threads — `EditorSession.sendFrame` synchronizes seal+write so sequence
@@ -398,11 +403,22 @@ cannot read, forge, replay, or reorder anything.
   only the fields that actually changed, so an untouched resource is never rewritten and the
   round-trip stays lossless.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
-  eyedropper, line, rectangle, vertical mirror, zoom/pan, pixel grid, bounded undo/redo, PNG
-  import/export, size presets — opens in place from a studio's texture slot and from the asset
-  preview in Advanced Files, and saves through `assets.put`. Creating a texture for a resource
-  that has none also writes the owning field. All pixel arithmetic lives in a pure module
-  (`pixels.ts`) pinned by vitest, per the repo's pure-seam convention.
+  eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
+  PNG import/export, free canvas resize — opens in place from a studio's texture slot and from
+  the asset preview in Advanced Files, and saves through `assets.put`. Creating a texture for a
+  resource that has none also writes the owning field. The right panel is tool settings: colour
+  controls appear exactly when the active tool consumes a colour, the crop tool offers marquee
+  selection with aspect-ratio locks and manual x/y/w/h, and the canvas section resamples to any
+  size (1–1024 px, non-square included — glyphs and paintings are not squares). All pixel
+  arithmetic lives in a pure module (`pixels.ts`) pinned by vitest, per the repo's pure-seam
+  convention; the server's 2 MiB asset cap is the honest upper bound on canvas size.
+- **Sound editing**: a sound's studio is self-sufficient — the preview panel plays the first
+  source and every source row carries an upload/replace control, so the .ogg never needs a
+  detour through Advanced Files. "Add…" uploads a file and appends its ref to the sources
+  list (an unsaved draft change like any other field); paths and name sanitisation live in
+  `studio.ts` (`soundAssetPath`, `sanitizeSoundName`), pinned by vitest. The schema drives the
+  rest: `category` declares `allowedValues`, so the studio renders the vanilla sound sources
+  as a dropdown instead of a free-text field whose mistakes silently reject the definition.
 - **Blockbench integration** (master §9.3): the pinned, unmodified Blockbench web build loads
   inside the editor (iframe with a scripting bridge) from **static assets served by the editor
   SPA's own host** — never an inbound connection to the game server (D11 intact); the Materione

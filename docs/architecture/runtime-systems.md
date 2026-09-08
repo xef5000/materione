@@ -345,6 +345,52 @@ definitions participate in the content graph (PLACED_BY_ITEM / FURNITURE_STAGE e
   compiler injects them into the pack's `rendertype_text` shader set. Parity table stakes
   (Oraxen and Nexo both have this); the runtime's only job is stable id allocation.
 
+**As built (M4):** glyphs compile to bitmap providers merged per font key into one
+`assets/<ns>/font/<name>.json` (the pack glyph font `<ns>:glyphs` for glyphs without an
+explicit `font:`), and every generated font is wired into the client's default font:
+`assets/minecraft/font/default.json` gains one `type:reference` provider per generated font
+(the 1.21.2+ reference provider — the client renders unstyled text only through the default
+font, so without the references codepoints show as tofu boxes). The shift font's `type:space`
+provider (power-of-two advances on U+E10x/E11x — Nexo's technique) exists once at
+`assets/materione/font/shift.json` and is referenced from the default font and every generated
+font, so `<glyph:id>`, `<g:id>`, `<shift:N>` and `:placeholder:` compose inside any materione
+font without switching fonts. Default-font glyphs go out unstyled; explicit `font:` glyphs are
+styled with their font key.
+Codepoints are durable consecutive runs from the allocation table (kind `glyph-codepoint`,
+origin 42000, `AllocationTable.range`) — never written back into authoring YAML, unlike the
+incumbents; an explicit `char` field therefore does not exist, and the editor shows the
+allocated codepoint as server-computed browse metadata. Shapes: single texture, `rows`/`columns`
+sheets (chars row-major), `frames` animations (one codepoint per frame; frame cycling surfaces
+arrive with M6), `reference` aliases (pure alias — no allocation, resolved through the target
+at text time). The runtime keeps a `RuntimeGlyphs` view in the shadow swap; the text pipeline
+(`platform/text/GlyphText`) resolves markers in item text, chat (decorate-time, previews
+included), signs, books and anvil renames, forces white unless `colorable` (the incumbent
+color-bleed trick), applies optional `shadow_color`, and leaves denied or unresolvable markers
+literal. Chat resolution checks the viewer's glyph permission and the live registry —
+placeholders resolve only for emoji glyphs.
+
+**Text effects (as of the shader-injection slice).** `effects/*.yml` compile to a durable
+signal color (allocation kind `effect-signal`: the band `#FF00FF` downward, blue channel
+254..1 — colors no chat style produces, the Nexo magic-color trade-off) and a
+`RuntimeEffects` runtime view. The text pipeline resolves paired spans —
+`<effect:pack:id>…</effect>` (alias `<e:…>`; no nesting) — coloring the span's plain runs
+with the signal; glyph codepoints inside keep their forced white, explicit `&`-codes keep
+theirs. The pack injects the client's `rendertype_text` **vertex** shader per version-matched
+overlay (`materione_1_21_4` 46–62, `materione_1_21_6` 63–83, `materione_26_1` 84–87,
+`materione_26_2` 88+): the replacement outputs the vanilla varyings, so the client's own
+fragment shader (alpha cutout, fog) keeps working unmodified; only the `.vsh` is replaced
+(plus the program `.json` pre-26.x with the `GameTime` uniform — since 1.21.6 `GameTime`
+rides the Globals UBO). The generated `materione_text_effects.glsl` include bakes one branch
+per effect keyed on its signal: wave/shake displace the vertex pre-transform, rainbow/pulse
+recolor post-lightmap (authored `colors` stops become a mix-chain; rainbow falls back to a
+cosine palette). Shaders never ship in the base layer — a client matching no rung gets a
+shader-free pack — and pack.mcmeta carries the `overlays` ladder plus
+`sodium.ignored_shaders`. `MTR-0044` survives as the honest conditional: when the server's
+detected client format is outside the ladder, the effects compile but a WARN says they will
+not animate. `MTR-0047` fires when the 254-slot signal band is exhausted (signals are
+durable; deleting an effect does not release its color to a new one automatically). Test
+in-game with `/materione dev effect <pack>:<id> <text>`.
+
 ---
 
 ## 7. HUDs
@@ -435,15 +481,88 @@ brewing), disable-vanilla settings, and the in-game builder wait for M7.
 - **Sounds**: `.ogg` assets → pack `sounds.json`; registration namespaced; replace-vanilla
   is a platform-gated override map. Usable everywhere via `play_sound` action + text
   pipeline.
-- **Music discs / jukebox songs**: datapack artifact (auto-generated at compile), item
-  component `jukebox_playable`, comparator output/range/duration configurable.
-- **Paintings**: datapack variant registry (1.21+), asset dimensions validated at compile;
-  animated via `.mcmeta`. **Restart-required content** (master §6.4): painting/jukebox/trim
-  changes stage for the next boot and are reported as such — they never pretend to hot-apply.
+- **Music discs / jukebox songs**: registry-registered on Paper 1.21.6+ (`:modern`),
+  world-datapack artifact (auto-generated at compile) on older servers; item component
+  `jukebox_playable`, comparator output/range/duration configurable.
+- **Paintings**: painting-variant registry (1.21+) — composed through Paper's registry
+  events on Paper 1.21.6+, datapack variant entries on older servers; asset dimensions
+  validated at compile; animated via `.mcmeta`. **Restart-required content** (master §6.4):
+  painting/jukebox/trim changes stage for the next boot and are reported as such — they
+  never pretend to hot-apply.
 - **Custom particles**: a small particle API on items/furniture/blocks (`particle` action in
   ECA + aura-style shapes) — deliberately thin; deep VFX stays with ModelEngine/particle
   plugins through the integrations seam rather than a parallel particle engine (parity
   §3.12's "small particle API" target).
+
+**As built (M4):** sounds are `sounds/*.yml` — one event per file, `.ogg` sources under
+`assets/sounds/`; events group per namespace into `assets/<ns>/sounds.json`, and
+`replace_vanilla: <event>` entries route through the compiler's vanilla-override merge into
+`assets/minecraft/sounds.json` (first-wins with diagnostics, like blockstates). `/materione
+dev sound <pack>:<id>` plays a key at the sender for instant checking. A sound's `jukebox:`
+section turns it into a datapack `jukebox_song` artifact; an item's `jukebox_song:` field
+adds the `minecraft:jukebox_playable` component fail-soft at stack build (unknown song keys —
+not registered yet — are skipped, never crash the stack). Paintings are
+`paintings/*.yml` → painting variants + the `minecraft:placeable` tag for
+vanilla random placement, with the texture's exact pixel size (16/block) validated from the
+PNG header at parse time (MTR-0041). **The texture needs no generated atlas file**: the
+client's paintings atlas (`assets/minecraft/atlases/paintings.json`, plural) directory-scans
+`textures/painting/` across all namespaces with an empty prefix, so the sprite id is
+`<ns>:<path>` and the variant's `asset_id` is exactly that — a `painting/`-prefixed asset_id
+or a generated single-source atlas file renders as an invisible checkerboard (an earlier
+implementation shipped `atlases/painting.json`, a file the client never loads, and learned
+this the hard way).
+
+**Two registration seams (as of the 26.x migration).** Capability detection
+(`RegistryCapabilities`, reflection on the server's own classes — no version strings) picks
+one per boot:
+- *Registry mode* (Paper 1.21.6+, the Nexo model): the plugin's `PluginBootstrap`
+  (`:modern`, compiled against paper-api 26.1.2 — the D10 floor exception) parses the
+  registry-relevant content straight from the pack sources (same parsers, same template
+  pool), registers painting variants via `RegistryEvents.PAINTING_VARIANT.compose()`,
+  jukebox songs via `RegistryEvents.JUKEBOX_SONG.compose()` (the song's sound event is
+  declared inline through the nested builder factory — a resource-pack-only sound key is
+  not a registry entry), and placeable paintings via the post-flatten
+  `TAGS(PAINTING_VARIANT)` event. Nothing is written into the world; compose-registered
+  entries sync to clients like datapack entries.
+- *Datapack mode* (1.21.4/1.21.5 floor): the variants and songs compile into one
+  deterministic `datapack.zip` (pack.mcmeta, hash
+marker) that `DatapackService` deploys atomically to the default world's `datapacks/` folder
+on every reload — unchanged hash skips, a changed hash stages restart-required intent
+(MTR-0028) that the boot drain clears (MTR-0029). Restart-required classification is hence
+proven end to end: deployed bytes are visible, applied only after a restart, and the pre-apply
+report never pretends otherwise. The applier trusts the world zip, not a side
+marker: the deployed artifact carries its hash inside `materione.json`, the
+skip decision compares against that embedded hash, and a lost or regenerated
+world is repaired on the next reload even when the pack bytes are unchanged
+(a noop reload still verifies the world folder). `/materione doctor` prints
+the deployed vs boot-loaded hashes, and `/materione dev painting <pack>:<id>`
+places one exact variant where a player looks — vanilla placement only picks
+randomly from the placeable tag, so the dev command is the deterministic
+check. The datapack's `pack.mcmeta` advertises its format range in both schema
+generations (`pack_format`+`supported_formats`, `min_format`+`max_format`) with
+the server-reported data format folded into the upper bound — formats are
+major.minor pairs since 25w31a (26.1's data format is 101.1) and a datapack
+advertising only a fixed old `pack_format` reads as incompatible on
+1.21.9+/26.x servers. Deployment targets the **world root's** `datapacks/`
+folder (world container + the world's name): since the 26.x world-folder
+restructure, `getWorldFolder()` of the first Bukkit world points at the
+overworld *dimension* directory, which vanilla never scans — the first
+implementation deployed there and the datapack silently never loaded. The
+acceptance gate closes that class of failure: at boot the plugin asks the
+server's `DatapackManager` whether `materione-content` was actually
+registered (MTR-0046 when not), and `/materione doctor` prints deployed vs
+boot-loaded hashes plus acceptance. `/materione dev painting <pack>:<id>`
+places one exact variant where a player looks — vanilla placement only picks
+randomly from the placeable tag, so the dev command is the deterministic
+check.
+
+In registry mode the same hash ledger runs against the compiled artifact
+(the registered content's proxy): the first apply of a boot records it, a
+reload that changes it stages restart-required, any world-folder artifact
+left from a datapack-era boot or server upgrade is removed (its entries
+would register first at world load and collide with the registry's own),
+and `/materione doctor` prints `registry: … registered at boot` instead of
+the datapack line.
 
 ---
 

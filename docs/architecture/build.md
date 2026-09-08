@@ -19,6 +19,7 @@ exists, not what's planned). Anything marked *M-later* is reserved, not built.
 | AssertJ | 3.27.7 | |
 | ArchUnit | 1.5.0 | Powers the ban tests (§5). |
 | paper-api | 1.21.4-R0.1-SNAPSHOT | **Compile against the floor**, `compileOnly`. Post-floor APIs are structurally unreachable outside `platform/` — plugin.md §8.2 enforcement becomes a compile error. `platform/` may add a newer pin when a second implementation exists (M-later). |
+| paper-api (modern) | 26.1.2.build.74-stable | The D10 exception, realized: `:modern` compiles against a 26.x paper-api (JVM 25 toolchain — Paper 26.x requires it — while `--release 21` keeps the bytecode floor-loadable; the compile classpath requests the JVM-25 dependency variant explicitly). Classes here run only after `RegistryCapabilities` confirms the 26.x registry APIs exist at runtime; a floor server never links them. |
 | SnakeYAML | 2.2 | `compileOnly` — the server provides it at runtime; never shaded. |
 | Gson | 2.11.0 | `compileOnly` like SnakeYAML (server-provided); used for the server jar's `version.json` (pack-format detection) and by `pack/` via creative. |
 | creative | 1.14.4 | MIT. The **Nexo-maintained fork** of `team.unnamed/creative` — same coordinates, resolved from `repo.nexomc.com/releases/` (filtered to `team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. The fork (not upstream 1.7.3) because it tracks new Minecraft versions in Nexo production: 1.14.x writes `pack.mcmeta` `min_format`/`max_format`, the only range schema 25w31a+ (1.21.9/26.x) clients honor. |
@@ -68,7 +69,7 @@ assembled by `plugin/` via Shadow; **nothing depends on `plugin`** (the leaf, ru
 | `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, `fixtures/` declared as a test **input** (a corpus change invalidates test tasks — path references are invisible to Gradle otherwise), `materione.golden.regen` passthrough, integration-tag exclusion on unit `Test` tasks. |
 | `materione.library-conventions` | library modules | Test bundle (JUnit, AssertJ, ArchUnit) + `testing` testFixtures. |
 | `materione.paper-conventions` | api, core, platform, plugin | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. |
-| `materione.plugin-conventions` | plugin only | Shadow wiring (M1: relocations for creative + Gson), `plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
+| `materione.plugin-conventions` | plugin only | Shadow wiring (M1: relocations for creative + Gson), `paper-plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
 
 Custom tasks in `build-logic/src/main/kotlin`: `GenerateVersionSourceTask` (version class
 from the Gradle version — one source of truth), `DownloadPaperServerTask` (pinned-jar
@@ -189,7 +190,7 @@ client plays the browser end-to-end against the real listener: SPA served from t
 capability blob decrypt, hello, console-driven in-game approval, signed-reply +
 key-confirmation verification, sealed RPC round trip, `edit.put` of a real item watched
 going live (`dev stack sample:editor_gem`), asset upload/list, and the plugin.md §9
-budget — send(save)→push.reload **under 2 s** — then cleanup back to 53 items.
+budget — send(save)→push.reload **under 2 s** — then cleanup back to 56 items.
 *Workbench update extension:* the same run now also drives the authoring/ops surface —
 `edit.create` (scaffold lands at rev 1, duplicate refused, item live via `dev stack`),
 `edit.move` (old path unreadable after), `assets.move`, `pipeline.reload` (manual
@@ -242,5 +243,5 @@ locally-resolvable JDKs like `~/.jdks/...` win when present).
   assertions against log files, never console stdout, and kills process trees
   descendants-first.
 - Version bumps happen once, in `gradle.properties` (`version=`) — the jar name, the
-  generated `MaterioneVersion`, `plugin.yml`, and the harness's expected version all
+  generated `MaterioneVersion`, `paper-plugin.yml`, and the harness's expected version all
   derive from it.
