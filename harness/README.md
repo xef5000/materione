@@ -94,3 +94,13 @@ loop** complements them locally: a second Paper pin (`paper-probe-*`, the
 26.x seam) plus a real windowed client joined via the DebugBridge bridge mod,
 giving an agent session RCON scene control and framebuffer screenshots. Not
 CI; prerequisites and the full recipe live in [`docs/probe.md`](../docs/probe.md).
+
+## Related: the in-game QA suite (`qa/`, `qa/README.md`)
+
+Where the probe loop is a *debugging* tool (reproduce one reported failure),
+the **QA suite** is the systematic layer on top of it: a committed test
+catalog (`qa/catalog/`), a ledger of what passed at which commit
+(`qa/ledger/`), dependency-ordered execution that blocks dependents of a
+failure, and failure dossiers that file as GitHub issues. It rides the same
+26.x probe locally — never CI (which runs only the cheap catalog `check`).
+Charter and commands: [`qa/README.md`](../qa/README.md).

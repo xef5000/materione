@@ -46,6 +46,11 @@ jobs:
       - name: Build (unit + ArchUnit)
         run: ./gradlew build
 
+      # QA catalog integrity + ledger drift (issue #38) — pure Node, no
+      # Minecraft. The in-game suite itself stays a local dev tool.
+      - name: QA catalog check
+        run: node qa/runner.mjs check
+
       - name: Upload plugin jar
         uses: actions/upload-artifact@v4
         with:

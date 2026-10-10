@@ -86,6 +86,18 @@ The client window pops up on the desktop while it runs — that is expected
 (real rendering is the point). The window can be covered or minimized-adjacent;
 avoid *minimizing* it (the framebuffer stops updating).
 
+## Agent mode (`probe.mjs agent`)
+
+The [QA suite](../qa/README.md) does not shell out per call — it drives a
+**long-lived agent process**: `node scripts/probe/probe.mjs agent` speaks
+JSONL over stdio (requests `{id, cmd, args}`, responses
+`{id, ok, result|error}`; human progress goes to stderr). One process holds
+the whole session state — server boot, client launch, join — so a QA run
+boots once, not per test. Commands: `up`, `down`, `client`, `join`, `quit`,
+`rcon`, `exec`, `command`, `chat`, `state`, `screen`, `shot`, `status`,
+`ping`. Failures are answers (`ok: false`), not crashes: the agent survives a
+broken environment and lets the runner decide what that means.
+
 ## When to use it
 
 - An issue says "the glyph renders as tofu" / "the item is checkerboarded" /
