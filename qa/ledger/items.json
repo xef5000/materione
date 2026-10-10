@@ -38,13 +38,13 @@
     "eyes": null
   },
   "items.auto-updater-refresh": {
-    "sha": "1447d702cb1093357925da8d12ee133680eac35f",
-    "dirty": true,
+    "sha": "a1db5ca3916daca48cbec7302c76b00e5d214a4d",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "352dd319ed995a7be1381e770d714ed8789e181b5cfaddf6c690ba5c7f95b517",
     "result": "pass",
-    "at": "2026-10-10T22:09:03.044Z",
-    "run": "run-2026-10-10T22-07-58",
+    "at": "2026-10-10T22:10:32.349Z",
+    "run": "run-2026-10-10T22-09-27",
     "eyes": null
   }
 }
