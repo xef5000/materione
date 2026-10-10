@@ -135,3 +135,8 @@ If your work forces a choice on one, surface it in the PR/doc discussion instead
   probe loop (`scripts/probe/probe.mjs`, [`docs/probe.md`](docs/probe.md)) to reproduce,
   fix, and verify with screenshots — don't ask the reporter for another screenshot.
   Local only (26.x seam + JDK 25 + vanilla client); CI stays on the 1.21.4 harness.
+- **User-visible features ship QA catalog entries**: every PR that adds or changes
+  player-visible behavior adds tests to `qa/catalog/` ([`qa/README.md`](qa/README.md) is
+  the charter) — auto assertions for observable logic, `visual` tests with screenshots
+  for render/GUI work. The committed ledger (`qa/ledger/`) tracks what passed at which
+  commit; blessing runs happen on main, not on feature branches.

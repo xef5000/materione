@@ -22,6 +22,7 @@ import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -42,28 +43,15 @@ const BOOT_TIMEOUT_MS = 300_000;
 
 const args = process.argv.slice(2);
 const cmd = args.shift();
+// Agent mode (issue #38): JSONL-over-stdio executor for qa/runner.mjs. Only
+// JSONL responses may touch stdout — all human progress goes to stderr, and
+// fail() throws (the agent survives; the runner decides what a failure means).
+const AGENT = cmd === 'agent';
 
-try {
-  switch (cmd) {
-    case 'up': await cmdUp(); break;
-    case 'down': await cmdDown(); break;
-    case 'restart': await cmdDown(); await cmdUp(); break;
-    case 'client': await cmdClient(); break;
-    case 'join': await cmdJoin(); break;
-    case 'shot': await cmdShot(); break;
-    case 'exec': await cmdExec(); break;
-    case 'screen': await bridged((call) => call('screenInspect', {}), printResult); break;
-    case 'state': await bridged((call) => call('snapshot', {}), printResult); break;
-    case 'chat': await bridged((call) => call('chatHistory', { limit: intOpt('limit', 20) }), printResult); break;
-    case 'command': await cmdRunCommand(); break;
-    case 'quit': await cmdQuit(); break;
-    case 'rcon': await cmdRcon(); break;
-    case 'boot': await cmdBoot(); break;
-    default: usage();
-  }
-} catch (e) {
-  fail(e.message ?? String(e));
-}
+// The dispatch itself runs at the very bottom of the module: an `await` up
+// here would suspend module evaluation for the whole session (the agent loop
+// does not return until stdin closes), leaving every declaration below it —
+// ProbeError included — in the temporal dead zone while handlers execute.
 
 function usage() {
   process.stdout.write(`probe — Materione agent probe loop (docs/probe.md)
@@ -84,6 +72,11 @@ Client (real windowed Minecraft + DebugBridge):
   quit                      quit the client
 All-in-one:
   boot                      up + client + join + sanity shot
+Agent mode (qa/runner.mjs drives this; docs/probe.md):
+  agent                     JSONL-over-stdio executor: one long-lived process
+                            holding the server+client state, commands up/down/
+                            client/join/rcon/exec/command/chat/state/screen/
+                            shot/quit/status/ping
 `);
 }
 
@@ -105,12 +98,17 @@ function readPins() {
 
 // ------------------------------------------------------------- helpers ----
 
+// Agent-mode failures: the runner classifies anything thrown as ProbeError as
+// environment/infrastructure ("boot timed out"), not product misbehavior.
+class ProbeError extends Error {}
+
 function fail(message) {
+  if (AGENT) throw new ProbeError(message);
   process.stderr.write(`probe: ${message}\n`);
   process.exit(1);
 }
 
-function log(msg) { process.stdout.write(`${msg}\n`); }
+function log(msg) { (AGENT ? process.stderr : process.stdout).write(`${msg}\n`); }
 
 function intOpt(name, fallback) {
   const i = args.indexOf(`--${name}`);
@@ -249,11 +247,15 @@ function serverProperties() {
 }
 
 async function cmdUp() {
+  await doUp({ build: !args.includes('--no-build'), keepWorld: args.includes('--keep-world') });
+}
+
+async function doUp({ build = true, keepWorld = false } = {}) {
   const pins = readPins();
   if (pidAlive(readPid('server'))) fail('probe server already running — use: probe restart (or down)');
 
   fs.mkdirSync(SERVER_DIR, { recursive: true });
-  const jar = await ensurePluginJar(!args.includes('--no-build'));
+  const jar = await ensurePluginJar(build);
   const paperJar = await downloadVerified(
     path.join(DL_DIR, `paper-${pins['paper-probe-version']}-${pins['paper-probe-build']}.jar`),
     pins['paper-probe-url'],
@@ -264,8 +266,8 @@ async function cmdUp() {
   fs.writeFileSync(path.join(SERVER_DIR, 'eula.txt'), 'eula=true\n');
   fs.writeFileSync(path.join(SERVER_DIR, 'server.properties'), serverProperties());
   // Fresh world + fresh log every `up` (deterministic baseline: no scene
-  // leftovers from the last session). --keep-world opts out for debugging.
-  if (!args.includes('--keep-world')) {
+  // leftovers from the last session). keepWorld opts out for debugging.
+  if (!keepWorld) {
     for (const stale of ['world', 'world_nether', 'world_the_end', 'logs']) {
       fs.rmSync(path.join(SERVER_DIR, stale), { recursive: true, force: true });
     }
@@ -344,7 +346,9 @@ async function ensurePluginJar(build) {
 function runGradle(tasks) {
   return new Promise((resolve, reject) => {
     const wrapper = process.platform === 'win32' ? 'gradlew.bat' : 'gradlew';
-    const child = spawn(path.join(ROOT, wrapper), tasks, { cwd: ROOT, stdio: 'inherit', shell: true });
+    // Agent mode: stdout is the JSONL channel — gradle output goes to stderr.
+    const stdio = AGENT ? ['ignore', process.stderr, process.stderr] : 'inherit';
+    const child = spawn(path.join(ROOT, wrapper), tasks, { cwd: ROOT, stdio, shell: true });
     child.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`gradlew ${tasks.join(' ')} exited ${code}`))));
   });
 }
@@ -460,6 +464,7 @@ async function bridgePort() {
 
 // Opens one bridge connection and hands the caller a request fn. The request
 // fn must not outlive the callback — the socket closes when it returns.
+// Resolves to the use() callback's return value (CLI callers ignore it).
 async function bridged(use, onResult) {
   const port = await bridgePort();
   if (!port) fail('client/DebugBridge is not running — run: probe client');
@@ -485,11 +490,14 @@ async function bridged(use, onResult) {
     pending.set(id, (msg) => { clearTimeout(timer); resolve(msg); });
     ws.send(JSON.stringify({ id, type, payload }));
   });
+  let returned;
   try {
-    onResult(await use(call));
+    returned = await use(call);
+    onResult(returned);
   } finally {
     ws.close();
   }
+  return returned;
 }
 
 // Groovy results arrive wrapped as {type, value} bridge cells; unwrap them.
@@ -661,8 +669,10 @@ function rulesAllow(rules) {
 }
 
 async function cmdJoin() {
-  const host = strOpt('host', '127.0.0.1');
-  const port = intOpt('port', SERVER_PORT);
+  await doJoin({ host: strOpt('host', '127.0.0.1'), port: intOpt('port', SERVER_PORT) });
+}
+
+async function doJoin({ host = '127.0.0.1', port = SERVER_PORT } = {}) {
   let settled = false;
   await bridged(async (call) => {
     const msg = await call('joinServer', { address: `${host}:${port}`, acceptResourcePacks: true }, 30_000);
@@ -681,17 +691,25 @@ async function cmdJoin() {
 }
 
 async function cmdShot() {
+  const written = await doShot({
+    out: strOpt('out'),
+    scale: intOpt('scale', 0),
+    quality: intOpt('quality', 0),
+  });
+  log(`${written.path} (${written.width}x${written.height}${written.copiedFrom ? `, copied from ${written.copiedFrom}` : ''})`);
+}
+
+async function doShot({ out, scale = 0, quality = 0 } = {}) {
   fs.mkdirSync(SHOTS_DIR, { recursive: true });
   const payload = {};
-  if (intOpt('scale', 0)) payload.scale = intOpt('scale', 0);
-  if (intOpt('quality', 0)) payload.quality = intOpt('quality', 0);
-  await bridged(async (call) => {
+  if (scale) payload.scale = scale;
+  if (quality) payload.quality = quality;
+  return bridged(async (call) => {
     const msg = await call('screenshot', payload, 30_000);
     if (!msg.success) fail(`screenshot failed: ${msg.error ?? '(no error)'}`);
     const result = unwrapBridgeValue(msg.result) ?? {};
-    const outOpt = strOpt('out');
-    const target = outOpt ? path.resolve(outOpt) : path.join(SHOTS_DIR, `shot-${Date.now()}.jpg`);
-    log(writeCapture(result, target));
+    const target = out ? path.resolve(out) : path.join(SHOTS_DIR, `shot-${Date.now()}.jpg`);
+    return writeCapture(result, target);
   }, () => {});
 }
 
@@ -699,11 +717,11 @@ function writeCapture(result, target) {
   fs.mkdirSync(path.dirname(target), { recursive: true });
   if (typeof result.base64 === 'string') {
     fs.writeFileSync(target, Buffer.from(result.base64, 'base64'));
-    return `${target} (${result.width}x${result.height ?? '?'})`;
+    return { path: target, width: result.width, height: result.height ?? null, copiedFrom: null };
   }
   if (typeof result.path === 'string' && fs.existsSync(result.path)) {
     fs.copyFileSync(result.path, target);
-    return `${target} (copied from ${result.path}, ${result.width}x${result.height ?? '?'})`;
+    return { path: target, width: result.width, height: result.height ?? null, copiedFrom: result.path };
   }
   fail(`screenshot returned neither base64 nor a readable path — keys: ${Object.keys(result).join(', ')}`);
 }
@@ -743,4 +761,120 @@ async function cmdBoot() {
   await cmdJoin();
   await cmdShot();
   log('probe loop is live. Drive the scene with `probe rcon ...` / `probe command ...`, capture with `probe shot`.');
+}
+
+// --------------------------------------------------------------- agent ----
+
+// JSONL executor for qa/runner.mjs (issue #38): requests {id, cmd, args} on
+// stdin, responses {id, ok, result|error} on stdout, human progress on stderr.
+// State (booted server, launched client, joined player) lives for the whole
+// run — the qa suite boots once, not per test. Bridges/calls that fail throw;
+// the agent answers ok:false and stays alive (the environment may be broken,
+// but the runner decides what that means).
+async function cmdAgent() {
+  log(`probe agent: JSONL on stdio, root ${ROOT}`);
+  const handlers = {
+    ping: async () => ({ pong: true }),
+    status: async () => ({
+      server: pidAlive(readPid('server')),
+      bridge: await bridgePort(),
+      player: PROBE_PLAYER,
+    }),
+    up: (a) => doUp({ build: a?.build !== false, keepWorld: Boolean(a?.keepWorld) }),
+    down: () => cmdDown(),
+    client: () => cmdClient(),
+    join: (a) => doJoin(a ?? {}),
+    quit: () => cmdQuit(),
+    rcon: async (a) => {
+      if (!a?.command) throw new ProbeError('rcon requires args.command');
+      return { reply: await rconCommand(a.command) };
+    },
+    exec: (a) => {
+      if (!a?.code) throw new ProbeError('exec requires args.code');
+      const timeout = a.timeoutMs ?? 10_000;
+      return bridged(async (call) => {
+        const msg = await call('execute', { code: a.code, timeoutMs: timeout }, timeout + 15_000);
+        if (!msg.success) throw new ProbeError(`bridge exec failed: ${msg.error ?? '(no error)'}`);
+        return { value: unwrapBridgeValue(msg.result) };
+      }, () => {});
+    },
+    command: (a) => {
+      if (!a?.command) throw new ProbeError('command requires args.command');
+      const asPlayer = a.command.startsWith('/') ? a.command : `/${a.command}`;
+      return bridged(async (call) => {
+        const msg = await call('runCommand', { command: asPlayer }, 30_000);
+        if (!msg.success) throw new ProbeError(`bridge runCommand failed: ${msg.error ?? '(no error)'}`);
+        return { value: unwrapBridgeValue(msg.result) };
+      }, () => {});
+    },
+    chat: (a) => bridged(async (call) => {
+      const msg = await call('chatHistory', { limit: a?.limit ?? 30 });
+      if (!msg.success) throw new ProbeError(`bridge chatHistory failed: ${msg.error ?? '(no error)'}`);
+      return { lines: unwrapBridgeValue(msg.result) };
+    }, () => {}),
+    state: () => bridged(async (call) => {
+      const msg = await call('snapshot', {});
+      if (!msg.success) throw new ProbeError(`bridge snapshot failed: ${msg.error ?? '(no error)'}`);
+      return unwrapBridgeValue(msg.result);
+    }, () => {}),
+    screen: () => bridged(async (call) => {
+      const msg = await call('screenInspect', {});
+      if (!msg.success) throw new ProbeError(`bridge screenInspect failed: ${msg.error ?? '(no error)'}`);
+      return unwrapBridgeValue(msg.result);
+    }, () => {}),
+    shot: (a) => doShot({
+      out: a?.out,
+      scale: a?.scale ?? 0,
+      quality: a?.quality ?? 0,
+    }),
+  };
+
+  const rl = readline.createInterface({ input: process.stdin, terminal: false });
+  const respond = (obj) => process.stdout.write(`${JSON.stringify(obj)}\n`);
+  for await (const line of rl) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let req;
+    try {
+      req = JSON.parse(trimmed);
+    } catch {
+      respond({ id: null, ok: false, error: `unparseable agent request: ${trimmed.slice(0, 120)}` });
+      continue;
+    }
+    try {
+      const handler = handlers[req.cmd];
+      if (!handler) throw new ProbeError(`unknown agent command: ${req.cmd}`);
+      const result = await handler(req.args ?? {});
+      respond({ id: req.id, ok: true, result });
+    } catch (e) {
+      log(`agent ${req.cmd} failed: ${e.message ?? e}`);
+      respond({ id: req.id, ok: false, error: e.message ?? String(e), probe: e instanceof ProbeError });
+    }
+  }
+}
+
+// ------------------------------------------------------------------ main ----
+
+// Bottom-of-module dispatch — see the comment at the top of the file.
+try {
+  switch (cmd) {
+    case 'up': await cmdUp(); break;
+    case 'down': await cmdDown(); break;
+    case 'restart': await cmdDown(); await cmdUp(); break;
+    case 'client': await cmdClient(); break;
+    case 'join': await cmdJoin(); break;
+    case 'shot': await cmdShot(); break;
+    case 'exec': await cmdExec(); break;
+    case 'screen': await bridged((call) => call('screenInspect', {}), printResult); break;
+    case 'state': await bridged((call) => call('snapshot', {}), printResult); break;
+    case 'chat': await bridged((call) => call('chatHistory', { limit: intOpt('limit', 20) }), printResult); break;
+    case 'command': await cmdRunCommand(); break;
+    case 'quit': await cmdQuit(); break;
+    case 'rcon': await cmdRcon(); break;
+    case 'boot': await cmdBoot(); break;
+    case 'agent': await cmdAgent(); break;
+    default: usage();
+  }
+} catch (e) {
+  fail(e.message ?? String(e));
 }

@@ -49,3 +49,7 @@ nexo-reference/
 # Editor SPA build
 webui/node_modules/
 webui/dist/
+
+# In-game QA run evidence (issue #38) — qa/catalog and qa/ledger are committed;
+# run artifacts (screenshots, transcripts, dossiers) are machine-local
+qa/results/
