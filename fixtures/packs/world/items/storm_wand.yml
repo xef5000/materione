@@ -1,7 +1,7 @@
 # ECA showcase: a condition, a rule cooldown, and the commands mechanic —
 # one left-click drives both surfaces (qa mechanics.commands-and-cooldown):
-# the console tellraw and the player-executed list fire on every swing while
-# the rule's message is suppressed inside its 2s cooldown window.
+# the console tellraw and the player-executed version marker fire on every
+# swing while the rule's message is suppressed inside its 2s cooldown window.
 storm_wand:
   material: BLAZE_ROD
   display_name: "Storm Wand"
@@ -9,7 +9,7 @@ storm_wand:
     - on: click:left
       if:
         - "player.health > 0"
-      cooldown: 2000
+      cooldown: 3000
       do:
         - message: {text: "&bThe wand crackles."}
   mechanics:
@@ -19,4 +19,4 @@ storm_wand:
     - commands:
         as_player: true
         on_left_click:
-          - "list"
+          - "materione version"
