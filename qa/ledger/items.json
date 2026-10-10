@@ -12,5 +12,25 @@
     "issueUrl": "https://github.com/xef5000/materione/issues/39",
     "markedBy": "agent:session-qa",
     "note": "Blessed on main 340344b (squash of #43): gem renders textured in hotbar and hand, zero shader compile errors (run-2026-10-10T19-29-19). Closes the tracked failure."
+  },
+  "items.ruby-sword-3d-hand-render": {
+    "sha": "8529f3ce86d2a58c773617c9b628e27ca1257012",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "e4c6a33f6be3114053ea519e9c189034db9d380d30bcbde5ccae3a9478ff2270",
+    "result": "fail",
+    "at": "2026-10-10T20:09:51.208Z",
+    "run": "run-2026-10-10T20-06-27",
+    "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, ruby-red blade against a dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
+    "markedBy": "agent:session-qa",
+    "note": "CONFIRMED BROKEN: hotbar slot renders magenta/black checkerboard and the held item is a giant checkerboard cuboid (missing model). Client log: 'Unable to bake item model: sample:ruby_sword' — IllegalStateException 'Multiple atlases used in model, expected minecraft:textures/atlas/items.png, but also got minecraft:textures/atlas/blocks.png' (CuboidItemModelWrapper.validateAtlasUsage). Root cause: the pack compiler emits single-source atlas entries for custom-dir textures (sample:obsidian/axe) into atlases/blocks.json (blocks atlas), while item/-convention textures (sample:item/ruby) are gathered by vanilla's items atlas on 26.x — and 26.1.2 forbids one item model from spanning two atlases. Single-atlas models work (corpus gems are blocks-only and render); ANY model mixing the two conventions breaks. Fix direction: on the 26.x+ rungs route item-model sprite single-sources into atlases/items.json (or both atlases), keeping blocks.json for block-model sprites.",
+    "issue": 46,
+    "issueUrl": "https://github.com/xef5000/materione/issues/46",
+    "evidence": [
+      "qa/evidence/run-2026-10-10T20-06-27/items.ruby-sword-3d-hand-render/dossier.md",
+      "qa/evidence/run-2026-10-10T20-06-27/items.ruby-sword-3d-hand-render/held.jpg",
+      "qa/evidence/run-2026-10-10T20-06-27/items.ruby-sword-3d-hand-render/hotbar.jpg",
+      "qa/evidence/run-2026-10-10T20-06-27/items.ruby-sword-3d-hand-render/transcript.jsonl"
+    ]
   }
 }
