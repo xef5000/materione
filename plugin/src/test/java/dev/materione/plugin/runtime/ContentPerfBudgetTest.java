@@ -103,17 +103,20 @@ class ContentPerfBudgetTest {
     }
 
     @Test
-    void itemResolveMeanUnderOneMicrosecond(@TempDir Path workDir) {
+    void itemResolveSteadyStateUnderOneMicrosecond(@TempDir Path workDir) {
         RuntimeRegistries registries = loadCorpus(workDir).shadow;
         NamespacedId gem = NamespacedId.parse("corpus:gem_red");
 
-        for (int i = 0; i < 10_000; i++) { // warmup: JIT before measurement
+        for (int i = 0; i < 100_000; i++) { // warmup: enough work for C2 to settle
             registries.item(gem);
         }
-        // Median of per-round means (#36): a GC pause or hypervisor steal on a
-        // shared runner must not fail the budget, but a real >=2x regression
-        // still moves the median — plugin.md §9 semantics stay intact.
-        int rounds = 9;
+        // Best of per-round means: noise (GC, background JIT, hypervisor
+        // steal) only ever inflates rounds, so the minimum estimates the
+        // steady-state lookup cost — and a real regression raises every
+        // round including the best one, keeping plugin.md §9 semantics.
+        // The median-of-rounds variant (#36) still flaked when a shared
+        // runner stayed busy for over half the rounds (#44).
+        int rounds = 11;
         int lookupsPerRound = 20_000;
         long[] means = new long[rounds];
         for (int round = 0; round < rounds; round++) {
@@ -124,11 +127,12 @@ class ContentPerfBudgetTest {
             means[round] = (System.nanoTime() - start) / lookupsPerRound;
         }
         Arrays.sort(means);
-        long medianNs = means[rounds / 2];
+        long bestNs = means[0];
 
         assertThat(registries.item(gem)).isPresent();
-        assertThat(medianNs)
-                .as("registry-map resolve median of %d rounds x %d lookups", rounds, lookupsPerRound)
+        assertThat(bestNs)
+                .as("registry-map resolve best of %d rounds x %d lookups, round means (ns) %s",
+                        rounds, lookupsPerRound, Arrays.toString(means))
                 .isLessThan(RESOLVE_BUDGET_NS);
     }
 
