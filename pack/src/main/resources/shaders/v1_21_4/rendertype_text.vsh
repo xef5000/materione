@@ -20,13 +20,15 @@ out vec2 texCoord0;
 #moj_import <minecraft:materione_text_effects.glsl>
 
 void main() {
-    materionePreTransform();
+    // attributes are read-only: the hooks animate a local copy
+    vec3 mtrPosition = Position;
+    materionePreTransform(mtrPosition);
 
-    gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
+    gl_Position = ProjMat * ModelViewMat * vec4(mtrPosition, 1.0);
 
-    vertexDistance = fog_distance(Position, FogShape);
+    vertexDistance = fog_distance(mtrPosition, FogShape);
     vertexColor = Color * texelFetch(Sampler2, UV2 / 16, 0);
     texCoord0 = UV0;
 
-    materionePostTransform();
+    materionePostTransform(mtrPosition);
 }

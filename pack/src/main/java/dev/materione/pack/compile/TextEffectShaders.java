@@ -83,27 +83,29 @@ final class TextEffectShaders {
                     return fract(sin(n) * 43758.5453123);
                 }
 
-                void materionePreTransform() {
+                // GLSL forbids assigning to an attribute, so both hooks
+                // operate on the caller's local copy of the position
+                void materionePreTransform(inout vec3 pos) {
                 """);
         for (EffectSpec effect : effects) {
             String signal = signalVec(effect);
             switch (effect.kind()) {
                 case "wave" -> out.append(String.format(Locale.ROOT, """
                             if (mtrSignal(Color.rgb, %s)) {
-                                Position.y += sin(MTR_SECONDS * %s * MTR_TAU + Position.x * 0.8) * %s;
+                                pos.y += sin(MTR_SECONDS * %s * MTR_TAU + pos.x * 0.8) * %s;
                             }
                     """, signal, glsl(effect.speed()), glsl(effect.amplitude())));
                 case "shake" -> out.append(String.format(Locale.ROOT, """
                             if (mtrSignal(Color.rgb, %s)) {
                                 float phase = floor(MTR_SECONDS * %s * 20.0);
-                                Position.x += (mtrHash(phase) - 0.5) * 1.5 * %s;
-                                Position.y += (mtrHash(phase + 91.7) - 0.5) * 1.5 * %s;
+                                pos.x += (mtrHash(phase) - 0.5) * 1.5 * %s;
+                                pos.y += (mtrHash(phase + 91.7) - 0.5) * 1.5 * %s;
                             }
                     """, signal, glsl(effect.speed()), glsl(effect.amplitude()), glsl(effect.amplitude())));
                 default -> { /* rainbow/pulse are post-transform */ }
             }
         }
-        out.append("}\n\nvoid materionePostTransform() {\n");
+        out.append("}\n\nvoid materionePostTransform(in vec3 pos) {\n");
         for (EffectSpec effect : effects) {
             String signal = signalVec(effect);
             switch (effect.kind()) {
@@ -147,12 +149,12 @@ final class TextEffectShaders {
                 }
             }
             chain.append(")".repeat(Math.max(0, count - 1))).append(";");
-            return "float mt = fract(MTR_SECONDS * " + glsl(phase) + " + Position.x * "
+            return "float mt = fract(MTR_SECONDS * " + glsl(phase) + " + pos.x * "
                     + glsl(spread) + ");\n        " + chain;
         }
         // cosine-palette rainbow: three phase-shifted cosines
         return String.format(Locale.ROOT,
-                "vertexColor.rgb = 0.5 + 0.5 * cos(MTR_TAU * (MTR_SECONDS * %s * 0.1 + Position.x * %s * 0.05) + vec3(0.0, 2.094, 4.188));",
+                "vertexColor.rgb = 0.5 + 0.5 * cos(MTR_TAU * (MTR_SECONDS * %s * 0.1 + pos.x * %s * 0.05) + vec3(0.0, 2.094, 4.188));",
                 glsl(effect.speed()), glsl(effect.amplitude()));
     }
 

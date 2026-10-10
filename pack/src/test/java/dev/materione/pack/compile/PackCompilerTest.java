@@ -501,15 +501,25 @@ class PackCompilerTest {
             }
             assertThat(entryText(zip, "materione_26_1/assets/minecraft/shaders/core/rendertype_text.vsh"))
                     .contains("#version 330")
-                    .contains("materionePreTransform();")
-                    .contains("materionePostTransform();");
-            assertThat(entryText(zip,
-                    "materione_26_1/assets/minecraft/shaders/include/materione_text_effects.glsl"))
+                    .contains("vec3 mtrPosition = Position;")
+                    .contains("materionePreTransform(mtrPosition);")
+                    .contains("materionePostTransform(mtrPosition);")
+                    // the attribute is never transformed directly: GLSL
+                    // rejects assignment to an `in` and the failed compile
+                    // makes the client drop the whole pack (#39)
+                    .doesNotContain("vec4(Position, 1.0)");
+            String effects = entryText(zip,
+                    "materione_26_1/assets/minecraft/shaders/include/materione_text_effects.glsl");
+            assertThat(effects)
+                    .contains("void materionePreTransform(inout vec3 pos)")
+                    .contains("void materionePostTransform(in vec3 pos)")
                     // the fixture's two effects: rainbow (with baked stops) and wave
                     .contains("vec3(1.0, 0.0, 0.99607843)")
                     .contains("vec3(1.0, 0.0, 0.99215686)")
                     .contains("vertexColor.rgb = (mt < ")
-                    .contains("Position.y += sin(");
+                    .contains("pos.y += sin(")
+                    // the hooks must never touch the Position attribute
+                    .doesNotContain("Position");
             assertThat(mcmeta).contains("ignored_shaders");
         }
         try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
