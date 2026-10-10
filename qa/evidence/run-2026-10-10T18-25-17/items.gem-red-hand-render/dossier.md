@@ -10,8 +10,8 @@ A visual pass (see the test definition for the eyes criterion).
 
 ## Evidence
 
-- `qa\results\run-2026-10-10T18-25-17\items.gem-red-hand-render\held.jpg`
-- `qa\results\run-2026-10-10T18-25-17\items.gem-red-hand-render\hotbar.jpg`
+- `qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render\held.jpg`
+- `qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render\hotbar.jpg`
 
 ## Test definition
 
