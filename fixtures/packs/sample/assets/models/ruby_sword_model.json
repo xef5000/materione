@@ -1,6 +1,63 @@
 {
-  "parent": "minecraft:item/generated",
+  "comment": "Hand-authored 3D fixture model (elements path) — solid 1x1 fixture textures; the cube silhouette, not texture detail, is the visual signal",
+  "parent": "minecraft:item/handheld",
   "textures": {
-    "layer0": "sample:item/ruby"
-  }
+    "blade": "sample:item/ruby",
+    "hilt": "sample:obsidian/axe",
+    "particle": "sample:item/ruby"
+  },
+  "elements": [
+    {
+      "name": "blade",
+      "from": [6.5, 7, 7],
+      "to": [9.5, 13, 9],
+      "faces": {
+        "north": { "texture": "#blade" },
+        "south": { "texture": "#blade" },
+        "east": { "texture": "#hilt" },
+        "west": { "texture": "#hilt" },
+        "up": { "texture": "#blade" },
+        "down": { "texture": "#blade" }
+      }
+    },
+    {
+      "name": "blade_tip",
+      "from": [7.25, 13, 7.5],
+      "to": [8.75, 15, 8.5],
+      "faces": {
+        "north": { "texture": "#blade" },
+        "south": { "texture": "#blade" },
+        "east": { "texture": "#blade" },
+        "west": { "texture": "#blade" },
+        "up": { "texture": "#blade" },
+        "down": { "texture": "#blade" }
+      }
+    },
+    {
+      "name": "guard",
+      "from": [4, 5.5, 6.5],
+      "to": [12, 7, 9.5],
+      "faces": {
+        "north": { "texture": "#hilt" },
+        "south": { "texture": "#hilt" },
+        "east": { "texture": "#hilt" },
+        "west": { "texture": "#hilt" },
+        "up": { "texture": "#hilt" },
+        "down": { "texture": "#hilt" }
+      }
+    },
+    {
+      "name": "hilt",
+      "from": [7, 2.5, 7.25],
+      "to": [9, 5.5, 8.75],
+      "faces": {
+        "north": { "texture": "#hilt" },
+        "south": { "texture": "#hilt" },
+        "east": { "texture": "#hilt" },
+        "west": { "texture": "#hilt" },
+        "up": { "texture": "#hilt" },
+        "down": { "texture": "#hilt" }
+      }
+    }
+  ]
 }

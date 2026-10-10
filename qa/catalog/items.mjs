@@ -39,4 +39,37 @@ export default [
       );
     },
   }),
+  test({
+    id: 'items.ruby-sword-3d-hand-render',
+    title: 'sample:ruby_sword renders its hand-authored 3D model (blade/guard/hilt cubes) in hand and hotbar',
+    mode: 'visual',
+    covers: [
+      'content/**',
+      'pack/**',
+      'delivery/**',
+      'modern/**',
+      'fixtures/packs/sample/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give sample:ruby_sword Probe');
+      await ctx.waitForChat(/Given sample:ruby_sword/);
+      // Hold the item and confirm the pack-defined name, then capture. The
+      // model is the elements-bearing fixture (4 cubes, ruby blade vs dark
+      // hilt), so the eyes criterion is the 3D silhouette, not a flat sprite.
+      await ctx.exec('player.getInventory().selected = 0');
+      const heldName = await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()',
+      );
+      ctx.expect(String(heldName)).toBe('Ruby Sword');
+      await ctx.sleep(600);
+      await ctx.shot('held');
+      // Wide view of the HUD for the hotbar render.
+      await ctx.shot('hotbar');
+      ctx.needsEyes(
+        'the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, ruby-red blade against a dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard',
+      );
+    },
+  }),
 ];
