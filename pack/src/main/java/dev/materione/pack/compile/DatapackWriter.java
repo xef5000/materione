@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.TreeMap;
@@ -43,8 +44,15 @@ public final class DatapackWriter {
      */
     public static final PackFormats.Version DATA_FORMAT_CEILING = new PackFormats.Version(128, 0);
 
-    /** Fixed zip timestamp: same content → same bytes, always. */
-    private static final long ZIP_TIME = 1735689600000L; // 2025-01-01T00:00:00Z
+    /**
+     * Fixed zip timestamp: same content → same bytes, always, on any machine.
+     * Stored as a local date-time and applied via {@link ZipEntry#setTimeLocal}
+     * — {@link ZipEntry#setTime(long)} renders epoch millis through the JVM's
+     * default timezone, so the same code produced different zip bytes on UTC
+     * CI runners than on a UTC-offset dev machine (D7 violation: goldens
+     * baked in the generating machine's zone).
+     */
+    private static final LocalDateTime ZIP_STAMP = LocalDateTime.of(2025, 1, 1, 0, 0, 0);
 
     /** The written artifact: staged zip + its content hash. */
     public record Artifact(Path zip, String sha256) {}
@@ -124,7 +132,7 @@ public final class DatapackWriter {
 
     private static ZipEntry entry(String name) {
         ZipEntry entry = new ZipEntry(name);
-        entry.setTime(ZIP_TIME);
+        entry.setTimeLocal(ZIP_STAMP);
         return entry;
     }
 
