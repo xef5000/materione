@@ -31,153 +31,165 @@
 | ⚠️ | Reported / from model knowledge — **verify** |
 | ❌ | Not natively supported (may be achievable by combining other plugins) |
 
+**Materione column** (status as of 2026-10-10; sources: the
+[roadmap](roadmap.md) shipped record M0–M4 and the in-game QA catalog
+[`qa/`](../qa/README.md)):
+
+| Symbol | Meaning |
+|---|---|
+| ✅🧪 | Added **and** exercised by the in-game QA suite (real client render / command assertions) |
+| ✅ | Added — unit tests + the live-Paper harness cover it in CI |
+| 🚧 | Partial — a first slice ships, the rest is owned by a named milestone |
+| 📋 | Planned — on the roadmap under the cited milestone, tracked on the [board](https://github.com/users/xef5000/projects/1) |
+| ➖ | Not planned — delegated permanently to other tools or rejected (see the roadmap's "explicitly NOT" list) |
+
 ---
 
 ## 1. Feature Matrix (quick scan)
 
 ### A. Architecture & platform
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Config model | YAML "items packs" | YAML items + `Mechanics` engine | YAML items + `Mechanics` engine |
-| Auto resource-pack generation | ✅ | ✅ | ✅ |
-| Built-in pack self-host webserver | ✅ | ✅ (Java HTTP) | ✅ (SELFHOST) |
-| External/CDN upload | ✅ | ✅ (Polymath/Atlas, transfer.sh) | ✅ (S3 / R2 / Hetzner, LobFile, Polymath) |
-| Pack obfuscation | ⚠️ | ✅ (tamper protection) | ✅ (NONE/SIMPLE/FULL + cache) |
-| PackSquash compression | ❌ | ❌ | ✅ |
-| Multi-version packs (ViaVersion) | ✅ ⚠️ | ✅ | ✅ |
-| Proxy pack-dedup (Velocity/Bungee) | ❌ ⚠️ | ✅ (PackLayer) | ✅ (NexoProxy) |
-| Pre-join pack send | ⚠️ | ✅ (1.21.7+) | ✅ |
-| **Folia** support | ⚠️ verify | ✅ native | ✅ native |
-| **Bedrock (Geyser)** conversion | ❌ / community | ❌ | ✅ (Scaffolding addon) |
-| Pack layering (on top of existing packs) | ⚠️ | ✅ | ✅ (MultiPack) |
-| Creative-inventory client mod | ❌ | ❌ | ✅ (NCI Fabric mod) |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Config model | YAML "items packs" | YAML items + `Mechanics` engine | YAML items + `Mechanics` engine | ✅ (lossless YAML round-trips) |
+| Auto resource-pack generation | ✅ | ✅ | ✅ | ✅ |
+| Built-in pack self-host webserver | ✅ | ✅ (Java HTTP) | ✅ (SELFHOST) | ✅ |
+| External/CDN upload | ✅ | ✅ (Polymath/Atlas, transfer.sh) | ✅ (S3 / R2 / Hetzner, LobFile, Polymath) | 📋 M7 |
+| Pack obfuscation | ⚠️ | ✅ (tamper protection) | ✅ (NONE/SIMPLE/FULL + cache) | 📋 M7 |
+| PackSquash compression | ❌ | ❌ | ✅ | 📋 M7 |
+| Multi-version packs (ViaVersion) | ✅ ⚠️ | ✅ | ✅ | ✅ (format ladder + overlays) |
+| Proxy pack-dedup (Velocity/Bungee) | ❌ ⚠️ | ✅ (PackLayer) | ✅ (NexoProxy) | 📋 M7 |
+| Pre-join pack send | ⚠️ | ✅ (1.21.7+) | ✅ | 📋 M7 (send-on-join ✅) |
+| **Folia** support | ⚠️ verify | ✅ native | ✅ native | 🚧 (Folia-safe scheduling, unproven) |
+| **Bedrock (Geyser)** conversion | ❌ / community | ❌ | ✅ (Scaffolding addon) | 📋 M8 |
+| Pack layering (on top of existing packs) | ⚠️ | ✅ | ✅ (MultiPack) | 📋 M7 |
+| Creative-inventory client mod | ❌ | ❌ | ✅ (NCI Fabric mod) | 📋 M8 |
 
 ### B. Items
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Custom items (name/lore/flags/attrs/enchants/PDC) | ✅ | ✅ | ✅ |
-| `custom_model_data` models | ✅ | ✅ | ✅ |
-| **1.21.4+ ItemModels** (item model JSON) | ⚠️ | ✅ (4 generation modes) | ✅ (full ItemModel builder) |
-| **1.20.5+ data components** | 🟡 ⚠️ | ✅ | ✅ (deepest coverage) |
-| Auto texture/model generation | ✅ | ✅ | ✅ |
-| Hand-authored 3D models (Blockbench) | ✅ | ✅ | ✅ |
-| Composite / multi-layer models | ⚠️ | ✅ (gui_model, oversized) | ✅ (composite_models) |
-| Oversized-in-GUI models (1.21.6+) | ⚠️ | ✅ | ✅ |
-| Dyeable items | ✅ | ✅ | ✅ |
-| Durability-based "damaged" model stages | ✅ | ✅ | ✅ |
-| 2D player heads as items | ⚠️ | ❌ | ✅ |
-| Item templates / inheritance | ⚠️ | 🟡 | ✅ (`template`) |
-| Item auto-updater (refresh held items on config change) | ⚠️ | ✅ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Custom items (name/lore/flags/attrs/enchants/PDC) | ✅ | ✅ | ✅ | ✅🧪 |
+| `custom_model_data` models | ✅ | ✅ | ✅ | ✅ (via ItemModels) |
+| **1.21.4+ ItemModels** (item model JSON) | ⚠️ | ✅ (4 generation modes) | ✅ (full ItemModel builder) | ✅🧪 |
+| **1.20.5+ data components** | 🟡 ⚠️ | ✅ | ✅ (deepest coverage) | ✅ |
+| Auto texture/model generation | ✅ | ✅ | ✅ | ✅🧪 |
+| Hand-authored 3D models (Blockbench) | ✅ | ✅ | ✅ | ✅🧪 |
+| Composite / multi-layer models | ⚠️ | ✅ (gui_model, oversized) | ✅ (composite_models) | 📋 M7 |
+| Oversized-in-GUI models (1.21.6+) | ⚠️ | ✅ | ✅ | 📋 M7 |
+| Dyeable items | ✅ | ✅ | ✅ | 📋 M7 |
+| Durability-based "damaged" model stages | ✅ | ✅ | ✅ | 📋 M7 |
+| 2D player heads as items | ⚠️ | ❌ | ✅ | 📋 M7 |
+| Item templates / inheritance | ⚠️ | 🟡 | ✅ (`template`) | ✅ |
+| Item auto-updater (refresh held items on config change) | ⚠️ | ✅ | ✅ | ✅ |
 
 ### C. Special item types
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Custom shields (blocking model) | ✅ | ✅ | ✅ |
-| Custom bows (pulling stages) | ✅ | ✅ | ✅ |
-| Custom crossbows (charged/firework) | ✅ | ✅ | ✅ |
-| Custom fishing rods (cast model) | ✅ | ✅ | ✅ |
-| Custom tridents | ✅ ⚠️ | 🟡 (via mechanics) | ✅ (dedicated mechanic) |
-| Custom elytra | ✅ | ✅ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Custom shields (blocking model) | ✅ | ✅ | ✅ | 📋 M7 |
+| Custom bows (pulling stages) | ✅ | ✅ | ✅ | 📋 M7 |
+| Custom crossbows (charged/firework) | ✅ | ✅ | ✅ | 📋 M7 |
+| Custom fishing rods (cast model) | ✅ | ✅ | ✅ | 📋 M7 |
+| Custom tridents | ✅ ⚠️ | 🟡 (via mechanics) | ✅ (dedicated mechanic) | 📋 M7 |
+| Custom elytra | ✅ | ✅ | ✅ | 📋 M7 |
 
 ### D. Mechanics / Behaviors (item-level logic)
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Events on items (click/equip/death/drop/etc.) | 🟡 ⚠️ | ✅ (Custom Mechanic + clickAction) | ✅ (Custom Mechanic) |
-| Expression conditions (JS/SpEL on player/server) | ⚠️ | ✅ (JS-like) | ✅ (SpEL) |
-| Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ |
-| Custom durability mechanic | ⚠️ | ✅ | ✅ |
-| Custom food / consumable + effects | ✅ | ✅ | ✅ (component) |
-| Soulbound (keep on death) | ⚠️ | ✅ | ✅ |
-| Armor effects (potion while worn, full-set) | ⚠️ | ✅ | ✅ |
-| Backpack item mechanic | ⚠️ verify | ✅ | ✅ |
-| Aura / particle effects | 🟡 | ✅ (simple/ring/helix) | 🟡 |
-| Skin / skinnable items | ⚠️ | ✅ | ❌ |
-| Hat (wear any item on head) | ⚠️ | ✅ | 🟡 |
-| **Combat spell mechanics** (lunge, lightning, fireball, lifeleech, bleed, wither skull, energy blast) | ❌ | ✅ (richest) | 🟡 |
-| **Farming mechanics** (harvest/replant, big-mining 3×3, auto-smelt, bottled-XP, bedrock-break, watering) | ❌ ⚠️ | ✅ (richest) | ✅ (harvesting, smelting) |
-| Repair / item-as-repair-material | ⚠️ | ✅ | 🟡 |
-| Third-party custom-mechanic API | ✅ ⚠️ | ✅ (factory + listener) | ✅ (Mechanic + Factory) |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Events on items (click/equip/death/drop/etc.) | 🟡 ⚠️ | ✅ (Custom Mechanic + clickAction) | ✅ (Custom Mechanic) | ✅ (ECA) |
+| Expression conditions (JS/SpEL on player/server) | ⚠️ | ✅ (JS-like) | ✅ (SpEL) | ✅ (ECA expressions) |
+| Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ | ✅ |
+| Custom durability mechanic | ⚠️ | ✅ | ✅ | ✅ |
+| Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅ |
+| Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅ |
+| Armor effects (potion while worn, full-set) | ⚠️ | ✅ | ✅ | 📋 M7 |
+| Backpack item mechanic | ⚠️ verify | ✅ | ✅ | ✅ |
+| Aura / particle effects | 🟡 | ✅ (simple/ring/helix) | 🟡 | 📋 M7 |
+| Skin / skinnable items | ⚠️ | ✅ | ❌ | 📋 M7 |
+| Hat (wear any item on head) | ⚠️ | ✅ | 🟡 | 📋 M7 |
+| **Combat spell mechanics** (lunge, lightning, fireball, lifeleech, bleed, wither skull, energy blast) | ❌ | ✅ (richest) | 🟡 | 📋 M7 |
+| **Farming mechanics** (harvest/replant, big-mining 3×3, auto-smelt, bottled-XP, bedrock-break, watering) | ❌ ⚠️ | ✅ (richest) | ✅ (harvesting, smelting) | 📋 M7 |
+| Repair / item-as-repair-material | ⚠️ | ✅ | 🟡 | 📋 M7 |
+| Third-party custom-mechanic API | ✅ ⚠️ | ✅ (factory + listener) | ✅ (Mechanic + Factory) | ✅ (mechanics registry seam) |
 
 ### E. Custom blocks (world-placed)
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| NoteBlock-based blocks | ✅ (~800) | ✅ (~800) | ✅ (~1149) |
-| Tripwire/StringBlock (foliage, waterlog, tall, sapling) | ✅ ⚠️ | ✅ (~127) | ✅ (~127) |
-| ChorusBlock (transparent) | ✅ ⚠️ | ✅ (~63) | ✅ (~63) |
-| Blocks-without-textures (technical) | ✅ | 🟡 (legacy mushroom) | 🟡 |
-| Hardness / best-tool / blast resistance / sounds | ✅ | ✅ | ✅ |
-| Light emission | ✅ | ✅ | ✅ |
-| Custom drops (silk-touch/fortune/tiered/loot-table) | ✅ | ✅ | ✅ |
-| Block storage (shulker/enderchest/disposal/personal) | ✅ | ✅ | ✅ |
-| Limited placing (allow/deny lists, roof/floor/wall, radius) | ✅ | ✅ | ✅ |
-| Directional variants (log/barrel/furnace/dropper) | ✅ ⚠️ | ✅ | ✅ |
-| Falling blocks | ⚠️ | ✅ | ✅ |
-| **Stairs / slabs / doors / trapdoors / grates / bulbs** | 🟡 ⚠️ | ✅ (ShapedBlock, built-in) | ✅ (Carpentry addon) |
-| Log stripping | ⚠️ | ✅ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| NoteBlock-based blocks | ✅ (~800) | ✅ (~800) | ✅ (~1149) | ✅ |
+| Tripwire/StringBlock (foliage, waterlog, tall, sapling) | ✅ ⚠️ | ✅ (~127) | ✅ (~127) | 🚧 (dry — not waterloggable yet) |
+| ChorusBlock (transparent) | ✅ ⚠️ | ✅ (~63) | ✅ (~63) | ✅ |
+| Blocks-without-textures (technical) | ✅ | 🟡 (legacy mushroom) | 🟡 | ✅ |
+| Hardness / best-tool / blast resistance / sounds | ✅ | ✅ | ✅ | 📋 M7 |
+| Light emission | ✅ | ✅ | ✅ | ✅ |
+| Custom drops (silk-touch/fortune/tiered/loot-table) | ✅ | ✅ | ✅ | 📋 M7 |
+| Block storage (shulker/enderchest/disposal/personal) | ✅ | ✅ | ✅ | ✅ (furniture storage) |
+| Limited placing (allow/deny lists, roof/floor/wall, radius) | ✅ | ✅ | ✅ | ✅ |
+| Directional variants (log/barrel/furnace/dropper) | ✅ ⚠️ | ✅ | ✅ | 📋 M7 |
+| Falling blocks | ⚠️ | ✅ | ✅ | 📋 M7 |
+| **Stairs / slabs / doors / trapdoors / grates / bulbs** | 🟡 ⚠️ | ✅ (ShapedBlock, built-in) | ✅ (Carpentry addon) | 🚧 (stairs + slabs via shaped blocks) |
+| Log stripping | ⚠️ | ✅ | ✅ | 📋 M7 |
 
 ### F. Furniture (entity decor)
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Display-entity furniture (1.19.4+) | ✅ ⚠️ | ✅ (default) | ✅ (only method) |
-| Item-frame / glow-frame / armor-stand furniture | ✅ | ✅ | ❌ (dropped) |
-| Hitboxes (barrier / interaction / shulker / ghast) | ✅ | ✅ | ✅ (4 types, incl. ghast 1.21.6) |
-| Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ |
-| Seats (single + multi) | ✅ | ✅ | ✅ |
-| Lights (toggleable) | ✅ | ✅ | ✅ |
-| Storage | ✅ | ✅ | ✅ |
-| Beds (sleep / lie-down) | ⚠️ | ❌ | ✅ |
-| Doors (rotating + sliding) | ⚠️ | 🟡 | ✅ |
-| Connectable furniture (couches/tables auto-join) | ⚠️ | ❌ | ✅ |
-| Furniture states (cycle on interact) | ⚠️ | 🟡 (Pack.models) | ✅ (6 state types) |
-| Furniture placements (per-surface behavior) | ⚠️ | ❌ | ✅ |
-| Text displays (PAPI, client-side) | ⚠️ | ✅ | ✅ |
-| Evolution / farming stages | ✅ | ✅ | ✅ |
-| Rotation / restricted rotation | ✅ | ✅ | ✅ |
-| Waterloggable | ⚠️ | ✅ (string/shaped) | ✅ |
-| Jukebox furniture (accept discs) | ⚠️ | ✅ | ✅ |
-| BlockLocker protection | ⚠️ | ✅ | ✅ |
-| ModelEngine blueprint binding | ⚠️ | ✅ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Display-entity furniture (1.19.4+) | ✅ ⚠️ | ✅ (default) | ✅ (only method) | ✅ |
+| Item-frame / glow-frame / armor-stand furniture | ✅ | ✅ | ❌ (dropped) | ➖ (display entities only) |
+| Hitboxes (barrier / interaction / shulker / ghast) | ✅ | ✅ | ✅ (4 types, incl. ghast 1.21.6) | ✅ |
+| Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ | 🚧 (transform + rotation; scale/brightness 📋 M7) |
+| Seats (single + multi) | ✅ | ✅ | ✅ | ✅ |
+| Lights (toggleable) | ✅ | ✅ | ✅ | ✅ |
+| Storage | ✅ | ✅ | ✅ | ✅ |
+| Beds (sleep / lie-down) | ⚠️ | ❌ | ✅ | 📋 M7 |
+| Doors (rotating + sliding) | ⚠️ | 🟡 | ✅ | 📋 M7 |
+| Connectable furniture (couches/tables auto-join) | ⚠️ | ❌ | ✅ | 📋 M7 |
+| Furniture states (cycle on interact) | ⚠️ | 🟡 (Pack.models) | ✅ (6 state types) | 📋 M7 |
+| Furniture placements (per-surface behavior) | ⚠️ | ❌ | ✅ | 📋 M7 |
+| Text displays (PAPI, client-side) | ⚠️ | ✅ | ✅ | ✅ |
+| Evolution / farming stages | ✅ | ✅ | ✅ | ✅ |
+| Rotation / restricted rotation | ✅ | ✅ | ✅ | ✅ |
+| Waterloggable | ⚠️ | ✅ (string/shaped) | ✅ | 🚧 (stringblocks dry) |
+| Jukebox furniture (accept discs) | ⚠️ | ✅ | ✅ | 📋 M7 (vanilla-jukebox discs ✅) |
+| BlockLocker protection | ⚠️ | ✅ | ✅ | 📋 M7 |
+| ModelEngine blueprint binding | ⚠️ | ✅ | ✅ | 📋 M7 |
 
 ### G. Armor & equipment
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Component-based armor (1.21.2+, any material) | ⚠️ | ✅ | ✅ |
-| Trim-based armor (1.20+, datapack) | ✅ | ✅ | ✅ (deprecated 1.25) |
-| Legacy shader armor (Optifine/leather) | ✅ | ✅ (1.18–1.19.4) | ❌ |
-| Animated / emissive armor textures | ✅ | ✅ | ✅ |
-| Custom elytra | ✅ | ✅ | ✅ |
-| **Mob armor** (wolf / horse / llama / nautilus) | ⚠️ verify | ❌ (reachable via component only) | ✅ (documented) |
-| **Custom saddles** (1.21.5+) | ❌ | ❌ | ✅ |
-| **Harness** (Happy Ghast, 1.21.6+) | ❌ | ❌ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Component-based armor (1.21.2+, any material) | ⚠️ | ✅ | ✅ | 📋 M7 |
+| Trim-based armor (1.20+, datapack) | ✅ | ✅ | ✅ (deprecated 1.25) | 📋 M7 |
+| Legacy shader armor (Optifine/leather) | ✅ | ✅ (1.18–1.19.4) | ❌ | ➖ (modern-only, D10) |
+| Animated / emissive armor textures | ✅ | ✅ | ✅ | 📋 M7 |
+| Custom elytra | ✅ | ✅ | ✅ | 📋 M7 |
+| **Mob armor** (wolf / horse / llama / nautilus) | ⚠️ verify | ❌ (reachable via component only) | ✅ (documented) | 📋 M7 |
+| **Custom saddles** (1.21.5+) | ❌ | ❌ | ✅ | 📋 M7 |
+| **Harness** (Happy Ghast, 1.21.6+) | ❌ | ❌ | ✅ | 📋 M7 |
 
 ### H. HUDs & on-screen UI
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| **Native HUD system (Java)** | ✅ **(strongest)** — IMAGES/TEXT/BAR | 🟡 (glyph-based only) | ❌ (Java) / ✅ Bedrock retexture |
-| Animated HUD images | ✅ | 🟡 | ❌ |
-| Progress-bar HUDs (mana/stamina/health) | ✅ | 🟡 (glyph bars) | ❌ |
-| Per-world / conditional HUDs | ✅ | 🟡 | ❌ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| **Native HUD system (Java)** | ✅ **(strongest)** — IMAGES/TEXT/BAR | 🟡 (glyph-based only) | ❌ (Java) / ✅ Bedrock retexture | 📋 M6 |
+| Animated HUD images | ✅ | 🟡 | ❌ | 📋 M6 |
+| Progress-bar HUDs (mana/stamina/health) | ✅ | 🟡 (glyph bars) | ❌ | 📋 M6 |
+| Per-world / conditional HUDs | ✅ | 🟡 | ❌ | 📋 M6 |
 
 ### I. Glyphs / fonts / emoji
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Basic glyph (texture → unicode) | ✅ | ✅ | ✅ |
-| Multi-bitmap glyph (one sheet → many) | ✅ | ✅ | ✅ |
-| Animated glyph (sprite sheet / GIF) | ✅ | ✅ | ✅ |
-| Grid glyph (large texture across chars) | ✅ | ✅ | ⚠️ |
-| Reference glyph (alias) | ✅ | ✅ | ✅ |
-| Pixel-shift tags (`<shift:N>`) | ✅ | ✅ | ✅ |
-| Emoji/chat integration + permissions + tab-complete | ✅ | ✅ | ✅ |
-| **GLSL text effects** (rainbow/wave/shake/pulse) | ✅ | ✅ | ✅ (addon, 7 effects) |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Basic glyph (texture → unicode) | ✅ | ✅ | ✅ | ✅ |
+| Multi-bitmap glyph (one sheet → many) | ✅ | ✅ | ✅ | ✅ |
+| Animated glyph (sprite sheet / GIF) | ✅ | ✅ | ✅ | 🚧 (frame 1 renders; cycling 📋 M6) |
+| Grid glyph (large texture across chars) | ✅ | ✅ | ⚠️ | ✅ |
+| Reference glyph (alias) | ✅ | ✅ | ✅ | ✅ |
+| Pixel-shift tags (`<shift:N>`) | ✅ | ✅ | ✅ | ✅ |
+| Emoji/chat integration + permissions + tab-complete | ✅ | ✅ | ✅ | ✅ |
+| **GLSL text effects** (rainbow/wave/shake/pulse) | ✅ | ✅ | ✅ (addon, 7 effects) | ✅ |
 
 *As built in Materione (M4):* all glyph shapes (basic, `rows`/`columns` sheets,
 `frames` animations, `reference` aliases), shift tags (a space provider appended
@@ -190,34 +202,34 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 
 ### J. GUIs / menus / dialogs
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) |
-| Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) |
-| **Server-side dialogs** (1.21+ forms) | ❌ | ❌ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | 📋 M6 |
+| Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) | 📋 M6 |
+| **Server-side dialogs** (1.21+ forms) | ❌ | ❌ | ✅ | 📋 M6 |
 
 ### K. Recipes
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Shaped | ✅ | ✅ | ✅ |
-| Shapeless | ✅ ⚠️ | ✅ | ✅ |
-| Furnace | ✅ | ✅ | ✅ |
-| Blasting / Smoking | ⚠️ | ⚠️ | ✅ |
-| Stonecutting | ⚠️ | ⚠️ | ✅ |
-| Smithing | ⚠️ | ⚠️ | ✅ (addon) |
-| Brewing | ❌ | ❌ | ✅ |
-| In-game recipe builder | ⚠️ | ✅ | ✅ |
-| Disable vanilla recipes | ✅ | ✅ | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Shaped | ✅ | ✅ | ✅ | ✅ |
+| Shapeless | ✅ ⚠️ | ✅ | ✅ | ✅ |
+| Furnace | ✅ | ✅ | ✅ | ✅ |
+| Blasting / Smoking | ⚠️ | ⚠️ | ✅ | 📋 M7 |
+| Stonecutting | ⚠️ | ⚠️ | ✅ | 📋 M7 |
+| Smithing | ⚠️ | ⚠️ | ✅ (addon) | 📋 M7 |
+| Brewing | ❌ | ❌ | ✅ | 📋 M7 |
+| In-game recipe builder | ⚠️ | ✅ | ✅ | 🚧 (web studio; in-game 📋 M7) |
+| Disable vanilla recipes | ✅ | ✅ | ✅ | 📋 M7 |
 
 ### L. Sound, music & visuals
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) |
-| Custom music discs / jukebox songs | ✅ | ✅ | ✅ |
-| **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ |
-| Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) | ✅ |
+| Custom music discs / jukebox songs | ✅ | ✅ | ✅ | ✅ |
+| **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ | ✅ |
+| Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native | 📋 M7 |
 
 *As built in Materione (M4):* custom sounds (`sounds/` definitions → per-namespace
 `sounds.json`, `replace_vanilla:` overrides through the merge seam, inline studio
@@ -231,31 +243,30 @@ through the M2 staging ledger.
 
 ### M. World & environment
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| **Ore / world generation** (populate custom blocks) | ✅ **(unique)** | ❌ | ❌ |
-| **Custom liquids / fluids** (flowing) | ✅ **(unique)** | ❌ | ❌ |
-| Vehicles / mounts (native driving) | ❌ | ❌ | ❌ |
-| Pets / companions (native) | ❌ | ❌ | ❌ |
-| Custom mobs (native AI) | ❌ | ❌ | ❌ |
-| Loot tables | ⚠️ | 🟡 | ✅ |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| **Ore / world generation** (populate custom blocks) | ✅ **(unique)** | ❌ | ❌ | 📋 M8 |
+| **Custom liquids / fluids** (flowing) | ✅ **(unique)** | ❌ | ❌ | 📋 M8 |
+| Vehicles / mounts (native driving) | ❌ | ❌ | ❌ | ➖ |
+| Pets / companions (native) | ❌ | ❌ | ❌ | ➖ |
+| Custom mobs (native AI) | ❌ | ❌ | ❌ | ➖ |
+| Loot tables | ⚠️ | 🟡 | ✅ | 📋 M7 |
 
 ### N. Integration & API
 
-| Capability | ItemsAdder | Oraxen | Nexo |
-|---|---|---|---|
-| PlaceholderAPI | ✅ | ✅ | ✅ |
-| Java developer API | ✅ (CustomStack/Block/Furniture) | ✅ | ✅ (Maven + JavaDocs) |
-| ModelEngine compat (merge RP + blueprints) | ✅ | ✅ | ✅ (auto-strip shaders) |
-| MythicMobs / MythicCrucible | ⚠️ | ✅ (Crucible) | ✅ |
-| MMOItems | ⚠️ | ❌ | ✅ |
-| Vault / economy | ⚠️ | ⚠️ (undocumented) | ⚠️ |
-| BlockLocker protection | ⚠️ | ✅ | ✅ |
-| Anti-cheat bridges | ⚠️ | ❌ | ✅ (Vulcan/Spartan) |
-| Migration converters | — | — | ✅ (from Oraxen **and** ItemsAdder) |
+| Capability | ItemsAdder | Oraxen | Nexo | Materione |
+|---|---|---|---|---|
+| PlaceholderAPI | ✅ | ✅ | ✅ | ✅ |
+| Java developer API | ✅ (CustomStack/Block/Furniture) | ✅ | ✅ (Maven + JavaDocs) | ✅ (registry + mechanics seams) |
+| ModelEngine compat (merge RP + blueprints) | ✅ | ✅ | ✅ (auto-strip shaders) | 📋 M7 |
+| MythicMobs / MythicCrucible | ⚠️ | ✅ (Crucible) | ✅ | 📋 M7 |
+| MMOItems | ⚠️ | ❌ | ✅ | 📋 M7 |
+| Vault / economy | ⚠️ | ⚠️ (undocumented) | ⚠️ | 📋 M7 |
+| BlockLocker protection | ⚠️ | ✅ | ✅ | 📋 M7 |
+| Anti-cheat bridges | ⚠️ | ❌ | ✅ (Vulcan/Spartan) | 📋 M7 |
+| Migration converters | — | — | ✅ (from Oraxen **and** ItemsAdder) | 📋 M7 (IA → Oraxen → Nexo) |
 
 ---
-
 ## 2. Architecture at a glance
 
 ### ItemsAdder (LoneDev)
