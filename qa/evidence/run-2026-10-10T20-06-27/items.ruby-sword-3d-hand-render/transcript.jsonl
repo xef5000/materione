@@ -1,0 +1,16 @@
+{"t":0,"kind":"note","msg":"test start: items.ruby-sword-3d-hand-render (visual)"}
+{"t":263,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":529,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":793,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1057,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1726,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1989,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2254,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2520,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":3189,"kind":"rcon","req":{"command":"materione give sample:ruby_sword Probe"},"res":""}
+{"t":3205,"kind":"chat","req":{"limit":30},"res":{"messages":[{"plain":"Given sample:ruby_sword ×1","addedTime":236},{"plain":"[DebugBridge] Web UI: http://localhost:9976","addedTime":130},{"plain":"Probe joined the game","addedTime":129}],"count":3}}
+{"t":3604,"kind":"exec","req":{"code":"player.getInventory().selected = 0","timeoutMs":10000},"res":0}
+{"t":3687,"kind":"exec","req":{"code":"return player.getMainHandItem().getHoverName().getString()","timeoutMs":10000},"res":"Ruby Sword"}
+{"t":4765,"kind":"shot","req":{"name":"held"},"res":{"path":"C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T20-06-27\\items.ruby-sword-3d-hand-render\\held.jpg","width":640,"height":360,"copiedFrom":"C:\\Users\\romde\\AppData\\Local\\Temp\\debugbridge-screenshot-9764006774147985508.jpg"}}
+{"t":4899,"kind":"shot","req":{"name":"hotbar"},"res":{"path":"C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T20-06-27\\items.ruby-sword-3d-hand-render\\hotbar.jpg","width":640,"height":360,"copiedFrom":"C:\\Users\\romde\\AppData\\Local\\Temp\\debugbridge-screenshot-16603880279301513797.jpg"}}
+{"t":4,"kind":"note","msg":"outcome: visual"}
