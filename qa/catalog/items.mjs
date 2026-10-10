@@ -4,6 +4,17 @@
 // closed with `node qa/runner.mjs mark <id> pass|fail`.
 
 import { test } from './_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// The probe server's working copy of the sample pack. The auto-updater test
+// stages config changes HERE (never the repo fixture); probe `up` re-copies
+// fixtures on every boot, so the workspace self-heals regardless.
+const SERVER_ITEM_COPY = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..',
+  'harness', 'build', 'probe', 'server', 'plugins', 'Materione',
+  'content', 'packs', 'sample', 'items', 'templated_ruby.yml');
 
 export default [
   test({
@@ -100,6 +111,54 @@ export default [
         'return player.getInventory().items.get(0).getHoverName().getString()',
       );
       ctx.expect(String(heldName)).toBe('Templated Ruby');
+    },
+  }),
+  test({
+    id: 'items.auto-updater-refresh',
+    title: 'sample:templated_ruby held by a mid-session player picks up a config change (display name) on the next inventory scan',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/ItemAutoUpdater.java',
+      'platform/src/main/java/dev/materione/platform/items/MaterioneStacks.java',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeItem.java',
+      'fixtures/packs/sample/**',
+    ],
+    dependsOn: ['items.template-inheritance'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give sample:templated_ruby Probe');
+      await ctx.waitForChat(/Given sample:templated_ruby/);
+      await ctx.exec('player.getInventory().selected = 0');
+      const before = await ctx.exec(
+        'return player.getInventory().items.get(0).getHoverName().getString()');
+      ctx.expect(String(before)).toBe('Templated Ruby');
+
+      // Stage the config change in the SERVER's content copy (the repo
+      // fixture is never touched) and hot-reload it into the runtime.
+      const original = fs.readFileSync(SERVER_ITEM_COPY, 'utf8');
+      fs.writeFileSync(
+        SERVER_ITEM_COPY, original.replace('Templated Ruby', 'Updated Ruby'));
+      try {
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.sleep(700); // the scheduled apply swap lands after the marker
+
+        // Rejoin: the join-time scan is the updater's first-class trigger
+        // (the throttled inventory-event path is the other; unit-covered).
+        await ctx.rejoin();
+        await ctx.sleep(700); // the join-time scan runs on the player's thread
+
+        const after = await ctx.exec(
+          'return player.getInventory().items.get(0).getHoverName().getString()');
+        ctx.expect(String(after)).toBe('Updated Ruby');
+      } finally {
+        // Restore the server copy and the runtime no matter how the
+        // assertions went — later tests must see the shipped definition.
+        fs.writeFileSync(SERVER_ITEM_COPY, original);
+        try { await ctx.rcon('materione reload'); } catch (e) {
+          ctx.log('restore reload failed: ' + (e?.message ?? e));
+        }
+      }
     },
   }),
 ];

@@ -12,6 +12,9 @@
 //   ctx.rcon(cmd)                 → server-console command reply (string)
 //   ctx.exec(groovy, timeoutMs?)  → client-side Groovy result, unwrapped
 //   ctx.command(cmd)              → run a command AS THE PLAYER
+//   ctx.rejoin()                  → disconnect, relaunch the probe client and
+//                                   rejoin (join-time behaviors rerun; returns
+//                                   once the player is in-world again)
 //   ctx.chat(limit?)              → recent client chat lines (strings)
 //   ctx.waitForChat(regex, opts?) → poll chat until a line matches (throws
 //                                   AssertionError on timeout)

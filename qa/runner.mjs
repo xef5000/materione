@@ -672,6 +672,18 @@ function makeCtx({ test, agent, testDir, transcript, logOffset }) {
     },
     exec: (code, timeoutMs = 10_000) => agentCall('exec', 'exec', { code, timeoutMs }, (r) => r.value, timeoutMs + 30_000),
     command: (command) => agentCall('command', 'command', { command }, (r) => r.value, 60_000),
+    // Full rejoin: bridge quit terminates the client process, so this
+    // relaunches it (as probe up does) and rejoins. Every join-time behavior
+    // — pack delivery, the auto-updater's join-time scan — reruns; the join
+    // call only returns once the player is in-world again.
+    rejoin: async () => {
+      await agentCall('quit', 'quit', {}, null, 120_000);
+      // the dying client's DebugBridge port lingers briefly; relaunching
+      // too early trips cmdClient's already-running guard
+      await new Promise((r) => setTimeout(r, 5000));
+      await agentCall('client', 'client', {}, null, 360_000);
+      await agentCall('join', 'join', {}, null, 180_000);
+    },
     state: () => agentCall('state', 'state', {}, null, 60_000),
     chat: async (limit = 30) => {
       // DebugBridge chatHistory returns {messages: [{plain, addedTime}], count} —
