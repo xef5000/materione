@@ -68,7 +68,7 @@ export default [
       // Wide view of the HUD for the hotbar render.
       await ctx.shot('hotbar');
       ctx.needsEyes(
-        'the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, ruby-red blade against a dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard',
+        'the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard',
       );
     },
   }),
