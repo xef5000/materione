@@ -85,3 +85,12 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.
+
+## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
+
+The tiers above are headless — no client ever joins, so visual failure modes
+(tofu glyphs, checkerboarded models) stay invisible to them. The **probe
+loop** complements them locally: a second Paper pin (`paper-probe-*`, the
+26.x seam) plus a real windowed client joined via the DebugBridge bridge mod,
+giving an agent session RCON scene control and framebuffer screenshots. Not
+CI; prerequisites and the full recipe live in [`docs/probe.md`](../docs/probe.md).

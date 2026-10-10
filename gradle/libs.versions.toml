@@ -44,6 +44,23 @@ paper-harness-build = "232"
 paper-harness-url = "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar"
 paper-harness-sha256 = "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
 
+# Probe stack pins — the local agent-probe loop (scripts/probe/probe.mjs,
+# docs/probe.md), issue #34. NOT used by any Gradle module: the script parses
+# these lines so the probe stays hermetic like the harness pin above. The
+# probe rides the 26.x seam (same build the scratch server runs) because the
+# probe's real client mod (DebugBridge) has no 1.21.4 build; CI/harness
+# coverage of the 1.21.4 floor is untouched.
+paper-probe-version = "26.1.2"
+paper-probe-build = "74"
+paper-probe-url = "https://fill-data.papermc.io/v1/objects/1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7/paper-26.1.2-74.jar"
+paper-probe-sha256 = "1d70b1dab9cf4a6de615209a536f3a45a2186240253c428213ce2188ab95e5f7"
+# Fabric client-side mod exposing the running client over a localhost WS
+# (screenshots, GUI inspection, Groovy) — https://github.com/use-ai-for-mc/debugbridge
+probe-debugbridge-version = "2.1.0"
+probe-debugbridge-url = "https://cdn.modrinth.com/data/XluaQP7T/versions/UTmX0lam/debugbridge-26.1-2.1.0.jar"
+probe-debugbridge-sha1 = "7723f7195dedb170992d73fd06a3064ff9061434"
+probe-fabric-loader = "0.19.5"
+
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
 paper-api-modern = { module = "io.papermc.paper:paper-api", version.ref = "paper-api-modern" }

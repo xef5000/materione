@@ -39,6 +39,7 @@ val downloadPaperServer by tasks.registering(DownloadPaperServerTask::class) {
 
 tasks.register<PrintLatestPaperPinTask>("printLatestPaperPin") {
     paperVersion.convention(providers.gradleProperty("paperVersion"))
+    pinPrefix.convention(providers.gradleProperty("pinPrefix"))
     // Manual maintenance task — never up-to-date, never cached.
     outputs.upToDateWhen { false }
 }
