@@ -1,21 +1,13 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
+    "sha": "494c29e6163d9eb42e1086a8ab4ad0f1d4ebdbb4",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "fail",
-    "at": "2026-10-10T18:34:37.981Z",
-    "run": "run-2026-10-10T18-33-11",
+    "result": "visual",
+    "at": "2026-10-10T19:18:23.925Z",
+    "run": "run-2026-10-10T19-17-41",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
-    "evidence": [
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/dossier.md",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/held.jpg",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/hotbar.jpg",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/transcript.jsonl"
-    ],
-    "markedBy": "agent:session-qa",
-    "note": "Still broken on main 7047df0 — identical checkerboard/missing-model render; see #39 for the full root-cause analysis (generated text-effect shader mutates the Position attribute, invalid GLSL, client drops the whole pack).",
     "issue": 39,
     "issueUrl": "https://github.com/xef5000/materione/issues/39"
   }
