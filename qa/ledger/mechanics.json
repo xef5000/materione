@@ -1,0 +1,12 @@
+{
+  "mechanics.commands-and-cooldown": {
+    "sha": "85faaef6dd527bf5b93571302e72bbb04db08199",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "3928e4e0fa0b303413ebde620cd2f66fb50b3150b2265ccf31908411060afc13",
+    "result": "fail",
+    "at": "2026-10-10T23:03:39.513Z",
+    "run": "run-2026-10-10T23-02-53",
+    "dossier": "qa\\results\\run-2026-10-10T23-02-53\\mechanics.commands-and-cooldown\\dossier.md"
+  }
+}
