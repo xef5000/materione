@@ -123,10 +123,11 @@ Scratch and truth are different things:
 - `qa/evidence/<runId>/<testId>/` is **tracked**. When a failure is filed
   (`runner file`), its dossier + transcript + screenshots are *promoted*
   there, committed, and pushed **before** the issue is created — so every
-  link in an issue body is a permanent `raw/main` repo URL and screenshots
-  inline-render for any human, agent, or clone. A failure of an already-filed
-  test comments its new evidence on the existing issue instead of filing a
-  duplicate (`--force` overrides for genuine regressions).
+  link in an issue body is a permanent repo URL that resolves for anyone who
+  can read the issue (repo readers; the repo is private, so that is exactly
+  the audience), with screenshots inline or one click away. A failure of an
+  already-filed test comments its new evidence on the existing issue instead
+  of filing a duplicate (`--force` overrides for genuine regressions).
 - The ledger stores repo-relative `qa/evidence/...` paths only — never
   machine-specific paths. `check` fails if a ledger-referenced evidence file
   is missing from the repo, and promoted evidence is never moved or renamed
