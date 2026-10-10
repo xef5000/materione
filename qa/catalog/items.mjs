@@ -72,4 +72,32 @@ export default [
       );
     },
   }),
+  test({
+    id: 'items.template-inheritance',
+    title: 'sample:templated_ruby gets its material from the base_item template and its own display name in game',
+    mode: 'auto',
+    covers: [
+      'content/**',
+      'fixtures/packs/sample/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give sample:templated_ruby Probe');
+      await ctx.waitForChat(/Given sample:templated_ruby/);
+      // The material is INHERITED (base_item says PAPER; the definition does
+      // not restate it) while the display name is the definition's own — one
+      // item proving both merge directions reach the live runtime. Indexed
+      // Groovy only: DebugBridge wraps collections, closures do not resolve.
+      await ctx.exec('player.getInventory().selected = 0');
+      const material = await ctx.exec(
+        'return player.getInventory().items.get(0).getType().name()',
+      );
+      ctx.expect(String(material)).toBe('PAPER');
+      const heldName = await ctx.exec(
+        'return player.getInventory().items.get(0).getHoverName().getString()',
+      );
+      ctx.expect(String(heldName)).toBe('Templated Ruby');
+    },
+  }),
 ];

@@ -1,0 +1,9 @@
+# Template-inheritance end to end: `material` is inherited from the
+# base_item template (PAPER) and deliberately NOT restated here — the QA
+# suite (qa items.template-inheritance) gives this item in game and asserts
+# the inherited material plus the definition's own display name, proving
+# both merge directions reach the live runtime.
+templated_ruby:
+  template: base_item
+  texture: item/ruby
+  display_name: "Templated Ruby"
