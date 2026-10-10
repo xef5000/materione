@@ -510,6 +510,9 @@ async function runTest(test, agent, runDir, { head, dirty }) {
   if (!stepsError) {
     // head/dirty are the run-start snapshots: the run's own ledger writes
     // must never pollute the dirty flag of the entries it records.
+    // An open issue link carries forward across fail/visual re-records — it
+    // belongs to the test until a pass (the fix PR closes the issue).
+    const previous = readLedger(test.suite)[test.id];
     const entry = {
       sha: head, dirty, env: envKey(), def: test.defHash,
       result: test.mode === 'visual' ? 'visual' : 'pass',
@@ -517,6 +520,10 @@ async function runTest(test, agent, runDir, { head, dirty }) {
       eyes: ctx.eyesNote,
       evidence: [...ctx.shots],
     };
+    if (entry.result !== 'pass' && previous?.issue) {
+      entry.issue = previous.issue;
+      if (previous.issueUrl) entry.issueUrl = previous.issueUrl;
+    }
     writeLedgerEntry(test, entry);
     transcript.push({ t: Date.now() - ms, kind: 'note', msg: `outcome: ${entry.result}` });
     writeTranscript(testDir, transcript);
@@ -973,14 +980,16 @@ async function cmdMark(argv) {
   let note = null;
   let shot = null;
   let by = process.env.MTR_MARKED_BY ?? 'user';
+  let issue = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--note') note = argv[++i];
     else if (argv[i] === '--shot') shot = argv[++i];
     else if (argv[i] === '--by') by = argv[++i];
+    else if (argv[i] === '--issue') issue = Number(argv[++i]);
     else positional.push(argv[i]);
   }
   const [testId, verdict] = positional;
-  if (!testId || !['pass', 'fail'].includes(verdict)) throw new QaError('usage: node qa/runner.mjs mark <testId> pass|fail [--note s] [--shot p] [--by who]');
+  if (!testId || !['pass', 'fail'].includes(verdict)) throw new QaError('usage: node qa/runner.mjs mark <testId> pass|fail [--note s] [--shot p] [--by who] [--issue N]');
   const tests = await loadCatalog();
   const test = tests.find((t) => t.id === testId);
   if (!test) throw new QaError(`unknown test "${testId}"`);
@@ -1001,6 +1010,10 @@ async function cmdMark(argv) {
     note,
     evidence: shot ? [...new Set([...(previous.evidence ?? []), shot])] : previous.evidence,
   };
+  if (issue) {
+    entry.issue = issue;
+    entry.issueUrl = `https://github.com/xef5000/materione/issues/${issue}`;
+  }
   writeLedgerEntry(test, entry);
   process.stdout.write(`${testId} marked ${verdict} (by ${by}) at ${short(headSha())}\n`);
 

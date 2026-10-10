@@ -1,18 +1,19 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "6af794b8e2716a4a252b864976f368764d08cac2",
+    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
     "result": "fail",
-    "at": "2026-10-10T18:27:24.270Z",
-    "run": "run-2026-10-10T18-25-17",
+    "at": "2026-10-10T18:34:37.981Z",
+    "run": "run-2026-10-10T18-33-11",
+    "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "evidence": [
-      "C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T18-25-17\\items.gem-red-hand-render\\held.jpg",
-      "C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T18-25-17\\items.gem-red-hand-render\\hotbar.jpg"
+      "C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T18-33-11\\items.gem-red-hand-render\\held.jpg",
+      "C:\\Users\\romde\\Documents\\dev\\minecraft\\materione\\qa\\results\\run-2026-10-10T18-33-11\\items.gem-red-hand-render\\hotbar.jpg"
     ],
     "markedBy": "agent:session-qa",
-    "note": "CONFIRMED BROKEN: corpus:gem_red renders as missing-texture (magenta/black checkerboard) in the hotbar and as a giant missing-model black/magenta shape in first person. The pack-defined display name 'Red Gem' DOES reach the client, so item metadata + give logic work — the failure is resource-pack-level. ROOT CAUSE (client log): 'Caught error loading resourcepacks, removing all selected resourcepacks' after 'Couldn't compile vertex shader (minecraft:core/rendertype_text): ERROR: 6:21: assign : l-value required Position (cannot modify an attribute)'. The delivered pack's materione_26_1 overlay overrides assets/minecraft/shaders/core/rendertype_text.vsh with a generated hook (materionePreTransform) whose text-effect wobble does 'Position.y += sin(...)' — a direct assignment to the 'in vec3 Position' ATTRIBUTE, which GLSL forbids. 26.1.2's text/gui_text/text_polygon_offset pipelines all reference this vertex shader, so one bad compile fails ALL required shader programs and the client drops the ENTIRE pack (vanilla fallback) — every custom asset then renders checkerboarded. The 1_21_4/1_21_6/26_2 overlays should be audited for the same attribute-mutation pattern. Fix direction: copy Position into a local (vec3 mtrPosition), mutate the local in the hook, and use it for gl_Position in the generated vsh template.",
+    "note": "Still broken on main 7047df0 — identical checkerboard/missing-model render; see #39 for the full root-cause analysis (generated text-effect shader mutates the Position attribute, invalid GLSL, client drops the whole pack).",
     "issue": 39,
     "issueUrl": "https://github.com/xef5000/materione/issues/39"
   }
