@@ -1,30 +1,30 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "9abc8256bfbb805cd5430ab9bdddceebfd83f865",
+    "sha": "d798d700c96631d2ba1e36dddc29061bbe82ea55",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
     "result": "pass",
-    "at": "2026-10-10T20:40:46.311Z",
-    "run": "run-2026-10-10T20-38-54",
+    "at": "2026-10-10T21:02:13.894Z",
+    "run": "run-2026-10-10T21-01-13",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
     "issueUrl": "https://github.com/xef5000/materione/issues/39",
     "markedBy": "agent:session-qa",
-    "note": "Re-blessed on the atlas-fix branch: gem still renders textured in hand + hotbar (run-2026-10-10T20-38-54)."
+    "note": "Blessed on main d798d70: gem unaffected by the atlas mirror (run-2026-10-10T21-01-13)."
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "9abc8256bfbb805cd5430ab9bdddceebfd83f865",
+    "sha": "d798d700c96631d2ba1e36dddc29061bbe82ea55",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
     "result": "pass",
-    "at": "2026-10-10T20:40:46.047Z",
-    "run": "run-2026-10-10T20-38-54",
+    "at": "2026-10-10T21:02:13.721Z",
+    "run": "run-2026-10-10T21-01-13",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
     "issueUrl": "https://github.com/xef5000/materione/issues/46",
     "markedBy": "agent:session-qa",
-    "note": "Atlas fix 27176c2: the items-atlas mirror resolves the bake — the 3D sword renders (red blade/dark hilt cubes in hand, angled 3D icon in hotbar), zero bake errors (run-2026-10-10T20-38-54)."
+    "note": "Blessed on main d798d70 (squash of #47): the items-atlas mirror resolves the bake — 3D sword renders, red blade/dark hilt, no checkerboard (run-2026-10-10T21-01-13). Closes the tracked failure."
   }
 }
