@@ -14,16 +14,18 @@
     "note": "Blessed on main d798d70: gem unaffected by the atlas mirror (run-2026-10-10T21-01-13)."
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "eab8306b5f3dc9e5a34aecac43b7c54226b1cdee",
+    "sha": "363c0cd26f6bf3eae2de19dc0d679456e5679ba3",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
-    "result": "visual",
-    "at": "2026-10-10T21:40:29.809Z",
+    "result": "pass",
+    "at": "2026-10-10T21:40:43.195Z",
     "run": "run-2026-10-10T21-39-47",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
-    "issueUrl": "https://github.com/xef5000/materione/issues/46"
+    "issueUrl": "https://github.com/xef5000/materione/issues/46",
+    "markedBy": "agent:session-qa",
+    "note": "Unchanged render on the template-fixture branch (run-2026-10-10T21-39-47): sword still renders the 3D model; the new templated_ruby item did not disturb it."
   },
   "items.template-inheritance": {
     "sha": "eab8306b5f3dc9e5a34aecac43b7c54226b1cdee",
