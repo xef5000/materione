@@ -87,13 +87,15 @@ export default [
       await ctx.waitForChat(/Given sample:templated_ruby/);
       // The material is INHERITED (base_item says PAPER; the definition does
       // not restate it) while the display name is the definition's own — one
-      // item proving both merge directions reach the live runtime. Indexed
-      // Groovy only: DebugBridge wraps collections, closures do not resolve.
+      // item proving both merge directions reach the live runtime. The
+      // bridge exposes NMS ItemStacks (getType() is the Bukkit method), so
+      // the material reads as its stable description id. Indexed Groovy
+      // only: closures do not resolve.
       await ctx.exec('player.getInventory().selected = 0');
-      const material = await ctx.exec(
-        'return player.getInventory().items.get(0).getType().name()',
+      const materialId = await ctx.exec(
+        'return player.getInventory().items.get(0).getItem().getDescriptionId()',
       );
-      ctx.expect(String(material)).toBe('PAPER');
+      ctx.expect(String(materialId)).toBe('item.minecraft.paper');
       const heldName = await ctx.exec(
         'return player.getInventory().items.get(0).getHoverName().getString()',
       );
