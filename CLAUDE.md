@@ -62,6 +62,46 @@ updates ride the same PR; close the issue via the PR.
   fields preserved; one schema source per content type (registry self-description).
 - **Module boundaries are enforced by the build** (plugin.md §11), not by review goodwill.
 - **Performance budgets (plugin.md §9) are enforced from M1**, not retrofitted.
+- **Cloudflare cost guardrails bind** (§ below) — deploys and account mutations are
+  the user's actions, never the agent's.
+
+## Cloudflare cost guardrails (binding from M5 — cloud work)
+
+The Cloudflare account behind this project (relay, payload store, website) is
+pay-as-you-go with **no hard spend cap**: budget alerts are email-only and
+daily-cadence, so prevention is procedural. These rules bind every agent and
+session with account access:
+
+- **No plan purchases or subscriptions.** The account stays on the free plan
+  unless the owner upgrades it personally in the dashboard. Workers AI, Images,
+  Stream, Logpush, and Browser Rendering are off-limits entirely (per-unit/GPU
+  pricing).
+- **Deploy-class commands are the user's to run, not the agent's**: `wrangler`
+  `deploy`/`versions`/`delete`/`secret`/`kv`/`r2`/`d1`/`queues`/`pages`-class
+  subcommands and `cloudflare-api` MCP `execute` calls are denied to agents by
+  the cost-guard hook (below). Local development (`wrangler dev`, `wrangler
+  tail`) and reads stay allowed. When deploy work is needed, hand the user the
+  exact command; do not attempt to run or bypass the guard.
+- **No public endpoint without rate limits** (in-Worker or WAF) — traffic bills
+  the account regardless of who sends it; no "temporary" unthrottled endpoints.
+- **PRs that add or change deployed infrastructure state the cost model**
+  (which free-tier line items, what would charge money at what rate).
+
+Rationale: at list prices, thousands of dollars in an hour requires a paid plan
+plus an unthrottled public endpoint, or a per-unit product. The guard denies the
+agent the first step of every such path; the user's own dashboard actions are
+outside its scope by design.
+
+Mechanics: the guard is `PreToolUse` hook `.zcode/hooks/cf-cost-guard.mjs`
+registered in `.zcode/config.json` (`hooks.events.PreToolUse`, ZCode workspace
+scope). It denies positively-identified deploy-class invocations and
+`mcp__cloudflare-api__execute`, and fails open on anything unrecognized (a
+broken guard must never break the session — the approval prompt is the
+backstop). `.zcode/` is gitignored, so a fresh clone must re-create the hook and
+config before cloud work; lifting the guard is a deliberate owner action
+(`hooks.enabled: false` or delete the entry — restore it after). The OAuth grant
+backing the `cloudflare-api` MCP server can be audited and revoked in the
+Cloudflare dashboard (My Profile → Authorized OAuth Apps).
 
 ## Toolchain floor (decided; details beyond this belong to M0)
 
