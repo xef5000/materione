@@ -130,3 +130,8 @@ If your work forces a choice on one, surface it in the PR/doc discussion instead
   traceability, no contradictions. Verify cross-references after restructures.
 - English prose, tables for enumerations, ASCII diagrams where a picture prevents a
   paragraph. Match the existing docs' tone (declarative, rationale-bearing).
+- **Visual debugging has a tool**: when an issue describes something only visible in a
+  real client (tofu glyphs, checkerboarded models, invisible paintings), use the agent
+  probe loop (`scripts/probe/probe.mjs`, [`docs/probe.md`](docs/probe.md)) to reproduce,
+  fix, and verify with screenshots — don't ask the reporter for another screenshot.
+  Local only (26.x seam + JDK 25 + vanilla client); CI stays on the 1.21.4 harness.

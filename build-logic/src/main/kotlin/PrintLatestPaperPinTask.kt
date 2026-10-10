@@ -16,6 +16,10 @@ import org.gradle.api.tasks.TaskAction
  * gradle/libs.versions.toml. Run with:
  *
  *   ./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.4
+ *   ./gradlew :harness:printLatestPaperPin -PpaperVersion=26.1.2 -PpinPrefix=paper-probe
+ *
+ * Handles both response shapes: pre-26.x versions report `build` + top-level
+ * `sha256`, 26.x versions report `id` + `checksums.sha256`.
  *
  * (The old api.papermc.io v2 API is 410 Gone; never resolve at test time.)
  */
@@ -25,6 +29,11 @@ abstract class PrintLatestPaperPinTask : DefaultTask() {
     @get:Optional
     abstract val paperVersion: Property<String>
 
+    /** TOML key prefix to print, e.g. paper-harness (default) or paper-probe. */
+    @get:Input
+    @get:Optional
+    abstract val pinPrefix: Property<String>
+
     init {
         outputs.upToDateWhen { false }
     }
@@ -33,6 +42,7 @@ abstract class PrintLatestPaperPinTask : DefaultTask() {
     fun print() {
         val version = paperVersion.orNull
             ?: throw IllegalStateException("pass the version to look up: -PpaperVersion=1.21.4")
+        val prefix = pinPrefix.orNull ?: "paper-harness"
         val uri = URI("https://fill.papermc.io/v3/projects/paper/versions/$version/builds/latest")
         val client = HttpClient.newHttpClient()
         val request = HttpRequest.newBuilder(uri)
@@ -46,16 +56,18 @@ abstract class PrintLatestPaperPinTask : DefaultTask() {
             )
         }
         val body = response.body()
-        val build = regexGroup("\"build\":\\s*(\\d+)", body)
+        // "build": 232 (pre-26.x) | "id": 74 (26.x)
+        val build = regexGroup("\"(?:build|id)\":\\s*(\\d+)", body)
         val url = regexGroup("\"server:default\"[\\s\\S]*?\"url\":\\s*\"([^\"]+)\"", body)
+        // "sha256": "..." (pre-26.x) | "checksums": { "sha256": "..." } (26.x)
         val sha256 = regexGroup("\"server:default\"[\\s\\S]*?\"sha256\":\\s*\"([a-f0-9]{64})\"", body)
         logger.lifecycle(
             """
             |Paste into gradle/libs.versions.toml [versions]:
-            |paper-harness-version = "$version"
-            |paper-harness-build = "$build"
-            |paper-harness-url = "$url"
-            |paper-harness-sha256 = "$sha256"
+            |$prefix-version = "$version"
+            |$prefix-build = "$build"
+            |$prefix-url = "$url"
+            |$prefix-sha256 = "$sha256"
             """.trimMargin(),
         )
     }

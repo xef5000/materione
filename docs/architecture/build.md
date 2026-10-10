@@ -212,7 +212,9 @@ exported model + texture + `.bbmodel` source, `edit.setScalar` quick-attaching
 `paper-harness-url` / `paper-harness-sha256` in `gradle/libs.versions.toml`. The CI cache
 keys on the catalog hash, so a pin bump is a fresh download by construction. The pinned
 v2 metadata API is gone (410); the pin is absolute-URL + checksum precisely so test runs
-make **zero** metadata API calls.
+make **zero** metadata API calls. The task also handles the 26.x response shape
+(`id`/`checksums.sha256`) and takes `-PpinPrefix=` — the agent probe loop's
+`paper-probe-*` pins are maintained the same way (see `docs/probe.md`).
 
 **Running it from IntelliJ:** the `harness` module is an `application`
 (main class `dev.materione.harness.PaperHarnessRunner`). After one `:harness:integrationTest`
