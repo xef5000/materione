@@ -1,12 +1,12 @@
 {
   "mechanics.commands-and-cooldown": {
-    "sha": "6262d533553a7e345c02a4d17b85a19203053a43",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "3928e4e0fa0b303413ebde620cd2f66fb50b3150b2265ccf31908411060afc13",
-    "result": "fail",
-    "at": "2026-10-10T23:13:25.709Z",
-    "run": "run-2026-10-10T23-12-41",
-    "dossier": "qa\\results\\run-2026-10-10T23-12-41\\mechanics.commands-and-cooldown\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-10T23:33:36.882Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   }
 }

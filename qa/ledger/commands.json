@@ -1,79 +1,72 @@
 {
   "commands.version": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "3ea4945cd2390e62bd043d3a69045bc76bd40040749fa9d92d64a096924cbb0c",
     "result": "pass",
-    "at": "2026-10-10T18:34:02.015Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:24.894Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.unknown-subcommand": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "01edddc63b12232bef62c47627c7e99d8dd271b65e3a6803d4f01e458064fdd5",
     "result": "pass",
-    "at": "2026-10-10T18:34:03.764Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:26.592Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.doctor": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "90fd7ad32c029b4281e53dafe70fe2a134e42a80e0cd96a93d96e33f2ca3600d",
     "result": "pass",
-    "at": "2026-10-10T18:34:05.513Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:28.310Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.give-basic": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "7958c826ba1978645de8797dc5b76b92bcdf311c6ab567518e65afdeebe511f0",
     "result": "pass",
-    "at": "2026-10-10T18:34:09.188Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:32.059Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.give-amount": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "389c995575265338483db23a3c67daedbb33f3495fd8d9911f87244cb2c4cc2f",
     "result": "pass",
-    "at": "2026-10-10T18:34:16.123Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:42.492Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.give-unknown-item": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "098fc0f0ce4e0134757a899aaa7ae312ca41215f37aa2c08c82685e07c9922f5",
     "result": "pass",
-    "at": "2026-10-10T18:34:17.863Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:44.242Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   },
   "commands.give-unknown-player": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": false,
+    "sha": "8bd0257e510bb8c77d684019fc1946bf2c0c6b11",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "7e6c2112d8f0346f6707e9ab41e34fe6b1fb1de3ea6d415d67e491949a5eb554",
     "result": "pass",
-    "at": "2026-10-10T18:34:19.604Z",
-    "run": "run-2026-10-10T18-33-11",
-    "eyes": null,
-    "evidence": []
+    "at": "2026-10-10T23:32:45.973Z",
+    "run": "run-2026-10-10T23-31-44",
+    "eyes": null
   }
 }
