@@ -158,7 +158,7 @@ class PackCompilerTest {
         assertThat(outcome).isNotNull();
         // ruby + ruby_sword + obsidian_axe + chair display + the auto placement
         // items of marble_stairs and marble_slab (no item: link)
-        assertThat(outcome.itemDefinitions()).isEqualTo(6);
+        assertThat(outcome.itemDefinitions()).isEqualTo(7);
         assertThat(outcome.sha256()).isNotBlank();
 
         try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {

@@ -80,7 +80,7 @@
 | Dyeable items | ✅ | ✅ | ✅ | 📋 M7 |
 | Durability-based "damaged" model stages | ✅ | ✅ | ✅ | 📋 M7 |
 | 2D player heads as items | ⚠️ | ❌ | ✅ | 📋 M7 |
-| Item templates / inheritance | ⚠️ | 🟡 | ✅ (`template`) | ✅ |
+| Item templates / inheritance | ⚠️ | 🟡 | ✅ (`template`) | ✅🧪 |
 | Item auto-updater (refresh held items on config change) | ⚠️ | ✅ | ✅ | ✅ |
 
 ### C. Special item types
