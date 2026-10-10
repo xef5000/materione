@@ -9,13 +9,9 @@
     "run": "run-2026-10-10T18-33-11",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "evidence": [
-      "qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render/held.jpg",
-      "qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render/hotbar.jpg",
-      "qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render/dossier.md",
-      "qa/evidence/run-2026-10-10T18-25-17/items.gem-red-hand-render/transcript.jsonl",
+      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/dossier.md",
       "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/held.jpg",
       "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/hotbar.jpg",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/dossier.md",
       "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/transcript.jsonl"
     ],
     "markedBy": "agent:session-qa",
