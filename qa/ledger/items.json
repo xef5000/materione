@@ -1,14 +1,16 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "494c29e6163d9eb42e1086a8ab4ad0f1d4ebdbb4",
-    "dirty": true,
+    "sha": "064c0825e95b8e93efbefe8cae03a89befdfea8e",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "visual",
-    "at": "2026-10-10T19:18:23.925Z",
+    "result": "pass",
+    "at": "2026-10-10T19:19:50.318Z",
     "run": "run-2026-10-10T19-17-41",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
-    "issueUrl": "https://github.com/xef5000/materione/issues/39"
+    "issueUrl": "https://github.com/xef5000/materione/issues/39",
+    "markedBy": "agent:session-qa",
+    "note": "Shader fix 494c29e: mtrPosition local replaces attribute mutation; client log has zero compile errors and the gem renders textured in hotbar and hand (run-2026-10-10T19-17-41)."
   }
 }
