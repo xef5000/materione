@@ -21,6 +21,14 @@ logs/
 Thumbs.db
 .DS_Store
 
+# Secrets / local credentials — never commit
+.env
+.env.*
+*.pem
+*.jks
+*.keystore
+*.p12
+
 # Future webui (M3) — ignored from day one so experiments don't leak in
 webui/node_modules/
 
