@@ -50,7 +50,9 @@ import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
  * {@code block} conventions never reach the client's block atlas on their
  * own — the compiler emits one merged {@code blocks.json} of single-source
  * entries covering them (MTR-0017 flags a user atlas that cannot be
- * parsed).
+ * parsed). 26.x clients additionally bake item models from the items atlas,
+ * and one model may not span two atlases — the same single-source set is
+ * mirrored into {@code items.json} inside a 26.x-scoped overlay (#46).
  */
 public final class PackCompiler {
 
@@ -58,6 +60,16 @@ public final class PackCompiler {
 
     /** The one atlas file vanilla loads for item/block model textures. */
     private static final String ATLAS_PATH = "assets/minecraft/atlases/blocks.json";
+
+    /**
+     * The items atlas — 26.x clients bake item models from it, and its
+     * vanilla sources gather only item/-convention sprites (#46).
+     */
+    private static final String ITEMS_ATLAS_PATH = "assets/minecraft/atlases/items.json";
+
+    /** Overlay dir + format floor carrying the items-atlas mirror (26.x train). */
+    private static final String ITEMS_ATLAS_OVERLAY_DIR = "materione_items_26";
+    private static final int ITEMS_ATLAS_MIN_FORMAT = 84;
 
     /** Texture dirs vanilla's block atlas already scans for every namespace. */
     private static final Set<String> VANILLA_COVERED_DIRS = Set.of("item", "block");
@@ -93,6 +105,7 @@ public final class PackCompiler {
         final List<VanillaFragment> userVanillaFragments = new ArrayList<>();
         String description = DEFAULT_DESCRIPTION;
         String atlasJson;
+        String itemsAtlasJson;
         Map<String, Map<String, Object>> vanillaJson;
 
         @Override
@@ -367,10 +380,17 @@ public final class PackCompiler {
     private static void buildAtlas(Emitter emitter, dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
         var sprites = new TreeSet<String>();
         String userAtlasSource = null;
+        boolean userItemsAtlas = false;
         for (String[] copy : emitter.assetCopies) {
             String dest = copy[1];
             if (dest.equals(ATLAS_PATH)) {
                 userAtlasSource = copy[0];
+                continue;
+            }
+            if (dest.equals(ITEMS_ATLAS_PATH)) {
+                // the user routes their own items-atlas sprites — the
+                // generated mirror would shadow it on 26.x overlays
+                userItemsAtlas = true;
                 continue;
             }
             if (!dest.endsWith(".png")) {
@@ -397,6 +417,7 @@ public final class PackCompiler {
             return;
         }
         var sources = new ArrayList<Object>();
+        var itemSources = new ArrayList<Object>();
         var seen = new TreeSet<String>();
         if (userAtlasSource != null) {
             JsonElement parsed;
@@ -421,12 +442,22 @@ public final class PackCompiler {
                 source.put("type", "single");
                 source.put("resource", sprite);
                 sources.add(source);
+                itemSources.add(source);
             }
         }
         var root = new LinkedHashMap<String, Object>();
         root.put("sources", sources);
         emitter.assetCopies.removeIf(copy -> copy[1].equals(ATLAS_PATH));
         emitter.atlasJson = toJson(root);
+        // The generated singles are mirrored into the items atlas for 26.x
+        // clients (writeItemAtlasOverlay) — user-shipped blocks.json sources
+        // stay blocks-scoped, and a user-shipped items.json suppresses the
+        // mirror entirely.
+        if (!userItemsAtlas && !itemSources.isEmpty()) {
+            var itemRoot = new LinkedHashMap<String, Object>();
+            itemRoot.put("sources", itemSources);
+            emitter.itemsAtlasJson = toJson(itemRoot);
+        }
     }
 
     /**
@@ -717,11 +748,12 @@ public final class PackCompiler {
      */
     private static void writeTextEffectShaders(
             Emitter emitter, ResourcePack pack, int detectedMaxFormat,
-            dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
+            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
+            List<Object> overlayEntries) {
         if (emitter.textEffects.isEmpty()) {
             return;
         }
-        var entries = new ArrayList<Object>();
+        var entries = overlayEntries;
         for (TextEffectShaders.Rung rung : TextEffectShaders.RUNGS) {
             var overlay = team.unnamed.creative.overlay.Overlay.overlay(rung.overlayDir());
             overlay.unknownFile(TextEffectShaders.includePath(),
@@ -741,9 +773,6 @@ public final class PackCompiler {
                             team.unnamed.creative.metadata.pack.FormatVersion.of(rung.maxFormat())),
                     rung.overlayDir()));
         }
-        pack.overlaysMeta(team.unnamed.creative.metadata.overlays.OverlaysMeta.of(
-                entries.stream().map(e -> (team.unnamed.creative.metadata.overlays.OverlayEntry) e)
-                        .toList()));
         pack.sodiumMeta(team.unnamed.creative.metadata.sodium.SodiumMeta.sodium(
                 TextEffectShaders.overriddenShaders()));
         if (detectedMaxFormat > 0 && !TextEffectShaders.covers(detectedMaxFormat)) {
@@ -757,13 +786,48 @@ public final class PackCompiler {
         }
     }
 
+    /**
+     * Mirrors the generated atlas single-sources into {@code items.json}
+     * inside a 26.x-scoped overlay: those clients bake item models from the
+     * items atlas, whose vanilla sources gather only item/-convention
+     * sprites, and one model may not span two atlases (the bake is rejected,
+     * #46). With the mirror, a model mixing custom-dir and item/-convention
+     * sprites resolves within the items atlas while block models keep the
+     * base {@code blocks.json}. Pre-26.x clients never apply the overlay —
+     * their item models bake from the blocks atlas — and a user-shipped
+     * items.json suppresses the mirror (buildAtlas).
+     */
+    private static void writeItemAtlasOverlay(
+            Emitter emitter, ResourcePack pack, List<Object> overlayEntries) {
+        if (emitter.itemsAtlasJson == null) {
+            return;
+        }
+        var overlay = team.unnamed.creative.overlay.Overlay.overlay(ITEMS_ATLAS_OVERLAY_DIR);
+        overlay.unknownFile(ITEMS_ATLAS_PATH,
+                team.unnamed.creative.base.Writable.stringUtf8(emitter.itemsAtlasJson));
+        pack.overlay(overlay);
+        overlayEntries.add(team.unnamed.creative.metadata.overlays.OverlayEntry.of(
+                team.unnamed.creative.metadata.pack.PackFormat.format(
+                        team.unnamed.creative.metadata.pack.FormatVersion.of(ITEMS_ATLAS_MIN_FORMAT),
+                        team.unnamed.creative.metadata.pack.FormatVersion.of(
+                                TextEffectShaders.RUNGS.get(TextEffectShaders.RUNGS.size() - 1).maxFormat())),
+                ITEMS_ATLAS_OVERLAY_DIR));
+    }
+
     private static Outcome writeStaged(
             Emitter emitter, Path generatedDir, int detectedMaxFormat,
             PackFormats.Version detectedMaxDataFormat,
             dev.materione.api.diagnostics.DiagnosticsBus diagnostics) {
         ResourcePack pack = ResourcePack.resourcePack();
         pack.packMeta(PackFormats.spec(detectedMaxFormat), Component.text(emitter.description));
-        writeTextEffectShaders(emitter, pack, detectedMaxFormat, diagnostics);
+        var overlayEntries = new ArrayList<Object>();
+        writeTextEffectShaders(emitter, pack, detectedMaxFormat, diagnostics, overlayEntries);
+        writeItemAtlasOverlay(emitter, pack, overlayEntries);
+        if (!overlayEntries.isEmpty()) {
+            pack.overlaysMeta(team.unnamed.creative.metadata.overlays.OverlaysMeta.of(
+                    overlayEntries.stream().map(e -> (team.unnamed.creative.metadata.overlays.OverlayEntry) e)
+                            .toList()));
+        }
         emitter.itemDefinitions.forEach((path, json) ->
                 pack.unknownFile(path, team.unnamed.creative.base.Writable.stringUtf8(toJson(json))));
         emitter.models.forEach((path, json) ->

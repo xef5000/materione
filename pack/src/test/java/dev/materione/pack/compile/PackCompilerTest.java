@@ -191,6 +191,18 @@ class PackCompilerTest {
                     .doesNotContain("item/ruby")
                     .doesNotContain("block/marble");
 
+            // items-atlas mirror (#46): 26.x bakes item models from the items
+            // atlas, whose vanilla sources gather only item/-convention
+            // sprites, and one model may not span two atlases — the generated
+            // singles ship in a 26.x-scoped overlay (never the base layer,
+            // never the pre-26.x overlays)
+            assertThat(zip.getEntry("assets/minecraft/atlases/items.json")).isNull();
+            assertThat(zip.getEntry(
+                    "materione_1_21_4/assets/minecraft/atlases/items.json")).isNull();
+            assertThat(entryText(zip, "materione_items_26/assets/minecraft/atlases/items.json"))
+                    .contains("\"resource\":\"sample:obsidian/axe\"")
+                    .doesNotContain("item/ruby");
+
             // mcmeta: floor base plus a range reaching past newer clients, in
             // BOTH schema generations — supported_formats for pre-25w31a
             // clients, min_format/max_format for 1.21.9+/26.x clients (which
@@ -201,7 +213,8 @@ class PackCompilerTest {
                     .contains("supported_formats")
                     .contains("min_format")
                     .contains("max_format")
-                    .contains(String.valueOf(PackFormats.MAX_KNOWN_FORMAT));
+                    .contains(String.valueOf(PackFormats.MAX_KNOWN_FORMAT))
+                    .contains("materione_items_26");
         }
     }
 
