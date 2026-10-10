@@ -28,6 +28,9 @@ Live work tracking lives on GitHub, not in docs:
 - **[Issues](https://github.com/xef5000/materione/issues)** are the unit of work. Each
   carries context, a scope checklist, exit criteria, a **milestone** (M5–M8), and
   `kind:*` (feature/decision/research/docs/chore) + `area:*` (module) labels.
+- **[Project board](https://github.com/users/xef5000/projects/1)** ("Materione Roadmap")
+  is the live view over all issues — pick work from it and keep its Status column
+  (Todo/In Progress/Done) current.
 - **Milestones** M5–M8 mirror the roadmap. Shipped milestones (M0–M4) are recorded only
   in [`docs/roadmap.md`](docs/roadmap.md) as-built notes — do not file issues for them.
 - **Decision/research issues** track architecture §14 open questions (`kind:decision`,

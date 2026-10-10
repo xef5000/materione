@@ -12,7 +12,8 @@
 > wrong — stop and amend the architecture doc first.
 >
 > **Tracking lives on GitHub** (since 2026-10-09): open work is
-> [issues](https://github.com/xef5000/materione/issues) under milestones M5–M8; open
+> [issues](https://github.com/xef5000/materione/issues) under milestones M5–M8, viewable
+> on the [Materione Roadmap board](https://github.com/users/xef5000/projects/1); open
 > questions from architecture §14 are `kind:decision` issues. This document keeps the
 > milestone definitions, the shipped record (as-built notes below), and the
 > cross-milestone rules — it does not track progress.
