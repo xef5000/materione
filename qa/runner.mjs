@@ -27,6 +27,7 @@ const QA = path.join(ROOT, 'qa');
 const CATALOG_DIR = path.join(QA, 'catalog');
 const LEDGER_DIR = path.join(QA, 'ledger');
 const RESULTS_DIR = path.join(QA, 'results');
+const EVIDENCE_DIR = path.join(QA, 'evidence');
 const PROBE = path.join(ROOT, 'scripts', 'probe', 'probe.mjs');
 const SERVER_LOG = path.join(ROOT, 'harness', 'build', 'probe', 'server', 'logs', 'latest.log');
 const CLIENT_LOG = path.join(ROOT, 'harness', 'build', 'probe', 'client', 'client.log');
@@ -85,8 +86,13 @@ function usage() {
                             from plan. Flags: --all, --no-build, --keep-server,
                             --file (auto-file issues for failures)
   report [runId]            print a run's summary
-  file <runId> <testId>     file a GitHub issue from a failure dossier
-  mark <testId> pass|fail   record a visual verdict [--note s] [--shot p] [--by who]
+  file <runId> <testId>     promote a failure's evidence into qa/evidence/,
+                            commit+push it, then file a GitHub issue whose
+                            links are permanent repo URLs. If the test already
+                            has an open issue: comment the new evidence there
+                            instead of filing a duplicate (--force overrides).
+                            Flags: --dry-run, --force
+  mark <testId> pass|fail   record a visual verdict [--note s] [--by who]
 `);
 }
 
@@ -518,7 +524,9 @@ async function runTest(test, agent, runDir, { head, dirty }) {
       result: test.mode === 'visual' ? 'visual' : 'pass',
       at: new Date(ms).toISOString(), run: path.basename(runDir),
       eyes: ctx.eyesNote,
-      evidence: [...ctx.shots],
+      // No evidence paths here: scratch shots stay machine-local until a
+      // failure is filed (then qa/evidence/ repo-relative paths land in the
+      // ledger via `file`). A pass needs only its run id.
     };
     if (entry.result !== 'pass' && previous?.issue) {
       entry.issue = previous.issue;
@@ -925,9 +933,21 @@ function latestRunId() {
 
 // =================================================================== file ==
 
+// Evidence must outlive the machine that captured it (issue #41): `file`
+// promotes a failure's dossier + transcript + screenshots from the gitignored
+// scratch dir into the tracked qa/evidence/ tree, commits and pushes BEFORE
+// touching GitHub, and rewrites every path in the issue body to a permanent
+// /raw/main/ URL — screenshots inline-render. Local paths never reach GitHub.
 async function cmdFile(argv) {
-  const [runId, testId] = argv;
-  if (!runId || !testId) throw new QaError('usage: node qa/runner.mjs file <runId> <testId>');
+  const positional = [];
+  const flags = { dry: false, force: false };
+  for (const a of argv) {
+    if (a === '--dry-run') flags.dry = true;
+    else if (a === '--force') flags.force = true;
+    else positional.push(a);
+  }
+  const [runId, testId] = positional;
+  if (!runId || !testId) throw new QaError('usage: node qa/runner.mjs file <runId> <testId> [--dry-run] [--force]');
   const tests = await loadCatalog();
   const test = tests.find((t) => t.id === testId);
   if (!test) throw new QaError(`unknown test "${testId}"`);
@@ -936,26 +956,113 @@ async function cmdFile(argv) {
     throw new QaError(`no dossier at ${path.relative(ROOT, dossierPath)} — only failed tests can be filed`);
   }
 
-  const gh = ghExe();
-  ensureLabel(gh, 'qa-failure', 'In-game QA suite failure dossier (qa/)', 'D93F0B');
-  const body = `${fs.readFileSync(dossierPath, 'utf8').trim()}
+  const promoted = promoteEvidence(runId, testId, { dry: flags.dry });
+  // Build the body from the PROMOTED text (scratch paths rewritten to
+  // qa/evidence/) — otherwise issue links would point at gitignored paths.
+  const promotedMd = promoteRewrite(fs.readFileSync(dossierPath, 'utf8'), runId, testId);
+  const body = inlineEvidence(promotedMd.trim(), originRawBase());
+  const ledger = readLedger(test.suite);
+  const entry = ledger[testId] ?? {};
 
-_Filed by \`node qa/runner.mjs file ${runId} ${testId}\`. Evidence paths are local to the reporting machine but the dossier is self-contained (transcript, log excerpts, exact repro)._
-`;
-  const bodyFile = path.join(RESULTS_DIR, runId, testId, 'issue-body.md');
-  fs.writeFileSync(bodyFile, body);
-  const url = execFileSync(gh, ['issue', 'create', '--title', `[qa:${test.suite}] ${test.title}`, '--body-file', bodyFile, '--label', 'qa-failure'], { encoding: 'utf8' }).trim();
-  const number = Number(url.match(/\/issues\/(\d+)/)?.[1]);
-  process.stdout.write(`filed #${number}: ${url}\n`);
-
-  writeLedgerEntry(test, { ...(readLedger(test.suite)[testId] ?? {}), issue: number, issueUrl: url });
-  try {
-    execFileSync(gh, ['project', 'item-add', PROJECT_NUMBER, '--owner', PROJECT_OWNER, '--url', url], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    execFileSync(gh, ['project', 'item-edit', PROJECT_NUMBER, '--owner', PROJECT_OWNER, '--project-id', PROJECT_ID, '--url', url, '--field', 'Status', '--value', 'Todo'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    process.stdout.write(`added to the board (Status: Todo)\n`);
-  } catch (e) {
-    process.stdout.write(`(board update failed — add manually: ${e.message})\n`);
+  if (flags.dry) {
+    process.stdout.write(`--- would promote ---\n${promoted.files.join('\n')}\n--- issue/comment body ---\n${body}\n`);
+    return;
   }
+
+  // Push the evidence FIRST: an issue whose image links 404 is exactly the
+  // failure mode this command exists to prevent.
+  commitAndPushEvidence();
+
+  const gh = ghExe();
+  if (entry.issue && !flags.force) {
+    const comment = `${body}\n\n---\n_Re-failure observed in \`${runId}\` — evidence promoted to \`qa/evidence/${runId}/${testId}/\`. Comment posted by \`node qa/runner.mjs file ${runId} ${testId}\`._\n`;
+    const commentFile = path.join(RESULTS_DIR, runId, testId, 'comment-body.md');
+    fs.writeFileSync(commentFile, comment);
+    execFileSync(gh, ['issue', 'comment', String(entry.issue), '--body-file', commentFile], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    process.stdout.write(`commented on #${entry.issue} (evidence: ${promoted.dir}/)\n`);
+  } else {
+    ensureLabel(gh, 'qa-failure', 'In-game QA suite failure dossier (qa/)', 'D93F0B');
+    const url = execFileSync(gh, ['issue', 'create', '--title', `[qa:${test.suite}] ${test.title}`, '--body-file', toTempBody(runId, testId, body), '--label', 'qa-failure'], { encoding: 'utf8' }).trim();
+    const number = Number(url.match(/\/issues\/(\d+)/)?.[1]);
+    process.stdout.write(`filed #${number}: ${url}\n`);
+    entry.issue = number;
+    entry.issueUrl = url;
+    try {
+      execFileSync(gh, ['project', 'item-add', PROJECT_NUMBER, '--owner', PROJECT_OWNER, '--url', url], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      execFileSync(gh, ['project', 'item-edit', PROJECT_NUMBER, '--owner', PROJECT_OWNER, '--project-id', PROJECT_ID, '--url', url, '--field', 'Status', '--value', 'Todo'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+      process.stdout.write(`added to the board (Status: Todo)\n`);
+    } catch (e) {
+      process.stdout.write(`(board update failed — add manually: ${e.message})\n`);
+    }
+  }
+
+  // The ledger stores repo-relative promoted paths only — never machine paths.
+  writeLedgerEntry(test, { ...entry, evidence: promoted.files });
+}
+
+function promoteEvidence(runId, testId, { dry = false } = {}) {
+  const srcDir = path.join(RESULTS_DIR, runId, testId);
+  if (!fs.existsSync(srcDir)) throw new QaError(`no scratch evidence at qa/results/${runId}/${testId} — it may have been cleaned up; re-run the test`);
+  const files = fs.readdirSync(srcDir).filter((f) => f === 'dossier.md' || f === 'transcript.jsonl' || /\.(jpg|jpeg|png)$/i.test(f));
+  if (dry) {
+    return { dir: `qa/evidence/${runId}/${testId}`, files: files.map((f) => `qa/evidence/${runId}/${testId}/${f}`) };
+  }
+  const dstDir = path.join(EVIDENCE_DIR, runId, testId);
+  fs.mkdirSync(dstDir, { recursive: true });
+  for (const file of files) {
+    let content = fs.readFileSync(path.join(srcDir, file));
+    if (file === 'dossier.md') {
+      content = Buffer.from(promoteRewrite(content.toString('utf8'), runId, testId), 'utf8');
+    }
+    fs.writeFileSync(path.join(dstDir, file), content);
+  }
+  return { dir: `qa/evidence/${runId}/${testId}`, files: files.map((f) => `qa/evidence/${runId}/${testId}/${f}`) };
+}
+
+// The dossier references its evidence by scratch-relative paths; after
+// promotion those live under qa/evidence/.
+function promoteRewrite(md, runId, testId) {
+  const promoted = `qa/evidence/${runId}/${testId}`;
+  return md
+    .split(`qa\\results\\${runId}\\${testId}`).join(promoted)
+    .split(`qa/results/${runId}/${testId}`).join(promoted);
+}
+
+// Turn repo-relative qa/evidence/ references into permanent raw URLs; images
+// become inline markdown so GitHub renders them in the issue. Anything that
+// still references scratch (qa/results/) is a bug — it would 404.
+function inlineEvidence(md, rawBase) {
+  return md.replace(/[`']?(qa[\\/]evidence[\\/][^`'()\s]+)[`']?/g, (full, relPath) => {
+    const rel = relPath.replace(/\\/g, '/');
+    const url = `${rawBase}/${rel}`;
+    if (/\.(jpg|jpeg|png)$/i.test(rel)) return `![evidence: ${path.basename(rel)}](${url})`;
+    return `[${rel}](${url})`;
+  });
+}
+
+function originRawBase() {
+  if (process.env.MTR_RAW_BASE) return process.env.MTR_RAW_BASE.replace(/\/$/, '');
+  let remote;
+  try { remote = git('remote', 'get-url', 'origin'); } catch { throw new QaError('no git remote "origin" — cannot build evidence URLs (or set MTR_RAW_BASE)'); }
+  const https = remote.match(/github\.com[/:](.+?)\.git$/i) ?? remote.match(/github\.com[/:](.+?)$/i);
+  if (!https) throw new QaError(`cannot parse origin remote "${remote}" (or set MTR_RAW_BASE)`);
+  return `https://github.com/${https[1]}/raw/main`;
+}
+
+function toTempBody(runId, testId, body) {
+  const file = path.join(RESULTS_DIR, runId, testId, 'issue-body.md');
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `${body}\n`);
+  return file;
+}
+
+function commitAndPushEvidence() {
+  const pending = git('status', '--porcelain', '--', 'qa/evidence');
+  if (pending.length) {
+    git('add', 'qa/evidence');
+    git('commit', '-m', `qa: promote failure evidence (${short(headSha())})`, '--', 'qa/evidence');
+  }
+  git('push');
 }
 
 function ghExe() {
@@ -978,18 +1085,16 @@ function ensureLabel(gh, name, description, color) {
 async function cmdMark(argv) {
   const positional = [];
   let note = null;
-  let shot = null;
   let by = process.env.MTR_MARKED_BY ?? 'user';
   let issue = null;
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--note') note = argv[++i];
-    else if (argv[i] === '--shot') shot = argv[++i];
     else if (argv[i] === '--by') by = argv[++i];
     else if (argv[i] === '--issue') issue = Number(argv[++i]);
     else positional.push(argv[i]);
   }
   const [testId, verdict] = positional;
-  if (!testId || !['pass', 'fail'].includes(verdict)) throw new QaError('usage: node qa/runner.mjs mark <testId> pass|fail [--note s] [--shot p] [--by who] [--issue N]');
+  if (!testId || !['pass', 'fail'].includes(verdict)) throw new QaError('usage: node qa/runner.mjs mark <testId> pass|fail [--note s] [--by who] [--issue N]');
   const tests = await loadCatalog();
   const test = tests.find((t) => t.id === testId);
   if (!test) throw new QaError(`unknown test "${testId}"`);
@@ -1008,8 +1113,10 @@ async function cmdMark(argv) {
     def: test.defHash,
     markedBy: by,
     note,
-    evidence: shot ? [...new Set([...(previous.evidence ?? []), shot])] : previous.evidence,
   };
+  // Evidence paths are not recorded here (they would be machine-local);
+  // `runner file` promotes the run's evidence into qa/evidence/ and fills
+  // the ledger with repo-relative paths.
   if (issue) {
     entry.issue = issue;
     entry.issueUrl = `https://github.com/xef5000/materione/issues/${issue}`;
@@ -1068,16 +1175,24 @@ async function cmdCheck() {
     process.stdout.write(`${suite.padEnd(20)} ${count} test(s)\n`);
   }
   // Ledger drift: entries referencing unknown ids mean a test was renamed or
-  // deleted — the ledger needs a human decision (drop the entry).
+  // deleted — the ledger needs a human decision (drop the entry). Evidence
+  // integrity: ledger-referenced promoted evidence must exist in the repo,
+  // or the issue links built from it are dead.
   let drift = 0;
   if (fs.existsSync(LEDGER_DIR)) {
     for (const f of fs.readdirSync(LEDGER_DIR)) {
       const suite = f.replace(/\.json$/, '');
       const ledger = JSON.parse(fs.readFileSync(path.join(LEDGER_DIR, f), 'utf8'));
-      for (const id of Object.keys(ledger)) {
+      for (const [id, entry] of Object.entries(ledger)) {
         if (!tests.some((t) => t.id === id)) {
           process.stderr.write(`ledger drift: qa/ledger/${f} has entry "${id}" with no catalog test\n`);
           drift++;
+        }
+        for (const p of entry.evidence ?? []) {
+          if (!p.startsWith('qa/evidence/') || !fs.existsSync(path.join(ROOT, p))) {
+            process.stderr.write(`evidence drift: qa/ledger/${f} "${id}" references "${p}", which is not a tracked qa/evidence/ path\n`);
+            drift++;
+          }
         }
       }
       if (!tests.some((t) => t.suite === suite) && Object.keys(ledger).length) {

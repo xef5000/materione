@@ -113,9 +113,29 @@ breaks.
 - **Full re-swarm** (`run all`) per milestone tag or probe-pin bump — the
   env key already forces the latter.
 - One swarm at a time per machine (the probe owns fixed ports and the GPU).
-- Evidence (`qa/results/`) is gitignored and machine-local; dossiers embed
-  the log/chat excerpts inline so filed issues stand alone, and the local
-  paths stay valid for the next agent on this machine.
+
+## Evidence lives in the repo (never on a machine)
+
+Scratch and truth are different things:
+
+- `qa/results/` is **scratch** (gitignored, machine-local, disposable): every
+  run's transcripts, screenshots, and dossiers land there first.
+- `qa/evidence/<runId>/<testId>/` is **tracked**. When a failure is filed
+  (`runner file`), its dossier + transcript + screenshots are *promoted*
+  there, committed, and pushed **before** the issue is created — so every
+  link in an issue body is a permanent `raw/main` repo URL and screenshots
+  inline-render for any human, agent, or clone. A failure of an already-filed
+  test comments its new evidence on the existing issue instead of filing a
+  duplicate (`--force` overrides for genuine regressions).
+- The ledger stores repo-relative `qa/evidence/...` paths only — never
+  machine-specific paths. `check` fails if a ledger-referenced evidence file
+  is missing from the repo, and promoted evidence is never moved or renamed
+  (issue links depend on it).
+- Growth is bounded by construction: only failures are promoted (passes keep
+  their run id), and evidence is JPEG + text — a few dozen KB per failure.
+
+The flow runs `file` from main (the swarm policy) so pushed evidence and the
+main-branch raw URLs agree.
 
 ## Deliberate boundaries
 
@@ -124,6 +144,6 @@ breaks.
   [`:harness`](../harness/README.md) integration tests.
 - CI never boots Minecraft. `check` is the only CI step (catalog integrity +
   ledger drift).
-- The ledger is committed; `qa/results/` is not. Results without evidence
-  paths that still resolve are normal after cleanup — dossiers are
-  self-contained by design.
+- The ledger and the promoted failure evidence (`qa/evidence/`) are
+  committed; `qa/results/` scratch is not. A pass whose scratch has been
+  cleaned up is normal — the ledger's run id is its only pointer.
