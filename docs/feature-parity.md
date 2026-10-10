@@ -100,7 +100,7 @@
 |---|---|---|---|---|
 | Events on items (click/equip/death/drop/etc.) | 🟡 ⚠️ | ✅ (Custom Mechanic + clickAction) | ✅ (Custom Mechanic) | ✅ (ECA) |
 | Expression conditions (JS/SpEL on player/server) | ⚠️ | ✅ (JS-like) | ✅ (SpEL) | ✅ (ECA expressions) |
-| Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ | ✅ |
+| Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ | ✅🧪 (console + player; cooldown on behavior rules) |
 | Custom durability mechanic | ⚠️ | ✅ | ✅ | ✅ |
 | Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅ |
 | Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅ |
