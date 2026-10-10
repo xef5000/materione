@@ -3,8 +3,9 @@
 # Jobs:
 #   build          — unit + ArchUnit tests, shaded jar artifact (every push/PR)
 #   integration    — real headless Paper 1.21.4 boot of the shaded jar
-#   windows-canary — same build on Windows; non-blocking until it has been
-#                    green for a few weeks (then make it required)
+#   windows-canary — full suite on Windows; nightly schedule + manual dispatch
+#                    only (windows-latest bills 2x Actions minutes, and the
+#                    canary is advisory signal, not a gate); non-blocking
 #
 # No JDK matrix by design: the Java toolchain is pinned to Temurin 21 by the
 # build itself (foojay resolver), so every job provisions the same JDK.
@@ -15,6 +16,11 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Nightly full suite including the Windows canary — 04:00 UTC
+    # (≈ midnight US Eastern). UTC only; GitHub does not honor DST per zone.
+    - cron: '0 4 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -85,8 +91,12 @@ jobs:
     name: build (windows canary)
     runs-on: windows-latest
     needs: build
-    # Non-blocking by design: promote to required after it has been green for
-    # a few weeks (remove continue-on-error and the branch-protection note).
+    # Nightly/manual only: pushes and PRs skip this job entirely. When it has
+    # been green nightly for a few weeks, reconsider making it required —
+    # but remember it is the wall-time critical path (and 2x-billed).
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # Non-blocking by design: promote to required after it has been green for a
+    # few weeks (remove continue-on-error and the branch-protection note).
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -97,6 +107,18 @@ jobs:
           java-version: '21'
 
       - uses: gradle/actions/setup-gradle@v4
+
+      # The pinned Paper server jar (gradle/libs.versions.toml pin), cached by
+      # content hash — a pin bump is a new key. The path follows
+      # GRADLE_USER_HOME because setup-gradle relocates it on Windows runners
+      # (observed D:\a\.gradle, not ~/.gradle); cache entries are OS-scoped,
+      # so sharing the ubuntu key scheme is safe.
+      - name: Cache pinned Paper server
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.GRADLE_USER_HOME || '~/.gradle' }}/caches/materione-paper
+          key: paper-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: paper-
 
       - name: Build + integration (canary)
         run: ./gradlew build :harness:integrationTest
