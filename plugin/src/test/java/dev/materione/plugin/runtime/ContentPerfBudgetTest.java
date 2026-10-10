@@ -21,6 +21,7 @@ import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.pack.compile.PackCompiler;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -109,16 +110,25 @@ class ContentPerfBudgetTest {
         for (int i = 0; i < 10_000; i++) { // warmup: JIT before measurement
             registries.item(gem);
         }
-        int rounds = 100_000;
-        long start = System.nanoTime();
-        for (int i = 0; i < rounds; i++) {
-            registries.item(gem);
+        // Median of per-round means (#36): a GC pause or hypervisor steal on a
+        // shared runner must not fail the budget, but a real >=2x regression
+        // still moves the median — plugin.md §9 semantics stay intact.
+        int rounds = 9;
+        int lookupsPerRound = 20_000;
+        long[] means = new long[rounds];
+        for (int round = 0; round < rounds; round++) {
+            long start = System.nanoTime();
+            for (int i = 0; i < lookupsPerRound; i++) {
+                registries.item(gem);
+            }
+            means[round] = (System.nanoTime() - start) / lookupsPerRound;
         }
-        long meanNs = (System.nanoTime() - start) / rounds;
+        Arrays.sort(means);
+        long medianNs = means[rounds / 2];
 
         assertThat(registries.item(gem)).isPresent();
-        assertThat(meanNs)
-                .as("registry-map resolve mean over %d lookups", rounds)
+        assertThat(medianNs)
+                .as("registry-map resolve median of %d rounds x %d lookups", rounds, lookupsPerRound)
                 .isLessThan(RESOLVE_BUDGET_NS);
     }
 
