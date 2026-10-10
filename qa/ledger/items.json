@@ -1,22 +1,16 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "7047df050c8ee77c3d96863fc26843a5c663eccc",
-    "dirty": true,
+    "sha": "064c0825e95b8e93efbefe8cae03a89befdfea8e",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "fail",
-    "at": "2026-10-10T18:34:37.981Z",
-    "run": "run-2026-10-10T18-33-11",
+    "result": "pass",
+    "at": "2026-10-10T19:19:50.318Z",
+    "run": "run-2026-10-10T19-17-41",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
-    "evidence": [
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/dossier.md",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/held.jpg",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/hotbar.jpg",
-      "qa/evidence/run-2026-10-10T18-33-11/items.gem-red-hand-render/transcript.jsonl"
-    ],
-    "markedBy": "agent:session-qa",
-    "note": "Still broken on main 7047df0 — identical checkerboard/missing-model render; see #39 for the full root-cause analysis (generated text-effect shader mutates the Position attribute, invalid GLSL, client drops the whole pack).",
     "issue": 39,
-    "issueUrl": "https://github.com/xef5000/materione/issues/39"
+    "issueUrl": "https://github.com/xef5000/materione/issues/39",
+    "markedBy": "agent:session-qa",
+    "note": "Shader fix 494c29e: mtrPosition local replaces attribute mutation; client log has zero compile errors and the gem renders textured in hotbar and hand (run-2026-10-10T19-17-41)."
   }
 }

@@ -28,18 +28,20 @@ out vec2 texCoord0;
 #moj_import <minecraft:materione_text_effects.glsl>
 
 void main() {
-    materionePreTransform();
+    // attributes are read-only: the hooks animate a local copy
+    vec3 mtrPosition = Position;
+    materionePreTransform(mtrPosition);
 
-    gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);
+    gl_Position = ProjMat * ModelViewMat * vec4(mtrPosition, 1.0);
 
 #if !defined(IS_GUI) && !defined(IS_SEE_THROUGH)
-    sphericalVertexDistance = fog_spherical_distance(Position);
-    cylindricalVertexDistance = fog_cylindrical_distance(Position);
+    sphericalVertexDistance = fog_spherical_distance(mtrPosition);
+    cylindricalVertexDistance = fog_cylindrical_distance(mtrPosition);
     vertexColor = Color * sample_lightmap(Sampler2, UV2);
 #else
     vertexColor = Color;
 #endif
     texCoord0 = UV0;
 
-    materionePostTransform();
+    materionePostTransform(mtrPosition);
 }
