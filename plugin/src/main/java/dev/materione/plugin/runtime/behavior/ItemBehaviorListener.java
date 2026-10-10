@@ -37,7 +37,14 @@ public final class ItemBehaviorListener implements Listener {
         this.diagnostics = diagnostics;
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    /**
+     * Block interactions honour cancellation (protection plugins decide
+     * first, runtime-systems §2.1). AIR interactions always run: Paper
+     * itself cancels arm-swings and item-uses aimed at the air — that flag
+     * is vanilla noise there, not a veto, and honouring it silently killed
+     * every air-click rule (#53).
+     */
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = false)
     public void onInteract(PlayerInteractEvent event) {
         String detail = switch (event.getAction()) {
             case LEFT_CLICK_BLOCK, LEFT_CLICK_AIR -> "left";
@@ -47,11 +54,27 @@ public final class ItemBehaviorListener implements Listener {
         if (detail == null || event.getHand() != org.bukkit.inventory.EquipmentSlot.HAND) {
             return; // off-hand would double-fire every right click
         }
+        if (blockInteractionCancelled(event)) {
+            return;
+        }
         try {
             behavior.fireItemEvent("click", detail, event.getPlayer(), event.getItem(), event);
         } catch (RuntimeException e) {
             reportBridgeFailure(event.getPlayer(), e);
         }
+    }
+
+    /**
+     * The aggregate cancelled flag on block interactions. Deprecated on this
+     * API floor (Paper steers to the Result accessors, which the newer
+     * generation on this classpath removed) — as a plain protection-veto
+     * gate it is exactly the signal needed.
+     */
+    @SuppressWarnings("deprecation")
+    private static boolean blockInteractionCancelled(PlayerInteractEvent event) {
+        return (event.getAction() == Action.LEFT_CLICK_BLOCK
+                || event.getAction() == Action.RIGHT_CLICK_BLOCK)
+                && event.isCancelled();
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
