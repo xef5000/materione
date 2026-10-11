@@ -1,0 +1,15 @@
+# Custom durability showcase (qa mechanics.custom-durability): the mechanic
+# owns wear in stack PDC — vanilla damage is cancelled and the third vanilla
+# use breaks the blade. The right-click rule reads the live counters through
+# ${item.*} interpolation, giving the QA run a chat-readable wear probe that
+# doubles as the expression-surface check for the durability state.
+crucible_blade:
+  material: IRON_SWORD
+  display_name: "Crucible Blade"
+  behavior:
+    - on: click:right
+      do:
+        - message: "blade-wear ${item.durability_used}/${item.durability_max}"
+  mechanics:
+    - durability:
+        max: 3

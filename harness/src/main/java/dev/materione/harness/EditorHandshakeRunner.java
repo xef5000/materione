@@ -506,7 +506,7 @@ public final class EditorHandshakeRunner {
             // 7. prove the pack is back to its boot state, then stop
             // (3 sample + 50 corpus items + 2 auto placement items)
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=57"));
+                    "MATERIONE-RELOAD-OK items=58"));
             problems.addAll(drive(console, log, options, "materione editor status",
                     "editor listener: running"));
             console.send("materione editor stop");
