@@ -343,4 +343,142 @@ return 'respawned'`))).toBe('respawned');
       ctx.expect(drops.includes('minecraft:diamond')).toBe(true);
     },
   }),
+
+  test({
+    id: 'mechanics.backpack',
+    title: "the world:satchel opens a 2-row 'Satchel' container on right-click, a diamond deposited through a real container click rides the held stack's own PDC across close/reopen, and comes back out on withdrawal",
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
+      'platform/src/main/java/dev/materione/platform/items/ItemListCodec.java',
+      'fixtures/packs/world/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give world:satchel Probe');
+      await ctx.waitForChat(/Given world:satchel/);
+      await ctx.rcon('give Probe minecraft:diamond 1');
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()')))
+        .toBe("Traveler's Satchel");
+
+      // DebugBridge wraps collections — direct method calls only. Container
+      // slot mapping for a 2-row menu: 0..17 are the backpack, 18..44 the
+      // main inventory, 45..53 the hotbar — the diamond given second sits in
+      // hotbar slot 1, i.e. container slot 46.
+      // Open/closed reads off the menu id: 26.1.2's closeContainer() resets
+      // containerMenu to the player's own inventoryMenu (id 0) — the field
+      // is never null, so null-checking it never sees "closed".
+      const menuOpen = async () => String(await ctx.exec(
+        'return player.containerMenu.containerId == 0 ? "closed" : "open"'));
+      const waitForMenu = async (want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          if ((await menuOpen()) === want) return;
+          if (Date.now() > deadline) ctx.expect(await menuOpen()).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      const slotName = (index) => ctx.exec(`def s = player.containerMenu.getSlot(${index}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString()`);
+      const waitForSlot = async (index, want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const name = String(await slotName(index));
+          if (name === want) return;
+          if (Date.now() > deadline) ctx.expect(name).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      // A real container click — the same input a shift-click sends.
+      // 26.1.2 renamed the old handleInventoryMouseClick/ClickType pair to
+      // handleContainerInput/ContainerInput (verified against the client jar).
+      const quickMove = (slot) => ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, ${slot}, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)
+return 'clicked'`);
+      // useItem fires ServerboundUseItemPacket; the plugin's PlayerInteractEvent
+      // listener runs despite Paper's pre-cancelled RIGHT_CLICK_AIR (its
+      // @EventHandler does not set ignoreCancelled) and opens the menu.
+      const useHand = () => ctx.exec(`mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND)
+return 'use-queued'`);
+      // Targeted PDC reads: a full custom_data dump truncates the long
+      // backpack-data byte array before backpack-id would print (both keys
+      // live under custom_data.PublicBukkitValues."materione:*"). Presence
+      // reads off the value shape: a UUID string for the id, "[B;" for the
+      // byte array; a missing path answers "Found no elements matching ...".
+      const backpackIdReply = () => ctx.rcon(
+        'data get entity Probe SelectedItem.components."minecraft:custom_data"'
+        + '.PublicBukkitValues."materione:backpack-id"');
+      const hasBackpackId = async () =>
+        /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/
+          .test(await backpackIdReply());
+      const hasBackpackData = async () => (await ctx.rcon(
+        'data get entity Probe SelectedItem.components."minecraft:custom_data"'
+        + '.PublicBukkitValues."materione:backpack-data"')).includes('[B;');
+      const inventoryDump = () => ctx.exec(`def found = ''
+for (int i = 0; i < 36; i++) {
+  def s = player.getInventory().items.get(i)
+  if (!s.isEmpty()) found = found + i + ':' + s.getHoverName().getString() + '; '
+}
+return found`);
+      // the title lives on the container screen in 26.x, not on the menu
+      const screenTitle = () => ctx.exec(
+        "return mc.screen == null ? 'none' : mc.screen.getTitle().getString()");
+
+      // a fresh stack carries no per-instance identity yet
+      ctx.expect(await hasBackpackId()).toBe(false);
+      ctx.expect(await hasBackpackData()).toBe(false);
+
+      // right-click opens the backpack (the plugin cancels the interact, so
+      // the chest item never places): 2 rows × 9 + 36 player slots, and the
+      // authored '&6Satchel' title — not the item's display name
+      await useHand();
+      await waitForMenu('open');
+      ctx.expect(String(await screenTitle())).toContain('Satchel');
+      ctx.expect(Number(await ctx.exec(
+        'return player.containerMenu.slots.size()'))).toBe(54);
+      // the first open assigned the stack its durable backpack-id
+      ctx.expect(await hasBackpackId()).toBe(true);
+
+      // deposit the marker with a real shift-click, close
+      ctx.expect(String(await slotName(46))).toBe('Diamond');
+      await quickMove(46);
+      await waitForSlot(0, 'Diamond');
+      await ctx.exec('player.closeContainer()');
+      await waitForMenu('closed');
+      await ctx.sleep(700); // MONITOR close listener encodes the menu into PDC
+
+      // server truth: the contents are serialized inside the held stack
+      ctx.expect(await hasBackpackId()).toBe(true);
+      ctx.expect(await hasBackpackData()).toBe(true);
+
+      // persistence: reopening restores the marker from the stack PDC
+      await useHand();
+      await waitForMenu('open');
+      await waitForSlot(0, 'Diamond');
+      ctx.expect(String(await slotName(1))).toBe('empty');
+
+      // withdrawal: shift-click back out, close — inventory and PDC agree
+      await quickMove(0);
+      await waitForSlot(0, 'empty');
+      await ctx.exec('player.closeContainer()');
+      await waitForMenu('closed');
+      await ctx.sleep(700);
+      const inv = String(await inventoryDump());
+      ctx.expect(inv).toContain('Diamond');
+      ctx.expect(await hasBackpackData()).toBe(true);
+      // and a final reopen proves the emptied container round-trips too
+      await useHand();
+      await waitForMenu('open');
+      ctx.expect(String(await slotName(0))).toBe('empty');
+      await ctx.exec('player.closeContainer()');
+      await waitForMenu('closed');
+      // the satchel itself was never consumed or duplicated by all this
+      ctx.expect(inv).toContain("Traveler's Satchel");
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()')))
+        .toBe("Traveler's Satchel");
+    },
+  }),
 ];

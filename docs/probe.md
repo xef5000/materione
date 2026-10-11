@@ -152,6 +152,24 @@ already asserts.
   the player's rotation, guaranteeing alignment. Attacks on armor stands
   never land on 26.1.2 (vanilla-irrelevant quirk); use a `NoAI` villager,
   and space swings past the weapon's full attack cooldown.
+- **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
+  drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
+  slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
+  (the old `handleInventoryMouseClick`/`ClickType` pair is gone; a 2-row menu
+  maps container slots 0–17 to the top, 18–44 to the main inventory and
+  45–53 to the hotbar). Close with `player.closeContainer()` — that one sends
+  the close packet; `clientSideCloseContainer()` does not. The open menu's
+  title lives on the screen, not the menu: `mc.screen.getTitle().getString()`.
+  Open/closed state reads off the menu id (`player.containerMenu.containerId
+  == 0` is closed) — closeContainer() resets `containerMenu` to the player's
+  own `inventoryMenu`, so the field is never null and null-checking it never
+  sees a close.
+- **`data get` truncates long byte arrays**: a full
+  `SelectedItem.components."minecraft:custom_data"` dump cuts off partway
+  through a byte-array value, so later PDC keys never print — read targeted
+  paths instead (`..."minecraft:custom_data".PublicBukkitValues."materione:key"`).
+  A missing path answers `Found no elements matching <path>` (echoing the
+  path text — don't assert presence by matching the key name in that reply).
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 
