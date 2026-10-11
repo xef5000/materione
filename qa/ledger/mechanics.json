@@ -28,5 +28,15 @@
     "at": "2026-10-11T20:10:43.007Z",
     "run": "run-2026-10-11T20-08-07",
     "eyes": null
+  },
+  "mechanics.soulbound": {
+    "sha": "920b6598ccfe7a0ca883a9efb3c1fee66a6050b5",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "b98aede53b71cb66988df203865f97c2181497ac6e5e32ca927777a2a94601f2",
+    "result": "pass",
+    "at": "2026-10-11T20:30:05.712Z",
+    "run": "run-2026-10-11T20-29-11",
+    "eyes": null
   }
 }
