@@ -103,7 +103,7 @@
 | Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ | ✅🧪 (console + player; cooldown on behavior rules) |
 | Custom durability mechanic | ⚠️ | ✅ | ✅ | ✅🧪 (PDC counter; vanilla wear cancelled; survives reload; breaks at max) |
 | Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅🧪 (vanilla food component projection + effects on consume) |
-| Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅ |
+| Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅🧪 (PDC stash on death, restore on respawn) |
 | Armor effects (potion while worn, full-set) | ⚠️ | ✅ | ✅ | 📋 M7 |
 | Backpack item mechanic | ⚠️ verify | ✅ | ✅ | ✅ |
 | Aura / particle effects | 🟡 | ✅ (simple/ring/helix) | 🟡 | 📋 M7 |
