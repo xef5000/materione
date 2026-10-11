@@ -152,6 +152,19 @@ already asserts.
   the player's rotation, guaranteeing alignment. Attacks on armor stands
   never land on 26.1.2 (vanilla-irrelevant quirk); use a `NoAI` villager,
   and space swings past the weapon's full attack cooldown.
+- **Crosshair-driven block work**: aim with `player.setRot(yaw, pitch)` (it
+  persists between exec calls; positive pitch is down), then verify
+  `mc.hitResult` (a `BlockHitResult`: `getType()`/`getBlockPos()`/`getDirection()`)
+  and act in the SAME Groovy call — the physical desktop mouse can nudge the
+  camera between calls, and survival block reach is 4.5 (a target just past
+  it reads as a silent MISS). `setDown(true)` on `keyAttack` does drive
+  continuous mining; `mc.gameMode.useItemOn(player, hand, hitResult)` is the
+  direct-packet alternative (26.1.2 signature takes a `BlockHitResult`).
+  Server-side blockstate asserts go through `execute if block <pos>
+  <block>[prop=val,…]` — `data get block` fails on non-block-entities like
+  note blocks — and the async region-thread replies of `/materione dev
+  inspect` land in the server log (MATERIONE-DEV-INSPECT), not the RCON
+  response. `chatHistory` is newest-first: count lines, don't index.
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
