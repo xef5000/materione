@@ -266,11 +266,16 @@ async function doUp({ build = true, keepWorld = false } = {}) {
   fs.writeFileSync(path.join(SERVER_DIR, 'eula.txt'), 'eula=true\n');
   fs.writeFileSync(path.join(SERVER_DIR, 'server.properties'), serverProperties());
   // Fresh world + fresh log every `up` (deterministic baseline: no scene
-  // leftovers from the last session). keepWorld opts out for debugging.
+  // leftovers from the last session). The block placement index travels with
+  // the world (disposable accelerator, chunk PDC is the truth) — a stale
+  // journal would have the sweep report placements the fresh world never
+  // had. keepWorld opts out for debugging.
   if (!keepWorld) {
     for (const stale of ['world', 'world_nether', 'world_the_end', 'logs']) {
       fs.rmSync(path.join(SERVER_DIR, stale), { recursive: true, force: true });
     }
+    fs.rmSync(path.join(SERVER_DIR, 'plugins', 'Materione', 'generated', 'index'),
+      { recursive: true, force: true });
   }
   fs.mkdirSync(path.join(SERVER_DIR, 'logs'), { recursive: true });
   const plugins = path.join(SERVER_DIR, 'plugins');

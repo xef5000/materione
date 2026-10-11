@@ -1,50 +1,46 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "bf74956bc344abca932dafec5aa0e9428287c4eb",
-    "dirty": true,
+    "sha": "ed1807bbf1e1c9dfbede9c51b3fdb1585cf946e0",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "pass",
-    "at": "2026-10-11T20:39:10.676Z",
-    "run": "run-2026-10-11T20-36-27",
+    "result": "visual",
+    "at": "2026-10-11T22:53:33.810Z",
+    "run": "run-2026-10-11T22-50-35",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
-    "issueUrl": "https://github.com/xef5000/materione/issues/39",
-    "markedBy": "zcode",
-    "note": "gem sprite + red hand render at bf74956"
+    "issueUrl": "https://github.com/xef5000/materione/issues/39"
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "bf74956bc344abca932dafec5aa0e9428287c4eb",
-    "dirty": true,
+    "sha": "ed1807bbf1e1c9dfbede9c51b3fdb1585cf946e0",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
-    "result": "pass",
-    "at": "2026-10-11T20:39:10.852Z",
-    "run": "run-2026-10-11T20-36-27",
+    "result": "visual",
+    "at": "2026-10-11T22:53:38.485Z",
+    "run": "run-2026-10-11T22-50-35",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
-    "issueUrl": "https://github.com/xef5000/materione/issues/46",
-    "markedBy": "zcode",
-    "note": "3D sword in hand, hover name correct at bf74956"
+    "issueUrl": "https://github.com/xef5000/materione/issues/46"
   },
   "items.template-inheritance": {
-    "sha": "bf74956bc344abca932dafec5aa0e9428287c4eb",
+    "sha": "ed1807bbf1e1c9dfbede9c51b3fdb1585cf946e0",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "e468e7001724cb59419aa5e7d96e8e453e63e06006dd6ddcba409f89b9a0eb2e",
     "result": "pass",
-    "at": "2026-10-11T20:37:35.282Z",
-    "run": "run-2026-10-11T20-36-27",
+    "at": "2026-10-11T22:53:42.327Z",
+    "run": "run-2026-10-11T22-50-35",
     "eyes": null
   },
   "items.auto-updater-refresh": {
-    "sha": "bf74956bc344abca932dafec5aa0e9428287c4eb",
+    "sha": "ed1807bbf1e1c9dfbede9c51b3fdb1585cf946e0",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "352dd319ed995a7be1381e770d714ed8789e181b5cfaddf6c690ba5c7f95b517",
     "result": "pass",
-    "at": "2026-10-11T20:38:05.698Z",
-    "run": "run-2026-10-11T20-36-27",
+    "at": "2026-10-11T22:54:25.852Z",
+    "run": "run-2026-10-11T22-50-35",
     "eyes": null
   }
 }
