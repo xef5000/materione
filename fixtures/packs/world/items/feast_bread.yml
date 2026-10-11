@@ -1,0 +1,21 @@
+# Custom food showcase (qa mechanics.custom-food): nutrition, saturation and
+# can_always_eat project onto the vanilla food component at stack build, so
+# the eat itself is native vanilla logic with authored values. The effects
+# list and the consume rule ride the PlayerItemConsumeEvent listeners. The
+# QA run eats this at full hunger — only can_always_eat makes that possible.
+feast_bread:
+  material: BREAD
+  display_name: "Feast Bread"
+  behavior:
+    - on: consume
+      do:
+        - message: "feast-devoured"
+  mechanics:
+    - food:
+        nutrition: 6
+        saturation: 12.0
+        can_always_eat: true
+        effects:
+          - type: speed
+            amplifier: 1
+            duration_ticks: 200

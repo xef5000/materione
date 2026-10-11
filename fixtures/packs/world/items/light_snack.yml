@@ -1,0 +1,19 @@
+# The can_always_eat gate (qa mechanics.custom-food): at full hunger this
+# never becomes edible — the use aborts, no consume event fires, the item
+# survives. Guards the negative half of the vanilla component projection.
+light_snack:
+  material: BREAD
+  display_name: "Light Snack"
+  behavior:
+    - on: consume
+      do:
+        - message: "snack-devoured"
+  mechanics:
+    - food:
+        nutrition: 2
+        saturation: 2.0
+        can_always_eat: false
+        effects:
+          - type: haste
+            amplifier: 0
+            duration_ticks: 100
