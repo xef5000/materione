@@ -368,8 +368,11 @@ return 'respawned'`))).toBe('respawned');
       // slot mapping for a 2-row menu: 0..17 are the backpack, 18..44 the
       // main inventory, 45..53 the hotbar — the diamond given second sits in
       // hotbar slot 1, i.e. container slot 46.
+      // Open/closed reads off the menu id: 26.1.2's closeContainer() resets
+      // containerMenu to the player's own inventoryMenu (id 0) — the field
+      // is never null, so null-checking it never sees "closed".
       const menuOpen = async () => String(await ctx.exec(
-        'return player.containerMenu == null ? "closed" : "open"'));
+        'return player.containerMenu.containerId == 0 ? "closed" : "open"'));
       const waitForMenu = async (want, timeoutMs = 8000) => {
         const deadline = Date.now() + timeoutMs;
         for (;;) {

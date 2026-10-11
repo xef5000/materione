@@ -159,8 +159,11 @@ already asserts.
   maps container slots 0–17 to the top, 18–44 to the main inventory and
   45–53 to the hotbar). Close with `player.closeContainer()` — that one sends
   the close packet; `clientSideCloseContainer()` does not. The open menu's
-  title lives on the screen, not the menu: `mc.screen.getTitle().getString()`
-  while `player.containerMenu != null`.
+  title lives on the screen, not the menu: `mc.screen.getTitle().getString()`.
+  Open/closed state reads off the menu id (`player.containerMenu.containerId
+  == 0` is closed) — closeContainer() resets `containerMenu` to the player's
+  own `inventoryMenu`, so the field is never null and null-checking it never
+  sees a close.
 - **`data get` truncates long byte arrays**: a full
   `SelectedItem.components."minecraft:custom_data"` dump cuts off partway
   through a byte-array value, so later PDC keys never print — read targeted
