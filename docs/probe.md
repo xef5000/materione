@@ -136,6 +136,22 @@ already asserts.
 - 26.x renamed the gamerules (1.21.11 registry rework): `advance_time`,
   `advance_weather`, `spawn_mobs`, `random_tick_speed`, … `doFireTick` is gone
   entirely.
+- **Groovy exec quirks (26.1.2)**: results come back wrapped
+  (`GroovyJavaObject`) — direct method calls and `isEmpty()`/`get(i)` work,
+  but Groovy collection methods (`find {}`, `each`, `for (x in list)`) see
+  the wrapper, not the elements, and blow up; `instanceof` and `String(...)`
+  also fail on wrapped values (use `getClass().getSimpleName()` and
+  `.toString()`); fully-qualified class literals resolve via the mapped name
+  (`net.minecraft.world.entity.decoration.ArmorStand` works — if the package
+  is wrong Groovy reports "No such property: net"). Return strings from the
+  script (`.toString()`), never raw enums/objects.
+- **Simulating clicks**: `keyMapping.setDown(true)` does nothing — keybinds
+  fire on click counts. Use `mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())`
+  (same shape for `keyUse`). The crosshair decides the target, so summon the
+  target with `execute as Probe at @s run summon ... ^ ^ ^2` — carets share
+  the player's rotation, guaranteeing alignment. Attacks on armor stands
+  never land on 26.1.2 (vanilla-irrelevant quirk); use a `NoAI` villager,
+  and space swings past the weapon's full attack cooldown.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

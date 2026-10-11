@@ -1,31 +1,31 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "f59db60312b61c10dd966d1afa891f42332ddd56",
+    "sha": "e3e944c6c657dde88c5564769fab037b0be3bb5a",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
     "result": "pass",
-    "at": "2026-10-10T23:47:02.494Z",
-    "run": "run-2026-10-10T23-44-59",
+    "at": "2026-10-11T01:36:00.908Z",
+    "run": "run-2026-10-11T01-34-33",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
     "issueUrl": "https://github.com/xef5000/materione/issues/39",
-    "markedBy": "agent:session-qa",
-    "note": "Blessed on main f59db60 (#54): gem render unchanged."
+    "markedBy": "zcode",
+    "note": "gem sprite in hotbar slot 0 and red hand render at e3e944c"
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "f59db60312b61c10dd966d1afa891f42332ddd56",
+    "sha": "e3e944c6c657dde88c5564769fab037b0be3bb5a",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
     "result": "pass",
-    "at": "2026-10-10T23:47:02.654Z",
-    "run": "run-2026-10-10T23-44-59",
+    "at": "2026-10-11T01:36:01.069Z",
+    "run": "run-2026-10-11T01-34-33",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
     "issueUrl": "https://github.com/xef5000/materione/issues/46",
-    "markedBy": "agent:session-qa",
-    "note": "Blessed on main f59db60 (#54): 3D sword render unchanged."
+    "markedBy": "zcode",
+    "note": "3D sword model in hand, hover name correct at e3e944c"
   },
   "items.template-inheritance": {
     "sha": "f59db60312b61c10dd966d1afa891f42332ddd56",
