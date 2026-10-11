@@ -102,7 +102,7 @@
 | Expression conditions (JS/SpEL on player/server) | ⚠️ | ✅ (JS-like) | ✅ (SpEL) | ✅ (ECA expressions) |
 | Commands mechanic (console/player/op + cooldown) | ✅ | ✅ | ✅ | ✅🧪 (console + player; cooldown on behavior rules) |
 | Custom durability mechanic | ⚠️ | ✅ | ✅ | ✅🧪 (PDC counter; vanilla wear cancelled; survives reload; breaks at max) |
-| Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅ |
+| Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅🧪 (vanilla food component projection + effects on consume) |
 | Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅ |
 | Armor effects (potion while worn, full-set) | ⚠️ | ✅ | ✅ | 📋 M7 |
 | Backpack item mechanic | ⚠️ verify | ✅ | ✅ | ✅ |

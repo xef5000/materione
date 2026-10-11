@@ -187,4 +187,96 @@ return 'clicked'`);
       await ctx.rcon('execute as Probe at @s run kill @e[type=villager,distance=..8]');
     },
   }),
+
+  test({
+    id: 'mechanics.custom-food',
+    title: 'feast_bread projects nutrition/saturation/can_always_eat onto the vanilla food component (a full-hunger eat consumes it, moves saturation by exactly the component value, applies the speed effect and fires the consume rule) while light_snack with can_always_eat false cannot be eaten at full hunger',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'behavior/src/main/java/dev/materione/behavior/**',
+      'platform/src/main/java/dev/materione/platform/items/MaterioneStacks.java',
+      'fixtures/packs/world/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('gamemode survival Probe');
+      // data-get helper: strips the "Probe has the following entity data: " wrapper
+      const dataValue = async (path) => {
+        const reply = await ctx.rcon(`data get entity Probe ${path}`);
+        return reply.slice(reply.indexOf(': ') + 2);
+      };
+      const countLines = async (needle) =>
+        (await ctx.chat(60)).filter((l) => l.includes(needle)).length;
+      // one bite = a real use-key click plus a hold; eating takes ~1.6s of hold
+      const bite = () => ctx.exec(`mc.options.keyUse.click(mc.options.keyUse.getDefaultKey())
+mc.options.keyUse.setDown(true)
+return 'bite-queued'`);
+      const release = () => ctx.exec(`mc.options.keyUse.setDown(false)
+return 'released using=' + player.isUsingItem()`);
+      const heldName = () => ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()');
+
+      // --- negative gate: light_snack (can_always_eat false) at full hunger ---
+      await ctx.rcon('materione give world:light_snack Probe');
+      await ctx.waitForChat(/Given world:light_snack/);
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await heldName())).toBe('Light Snack');
+      const snackBaseline = await countLines('snack-devoured');
+      ctx.expect(await dataValue('foodLevel')).toBe('20'); // gate precondition
+      ctx.expect(String(await bite())).toBe('bite-queued');
+      await ctx.sleep(700);
+      // the use never starts: full hunger + can_always_eat false
+      ctx.expect(String(await ctx.exec('return player.isUsingItem()'))).toBe('false');
+      ctx.expect(String(await release())).toBe('released using=false');
+      ctx.expect(String(await heldName())).toBe('Light Snack'); // survived
+      ctx.expect(await countLines('snack-devoured')).toBe(snackBaseline);
+      ctx.expect((await dataValue('active_effects')).includes('minecraft:haste'))
+        .toBe(false);
+
+      // --- positive: feast_bread eats at full hunger (can_always_eat true) ---
+      await ctx.rcon('clear Probe');
+      await ctx.rcon('materione give world:feast_bread Probe');
+      await ctx.waitForChat(/Given world:feast_bread/);
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await heldName())).toBe('Feast Bread');
+      // the authored values ride the vanilla food component (bread's own is
+      // nutrition 5 / saturation 6.0 — the projection is distinguishable)
+      const comp = (await dataValue('SelectedItem.components."minecraft:food"'))
+        .replace(/\s+/g, ' ');
+      ctx.expect(comp.includes('nutrition: 6')).toBe(true);
+      ctx.expect(comp.includes('saturation: 12.0')).toBe(true);
+      ctx.expect(comp.includes('can_always_eat: 1b')).toBe(true);
+
+      const foodBefore = Number(await dataValue('foodLevel'));
+      const satBefore = parseFloat(await dataValue('foodSaturationLevel'));
+      const feastBaseline = await countLines('feast-devoured');
+
+      ctx.expect(String(await bite())).toBe('bite-queued');
+      await ctx.sleep(700); // mid-eat: the hold is consuming
+      ctx.expect(String(await ctx.exec('return player.isUsingItem()'))).toBe('true');
+      await ctx.sleep(1300); // hold past the 1.6s eat window: it completes alone
+      ctx.expect(String(await release())).toBe('released using=false');
+      await ctx.sleep(500); // MONITOR listener applies effects next tick + chat
+
+      // consumed
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().isEmpty()'))).toBe('true');
+      // vanilla ate the authored component: food +6 (clamped), saturation
+      // +12 clamped to the new food level (26.1 FoodData.add formula)
+      const foodAfter = Number(await dataValue('foodLevel'));
+      const satAfter = parseFloat(await dataValue('foodSaturationLevel'));
+      ctx.expect(foodAfter).toBe(Math.min(20, foodBefore + 6));
+      ctx.expect(satAfter).toBe(Math.min(foodAfter, satBefore + 12));
+      // the effects list applied on consume
+      const fx = await dataValue('active_effects');
+      ctx.expect(fx.includes('minecraft:speed')).toBe(true);
+      ctx.expect(fx.includes('amplifier: 1b')).toBe(true);
+      // and the ECA consume rule fired
+      ctx.expect((await countLines('feast-devoured')) - feastBaseline).toBe(1);
+    },
+  }),
 ];
