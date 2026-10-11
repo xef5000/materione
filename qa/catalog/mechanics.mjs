@@ -279,4 +279,68 @@ return 'released using=' + player.isUsingItem()`);
       ctx.expect((await countLines('feast-devoured')) - feastBaseline).toBe(1);
     },
   }),
+
+  test({
+    id: 'mechanics.soulbound',
+    title: "the warden's talisman survives death — pulled from the drop list into the player-PDC stash while dead, restored on respawn with its materione identity intact, while unsoulbound diamonds drop at the death spot",
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
+      'platform/src/main/java/dev/materione/platform/items/ItemListCodec.java',
+      'fixtures/packs/world/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('gamemode survival Probe');
+      // the probe world keeps keepInventory off, so the death drop list is live
+      await ctx.rcon('materione give world:talisman Probe');
+      await ctx.waitForChat(/Given world:talisman/);
+      await ctx.rcon('give Probe minecraft:diamond 2');
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()')))
+        .toBe("Warden's Talisman");
+
+      const inventoryDump = () => ctx.exec(`def found = ''
+for (int i = 0; i < 36; i++) {
+  def s = player.getInventory().items.get(i)
+  if (!s.isEmpty()) found = found + i + ':' + s.getHoverName().getString() + '; '
+}
+return found`);
+
+      // death: the soulbound drop leaves the drop list and rides the
+      // player-PDC stash until respawn (context reset clears stale drops)
+      await ctx.rcon('kill Probe');
+      await ctx.sleep(800);
+      const stash = await ctx.rcon('data get entity Probe BukkitValues');
+      ctx.expect(stash.includes('"materione:soulbound"')).toBe(true);
+
+      // the client sits on the death screen; respawn through the real
+      // client path (LocalPlayer.respawn → PERFORM_RESPAWN)
+      ctx.expect(String(await ctx.exec(`player.respawn()
+return 'respawned'`))).toBe('respawned');
+      await ctx.sleep(1500); // MONITOR respawn listener restores next tick
+
+      // the talisman is back, the diamonds are not
+      const inv = String(await inventoryDump());
+      ctx.expect(inv.includes("Warden's Talisman")).toBe(true);
+      ctx.expect(inv.includes('Diamond')).toBe(false);
+
+      // the restored stack kept its materione identity through the codec
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()')))
+        .toBe("Warden's Talisman");
+      ctx.expect((await ctx.rcon(
+        'data get entity Probe SelectedItem.components."minecraft:custom_data"'))
+        .includes('world:talisman')).toBe(true);
+
+      // the unsoulbound diamonds dropped as an item entity at the death spot
+      const drops = await ctx.rcon(
+        'execute positioned 0.5 -60 3.5 run data get entity '
+        + '@e[type=item,distance=..8,limit=1] Item');
+      ctx.expect(drops.includes('minecraft:diamond')).toBe(true);
+    },
+  }),
 ];
