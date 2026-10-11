@@ -38,5 +38,15 @@
     "at": "2026-10-11T20:38:47.787Z",
     "run": "run-2026-10-11T20-36-27",
     "eyes": null
+  },
+  "mechanics.backpack": {
+    "sha": "e94b21ee3f0d93094cedb550c0a5b97ad3c35bc0",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "58e9930eee2c54967d2c9a656f06e714ebd40bcd2d1c9bd938e30edb0810be01",
+    "result": "pass",
+    "at": "2026-10-11T22:15:42.790Z",
+    "run": "run-2026-10-11T22-14-50",
+    "eyes": null
   }
 }
