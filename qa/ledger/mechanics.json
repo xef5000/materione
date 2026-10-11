@@ -1,12 +1,22 @@
 {
   "mechanics.commands-and-cooldown": {
-    "sha": "f59db60312b61c10dd966d1afa891f42332ddd56",
-    "dirty": false,
+    "sha": "8e3749a97469f3d19242986212eee53a08cb508a",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "3928e4e0fa0b303413ebde620cd2f66fb50b3150b2265ccf31908411060afc13",
+    "def": "c246366d26b71d855b4f96872c739c5b931bcf61f894c60fcbf33f82c7bb8122",
     "result": "pass",
-    "at": "2026-10-10T23:46:49.652Z",
-    "run": "run-2026-10-10T23-44-59",
+    "at": "2026-10-11T01:33:49.644Z",
+    "run": "run-2026-10-11T01-32-56",
+    "eyes": null
+  },
+  "mechanics.custom-durability": {
+    "sha": "8e3749a97469f3d19242986212eee53a08cb508a",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "fab54af4fb026cb9e32b411fa3a336a9a953722624ad22b96832a81ae89641e9",
+    "result": "pass",
+    "at": "2026-10-11T01:34:03.344Z",
+    "run": "run-2026-10-11T01-32-56",
     "eyes": null
   }
 }
