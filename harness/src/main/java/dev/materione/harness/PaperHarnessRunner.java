@@ -23,7 +23,7 @@ public final class PaperHarnessRunner {
     public HarnessResult run(HarnessOptions options, Set<String> toleratedErrorMarkers) {
         ServerWorkspace workspace;
         try {
-            // sample+corpus only: the bootstrap gate pins 58 live items; the
+            // sample+corpus only: the bootstrap gate pins 57 live items; the
             // world pack belongs to the world-persistence scenario
             workspace = ServerWorkspace.create(options, "bootstrap", Set.of("sample", "corpus"));
         } catch (IOException e) {
@@ -66,8 +66,8 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=58")) {
-                problems.add("MATERIONE-CONTENT-OK items=58 missing after boot "
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=57")) {
+                problems.add("MATERIONE-CONTENT-OK items=57 missing after boot "
                         + "(fixture packs: 4 sample items (incl. the music disc) + 50 corpus "
                         + "items + 2 auto placement items (marble_stairs/slab) should be live)");
             }
@@ -381,7 +381,7 @@ public final class PaperHarnessRunner {
             console.send("forceload remove all");
             // no-op reload first: nothing changed since boot
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=58"));
+                    "MATERIONE-RELOAD-OK items=57"));
             hotReloadScenario(console, log, workspace, options, problems);
 
             console.send("stop");
@@ -439,13 +439,13 @@ public final class PaperHarnessRunner {
                   display_name: "Extra Gem"
                 """);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=59"));
+                "MATERIONE-RELOAD-OK items=58"));
 
         Thread.sleep(1000);
         Files.writeString(broken, Files.readString(faultSource));
         int beforeFaultReload = log.mark();
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=59"));
+                "MATERIONE-RELOAD-OK items=58"));
         if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
             problems.add("fault injection: MTR-0007 missing after reloading a broken item file");
         }
@@ -454,7 +454,7 @@ public final class PaperHarnessRunner {
         Files.deleteIfExists(extra);
         Files.deleteIfExists(broken);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=58"));
+                "MATERIONE-RELOAD-OK items=57"));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
