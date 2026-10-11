@@ -105,7 +105,7 @@
 | Custom food / consumable + effects | ✅ | ✅ | ✅ (component) | ✅🧪 (vanilla food component projection + effects on consume) |
 | Soulbound (keep on death) | ⚠️ | ✅ | ✅ | ✅🧪 (PDC stash on death, restore on respawn) |
 | Armor effects (potion while worn, full-set) | ⚠️ | ✅ | ✅ | 📋 M7 |
-| Backpack item mechanic | ⚠️ verify | ✅ | ✅ | ✅ |
+| Backpack item mechanic | ⚠️ verify | ✅ | ✅ | ✅🧪 |
 | Aura / particle effects | 🟡 | ✅ (simple/ring/helix) | 🟡 | 📋 M7 |
 | Skin / skinnable items | ⚠️ | ✅ | ❌ | 📋 M7 |
 | Hat (wear any item on head) | ⚠️ | ✅ | 🟡 | 📋 M7 |
