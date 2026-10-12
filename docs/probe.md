@@ -165,6 +165,15 @@ already asserts.
   note blocks — and the async region-thread replies of `/materione dev
   inspect` land in the server log (MATERIONE-DEV-INSPECT), not the RCON
   response. `chatHistory` is newest-first: count lines, don't index.
+- **Client-side render truth**: `mc.level.getBlockState(pos).toString()` reads
+  the CLIENT's local state (`Block{minecraft:x}[prop=val,…]`) — the server
+  never resends a block whose state it did not change, so client/server state
+  agreement (asserted separately against the same state key) is the
+  programmatic proxy for "the resource pack still renders this block": an
+  unmapped state renders the missing model with no server-side trace. State
+  keys must match the client's alphabetical property order; the host name and
+  bracket content are best asserted as two separate `contains` (`Block{…}`
+  breaks a naive `host[props]` substring).
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`

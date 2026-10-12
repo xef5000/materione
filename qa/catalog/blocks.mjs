@@ -39,6 +39,34 @@ const stateKey = (slot) => {
   return `minecraft:note_block[instrument=${p.instrument},note=${p.note},powered=${p.powered}]`;
 };
 
+// Mirror of BlockStateSpaces' chorus identity bits (slot = the connection-bit
+// pattern: up=1 down=2 north=4 east=8 south=16 west=32, slots 0..63). The
+// alphabetical bracket order matches the client's BlockState#toString so the
+// same string works as an `execute if block` predicate AND as the expected
+// client-side render state.
+function chorusStateKey(slot) {
+  const bit = (mask) => (slot & mask) !== 0;
+  return 'minecraft:chorus_plant'
+    + `[down=${bit(2)},east=${bit(8)},north=${bit(4)},south=${bit(16)},up=${bit(1)},west=${bit(32)}]`;
+}
+
+// The client's locally rendered blockstate at a cell — the render-fidelity
+// proxy for auto mode: the pack maps exactly the allocated slot's variant, so
+// a client state that still equals the slot key renders the custom model,
+// while a flipped state (vanilla connection recalc on the client) would hit
+// an unmapped variant and break the look with no server-side trace.
+// BlockState#toString is `Block{minecraft:chorus_plant}[down=…]` — the host
+// and the bracket content are asserted separately.
+const expectClientState = async (ctx, cell, slot) => {
+  const state = String(await ctx.exec(
+    `return mc.level.getBlockState(net.minecraft.core.BlockPos.containing(${cell[0]}d, ${cell[1]}d, ${cell[2]}d)).toString()`,
+    15_000));
+  ctx.expect(state).toContain('{minecraft:chorus_plant}');
+  const bit = (mask) => (slot & mask) !== 0;
+  ctx.expect(state).toContain(
+    `[down=${bit(2)},east=${bit(8)},north=${bit(4)},south=${bit(16)},up=${bit(1)},west=${bit(32)}]`);
+};
+
 const parseHit = (s) => {
   const m = /^(\w+) (-?\d+),(-?\d+),(-?\d+) (\w+)$/.exec(String(s));
   if (!m) return null;
@@ -77,12 +105,12 @@ return '${marker}'`, 15_000);
 // Aims at `cell` and HOLDS attack (mining is hold-driven, not click-driven),
 // waits `holdMs`, releases, then requires the cell to read as air — retrying
 // the whole hold when the crosshair drifted off mid-hold.
-const mineAway = async (ctx, cell, holdMs, tries = 3) => {
+const mineAway = async (ctx, cell, holdMs, yaw = 0, pitch = 20, tries = 3) => {
   let last = '(no attempt)';
   const release = () => ctx.exec('mc.options.keyAttack.setDown(false)\nreturn \'released\'').catch(() => {});
   for (let i = 0; i < tries; i++) {
     try {
-      const hit = parseHit(await aimRead(ctx, 0, 20));
+      const hit = parseHit(await aimRead(ctx, yaw, pitch));
       last = hit;
       if (onTarget(hit, cell)) {
         const started = await ctx.exec(`def hit = mc.hitResult
@@ -258,6 +286,150 @@ export default [
         `execute positioned ${lamp[0] + 0.5} ${lamp[1]} ${lamp[2] + 0.5} if entity @e[type=item,distance=..6]`,
       )).toBe('Test failed');
       // the placement index is back to empty: both scenes fully torn down
+      await ctx.rcon('materione dev sweep');
+      await ctx.waitForServerLog(/MATERIONE-DEV-SWEEP indexed=0 ok=0 /, { timeoutMs: 45_000 });
+    },
+  }),
+
+  test({
+    id: 'blocks.chorus-transparent',
+    title: 'world:chorus_pillar (synthetic auto-placement item on the chorus-plant host) is giveable, places from a real client as exactly its allocated connection-bit state on end stone, both pillars of an adjacent pair keep their identity and state (no vanilla connection drift server- or client-side), a vanished support does not pop the custom block, and mining plus dev remove tear both down cleanly',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/blocks/**',
+      'core/src/main/java/dev/materione/core/blocks/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/blocks/**',
+      'fixtures/packs/world/blocks/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 360_000, // fresh-boot region-thread queues can hold packets/replies for ~1min under load
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('gamemode survival Probe');
+      await ctx.sleep(15_000); // let the fresh boot's region-thread queue drain before crosshair work
+
+      // --- stage: two end-stone pads in front of the anchor ------------------
+      // The chorus host survives only on end stone / chorus neighbors in
+      // vanilla's client-side placement check, so the pads give the real
+      // client a legal placement surface. Cells: pad A [0,-61,6], pad B
+      // [1,-61,6]; the pillars land at [0,-60,6] and [1,-60,6] (face-adjacent
+      // east-west). The stone cell [0,-60,5] is north of pillar 1.
+      const padA = [0, -61, 6];
+      const padB = [1, -61, 6];
+      const pillar1 = [0, -60, 6];
+      const pillar2 = [1, -60, 6];
+      const stoneCell = [0, -60, 5];
+      for (const cell of [pillar1, pillar2, [0, -59, 6], [1, -59, 6]]) {
+        await cleanCell(ctx, cell); // idempotent reruns
+      }
+      for (const cell of [padA, padB, stoneCell]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+      for (const cell of [padA, padB]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:end_stone`);
+      }
+      ctx.expect(await ctx.rcon(`execute if block ${padA.join(' ')} minecraft:end_stone`))
+        .toBe('Test passed');
+
+      // give resolves the synthetic auto-placement item (the block has no
+      // item: link — the registry synthesized one at the block's own id)
+      await ctx.rcon('materione give world:chorus_pillar Probe');
+      await ctx.waitForChat(/Given world:chorus_pillar/);
+      await ctx.rcon('materione dev stack world:chorus_pillar');
+      await ctx.waitForServerLog(/MATERIONE-STACK id=world:chorus_pillar item_model=world:chorus_pillar/,
+        { timeoutMs: 20_000 });
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()'))).toBe('Chorus Pillar');
+
+      // --- scene A: place pillar 1 on pad A from the client ------------------
+      // verify the pad's top face first, then click atomically (pitch 28 puts
+      // the crosshair on that top face ~3 blocks south-southeast).
+      const hit = parseHit(await aimRead(ctx, 0, 28));
+      if (!hit || hit.type !== 'BLOCK' || hit.dir !== 'up' || !onTarget(hit, padA)) {
+        ctx.expect(JSON.stringify(hit)).toBe(`top face of pad ${JSON.stringify(padA)}`);
+      }
+      await aimedClick(ctx, padA, 0, 28, 'keyUse', 'use-clicked');
+
+      // identity: state decodes through the allocation table and agrees with
+      // the chunk-PDC record
+      const line = await inspectCell(ctx, pillar1,
+        /found=true world:chorus_pillar technique=chorus/);
+      const slot = Number(/slot=(\d+)/.exec(line)[1]);
+      const rawSlot = Number(/rawSlot=(\d+)/.exec(line)[1]);
+      ctx.expect(rawSlot).toBe(slot);
+      ctx.expect(slot).toBeGreaterThan(-1);
+      ctx.expect(slot).toBeLessThan(64);
+
+      // state: exactly the allocated slot's connection bits, server and client
+      const key = chorusStateKey(slot);
+      ctx.expect(await ctx.rcon(`execute if block ${pillar1.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await expectClientState(ctx, pillar1, slot);
+
+      // --- scene B: pillar 2 east-adjacent ------------------------------------
+      // A second chorus placement is vanilla's trigger for connection
+      // recalculation — the new state must still be the allocated slot (the
+      // connection bits are the identity; vanilla's toward-neighbor arms
+      // would decode to an unallocated slot). Give again: scene A consumed
+      // the stack in survival.
+      await ctx.rcon('materione give world:chorus_pillar Probe');
+      await ctx.waitForChat(/Given world:chorus_pillar/);
+      await ctx.exec('player.getInventory().selected = 0');
+      const hit2 = parseHit(await aimRead(ctx, -18, 27));
+      if (!hit2 || hit2.type !== 'BLOCK' || hit2.dir !== 'up' || !onTarget(hit2, padB)) {
+        ctx.expect(JSON.stringify(hit2)).toBe(`top face of pad ${JSON.stringify(padB)}`);
+      }
+      await aimedClick(ctx, padB, -18, 27, 'keyUse', 'use-clicked');
+
+      const line2 = await inspectCell(ctx, pillar2,
+        /found=true world:chorus_pillar technique=chorus/);
+      ctx.expect(Number(/slot=(\d+)/.exec(line2)[1])).toBe(slot);
+      ctx.expect(await ctx.rcon(`execute if block ${pillar1.join(' ')} ${key}`))
+        .toBe('Test passed');
+      ctx.expect(await ctx.rcon(`execute if block ${pillar2.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await expectClientState(ctx, pillar1, slot);
+      await expectClientState(ctx, pillar2, slot);
+
+      // --- scene C: a vanilla neighbor change leaves both states alone -------
+      await ctx.rcon(`setblock ${stoneCell.join(' ')} minecraft:stone`);
+      await ctx.sleep(800);
+      ctx.expect(await ctx.rcon(`execute if block ${pillar1.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await expectClientState(ctx, pillar1, slot);
+
+      // --- scene D: vanished support does not pop the custom block -----------
+      // State-as-identity: physics recalculation of a confirmed placement is
+      // cancelled (fallback listener; the paper flag is off in this probe),
+      // so the chorus pillar floats where its support was — a pop-off would
+      // strand the chunk-PDC record as a quarantine (MTR-0024).
+      await ctx.rcon(`setblock ${padA.join(' ')} minecraft:air`);
+      await ctx.sleep(1500); // a scheduled-tick pop would fire within a tick
+      ctx.expect(await ctx.rcon(`execute if block ${pillar1.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await expectClientState(ctx, pillar1, slot);
+      await inspectCell(ctx, pillar1, /found=true world:chorus_pillar technique=chorus/);
+
+      // --- teardown: mining removes pillar 2 through the runtime pipeline ----
+      // chorus plant is bare-hand fast; hold ~1.6s is plenty (pitch 23 /
+      // yaw -22 puts the crosshair on pillar 2's north face)
+      await mineAway(ctx, pillar2, 1600, -22, 23);
+      await inspectCell(ctx, pillar2, /found=false none material=air rawSlot=-/);
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${pillar2[0] + 0.5} ${pillar2[1]} ${pillar2[2] + 0.5} if entity @e[type=item,distance=..6]`,
+      )).toBe('Test failed');
+
+      // operator removal for pillar 1, then the staging blocks
+      await ctx.rcon(`materione dev remove ${pillar1.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-REMOVE ok=true removed world:chorus_pillar world ${pillar1.join(' ')}`),
+        { timeoutMs: 45_000 });
+      for (const cell of [stoneCell, padB]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+
+      // the placement index is back to empty: everything torn down
       await ctx.rcon('materione dev sweep');
       await ctx.waitForServerLog(/MATERIONE-DEV-SWEEP indexed=0 ok=0 /, { timeoutMs: 45_000 });
     },
