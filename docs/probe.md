@@ -165,6 +165,16 @@ already asserts.
   note blocks — and the async region-thread replies of `/materione dev
   inspect` land in the server log (MATERIONE-DEV-INSPECT), not the RCON
   response. `chatHistory` is newest-first: count lines, don't index.
+- **Input-path reliability (26.1.2 probe client)**: across a long client
+  session, bare-swing packets (`player.swing` → LEFT_CLICK_AIR) and
+  attack-key presses on entities stop reaching the server after earlier
+  tests in the same session ran block placements/mining — while dig-path
+  clicks (attack key on a block → LEFT_CLICK_BLOCK) and right-click uses
+  stay reliable. Drive left-click interactions through a momentary ground
+  click, and run input-heavy tests early in the session (the runner
+  executes tests in catalog order unless selectors say otherwise).
+  Crosshair state also leaks across tests: aim atomically before every
+  click/hold whose meaning depends on the target.
 - **Client-side render truth**: `mc.level.getBlockState(pos).toString()` reads
   the CLIENT's local state (`Block{minecraft:x}[prop=val,…]`) — the server
   never resends a block whose state it did not change, so client/server state

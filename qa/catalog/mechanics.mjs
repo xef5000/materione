@@ -24,18 +24,40 @@ export default [
         'return player.getInventory().items.get(0).getHoverName().getString()');
       ctx.expect(String(held)).toBe('Storm Wand');
 
-      // A client-side swing sends the swing packet the server turns into
-      // LEFT_CLICK_AIR — no input injection needed. One swing drives three
-      // surfaces: the console tellraw (commands mechanic, %player%
+      // A momentary left-click on the ground rides the vanilla input path
+      // (keyAttack click → dig-start → LEFT_CLICK_BLOCK) — one click drives
+      // three surfaces: the console tellraw (commands mechanic, %player%
       // substituted), the player-executed version command (as_player — the
       // MATERIONE-VERSION log marker proves the dispatch), and the behavior
-      // rule whose message is gated by its 3s cooldown.
+      // rule whose message is gated by its 3s cooldown. The bare-swing packet
+      // path (LocalPlayer.swing → LEFT_CLICK_AIR) proved unreliable on 26.1.2
+      // probe sessions once block sessions ran earlier in the same client
+      // session, while dig-path clicks stay stable — the same choice a real
+      // player's press produces.
       const counts = async () => {
         const lines = await ctx.chat(60);
         return {
           sparks: lines.filter((l) => l.includes('The wand sparks.')).length,
           crackles: lines.filter((l) => l.includes('The wand crackles.')).length,
         };
+      };
+      // aim at the ground and left-click it — atomic (the crosshair must not
+      // drift off the block between verify and click), retrying against
+      // desktop-mouse nudges; a momentary click starts no dig progress
+      const groundSwing = async (tries = 3) => {
+        let last = '(no attempt)';
+        for (let i = 0; i < tries; i++) {
+          const reply = await ctx.exec(`player.setRot(0F, 50F)
+Thread.sleep(400)
+def hit = mc.hitResult
+if (hit.getType().toString() != 'BLOCK') return 'AIR'
+mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())
+return 'left-clicked'`, 15_000);
+          if (String(reply) === 'left-clicked') return;
+          last = String(reply);
+          await ctx.sleep(700);
+        }
+        ctx.expect(last).toBe('left-clicked');
       };
       const waitForCount = async (name, want, timeoutMs = 8000) => {
         const deadline = Date.now() + timeoutMs;
@@ -54,21 +76,21 @@ export default [
 
       const baseline = await counts();
 
-      // swing 1: cooldown fresh — every surface fires
-      await ctx.exec('player.swing(player.getUsedItemHand())');
+      // left-click 1: cooldown fresh — every surface fires
+      await groundSwing();
       await waitForCount('sparks', baseline.sparks + 1);
       await ctx.waitForServerLog(/MATERIONE-VERSION/);
       await waitForCount('crackles', baseline.crackles + 1, 3000);
 
-      // swing 2 immediately: the mechanics fire again, the rule is suppressed
-      await ctx.exec('player.swing(player.getUsedItemHand())');
+      // left-click 2 immediately: the mechanics fire again, the rule is suppressed
+      await groundSwing();
       await waitForCount('sparks', baseline.sparks + 2);
       const suppressed = await counts();
       ctx.expect(suppressed.crackles - baseline.crackles).toBe(1);
 
       // after the 3s window the rule fires again
       await ctx.sleep(3300);
-      await ctx.exec('player.swing(player.getUsedItemHand())');
+      await groundSwing();
       await waitForCount('sparks', baseline.sparks + 3);
       await waitForCount('crackles', baseline.crackles + 2, 3000);
     },
@@ -211,8 +233,12 @@ return 'clicked'`);
       };
       const countLines = async (needle) =>
         (await ctx.chat(60)).filter((l) => l.includes(needle)).length;
-      // one bite = a real use-key click plus a hold; eating takes ~1.6s of hold
-      const bite = () => ctx.exec(`mc.options.keyUse.click(mc.options.keyUse.getDefaultKey())
+      // one bite = a real use-key click plus a hold; eating takes ~1.6s of
+      // hold. The camera aims at open sky first (atomically): earlier tests
+      // leave the crosshair wherever their aiming stopped, and a bite with a
+      // block under the crosshair becomes a useItemOn instead of an eat.
+      const bite = () => ctx.exec(`player.setRot(0F, -60F)
+mc.options.keyUse.click(mc.options.keyUse.getDefaultKey())
 mc.options.keyUse.setDown(true)
 return 'bite-queued'`);
       const release = () => ctx.exec(`mc.options.keyUse.setDown(false)
