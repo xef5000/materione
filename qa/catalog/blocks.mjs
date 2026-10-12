@@ -434,4 +434,146 @@ export default [
       await ctx.waitForServerLog(/MATERIONE-DEV-SWEEP indexed=0 ok=0 /, { timeoutMs: 45_000 });
     },
   }),
+
+  test({
+    id: 'blocks.technical-untex',
+    title: 'world:ghost_panel (technical, bone_block host) places from a real client through its synthetic auto-placement item onto the host default state — no slot claimed, identity rides chunk PDC alone; a vanilla bone block placed beside it stays unidentified vanilla; a neighbor change moves nothing; mining and dev place/remove tear it down cleanly',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/blocks/**',
+      'core/src/main/java/dev/materione/core/blocks/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/blocks/**',
+      'fixtures/packs/world/blocks/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 300_000, // fresh-boot region-thread queues can hold packets/replies for ~1min under load
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('gamemode survival Probe');
+      await ctx.sleep(15_000); // let the fresh boot's region-thread queue drain before crosshair work
+
+      // --- stage: two smooth-stone pads in front of the anchor ---------------
+      // Same proven geometry as the chorus test: pads at y=-61, placements at
+      // y=-60 (face-adjacent east-west pair), stone cell north of the panel.
+      const padA = [0, -61, 6];
+      const padB = [1, -61, 6];
+      const panel = [0, -60, 6];
+      const vanilla = [1, -60, 6];
+      const stoneCell = [0, -60, 5];
+      for (const cell of [panel, vanilla, [0, -59, 6], [1, -59, 6], stoneCell]) {
+        await cleanCell(ctx, cell); // idempotent reruns: custom AND vanilla leftovers
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+      for (const cell of [padA, padB, stoneCell]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+      for (const cell of [padA, padB]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:smooth_stone`);
+      }
+      ctx.expect(await ctx.rcon(`execute if block ${padA.join(' ')} minecraft:smooth_stone`))
+        .toBe('Test passed');
+
+      // give resolves the synthetic auto-placement item: the definition id,
+      // the model, and the HOST's item form (bone block is placeable, so the
+      // placement rides BlockPlaceEvent — runtime-systems §13)
+      await ctx.rcon('materione give world:ghost_panel Probe');
+      await ctx.waitForChat(/Given world:ghost_panel/);
+      await ctx.rcon('materione dev stack world:ghost_panel');
+      await ctx.waitForServerLog(/MATERIONE-STACK id=world:ghost_panel item_model=world:ghost_panel/,
+        { timeoutMs: 20_000 });
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getHoverName().getString()'))).toBe('Ghost Panel');
+      ctx.expect(await ctx.rcon('data get entity Probe SelectedItem.id'))
+        .toContain('minecraft:bone_block');
+
+      // --- scene A: place the panel on pad A from the client ------------------
+      // The runtime spends no state bits: the placed host is the DEFAULT
+      // block data (axis=y) and the identity lives only in the chunk PDC —
+      // inspect reports the definition slot -1 and rawSlot - (undecodable).
+      const hit = parseHit(await aimRead(ctx, 0, 28));
+      if (!hit || hit.type !== 'BLOCK' || hit.dir !== 'up' || !onTarget(hit, padA)) {
+        ctx.expect(JSON.stringify(hit)).toBe(`top face of pad ${JSON.stringify(padA)}`);
+      }
+      await aimedClick(ctx, padA, 0, 28, 'keyUse', 'use-clicked');
+
+      const line = await inspectCell(ctx, panel, /found=true world:ghost_panel technique=technical/);
+      ctx.expect(line).toContain('slot=-1');
+      ctx.expect(line).toContain('material=bone_block');
+      ctx.expect(line).toContain('rawSlot=-');
+      const key = 'minecraft:bone_block[axis=y]';
+      ctx.expect(await ctx.rcon(`execute if block ${panel.join(' ')} ${key}`))
+        .toBe('Test passed');
+      // client side: the host's vanilla look is untouched (no state hijack to
+      // render — the pack claims no bone_block blockstate)
+      const clientState = String(await ctx.exec(
+        `return mc.level.getBlockState(net.minecraft.core.BlockPos.containing(${panel[0]}d, ${panel[1]}d, ${panel[2]}d)).toString()`,
+        15_000));
+      ctx.expect(clientState).toContain('{minecraft:bone_block}');
+      ctx.expect(clientState).toContain('[axis=y]');
+
+      // --- scene B: a VANILLA bone block beside it stays vanilla --------------
+      // The technical host TYPE is a PDC-only identify candidate, so the
+      // absence of a chunk-PDC record must keep identify empty — a global
+      // "bone blocks are ours" overclaim would make this cell found=true.
+      await ctx.rcon('clear Probe');
+      await ctx.rcon('give Probe minecraft:bone_block 1');
+      await ctx.exec('player.getInventory().selected = 0');
+      ctx.expect(await ctx.rcon('data get entity Probe SelectedItem.id'))
+        .toContain('minecraft:bone_block');
+      const hit2 = parseHit(await aimRead(ctx, -18, 27));
+      if (!hit2 || hit2.type !== 'BLOCK' || hit2.dir !== 'up' || !onTarget(hit2, padB)) {
+        ctx.expect(JSON.stringify(hit2)).toBe(`top face of pad ${JSON.stringify(padB)}`);
+      }
+      await aimedClick(ctx, padB, -18, 27, 'keyUse', 'use-clicked');
+      await inspectCell(ctx, vanilla, /found=false none material=bone_block rawSlot=-/);
+      ctx.expect(await ctx.rcon(`execute if block ${vanilla.join(' ')} ${key}`))
+        .toBe('Test passed');
+
+      // --- scene C: a neighbor change moves nothing ----------------------------
+      // No state identity to drift — the vanilla neighbor update reshapes
+      // nothing (bone block is a plain full block) and the PDC record holds.
+      await ctx.rcon(`setblock ${stoneCell.join(' ')} minecraft:stone`);
+      await ctx.sleep(800);
+      ctx.expect(await ctx.rcon(`execute if block ${panel.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await inspectCell(ctx, panel, /found=true world:ghost_panel technique=technical/);
+
+      // --- scene D: mining tears it down through the runtime pipeline ---------
+      // bone block is tool-gated (~10s bare hand, ~0.4s with a diamond
+      // pickaxe) and the runtime's break pipeline only fires when the vanilla
+      // break completes — so mine with a pickaxe. Pitch 12 is shallow enough
+      // to clear the stone cell at [0,-60,5] (scene C) and land on the
+      // panel's top face — pitch 20 would strike that stone first. The
+      // definition lists no drops, so no item entities may appear.
+      await ctx.rcon('clear Probe');
+      await ctx.rcon('give Probe minecraft:diamond_pickaxe 1');
+      await ctx.exec('player.getInventory().selected = 0');
+      await mineAway(ctx, panel, 2600, 0, 12);
+      await inspectCell(ctx, panel, /found=false none material=air rawSlot=-/);
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${panel[0] + 0.5} ${panel[1]} ${panel[2] + 0.5} if entity @e[type=item,distance=..6]`,
+      )).toBe('Test failed');
+
+      // --- scene E: the operator path places and removes the same state -------
+      await ctx.rcon(`materione dev place world:ghost_panel ${panel.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-PLACE ok=true placed world:ghost_panel world ${panel.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(`execute if block ${panel.join(' ')} ${key}`))
+        .toBe('Test passed');
+      await ctx.rcon(`materione dev remove ${panel.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-REMOVE ok=true removed world:ghost_panel world ${panel.join(' ')}`),
+        { timeoutMs: 45_000 });
+
+      // --- teardown: the vanilla block (fail-soft remove), staging, sweep ----
+      await cleanCell(ctx, vanilla);
+      for (const cell of [stoneCell, padA, padB]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+      await ctx.rcon('materione dev sweep');
+      await ctx.waitForServerLog(/MATERIONE-DEV-SWEEP indexed=0 ok=0 /, { timeoutMs: 45_000 });
+    },
+  }),
 ];
