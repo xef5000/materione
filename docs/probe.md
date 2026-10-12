@@ -144,7 +144,18 @@ already asserts.
   `.toString()`); fully-qualified class literals resolve via the mapped name
   (`net.minecraft.world.entity.decoration.ArmorStand` works — if the package
   is wrong Groovy reports "No such property: net"). Return strings from the
-  script (`.toString()`), never raw enums/objects.
+  script (`.toString()`), never raw enums/objects. Reflection on a wrapped
+  value (`mc.level.getClass()`) reflects the bridge wrapper, not the
+  Minecraft object — enumerate the mapped CLASS instead:
+  `Class.forName('net.minecraft.client.multiplayer.ClientLevel').getMethods()`.
+- **Client light reads (26.1.2)**:
+  `mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(x, y, z))`
+  returns the block-light layer the client's light engine received — the
+  programmatic proxy for "this light source actually lights the scene".
+  `LightLayer` lives in `world.level` on 26.1.2, NOT `world.level.lighting`
+  (that package surfaces the "No such property: net" failure). A placed
+  `minecraft:light[level=n]` reads back `n` within ~1.5s of the block
+  landing.
 - **Simulating clicks**: `keyMapping.setDown(true)` does nothing — keybinds
   fire on click counts. Use `mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())`
   (same shape for `keyUse`). The crosshair decides the target, so summon the

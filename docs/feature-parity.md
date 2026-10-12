@@ -123,7 +123,7 @@
 | ChorusBlock (transparent) | ✅ ⚠️ | ✅ (~63) | ✅ (~63) | ✅🧪 (connection-bit state identity; floats without support) |
 | Blocks-without-textures (technical) | ✅ | 🟡 (legacy mushroom) | 🟡 | ✅🧪 (PDC-identified on the unclaimed host default state; vanilla hosts coexist) |
 | Hardness / best-tool / blast resistance / sounds | ✅ | ✅ | ✅ | 📋 M7 |
-| Light emission | ✅ | ✅ | ✅ | ✅ |
+| Light emission | ✅ | ✅ | ✅ | ✅🧪 (furniture light cells; the client light engine reads the placed level — blocks carry no light field yet) |
 | Custom drops (silk-touch/fortune/tiered/loot-table) | ✅ | ✅ | ✅ | 📋 M7 |
 | Block storage (shulker/enderchest/disposal/personal) | ✅ | ✅ | ✅ | ✅ (furniture storage) |
 | Limited placing (allow/deny lists, roof/floor/wall, radius) | ✅ | ✅ | ✅ | ✅ |
