@@ -97,4 +97,152 @@ export default [
       await ctx.rcon('kill @e[type=item]'); // the placement-item drop from remove
     },
   }),
+
+  test({
+    id: 'furniture.storage',
+    title: 'world:workbench (storage: 9) opens a 9-slot "Workbench" menu on a client right-click (entity or barrier-cell hit both route to the cluster), a shift-clicked diamond leaves the inventory and persists into the root entity PDC (materione:storage byte array), survives close/reopen from that record, and dev remove spills it back as a real dropped diamond',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(10_000); // fresh-boot region-thread queue drain before input work
+
+      // --- scene: anchor [0,-60,7] (same cell as the light test; both tests
+      // clean idempotently). The player stands at [0,-60,5]: entity reach is
+      // 3.0 and the interaction box centers ~2.2 away from the eye there.
+      const anchor = [0, -60, 7];
+      const lightCell = [0, -59, 7];
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.rcon(`materione dev remove ${lightCell.join(' ')} world`);
+      await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
+      await ctx.rcon(`setblock ${lightCell.join(' ')} minecraft:air`);
+      await ctx.rcon(`materione dev place world:workbench ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:workbench world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      await ctx.rcon(`tp Probe 0 -60 5`);
+      await ctx.rcon('give Probe minecraft:diamond 1'); // hotbar slot 0
+
+      // Menu slot map for a 1-row menu (9 + 36): container 0..8, main
+      // inventory 9..35, hotbar 36..44 — the diamond sits in menu slot 36.
+      const menuOpen = async () => String(await ctx.exec(
+        'return player.containerMenu.containerId == 0 ? "closed" : "open"'));
+      const waitForMenu = async (want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          if ((await menuOpen()) === want) return;
+          if (Date.now() > deadline) ctx.expect(await menuOpen()).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      const slotName = (index) => ctx.exec(`def s = player.containerMenu.getSlot(${index}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString()`);
+      const waitForSlot = async (index, want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const name = String(await slotName(index));
+          if (name === want) return;
+          if (Date.now() > deadline) ctx.expect(name).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      const quickMove = (slot) => ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, ${slot}, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)
+return 'clicked'`);
+      const screenTitle = () => ctx.exec(
+        "return mc.screen == null ? 'none' : mc.screen.getTitle().getString()");
+
+      // A right-click routes to the cluster through either hit path: the
+      // Interaction entity (onEntityInteract) or the barrier cell the model
+      // occludes (onCellInteract — the barrier is a real block). Both end in
+      // openStorage for this definition. Pitch 31 puts the crosshair on the
+      // interaction box ~2.2 away; the readback decides which path fired.
+      const aim = (yaw, pitch) => ctx.exec(`player.setRot(${yaw}F, ${pitch}F)
+Thread.sleep(500)
+def hit = mc.hitResult
+def t = hit.getType().toString()
+if (t == 'ENTITY') return 'ENTITY ' + hit.getEntity().getType().toString()
+if (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ()
+return t`, 15_000);
+      const clickFurniture = async (cell, tries = 3) => {
+        let last = '(no attempt)';
+        for (let i = 0; i < tries; i++) {
+          last = String(await aim(0, 31));
+          // EntityType#toString is the namespaced id form on 26.1.2
+          // ("entity.minecraft.interaction"), not the enum name
+          const onEntity = last.startsWith('ENTITY') && last.includes('interaction');
+          const onCell = last === `BLOCK ${cell.join(',')}`;
+          if (onEntity || onCell) {
+            const reply = await ctx.exec(`def hit = mc.hitResult
+def t = hit.getType().toString()
+if (t == 'ENTITY' || (t == 'BLOCK' && hit.getBlockPos().getX() == ${cell[0]} && hit.getBlockPos().getY() == ${cell[1]} && hit.getBlockPos().getZ() == ${cell[2]})) {
+  mc.options.keyUse.click(mc.options.keyUse.getDefaultKey())
+  return 'use-clicked'
+}
+return 'AIM-DRIFT'`, 15_000);
+            if (String(reply) === 'use-clicked') return onEntity ? 'entity' : 'cell';
+            last = String(reply);
+          }
+          await ctx.sleep(700);
+        }
+        ctx.expect(last).toBe(`use-clicked on ${JSON.stringify(cell)}`);
+      };
+
+      // --- open: the storage wins the shared click flow (ECA → storage → seat)
+      const via = await clickFurniture(anchor);
+      await waitForMenu('open');
+      ctx.log(`storage opened via ${via} hit`);
+      ctx.expect(String(await screenTitle())).toBe('Workbench');
+      ctx.expect(Number(await ctx.exec(
+        'return player.containerMenu.slots.size()'))).toBe(45);
+
+      // --- deposit: shift-click the diamond in, watch hotbar and container agree
+      ctx.expect(String(await slotName(36))).toBe('Diamond');
+      await quickMove(36);
+      await waitForSlot(0, 'Diamond');
+      await waitForSlot(36, 'empty');
+      await ctx.exec('player.closeContainer()');
+      await waitForMenu('closed');
+      await ctx.sleep(700); // MONITOR close listener writes the grid back to the root PDC
+
+      // --- server truth: the root's entity PDC carries a serialized grid
+      await ctx.rcon(`materione dev inspect ${anchor.join(' ')} world`);
+      const inspect = await ctx.waitForServerLog(
+        /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench .+ root=[0-9a-f-]{36} /,
+        { timeoutMs: 20_000 });
+      const root = /root=([0-9a-f-]{36}) /.exec(inspect)[1];
+      // Paper stores entity PDC under BukkitValues in entity NBT (item
+      // components use custom_data.PublicBukkitValues — a different path)
+      ctx.expect(await ctx.rcon(
+        `data get entity ${root} BukkitValues."materione:storage"`)).toContain('[B;');
+
+      // --- persistence: reopening rebuilds the menu FROM the PDC record
+      await clickFurniture(anchor);
+      await waitForMenu('open');
+      await waitForSlot(0, 'Diamond');
+      await ctx.exec('player.closeContainer()');
+      await waitForMenu('closed');
+      await ctx.sleep(700);
+
+      // --- teardown spills the stored grid: dev remove drops the contents
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${anchor[0] + 0.5} ${anchor[1] + 0.5} ${anchor[2] + 0.5}`
+        + ` as @e[type=item,distance=..4] run data get entity @s Item.id`))
+        .toContain('minecraft:diamond');
+      await ctx.rcon('kill @e[type=item]'); // the spill + the placement-item drop
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${anchor[0] + 0.5} ${anchor[1] + 0.5} ${anchor[2] + 0.5}`
+        + ` if entity @e[type=item,distance=..4]`)).toBe('Test failed');
+    },
+  }),
 ];
