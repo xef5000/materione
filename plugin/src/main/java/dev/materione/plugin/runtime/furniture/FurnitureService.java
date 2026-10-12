@@ -487,6 +487,9 @@ public final class FurnitureService implements Listener {
                 .remove(cellKey(anchor.getX(), anchor.getY(), anchor.getZ()));
         if (drop) {
             for (ItemStack content : readStorage(record)) {
+                if (content == null || content.getType().isAir()) {
+                    continue; // empty grid slots ride the record as null holes
+                }
                 root.getWorld().dropItemNaturally(center, content);
             }
             Optional<RuntimeFurniture> dropped = definitionOf(root);
