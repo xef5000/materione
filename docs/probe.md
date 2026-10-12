@@ -219,6 +219,18 @@ already asserts.
   paths instead (`..."minecraft:custom_data".PublicBukkitValues."materione:key"`).
   A missing path answers `Found no elements matching <path>` (echoing the
   path text — don't assert presence by matching the key name in that reply).
+  Two different NBT roots carry PDC: **entities** (and chunks) under
+  `BukkitValues."materione:key"`, **item components** under
+  `...custom_data.PublicBukkitValues."materione:key"` — the split cost a
+  QA run to find. Targeting an entity by UUID fails with "No entity was
+  found" when its chunk is unloaded (a bare `probe up` with no client keeps
+  only the spawn area loaded) — `forceload add <x> <z>` first.
+- **Container slot maps shift with menu height**: container slots are
+  `0..N-1`, then main inventory `N..N+26`, hotbar `N+27..N+35` (the 2-row
+  backpack's 45–53 hotbar is the N=18 case; a 9-slot furniture storage's
+  hotbar is 36–44). `EntityType#toString()` is the namespaced id form
+  (`entity.minecraft.interaction`), never the enum name — match with
+  `contains`, not equality.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

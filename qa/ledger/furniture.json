@@ -1,12 +1,22 @@
 {
   "furniture.light-emission": {
-    "sha": "0b9902c3f3e1df185ca05351af682f3be3358383",
+    "sha": "584ae4417b9b16dac54f821c4b9d92e7df12b925",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "cb4daaeaa0357b84329ca7548556100cf55cecff461b447f88b4b564b5612d53",
     "result": "pass",
-    "at": "2026-10-12T20:53:13.517Z",
-    "run": "run-2026-10-12T20-51-56",
+    "at": "2026-10-12T22:01:14.788Z",
+    "run": "run-2026-10-12T21-59-43",
+    "eyes": null
+  },
+  "furniture.storage": {
+    "sha": "584ae4417b9b16dac54f821c4b9d92e7df12b925",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "bdc4fa71e53c03e4dc7277522603ce6f094064573f20501d2f41ac1174364852",
+    "result": "pass",
+    "at": "2026-10-12T22:01:36.316Z",
+    "run": "run-2026-10-12T21-59-43",
     "eyes": null
   }
 }
