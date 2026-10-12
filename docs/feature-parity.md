@@ -121,7 +121,7 @@
 | NoteBlock-based blocks | ✅ (~800) | ✅ (~800) | ✅ (~1149) | ✅🧪 |
 | Tripwire/StringBlock (foliage, waterlog, tall, sapling) | ✅ ⚠️ | ✅ (~127) | ✅ (~127) | 🚧 (dry — not waterloggable yet) |
 | ChorusBlock (transparent) | ✅ ⚠️ | ✅ (~63) | ✅ (~63) | ✅🧪 (connection-bit state identity; floats without support) |
-| Blocks-without-textures (technical) | ✅ | 🟡 (legacy mushroom) | 🟡 | ✅ |
+| Blocks-without-textures (technical) | ✅ | 🟡 (legacy mushroom) | 🟡 | ✅🧪 (PDC-identified on the unclaimed host default state; vanilla hosts coexist) |
 | Hardness / best-tool / blast resistance / sounds | ✅ | ✅ | ✅ | 📋 M7 |
 | Light emission | ✅ | ✅ | ✅ | ✅ |
 | Custom drops (silk-touch/fortune/tiered/loot-table) | ✅ | ✅ | ✅ | 📋 M7 |

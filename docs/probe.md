@@ -184,6 +184,12 @@ already asserts.
   keys must match the client's alphabetical property order; the host name and
   bracket content are best asserted as two separate `contains` (`Block{…}`
   breaks a naive `host[props]` substring).
+- **Tool-gated hosts out-mine the hold**: hosts like bone block (~10s bare
+  hand, ~0.4s with a diamond pickaxe) never finish inside a `mineAway` hold
+  bare-handed — the runtime's break pipeline only fires when the vanilla
+  break completes, so the block stays and every retry burns its inspect
+  timeout. `give Probe` the correct tool (and re-select slot 0) before a
+  mining hold on any host whose material names a tool.
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
