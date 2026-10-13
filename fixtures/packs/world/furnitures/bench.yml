@@ -1,0 +1,21 @@
+# The multi-seat sit fixture: two seat offsets, no storage — the right-click
+# priority (ECA → storage → seat) only reaches sitPlayer on a storage-free
+# cluster, and the seat flow needs the first *live* seat to be selectable
+# (an occupied seat is skipped). qa furniture.seats drives it from a real
+# client. Texture reuses the workbench png.
+bench:
+  texture: block/workbench
+  display_name: Bench
+  rotation: 90
+  hitboxes:
+    - type: barrier
+      offset: [0, 0, 0]
+      width: 1.0
+      height: 0.6
+    - type: interaction
+      offset: [0, 0.4, 0]
+      width: 1.4
+      height: 1.0
+  seats:
+    - offset: [-0.3, 0.3, 0]
+    - offset: [0.3, 0.3, 0]
