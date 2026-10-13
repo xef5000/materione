@@ -217,6 +217,15 @@ already asserts.
   the light column and read MISS, steep angles cross over onto distant
   ground. Any cell-with-cell-above geometry hides its top face the same
   way; aim for side faces or drive the seam through `dev place`.
+- **Entity asserts and client entity lookups**: `execute if entity`
+  appends the match count ("Test passed. Count: 1" — plain "Test failed"
+  when nothing matches), so composition asserts can require exact counts.
+  The client-side mirror of a server-known entity is
+  `mc.level.getEntity(java.util.UUID.fromString('<uuid>'))` → null or the
+  entity (`getType().toString()` is the namespaced form
+  `entity.minecraft.item_display`); `getBlockX/Y/Z` floor the position
+  (an entity at y=-59.5 reads block y=-60). Server-side entity ids are
+  NOT in `data get entity` NBT — address entities by UUID selectors.
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
