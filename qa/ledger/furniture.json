@@ -1,52 +1,62 @@
 {
   "furniture.light-emission": {
-    "sha": "584ae4417b9b16dac54f821c4b9d92e7df12b925",
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "cb4daaeaa0357b84329ca7548556100cf55cecff461b447f88b4b564b5612d53",
     "result": "pass",
-    "at": "2026-10-12T22:01:14.788Z",
-    "run": "run-2026-10-12T21-59-43",
+    "at": "2026-10-13T04:30:15.415Z",
+    "run": "run-2026-10-13T04-29-18",
     "eyes": null
   },
   "furniture.storage": {
-    "sha": "584ae4417b9b16dac54f821c4b9d92e7df12b925",
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "bdc4fa71e53c03e4dc7277522603ce6f094064573f20501d2f41ac1174364852",
     "result": "pass",
-    "at": "2026-10-12T22:01:36.316Z",
-    "run": "run-2026-10-12T21-59-43",
+    "at": "2026-10-13T04:30:38.090Z",
+    "run": "run-2026-10-13T04-29-18",
     "eyes": null
   },
   "furniture.limited-placing": {
-    "sha": "e08ce50b0b704c338f96d913527dcb97f950d617",
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "02ef13d14ac6bf41c55ff7207c31430eeca13328ee8373c6ee4c073c9d1b98f0",
     "result": "pass",
-    "at": "2026-10-13T00:29:51.142Z",
-    "run": "run-2026-10-13T00-28-39",
+    "at": "2026-10-13T04:31:13.626Z",
+    "run": "run-2026-10-13T04-29-18",
     "eyes": null
   },
   "furniture.display-entity": {
-    "sha": "49eee6b8b36353d742b50722a8e1e25e5c24b3f9",
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "8639ca212dfdbfdeee872c3b7346be424529cce5da050cf73f28a2f729408d75",
     "result": "pass",
-    "at": "2026-10-13T01:11:21.185Z",
-    "run": "run-2026-10-13T01-09-53",
+    "at": "2026-10-13T04:31:56.084Z",
+    "run": "run-2026-10-13T04-29-18",
     "eyes": null
   },
   "furniture.hitboxes": {
-    "sha": "bdbde10de4dea77974187ebc38a61aa3385233b2",
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "56a513212e35db160b4285fdd6cbd8fc85263a38b2f3c80f9ba44e03833734ee",
     "result": "pass",
-    "at": "2026-10-13T02:16:02.938Z",
-    "run": "run-2026-10-13T02-15-04",
+    "at": "2026-10-13T04:32:15.289Z",
+    "run": "run-2026-10-13T04-29-18",
+    "eyes": null
+  },
+  "furniture.seats": {
+    "sha": "ecbf121dd0452b557e892187d54b4344eef6206f",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "f873f00ae3b67a818b10d4ad4dc31cfef45155d67558c5482913e101145c8d5b",
+    "result": "pass",
+    "at": "2026-10-13T04:32:37.189Z",
+    "run": "run-2026-10-13T04-29-18",
     "eyes": null
   }
 }
