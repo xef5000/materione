@@ -28,5 +28,15 @@
     "at": "2026-10-13T00:29:51.142Z",
     "run": "run-2026-10-13T00-28-39",
     "eyes": null
+  },
+  "furniture.display-entity": {
+    "sha": "49eee6b8b36353d742b50722a8e1e25e5c24b3f9",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "8639ca212dfdbfdeee872c3b7346be424529cce5da050cf73f28a2f729408d75",
+    "result": "pass",
+    "at": "2026-10-13T01:11:21.185Z",
+    "run": "run-2026-10-13T01-09-53",
+    "eyes": null
   }
 }
