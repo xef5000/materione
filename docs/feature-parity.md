@@ -141,7 +141,7 @@
 | Hitboxes (barrier / interaction / shulker / ghast) | ✅ | ✅ | ✅ (4 types, incl. ghast 1.21.6) | 🚧 (barrier + interaction, ✅🧪 live; shulker/ghast 📋 M7) |
 | Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ | 🚧 (transform + rotation; scale/brightness 📋 M7) |
 | Seats (single + multi) | ✅ | ✅ | ✅ | ✅🧪 (first-live-seat selection verified client-side; multi via an occupied skip on a two-seat fixture) |
-| Lights (toggleable) | ✅ | ✅ | ✅ | ✅ |
+| Lights (toggleable) | ✅ | ✅ | ✅ | 🚧 (static always-on light cells, ✅🧪 live — per-cell levels verified client-side; interact-toggled lights are not built and need furniture states, 📋 M7) |
 | Storage | ✅ | ✅ | ✅ | ✅ |
 | Beds (sleep / lie-down) | ⚠️ | ❌ | ✅ | 📋 M7 |
 | Doors (rotating + sliding) | ⚠️ | 🟡 | ✅ | 📋 M7 |

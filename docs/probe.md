@@ -155,7 +155,17 @@ already asserts.
   `LightLayer` lives in `world.level` on 26.1.2, NOT `world.level.lighting`
   (that package surfaces the "No such property: net" failure). A placed
   `minecraft:light[level=n]` reads back `n` within ~1.5s of the block
-  landing.
+  landing. With two sources near each other, the flood dominates: a
+  level-15 cell reads 13 on a cell two manhattan steps away, masking that
+  cell's own level — pick near-tied levels (e.g. 8 and 7) so each cell
+  reads at its own value and a wrong level fails the client read too.
+- **Direct entity-interact packet (26.1.2)**: the right-click-on-entity
+  equivalent of `useItemOn` is 4-ary —
+  `mc.gameMode.interact(player, entity, entityHitResult, hand)` (the
+  1.20-style 3-ary overload does not exist). Pass the bridge-wrapped
+  `mc.hitResult` uncast: an explicit `(EntityHitResult)` cast throws
+  "Cannot cast GroovyJavaObject" — Groovy's runtime dispatch unwraps
+  arguments on invocation, it just cannot convert them up front.
 - **Simulating clicks**: `keyMapping.setDown(true)` does nothing — keybinds
   fire on click counts. Use `mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())`
   (same shape for `keyUse`). The crosshair decides the target, so summon the
