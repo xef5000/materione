@@ -245,4 +245,139 @@ return 'AIM-DRIFT'`, 15_000);
         + ` if entity @e[type=item,distance=..4]`)).toBe('Test failed');
     },
   }),
+
+  test({
+    id: 'furniture.limited-placing',
+    title: 'furniture placement is limited to floor clicks: a workbench placement item right-clicked on a wall face places and consumes nothing, a floor click places the cluster (barrier + light cell) and consumes exactly one item, and the space pre-check denies an occupied anchor at the operator seam (dev place answers no-space, cluster root unchanged) — the deny is unreachable from real-client clicks because the cluster light cell caps the aim column',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(10_000); // fresh-boot region-thread queue drain before input work
+
+      const parseHit = (s) => {
+        const m = /^(\w+) (-?\d+),(-?\d+),(-?\d+) (\w+)$/.exec(String(s));
+        if (!m) return null;
+        return { type: m[1], x: Number(m[2]), y: Number(m[3]), z: Number(m[4]), dir: m[5] };
+      };
+      const onTarget = (hit, cell) => hit && hit.type === 'BLOCK'
+        && hit.x === cell[0] && hit.y === cell[1] && hit.z === cell[2];
+
+      // --- scene: the floor cell [1,-61,7] (solid ground, top face at y=-60)
+      // carries the allowed placement; the stone bump at [0,-60,5] offers the
+      // denied wall face (its north side). The player stands one block east
+      // (1,-60,3): the x=1.5 sight line to the floor clears the bump, while
+      // the bump's north face stays clickable with a slight west yaw.
+      const ground = [1, -61, 7];
+      const anchor = [1, -60, 7];
+      const light = [1, -59, 7];
+      const bump = [0, -60, 5];
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
+      for (const cell of [anchor, light, bump]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+      await ctx.rcon(`setblock ${bump.join(' ')} minecraft:stone`);
+      ctx.expect(await ctx.rcon(`execute if block ${ground.join(' ')} minecraft:air`))
+        .toBe('Test failed'); // the ground is solid
+
+      // the synthetic furniture placement item: paper material, the §13 seam
+      await ctx.rcon('materione give world:workbench Probe');
+      await ctx.waitForChat(/Given world:workbench/);
+      await ctx.rcon('tp Probe 1 -60 3');
+      await ctx.exec('player.getInventory().selected = 0');
+
+      const stackCount = async () => Number(await ctx.exec(`def n = 0
+for (int i = 0; i < 36; i++) {
+  if (!player.getInventory().items.get(i).isEmpty()) n = n + 1
+}
+return n`));
+      const aim = (yaw, pitch) => ctx.exec(`player.setRot(${yaw}F, ${pitch}F)
+Thread.sleep(500)
+def hit = mc.hitResult
+def t = hit.getType().toString()
+if (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()
+return t`, 15_000);
+      // Aim at `cell`'s face `dir` and send the use — all atomic with re-aim
+      // retries. The use goes through gameMode.useItemOn (a real
+      // ServerboundUseItemOnPacket built from the verified hitResult):
+      // keyUse.click is equally real but builds the packet from the crosshair
+      // at frame-processing time, so a desktop nudge between the readback and
+      // the packet redirects or drops the click (observed once as a silently
+      // vanished floor placement).
+      const clickFace = async (cell, dir, yaw, pitch, tries = 3) => {
+        let last = '(no attempt)';
+        for (let i = 0; i < tries; i++) {
+          const hit = parseHit(await aim(yaw, pitch));
+          last = hit;
+          if (hit && hit.type === 'BLOCK' && hit.dir === dir && onTarget(hit, cell)) {
+            const reply = await ctx.exec(`def hit = mc.hitResult
+if (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != ${cell[0]} || hit.getBlockPos().getY() != ${cell[1]} || hit.getBlockPos().getZ() != ${cell[2]} || hit.getDirection().toString() != '${dir}') return 'AIM-DRIFT'
+def result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
+return 'use:' + result.toString()`, 15_000);
+            if (String(reply).startsWith('use:')) return;
+            last = String(reply);
+          }
+          await ctx.sleep(700);
+        }
+        ctx.expect(JSON.stringify(last)).toBe(`use-clicked on ${JSON.stringify(cell)} ${dir}`);
+      };
+
+      // --- scene A: a wall face is denied — nothing places, nothing consumes.
+      // Yaw 30 / pitch 33 puts the crosshair on the bump's north face (yaw 18
+      // grazed the east face corner); the placement handler returns before
+      // any placement on a non-UP face and the paper item has no vanilla
+      // use. The vanilla anchor for such a click would be [0,-60,4] — it
+      // must stay air.
+      await clickFace(bump, 'north', 30, 33);
+      ctx.expect(await ctx.rcon('execute if block 0 -60 4 minecraft:air')).toBe('Test passed');
+      ctx.expect(await stackCount()).toBe(1);
+
+      // --- scene B: the floor is allowed — cluster spawns, one item consumed
+      await clickFace(ground, 'up', 0, 22);
+      ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:barrier`))
+        .toBe('Test passed');
+      ctx.expect(await ctx.rcon(`execute if block ${light.join(' ')} minecraft:light[level=14]`))
+        .toBe('Test passed');
+      ctx.expect(await stackCount()).toBe(0); // the paper was consumed
+      await ctx.rcon(`materione dev inspect ${anchor.join(' ')} world`);
+      const inspect = await ctx.waitForServerLog(
+        /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench .+ root=[0-9a-f-]{36} /,
+        { timeoutMs: 20_000 });
+      const root = /root=([0-9a-f-]{36}) /.exec(inspect)[1];
+
+      // --- scene C: the space pre-check denies an occupied anchor. The deny
+      // is only reachable at the operator seam: the cluster's own light cell
+      // (non-targetable) caps the column above the barrier, so a real client
+      // can never aim an UP-face click whose candidate anchor is claimed —
+      // the crosshair either misses entirely (shallow) or lands on distant
+      // ground (steep), both verified in the aim sweep. The dev driver is
+      // the documented harness path for this seam.
+      await ctx.rcon(`materione dev place world:workbench ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=false no-space world:workbench world ${anchor.join(' ')}`),
+        { timeoutMs: 20_000 });
+      await ctx.rcon(`materione dev inspect ${anchor.join(' ')} world`);
+      const inspect2 = await ctx.waitForServerLog(
+        /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench .+ root=[0-9a-f-]{36} /,
+        { timeoutMs: 20_000 });
+      ctx.expect(/root=([0-9a-f-]{36}) /.exec(inspect2)[1]).toBe(root);
+
+      // --- teardown
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      await ctx.rcon(`setblock ${bump.join(' ')} minecraft:air`);
+      await ctx.rcon('clear Probe');
+      await ctx.rcon('kill @e[type=item]');
+    },
+  }),
 ];

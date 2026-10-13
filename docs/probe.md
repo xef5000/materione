@@ -201,6 +201,22 @@ already asserts.
   break completes, so the block stays and every retry burns its inspect
   timeout. `give Probe` the correct tool (and re-select slot 0) before a
   mining hold on any host whose material names a tool.
+- **Direct-packet clicks for placement tests**: `keyUse.click` builds the
+  use packet from the crosshair at frame-processing time, so a physical
+  desktop nudge between the verified readback and the packet silently
+  redirects or drops a placement. When the click must be deterministic,
+  send it from the verified hit:
+  `mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, mc.hitResult)`
+  (a real `ServerboundUseItemOnPacket`; the reply is the client-side
+  `InteractionResult`, so `Pass` on a denied placement is expected — assert
+  the server-side outcome, not the reply).
+- **Non-targetable blocks cap the aim column**: a furniture cluster's
+  `minecraft:light` cell (like structure void: no collision, not
+  selectable) sits directly above the barrier, so from outside the
+  crosshair can never reach the barrier's top face — shallow angles enter
+  the light column and read MISS, steep angles cross over onto distant
+  ground. Any cell-with-cell-above geometry hides its top face the same
+  way; aim for side faces or drive the seam through `dev place`.
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
