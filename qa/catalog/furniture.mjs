@@ -20,6 +20,11 @@ const blockLightAt = (ctx, cell) => ctx.exec(
   `return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, `
   + `new net.minecraft.core.BlockPos(${cell[0]}, ${cell[1]}, ${cell[2]}))`, 15_000);
 
+// The client-side view of one cluster entity, by uuid: namespaced type plus
+// block position, or 'null' when the client does not know the entity.
+const clientEntity = (ctx, uuid) => ctx.exec(`def e = mc.level.getEntity(java.util.UUID.fromString('${uuid}'))
+return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' + e.getBlockY() + ',' + e.getBlockZ()`, 15_000);
+
 export default [
   test({
     id: 'furniture.light-emission',
@@ -378,6 +383,115 @@ return 'use:' + result.toString()`, 15_000);
       await ctx.rcon(`setblock ${bump.join(' ')} minecraft:air`);
       await ctx.rcon('clear Probe');
       await ctx.rcon('kill @e[type=item]');
+    },
+  }),
+
+  test({
+    id: 'furniture.display-entity',
+    title: 'furniture is a display-entity cluster: one item_display root centers on the anchor cell carrying the authored model, the member record names exactly an interaction hitbox, a marker-seat armor stand and the text-display label (client-visible by uuid with those types), all of it survives a full client relaunch, and dev remove dissolves every member server- and client-side',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 600_000, // includes one full client relaunch (ctx.rejoin)
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot region-thread queue drain
+
+      // --- scene: anchor [1,-60,7]; display-entity furniture renders from
+      // entities alone — the model carrier is the root, collision is the
+      // tagged barrier cell, nothing else is placed
+      const anchor = [1, -60, 7];
+      const light = [1, -59, 7];
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
+      await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
+      await ctx.rcon(`setblock ${light.join(' ')} minecraft:air`);
+
+      await ctx.rcon(`materione dev place world:workbench ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:workbench world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+
+      // the root pins on the anchor and its record carries the cluster:
+      // display= centers the model on the anchor cell (x.5, y.5, z.5)
+      await ctx.rcon(`materione dev inspect ${anchor.join(' ')} world`);
+      const inspect = await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:workbench `
+          + `display=${anchor[0] + 0.5},${anchor[1] + 0.5},${anchor[2] + 0.5} root=[0-9a-f-]{36} `),
+        { timeoutMs: 20_000 });
+      const root = /root=([0-9a-f-]{36}) /.exec(inspect)[1];
+
+      // composition near the anchor: exactly one of each display-entity
+      // member — the model root, the interaction hitbox, the marker seat,
+      // the label (execute if entity echoes the match count)
+      for (const type of ['item_display', 'interaction', 'armor_stand', 'text_display']) {
+        ctx.expect(await ctx.rcon(
+          `execute if entity @e[type=${type},x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+          + `z=${anchor[2] + 0.5},distance=..3]`)).toBe('Test passed. Count: 1');
+      }
+      // the members record names exactly three uuids (interaction, seat, label)
+      const membersReply = await ctx.rcon(
+        `data get entity ${root} BukkitValues."materione:members"`);
+      const memberUuids = membersReply.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? [];
+      ctx.expect(memberUuids.length).toBe(3);
+      // the label carries the authored text (legacy &e formatting stripped to
+      // the plain content by the component read)
+      ctx.expect(await ctx.rcon(
+        `data get entity @e[type=text_display,x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+        + `z=${anchor[2] + 0.5},distance=..3,limit=1] text`)).toContain('Workbench');
+      // the model rides the item_model component on the root's displayed stack
+      ctx.expect(await ctx.rcon(
+        `data get entity ${root} item.components."minecraft:item_model"`))
+        .toContain('world:workbench');
+
+      // the client sees the cluster: the root plus all three member types
+      const clientTypes = async () => {
+        const entries = [await clientEntity(ctx, root)];
+        for (const uuid of memberUuids) entries.push(await clientEntity(ctx, uuid));
+        return entries.map((e) => String(e).split('@')[0]).sort();
+      };
+      const wantTypes = ['entity.minecraft.armor_stand', 'entity.minecraft.interaction',
+        'entity.minecraft.item_display', 'entity.minecraft.text_display'];
+      const waitForClientTypes = async (want, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          if (JSON.stringify(await clientTypes()) === JSON.stringify(want)) return;
+          if (Date.now() > deadline) ctx.expect(await clientTypes()).toEqual(want);
+          await ctx.sleep(500);
+        }
+      };
+      await waitForClientTypes(wantTypes);
+      // the root centers on the anchor cell; -59.5 floors to the anchor's
+      // own block y
+      const rootView = String(await clientEntity(ctx, root));
+      ctx.expect(rootView).toBe(
+        `entity.minecraft.item_display@${anchor[0]},${anchor[1]},${anchor[2]}`);
+
+      // persistence: a full client relaunch re-syncs the same entities
+      await ctx.rejoin();
+      await waitForClientTypes(wantTypes);
+
+      // --- teardown: the cluster dissolves server- and client-side
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      for (const type of ['item_display', 'interaction', 'armor_stand', 'text_display']) {
+        ctx.expect(await ctx.rcon(
+          `execute if entity @e[type=${type},x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+          + `z=${anchor[2] + 0.5},distance=..3]`)).toBe('Test failed');
+      }
+      await ctx.sleep(1000); // despawn packets → client
+      ctx.expect(await clientEntity(ctx, root)).toBe('null');
+      for (const uuid of memberUuids) {
+        ctx.expect(await clientEntity(ctx, uuid)).toBe('null');
+      }
+      await ctx.rcon('kill @e[type=item]'); // the placement-item drop
     },
   }),
 ];
