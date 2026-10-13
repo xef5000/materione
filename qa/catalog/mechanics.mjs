@@ -168,10 +168,15 @@ return 'left-clicked'`, 15_000);
 
       const hit = async () => {
         ctx.expect(String(await aim())).toBe('entity.minecraft.villager');
-        await ctx.exec(`mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())
-return 'clicked'`);
-        // past the sword's full attack cooldown — 26.1 gates swings on
-        // minimum attack charge, and a sub-charge swing is dropped silently
+        // direct attack packet — the keybind click path decays over a long
+        // client session (issue #63) and silently stops landing; the packet
+        // is the same ServerboundInteractPacket(ATTACK) a charged click
+        // produces, without the client-side sub-charge gate
+        await ctx.exec(`def target = mc.hitResult.getEntity()
+mc.gameMode.attack(player, target)
+return 'attacked'`);
+        // the server-side attack cooldown still scales damage — spacing
+        // keeps it full (the villager's 40f absorption absorbs any hit)
         await ctx.sleep(1700);
       };
 
