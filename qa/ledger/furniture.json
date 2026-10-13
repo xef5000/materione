@@ -38,5 +38,15 @@
     "at": "2026-10-13T01:11:21.185Z",
     "run": "run-2026-10-13T01-09-53",
     "eyes": null
+  },
+  "furniture.hitboxes": {
+    "sha": "bdbde10de4dea77974187ebc38a61aa3385233b2",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "56a513212e35db160b4285fdd6cbd8fc85263a38b2f3c80f9ba44e03833734ee",
+    "result": "pass",
+    "at": "2026-10-13T02:16:02.938Z",
+    "run": "run-2026-10-13T02-15-04",
+    "eyes": null
   }
 }

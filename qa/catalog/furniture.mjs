@@ -494,4 +494,91 @@ return 'use:' + result.toString()`, 15_000);
       await ctx.rcon('kill @e[type=item]'); // the placement-item drop
     },
   }),
+
+  test({
+    id: 'furniture.hitboxes',
+    title: 'the shipped hitbox pair behaves: a barrier cell is real collision that stops a walking player (who crosses the anchor cell freely before the cluster exists), the interaction entity is sized exactly per the fixture (width 1.2, height 1.1, responsive) and routes clicks to the cluster, and removal releases the cell so the walk-through works again',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot region-thread queue drain before input work
+
+      // --- scene: the cluster anchors at [1,-60,7]; the barrier hitbox
+      // (offset [0,0,0]) occupies the anchor cell, dead in the walk path
+      // from the spawn point (1,-60,3) heading south.
+      const anchor = [1, -60, 7];
+      const light = [1, -59, 7];
+      const spawn = 'tp Probe 1 -60 3';
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
+      await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
+      await ctx.rcon(`setblock ${light.join(' ')} minecraft:air`);
+
+      // movement is hold-driven: walk south for 1.2s, release, let the
+      // server-corrected position settle, then read the player z
+      const walk = async () => {
+        await ctx.exec('player.setRot(0F, 0F)\nreturn \'faced-south\'');
+        await ctx.exec('mc.options.keyUp.setDown(true)\nreturn \'walking\'');
+        await ctx.sleep(1200);
+        await ctx.exec('mc.options.keyUp.setDown(false)\nreturn \'released\'');
+        await ctx.sleep(600);
+        return Number(await ctx.exec('return player.getZ()'));
+      };
+
+      // --- baseline: the empty scene is walkable — the player crosses the
+      // anchor cell's z (and the interaction column) entirely
+      await ctx.rcon(spawn);
+      const openZ = await walk();
+      ctx.expect(openZ).toBeGreaterThan(7.5);
+      await ctx.rcon(spawn);
+
+      // --- place: the barrier hitbox claims the anchor cell
+      await ctx.rcon(`materione dev place world:workbench ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:workbench world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:barrier`))
+        .toBe('Test passed');
+
+      // --- collision: the same walk stops at the barrier's north face
+      const blockedZ = await walk();
+      ctx.expect(blockedZ).toBeLessThan(6.9);
+      ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:barrier`))
+        .toBe('Test passed');
+      await ctx.rcon(spawn);
+
+      // --- the interaction hitbox is sized per the fixture (width 1.2,
+      // height 1.1) and responsive; its click routing to the cluster is
+      // covered by furniture.storage
+      ctx.expect(await ctx.rcon(
+        `data get entity @e[type=interaction,x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+        + `z=${anchor[2] + 0.5},distance=..3,limit=1] width`)).toContain('1.2');
+      ctx.expect(await ctx.rcon(
+        `data get entity @e[type=interaction,x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+        + `z=${anchor[2] + 0.5},distance=..3,limit=1] height`)).toContain('1.1');
+      ctx.expect(await ctx.rcon(
+        `data get entity @e[type=interaction,x=${anchor[0] + 0.5},y=${anchor[1] + 0.5},`
+        + `z=${anchor[2] + 0.5},distance=..3,limit=1] response`)).toContain('1b');
+
+      // --- teardown: the cell releases and the path is walkable again
+      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:air`))
+        .toBe('Test passed');
+      const reopenedZ = await walk();
+      ctx.expect(reopenedZ).toBeGreaterThan(7.5);
+      await ctx.rcon('clear Probe');
+      await ctx.rcon('kill @e[type=item]');
+    },
+  }),
 ];
