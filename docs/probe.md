@@ -226,6 +226,14 @@ already asserts.
   `entity.minecraft.item_display`); `getBlockX/Y/Z` floor the position
   (an entity at y=-59.5 reads block y=-60). Server-side entity ids are
   NOT in `data get entity` NBT — address entities by UUID selectors.
+- **Movement is hold-state, actions are click-counts**: walking/vehicle
+  keys drive through `mc.options.keyUp.setDown(true)` (poll each tick),
+  while use/attack fire on `click(key)` — the same setDown on an action
+  key does nothing. The server-corrected position needs a settle beat
+  after releasing before `player.getZ()` reflects the collision stop
+  (a barrier face stops the player at cell-edge minus the 0.3 radius).
+  NBT scalars read back suffixed (`1.2f`, `1b`) — assert with
+  `toContain`, not equality.
 - **Inventory/GUI automation (26.1.2)**: the container-click API renamed —
   drive real clicks with `mc.gameMode.handleContainerInput(menu.containerId,
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
