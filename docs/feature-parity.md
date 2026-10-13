@@ -126,7 +126,7 @@
 | Light emission | ✅ | ✅ | ✅ | ✅🧪 (furniture light cells; the client light engine reads the placed level — blocks carry no light field yet) |
 | Custom drops (silk-touch/fortune/tiered/loot-table) | ✅ | ✅ | ✅ | 📋 M7 |
 | Block storage (shulker/enderchest/disposal/personal) | ✅ | ✅ | ✅ | ✅🧪 (furniture storage: shift-click round-trips through the root PDC; spills on removal — blocks carry no storage yet) |
-| Limited placing (allow/deny lists, roof/floor/wall, radius) | ✅ | ✅ | ✅ | ✅ |
+| Limited placing (allow/deny lists, roof/floor/wall, radius) | ✅ | ✅ | ✅ | 🚧 (floor-only placing + space pre-check, ✅🧪 live; allow/deny lists, roof/wall, radius 📋 M7) |
 | Directional variants (log/barrel/furnace/dropper) | ✅ ⚠️ | ✅ | ✅ | 📋 M7 |
 | Falling blocks | ⚠️ | ✅ | ✅ | 📋 M7 |
 | **Stairs / slabs / doors / trapdoors / grates / bulbs** | 🟡 ⚠️ | ✅ (ShapedBlock, built-in) | ✅ (Carpentry addon) | 🚧 (stairs + slabs via shaped blocks) |
