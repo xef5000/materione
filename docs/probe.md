@@ -215,8 +215,17 @@ already asserts.
   selectable) sits directly above the barrier, so from outside the
   crosshair can never reach the barrier's top face — shallow angles enter
   the light column and read MISS, steep angles cross over onto distant
-  ground. Any cell-with-cell-above geometry hides its top face the same
-  way; aim for side faces or drive the seam through `dev place`.
+  ground. The interaction hitbox above a barrier cell occludes the same
+  way even without a light. Any cell-with-cell-above geometry hides its
+  top face the same way; aim for side faces or drive the seam through
+  `dev place`.
+- **Seats need a storage-free cluster**: the shared click priority is
+  ECA → storage → seat, so a furniture with `storage:` never sits —
+  seat coverage needs a storage-free fixture (the corpus's `bench`).
+  `ride <target> dismount` / `ride <rider> mount <vehicle>` drive
+  dismount/occupancy from the console; the seat's live `Passengers` NBT
+  serializes full passenger compounds (truncation-prone) — assert the
+  seat outcome via the rider's vehicle, not the NBT.
 - **Entity asserts and client entity lookups**: `execute if entity`
   appends the match count ("Test passed. Count: 1" — plain "Test failed"
   when nothing matches), so composition asserts can require exact counts.

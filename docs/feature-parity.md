@@ -140,7 +140,7 @@
 | Item-frame / glow-frame / armor-stand furniture | ✅ | ✅ | ❌ (dropped) | ➖ (display entities only) |
 | Hitboxes (barrier / interaction / shulker / ghast) | ✅ | ✅ | ✅ (4 types, incl. ghast 1.21.6) | 🚧 (barrier + interaction, ✅🧪 live; shulker/ghast 📋 M7) |
 | Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ | 🚧 (transform + rotation; scale/brightness 📋 M7) |
-| Seats (single + multi) | ✅ | ✅ | ✅ | ✅ |
+| Seats (single + multi) | ✅ | ✅ | ✅ | ✅🧪 (first-live-seat selection verified client-side; multi via an occupied skip on a two-seat fixture) |
 | Lights (toggleable) | ✅ | ✅ | ✅ | ✅ |
 | Storage | ✅ | ✅ | ✅ | ✅ |
 | Beds (sleep / lie-down) | ⚠️ | ❌ | ✅ | 📋 M7 |
