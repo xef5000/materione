@@ -64,7 +64,7 @@ public final class WorldPersistenceRunner {
 
         // --- boot A: setup + reload survival ---------------------------------
         ServerWorkspace workspaceA = ServerWorkspace.create(options, "world-a", packs);
-        Boot a1 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=69");
+        Boot a1 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=70");
         if (a1 != null) {
             settleChunk(a1, 0, 0);
             placeWorldSet(a1, options, problems);
@@ -88,7 +88,7 @@ public final class WorldPersistenceRunner {
                     "MATERIONE-STACK id=world:string_fence item_model=world:string_fence", problems);
 
             // reload must keep every placement (rebuild visuals only)
-            drive(a1, options, "materione reload", "MATERIONE-RELOAD-OK items=69", problems);
+            drive(a1, options, "materione reload", "MATERIONE-RELOAD-OK items=70", problems);
             drive(a1, options, "materione dev sweep",
                     "MATERIONE-DEV-SWEEP indexed=6 ok=6 stale=0 orphans=0 drifted=0 unloaded=0",
                     problems);
@@ -100,7 +100,7 @@ public final class WorldPersistenceRunner {
         }
 
         // --- boot A again: restart survival -----------------------------------
-        Boot a2 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=69");
+        Boot a2 = boot(options, workspaceA, problems, "MATERIONE-CONTENT-OK items=70");
         if (a2 != null) {
             settleChunk(a2, 0, 0);
             drive(a2, options, "materione dev sweep",
@@ -117,7 +117,7 @@ public final class WorldPersistenceRunner {
         // --- boot B: world-copy survival ---------------------------------------
         ServerWorkspace workspaceB = ServerWorkspace.create(options, "world-b", packs);
         copyDirectory(workspaceA.root.resolve("world"), workspaceB.root.resolve("world"));
-        Boot b1 = boot(options, workspaceB, problems, "MATERIONE-CONTENT-OK items=69");
+        Boot b1 = boot(options, workspaceB, problems, "MATERIONE-CONTENT-OK items=70");
         if (b1 != null) {
             settleChunk(b1, 0, 0);
             drive(b1, options, "materione dev sweep",
@@ -184,7 +184,7 @@ public final class WorldPersistenceRunner {
                       do: []
                 """);
         int cursor = boot.log().mark();
-        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=70", problems);
+        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=71", problems);
         if (boot.log().awaitLine("MTR-0022", java.time.Duration.ofSeconds(5), cursor) == null) {
             problems.add("fault injection: MTR-0022 missing for the unparseable condition");
         }
@@ -192,7 +192,7 @@ public final class WorldPersistenceRunner {
             problems.add("fault injection: MTR-0021 missing for the empty rule chain");
         }
         Files.deleteIfExists(broken);
-        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=69", problems);
+        drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=70", problems);
     }
 
     /**
@@ -210,7 +210,7 @@ public final class WorldPersistenceRunner {
         var problems = new ArrayList<String>();
         ServerWorkspace workspace = ServerWorkspace.create(options, "world-fault", packs);
 
-        Boot f1 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=69");
+        Boot f1 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=70");
         if (f1 == null) {
             return problems;
         }
@@ -235,7 +235,7 @@ public final class WorldPersistenceRunner {
                 .resolve("plugins").resolve("Materione").resolve("storage").resolve("allocation.bin"));
 
         // aaa_crate (a block with no item: link) adds one auto placement item
-        Boot f2 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=70");
+        Boot f2 = boot(options, workspace, problems, "MATERIONE-CONTENT-OK items=71");
         if (f2 == null) {
             return problems;
         }
