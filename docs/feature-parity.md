@@ -136,7 +136,7 @@
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Display-entity furniture (1.19.4+) | ✅ ⚠️ | ✅ (default) | ✅ (only method) | ✅ |
+| Display-entity furniture (1.19.4+) | ✅ ⚠️ | ✅ (default) | ✅ (only method) | ✅🧪 (ItemDisplay root + interaction/seat/label members, client-visible, survives client relaunch) |
 | Item-frame / glow-frame / armor-stand furniture | ✅ | ✅ | ❌ (dropped) | ➖ (display entities only) |
 | Hitboxes (barrier / interaction / shulker / ghast) | ✅ | ✅ | ✅ (4 types, incl. ghast 1.21.6) | ✅ |
 | Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ | 🚧 (transform + rotation; scale/brightness 📋 M7) |
