@@ -18,5 +18,15 @@
     "at": "2026-10-12T22:01:36.316Z",
     "run": "run-2026-10-12T21-59-43",
     "eyes": null
+  },
+  "furniture.limited-placing": {
+    "sha": "e08ce50b0b704c338f96d913527dcb97f950d617",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "02ef13d14ac6bf41c55ff7207c31430eeca13328ee8373c6ee4c073c9d1b98f0",
+    "result": "pass",
+    "at": "2026-10-13T00:29:51.142Z",
+    "run": "run-2026-10-13T00-28-39",
+    "eyes": null
   }
 }
