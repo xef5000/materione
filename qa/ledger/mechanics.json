@@ -10,13 +10,13 @@
     "eyes": null
   },
   "mechanics.custom-durability": {
-    "sha": "2595b1d39f5896310be4cd6b0c7e532f0bc6a71e",
+    "sha": "5843aa05bc2446acb6d3b6b84d0c4fe3ad434629",
     "dirty": false,
     "env": "f29751d62d53",
-    "def": "d28f5f8fdb5e8514fd49c486c345ac362c332058c22b0b9dc7e137ece8de6f0f",
+    "def": "b5b409ebffbd535bc13e3a9aa4e6a3228667374762b5a7108ba03cbee14d16d8",
     "result": "pass",
-    "at": "2026-10-12T18:28:26.501Z",
-    "run": "run-2026-10-12T18-27-17",
+    "at": "2026-10-13T04:23:49.598Z",
+    "run": "run-2026-10-13T04-22-38",
     "eyes": null
   },
   "mechanics.custom-food": {
