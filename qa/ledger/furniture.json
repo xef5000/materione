@@ -90,13 +90,13 @@
     "eyes": null
   },
   "furniture.rotation": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "3ca6e43737c6d75303f65fd64de34ae32f6cfa5b3d17509d36b83a54cd74a6a0",
-    "result": "fail",
-    "at": "2026-10-16T23:34:08.238Z",
-    "run": "run-2026-10-16T23-21-07",
-    "dossier": "qa\\results\\run-2026-10-16T23-21-07\\furniture.rotation\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-16T23:37:28.986Z",
+    "run": "run-2026-10-16T23-36-17",
+    "eyes": null
   }
 }

@@ -10,14 +10,14 @@
     "eyes": null
   },
   "mechanics.custom-durability": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "b5b409ebffbd535bc13e3a9aa4e6a3228667374762b5a7108ba03cbee14d16d8",
     "result": "fail",
-    "at": "2026-10-16T23:34:45.568Z",
-    "run": "run-2026-10-16T23-21-07",
-    "dossier": "qa\\results\\run-2026-10-16T23-21-07\\mechanics.custom-durability\\dossier.md"
+    "at": "2026-10-16T23:37:46.626Z",
+    "run": "run-2026-10-16T23-36-17",
+    "dossier": "qa\\results\\run-2026-10-16T23-36-17\\mechanics.custom-durability\\dossier.md"
   },
   "mechanics.custom-food": {
     "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
@@ -30,14 +30,14 @@
     "eyes": null
   },
   "mechanics.soulbound": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "b98aede53b71cb66988df203865f97c2181497ac6e5e32ca927777a2a94601f2",
-    "result": "fail",
-    "at": "2026-10-16T23:35:21.588Z",
-    "run": "run-2026-10-16T23-21-07",
-    "dossier": "qa\\results\\run-2026-10-16T23-21-07\\mechanics.soulbound\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-16T23:38:02.013Z",
+    "run": "run-2026-10-16T23-36-17",
+    "eyes": null
   },
   "mechanics.backpack": {
     "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
