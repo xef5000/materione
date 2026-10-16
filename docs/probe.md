@@ -287,6 +287,16 @@ already asserts.
   the namespaced id form
   (`entity.minecraft.interaction`), never the enum name — match with
   `contains`, not equality.
+- **Forcing a chunk-load replay** (furniture evolution applies only in
+  `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
+  hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before
+  tp-ing back (the fixed sleep removes unload-latency variance from the
+  schedule; poll `execute if entity` to confirm the unload). Probes of the
+  replay windows then read the root's `materione:furniture-id` PDC record.
+  Gamerule notes on 26.x: the query/set form needs the namespaced id
+  (`gamerule minecraft:random_tick_speed`), bare `gamerule` listing is gone,
+  and `spawnChunkRadius` no longer exists — distance is the only unload
+  lever.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 
