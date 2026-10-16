@@ -955,7 +955,9 @@ return 'interact:' + result.toString()`, 15_000);
         { timeoutMs: 20_000 });
       const rootA = /root=([0-9a-f-]{36}) /.exec(preReload)[1];
       await ctx.rcon('materione reload');
-      await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=72/, { timeoutMs: 45_000 });
+      // the item count itself is pinned by the harness IT — this test only
+      // needs the reload-completed marker, so the count stays unmatched
+      await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/, { timeoutMs: 45_000 });
       await ctx.rcon(`materione dev inspect ${anchorA.join(' ')} world`);
       const postReload = await ctx.waitForServerLog(
         /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:crate .+ root=[0-9a-f-]{36} /,
