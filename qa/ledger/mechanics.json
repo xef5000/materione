@@ -10,14 +10,14 @@
     "eyes": null
   },
   "mechanics.custom-durability": {
-    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
+    "sha": "60280ea115b7acdf688aa38e3b34303c46f62baa",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "b5b409ebffbd535bc13e3a9aa4e6a3228667374762b5a7108ba03cbee14d16d8",
-    "result": "fail",
-    "at": "2026-10-16T23:37:46.626Z",
-    "run": "run-2026-10-16T23-36-17",
-    "dossier": "qa\\results\\run-2026-10-16T23-36-17\\mechanics.custom-durability\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-16T23:39:06.794Z",
+    "run": "run-2026-10-16T23-38-15",
+    "eyes": null
   },
   "mechanics.custom-food": {
     "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
