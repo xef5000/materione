@@ -1201,4 +1201,173 @@ return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' +
       await ctx.rcon('clear Probe');
     },
   }),
+
+  test({
+    id: 'furniture.rotation',
+    title: 'rotation snaps the cluster to the definition grid and restricted rotation disables it: a bench (rotation 90) hand-placed at look yaw 90 lands its seat pair north/south of center with the root Rotation [90] and a rotated model transformation, at look yaw 135 it snaps to 180 (seat pair east/west), and a signpost (rotation 0) hand-placed at the same off-grid yaw stays unrotated (root Rotation [0,0], identity transformation, light cell and seat east of the anchor exactly as at yaw 0)',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 360_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(10_000); // fresh-boot region-thread queue drain before input work
+
+      // --- scene: three hand placements on the x=1 column. The placement
+      // yaw IS the look yaw, so each spot stands where the desired yaw's
+      // ray actually hits its ground cell (reach 4.5, top face ~1.4 below
+      // the eye): bench A from the east looking west (yaw 90), bench B and
+      // the signpost from the south-east looking north-west (yaw 135,
+      // which the 90-grid snaps half-up to 180). The signpost (rotation 0)
+      // must ignore that yaw entirely.
+      const benchA = { anchor: [1, -60, 7], ground: [1, -61, 7], spot: [4.5, -60, 7.5], yaw: 90, pitch: 26 };
+      const benchB = { anchor: [1, -60, 13], ground: [1, -61, 13], spot: [3.5, -60, 15.5], yaw: 135, pitch: 26 };
+      const signpost = { anchor: [1, -60, 19], ground: [1, -61, 19], spot: [3.5, -60, 21.5], yaw: 135, pitch: 26 };
+      for (const cell of [[1, -60, 7], [1, -60, 13], [1, -60, 19],
+        [2, -60, 19], [0, -60, 19], [1, -60, 18], [1, -60, 20]]) {
+        await ctx.rcon(`materione dev remove ${cell.join(' ')} world`);
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      }
+
+      const stackCount = async () => Number(await ctx.exec(`def n = 0
+for (int i = 0; i < 36; i++) {
+  if (!player.getInventory().items.get(i).isEmpty()) n = n + 1
+}
+return n`));
+      const parseHit = (s) => {
+        const m = /^(\w+) (-?\d+),(-?\d+),(-?\d+) (\w+)$/.exec(String(s));
+        if (!m) return null;
+        return { type: m[1], x: Number(m[2]), y: Number(m[3]), z: Number(m[4]), dir: m[5] };
+      };
+      const placeByHand = async (scene, tries = 3) => {
+        await ctx.rcon(`tp Probe ${scene.spot.join(' ')}`);
+        let last = '(no attempt)';
+        for (let i = 0; i < tries; i++) {
+          last = String(await ctx.exec(`player.setRot(${scene.yaw}F, ${scene.pitch}F)
+Thread.sleep(500)
+def hit = mc.hitResult
+def t = hit.getType().toString()
+if (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()
+return t`, 15_000));
+          const hit = parseHit(last);
+          if (hit && hit.type === 'BLOCK' && hit.dir === 'up'
+            && hit.x === scene.ground[0] && hit.y === scene.ground[1] && hit.z === scene.ground[2]) {
+            const reply = await ctx.exec(`def hit = mc.hitResult
+if (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != ${scene.ground[0]} || hit.getBlockPos().getY() != ${scene.ground[1]} || hit.getBlockPos().getZ() != ${scene.ground[2]} || hit.getDirection().toString() != 'up') return 'AIM-DRIFT'
+def result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
+return 'use:' + result.toString()`, 15_000);
+            if (String(reply).startsWith('use:')) return;
+            last = String(reply);
+          }
+          await ctx.sleep(700);
+        }
+        ctx.expect(last).toBe(`placed on ${JSON.stringify(scene.ground)}`);
+      };
+      const seatsOf = async (anchor) => {
+        await ctx.rcon(`materione dev inspect ${anchor.join(' ')} world`);
+        // the display coordinates pin THIS anchor — a loose regex would
+        // match an earlier cluster's inspect line still in the log
+        const esc = (n) => String(n).replace('.', '\\.');
+        const inspect = await ctx.waitForServerLog(
+          new RegExp(`MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=\\S+ `
+            + `display=${esc(anchor[0] + 0.5)},${esc(anchor[1] + 0.5)},${esc(anchor[2] + 0.5)} `
+            + `root=[0-9a-f-]{36} `),
+          { timeoutMs: 20_000 });
+        const root = /root=([0-9a-f-]{36}) /.exec(inspect)[1];
+        const seatsReply = await ctx.rcon(
+          `data get entity ${root} BukkitValues."materione:seats"`);
+        const seats = seatsReply.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g) ?? [];
+        return { root, seats };
+      };
+      const seatPos = (uuid) => ctx.exec(`def e = mc.level.getEntity(java.util.UUID.fromString('${uuid}'))
+return e == null ? 'null' : (Math.round(e.getX() * 100.0) / 100.0) + ',' + (Math.round(e.getZ() * 100.0) / 100.0)`, 15_000);
+      // each give lands in the first empty hotbar slot (previous placements
+      // consume theirs), so select by scanning, never by fixed index
+      const selectPlacementItem = async () => ctx.exec(`def slot = -1
+for (int i = 0; i < 9; i++) {
+  if (!player.getInventory().items.get(i).isEmpty()) { slot = i; break }
+}
+if (slot >= 0) player.getInventory().selected = slot
+return 'slot-' + slot`, 15_000);
+
+      // --- bench A at look yaw 90: the seat pair rotates a quarter turn
+      // from its authored west/east offsets to north/south of center; the
+      // model transformation carries the matching quarter-turn quaternion
+      await ctx.rcon('materione give world:bench Probe');
+      await ctx.waitForChat(/Given world:bench/);
+      await selectPlacementItem();
+      await placeByHand(benchA);
+      ctx.expect(await ctx.rcon(`execute if block ${benchA.anchor.join(' ')} minecraft:barrier`))
+        .toBe('Test passed');
+      const benchARoot = await seatsOf(benchA.anchor);
+      ctx.expect(benchARoot.seats.length).toBe(2);
+      // seat A (first in the record, authored [-0.3,0.3,0]) at yaw 90 →
+      // (0, +0.3): south of center; the client readback carries the same
+      // rotated position the server computed
+      ctx.expect(await seatPos(benchARoot.seats[0])).toBe('1.5,7.8');
+      ctx.expect(await seatPos(benchARoot.seats[1])).toBe('1.5,7.2');
+      ctx.expect(await ctx.rcon(`data get entity ${benchARoot.root} Rotation`))
+        .toContain('[90.0f, 0.0f]');
+      ctx.expect(await ctx.rcon(
+        `data get entity ${benchARoot.root} transformation.left_rotation`))
+        .toContain('0.7071'); // rotationY(90°) = [0, sin45°, 0, cos45°]
+
+      // --- bench B at look yaw 135: the 90-grid snaps half-up to 180 —
+      // the same seat pair lands east/west instead
+      await ctx.rcon('materione give world:bench Probe');
+      await ctx.waitForChat(/Given world:bench/);
+      await selectPlacementItem();
+      await placeByHand(benchB);
+      const benchBRoot = await seatsOf(benchB.anchor);
+      // seat A at yaw 180 → (+0.3, 0): east of center
+      ctx.expect(await seatPos(benchBRoot.seats[0])).toBe('1.8,13.5');
+      ctx.expect(await seatPos(benchBRoot.seats[1])).toBe('1.2,13.5');
+      ctx.expect(await ctx.rcon(`data get entity ${benchBRoot.root} Rotation`))
+        .toContain('[-180.0f, 0.0f]'); // 180 normalizes to the [-180,180) record
+
+      // --- signpost (rotation: 0) at the same off-grid look yaw 135:
+      // restricted rotation — snapYaw answers 0 whatever the placer faces,
+      // so the cluster lands exactly as at yaw 0
+      await ctx.rcon('materione give world:signpost Probe');
+      await ctx.waitForChat(/Given world:signpost/);
+      await selectPlacementItem();
+      await placeByHand(signpost);
+      // the asymmetric light cell always lands EAST ([1,0,0] at yaw 0) —
+      // a wrong rotation would put it north/west/south of the anchor
+      ctx.expect(await ctx.rcon(`execute if block 2 -60 19 minecraft:light[level=7]`))
+        .toBe('Test passed');
+      ctx.expect(await ctx.rcon(`execute if block 0 -60 19 minecraft:light`))
+        .toBe('Test failed');
+      ctx.expect(await ctx.rcon(`execute if block 1 -60 20 minecraft:light`))
+        .toBe('Test failed');
+      const signRoot = await seatsOf(signpost.anchor);
+      ctx.expect(signRoot.seats.length).toBe(1);
+      ctx.expect(await seatPos(signRoot.seats[0])).toBe('1.9,19.5'); // east seat
+      ctx.expect(await ctx.rcon(`data get entity ${signRoot.root} Rotation`))
+        .toContain('[0.0f, 0.0f]');
+      ctx.expect(await ctx.rcon(
+        `data get entity ${signRoot.root} transformation.left_rotation`))
+        .toContain('1.0f'); // identity
+
+      // the client engine sees the restricted cluster's light too
+      await ctx.sleep(1500);
+      ctx.expect(await blockLightAt(ctx, [2, -60, 19])).toBe(7);
+
+      // --- teardown
+      for (const anchor of [benchA.anchor, benchB.anchor, signpost.anchor]) {
+        await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+        await ctx.waitForServerLog(
+          new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
+          { timeoutMs: 45_000 });
+      }
+      ctx.expect(await stackCount()).toBe(0); // all three placements consumed
+      await ctx.rcon('kill @e[type=item]');
+      await ctx.rcon('clear Probe');
+    },
+  }),
 ];
