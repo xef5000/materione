@@ -195,6 +195,14 @@ public final class FurnitureService implements Listener {
         ItemDisplay root = world.spawn(origin, ItemDisplay.class, display -> {
             display.setItemStack(displayStack(def));
             display.setRotation(yaw, 0f);
+            // the renderer works from the transformation matrix, not body
+            // yaw (issue #77): rotationY carries the same component formula
+            // as FurnitureMath.rotate, so the model turns with the cells
+            display.setTransformation(new org.bukkit.util.Transformation(
+                    new org.joml.Vector3f(),
+                    new org.joml.Quaternionf().rotationY((float) Math.toRadians(yaw)),
+                    new org.joml.Vector3f(1, 1, 1),
+                    new org.joml.Quaternionf()));
         });
         root.getPersistentDataContainer().set(KEY_FURNITURE, PersistentDataType.STRING, def.id().toString());
         root.getPersistentDataContainer().set(KEY_PLACED, PersistentDataType.LONG, System.currentTimeMillis());

@@ -1,0 +1,20 @@
+# The restricted-rotation probe: rotation: 0 disables the snap grid —
+# snapYaw returns 0 whatever way the placer faces, so the light cell and
+# the seat always land EAST of the anchor (their asymmetric offsets are
+# what make a wrong rotation visible). qa furniture.rotation places it at
+# an off-grid yaw and pins the unrotated result. Texture reuses the
+# workbench png.
+signpost:
+  texture: block/workbench
+  display_name: Signpost
+  rotation: 0
+  hitboxes:
+    - type: interaction
+      offset: [0, 0.5, 0]
+      width: 1.0
+      height: 1.0
+  seats:
+    - offset: [0.4, 0.3, 0]
+  lights:
+    - offset: [1, 0, 0]
+      level: 7
