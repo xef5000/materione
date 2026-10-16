@@ -142,7 +142,7 @@
 | Display transform / scale / brightness / culling | ✅ ⚠️ | ✅ | ✅ | 🚧 (transform + rotation; scale/brightness 📋 M7) |
 | Seats (single + multi) | ✅ | ✅ | ✅ | ✅🧪 (first-live-seat selection verified client-side; multi via an occupied skip on a two-seat fixture) |
 | Lights (toggleable) | ✅ | ✅ | ✅ | 🚧 (static always-on light cells, ✅🧪 live — per-cell levels verified client-side; interact-toggled lights are not built and need furniture states, 📋 M7) |
-| Storage | ✅ | ✅ | ✅ | ✅ |
+| Storage | ✅ | ✅ | ✅ | ✅🧪 (chest-grid inventories per cluster — 9–54 sizes, full-grid addressing, per-cluster isolation; contents survive reload on the unchanged root and removal spills them) |
 | Beds (sleep / lie-down) | ⚠️ | ❌ | ✅ | 📋 M7 |
 | Doors (rotating + sliding) | ⚠️ | 🟡 | ✅ | 📋 M7 |
 | Connectable furniture (couches/tables auto-join) | ⚠️ | ❌ | ✅ | 📋 M7 |

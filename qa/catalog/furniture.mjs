@@ -806,4 +806,190 @@ return 'interact:' + result.toString()`, 15_000);
       await ctx.rcon('kill @e[type=item]'); // the placement-item drop from remove
     },
   }),
+
+  test({
+    id: 'furniture.storage-capacity',
+    title: 'a 54-slot crate opens a 6-row "Crate" menu (90 slots) on a client right-click, a shift-clicked diamond reaches slot 0 and a cursor pickup pair places it in the LAST container slot 53 (full-grid depth), two crates of the same id hold independent grids (diamond vs iron), and both records survive materione reload with the root uuids unchanged — removal spills each grid',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/furniture/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/furniture/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeFurniture.java',
+      'fixtures/packs/world/furnitures/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 360_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(10_000); // fresh-boot region-thread queue drain before input work
+
+      // --- scene: two crates of the same id, 4 blocks apart on the same
+      // column so one aim geometry serves both: crate A anchors at
+      // [1,-60,7] (clicked from [1,-60,5]) and crate B at [1,-60,11]
+      // (clicked from [1,-60,9]) — the interaction box is always dz=2,
+      // yaw 0 / pitch 24 south. No barrier hitbox: clicks target the
+      // interaction entity.
+      const anchorA = [1, -60, 7];
+      const anchorB = [1, -60, 11];
+      for (const anchor of [anchorA, anchorB]) {
+        await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
+        await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
+      }
+      await ctx.rcon(`materione dev place world:crate ${anchorA.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:crate world ${anchorA.join(' ')}`),
+        { timeoutMs: 45_000 });
+      await ctx.rcon(`materione dev place world:crate ${anchorB.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:crate world ${anchorB.join(' ')}`),
+        { timeoutMs: 45_000 });
+
+      // Menu slot map for a 6-row menu (54 + 36): container 0..53, main
+      // inventory 54..80, hotbar 81..89 — the given items ride hotbar 0/1
+      // = menu slots 81/82.
+      const menuOpen = async () => String(await ctx.exec(
+        'return player.containerMenu.containerId == 0 ? "closed" : "open"'));
+      const waitForMenu = async (want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          if ((await menuOpen()) === want) return;
+          if (Date.now() > deadline) ctx.expect(await menuOpen()).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      const slotName = (index) => ctx.exec(`def s = player.containerMenu.getSlot(${index}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString()`);
+      const waitForSlot = async (index, want, timeoutMs = 8000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const name = String(await slotName(index));
+          if (name === want) return;
+          if (Date.now() > deadline) ctx.expect(name).toBe(want);
+          await ctx.sleep(300);
+        }
+      };
+      const click = (slot, mode) => ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, ${slot}, 0, net.minecraft.world.inventory.ContainerInput.${mode}, player)
+return 'clicked'`);
+      const screenTitle = () => ctx.exec(
+        "return mc.screen == null ? 'none' : mc.screen.getTitle().getString()");
+
+      // right-click the crate's interaction entity (same geometry the
+      // light-toggle test proves: box (1.5,-59.5,7.5) from an eye at
+      // (1.5,-58.62,5.5), pitch 24, ~2.2 away, inside the 3.0 reach)
+      const openCrate = async (anchor, tries = 3) => {
+        let last = '(no attempt)';
+        for (let i = 0; i < tries; i++) {
+          last = String(await ctx.exec(`player.setRot(0F, 24F)
+Thread.sleep(500)
+def hit = mc.hitResult
+return hit.getType().toString() + ' ' + (hit.getEntity() == null ? '-' : hit.getEntity().getType().toString())`, 15_000));
+          if (last === 'ENTITY entity.minecraft.interaction') {
+            const reply = await ctx.exec(`def hit = mc.hitResult
+if (hit.getType().toString() != 'ENTITY' || hit.getEntity() == null || hit.getEntity().getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT'
+def result = mc.gameMode.interact(player, hit.getEntity(), hit, net.minecraft.world.InteractionHand.MAIN_HAND)
+return 'interact:' + result.toString()`, 15_000);
+            if (String(reply).startsWith('interact:')) {
+              await waitForMenu('open');
+              return;
+            }
+            last = String(reply);
+          }
+          await ctx.sleep(700);
+        }
+        ctx.expect(last).toBe('crate menu open');
+      };
+      const closeMenu = async () => {
+        await ctx.exec('player.closeContainer()\nreturn \'closed\'');
+        await waitForMenu('closed');
+        await ctx.sleep(700); // MONITOR close listener writes the grid back
+      };
+
+      // --- capacity: 54 container slots + the 36-slot player inventory,
+      // title from the fixture's display_name
+      await ctx.rcon('tp Probe 1 -60 5');
+      await ctx.rcon('give Probe minecraft:diamond 1'); // hotbar 0 → menu 81
+      await openCrate(anchorA);
+      ctx.expect(String(await screenTitle())).toBe('Crate');
+      ctx.expect(Number(await ctx.exec(
+        'return player.containerMenu.slots.size()'))).toBe(90);
+      // shift-click deposits into slot 0; a cursor PICKUP pair reaches the
+      // last container slot (54 diamonds would be needed to fill there by
+      // shift-click alone)
+      await click(81, 'QUICK_MOVE');
+      await waitForSlot(0, 'Diamond');
+      await click(0, 'PICKUP'); // diamond → cursor
+      await click(53, 'PICKUP'); // cursor → last container slot
+      await waitForSlot(53, 'Diamond');
+      await waitForSlot(0, 'empty');
+      await closeMenu();
+
+      // --- isolation: crate B carries its own grid from its own record
+      await ctx.rcon('tp Probe 1 -60 9');
+      await ctx.rcon('give Probe minecraft:iron_ingot 1'); // hotbar 0 → menu 81
+      await openCrate(anchorB);
+      ctx.expect(Number(await ctx.exec(
+        'return player.containerMenu.slots.size()'))).toBe(90);
+      await click(81, 'QUICK_MOVE');
+      await waitForSlot(0, 'Iron Ingot');
+      await closeMenu();
+
+      // reopen A: the diamond sits at 53 and B's iron never crossed over
+      await ctx.rcon('tp Probe 1 -60 5');
+      await openCrate(anchorA);
+      await waitForSlot(53, 'Diamond');
+      ctx.expect(String(await slotName(0))).toBe('empty');
+      await closeMenu();
+      // reopen B: the iron sits at 0 and A's diamond never crossed over
+      await ctx.rcon('tp Probe 1 -60 9');
+      await openCrate(anchorB);
+      await waitForSlot(0, 'Iron Ingot');
+      ctx.expect(String(await slotName(53))).toBe('empty');
+      await closeMenu();
+
+      // --- reload survival: records ride the root entities, which reload
+      // never rewrites (visuals-only policy) — the root uuid must come back
+      // identical, not a fresh entity with an empty record
+      await ctx.rcon(`materione dev inspect ${anchorA.join(' ')} world`);
+      const preReload = await ctx.waitForServerLog(
+        /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:crate .+ root=[0-9a-f-]{36} /,
+        { timeoutMs: 20_000 });
+      const rootA = /root=([0-9a-f-]{36}) /.exec(preReload)[1];
+      await ctx.rcon('materione reload');
+      await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=72/, { timeoutMs: 45_000 });
+      await ctx.rcon(`materione dev inspect ${anchorA.join(' ')} world`);
+      const postReload = await ctx.waitForServerLog(
+        /MATERIONE-DEV-FURNITURE-INSPECT found=true furniture id=world:crate .+ root=[0-9a-f-]{36} /,
+        { timeoutMs: 20_000 });
+      ctx.expect(/root=([0-9a-f-]{36}) /.exec(postReload)[1]).toBe(rootA);
+      await ctx.rcon('tp Probe 1 -60 5');
+      await openCrate(anchorA);
+      await waitForSlot(53, 'Diamond');
+      await closeMenu();
+      await ctx.rcon('tp Probe 1 -60 9');
+      await openCrate(anchorB);
+      await waitForSlot(0, 'Iron Ingot');
+      await closeMenu();
+
+      // --- teardown: removal spills each grid beside its own cluster
+      await ctx.rcon(`materione dev remove ${anchorA.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchorA.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${anchorA[0] + 0.5} ${anchorA[1] + 0.5} ${anchorA[2] + 0.5}`
+        + ` as @e[type=item,distance=..4] run data get entity @s Item.id`))
+        .toContain('minecraft:diamond');
+      await ctx.rcon('kill @e[type=item]'); // the spill + the placement-item drop
+      await ctx.rcon(`materione dev remove ${anchorB.join(' ')} world`);
+      await ctx.waitForServerLog(
+        new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchorB.join(' ')}`),
+        { timeoutMs: 45_000 });
+      ctx.expect(await ctx.rcon(
+        `execute positioned ${anchorB[0] + 0.5} ${anchorB[1] + 0.5} ${anchorB[2] + 0.5}`
+        + ` as @e[type=item,distance=..4] run data get entity @s Item.id`))
+        .toContain('minecraft:iron_ingot');
+      await ctx.rcon('kill @e[type=item]');
+      await ctx.rcon('clear Probe');
+    },
+  }),
 ];

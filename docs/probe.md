@@ -258,7 +258,10 @@ already asserts.
   slot, 0, net.minecraft.world.inventory.ContainerInput.QUICK_MOVE, player)`
   (the old `handleInventoryMouseClick`/`ClickType` pair is gone; a 2-row menu
   maps container slots 0–17 to the top, 18–44 to the main inventory and
-  45–53 to the hotbar). Close with `player.closeContainer()` — that one sends
+  45–53 to the hotbar). `QUICK_MOVE` always fills the FIRST empty container
+  slot; to reach a specific slot, a `PICKUP` pair moves through the cursor:
+  click the source slot (stack → cursor), then the target slot (cursor →
+  placed). Close with `player.closeContainer()` — that one sends
   the close packet; `clientSideCloseContainer()` does not. The open menu's
   title lives on the screen, not the menu: `mc.screen.getTitle().getString()`.
   Open/closed state reads off the menu id (`player.containerMenu.containerId
@@ -280,7 +283,8 @@ already asserts.
 - **Container slot maps shift with menu height**: container slots are
   `0..N-1`, then main inventory `N..N+26`, hotbar `N+27..N+35` (the 2-row
   backpack's 45–53 hotbar is the N=18 case; a 9-slot furniture storage's
-  hotbar is 36–44). `EntityType#toString()` is the namespaced id form
+  hotbar is 36–44; a 54-slot crate's is 81–89). `EntityType#toString()` is
+  the namespaced id form
   (`entity.minecraft.interaction`), never the enum name — match with
   `contains`, not equality.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —

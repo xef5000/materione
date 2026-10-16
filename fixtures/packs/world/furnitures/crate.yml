@@ -1,0 +1,16 @@
+# The storage-capacity probe: a 54-slot grid (the parser's ceiling — sizes
+# are multiples of 9 from 9 to 54) with none of the other click consumers —
+# no seats, no lights, no ECA rules — so a right-click goes straight to
+# openStorage. qa furniture.storage-capacity drives it from a real client:
+# menu scaling, full-grid addressing, per-cluster isolation, reload
+# survival. Texture reuses the workbench png.
+crate:
+  texture: block/workbench
+  display_name: Crate
+  rotation: 90
+  hitboxes:
+    - type: interaction
+      offset: [0, 0.5, 0]
+      width: 1.0
+      height: 1.0
+  storage: 54
