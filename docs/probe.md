@@ -297,6 +297,18 @@ already asserts.
   (`gamerule minecraft:random_tick_speed`), bare `gamerule` listing is gone,
   and `spawnChunkRadius` no longer exists — distance is the only unload
   lever.
+- **Rotation tests**: the furniture placement yaw IS the look yaw, so stand
+  where the desired yaw's ray actually hits the ground cell (e.g. yaw 90
+  means standing east, looking west). Snap results normalize into the
+  entity record: a snapped 180 reads back `[-180.0f, 0.0f]`. Doubles in
+  `Pos`-style readbacks print full precision (`1.7999999999999998`) —
+  round in the Groovy probe (`Math.round(x * 100.0) / 100.0`) before
+  asserting. Each `materione give` lands in the FIRST empty hotbar slot,
+  so select by scanning, never by fixed index.
+- **`waitForServerLog` scans since test start** and returns the first
+  match — when a test inspects several clusters, anchor the regex to THIS
+  one (the inspect lines carry `display=<x.5>,<y.5>,<z.5>`), or an earlier
+  cluster's line answers instantly with the wrong uuid.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

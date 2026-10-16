@@ -150,7 +150,7 @@
 | Furniture placements (per-surface behavior) | ⚠️ | ❌ | ✅ | 📋 M7 |
 | Text displays (PAPI, client-side) | ⚠️ | ✅ | ✅ | ✅ |
 | Evolution / farming stages | ✅ | ✅ | ✅ | ✅🧪 (lazy chunk-load replay on absolute placement clocks: stage windows, in-place transforms with storage riding along; the multi-hop chain stall fixed in #75 — farming mechanics themselves are row "Farming mechanics", 📋 M7) |
-| Rotation / restricted rotation | ✅ | ✅ | ✅ | ✅ |
+| Rotation / restricted rotation | ✅ | ✅ | ✅ | ✅🧪 (snap grid 45/90/180 verified on hand placements — cells, seats and the model transformation rotate; `rotation: 0` restricted verified at an off-grid yaw; the model used to ignore the yaw entirely — display transformations render from the matrix, not body yaw — fixed in #77) |
 | Waterloggable | ⚠️ | ✅ (string/shaped) | ✅ | 🚧 (stringblocks dry) |
 | Jukebox furniture (accept discs) | ⚠️ | ✅ | ✅ | 📋 M7 (vanilla-jukebox discs ✅) |
 | BlockLocker protection | ⚠️ | ✅ | ✅ | 📋 M7 |
