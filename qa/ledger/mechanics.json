@@ -10,14 +10,14 @@
     "eyes": null
   },
   "mechanics.custom-durability": {
-    "sha": "213985a1086fc361144b6386bb5328f8787ea9ac",
+    "sha": "dcfbe0a9b2527e49147e8e2522b69f32fee5472b",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "b5b409ebffbd535bc13e3a9aa4e6a3228667374762b5a7108ba03cbee14d16d8",
-    "result": "fail",
-    "at": "2026-10-16T23:17:04.150Z",
-    "run": "run-2026-10-16T23-03-47",
-    "dossier": "qa\\results\\run-2026-10-16T23-03-47\\mechanics.custom-durability\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-16T23:19:15.208Z",
+    "run": "run-2026-10-16T23-18-14",
+    "eyes": null
   },
   "mechanics.custom-food": {
     "sha": "213985a1086fc361144b6386bb5328f8787ea9ac",
@@ -40,13 +40,13 @@
     "eyes": null
   },
   "mechanics.backpack": {
-    "sha": "213985a1086fc361144b6386bb5328f8787ea9ac",
+    "sha": "dcfbe0a9b2527e49147e8e2522b69f32fee5472b",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "58e9930eee2c54967d2c9a656f06e714ebd40bcd2d1c9bd938e30edb0810be01",
-    "result": "fail",
-    "at": "2026-10-16T23:17:51.392Z",
-    "run": "run-2026-10-16T23-03-47",
-    "dossier": "qa\\results\\run-2026-10-16T23-03-47\\mechanics.backpack\\dossier.md"
+    "result": "pass",
+    "at": "2026-10-16T23:19:28.150Z",
+    "run": "run-2026-10-16T23-18-14",
+    "eyes": null
   }
 }
