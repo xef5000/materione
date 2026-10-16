@@ -70,13 +70,13 @@
     "eyes": null
   },
   "furniture.storage-capacity": {
-    "sha": "8c76af058f8272f1bc12fa0ebca1d8f3be7f95a7",
-    "dirty": false,
+    "sha": "ed992457c749a535f3cc9ae05d42568af61e0590",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "1d5174298f17c10248af4295d38b47df1f04472d1c9298d9203e4a928e000cbc",
+    "def": "511075dcc37875f60397c4c9e89d1ddb59c78e026abf76343cc530dd11f6a7a4",
     "result": "pass",
-    "at": "2026-10-16T00:50:31.257Z",
-    "run": "run-2026-10-16T00-45-59",
+    "at": "2026-10-16T02:24:09.065Z",
+    "run": "run-2026-10-16T02-22-57",
     "eyes": null
   }
 }
