@@ -676,7 +676,11 @@ public final class FurnitureService implements Listener {
         root.setItemStack(displayStack(next.get()));
         root.getPersistentDataContainer().set(
                 KEY_FURNITURE, PersistentDataType.STRING, next.get().id().toString());
-        root.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.INTEGER, targetIndex + 1);
+        // the applied counter indexes the CURRENT definition's list — a
+        // transform to another definition starts that list fresh (a self
+        // target keeps counting so later replays skip the applied entry)
+        root.getPersistentDataContainer().set(KEY_STAGE, PersistentDataType.INTEGER,
+                next.get().id().equals(def.id()) ? targetIndex + 1 : 0);
     }
 
     // --- storage -----------------------------------------------------------------

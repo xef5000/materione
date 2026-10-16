@@ -149,7 +149,7 @@
 | Furniture states (cycle on interact) | ⚠️ | 🟡 (Pack.models) | ✅ (6 state types) | 📋 M7 |
 | Furniture placements (per-surface behavior) | ⚠️ | ❌ | ✅ | 📋 M7 |
 | Text displays (PAPI, client-side) | ⚠️ | ✅ | ✅ | ✅ |
-| Evolution / farming stages | ✅ | ✅ | ✅ | ✅ |
+| Evolution / farming stages | ✅ | ✅ | ✅ | ✅🧪 (lazy chunk-load replay on absolute placement clocks: stage windows, in-place transforms with storage riding along; the multi-hop chain stall fixed in #75 — farming mechanics themselves are row "Farming mechanics", 📋 M7) |
 | Rotation / restricted rotation | ✅ | ✅ | ✅ | ✅ |
 | Waterloggable | ⚠️ | ✅ (string/shaped) | ✅ | 🚧 (stringblocks dry) |
 | Jukebox furniture (accept discs) | ⚠️ | ✅ | ✅ | 📋 M7 (vanilla-jukebox discs ✅) |
