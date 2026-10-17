@@ -330,7 +330,10 @@ already asserts.
   a number or string, both parse (#81). Absolute cell codepoints differ
   between a fresh allocation table and a long-lived server (runs hand
   out in definition-scan order, durably) — assert the run's shape
-  (count, consecutiveness), never absolute values.
+  (count, consecutiveness), never absolute values. Grid composition
+  (a wide `rows: 1` strip) chains the cell tags with NO separators —
+  flush-ness is assertable by slicing the chat line at the first high
+  codepoint and checking the four cells are adjacent.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 
