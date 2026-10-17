@@ -333,7 +333,13 @@ already asserts.
   (count, consecutiveness), never absolute values. Grid composition
   (a wide `rows: 1` strip) chains the cell tags with NO separators —
   flush-ness is assertable by slicing the chat line at the first high
-  codepoint and checking the four cells are adjacent.
+  codepoint and checking the four cells are adjacent. Alias surfaces
+  resolve one level only: a dangling or chained alias stays literal
+  with no build diagnostic (#84) — poll those by their literal tag
+  text, not by codepoint counts. Permission-gated aliases deny per
+  alias (`deop Probe` → tag literal, `op Probe` → resolves; restore op
+  BEFORE the asserts — the async decorate settles ~seconds after
+  sendChat, so sleep before restoring).
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

@@ -248,4 +248,106 @@ return 'sent'`, 15_000);
       ctx.expect(widths[3]).toBe(widths[0]);
     },
   }),
+
+  test({
+    id: 'glyphs.alias',
+    title: 'reference glyphs (aliases) resolve through their target\'s bitmaps without allocating anything: three aliases of sample:heart (the M4 heart_big at index 1, an alias with no index, an alias with an out-of-range index 99) all render the SAME codepoint as a :heart: chat, with the same font binding; a dangling alias (unknown target) and a chained alias (target is itself an alias — resolution is one level) stay literal with no codepoint leak; and an alias\'s own permission gates it independently of its target (denied while deopped, resolving after re-op)',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/glyphs/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeGlyphs.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+      'fixtures/packs/sample/glyphs/**',
+    ],
+    dependsOn: ['glyphs.grid'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      const widthOf = (cp) => ctx.exec(`String s = new String(Character.toChars(${cp}))
+return mc.font.width(s)`, 15_000);
+      const missingWidth = Number(await widthOf(0xF8FF)); // unbound private-use
+      ctx.expect(missingWidth).toBe(6);
+      const send = (text) => ctx.exec(`mc.getConnection().sendChat('${text}')
+return 'sent'`, 15_000);
+      // find a chat line whose high-codepoint count matches (glyph tags
+      // consumed); earlier glyph tests' lines stay in history, so both the
+      // count and the no-residue shape discriminate
+      const findLine = async (highCount, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          for (const line of lines) {
+            const high = [...line].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+            if (high.length === highCount && !line.includes('<glyph:')) return { line, high };
+          }
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      const findLiteral = async (marker, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          const line = lines.find((l) => l.includes(marker));
+          if (line) return line;
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+
+      // --- the target's codepoint, live: the :heart: echo
+      await send(':heart:');
+      const target = await findLine(1);
+      if (!target) ctx.expect('(no :heart: line in chat history)').toBe('one codepoint');
+      const H = target.high[0];
+      ctx.expect(H).toBeGreaterThan(41999);
+      ctx.expect(H).toBeLessThan(42100);
+      ctx.expect(Number(await widthOf(H))).toBe(9);
+
+      // --- alias identity: index 1 (heart_big), no index, out-of-range 99 —
+      // all resolve to the target's first cell, the same codepoint, bound
+      await send('<glyph:heart_big><glyph:heart_alias><glyph:heart_edge>');
+      const aliased = await findLine(3);
+      if (!aliased) ctx.expect('(no alias line in chat history)').toBe('three codepoints');
+      ctx.expect(aliased.high[0]).toBe(H);
+      ctx.expect(aliased.high[1]).toBe(H);
+      ctx.expect(aliased.high[2]).toBe(H);
+      ctx.expect(Number(await widthOf(aliased.high[0]))).toBe(9);
+      ctx.expect(await ctx.shot('glyph-alias')).toBeTruthy();
+
+      // --- fail-soft: a dangling target and a chained alias (references
+      // resolve exactly one level) stay literal — no crash, no codepoint leak
+      await send('<glyph:dangling_alias> <glyph:alias_chain>');
+      const dead = await findLiteral('dangling_alias');
+      if (!dead) ctx.expect('(no dangling_alias line in chat history)').toBe('the literal tags');
+      ctx.expect(dead.includes('<glyph:dangling_alias>')).toBe(true);
+      ctx.expect(dead.includes('<glyph:alias_chain>')).toBe(true);
+      const deadHigh = [...dead].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+      ctx.expect(deadHigh.length).toBe(0);
+
+      // --- the alias's OWN permission gates it independently of its target
+      // (heart has none): restore op before any assert can fail
+      await ctx.rcon('deop Probe');
+      await send('restricted_alias <glyph:restricted_alias>');
+      await ctx.sleep(2_500); // the async decorate settles while still deopped
+      await ctx.rcon('op Probe');
+      const denied = await findLiteral('restricted_alias');
+      if (!denied) ctx.expect('(no restricted_alias line in chat history)').toBe('the literal tag');
+      ctx.expect(denied.includes('<glyph:restricted_alias>')).toBe(true);
+      const deniedHigh = [...denied].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+      ctx.expect(deniedHigh.length).toBe(0); // no unicode leak for a denied viewer
+      // permitted again: the same alias resolves (found by its marker word,
+      // so a stale one-codepoint line can't stand in for the re-check)
+      await send('alias_recheck <glyph:restricted_alias>');
+      const recheck = await findLiteral('alias_recheck');
+      if (!recheck) ctx.expect('(no alias_recheck line in chat history)').toBe('the resolved alias');
+      const recheckHigh = [...recheck].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+      ctx.expect(recheckHigh.length).toBe(1);
+      ctx.expect(recheckHigh[0]).toBe(H);
+      ctx.expect(recheck.includes('<glyph:restricted_alias>')).toBe(false);
+    },
+  }),
 ];
