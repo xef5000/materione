@@ -131,6 +131,18 @@ class GlyphTypeTest {
     }
 
     @Test
+    void referenceIndexSpecReadsNumbersAndStrings() {
+        // YAML authors write a single cell as a number (index: 2) as naturally
+        // as a range string — a dropped number would silently render cell 1
+        var numeric = parseGlyph(map("reference", "sample:heart", "index", 2));
+        assertThat(numeric.indexSpec()).isEqualTo("2");
+        var range = parseGlyph(map("reference", "sample:heart", "index", "1..4"));
+        assertThat(range.indexSpec()).isEqualTo("1..4");
+        var absent = parseGlyph(map("reference", "sample:heart"));
+        assertThat(absent.indexSpec()).isNull();
+    }
+
+    @Test
     void explicitFontKeyIsHonored() {
         var glyph = parseGlyph(map("texture", "gui/x", "font", "fancy"));
         assertThat(glyph.fontKey()).isEqualTo("sample:fancy");
