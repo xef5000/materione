@@ -28,5 +28,15 @@
     "at": "2026-10-17T01:54:21.429Z",
     "run": "run-2026-10-17T01-53-13",
     "eyes": null
+  },
+  "glyphs.alias": {
+    "sha": "6fe35953b4a25f3b6e6bcb1bee63187cf18d55f0",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "55b8aa7ceb17543081ada67ce574d30b61ff8dd970b421c4464821146452560e",
+    "result": "pass",
+    "at": "2026-10-17T02:25:29.467Z",
+    "run": "run-2026-10-17T02-24-34",
+    "eyes": null
   }
 }
