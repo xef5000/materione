@@ -182,7 +182,7 @@
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Basic glyph (texture → unicode) | ✅ | ✅ | ✅ | ✅ |
+| Basic glyph (texture → unicode) | ✅ | ✅ | ✅ | ✅🧪 (no authored codepoints — the compiler's durable allocation table hands out the run; a real chat `:heart:` comes back as exactly one codepoint the client font engine binds with the compiled bitmap advance; colon-less placeholders like `<3` are completion-only and never resolve, #79) |
 | Multi-bitmap glyph (one sheet → many) | ✅ | ✅ | ✅ | ✅ |
 | Animated glyph (sprite sheet / GIF) | ✅ | ✅ | ✅ | 🚧 (frame 1 renders; cycling 📋 M6) |
 | Grid glyph (large texture across chars) | ✅ | ✅ | ⚠️ | ✅ |
