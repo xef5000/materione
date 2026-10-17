@@ -14,12 +14,12 @@
     "note": null
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "351919163b16084e5451aed196e628b82eaab5e8",
-    "dirty": true,
+    "sha": "dd996d750a66d78469e830f61c33212423cb7672",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
     "result": "pass",
-    "at": "2026-10-17T01:14:54.557Z",
+    "at": "2026-10-17T01:15:35.707Z",
     "run": "run-2026-10-17T01-13-42",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
