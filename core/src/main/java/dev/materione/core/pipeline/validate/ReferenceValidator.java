@@ -202,7 +202,11 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                 : DiagnosticCodes.SOUND_SOURCE_MISSING;
     }
 
-    /** A glyph {@code reference:} must name another glyph. */
+    /**
+     * A glyph {@code reference:} must name another glyph — and not another
+     * alias: aliases resolve exactly one level at text time, so an alias
+     * targeting an alias renders literal forever with no other signal.
+     */
     private static void validateGlyphAlias(
             ContentResource resource,
             Map<?, ?> definition,
@@ -218,6 +222,16 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             }
             for (ContentResource candidate : pack.resources()) {
                 if ("glyph".equals(candidate.contentType()) && candidate.id().equals(targetId)) {
+                    if (candidate.document().data().get(candidate.id().value())
+                            instanceof Map<?, ?> targetDef && targetDef.get("reference") != null) {
+                        problems.add(new Diagnostic(
+                                DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                                "glyph " + resource.id() + " references alias '" + target
+                                        + "' — aliases resolve one level only",
+                                resource.id(), null,
+                                "point the reference at a glyph that owns bitmaps "
+                                        + "(texture, frames or rows/columns sheet)"));
+                    }
                     return;
                 }
             }

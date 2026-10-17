@@ -1,0 +1,3 @@
+restricted_alias:
+  reference: sample:heart
+  permission: materione.glyph.restricted
