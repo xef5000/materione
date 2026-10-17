@@ -183,7 +183,7 @@
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
 | Basic glyph (texture → unicode) | ✅ | ✅ | ✅ | ✅🧪 (no authored codepoints — the compiler's durable allocation table hands out the run; a real chat `:heart:` comes back as exactly one codepoint the client font engine binds with the compiled bitmap advance; colon-less placeholders like `<3` are completion-only and never resolve, #79) |
-| Multi-bitmap glyph (one sheet → many) | ✅ | ✅ | ✅ | ✅ |
+| Multi-bitmap glyph (one sheet → many) | ✅ | ✅ | ✅ | ✅🧪 (`rows`/`columns` compile to one bitmap provider with a chars-string per row, row-major over one durable allocation run; a chat line of the sheet's tag + three index-reference aliases renders four distinct client-bound cells in row-major order, verified by color-sliced screenshot; the numeric-`index` drop that pinned every alias to cell 1 fixed in #81; tags take bare ids, non-first cells are reachable only via a reference alias's `index`) |
 | Animated glyph (sprite sheet / GIF) | ✅ | ✅ | ✅ | 🚧 (frame 1 renders; cycling 📋 M6) |
 | Grid glyph (large texture across chars) | ✅ | ✅ | ⚠️ | ✅ |
 | Reference glyph (alias) | ✅ | ✅ | ✅ | ✅ |

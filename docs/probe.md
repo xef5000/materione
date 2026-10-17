@@ -320,6 +320,17 @@ already asserts.
   box measures 6. The runner's `expect` has no negation and no
   `toBeGreaterThanOrEqual` — precompute booleans/derived values in the
   test and assert with `toBe`.
+- **Glyph tags take bare ids** (`<glyph:heart>`, `<g:heart:colorable>`) —
+  the tag parser splits on `:` and its second slot is the `colorable`
+  flag, so a namespaced tag like `<glyph:sample:heart>` silently stays
+  literal (lookup key becomes `sample`). The `reference:` *field* in
+  glyph YAML takes full ids. Sheet cells are reached only through a
+  reference alias's `index` (`2` or `1..4`, 1-based row-major); the
+  sheet's own tag/placeholder renders cell 1 — and author `index: 2` as
+  a number or string, both parse (#81). Absolute cell codepoints differ
+  between a fresh allocation table and a long-lived server (runs hand
+  out in definition-scan order, durably) — assert the run's shape
+  (count, consecutiveness), never absolute values.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

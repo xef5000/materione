@@ -94,4 +94,78 @@ return 'sent'`, 15_000);
       ctx.expect(hearts.includes('<3')).toBe(true);
     },
   }),
+
+  test({
+    id: 'glyphs.sheet',
+    title: 'one sheet definition (sample:color_sheet, texture gui/color_sheet, rows 2 × columns 2) becomes four live client codepoints: the sheet\'s own <glyph:> tag renders cell 1 and reference aliases with index 2/3/4 render cells 2/3/4 as one consecutive row-major allocation run, every cell binds in the client font engine with the same advance (the sliced cell\'s compiled width, never the missing-glyph box), and the four cells render visually distinct (screenshot: red green / blue yellow quadrants)',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/glyphs/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeGlyphs.java',
+      'core/src/main/java/dev/materione/core/text/GlyphCodepoints.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+      'fixtures/packs/sample/glyphs/**',
+    ],
+    dependsOn: ['glyphs.basic'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      const widthOf = (cp) => ctx.exec(`String s = new String(Character.toChars(${cp}))
+return mc.font.width(s)`, 15_000);
+      const missingWidth = Number(await widthOf(0xF8FF)); // unbound private-use
+      ctx.expect(missingWidth).toBe(6);
+
+      // the sheet's own tag (renders its first cell) plus three reference
+      // aliases selecting cells 2, 3, 4 — one line, four live codepoints.
+      // Tags carry bare ids: the tag parser splits on ':' and the second
+      // slot is the optional "colorable" flag, so namespaced ids in a tag
+      // never resolve (the reference FIELD takes full ids, as the fixtures do)
+      await ctx.exec(`mc.getConnection().sendChat('<glyph:color_sheet> <glyph:sheet_cell_2> <glyph:sheet_cell_3> <glyph:sheet_cell_4>')
+return 'sent'`, 15_000);
+      const findDecorated = async (timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          for (const line of lines) {
+            const high = [...line].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+            if (high.length >= 4) return { line, high };
+          }
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      const found = await findDecorated();
+      if (!found) ctx.expect('(no decorated line in chat history)').toBe('a line with four glyph codepoints');
+
+      // one sheet → many: four substituted codepoints on one line, inside
+      // the compiler's allocation window (never authored characters)
+      ctx.expect(found.high.length).toBe(4);
+      for (const cp of found.high) {
+        ctx.expect(cp).toBeGreaterThan(41999);
+        ctx.expect(cp).toBeLessThan(42100);
+      }
+      // row-major consecutive run: the sheet's own tag took cell 1 (the run
+      // base), the index references took cells 2..4 in tag order
+      ctx.expect(found.high[1]).toBe(found.high[0] + 1);
+      ctx.expect(found.high[2]).toBe(found.high[1] + 1);
+      ctx.expect(found.high[3]).toBe(found.high[2] + 1);
+      // the tags are consumed — no literal residue reaches the client
+      ctx.expect(found.line.includes('<glyph:')).toBe(false);
+      ctx.expect(await ctx.shot('glyph-sheet-cells')).toBeTruthy();
+
+      // every cell binds in the client font engine with the SAME advance —
+      // one sheet slices into equal cells — and never the missing-glyph box
+      const widths = [];
+      for (const cp of found.high) {
+        widths.push(Number(await widthOf(cp)));
+      }
+      ctx.expect(widths[0]).toBeGreaterThan(missingWidth);
+      ctx.expect(widths[1]).toBe(widths[0]);
+      ctx.expect(widths[2]).toBe(widths[0]);
+      ctx.expect(widths[3]).toBe(widths[0]);
+    },
+  }),
 ];
