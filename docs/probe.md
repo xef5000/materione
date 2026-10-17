@@ -340,9 +340,16 @@ already asserts.
   test, the healthy corpus must stay quarantine-free. Permission-gated
   aliases deny per alias (`deop Probe` → tag literal, `op Probe` →
   resolves; restore op BEFORE the asserts — the async decorate settles
-  ~seconds after sendChat, so sleep before restoring). Fixture sync at
-  `probe up` never prunes: deleting a fixture from the tree leaves the
-  stale copy server-side — remove it under
+  ~seconds after sendChat, so sleep before restoring). Shift tags
+  (`<shift:N>`) render U+E101..U+E11A space-provider characters —
+  codepoint-scanner helpers must treat that window separately from the
+  glyph window (42000+, below U+E101). The client font engine measures
+  the composed run at exactly N pixels (`mc.font.width` over
+  `new String(new int[] {…}, 0, n)` — build multi-char strings from an
+  int array; `toChars` is single-codepoint), which is the exact
+  discriminator: advance sum, never the missing-glyph box. Fixture sync
+  at `probe up` never prunes: deleting a fixture from the tree leaves
+  the stale copy server-side — remove it under
   `harness/build/probe/server/plugins/Materione/content/packs/` too.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.

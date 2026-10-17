@@ -340,4 +340,100 @@ return 'sent'`, 15_000);
       ctx.expect(recheck.includes('<glyph:restricted_alias>')).toBe(false);
     },
   }),
+
+  test({
+    id: 'glyphs.shift',
+    title: 'pixel-shift tags (<shift:N>) compose invisible U+E101+ space-provider characters that move text by exactly N pixels on a real client: <shift:7> renders as the greedy +4/+2/+1 run whose font-engine width measures exactly 7 (each character measuring its own advance — the minecraft:default → materione:shift space provider, never the missing-glyph box), <shift:-5> measures −5, <shift:600> composes +512/+64/+16/+8 to exactly 600, <shift:0> consumes the tag with no characters, and <shift:abc> stays literal',
+    mode: 'auto',
+    covers: [
+      'core/src/main/java/dev/materione/core/text/ShiftMath.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+    ],
+    dependsOn: ['glyphs.alias'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      const cpText = (cps) => `new String(new int[] {${cps.join(', ')}}, 0, ${cps.length})`;
+      const widthOfExpr = (expr) => ctx.exec(`String s = ${expr}
+return mc.font.width(s)`, 15_000);
+      const widthOfCp = (cp) => ctx.exec(`String s = new String(Character.toChars(${cp}))
+return mc.font.width(s)`, 15_000);
+      // shift characters live at U+E101..U+E11A — disjoint from the glyph
+      // codepoint window (42000+, well below U+E101)
+      const isShift = (cp) => cp >= 0xe101 && cp <= 0xe11a;
+      const send = (text) => ctx.exec(`mc.getConnection().sendChat('${text}')
+return 'sent'`, 15_000);
+      const findShift = async (count, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          for (const line of lines) {
+            const shifts = [...line].map((ch) => ch.codePointAt(0)).filter(isShift);
+            if (shifts.length === count && !line.includes('<shift:')) return { line, shifts };
+          }
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      const findLiteral = async (marker, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          const line = lines.find((l) => l.includes(marker));
+          if (line) return line;
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+
+      // --- +7: the greedy decomposition +4/+2/+1, measured by the client
+      await send('L<shift:7>R');
+      const plus = await findShift(3);
+      if (!plus) ctx.expect('(no shifted line in chat history)').toBe('three shift chars');
+      ctx.expect(plus.shifts[0]).toBe(0xe113); // +4, largest power first
+      ctx.expect(plus.shifts[1]).toBe(0xe112); // +2
+      ctx.expect(plus.shifts[2]).toBe(0xe111); // +1
+      ctx.expect(Number(await widthOfExpr(cpText(plus.shifts)))).toBe(7);
+      // each character measures its own space-provider advance — invisible,
+      // bound, never the 6-wide missing-glyph box
+      ctx.expect(Number(await widthOfCp(0xe113))).toBe(4);
+      ctx.expect(Number(await widthOfCp(0xe112))).toBe(2);
+      ctx.expect(Number(await widthOfCp(0xe111))).toBe(1);
+      ctx.expect(plus.line.includes('<shift:')).toBe(false);
+      ctx.expect(await ctx.shot('glyph-shift')).toBeTruthy();
+
+      // --- −5: negative advances compose the same way
+      await send('L<shift:-5>R');
+      const minus = await findShift(2);
+      if (!minus) ctx.expect('(no negative-shift line in chat history)').toBe('two shift chars');
+      ctx.expect(minus.shifts[0]).toBe(0xe103); // −4
+      ctx.expect(minus.shifts[1]).toBe(0xe101); // −1
+      ctx.expect(Number(await widthOfExpr(cpText(minus.shifts)))).toBe(-5);
+
+      // --- 600: beyond one power-of-two, still exact
+      await send('L<shift:600>R');
+      const wide = await findShift(4);
+      if (!wide) ctx.expect('(no wide-shift line in chat history)').toBe('four shift chars');
+      ctx.expect(wide.shifts[0]).toBe(0xe11a); // +512
+      ctx.expect(wide.shifts[1]).toBe(0xe117); // +64
+      ctx.expect(wide.shifts[2]).toBe(0xe115); // +16
+      ctx.expect(wide.shifts[3]).toBe(0xe114); // +8
+      ctx.expect(Number(await widthOfExpr(cpText(wide.shifts)))).toBe(600);
+
+      // --- 0: the tag is consumed, nothing renders
+      await send('L<shift:0>R');
+      const zero = await findShift(0);
+      if (!zero) ctx.expect('(no zero-shift line in chat history)').toBe('a plain LR line');
+      ctx.expect(zero.line.includes('LR')).toBe(true);
+
+      // --- invalid offset: stays literal
+      await send('L<shift:abc>R');
+      const bad = await findLiteral('<shift:abc>');
+      if (!bad) ctx.expect('(no literal tag line in chat history)').toBe('the literal tag');
+      ctx.expect(bad.includes('<shift:abc>')).toBe(true);
+    },
+  }),
 ];
