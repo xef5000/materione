@@ -1,0 +1,6 @@
+banner_strip:
+  texture: gui/banner_strip
+  rows: 1
+  columns: 4
+  ascent: 8
+  height: 8

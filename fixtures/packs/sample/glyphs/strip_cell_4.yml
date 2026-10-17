@@ -1,0 +1,5 @@
+strip_cell_4:
+  reference: sample:banner_strip
+  index: 4
+  ascent: 8
+  height: 8

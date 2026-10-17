@@ -168,4 +168,84 @@ return 'sent'`, 15_000);
       ctx.expect(widths[3]).toBe(widths[0]);
     },
   }),
+
+  test({
+    id: 'glyphs.grid',
+    title: 'grid glyph — a wide texture across chars (sample:banner_strip, texture gui/banner_strip 32×8, rows 1 × columns 4): the four cells compile as ONE single-row chars string over one allocation run, and chained with no separators in real chat (the sheet\'s tag then three index references) they render flush as one 32px-wide image — four consecutive ascending codepoints with no characters between them, each bound in the client font engine with the same cell advance, and the screenshot shows the four color bands butted left-to-right in row-major order (red green blue yellow)',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/glyphs/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeGlyphs.java',
+      'core/src/main/java/dev/materione/core/text/GlyphCodepoints.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+      'fixtures/packs/sample/glyphs/**',
+    ],
+    dependsOn: ['glyphs.sheet'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      const widthOf = (cp) => ctx.exec(`String s = new String(Character.toChars(${cp}))
+return mc.font.width(s)`, 15_000);
+      const missingWidth = Number(await widthOf(0xF8FF)); // unbound private-use
+      ctx.expect(missingWidth).toBe(6);
+
+      // the grid composition: the sheet's own tag (cell 1, the leftmost
+      // slice) then three index references, chained with NO separators —
+      // composition in text is chaining cell aliases (one tag = one
+      // codepoint; single-tag full-canvas emission is M6 HUD/menu scope)
+      await ctx.exec(`mc.getConnection().sendChat('<glyph:banner_strip><glyph:strip_cell_2><glyph:strip_cell_3><glyph:strip_cell_4>')
+return 'sent'`, 15_000);
+      const findDecorated = async (timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          for (const line of lines) {
+            const high = [...line].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+            if (high.length >= 4) return { line, high };
+          }
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      const found = await findDecorated();
+      if (!found) ctx.expect('(no decorated line in chat history)').toBe('a line with four glyph codepoints');
+
+      // one wide texture across four chars, inside the compiler's
+      // allocation window (never authored characters)
+      ctx.expect(found.high.length).toBe(4);
+      for (const cp of found.high) {
+        ctx.expect(cp).toBeGreaterThan(41999);
+        ctx.expect(cp).toBeLessThan(42100);
+      }
+      // row-major consecutive run in composition order: cell 1 base, then
+      // cells 2..4 left to right
+      ctx.expect(found.high[1]).toBe(found.high[0] + 1);
+      ctx.expect(found.high[2]).toBe(found.high[1] + 1);
+      ctx.expect(found.high[3]).toBe(found.high[2] + 1);
+      // flush: nothing (not even a space) sits between the cells — they
+      // butt into one image
+      const chars = [...found.line];
+      const at = chars.findIndex((ch) => ch.codePointAt(0) >= 0x2000);
+      const flush = chars.slice(at, at + 4).map((ch) => ch.codePointAt(0));
+      ctx.expect(flush).toEqual([found.high[0], found.high[1], found.high[2], found.high[3]]);
+      // the tags are consumed — no literal residue reaches the client
+      ctx.expect(found.line.includes('<glyph:')).toBe(false);
+      ctx.expect(await ctx.shot('glyph-grid-banner')).toBeTruthy();
+
+      // every cell binds with the SAME advance — equal cell widths are what
+      // makes the bands butt together instead of overlapping — and never
+      // the missing-glyph box
+      const widths = [];
+      for (const cp of found.high) {
+        widths.push(Number(await widthOf(cp)));
+      }
+      ctx.expect(widths[0]).toBeGreaterThan(missingWidth);
+      ctx.expect(widths[1]).toBe(widths[0]);
+      ctx.expect(widths[2]).toBe(widths[0]);
+      ctx.expect(widths[3]).toBe(widths[0]);
+    },
+  }),
 ];
