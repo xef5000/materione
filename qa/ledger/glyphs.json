@@ -38,5 +38,15 @@
     "at": "2026-10-17T02:46:38.281Z",
     "run": "run-2026-10-17T02-45-08",
     "eyes": null
+  },
+  "glyphs.shift": {
+    "sha": "0e249aefd058b427c89a94f18cc92cfc9b9a8938",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "d4f744ec361e2320b14c627fdb2584afb2ac0514ecd098e189b975d45efa2e12",
+    "result": "pass",
+    "at": "2026-10-17T23:47:12.470Z",
+    "run": "run-2026-10-17T23-46-20",
+    "eyes": null
   }
 }

@@ -187,7 +187,7 @@
 | Animated glyph (sprite sheet / GIF) | ✅ | ✅ | ✅ | 🚧 (frame 1 renders; cycling 📋 M6) |
 | Grid glyph (large texture across chars) | ✅ | ✅ | ⚠️ | ✅🧪 (a 32×8 strip with `rows: 1, columns: 4` compiles as one single-row chars string over one allocation run; chained cell tags with no separators reconstruct the image flush left-to-right in real chat — order, equal cell advances and butting verified by color-band screenshot; composition = chaining cell aliases, one tag = one codepoint, single-tag full-canvas emission is M6 HUD/menu scope) |
 | Reference glyph (alias) | ✅ | ✅ | ✅ | ✅🧪 (aliases resolve through the target's codepoints with zero allocation and zero pack output; alias identity, no-index default, and out-of-range fail-soft all render the target's cell live; an alias's own `permission` gates it independently of its target — denied viewers see the literal, no leak; dangling targets quarantine at pipeline validate and alias→alias chains are rejected there too — "aliases resolve one level only", pinned in PipelineRunnerTest) |
-| Pixel-shift tags (`<shift:N>`) | ✅ | ✅ | ✅ | ✅ |
+| Pixel-shift tags (`<shift:N>`) | ✅ | ✅ | ✅ | ✅🧪 (`<shift:N>` composes the U+E101+ space-provider run greedily largest-power-first — the client font engine measures the composed run at exactly N pixels (+7, −5 and 600 all verified), each character carrying its own advance, rendered invisibly; 0 consumes the tag, an invalid offset stays literal) |
 | Emoji/chat integration + permissions + tab-complete | ✅ | ✅ | ✅ | ✅ |
 | **GLSL text effects** (rainbow/wave/shake/pulse) | ✅ | ✅ | ✅ (addon, 7 effects) | ✅ |
 
