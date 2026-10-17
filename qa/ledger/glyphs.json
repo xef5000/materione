@@ -30,13 +30,13 @@
     "eyes": null
   },
   "glyphs.alias": {
-    "sha": "6828b479297820cb79513f0ebe708c2e577ddab3",
-    "dirty": false,
+    "sha": "26ef2958b4b6c7f5c2273c68bd368a00d22ca4f2",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "55b8aa7ceb17543081ada67ce574d30b61ff8dd970b421c4464821146452560e",
+    "def": "46b9f62314d136e765640fe4cbf277cb1f3b0ca30ab15d0607d5beed05c80591",
     "result": "pass",
-    "at": "2026-10-17T02:28:31.308Z",
-    "run": "run-2026-10-17T02-27-11",
+    "at": "2026-10-17T02:43:49.436Z",
+    "run": "run-2026-10-17T02-42-47",
     "eyes": null
   }
 }
