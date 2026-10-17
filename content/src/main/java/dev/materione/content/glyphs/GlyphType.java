@@ -141,7 +141,7 @@ public final class GlyphType implements ContentType {
                 rows,
                 columns,
                 reference == null ? null : Templates.shortRef(id.namespace(), reference),
-                Templates.text(merged, "index"),
+                indexSpec(merged),
                 stringList(merged.get("placeholders")),
                 Templates.text(merged, "permission"),
                 boolOf(merged, "emoji", false),
@@ -239,6 +239,20 @@ public final class GlyphType implements ContentType {
     private static int intOf(Map<String, Object> map, String key, int fallback) {
         Object value = map.get(key);
         return value instanceof Number number ? number.intValue() : fallback;
+    }
+
+    /**
+     * The authored reference cell spec: YAML authors write a single cell as a
+     * number ({@code index: 2}) as naturally as a range string ({@code index:
+     * "1..4"}) — both must reach the runtime spec, a dropped number would
+     * silently render cell 1 forever.
+     */
+    static String indexSpec(Map<String, Object> map) {
+        Object value = map.get("index");
+        if (value instanceof String s && !s.isBlank()) {
+            return s;
+        }
+        return value instanceof Number number ? number.toString() : null;
     }
 
     private static boolean boolOf(Map<String, Object> map, String key, boolean fallback) {
