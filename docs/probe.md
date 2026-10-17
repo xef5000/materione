@@ -309,6 +309,17 @@ already asserts.
   match — when a test inspects several clusters, anchor the regex to THIS
   one (the inspect lines carry `display=<x.5>,<y.5>,<z.5>`), or an earlier
   cluster's line answers instantly with the wrong uuid.
+- **Glyph/font acceptance**: real player chat is the decorate surface —
+  `mc.getConnection().sendChat(':placeholder:')` (the `/say` console path
+  bypasses `AsyncChatDecorateEvent`). The decorated echo lands in
+  `chatHistory` with the substituted codepoint as a raw character — scan
+  lines for `codePointAt >= 0x2000` to find it (the allocation window is
+  42000+). The client font binding reads via `mc.font.width(str)` (an int
+  argument like `Font.getGlyph(int)` trips the bridge's Integer boxing):
+  a bound bitmap glyph measures its compiled advance, the missing-glyph
+  box measures 6. The runner's `expect` has no negation and no
+  `toBeGreaterThanOrEqual` — precompute booleans/derived values in the
+  test and assert with `toBe`.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 
