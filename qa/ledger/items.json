@@ -1,27 +1,31 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "aa0de81db6ca0ad83b509f87d0aee6bae11b84bf",
+    "sha": "351919163b16084e5451aed196e628b82eaab5e8",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "visual",
-    "at": "2026-10-17T01:14:30.560Z",
+    "result": "pass",
+    "at": "2026-10-17T01:14:54.389Z",
     "run": "run-2026-10-17T01-13-42",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
-    "issueUrl": "https://github.com/xef5000/materione/issues/39"
+    "issueUrl": "https://github.com/xef5000/materione/issues/39",
+    "markedBy": "user",
+    "note": null
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "aa0de81db6ca0ad83b509f87d0aee6bae11b84bf",
-    "dirty": false,
+    "sha": "351919163b16084e5451aed196e628b82eaab5e8",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
-    "result": "visual",
-    "at": "2026-10-17T01:14:34.843Z",
+    "result": "pass",
+    "at": "2026-10-17T01:14:54.557Z",
     "run": "run-2026-10-17T01-13-42",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
-    "issueUrl": "https://github.com/xef5000/materione/issues/46"
+    "issueUrl": "https://github.com/xef5000/materione/issues/46",
+    "markedBy": "user",
+    "note": null
   },
   "items.template-inheritance": {
     "sha": "2a335fa5db86dfc3c9a0c845010514cbcc1a5fdb",
