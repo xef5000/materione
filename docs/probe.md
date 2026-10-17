@@ -334,12 +334,16 @@ already asserts.
   (a wide `rows: 1` strip) chains the cell tags with NO separators —
   flush-ness is assertable by slicing the chat line at the first high
   codepoint and checking the four cells are adjacent. Alias surfaces
-  resolve one level only: a dangling or chained alias stays literal
-  with no build diagnostic (#84) — poll those by their literal tag
-  text, not by codepoint counts. Permission-gated aliases deny per
-  alias (`deop Probe` → tag literal, `op Probe` → resolves; restore op
-  BEFORE the asserts — the async decorate settles ~seconds after
-  sendChat, so sleep before restoring).
+  resolve one level only: a dangling target or an alias→alias chain
+  quarantines at pipeline validate (UNRESOLVED_REFERENCE), so broken
+  aliases never reach the runtime — their rejection is pinned by unit
+  test, the healthy corpus must stay quarantine-free. Permission-gated
+  aliases deny per alias (`deop Probe` → tag literal, `op Probe` →
+  resolves; restore op BEFORE the asserts — the async decorate settles
+  ~seconds after sendChat, so sleep before restoring). Fixture sync at
+  `probe up` never prunes: deleting a fixture from the tree leaves the
+  stale copy server-side — remove it under
+  `harness/build/probe/server/plugins/Materione/content/packs/` too.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
 

@@ -251,7 +251,7 @@ return 'sent'`, 15_000);
 
   test({
     id: 'glyphs.alias',
-    title: 'reference glyphs (aliases) resolve through their target\'s bitmaps without allocating anything: three aliases of sample:heart (the M4 heart_big at index 1, an alias with no index, an alias with an out-of-range index 99) all render the SAME codepoint as a :heart: chat, with the same font binding; a dangling alias (unknown target) and a chained alias (target is itself an alias — resolution is one level) stay literal with no codepoint leak; and an alias\'s own permission gates it independently of its target (denied while deopped, resolving after re-op)',
+    title: 'reference glyphs (aliases) resolve through their target\'s bitmaps without allocating anything: three aliases of sample:heart (the M4 heart_big at index 1, an alias with no index, an alias with an out-of-range index 99) all render the SAME codepoint as a :heart: chat, with the same font binding; and an alias\'s own permission gates it independently of its target (denied while deopped, resolving after re-op). Dangling targets quarantine at pipeline validate and alias→alias chains are rejected there too (PipelineRunnerTest) — neither reaches the runtime',
     mode: 'auto',
     covers: [
       'content/src/main/java/dev/materione/content/glyphs/**',
@@ -317,16 +317,6 @@ return 'sent'`, 15_000);
       ctx.expect(aliased.high[2]).toBe(H);
       ctx.expect(Number(await widthOf(aliased.high[0]))).toBe(9);
       ctx.expect(await ctx.shot('glyph-alias')).toBeTruthy();
-
-      // --- fail-soft: a dangling target and a chained alias (references
-      // resolve exactly one level) stay literal — no crash, no codepoint leak
-      await send('<glyph:dangling_alias> <glyph:alias_chain>');
-      const dead = await findLiteral('dangling_alias');
-      if (!dead) ctx.expect('(no dangling_alias line in chat history)').toBe('the literal tags');
-      ctx.expect(dead.includes('<glyph:dangling_alias>')).toBe(true);
-      ctx.expect(dead.includes('<glyph:alias_chain>')).toBe(true);
-      const deadHigh = [...dead].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
-      ctx.expect(deadHigh.length).toBe(0);
 
       // --- the alias's OWN permission gates it independently of its target
       // (heart has none): restore op before any assert can fail

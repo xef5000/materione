@@ -72,6 +72,36 @@ class PipelineRunnerTest {
     }
 
     @Test
+    void danglingGlyphAliasQuarantines(@TempDir Path packsRoot) throws IOException {
+        installFaultPack(packsRoot, "faulty", "dangling-glyph.yml", "glyphs/dangling-glyph.yml");
+        var result = runner.request(new ReloadScope.Everything(), packsRoot);
+        assertThat(result.completed()).isTrue();
+        assertThat(quarantine.size()).isOne();
+        Diagnostic reason = quarantine.all().get(0).reason();
+        assertThat(reason.code()).isEqualTo(DiagnosticCodes.UNRESOLVED_REFERENCE);
+        assertThat(reason.message()).contains("references unknown glyph");
+    }
+
+    @Test
+    void chainedGlyphAliasQuarantines(@TempDir Path packsRoot) throws IOException {
+        // a mutual alias→alias chain: both targets EXIST, so the existence
+        // check passes — the alias-target check is what catches the chain
+        // (aliases resolve one level at text time; without this both render
+        // literal forever, silently)
+        installFaultPack(packsRoot, "faulty", "chained-glyph-alias.yml", "glyphs/chained_alias.yml");
+        Files.createDirectories(packsRoot.resolve("faulty/glyphs"));
+        Files.writeString(packsRoot.resolve("faulty/glyphs/middle_alias.yml"),
+                "middle_alias:\n  reference: chained_alias\n");
+        var result = runner.request(new ReloadScope.Everything(), packsRoot);
+        assertThat(result.completed()).isTrue();
+        assertThat(quarantine.size()).isEqualTo(2);
+        assertThat(quarantine.all()).allSatisfy(entry -> {
+            assertThat(entry.reason().code()).isEqualTo(DiagnosticCodes.UNRESOLVED_REFERENCE);
+            assertThat(entry.reason().message()).contains("one level only");
+        });
+    }
+
+    @Test
     void missingManifestExcludesPackResourcesButDoesNotAbort(@TempDir Path packsRoot) throws IOException {
         Path pack = packsRoot.resolve("manifestless");
         Files.createDirectories(pack.resolve("items"));
