@@ -1,15 +1,17 @@
 {
   "items.gem-red-hand-render": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "sha": "67b97e93d6ba4bec86a70643bb36b2fe40e78525",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "8a7abdb418e77f85c9e4afae15e4be7e4d663a7cc79670b20b70f63a590f5391",
-    "result": "visual",
-    "at": "2026-10-18T00:24:54.439Z",
+    "result": "pass",
+    "at": "2026-10-18T00:39:00.975Z",
     "run": "run-2026-10-18T00-23-15",
     "eyes": "the corpus:gem_red model + texture are visible in the held item and the hotbar slot — not the vanilla base item, not a missing-model cube, not a checkerboard texture",
     "issue": 39,
-    "issueUrl": "https://github.com/xef5000/materione/issues/39"
+    "issueUrl": "https://github.com/xef5000/materione/issues/39",
+    "markedBy": "user",
+    "note": null
   },
   "items.ruby-sword-3d-hand-render": {
     "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
