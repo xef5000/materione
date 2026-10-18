@@ -1,0 +1,9 @@
+crown:
+  texture: gui/spark_1
+  placeholders:
+    - ":crown:"
+  emoji: true
+  tab_complete: true
+  permission: materione.glyph.crown
+  ascent: 8
+  height: 8

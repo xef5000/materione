@@ -347,7 +347,17 @@ already asserts.
   the composed run at exactly N pixels (`mc.font.width` over
   `new String(new int[] {…}, 0, n)` — build multi-char strings from an
   int array; `toChars` is single-codepoint), which is the exact
-  discriminator: advance sum, never the missing-glyph box. Fixture sync
+  discriminator: advance sum, never the missing-glyph box. Emoji
+  surfaces: the join-time custom chat completions read back from the
+  client at `mc.getConnection().suggestionsProvider.
+  customCompletionSuggestions` (26.1.2; the connection object is a
+  DebugBridge wrapper — property access forwards, `.@target` reaches
+  the raw object) — the list is built at JOIN, so permission-filtering
+  asserts need `ctx.rejoin()` after `deop`/`op`; per-message decoration
+  permission is live and needs no rejoin. Plain (colon-less)
+  placeholders resolve as substrings of literal runs (#79) — beware
+  collisions when authoring them (`<u` matches inside `<unknown:x>`).
+  Fixture sync
   at `probe up` never prunes: deleting a fixture from the tree leaves
   the stale copy server-side — remove it under
   `harness/build/probe/server/plugins/Materione/content/packs/` too.

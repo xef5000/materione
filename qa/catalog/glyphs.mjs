@@ -76,22 +76,25 @@ return 'sent'`, 15_000);
       }
       ctx.expect(literal).toBeTruthy();
 
-      // --- the authored colon-less placeholder "<3" is registered for tab
-      // completion but never resolves: the emoji scanner only matches
-      // colon-delimited placeholders. Documented live; tracked separately.
-      await ctx.exec(`mc.getConnection().sendChat('<3')
+      // --- the authored colon-less placeholder "<3" is tab-completed AND
+      // resolves: plain placeholders match as exact substrings of literal
+      // runs (#79), landing on the same codepoint as :heart:
+      await ctx.exec(`mc.getConnection().sendChat('plain3 <3')
 return 'sent'`, 15_000);
       const deadline2 = Date.now() + 10_000;
       let hearts = null;
       for (;;) {
         const lines = await ctx.chat(12);
-        hearts = lines.find((line) => line.includes('<3')) ?? null;
+        hearts = lines.find((line) => line.includes('plain3')) ?? null;
         if (hearts) break;
         if (Date.now() > deadline2) break;
         await ctx.sleep(400);
       }
-      ctx.expect(hearts).toBeTruthy(); // stays literal
-      ctx.expect(hearts.includes('<3')).toBe(true);
+      ctx.expect(hearts).toBeTruthy();
+      const plainHigh = [...hearts].map((ch) => ch.codePointAt(0)).filter((cp) => cp >= 0x2000);
+      ctx.expect(plainHigh.length).toBe(1); // exactly the heart, no literal residue
+      ctx.expect(plainHigh[0]).toBe(cp);
+      ctx.expect(hearts.includes('<3')).toBe(false);
     },
   }),
 
@@ -434,6 +437,119 @@ return 'sent'`, 15_000);
       const bad = await findLiteral('<shift:abc>');
       if (!bad) ctx.expect('(no literal tag line in chat history)').toBe('the literal tag');
       ctx.expect(bad.includes('<shift:abc>')).toBe(true);
+    },
+  }),
+
+  test({
+    id: 'glyphs.emoji',
+    title: 'emoji/chat integration end to end: :heart:, :crown: and the alias placeholder :bigheart: resolve in one real chat line (the alias landing on its target\'s codepoint); a per-glyph permission gates :crown: live per message (literal while deopped, resolving after re-op, :heart: unaffected); and the join-time custom chat completions carry exactly the placeholders a player may use — :heart: and <3 for everyone, :crown: only when permitted, :bigheart: never (tab_complete false)',
+    mode: 'auto',
+    covers: [
+      'core/src/main/java/dev/materione/core/runtime/RuntimeGlyphs.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+      'fixtures/packs/sample/glyphs/**',
+    ],
+    dependsOn: ['glyphs.shift'],
+    timeoutMs: 420_000,
+    steps: async (ctx) => {
+      const isGlyphCp = (cp) => cp > 41999 && cp < 42100;
+      const send = (text) => ctx.exec(`mc.getConnection().sendChat('${text}')
+return 'sent'`, 15_000);
+      const findLine = async (marker, glyphCount, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          for (const line of lines) {
+            const glyphs = [...line].map((ch) => ch.codePointAt(0)).filter(isGlyphCp);
+            if (glyphs.length === glyphCount && line.includes(marker)) {
+              return { line, glyphs };
+            }
+          }
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      const findLiteral = async (marker, timeoutMs = 15_000) => {
+        const deadline = Date.now() + timeoutMs;
+        for (;;) {
+          const lines = await ctx.chat(12);
+          const line = lines.find((l) => l.includes(marker));
+          if (line) return line;
+          if (Date.now() > deadline) return null;
+          await ctx.sleep(400);
+        }
+      };
+      // the client stores the join-time custom chat completions in its
+      // suggestion provider (connection.suggestionsProvider.
+      // customCompletionSuggestions on 26.1.2 — a string set)
+      const completions = async () => {
+        const out = await ctx.exec(`def v = mc.getConnection().suggestionsProvider.customCompletionSuggestions
+def out = []
+for (def e : v) { out.add(e.toString()) }
+return out.join(' | ')`, 15_000);
+        return String(out);
+      };
+
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      // --- resolution matrix in one line: two regular emoji + the alias
+      // placeholder (resolves through its target's bitmaps)
+      await send(':heart: :crown: :bigheart:');
+      const all = await findLine('Probe', 3);
+      if (!all) ctx.expect('(no emoji line in chat history)').toBe('three glyph codepoints');
+      ctx.expect(all.line.includes(':crown:')).toBe(false);
+      ctx.expect(all.line.includes(':bigheart:')).toBe(false);
+      const H = all.glyphs[0]; // :heart:
+      const C = all.glyphs[1]; // :crown:
+      ctx.expect(C === H).toBe(false); // distinct glyphs, distinct codepoints
+      ctx.expect(all.glyphs[2]).toBe(H); // :bigheart: -> heart_alias -> heart cell 1
+      for (const cp of all.glyphs) {
+        ctx.expect(cp).toBeGreaterThan(41999);
+        ctx.expect(cp).toBeLessThan(42100);
+      }
+      ctx.expect(await ctx.shot('glyph-emoji')).toBeTruthy();
+
+      // --- the join-time completion list (this session joined as op):
+      // every placeholder the player may use, and nothing else
+      const opCompletions = await completions();
+      ctx.expect(opCompletions.includes(':heart:')).toBe(true);
+      ctx.expect(opCompletions.includes('<3')).toBe(true);
+      ctx.expect(opCompletions.includes(':crown:')).toBe(true); // tab_complete: true
+      ctx.expect(opCompletions.includes(':bigheart:')).toBe(false); // tab_complete: false
+
+      // --- permission gates :crown: live per message; :heart: has none
+      await ctx.rcon('deop Probe');
+      await send('denied :crown: but :heart: works');
+      await ctx.sleep(2_500); // the async decorate settles while still deopped
+      await ctx.rcon('op Probe');
+      const denied = await findLine('denied', 1);
+      if (!denied) ctx.expect('(no denied line in chat history)').toBe('one heart, literal crown');
+      ctx.expect(denied.line.includes(':crown:')).toBe(true); // literal for a denied viewer
+      ctx.expect(denied.glyphs[0]).toBe(H); // :heart: unaffected by crown's permission
+      await send('allowed :crown:');
+      const allowed = await findLine('allowed', 1);
+      if (!allowed) ctx.expect('(no allowed line in chat history)').toBe('the resolved crown');
+      ctx.expect(allowed.glyphs[0]).toBe(C);
+
+      // --- the completion list is built at JOIN: rejoin deopped and :crown:
+      // drops out (permission-filtered), while :heart: and <3 stay
+      await ctx.rcon('deop Probe');
+      await ctx.rejoin();
+      await ctx.sleep(3_000);
+      const deniedCompletions = await completions();
+      ctx.expect(deniedCompletions.includes(':heart:')).toBe(true);
+      ctx.expect(deniedCompletions.includes('<3')).toBe(true);
+      ctx.expect(deniedCompletions.includes(':crown:')).toBe(false);
+      ctx.expect(deniedCompletions.includes(':bigheart:')).toBe(false);
+      // restore the permitted baseline (op + fresh join rebuilds the list)
+      await ctx.rcon('op Probe');
+      await ctx.rejoin();
+      await ctx.sleep(3_000);
+      const restored = await completions();
+      ctx.expect(restored.includes(':crown:')).toBe(true);
+      ctx.expect(restored.includes(':heart:')).toBe(true);
     },
   }),
 ];
