@@ -555,4 +555,82 @@ return out.join(' | ')`, 15_000);
       ctx.expect(restored.includes(':heart:')).toBe(true);
     },
   }),
+
+  test({
+    id: 'glyphs.effects',
+    title: 'GLSL text effects live: the client\'s active resource manager serves the version-matched injected rendertype_text vertex shader under the vanilla name (materione marker present, the client\'s own pack format baked into the generated include) with exactly four signal-keyed animation branches — shake/wave in pre-transform, pulse/rainbow in post-transform; <e:…> spans resolve in real chat; the two-frame evidence shows the four effect words animating differently between frames',
+    mode: 'visual',
+    covers: [
+      'content/src/main/java/dev/materione/content/effects/**',
+      'core/src/main/java/dev/materione/core/runtime/RuntimeEffects.java',
+      'pack/src/main/java/dev/materione/pack/compile/TextEffectShaders.java',
+      'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
+      'fixtures/packs/sample/effects/**',
+    ],
+    dependsOn: ['glyphs.emoji'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+
+      // the client resource manager serves the INJECTED shader under the
+      // vanilla name — the overlay is active for this client's format, not
+      // the shader-free base layer
+      const shader = await ctx.exec(`def rm = mc.getResourceManager()
+def idc = Class.forName('net.minecraft.resources.Identifier')
+def rl = idc.fromNamespaceAndPath('minecraft', 'shaders/core/rendertype_text.vsh')
+def opt = rm.getResource(rl)
+if (!opt.isPresent()) return 'NOT PRESENT'
+return new String(opt.get().open().readAllBytes().@target, java.nio.charset.StandardCharsets.UTF_8)`, 20_000);
+      ctx.expect(String(shader)).toContain('materione');
+
+      // the generated include: the client's own pack format baked (84 = the
+      // 26.1 rung this probe client resolves to), one branch per effect keyed
+      // on its signal color — shake + wave pre-transform, pulse + rainbow post
+      const include = await ctx.exec(`def rm = mc.getResourceManager()
+def idc = Class.forName('net.minecraft.resources.Identifier')
+def rl = idc.fromNamespaceAndPath('minecraft', 'shaders/include/materione_text_effects.glsl')
+return new String(rm.getResource(rl).get().open().readAllBytes().@target, java.nio.charset.StandardCharsets.UTF_8)`, 20_000);
+      const inc = String(include);
+      ctx.expect(inc).toContain('MATERIONE_PACK_FORMAT 84');
+      ctx.expect(inc).toContain('materionePreTransform');
+      ctx.expect(inc).toContain('materionePostTransform');
+      ctx.expect(inc).toContain('mtrHash'); // shake's jitter
+      ctx.expect(inc).toContain('MTR_TAU'); // wave/pulse timing
+      ctx.expect(inc).toContain('0.166667'); // the rainbow gradient chain
+      let branchCount = 0;
+      let at = 0;
+      while ((at = inc.indexOf('if (mtrSignal(', at)) >= 0) {
+        branchCount += 1;
+        at += 1;
+      }
+      ctx.expect(branchCount).toBe(4); // one per effect (the helper definition doesn't match)
+
+      // the spans resolve in real chat (the decorate path; the colors
+      // themselves are the shader's business — judged by eyes below).
+      // Close tags are </e>/</effect> — the id lives on the open tag only
+      await ctx.exec(`mc.getConnection().sendChat('A <e:rainbow>rainbow</e> <e:wave>wave</e> <e:shake>shake</e> <e:pulse>pulse</e> B')
+return 'sent'`, 15_000);
+      const deadline = Date.now() + 15_000;
+      let line = null;
+      for (;;) {
+        const lines = await ctx.chat(12);
+        line = lines.find((l) => l.includes('rainbow') && l.includes('pulse')) ?? null;
+        if (line) break;
+        if (Date.now() > deadline) break;
+        await ctx.sleep(400);
+      }
+      ctx.expect(line).toBeTruthy();
+      ctx.expect(line.includes('<e:')).toBe(false); // tags consumed
+      ctx.expect(line.includes('</e')).toBe(false);
+
+      // the animation itself: two frames 700ms apart — judged by eyes
+      await ctx.sleep(700);
+      await ctx.shot('effects-frame-a');
+      await ctx.sleep(700);
+      await ctx.shot('effects-frame-b');
+      ctx.needsEyes('the four effect words (rainbow, wave, shake, pulse) render animated by the injected text shader — rainbow cycling hues, wave rippling vertically, shake jittering, pulse fading — visibly DIFFERENT between the two frames while the plain A/B words stay static, and no unshaded fallback (the effect words are not plain solid magenta-family signal text)');
+    },
+  }),
 ];

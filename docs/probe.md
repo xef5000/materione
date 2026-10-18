@@ -357,6 +357,15 @@ already asserts.
   permission is live and needs no rejoin. Plain (colon-less)
   placeholders resolve as substrings of literal runs (#79) — beware
   collisions when authoring them (`<u` matches inside `<unknown:x>`).
+  Effect surfaces: the injected shader reads back client-side from the
+  resource manager (`mc.getResourceManager()` over
+  `Class.forName('net.minecraft.resources.Identifier')` — 26.x renamed
+  ResourceLocation; `readAllBytes().@target` unwraps the bridge's byte
+  array before `new String(bytes, UTF_8)`) — `minecraft:shaders/core/
+  rendertype_text.vsh` resolving WITH the materione marker proves the
+  overlay is active for the client's format. Effect spans close with
+  `</e>`/`</effect>` — the id lives on the open tag only. The animation
+  itself is judged by eyes on two frames ~700ms apart (mode visual).
   Fixture sync
   at `probe up` never prunes: deleting a fixture from the tree leaves
   the stale copy server-side — remove it under
