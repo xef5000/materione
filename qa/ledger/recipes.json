@@ -1,12 +1,12 @@
 {
   "recipes.shaped": {
-    "sha": "470f7ca4f3d7a586a2fa1765bd07df78e913a97e",
-    "dirty": true,
+    "sha": "5065ec0a56c43b1c40fa2853c712de6e965a9f06",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "a223913604714150dea6c09fa7bfc8da009b8256643945bd751e062219e8dd59",
     "result": "pass",
-    "at": "2026-10-18T02:06:48.382Z",
-    "run": "run-2026-10-18T02-05-54",
+    "at": "2026-10-18T02:08:52.007Z",
+    "run": "run-2026-10-18T02-08-01",
     "eyes": null
   }
 }
