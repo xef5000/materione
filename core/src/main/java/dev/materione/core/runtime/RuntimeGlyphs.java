@@ -35,12 +35,29 @@ public final class RuntimeGlyphs {
 
     private final Map<NamespacedId, Entry> glyphs;
     private final List<Entry> emoji;
+    private final List<String> plainPlaceholders;
 
     public RuntimeGlyphs(Map<NamespacedId, Entry> glyphs) {
         // insertion order is part of the contract: same content → same registry
         // iteration → deterministic resolution when a bare id is ambiguous
         this.glyphs = java.util.Collections.unmodifiableMap(new java.util.LinkedHashMap<>(glyphs));
         this.emoji = this.glyphs.values().stream().filter(Entry::emoji).toList();
+        // colon-less emoji placeholders (<3, :D) resolve as exact substrings of
+        // literal runs (#79); longest first so <33 wins over <3 at a tie, with
+        // registry order breaking exact ties
+        this.plainPlaceholders = this.emoji.stream()
+                .flatMap(entry -> entry.placeholders().stream())
+                .filter(placeholder -> !resolvesByColonBranch(placeholder))
+                .distinct()
+                .sorted((a, b) -> b.length() - a.length())
+                .toList();
+    }
+
+    /** True when the colon branch of the scan can match it (":x:" shape). */
+    private static boolean resolvesByColonBranch(String placeholder) {
+        return placeholder.length() >= 2
+                && placeholder.charAt(0) == ':'
+                && placeholder.charAt(placeholder.length() - 1) == ':';
     }
 
     public static RuntimeGlyphs empty() {
@@ -71,6 +88,16 @@ public final class RuntimeGlyphs {
     /** Emoji-mode glyphs, for chat interception and tab-completion lists. */
     public List<Entry> emojiGlyphs() {
         return emoji;
+    }
+
+    /**
+     * Emoji placeholders the colon branch can never match ({@code <3},
+     * {@code :D}) — resolved as exact substrings of literal runs, longest
+     * first. Placeholders with no marker character at all still need one to
+     * be visited by the scan, so they stay completion-only.
+     */
+    public List<String> plainPlaceholders() {
+        return plainPlaceholders;
     }
 
     public boolean isEmpty() {

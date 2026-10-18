@@ -178,9 +178,48 @@ public final class GlyphText {
                 }
             }
             int next = nextMarker(text, at + 1);
-            builder.append(ItemText.legacy(text.substring(at, next)));
-            at = next;
+            int plain = appendPlainPlaceholder(builder, text, at, next, glyphs, permissions);
+            if (plain < 0) {
+                builder.append(ItemText.legacy(text.substring(at, next)));
+                at = next;
+            } else {
+                at = plain; // a plain placeholder was emitted; resume inside the run
+            }
         }
+    }
+
+    /**
+     * Emits the run up to the earliest colon-less emoji placeholder and
+     * resolves it (#79); returns the scan resume point, or -1 when the run
+     * holds none. Longest wins at a position tie (the registry sorts them
+     * first); a denied or unresolvable match emits literally and is skipped —
+     * no loop, no codepoint leak.
+     */
+    private static int appendPlainPlaceholder(
+            TextComponent.Builder builder, String text, int from, int to,
+            RuntimeGlyphs glyphs, Permissions permissions) {
+        var candidates = glyphs.plainPlaceholders();
+        int best = -1;
+        String match = null;
+        for (String candidate : candidates) {
+            int hit = text.indexOf(candidate, from);
+            if (hit < 0 || hit >= to) {
+                continue;
+            }
+            if (best < 0 || hit < best) { // longest-first order settles ties
+                best = hit;
+                match = candidate;
+            }
+        }
+        if (match == null) {
+            return -1;
+        }
+        if (best > from) {
+            builder.append(ItemText.legacy(text.substring(from, best)));
+        }
+        Component emoji = emojiComponent(glyphs.byPlaceholder(match).orElse(null), glyphs, permissions);
+        builder.append(emoji != null ? emoji : ItemText.legacy(match));
+        return best + match.length();
     }
 
     /** True for {@code effect:…} / {@code e:…} — the paired-span open tag. */
