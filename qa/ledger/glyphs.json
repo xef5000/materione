@@ -60,13 +60,15 @@
     "eyes": null
   },
   "glyphs.effects": {
-    "sha": "c9cc07ad5cb2d6af8892166224f982d93012f835",
+    "sha": "964bafb96a0718b540e46fe73b5feb20c7944f58",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "269210cfcaafe15a357bd2feb2d694d4bd14319afec44951ffc70a1dfdcb650a",
-    "result": "visual",
-    "at": "2026-10-18T01:23:15.643Z",
+    "result": "pass",
+    "at": "2026-10-18T01:24:58.975Z",
     "run": "run-2026-10-18T01-22-19",
-    "eyes": "the four effect words (rainbow, wave, shake, pulse) render animated by the injected text shader — rainbow cycling hues, wave rippling vertically, shake jittering, pulse fading — visibly DIFFERENT between the two frames while the plain A/B words stay static, and no unshaded fallback (the effect words are not plain solid magenta-family signal text)"
+    "eyes": "the four effect words (rainbow, wave, shake, pulse) render animated by the injected text shader — rainbow cycling hues, wave rippling vertically, shake jittering, pulse fading — visibly DIFFERENT between the two frames while the plain A/B words stay static, and no unshaded fallback (the effect words are not plain solid magenta-family signal text)",
+    "markedBy": "user",
+    "note": null
   }
 }
