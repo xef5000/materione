@@ -1,0 +1,4 @@
+shake:
+  kind: shake
+  speed: 6.0
+  amplitude: 1.0

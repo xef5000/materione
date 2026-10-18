@@ -1,0 +1,4 @@
+pulse:
+  kind: pulse
+  speed: 2.0
+  amplitude: 0.5
