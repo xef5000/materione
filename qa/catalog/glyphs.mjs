@@ -426,11 +426,14 @@ return 'sent'`, 15_000);
       ctx.expect(wide.shifts[3]).toBe(0xe114); // +8
       ctx.expect(Number(await widthOfExpr(cpText(wide.shifts)))).toBe(600);
 
-      // --- 0: the tag is consumed, nothing renders
-      await send('L<shift:0>R');
-      const zero = await findShift(0);
-      if (!zero) ctx.expect('(no zero-shift line in chat history)').toBe('a plain LR line');
-      ctx.expect(zero.line.includes('LR')).toBe(true);
+      // --- 0: the tag is consumed, nothing renders (marker word: older
+      // shift-free lines from predecessor tests linger in the history)
+      await send('zero<shift:0>LR');
+      const zero = await findLiteral('zeroLR');
+      if (!zero) ctx.expect('(no zero-shift line in chat history)').toBe('a zeroLR line');
+      const zeroShifts = [...zero].map((ch) => ch.codePointAt(0)).filter(isShift);
+      ctx.expect(zeroShifts.length).toBe(0);
+      ctx.expect(zero.includes('<shift:')).toBe(false);
 
       // --- invalid offset: stays literal
       await send('L<shift:abc>R');
