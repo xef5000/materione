@@ -1,12 +1,12 @@
 {
   "glyphs.basic": {
-    "sha": "1d9ca6a9c93fe70180eb3f28e750309bbd70493c",
-    "dirty": false,
+    "sha": "fb24efefe0d3b58cfc6a7f5207d2bb63c24a7267",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "3d43fe5a09de3d7ebceebe64d3a8d50197414172cba49fe5a4e06fb6417b91bb",
+    "def": "645a1ae54b9ae860bc60587b16de6fa89b9e6e17430fc4d18b4b083b9c42d7f0",
     "result": "pass",
-    "at": "2026-10-17T02:46:09.664Z",
-    "run": "run-2026-10-17T02-45-08",
+    "at": "2026-10-18T00:20:08.450Z",
+    "run": "run-2026-10-18T00-19-06",
     "eyes": null
   },
   "glyphs.sheet": {
@@ -47,6 +47,16 @@
     "result": "pass",
     "at": "2026-10-17T23:47:12.470Z",
     "run": "run-2026-10-17T23-46-20",
+    "eyes": null
+  },
+  "glyphs.emoji": {
+    "sha": "fb24efefe0d3b58cfc6a7f5207d2bb63c24a7267",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "f7fc6b1701687f10cd382ab5a4599e4dd31dfbe862375439522e456da4db44b1",
+    "result": "pass",
+    "at": "2026-10-18T00:21:25.635Z",
+    "run": "run-2026-10-18T00-19-06",
     "eyes": null
   }
 }
