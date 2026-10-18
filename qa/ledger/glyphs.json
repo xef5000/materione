@@ -50,13 +50,13 @@
     "eyes": null
   },
   "glyphs.emoji": {
-    "sha": "943ee9583e2a7cb5c908460cd366dab2c89a73c0",
-    "dirty": true,
+    "sha": "f12acdcd04989533237ae67fbe29eae3f0e30505",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "f7fc6b1701687f10cd382ab5a4599e4dd31dfbe862375439522e456da4db44b1",
     "result": "pass",
-    "at": "2026-10-18T00:33:05.369Z",
-    "run": "run-2026-10-18T00-30-45",
+    "at": "2026-10-18T00:38:58.823Z",
+    "run": "run-2026-10-18T00-36-12",
     "eyes": null
   }
 }
