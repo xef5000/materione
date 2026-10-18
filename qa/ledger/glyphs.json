@@ -40,23 +40,23 @@
     "eyes": null
   },
   "glyphs.shift": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
-    "dirty": false,
+    "sha": "943ee9583e2a7cb5c908460cd366dab2c89a73c0",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "d4f744ec361e2320b14c627fdb2584afb2ac0514ecd098e189b975d45efa2e12",
-    "result": "fail",
-    "at": "2026-10-18T00:24:49.549Z",
-    "run": "run-2026-10-18T00-23-15",
-    "dossier": "qa\\results\\run-2026-10-18T00-23-15\\glyphs.shift\\dossier.md"
+    "def": "40793a2b1519430b83d8c800fcff5a99af32da572d44c096a9c5b0efb2b35b77",
+    "result": "pass",
+    "at": "2026-10-18T00:31:44.350Z",
+    "run": "run-2026-10-18T00-30-45",
+    "eyes": null
   },
   "glyphs.emoji": {
-    "sha": "fb24efefe0d3b58cfc6a7f5207d2bb63c24a7267",
+    "sha": "943ee9583e2a7cb5c908460cd366dab2c89a73c0",
     "dirty": true,
     "env": "f29751d62d53",
     "def": "f7fc6b1701687f10cd382ab5a4599e4dd31dfbe862375439522e456da4db44b1",
     "result": "pass",
-    "at": "2026-10-18T00:21:25.635Z",
-    "run": "run-2026-10-18T00-19-06",
+    "at": "2026-10-18T00:33:05.369Z",
+    "run": "run-2026-10-18T00-30-45",
     "eyes": null
   }
 }
