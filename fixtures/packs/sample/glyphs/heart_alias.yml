@@ -1,2 +1,9 @@
 heart_alias:
   reference: sample:heart
+  index: 1
+  placeholders:
+    - ":bigheart:"
+  emoji: true
+  tab_complete: false
+  ascent: 8
+  height: 8

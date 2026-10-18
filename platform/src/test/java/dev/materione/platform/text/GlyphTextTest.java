@@ -24,7 +24,7 @@ class GlyphTextTest {
         var entries = new LinkedHashMap<NamespacedId, RuntimeGlyphs.Entry>();
         entries.put(NamespacedId.parse("sample:heart"), new RuntimeGlyphs.Entry(
                 NamespacedId.parse("sample:heart"), "sample:default", new int[] {42000},
-                List.of(":heart:"), null, true, true, null, null, null));
+                List.of(":heart:", "<3"), null, true, true, null, null, null));
         entries.put(NamespacedId.parse("sample:star"), new RuntimeGlyphs.Entry(
                 NamespacedId.parse("sample:star"), "sample:default", new int[] {42001},
                 List.of(), null, false, false, null, null, null));
@@ -36,7 +36,7 @@ class GlyphTextTest {
         // alias: borrows the heart's bitmap, own placeholder + permission
         entries.put(NamespacedId.parse("sample:love"), new RuntimeGlyphs.Entry(
                 NamespacedId.parse("sample:love"), "sample:default", new int[0],
-                List.of(":love:"), "materione.glyphs.premium", true, false, null,
+                List.of(":love:", "<u"), "materione.glyphs.premium", true, false, null,
                 "sample:heart", null));
         return new RuntimeGlyphs(entries);
     }
@@ -52,6 +52,38 @@ class GlyphTextTest {
         // star has no placeholder at all; nothing is consumed
         Component resolved = GlyphText.resolve(":star:", registry(), GlyphText.Permissions.ALLOW_ALL);
         assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo(":star:");
+    }
+
+    @Test
+    void plainPlaceholdersResolveAsSubstrings() {
+        // <3 is authored and tab-completed on sample:heart — it must resolve
+        // too, or the completion list invites players into dead text (#79)
+        Component resolved = GlyphText.resolve("I <3 u", registry(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("I " + HEART_CHAR + " u");
+        // two matches inside one literal run
+        Component twice = GlyphText.resolve("<3<3", registry(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(twice)).isEqualTo(HEART_CHAR + HEART_CHAR);
+    }
+
+    @Test
+    void plainPlaceholderLongestMatchWins() {
+        var entries = new LinkedHashMap<NamespacedId, RuntimeGlyphs.Entry>();
+        entries.put(NamespacedId.parse("sample:heart"), new RuntimeGlyphs.Entry(
+                NamespacedId.parse("sample:heart"), "sample:default", new int[] {42000},
+                List.of("<33", "<3"), null, true, false, null, null, null));
+        var glyphs = new RuntimeGlyphs(entries);
+        Component resolved = GlyphText.resolve("x <33 y", glyphs, GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("x " + HEART_CHAR + " y");
+    }
+
+    @Test
+    void deniedPlainPlaceholderStaysLiteral() {
+        // <u is the premium love alias's plain placeholder: denied viewers see
+        // the literal, no codepoint leak — same contract as :placeholders:
+        Component denied = GlyphText.resolve("I <u u", registry(), permission -> false);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(denied)).isEqualTo("I <u u");
+        Component allowed = GlyphText.resolve("I <u u", registry(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(allowed)).isEqualTo("I " + HEART_CHAR + " u");
     }
 
     @Test
@@ -105,8 +137,9 @@ class GlyphTextTest {
 
     @Test
     void unknownTagsAndColonsStayLiteral() {
-        Component resolved = GlyphText.resolve("time 12:30 <unknown:x>", registry(), GlyphText.Permissions.ALLOW_ALL);
-        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("time 12:30 <unknown:x>");
+        // no plain placeholder may substring-match here: <nope:x> avoids <3 and <u
+        Component resolved = GlyphText.resolve("time 12:30 <nope:x>", registry(), GlyphText.Permissions.ALLOW_ALL);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("time 12:30 <nope:x>");
     }
 
     @Test

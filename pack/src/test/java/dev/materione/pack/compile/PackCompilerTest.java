@@ -563,9 +563,11 @@ class PackCompilerTest {
         compileFixtures(tempDir, allocation);
         // the lamp's state slot flushed to disk before the pack was written
         assertThat(Files.exists(allocationFile)).isTrue();
-        // 1 block state slot + 5 glyph runs (sheet 6 codepoints, color sheet 4,
-        // banner strip 4, heart 1, frames 2) + 2 effect signals (rainbow, wave)
-        assertThat(allocation.liveCount()).isEqualTo(8);
+        // 1 block state slot + 6 glyph runs (sheet 6 codepoints, color sheet 4,
+        // banner strip 4, heart 1, crown 1, frames 2) + 2 effect signals
+        // (rainbow, wave); the emoji aliases (heart_big, heart_alias) allocate
+        // nothing
+        assertThat(allocation.liveCount()).isEqualTo(9);
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
