@@ -1,53 +1,53 @@
 {
   "glyphs.basic": {
-    "sha": "fb24efefe0d3b58cfc6a7f5207d2bb63c24a7267",
-    "dirty": true,
+    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "645a1ae54b9ae860bc60587b16de6fa89b9e6e17430fc4d18b4b083b9c42d7f0",
     "result": "pass",
-    "at": "2026-10-18T00:20:08.450Z",
-    "run": "run-2026-10-18T00-19-06",
+    "at": "2026-10-18T00:24:12.116Z",
+    "run": "run-2026-10-18T00-23-15",
     "eyes": null
   },
   "glyphs.sheet": {
-    "sha": "1d9ca6a9c93fe70180eb3f28e750309bbd70493c",
+    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "67309b5244bcad30026d3f08d1cc4ee754105a9b49ab1e7c4b8f2b03df1e4d97",
     "result": "pass",
-    "at": "2026-10-17T02:46:18.147Z",
-    "run": "run-2026-10-17T02-45-08",
+    "at": "2026-10-18T00:24:20.634Z",
+    "run": "run-2026-10-18T00-23-15",
     "eyes": null
   },
   "glyphs.grid": {
-    "sha": "1d9ca6a9c93fe70180eb3f28e750309bbd70493c",
+    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "16ebb4986b174aeca3209a616b3bb4f1f937cc5491d35087281209639cc0f483",
     "result": "pass",
-    "at": "2026-10-17T02:46:26.663Z",
-    "run": "run-2026-10-17T02-45-08",
+    "at": "2026-10-18T00:24:29.116Z",
+    "run": "run-2026-10-18T00-23-15",
     "eyes": null
   },
   "glyphs.alias": {
-    "sha": "1d9ca6a9c93fe70180eb3f28e750309bbd70493c",
+    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "46b9f62314d136e765640fe4cbf277cb1f3b0ca30ab15d0607d5beed05c80591",
     "result": "pass",
-    "at": "2026-10-17T02:46:38.281Z",
-    "run": "run-2026-10-17T02-45-08",
+    "at": "2026-10-18T00:24:40.732Z",
+    "run": "run-2026-10-18T00-23-15",
     "eyes": null
   },
   "glyphs.shift": {
-    "sha": "0e249aefd058b427c89a94f18cc92cfc9b9a8938",
+    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "d4f744ec361e2320b14c627fdb2584afb2ac0514ecd098e189b975d45efa2e12",
-    "result": "pass",
-    "at": "2026-10-17T23:47:12.470Z",
-    "run": "run-2026-10-17T23-46-20",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-18T00:24:49.549Z",
+    "run": "run-2026-10-18T00-23-15",
+    "dossier": "qa\\results\\run-2026-10-18T00-23-15\\glyphs.shift\\dossier.md"
   },
   "glyphs.emoji": {
     "sha": "fb24efefe0d3b58cfc6a7f5207d2bb63c24a7267",
