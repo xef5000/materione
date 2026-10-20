@@ -14,16 +14,18 @@
     "note": null
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "59c236524e4989919439a74d35106a875ac7bcc3",
+    "sha": "7b72e35a73ef646d4fa3b4dcbe4c061ecb1fc87c",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
-    "result": "visual",
-    "at": "2026-10-20T18:16:57.057Z",
+    "result": "pass",
+    "at": "2026-10-20T18:18:08.990Z",
     "run": "run-2026-10-20T18-16-08",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
-    "issueUrl": "https://github.com/xef5000/materione/issues/46"
+    "issueUrl": "https://github.com/xef5000/materione/issues/46",
+    "markedBy": "user",
+    "note": null
   },
   "items.template-inheritance": {
     "sha": "59c236524e4989919439a74d35106a875ac7bcc3",
