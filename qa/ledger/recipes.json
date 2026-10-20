@@ -1,32 +1,32 @@
 {
   "recipes.shaped": {
-    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
-    "dirty": true,
+    "sha": "a4735581360e007ddeef6609f91a1c98b9197b15",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "1a096416e03e7d25bf1661c46434482b34efbd7bf5fb5d576a000821acae7424",
     "result": "pass",
-    "at": "2026-10-20T04:20:01.576Z",
-    "run": "run-2026-10-20T04-19-05",
+    "at": "2026-10-20T04:23:55.671Z",
+    "run": "run-2026-10-20T04-22-59",
     "eyes": null
   },
   "recipes.shapeless": {
-    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
-    "dirty": true,
+    "sha": "a4735581360e007ddeef6609f91a1c98b9197b15",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "90aff3a802d0b40ec33cb723cf36746acf66c6ee17f31952d248102ad48d3e38",
     "result": "pass",
-    "at": "2026-10-20T04:20:19.783Z",
-    "run": "run-2026-10-20T04-19-05",
+    "at": "2026-10-20T04:24:13.887Z",
+    "run": "run-2026-10-20T04-22-59",
     "eyes": null
   },
   "recipes.furnace": {
-    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
-    "dirty": true,
+    "sha": "a4735581360e007ddeef6609f91a1c98b9197b15",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "83d391373fdb9f429095bb1f4f7117014e7c030ebc309c58dcefe775c256316d",
     "result": "pass",
-    "at": "2026-10-20T04:21:01.085Z",
-    "run": "run-2026-10-20T04-19-05",
+    "at": "2026-10-20T04:24:55.282Z",
+    "run": "run-2026-10-20T04-22-59",
     "eyes": null
   }
 }
