@@ -211,6 +211,10 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode EFFECT_SIGNAL_EXHAUSTED =
             new DiagnosticCode("MTR-0047", Severity.ERROR, "Text effect signal space exhausted");
 
+    /** An item authors a vanilla `components:` block, which nothing applies yet (#103). */
+    public static final DiagnosticCode ITEM_COMPONENTS_NOT_APPLIED =
+            new DiagnosticCode("MTR-0048", Severity.WARN, "Item components block not applied");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -258,7 +262,8 @@ public final class DiagnosticCodes {
             TEXT_EFFECT_UNSUPPORTED,
             GLYPH_CODEPOINT_EXHAUSTED,
             DATAPACK_NOT_ACCEPTED,
-            EFFECT_SIGNAL_EXHAUSTED);
+            EFFECT_SIGNAL_EXHAUSTED,
+            ITEM_COMPONENTS_NOT_APPLIED);
 
     private DiagnosticCodes() {}
 
