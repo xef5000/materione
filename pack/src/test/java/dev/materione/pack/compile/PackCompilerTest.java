@@ -543,7 +543,12 @@ class PackCompilerTest {
                     .contains("\"sound_id\":\"sample:anthem\"")
                     .contains("\"comparator_output\":7");
             assertThat(entryText(datapack, "data/minecraft/tags/painting_variant/placeable.json"))
-                    .contains("sample:sunrise");
+                    // two placeable paintings merge additively — the merge used
+                    // to blow up on the first painting's immutable map and drop
+                    // the second painting's whole compile (#100)
+                    .contains("sample:panorama")
+                    .contains("sample:sunrise")
+                    .doesNotContain("sample:moonrise");
             // the datapack advertises its range in BOTH mcmeta generations, like
             // the resource pack — a single old pack_format reads as incompatible
             // on 1.21.9+/26.x servers and its content silently never loads

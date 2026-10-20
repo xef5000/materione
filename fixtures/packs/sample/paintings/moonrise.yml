@@ -1,0 +1,7 @@
+moonrise:
+  texture: painting/moonrise
+  width: 1
+  height: 2
+  author: "Materione"
+  title: "Moonrise"
+  placeable: false

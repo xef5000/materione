@@ -236,7 +236,7 @@ vanilla-recipe disabling are 📋 M7.
 |---|---|---|---|---|
 | Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) | ✅🧪 (the client's sound registry resolves the pack's events to their own .ogg sources with authored subtitles and per-entry flags — stream verified live; event-level flags were silently dropped by the client, #94; `replace_vanilla:` overrides a vanilla event outright — without event-level `replace` the client merges the custom sources into the vanilla pool instead, #95; real playback verified through the client's sound engine via `/materione dev sound`) |
 | Custom music discs / jukebox songs | ✅ | ✅ | ✅ | ✅🧪 (a real disc plays end to end in a real jukebox: the disc carries the `jukebox_playable` component resolved against the generated datapack song — description, 90s length and comparator output 7 all reach the client; insertion through the client flips `has_record` and plays the pack's own anthem through the sound engine; the authored comparator_output reaches the redstone channel, a wire behind the comparator reads exactly 7; an empty-hand click ejects — record cleared, wire to 0, playback stopped, disc back in the inventory. One upstream caveat: streamed jukebox-song events keep playing past eject (#98) — the demo disc stays non-streamed) |
-| **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ | ✅ |
+| **Custom paintings** (1.21 painting variants) | ✅ | ❌ | ✅ | ✅🧪 (all three fixture variants compose through Paper's registry events at bootstrap — registry mode, nothing deployed to the world — and reach the client's synced painting-variant registry with their authored size, asset_id, author and title; `dev painting` places them on a real wall and the entity's variant reads back; the placeable tag shows in vanilla behavior — item placements never select the non-placeable variant and spread across the vanilla pool; both fixture textures render their own atlas sprites. Two in-round fixes: the second placeable painting in a pack used to crash the datapack compile and get dropped, #100; `dev painting` set the NMS direction inverted so it had never once placed, #101) |
 | Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native | 📋 M7 |
 
 *As built in Materione (M4):* custom sounds (`sounds/` definitions → per-namespace
@@ -246,10 +246,15 @@ vanilla's pool (#95), inline studio playback, `/materione dev sound` for in-game
 checks), music discs (a sound's
 `jukebox:` section → datapack song; an item's `jukebox_song:` field → the disc
 component, fail-soft until the datapack loads), and custom paintings
-(`paintings/` → `painting_variant` datapack entries + painting-atlas sprites +
-pixel-size validation + the `placeable` tag). All three are first-class editor
-types with studios, validation and goldens; paintings/jukebox apply restart-required
-through the M2 staging ledger.
+(`paintings/` → `painting_variant` entries + painting-atlas sprites +
+pixel-size validation + the `placeable` tag). Registration takes the modern
+seam when the server has it: on Paper 1.21.6+ a bootstrap composes painting
+variants and jukebox songs through the registry events and joins the placeable
+tag via the tags event — nothing is written into any world folder; floor
+servers (1.21.4/1.21.5) ride the compiled world datapack instead. Both paths
+are restart-required and tracked by the same hash ledger. All three are
+first-class editor types with studios, validation and goldens; paintings
+registration and the dev placement driver are live-verified (#100, #101).
 
 ### M. World & environment
 
@@ -472,7 +477,7 @@ Effectively equal across all three: textured unicode glyphs injected into Minecr
 
 - **Custom sounds** — all three (`.ogg`, mono; Nexo can **replace/mute vanilla sounds**).
 - **Music discs / jukebox songs** — all three (Nexo auto-generates the jukebox-song datapack; configurable comparator output/range/duration).
-- **Custom paintings (1.21 datapack)** — **ItemsAdder ✅** and **Nexo ✅** (animated via `.mcmeta`); **Oraxen ❌**.
+- **Custom paintings (1.21 painting variants)** — **ItemsAdder ✅** and **Nexo ✅** (animated via `.mcmeta`; Nexo also registers through Paper's registry events); **Oraxen ❌**.
 - **Custom particles** — weak everywhere (Oraxen via Aura; ItemsAdder ⚠️ partial; Nexo none native).
 
 **🎯 Target spec:** Custom sounds (incl. replace vanilla), music discs with auto-datapack, **custom paintings** (animated), and a small particle API on items/furniture.
@@ -602,7 +607,7 @@ A new competitor should be *more* modern than Nexo, not less. Anchor on:
 - **1.20.5+ data components** — the canonical way to express food, tools, durability, equippable, glint, etc. Expose the *entire* surface, version-tabbed.
 - **1.19.4+ display entities** (`item_display`, `text_display`, `interaction`, `block_display`) — the only sane furniture foundation. Use `interaction` for hitboxes, `item_display` for the model, `text_display` for labels. Don't build new furniture on item-frames/armor-stands.
 - **1.21.2+ `equippable.asset_id`** — armor/elytra/mob-armor/saddle/harness all flow through this one component. Track each new equipment slot.
-- **1.21+ server-side dialogs + custom paintings + jukebox songs** — all datapack-driven features worth wrapping in YAML.
+- **1.21+ server-side dialogs + custom paintings + jukebox songs** — restart-required registry features (datapack or Paper registry events) worth wrapping in YAML.
 - **Paper-native scheduling + Folia region/entity schedulers** — design async-first; target **Folia** from day one (Oraxen + Nexo do; verify ItemsAdder).
 - **Proxy pack dedup** — design for Velocity/Bungee from the start.
 

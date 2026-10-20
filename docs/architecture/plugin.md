@@ -184,10 +184,14 @@ suggestion.
   pack; the known-version table is the fallback, and MTR-0018 is a warning only when *neither*
   source covers the running version (an informational MTR-0018 when the server reports a
   format the table doesn't know yet).
-- **Datapack artifacts** (paintings, jukebox songs, optional trims) compile alongside, into the
+- **Registry-mode content** (paintings, jukebox songs on Paper 1.21.6+) composes at bootstrap
+  through the registry events — the world folder holds no artifact; the hash ledger tracks the
+  compiled artifact as the content's proxy.
+- **Datapack artifacts** (floor paintings/jukebox, optional trims) compile alongside, into the
   world's datapacks folder via atomic replace; each carries the content hash so staleness is
-  detectable. **Datapack registry content (paintings, jukebox songs, trim sets, worldgen
-  modifiers) is restart-required**: Minecraft bakes these at datapack load, so these changes
+  detectable. **Registry content (paintings, jukebox songs) and datapack content (trim sets,
+  worldgen modifiers) is restart-required**: registration composes and datapacks load only at
+  boot, so these changes
   stage for the next boot and appear in the pre-apply report and `/materione doctor` as
   *pending restart-required* — they never masquerade as live (master §6.4).
 - **Post-processing** (obfuscation, PackSquash, signing) is an ordered chain over the staged

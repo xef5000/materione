@@ -174,11 +174,14 @@ already asserts.
   never land on 26.1.2 (vanilla-irrelevant quirk); use a `NoAI` villager,
   and space swings past the weapon's full attack cooldown.
 - **Crosshair-driven block work**: aim with `player.setRot(yaw, pitch)` (it
-  persists between exec calls; positive pitch is down), then verify
-  `mc.hitResult` (a `BlockHitResult`: `getType()`/`getBlockPos()`/`getDirection()`)
-  and act in the SAME Groovy call — the physical desktop mouse can nudge the
+  persists between exec calls; positive pitch is down), then verify and act
+  in the SAME Groovy call — the physical desktop mouse can nudge the
   camera between calls, and survival block reach is 4.5 (a target just past
-  it reads as a silent MISS). `setDown(true)` on `keyAttack` does drive
+  it reads as a silent MISS). Verify the aim with a fresh
+  `mc.player.pick(20.0D, 1.0F, false)` — the `mc.hitResult` field is a
+  render-frame cache and can report a stale MISS even when the crosshair
+  genuinely holds the target (`getType()`/`getBlockPos()`/`getDirection()`).
+  `setDown(true)` on `keyAttack` does drive
   continuous mining; `mc.gameMode.useItemOn(player, hand, hitResult)` is the
   direct-packet alternative (26.1.2 signature takes a `BlockHitResult`).
   Server-side blockstate asserts go through `execute if block <pos>
@@ -205,6 +208,17 @@ already asserts.
   keys must match the client's alphabetical property order; the host name and
   bracket content are best asserted as two separate `contains` (`Block{…}`
   breaks a naive `host[props]` substring).
+- **Client registry reads (26.1.2)**:
+  `mc.level.registryAccess().@target.lookupOrThrow(<Registries constant>)`
+  resolves a synced registry (`Registries` lives in
+  `net.minecraft.core.registries`); the registry ITERATES values (not
+  holders) and `get(identifier)` returns `Optional` — 26.x shapes getters as
+  Optionals too (`PaintingVariant.author()`/`title()` are
+  `Optional<Component>`, `assetId()` is plain). Holder `.tags()` is always
+  empty client-side for painting variants (the tag data never syncs) —
+  placeable-pool questions are answered behaviorally (vanilla item placement)
+  or server-side, not by reading tags on the client. Dev commands travel as
+  raw packets (`mc.getConnection().@target.sendCommand(...)`, #96).
 - **Tool-gated hosts out-mine the hold**: hosts like bone block (~10s bare
   hand, ~0.4s with a diamond pickaxe) never finish inside a `mineAway` hold
   bare-handed — the runtime's break pipeline only fires when the vanilla

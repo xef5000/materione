@@ -21,7 +21,7 @@ here.
 | **Content graph** | The validated network of all resources and their typed references; the heart of the product ("the intertwining, made inspectable"). | master §5.3 |
 | **Content type** | A registered kind of resource (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting, …), extensible by addons. | master §5.1, runtime-systems.md §1 |
 | **Canned ECA** | A built-in mechanic implemented as a parameterized Event→Condition→Action bundle rather than custom Java; registered identically to third-party mechanics. | runtime-systems.md §2.3 |
-| **Datapack artifact** | Pack output Minecraft requires in datapack form (paintings, jukebox songs, trims, worldgen modifiers) — restart-required content. | plugin.md §4.4 |
+| **Datapack artifact** | Pack output Minecraft requires in datapack form (trims, worldgen modifiers; paintings and jukebox songs on pre-1.21.6 servers) — restart-required content. On 1.21.6+ those two register through Paper's registry events instead, with no world-folder artifact. | plugin.md §4.4, runtime-systems.md §10 |
 | **Definition** | The immutable, validated data of one resource, post-parse. | runtime-systems.md §1 |
 | **Diagnostics** | Structured failure records (`{code, severity, message, resource, file:line, hint}`) with stable `MTR-####` codes; the fail-soft backbone. | plugin.md §5 |
 | **Direct mode** | Editor transport where the plugin serves the API itself on loopback (or reverse-proxied); relay cut out; same protocol. | web.md §4.4 |

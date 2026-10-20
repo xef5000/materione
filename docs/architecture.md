@@ -125,7 +125,7 @@ Materione decomposes into five planes with strict data-flow direction:
                          ┌──────────────────────────────────────────────┐
                          │                COMPILE PLANE                  │
                          │  Content graph → allocation → resource pack   │
-                         │  (+ datapack: paintings, jukebox, trims)      │
+                         │  (+ datapack: trims; floor paintings/jukebox) │
                          └───────────────┬───────────────┬──────────────┘
                                          │ pack          │ typed definitions
                                          ▼               ▼
@@ -268,8 +268,9 @@ validated content graph** or a precise set of diagnostics — never a half-appli
 The compile plane turns appearance facets + assets into:
 
 - a **resource pack** (models, textures, fonts, sounds) — generated via the `creative` library;
-- **datapack artifacts** where Minecraft requires them (custom paintings, jukebox songs,
-  trim-based armor option);
+- **datapack artifacts** where Minecraft requires them (the trim-based armor option; custom
+  paintings and jukebox songs take the registry seam on 1.21.6+ and the datapack on the
+  floor);
 - **server-side definitions** (registries of items/blocks/furniture/HUD behaviors).
 
 Compilation is pure: same input graph → byte-identical output (D7). That makes golden-file
@@ -304,7 +305,9 @@ failure is reported. The diff drives:
   (keep-flagged / replace-with-air / replace-with-vanilla), surfaced to the admin before apply,
   never guessed;
 - **restart-required honesty** — some changes cannot hot-apply because Minecraft bakes them at
-  datapack load (custom paintings, jukebox songs, trim sets, worldgen modifiers). These are
+  boot: painting/jukebox registration composes once per boot (registry events on 1.21.6+,
+  datapack load on the floor), and trim sets and worldgen modifiers load with the datapack.
+  These are
   their own diff class: the pre-apply report lists them as **restart-required**, they are
   staged for the next boot, and `/materione doctor` reports pending restart-required changes.
   Nothing pretends to be live that isn't.

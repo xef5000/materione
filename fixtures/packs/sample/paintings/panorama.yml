@@ -1,0 +1,7 @@
+panorama:
+  texture: painting/panorama
+  width: 3
+  height: 2
+  author: "Materione"
+  title: "Panorama"
+  placeable: true
