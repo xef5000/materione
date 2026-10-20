@@ -1,22 +1,22 @@
 {
   "recipes.shaped": {
-    "sha": "7273f9bce9405ce8f4203a41950d6bf2c659ccb5",
-    "dirty": true,
+    "sha": "b516da9779bb116dda93441da222e50eaedfe78d",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "6d6379e7b4316bdde39c6323efe2f70c38049e3564e9de23e9952cd10f780209",
     "result": "pass",
-    "at": "2026-10-20T01:45:18.883Z",
-    "run": "run-2026-10-20T01-43-33",
+    "at": "2026-10-20T01:47:54.974Z",
+    "run": "run-2026-10-20T01-46-07",
     "eyes": null
   },
   "recipes.shapeless": {
-    "sha": "7273f9bce9405ce8f4203a41950d6bf2c659ccb5",
-    "dirty": true,
+    "sha": "b516da9779bb116dda93441da222e50eaedfe78d",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "735325038d45176c84f60e08ed5770806b773e3cd20708dd875cdc503d111641",
     "result": "pass",
-    "at": "2026-10-20T01:45:30.749Z",
-    "run": "run-2026-10-20T01-43-33",
+    "at": "2026-10-20T01:48:06.790Z",
+    "run": "run-2026-10-20T01-46-07",
     "eyes": null
   }
 }
