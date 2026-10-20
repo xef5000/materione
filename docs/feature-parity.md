@@ -72,7 +72,7 @@
 | Custom items (name/lore/flags/attrs/enchants/PDC) | ✅ | ✅ | ✅ | ✅🧪 |
 | `custom_model_data` models | ✅ | ✅ | ✅ | ✅ (via ItemModels) |
 | **1.21.4+ ItemModels** (item model JSON) | ⚠️ | ✅ (4 generation modes) | ✅ (full ItemModel builder) | ✅🧪 |
-| **1.20.5+ data components** | 🟡 ⚠️ | ✅ | ✅ (deepest coverage) | ✅ |
+| **1.20.5+ data components** | 🟡 ⚠️ | ✅ | ✅ (deepest coverage) | 🟡 🧪 (every stack is component-native — `item_model` plus the PDC identity serialized into `custom_data`, and the sugar projects display_name/lore, the food mechanic onto the vanilla `food` component and `jukebox_song` onto `jukebox_playable`; all read back live from the server's held-item NBT *and* the client's decoded component map. But the advertised generic `components:` block is parsed and never applied — authored vanilla components silently do nothing, #103; the version-aware pass-through stays the M7 item below) |
 | Auto texture/model generation | ✅ | ✅ | ✅ | ✅🧪 |
 | Hand-authored 3D models (Blockbench) | ✅ | ✅ | ✅ | ✅🧪 |
 | Composite / multi-layer models | ⚠️ | ✅ (gui_model, oversized) | ✅ (composite_models) | 📋 M7 |
@@ -571,7 +571,7 @@ Effectively equal across all three: textured unicode glyphs injected into Minecr
 > [`architecture/parity-reconciliation.md`](architecture/parity-reconciliation.md) for the
 > spec-by-spec mapping and what's explicitly dropped.
 1. **Item system** — YAML items with full properties; auto model generation + hand-authored models; **1.21.4+ ItemModels** (don't ship on `custom_model_data` alone).
-2. **Data components** — version-aware pass-through of the full component surface.
+2. **Data components** — version-aware pass-through of the full component surface (the advertised `components:` block parses today but applies nothing, #103).
 3. **Resource pack** — generation + external merge + self-host + S3 + obfuscation + PackSquash; pre-join send; proxy dedup.
 4. **Glyphs** — basic/multi-bitmap/animated/grid/reference + shifts + emoji mode + GLSL text effects.
 5. **Custom blocks** — NoteBlock + StringBlock + ChorusBlock + technical, with the full shared property set + shaped blocks.

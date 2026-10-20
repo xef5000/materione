@@ -148,8 +148,10 @@ pre-apply diff and rollback, `MaterioneStacks` (PDC `{materione:id}` + 1.21.4
 `item_model` component, volatile-state-preserving refresh), the join-time auto-updater
 (throttled inventory scans arrive with M2's mechanics work), template inheritance with
 cycle/diamond rejection, and the auto-model + hand-authored-model compile paths. The
-declarative `model_tree` surface and `components`/`behavior` fields are parsed-but-inert
-until M2+; `range_dispatch`/`select`/`condition` authoring waits for it.
+declarative `model_tree` surface stayed parsed-but-inert; the `components:` field warns
+at validate since M4's QA round (MTR-0048, #103) — the version-aware pass-through is
+the M7 item — while `behavior` shipped with M2's ECA engine;
+`range_dispatch`/`select`/`condition` authoring waits for the model tree.
 
 **As shipped (M2):** `behavior:` rules compile at apply through the ECA engine
 (invalid rules/expressions skip with `MTR-0021/0022`, siblings stay live) and resolve from

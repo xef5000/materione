@@ -24,7 +24,9 @@ import java.util.List;
  */
 public final class ValidateStage {
 
-    private final List<Validator> validators = List.of(new ReferenceValidator());
+    private final List<Validator> validators = List.of(
+            new ReferenceValidator(),
+            new ItemComponentsValidator());
 
     /** A pure check over one resource; returns diagnostics, never throws. */
     public interface Validator {

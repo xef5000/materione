@@ -20,6 +20,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(47); // MTR-0047 closes the text-effect signal band.
+        assertThat(DiagnosticCodes.all()).hasSize(48); // MTR-0048 flags the unapplied item components block.
     }
 }
