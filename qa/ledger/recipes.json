@@ -1,22 +1,32 @@
 {
   "recipes.shaped": {
-    "sha": "b516da9779bb116dda93441da222e50eaedfe78d",
-    "dirty": false,
+    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "6d6379e7b4316bdde39c6323efe2f70c38049e3564e9de23e9952cd10f780209",
+    "def": "1a096416e03e7d25bf1661c46434482b34efbd7bf5fb5d576a000821acae7424",
     "result": "pass",
-    "at": "2026-10-20T01:47:54.974Z",
-    "run": "run-2026-10-20T01-46-07",
+    "at": "2026-10-20T04:20:01.576Z",
+    "run": "run-2026-10-20T04-19-05",
     "eyes": null
   },
   "recipes.shapeless": {
-    "sha": "b516da9779bb116dda93441da222e50eaedfe78d",
-    "dirty": false,
+    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "735325038d45176c84f60e08ed5770806b773e3cd20708dd875cdc503d111641",
+    "def": "90aff3a802d0b40ec33cb723cf36746acf66c6ee17f31952d248102ad48d3e38",
     "result": "pass",
-    "at": "2026-10-20T01:48:06.790Z",
-    "run": "run-2026-10-20T01-46-07",
+    "at": "2026-10-20T04:20:19.783Z",
+    "run": "run-2026-10-20T04-19-05",
+    "eyes": null
+  },
+  "recipes.furnace": {
+    "sha": "0b2236e59461f147868f7d1f504b4f9d539ed8b8",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "83d391373fdb9f429095bb1f4f7117014e7c030ebc309c58dcefe775c256316d",
+    "result": "pass",
+    "at": "2026-10-20T04:21:01.085Z",
+    "run": "run-2026-10-20T04-19-05",
     "eyes": null
   }
 }

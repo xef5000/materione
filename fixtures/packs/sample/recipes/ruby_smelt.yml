@@ -1,0 +1,6 @@
+ruby_smelt:
+  type: furnace
+  input: ruby
+  result: minecraft:diamond
+  experience: 7
+  cookingtime: 100

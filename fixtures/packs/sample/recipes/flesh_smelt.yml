@@ -1,0 +1,6 @@
+flesh_smelt:
+  type: furnace
+  input: minecraft:rotten_flesh
+  result: minecraft:leather
+  experience: 1
+  cookingtime: 100

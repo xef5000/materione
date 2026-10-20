@@ -287,6 +287,32 @@ already asserts.
   the namespaced id form
   (`entity.minecraft.interaction`), never the enum name — match with
   `contains`, not equality.
+- **Furnace menus put the hotbar at 30+** (3 container + 27 main slots, no
+  3×3 grid in front of the inventory — the crafting menu's 37+ is its
+  result+grid offset, not a constant). The furnace's data slots
+  (`AbstractFurnaceMenu.data`) are a private SUPERCLASS field — reach them
+  with `getDeclaredField('data')` on the menu's superclass (the bridge's
+  `.@` direct access does not walk superclasses) — and they are STICKY:
+  burnTotal/cookTotal keep their last synced values even when nothing
+  burns (a never-lit furnace still reports the fuel's 1600), so only
+  litTime > 0 proves ignition, and cookProgress resets to 0 the tick a
+  smelt completes — completion is proven by the result slot, never the
+  progress. Under a loaded runner session the cook can finish well after
+  an impatient wall-clock window would give up (the server side is
+  provably done — `data get block` shows the output — while the menu view
+  still lags): poll with a generous deadline and poke a no-op PICKUP
+  click on an empty main-inventory slot each pass — the click makes the
+  server re-broadcast the container, so a stale client view cannot
+  outlive the poll.
+- **Stale recipe fixtures flip recipe matching**: the server-side packs
+  dir accumulates every fixture ever synced (sync never prunes), and
+  leftover diagnostic recipes keep matching live grids — two rubies also
+  matched a stale `[paper, paper]` recipe (the ruby is paper-typed) and
+  intermittently won registration order, so a crafting test predicted the
+  WRONG result in some runs and passed in others. `probe up` wipes the
+  world but NOT `plugins/Materione/content/packs/`: prune it whenever
+  fixtures were ever added-and-removed, and treat an unexpected boot-log
+  recipe count (`N recipe(s) applied`) as a sync-health check.
 - **Forcing a chunk-load replay** (furniture evolution applies only in
   `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
   hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before
