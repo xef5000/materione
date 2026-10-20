@@ -19,7 +19,7 @@ def read = { ns, name ->
   def sub = ev.getSubtitle() == null ? 'none' : ev.getSubtitle().getString()
   return ns + ':' + name + '=' + snd.getLocation().toString() + ' subtitle=' + sub + ' stream=' + snd.shouldStream()
 }
-return read('sample', 'level_up') + ' | ' + read('sample', 'anthem') + ' | ' + read('sample', 'nope') + ' | ' + read('minecraft', 'entity.pig.ambient')`;
+return read('sample', 'level_up') + ' | ' + read('sample', 'anthem') + ' | ' + read('sample', 'chime') + ' | ' + read('sample', 'nope') + ' | ' + read('minecraft', 'entity.pig.ambient')`;
 
 // The sound engine's active instances (SoundEngine.instanceBySource values).
 const ACTIVE_SOUNDS = `def sm = mc.getSoundManager().@target
@@ -69,7 +69,10 @@ export default [
       // --- registry resolution: events, sources, subtitles, per-entry flags
       const read = await ctx.exec(REGISTRY_READ, 15_000);
       ctx.expect(read).toContain('sample:level_up=sample:ui/level_up subtitle=Level up! stream=false');
-      ctx.expect(read).toContain('sample:anthem=sample:ui/anthem subtitle=Ruby Anthem stream=true'); // #94: entry-level stream
+      // #94: entry-level stream — pinned on the chime (the anthem stays
+      // non-streamed: streamed jukebox-song events ignore eject, #98)
+      ctx.expect(read).toContain('sample:anthem=sample:ui/anthem subtitle=Ruby Anthem stream=false');
+      ctx.expect(read).toContain('sample:chime=sample:ui/click subtitle=Chime stream=true');
       ctx.expect(read).toContain('sample:nope=NULL'); // registration is real, not "anything resolves"
       ctx.expect(read).toMatch(/minecraft:entity\.pig\.ambient=minecraft:mob\/pig\//); // vanilla stays vanilla
 
@@ -105,6 +108,7 @@ return 'stopped'`;
       // --- an unregistered key: the command runs, silence follows — no
       // crash, no fallback sound
       await devSound(ctx, 'sample:nope');
+      await ctx.sleep(800); // the command packet settles before the log check
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-SOUND key=sample:nope/)).toBeTruthy();
       const everPlayed = await waitForActiveSound(ctx, 'sample:', 1_500);
       ctx.expect(everPlayed).toBe(false);
@@ -150,6 +154,108 @@ return new ArrayList(seen).toString()`, 15_000);
 def master = Class.forName('net.minecraft.sounds.SoundSource').getField('MASTER').get(null)
 mc.getSoundManager().@target.stop(idc.fromNamespaceAndPath('minecraft', 'ui.button.click'), master)
 return 'stopped'`, 15_000);
+    },
+  }),
+
+  test({
+    id: 'sounds.jukebox',
+    title: 'a music disc plays the pack\'s jukebox song end to end in a real jukebox: the ruby disc carries the jukebox_playable component resolved against the generated datapack (song sample:anthem, description "Ruby Anthem", length 90s, comparator output 7), inserting it through the client flips the jukebox to has_record=true and plays sample:ui/anthem through the sound engine, the authored comparator_output reaches the redstone channel (the wire behind the comparator reads exactly 7), and an empty-hand click ejects the disc — record gone, wire back to 0, playback stopped, the disc back in the inventory',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/sounds/**',
+      'content/src/main/java/dev/materione/content/items/**',
+      'platform/src/main/java/dev/materione/platform/items/**',
+      'fixtures/packs/sample/sounds/**',
+      'fixtures/packs/sample/items/**',
+    ],
+    dependsOn: ['sounds.replace-vanilla'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const spot = { x: 2, y: -60, z: 3 };
+      await ctx.reset();
+      await ctx.rcon('materione give sample:ruby_disc Probe 1');
+
+      // --- the disc's component, resolved against the loaded datapack song
+      const comp = await ctx.exec(`def st = mc.player.getInventory().getItem(0)
+def dc = Class.forName('net.minecraft.core.component.DataComponents')
+def comp = st.get(dc.getField('JUKEBOX_PLAYABLE').get(null))
+return comp == null ? 'NONE' : comp.toString()`, 15_000);
+      ctx.expect(String(comp)).toContain('sample:anthem');
+      ctx.expect(String(comp)).toContain('description=literal{Ruby Anthem}');
+      ctx.expect(String(comp)).toContain('lengthInSeconds=90.0');
+      ctx.expect(String(comp)).toContain('comparatorOutput=7');
+
+      // --- the stage: jukebox, comparator reading it, wire as the readout
+      // (the comparator's cached NBT output lags — the wire's client state is
+      // the honest channel)
+      await ctx.rcon('setblock 2 -60 3 minecraft:jukebox');
+      await ctx.rcon('setblock 2 -60 4 minecraft:comparator[mode=compare,facing=north]');
+      await ctx.rcon('setblock 2 -60 5 minecraft:redstone_wire');
+
+      // --- insert through the client: disc selected, useItemOn
+      await ctx.exec(`def inv = mc.player.getInventory()
+for (int i = 0; i < 9; i++) { if (inv.getItem(i).getHoverName().getString().contains('Ruby disc')) { inv.selected = i; break } }
+def player = mc.player
+def hit = new net.minecraft.world.phys.BlockHitResult(
+    new net.minecraft.world.phys.Vec3(2.0, -59.5, 3.5),
+    net.minecraft.core.Direction.WEST,
+    new net.minecraft.core.BlockPos(2, -60, 3), false)
+mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
+return 'inserted'`, 15_000);
+
+      const state = async () => ctx.exec(`def jukebox = mc.level.getBlockState(new net.minecraft.core.BlockPos(2, -60, 3))
+def wire = mc.level.getBlockState(new net.minecraft.core.BlockPos(2, -60, 5))
+return jukebox.toString() + ' ' + wire.toString()`, 15_000);
+      const deadline = Date.now() + 8_000;
+      let now = await state();
+      for (;;) {
+        if (String(now).includes('has_record=true') && String(now).includes('power=7')) break;
+        if (Date.now() > deadline) break;
+        await ctx.sleep(400);
+        now = await state();
+      }
+      ctx.expect(String(now)).toContain('has_record=true');
+      ctx.expect(String(now)).toContain('power=7'); // the authored comparator_output
+      ctx.expect(await waitForActiveSound(ctx, 'sample:ui/anthem', 4_000)).toBe(true);
+      ctx.expect(await ctx.shot('jukebox-playing')).toBeTruthy();
+
+      // --- eject with an empty hand (the disc left the hand on insert),
+      // late enough that the sound is fully live — an eject that races the
+      // engine's queue can leave the young instance playing its course
+      await ctx.sleep(1_500);
+      await ctx.exec(`def player = mc.player
+def hit = new net.minecraft.world.phys.BlockHitResult(
+    new net.minecraft.world.phys.Vec3(2.0, -59.5, 3.5),
+    net.minecraft.core.Direction.WEST,
+    new net.minecraft.core.BlockPos(2, -60, 3), false)
+mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
+return 'ejected'`, 15_000);
+      let after = await state();
+      const ejectDeadline = Date.now() + 6_000;
+      for (;;) {
+        if (String(after).includes('has_record=false') && String(after).includes('power=0')) break;
+        if (Date.now() > ejectDeadline) break;
+        await ctx.sleep(400);
+        after = await state();
+      }
+      ctx.expect(String(after)).toContain('has_record=false');
+      ctx.expect(String(after)).toContain('power=0');
+      // the streamed jukebox instance retires off-thread once the eject
+      // broadcast lands — poll, don't race it
+      const stillPlaying = await waitForActiveSound(ctx, 'sample:ui/anthem', 10_000);
+      ctx.expect(stillPlaying).toBe(false);
+
+      // --- the popped disc returns to the inventory
+      await ctx.rcon('tp Probe 1.5 -60 3.5');
+      await ctx.sleep(1_200);
+      const inv = await ctx.exec(`def out = []
+def playerInv = mc.player.getInventory()
+for (int i = 0; i < 46; i++) {
+  def st = playerInv.getItem(i)
+  if (!st.isEmpty()) out.add(st.getHoverName().getString())
+}
+return out.join(' | ')`, 15_000);
+      ctx.expect(String(inv)).toContain('Ruby disc');
     },
   }),
 ];

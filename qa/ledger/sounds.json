@@ -1,22 +1,32 @@
 {
   "sounds.registration": {
-    "sha": "f9d8946f1863155008ec24141a61a35a91ba1cba",
-    "dirty": false,
+    "sha": "03b16cfdf3afdab10031427499a585563bcb4ef8",
+    "dirty": true,
     "env": "f29751d62d53",
-    "def": "100375fc74436106c2399672c58a142ebcd0f2f17716291fd676c0c7fc74f661",
+    "def": "fad9f36e7da2ad2637e29b7c15fe443783fbf73f9b2c23116d8b6ed785df6135",
     "result": "pass",
-    "at": "2026-10-20T14:43:10.815Z",
-    "run": "run-2026-10-20T14-42-18",
+    "at": "2026-10-20T17:53:23.682Z",
+    "run": "run-2026-10-20T17-52-36",
     "eyes": null
   },
   "sounds.replace-vanilla": {
-    "sha": "f9d8946f1863155008ec24141a61a35a91ba1cba",
-    "dirty": false,
+    "sha": "03b16cfdf3afdab10031427499a585563bcb4ef8",
+    "dirty": true,
     "env": "f29751d62d53",
     "def": "d60c508e1f37c6bc40bb1f81219bc397927c84f07f0888e8849ee1620a2c36ff",
     "result": "pass",
-    "at": "2026-10-20T14:43:13.966Z",
-    "run": "run-2026-10-20T14-42-18",
+    "at": "2026-10-20T17:53:26.847Z",
+    "run": "run-2026-10-20T17-52-36",
+    "eyes": null
+  },
+  "sounds.jukebox": {
+    "sha": "03b16cfdf3afdab10031427499a585563bcb4ef8",
+    "dirty": true,
+    "env": "f29751d62d53",
+    "def": "eb64f5a79073c5d3873a6674f644507f8ec2cbfc5c09fd50bf74d25723c9a9bc",
+    "result": "pass",
+    "at": "2026-10-20T17:53:47.912Z",
+    "run": "run-2026-10-20T17-52-36",
     "eyes": null
   }
 }

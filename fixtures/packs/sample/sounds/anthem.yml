@@ -1,7 +1,6 @@
 anthem:
   sounds:
     - ui/anthem.ogg
-  stream: true
   subtitle: "Ruby Anthem"
   jukebox:
     description: "Ruby Anthem"
