@@ -234,14 +234,16 @@ vanilla-recipe disabling are 📋 M7.
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) | ✅ |
+| Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) | ✅🧪 (the client's sound registry resolves the pack's events to their own .ogg sources with authored subtitles and per-entry flags — stream verified live; event-level flags were silently dropped by the client, #94; `replace_vanilla:` overrides a vanilla event outright — without event-level `replace` the client merges the custom sources into the vanilla pool instead, #95; real playback verified through the client's sound engine via `/materione dev sound`) |
 | Custom music discs / jukebox songs | ✅ | ✅ | ✅ | ✅ |
 | **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ | ✅ |
 | Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native | 📋 M7 |
 
 *As built in Materione (M4):* custom sounds (`sounds/` definitions → per-namespace
-`sounds.json`, `replace_vanilla:` overrides through the merge seam, inline studio
-playback, `/materione dev sound` for in-game checks), music discs (a sound's
+`sounds.json`, `replace_vanilla:` overrides through the vanilla-merge seam —
+event-level `replace:true` is forced, otherwise the client only merges into
+vanilla's pool (#95), inline studio playback, `/materione dev sound` for in-game
+checks), music discs (a sound's
 `jukebox:` section → datapack song; an item's `jukebox_song:` field → the disc
 component, fail-soft until the datapack loads), and custom paintings
 (`paintings/` → `painting_variant` datapack entries + painting-atlas sprites +

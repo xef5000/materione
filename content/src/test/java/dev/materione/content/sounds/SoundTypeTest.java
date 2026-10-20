@@ -67,7 +67,7 @@ class SoundTypeTest {
     }
 
     @Test
-    void nonDefaultsLandInTheEventJson() {
+    void nonDefaultsLandOnTheSoundEntries() {
         var sound = parseSound(map(
                 "sounds", List.of("a.ogg", "b.ogg"),
                 "volume", 0.5, "pitch", 1.5, "weight", 2,
@@ -75,15 +75,30 @@ class SoundTypeTest {
         var emitter = new RecordingEmitter();
         type.compile(sound, null, emitter, NO_ALLOCATIONS);
         var event = emitter.soundEvents.get(0).event();
-        assertThat(event)
-                .containsEntry("volume", 0.5f)
-                .containsEntry("pitch", 1.5f)
-                .containsEntry("weight", 2)
-                .containsEntry("stream", true)
-                .containsEntry("preload", true)
-                .containsEntry("attenuation_distance", 8)
-                .containsEntry("replace", true);
-        assertThat((List<?>) event.get("sounds")).hasSize(2);
+        assertThat(event).containsEntry("replace", true);
+        // the client reads sound properties off the entries, never the event —
+        // event-level stream is silently ignored (materione#94)
+        assertThat(event).doesNotContainKeys("volume", "pitch", "weight", "stream", "preload", "attenuation_distance");
+        var entries = (List<?>) event.get("sounds");
+        assertThat(entries).hasSize(2);
+        assertThat(entries).allSatisfy(entry -> assertThat(entry).isInstanceOf(Map.class));
+        var first = (Map<?, ?>) entries.get(0);
+        assertThat(first.get("name")).isEqualTo("sample:a");
+        assertThat(first.get("volume")).isEqualTo(0.5f);
+        assertThat(first.get("pitch")).isEqualTo(1.5f);
+        assertThat(first.get("weight")).isEqualTo(2);
+        assertThat(first.get("stream")).isEqualTo(true);
+        assertThat(first.get("preload")).isEqualTo(true);
+        assertThat(first.get("attenuation_distance")).isEqualTo(8);
+    }
+
+    @Test
+    void defaultSoundsStayPlainStringEntries() {
+        var sound = parseSound(map("sounds", List.of("a.ogg")));
+        var emitter = new RecordingEmitter();
+        type.compile(sound, null, emitter, NO_ALLOCATIONS);
+        assertThat(emitter.soundEvents.get(0).event())
+                .containsEntry("sounds", List.of("sample:a"));
     }
 
     @Test
@@ -99,6 +114,10 @@ class SoundTypeTest {
         var override = emitter.vanillaFiles.get(0);
         assertThat(override.path()).isEqualTo("sounds.json");
         assertThat(override.json()).containsKey("block.wood.step");
+        // an override must REPLACE the vanilla event, not merge into its pool
+        // (materione#95) — event-level replace is the client's opt-out
+        var event = (Map<?, ?>) override.json().get("block.wood.step");
+        assertThat(event.get("replace")).isEqualTo(true);
     }
 
     @Test

@@ -84,7 +84,7 @@ public final class SoundType implements ContentType {
                                 "Replace same-named entries from lower packs instead of adding", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Replace", "audio", 100, true, "boolean", "", "false")),
                         new ParameterSchema("replace_vanilla", ParameterType.STRING, false, null,
-                                "Vanilla sound event this definition overrides (e.g. block.wood.step)", null, null)
+                                "Vanilla sound event this definition overrides outright (e.g. block.wood.step) — event-level replace is forced, a bare merge would only add to vanilla's pool", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Override vanilla", "audio", 110, true, "text", "", "")),
                         new ParameterSchema("jukebox", ParameterType.RAW, false, null,
                                 "Music-disc song section: description, duration, comparator_output, range", null, null)
@@ -145,34 +145,53 @@ public final class SoundType implements ContentType {
         if (!(definition instanceof SoundDefinition sound)) {
             return;
         }
+        // The client reads volume/pitch/weight/stream/preload/attenuation off
+        // the sound ENTRIES, not the event — event-level stream is silently
+        // ignored (materione#94), so any non-default rides a per-entry object.
+        List<Object> entries = new ArrayList<>();
+        for (String source : sound.sources()) {
+            boolean entryJson = sound.volume() != 1.0f || sound.pitch() != 1.0f || sound.weight() != 1
+                    || sound.stream() || sound.preload()
+                    || (sound.attenuationDistance() != null && sound.attenuationDistance() != 16);
+            if (!entryJson) {
+                entries.add(source);
+                continue;
+            }
+            var entry = new LinkedHashMap<String, Object>();
+            entry.put("name", source);
+            if (sound.volume() != 1.0f) {
+                entry.put("volume", sound.volume());
+            }
+            if (sound.pitch() != 1.0f) {
+                entry.put("pitch", sound.pitch());
+            }
+            if (sound.weight() != 1) {
+                entry.put("weight", sound.weight());
+            }
+            if (sound.stream()) {
+                entry.put("stream", true);
+            }
+            if (sound.preload()) {
+                entry.put("preload", true);
+            }
+            if (sound.attenuationDistance() != null && sound.attenuationDistance() != 16) {
+                entry.put("attenuation_distance", sound.attenuationDistance());
+            }
+            entries.add(entry);
+        }
         var event = new LinkedHashMap<String, Object>();
-        event.put("sounds", sound.sources());
+        event.put("sounds", entries);
         if (sound.subtitle() != null) {
             event.put("subtitle", sound.subtitle());
-        }
-        if (sound.volume() != 1.0f) {
-            event.put("volume", sound.volume());
-        }
-        if (sound.pitch() != 1.0f) {
-            event.put("pitch", sound.pitch());
-        }
-        if (sound.weight() != 1) {
-            event.put("weight", sound.weight());
-        }
-        if (sound.stream()) {
-            event.put("stream", true);
-        }
-        if (sound.preload()) {
-            event.put("preload", true);
-        }
-        if (sound.attenuationDistance() != null && sound.attenuationDistance() != 16) {
-            event.put("attenuation_distance", sound.attenuationDistance());
         }
         if (sound.replace()) {
             event.put("replace", true);
         }
         if (sound.replaceVanilla() != null) {
-            // vanilla override: the key is the vanilla event's own name
+            // vanilla override: the key is the vanilla event's own name, and
+            // without event-level replace the client MERGES our entries into
+            // the vanilla event's pool instead of replacing them (materione#95)
+            event.put("replace", true);
             emitter.vanillaFile("sounds.json", Map.of(sound.replaceVanilla(), event));
         } else {
             emitter.soundEvent(sound.id().toString(), event);
