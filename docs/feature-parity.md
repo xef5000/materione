@@ -212,8 +212,8 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Shaped | ✅ | ✅ | ✅ | ✅ |
-| Shapeless | ✅ ⚠️ | ✅ | ✅ | ✅ |
+| Shaped | ✅ | ✅ | ✅ | ✅🧪 (an authored `" R / R / S "` column shape crafts the pack's Ruby Sword through a real crafting table — the grid filled via container-input packet clicks, the result slot server-authoritative per click; the same ingredients in a wrong arrangement yield nothing; #89) |
+| Shapeless | ✅ ⚠️ | ✅ | ✅ | ✅🧪 (any-arrangement crafting verified live with distinct and with duplicate custom ingredients — scattered ruby+stick and a 2×ruby stack both craft; one shipped corpus recipe is dead: two identical `ExactChoice` ingredients never match, the upstream Paper stacked-contents bug [PaperMC#10971](https://github.com/PaperMC/Paper/issues/10971), tracked in #90 with the full live matrix — fix path is a probe-pin bump, not our code) |
 | Furnace | ✅ | ✅ | ✅ | ✅ |
 | Blasting / Smoking | ⚠️ | ⚠️ | ✅ | 📋 M7 |
 | Stonecutting | ⚠️ | ⚠️ | ✅ | 📋 M7 |
@@ -221,6 +221,15 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 | Brewing | ❌ | ❌ | ✅ | 📋 M7 |
 | In-game recipe builder | ⚠️ | ✅ | ✅ | 🚧 (web studio; in-game 📋 M7) |
 | Disable vanilla recipes | ✅ | ✅ | ✅ | 📋 M7 |
+
+*As built in Materione (M4):* recipes are authoring-only — a `recipes/*.yml`
+entry emits no pack output; the RecipeApplier applies each at plugin enable
+through Bukkit `addRecipe` (`RecipeChoice.ExactChoice` for custom ingredients,
+`MaterialChoice` for vanilla, `FurnaceRecipe` for furnace), so fixture additions
+never churn pack goldens. Shaped and shapeless are live-verified through a real
+crafting table (#89, #91); furnace is built but not yet exercised in-game;
+blasting/smoking, stonecutting, smithing, brewing and vanilla-recipe disabling
+are 📋 M7.
 
 ### L. Sound, music & visuals
 
