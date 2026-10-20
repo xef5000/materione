@@ -14,12 +14,12 @@
     "note": "red gem model in hand matches blessed evidence"
   },
   "items.ruby-sword-3d-hand-render": {
-    "sha": "10c6394e3ee4a3ff0b6b539186d71e9891bedc93",
-    "dirty": true,
+    "sha": "5eab5c7aaec26ce005746aee34e55b2e94bede0a",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "297be85491a431e1c78dd1988d058e02de5d2ec55359de3f3f24ab3f3b9c8193",
     "result": "pass",
-    "at": "2026-10-20T19:55:44.625Z",
+    "at": "2026-10-20T19:56:25.062Z",
     "run": "run-2026-10-20T19-51-13",
     "eyes": "the ruby sword renders as the hand-authored 3D model — a distinct blade, tip, guard and hilt built from cubes, red blade against the dark guard/hilt, angled like a tool in the hotbar slot; not a flat 2D sprite, not the vanilla netherite sword, not a missing-model cube, not a checkerboard",
     "issue": 46,
