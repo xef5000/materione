@@ -1,0 +1,5 @@
+click:
+  sounds:
+    - ui/click.ogg
+  replace_vanilla: ui.button.click
+  subtitle: "Materione click"

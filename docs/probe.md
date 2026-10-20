@@ -313,6 +313,32 @@ already asserts.
   world but NOT `plugins/Materione/content/packs/`: prune it whenever
   fixtures were ever added-and-removed, and treat an unexpected boot-log
   recipe count (`N recipe(s) applied`) as a sync-health check.
+- **sounds.json properties live on the entries, and cross-pack pools merge
+  by default**: the client reads volume/pitch/weight/stream/preload/
+  attenuation_distance off the per-entry objects — event-level `stream` is
+  silently dropped (#94). Entries from ALL packs concatenate into the same
+  event key; only event-level `replace:true` replaces the pool — without
+  it a `replace_vanilla` override just adds a second weighted source (#95).
+  Verify pool contents by sampling `getSound(RandomSource)` many times and
+  collecting distinct locations.
+- **Sound file resource ids carry a `sounds/` prefix**: a sounds.json
+  source `sample:ui/level_up` maps to `assets/sample/sounds/ui/level_up.ogg`,
+  i.e. resource id `sample:sounds/ui/level_up.ogg` — `getResource` with the
+  bare source path misses.
+- **Real playback reads**: `SoundEngine.instanceBySource` (private field,
+  via `getDeclaredField` on `getSoundManager().@target.soundEngine`) holds
+  the active `SoundInstance`s — `inst.getSound().getLocation()` names the
+  playing source. Stops can RACE queued instances (the sound starts after
+  the stop already swept the map), so stop-and-check in a bounded loop.
+  Short sounds (<1s) are easy to miss entirely — assert playback on a long
+  one (the sample anthem) and stop it after.
+- **Typed `/materione` arguments never reach the server**: the synced
+  client tree collapses everything after the literal into ONE
+  `StringArgumentType.string()` node, so the chat GUI rejects any
+  multi-word or colon-bearing argument client-side (#96). Send dev
+  commands as raw packets instead:
+  `mc.getConnection().@target.sendCommand('materione dev sound sample:anthem')`
+  — the server handler executes and the client hears it.
 - **Forcing a chunk-load replay** (furniture evolution applies only in
   `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
   hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before
