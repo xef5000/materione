@@ -1,0 +1,5 @@
+chime:
+  sounds:
+    - ui/click.ogg
+  stream: true
+  subtitle: "Chime"

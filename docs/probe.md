@@ -339,6 +339,23 @@ already asserts.
   commands as raw packets instead:
   `mc.getConnection().@target.sendCommand('materione dev sound sample:anthem')`
   — the server handler executes and the client hears it.
+- **Comparator output: read a wire's client state, not the NBT** — the
+  comparator's cached `OutputSignal` block-entity field does not track the
+  live value under setblock-driven tests. Orientation is subtle: a
+  comparator's `facing` names its INPUT side's neighbor... in practice
+  compose as `jukebox at z`, `comparator[facing=north] at z+1`, wire at
+  z+2 — the wire's `power` in the client block state is the honest
+  end-to-end channel (a playing disc's authored comparator output lands
+  there within a second).
+- **Jukebox discs through a real client**: hold the disc in the main hand
+  and `useItemOn` the jukebox to insert (`has_record=true` in the client
+  block state); an empty-hand `useItemOn` ejects — the disc pops as an item
+  entity AT the jukebox (tp adjacent to vacuum it). Two timing traps: eject
+  late enough that the sound is fully live (an eject racing the engine's
+  queue can leave the young instance playing its course — wait for the
+  active instance, then ~1.5s), and the ejected instance retires off-thread
+  (poll ~10s). Upstream: a jukebox-song event authored `stream: true` keeps
+  playing past eject (#98) — non-streamed events stop instantly.
 - **Forcing a chunk-load replay** (furniture evolution applies only in
   `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
   hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before

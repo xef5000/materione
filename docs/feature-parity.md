@@ -235,7 +235,7 @@ vanilla-recipe disabling are 📋 M7.
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
 | Custom sounds registration | ✅ | ✅ | ✅ (incl. replace vanilla) | ✅🧪 (the client's sound registry resolves the pack's events to their own .ogg sources with authored subtitles and per-entry flags — stream verified live; event-level flags were silently dropped by the client, #94; `replace_vanilla:` overrides a vanilla event outright — without event-level `replace` the client merges the custom sources into the vanilla pool instead, #95; real playback verified through the client's sound engine via `/materione dev sound`) |
-| Custom music discs / jukebox songs | ✅ | ✅ | ✅ | ✅ |
+| Custom music discs / jukebox songs | ✅ | ✅ | ✅ | ✅🧪 (a real disc plays end to end in a real jukebox: the disc carries the `jukebox_playable` component resolved against the generated datapack song — description, 90s length and comparator output 7 all reach the client; insertion through the client flips `has_record` and plays the pack's own anthem through the sound engine; the authored comparator_output reaches the redstone channel, a wire behind the comparator reads exactly 7; an empty-hand click ejects — record cleared, wire to 0, playback stopped, disc back in the inventory. One upstream caveat: streamed jukebox-song events keep playing past eject (#98) — the demo disc stays non-streamed) |
 | **Custom paintings** (1.21 datapack) | ✅ | ❌ | ✅ | ✅ |
 | Custom particles | 🟡 ⚠️ | 🟡 (Aura) | ❌ native | 📋 M7 |
 

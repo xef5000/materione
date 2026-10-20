@@ -145,6 +145,20 @@ async function fetchText(url) {
   return res.text();
 }
 
+// Volatile metadata (fabric profile json, sha1 sidecars) under a cache-first
+// wrapper: the jars themselves stay hash-verified on disk, so when the meta
+// endpoint is unreachable the last good metadata keeps launches working.
+async function fetchTextCached(url, cacheFile) {
+  try {
+    const text = await fetchText(url);
+    fs.writeFileSync(cacheFile, text);
+    return text;
+  } catch (err) {
+    if (fs.existsSync(cacheFile)) return fs.readFileSync(cacheFile, 'utf8');
+    throw err;
+  }
+}
+
 function pidAlive(pid) {
   if (!pid) return false;
   try { return process.kill(pid, 0); } catch { return false; }
@@ -551,25 +565,27 @@ async function cmdClient() {
   // (KnotClient + loader + asm + mixin); jars are sha1-verified against the
   // maven sidecars.
   const profileUrl = `https://meta.fabricmc.net/v2/versions/loader/${mc}/${pins['probe-fabric-loader']}/profile/json`;
-  const profile = JSON.parse(await fetchText(profileUrl));
+  const profile = JSON.parse(await fetchTextCached(profileUrl, path.join(DL_DIR, 'fabric-profile.json')));
   const fabricJars = [];
   for (const lib of profile.libraries) {
     const [group, artifact, version] = lib.name.split(':');
     const repo = lib.url ?? 'https://libraries.minecraft.net/';
     const rel = `${group.replace(/\./g, '/')}/${artifact}/${version}/${artifact}-${version}.jar`;
-    const sha1 = (await fetchText(`${repo}${rel}.sha1`)).trim();
+    const sha1 = (await fetchTextCached(`${repo}${rel}.sha1`, `${path.join(DL_DIR, 'fabric', rel)}.sha1`)).trim();
     fabricJars.push(await downloadVerified(path.join(DL_DIR, 'fabric', rel), `${repo}${rel}`, sha1, 'sha1'));
   }
 
   const modsDir = path.join(CLIENT_DIR, 'mods');
   fs.mkdirSync(modsDir, { recursive: true });
   for (const stale of fs.readdirSync(modsDir)) fs.rmSync(path.join(modsDir, stale), { recursive: true, force: true });
-  await downloadVerified(
-    path.join(modsDir, 'debugbridge.jar'),
+  // hash-verified once into dl/, then copied — mods/ is wiped every launch
+  const bridgeJar = await downloadVerified(
+    path.join(DL_DIR, 'debugbridge.jar'),
     pins['probe-debugbridge-url'],
     pins['probe-debugbridge-sha1'],
     'sha1',
   );
+  fs.copyFileSync(bridgeJar, path.join(modsDir, 'debugbridge.jar'));
   // DebugBridge's manifest pins `minecraft = 26.1` exactly, so 26.1.2 fails
   // resolution — yet the build officially covers 26.1.x (Modrinth lists
   // 26.1/26.1.1/26.1.2 for this jar). Relax that one constraint through
