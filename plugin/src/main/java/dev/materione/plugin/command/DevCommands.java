@@ -126,8 +126,9 @@ public final class DevCommands {
      * {@code /materione dev painting <pack>:<variant>} — places the exact
      * painting variant where the sender is looking. Vanilla placement picks a
      * random variant from the placeable tag, so this is the deterministic way
-     * to check one. The variant exists server-side only after the content
-     * datapack has loaded (a restart after deploy).
+     * to check one. A registry-mode server composes variants at each boot; on
+     * the 1.21.4/1.21.5 floor they arrive with the world datapack — either
+     * way a variant only exists after a restart that loaded its content.
      */
     private void painting(CommandSender sender, String[] args) {
         if (args.length < 3) {
@@ -170,12 +171,20 @@ public final class DevCommands {
             return;
         }
         org.bukkit.block.BlockFace face = hit.getHitBlockFace();
-        // the painting hangs on the air block in front of the hit face,
-        // facing back out at the player
+        if (face.getModY() != 0) {
+            sender.sendMessage(Component.text(
+                    "dev painting: look at a wall (not the floor or ceiling)", NamedTextColor.RED));
+            return;
+        }
+        // the painting hangs on the air block in front of the hit face. NMS
+        // hangs the box BACKWARD from the direction and probes the support one
+        // step further along it, so the direction is the hit-face normal
+        // itself — pointing out of the wall at the player (#101); the opposite
+        // face makes survives() check open air and every placement fails
         org.bukkit.Location spot = hit.getHitBlock().getRelative(face).getLocation()
                 .add(0.5, 0.5, 0.5);
         var painting = player.getWorld().spawn(spot, org.bukkit.entity.Painting.class,
-                p -> p.setFacingDirection(face.getOppositeFace(), true));
+                p -> p.setFacingDirection(face, true));
         if (!painting.setArt(variant)) {
             painting.remove();
             plugin.getLogger().info("MATERIONE-DEV-PAINTING failed reason=no-space key=" + key);

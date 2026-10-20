@@ -306,9 +306,11 @@ files stay allocation-free. Every generated font carries the shift space provide
 resolve anywhere the text pipeline renders — chat decorate, signs, books, anvil renames, item
 names/lore — with per-glyph permission gating and pack-acceptance awareness in chat. Sounds
 group per namespace into `sounds.json`; `replace_vanilla:` entries ride the vanilla-override
-merge seam; `jukebox:` sections and painting variants compile into a deterministic
-`datapack.zip` deployed atomically to the world's datapacks folder with its content hash —
-the first producers of the M2 restart-staging ledger (MTR-0028/0029 prove the class).
+merge seam; `jukebox:` sections and painting variants register at boot — through Paper's
+registry events on 1.21.6+ (the Nexo model: nothing written into the world) and through a
+deterministic `datapack.zip` deployed atomically to the world's datapacks folder on the
+1.21.4/1.21.5 floor — the first producers of the M2 restart-staging ledger (MTR-0028/0029
+prove the class).
 Music discs are items with `jukebox_song:` (the component applies fail-soft until the datapack
 loads). Goldens lock the full media pack and datapack bytes; the harness drives glyphs through
 the live editor loop and asserts every staged artifact on real Paper.

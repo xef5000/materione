@@ -141,7 +141,11 @@ public final class PackCompiler {
         public void datapackFile(String path, Map<String, Object> json) {
             Map<String, Object> existing = datapackFiles.get(path);
             if (existing != null && path.startsWith("data/minecraft/tags/")) {
-                mergeTagValues(existing, json);
+                // merge into our own copy — the stored map belongs to the
+                // content type that emitted it and may be immutable
+                var merged = new LinkedHashMap<>(existing);
+                mergeTagValues(merged, json);
+                datapackFiles.put(path, merged);
                 return;
             }
             datapackFiles.putIfAbsent(path, json);

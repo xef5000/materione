@@ -28,16 +28,17 @@ class BootstrapContentReaderTest {
         BootstrapContentReader.RegistryContent content =
                 BootstrapContentReader.read(dataDir, warnings::add);
         assertThat(warnings).isEmpty();
-        assertThat(content.paintings()).hasSize(1);
-        PaintingDefinition painting = content.paintings().get(0);
-        assertThat(painting.id().toString()).isEqualTo("sample:sunrise");
+        // the corpus only grows — pin the canonical painting by id, not the
+        // corpus size
+        PaintingDefinition painting = byId(content.paintings(), "sample:sunrise");
         assertThat(painting.assetId()).isEqualTo("sample:sunrise");
         assertThat(painting.placeable()).isTrue();
         assertThat(painting.width()).isEqualTo(2);
         assertThat(painting.height()).isEqualTo(1);
-        assertThat(content.songs()).hasSize(1);
-        SoundDefinition song = content.songs().get(0);
-        assertThat(song.id().toString()).isEqualTo("sample:anthem");
+        SoundDefinition song = content.songs().stream()
+                .filter(s -> s.id().toString().equals("sample:anthem"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no song sample:anthem in " + content.songs()));
         assertThat(song.isSong()).isTrue();
     }
 
@@ -55,8 +56,18 @@ class BootstrapContentReaderTest {
         var warnings = new ArrayList<String>();
         BootstrapContentReader.RegistryContent content =
                 BootstrapContentReader.read(dataDir, warnings::add);
-        assertThat(content.paintings()).hasSize(1);
-        assertThat(content.paintings().get(0).id().toString()).isEqualTo("sample:sunrise");
+        // the broken pack contributes nothing: every parsed painting belongs
+        // to the valid sample pack (the corpus may hold several)
+        assertThat(content.paintings())
+                .allSatisfy(p -> assertThat(p.id().namespace()).isEqualTo("sample"));
+        assertThat(byId(content.paintings(), "sample:sunrise").assetId()).isEqualTo("sample:sunrise");
+    }
+
+    private static PaintingDefinition byId(List<PaintingDefinition> paintings, String id) {
+        return paintings.stream()
+                .filter(p -> p.id().toString().equals(id))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no painting " + id + " in " + paintings));
     }
 
     private static void copyTree(Path from, Path to) throws Exception {

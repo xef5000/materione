@@ -107,9 +107,11 @@ needs 32×16 — the compiler checks and tells you) plus author/title. Set
 `placeable: true` to join the vanilla random-placement pool.
 
 Glyph and sound saves go live in about a second like everything else;
-**paintings and jukebox songs apply at the next server restart** (they ride
-the world datapack). Materione says so honestly — a restart-required warning
-appears while changes are pending and clears after the restart loads them.
+**paintings and jukebox songs apply at the next server restart** — on Paper
+1.21.6+ they compose through the registry events at bootstrap, and on older
+servers they ride the world datapack. Materione says so honestly — a
+restart-required warning appears while changes are pending and clears after
+the restart loads them.
 
 ## 6. Preview and publish
 
