@@ -1,22 +1,22 @@
 {
   "sounds.registration": {
-    "sha": "2cf8572df0d5ee230cbc5afa200b6c4a67ca025e",
-    "dirty": true,
+    "sha": "f9d8946f1863155008ec24141a61a35a91ba1cba",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "100375fc74436106c2399672c58a142ebcd0f2f17716291fd676c0c7fc74f661",
     "result": "pass",
-    "at": "2026-10-20T14:38:54.963Z",
-    "run": "run-2026-10-20T14-38-04",
+    "at": "2026-10-20T14:43:10.815Z",
+    "run": "run-2026-10-20T14-42-18",
     "eyes": null
   },
   "sounds.replace-vanilla": {
-    "sha": "2cf8572df0d5ee230cbc5afa200b6c4a67ca025e",
-    "dirty": true,
+    "sha": "f9d8946f1863155008ec24141a61a35a91ba1cba",
+    "dirty": false,
     "env": "f29751d62d53",
     "def": "d60c508e1f37c6bc40bb1f81219bc397927c84f07f0888e8849ee1620a2c36ff",
     "result": "pass",
-    "at": "2026-10-20T14:38:58.126Z",
-    "run": "run-2026-10-20T14-38-04",
+    "at": "2026-10-20T14:43:13.966Z",
+    "run": "run-2026-10-20T14-42-18",
     "eyes": null
   }
 }
