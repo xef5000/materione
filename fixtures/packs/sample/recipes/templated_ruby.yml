@@ -1,0 +1,6 @@
+templated_ruby:
+  type: shapeless
+  result: templated_ruby
+  ingredients:
+    - ruby
+    - minecraft:stick

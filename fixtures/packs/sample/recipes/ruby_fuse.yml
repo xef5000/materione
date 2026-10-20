@@ -1,0 +1,6 @@
+ruby_fuse:
+  type: shapeless
+  result: templated_ruby
+  ingredients:
+    - ruby
+    - ruby

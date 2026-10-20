@@ -9,7 +9,9 @@ import { test } from './_lib.mjs';
 // blocks east (the anchor teleport makes it reachable), give ingredients,
 // open it through the client (useItemOn with a hand-built BlockHitResult —
 // the same surface a real player's right-click drives) and wait for the
-// server to bind the menu.
+// server to bind the menu. Returns the open inventory dump — the test
+// asserts its ingredients from it, never from the give's reply (an rcon
+// reply can come back empty even when the give landed).
 async function openCraftingTable(ctx, spot, ingredients) {
   await ctx.reset();
   await ctx.rcon(`setblock ${spot.x} ${spot.y} ${spot.z} minecraft:crafting_table`);
@@ -24,19 +26,29 @@ def hit = new net.minecraft.world.phys.BlockHitResult(
 mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
 return 'opened'`, 15_000);
   await ctx.sleep(800); // the open packet round-trips before the menu is bound
-  return ctx.exec(
+  const menuClass = await ctx.exec(
     `return mc.player.containerMenu.@target.getClass().getSimpleName()`, 15_000);
+  const inventory = await ctx.exec(`def out = []
+def inv = mc.player.getInventory()
+for (int i = 0; i < 46; i++) {
+  def st = inv.getItem(i)
+  if (!st.isEmpty()) out.add(st.getItem().toString() + ' x' + st.getCount() + ' -- ' + st.getHoverName().getString())
+}
+return out.join(' | ')`, 15_000);
+  return { menuClass, inventory };
 }
 
 // Grid moves: for each hotbar slot, pickup its stack and right-click one
-// item into each listed grid slot (1..9, row-major). The hotbar lives at
-// menu slots 37..45.
+// item into each listed grid slot (1..9, row-major); the cursor remainder
+// goes back onto the hotbar slot so the next fill picks it up again. The
+// hotbar lives at menu slots 37..45.
 async function fillGrid(ctx, cid, moves) {
   const script = moves
     .map((m) => `gm.handleContainerInput(cid, ${37 + m.hotbar}, 0, net.minecraft.world.inventory.ContainerInput.PICKUP, player)
 for (int slot : new int[] {${m.gridSlots.join(', ')}}) {
   gm.handleContainerInput(cid, slot, 1, net.minecraft.world.inventory.ContainerInput.PICKUP, player)
-}`)
+}
+gm.handleContainerInput(cid, ${37 + m.hotbar}, 0, net.minecraft.world.inventory.ContainerInput.PICKUP, player)`)
     .join('\n');
   await ctx.exec(`def player = mc.player
 def gm = mc.gameMode
@@ -98,10 +110,11 @@ export default [
     dependsOn: ['commands.give-basic'],
     timeoutMs: 240_000,
     steps: async (ctx) => {
-      const menuClass = await openCraftingTable(ctx, { x: 2, y: -60, z: 3 }, [
-        'give Probe minecraft:stick 1',
-        'materione give sample:ruby Probe 2',
-      ]);
+      const { menuClass } = await openCraftingTable(
+        ctx, { x: 2, y: -60, z: 3 }, [
+          'give Probe minecraft:stick 1',
+          'materione give sample:ruby Probe 2',
+        ]);
       ctx.expect(String(menuClass)).toBe('CraftingMenu');
       const cid = await ctx.exec('return mc.player.containerMenu.containerId', 15_000);
 
@@ -129,6 +142,50 @@ export default [
       // item pipeline, not a vanilla output
       ctx.expect(inv).toContain('-- Ruby Sword');
       ctx.expect(await ctx.shot('shaped-crafted')).toBeTruthy();
+
+      await ctx.exec("mc.player.closeContainer()\nreturn 'closed'", 15_000);
+    },
+  }),
+
+  test({
+    id: 'recipes.shapeless',
+    title: 'shapeless recipes craft at a real crafting table regardless of arrangement: sample:templated_ruby (ruby + minecraft:stick, distinct ingredients scattered in the grid) crafts one Templated Ruby, and sample:ruby_fuse (two rubies — duplicate identical ExactChoice ingredients, scattered differently) crafts a second that stacks into the inventory; a recipe whose duplicate custom ingredients Paper\'s stacked-contents cannot consume (corpus:amulet_blue, two identical AMETHYST_SHARD-material choices) never matches — #90, upstream PaperMC#10971',
+    mode: 'auto',
+    covers: [
+      'content/src/main/java/dev/materione/content/recipes/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/recipes/**',
+      'fixtures/packs/sample/recipes/**',
+    ],
+    dependsOn: ['recipes.shaped'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const { menuClass, inventory } = await openCraftingTable(
+        ctx, { x: 2, y: -60, z: 3 }, [
+          'give Probe minecraft:stick 1',
+          'materione give sample:ruby Probe 3',
+        ]);
+      ctx.expect(String(menuClass)).toBe('CraftingMenu');
+      ctx.expect(inventory).toContain('x3 -- Ruby'); // the ingredients landed
+      const cid = await ctx.exec('return mc.player.containerMenu.containerId', 15_000);
+
+      // --- distinct ingredients, scattered: ruby top-left, stick mid-right
+      const scattered = [
+        { hotbar: 1, gridSlots: [1] },
+        { hotbar: 0, gridSlots: [6] },
+      ];
+      await fillGrid(ctx, cid, scattered);
+      ctx.expect(await resultSlotItem(ctx)).toBe('Templated Ruby'); // predicted per click
+      const first = await takeResult(ctx, cid);
+      ctx.expect(first).toContain('-- Templated Ruby');
+
+      // --- duplicate identical custom ingredients (ruby + ruby), placed
+      // differently again — the shapeless kind cares about the multiset
+      const fused = [{ hotbar: 1, gridSlots: [3, 7] }];
+      await fillGrid(ctx, cid, fused);
+      ctx.expect(await resultSlotItem(ctx)).toBe('Templated Ruby');
+      const second = await takeResult(ctx, cid);
+      ctx.expect(second).toContain('x2 -- Templated Ruby');
+      ctx.expect(await ctx.shot('shapeless-crafted')).toBeTruthy();
 
       await ctx.exec("mc.player.closeContainer()\nreturn 'closed'", 15_000);
     },
