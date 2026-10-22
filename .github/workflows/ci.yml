@@ -51,12 +51,15 @@ jobs:
       - name: QA catalog check
         run: node qa/runner.mjs check
 
+      # Artifacts bill against the Actions storage quota; the jar is
+      # reproducible from any commit, so a week of history is plenty.
       - name: Upload plugin jar
         uses: actions/upload-artifact@v4
         with:
           name: materione-plugin
           path: plugin/build/libs/Materione-*.jar
           if-no-files-found: error
+          retention-days: 7
 
   integration:
     name: paper boot (ubuntu)
@@ -84,6 +87,8 @@ jobs:
       - name: Integration test (headless Paper 1.21.4 boot)
         run: ./gradlew :harness:integrationTest
 
+      # A failed boot dumps ~1 GB of server workspace per run — short
+      # retention keeps a fresh debug copy without eating the storage quota.
       - name: Upload harness workspaces on failure
         if: failure()
         uses: actions/upload-artifact@v4
@@ -91,6 +96,7 @@ jobs:
           name: harness-workspaces
           path: harness/build/work/
           if-no-files-found: ignore
+          retention-days: 3
 
   windows-canary:
     name: build (windows canary)
