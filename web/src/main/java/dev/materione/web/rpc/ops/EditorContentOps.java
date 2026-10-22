@@ -4,6 +4,7 @@ import com.google.gson.JsonObject;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentConflictException;
 import dev.materione.core.document.DocumentStore;
+import dev.materione.core.document.Scaffolds;
 import dev.materione.web.ReloadTrigger;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;

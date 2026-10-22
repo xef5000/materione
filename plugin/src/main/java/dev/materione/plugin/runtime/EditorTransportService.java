@@ -1,10 +1,14 @@
 package dev.materione.plugin.runtime;
 
-import dev.materione.api.NamespacedId;
-import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.DiagnosticsBus;
+import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.core.authoring.AuthoringApiImpl;
+import dev.materione.core.document.AuditLog;
+import dev.materione.core.document.DocumentStore;
 import dev.materione.core.settings.SettingsService.SettingsState;
+import dev.materione.plugin.runtime.api.GlyphMetadataComputer;
 import dev.materione.web.BaseOps;
 import dev.materione.web.EditorConfig;
 import dev.materione.web.EditorListener;
@@ -17,7 +21,11 @@ import dev.materione.web.rpc.RpcDispatcher;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.Component;
@@ -32,6 +40,11 @@ import org.bukkit.plugin.Plugin;
  * trust prompts through clickable chat, and hands out capability URLs. The
  * wire protocol itself never leaves {@code web/} (ban rule R8) — this class
  * only holds the facade.
+ *
+ * <p>Since the API-first transformation, reloads delegate to the plugin's
+ * {@link PipelineApi} implementation — one reload path for the editor, the
+ * commands and future MCP callers — and the file-watcher feed also reaches
+ * the authoring API's change subscription.
  */
 public final class EditorTransportService {
 
@@ -52,15 +65,31 @@ public final class EditorTransportService {
 
     private final PipelineService pipeline;
     private final DeliveryService delivery;
+    /** The one reload path (api.pipeline()); every editor reload funnels through it. */
+    private final PipelineApi pipelineApi;
+    /** Host-shared document services; null → this transport builds its own. */
+    private final DocumentStore sharedDocuments;
+    private final AuditLog sharedAudit;
+    /** Server-computed glyph metadata shared with the authoring API; nullable. */
+    private final GlyphMetadataComputer computedMetadata;
+    /** The authoring API's change feed; the watcher publishes into it. Nullable. */
+    private final AuthoringApiImpl authoringFeed;
 
     public EditorTransportService(Plugin plugin, DiagnosticsBus diagnostics,
             SchedulingGateway scheduling, PipelineService pipeline,
-            DeliveryService delivery) {
+            DeliveryService delivery, PipelineApi pipelineApi,
+            DocumentStore documents, AuditLog audit,
+            GlyphMetadataComputer computedMeta, AuthoringApiImpl authoringFeed) {
         this.plugin = plugin;
         this.diagnostics = diagnostics;
         this.scheduling = scheduling;
         this.pipeline = pipeline;
         this.delivery = delivery;
+        this.pipelineApi = java.util.Objects.requireNonNull(pipelineApi, "pipelineApi");
+        this.sharedDocuments = documents;
+        this.sharedAudit = audit;
+        this.computedMetadata = computedMeta;
+        this.authoringFeed = authoringFeed;
     }
 
     /** Starts the listener from settings ({@code editor_*} keys). False when disabled/unbound. */
@@ -115,8 +144,9 @@ public final class EditorTransportService {
      * itself inside).
      */
     private void startFileWatcher(dev.materione.core.storage.StorageService.StorageState storage) {
-        var documents = new dev.materione.core.document.DocumentStore(
-                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        var documents = sharedDocuments != null ? sharedDocuments
+                : new dev.materione.core.document.DocumentStore(
+                        storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
         try {
             var watcher = new dev.materione.core.document.PackWatcher(
                     storage.contentPacksDir(), documents,
@@ -125,6 +155,10 @@ public final class EditorTransportService {
                         if (current != null) {
                             dev.materione.web.SessionPush.documentChanged(
                                     current, change.pack(), change.path(), change.deleted());
+                        }
+                        AuthoringApiImpl feed = authoringFeed;
+                        if (feed != null) {
+                            feed.publishChange(change.pack(), change.path(), change.deleted());
                         }
                     });
             packWatcher = watcher;
@@ -143,10 +177,12 @@ public final class EditorTransportService {
      */
     private void registerContentOps(RpcDispatcher dispatcher,
             dev.materione.core.storage.StorageService.StorageState storage) {
-        var documents = new dev.materione.core.document.DocumentStore(
-                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
-        var audit = new dev.materione.core.document.AuditLog(
-                storage.storageDir().resolve("audit.log"));
+        var documents = sharedDocuments != null ? sharedDocuments
+                : new dev.materione.core.document.DocumentStore(
+                        storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        var audit = sharedAudit != null ? sharedAudit
+                : new dev.materione.core.document.AuditLog(
+                        storage.storageDir().resolve("audit.log"));
         ReloadTrigger trigger = new ReloadTrigger() {
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
@@ -215,52 +251,87 @@ public final class EditorTransportService {
     }
 
     /**
-     * Server-computed metadata for the studio: a glyph's allocated codepoint.
-     * The allocation table owns it (D7) — the form shows it, the file on disk
-     * never contains it.
+     * Server-computed metadata for the studio: a glyph's allocated codepoint,
+     * delegated to the shared {@link GlyphMetadataComputer} (the same
+     * implementation the authoring API uses — no duplication).
      */
-    @SuppressWarnings("unused") // parsed is part of the ComputedMeta contract
     private com.google.gson.JsonObject computedMeta(
             String pack, String path, com.google.gson.JsonObject parsed) {
-        if (!path.startsWith("glyphs/") || pipeline.allocation() == null || parsed == null) {
+        GlyphMetadataComputer computer = computedMetadata;
+        if (computer == null) {
             return null;
         }
-        var glyphs = new com.google.gson.JsonObject();
-        for (var entry : parsed.entrySet()) {
-            if (!entry.getValue().isJsonObject()) {
-                continue;
-            }
-            dev.materione.api.content.AllocatedRange run;
-            try {
-                run = pipeline.allocation().allocationOf(
-                        NamespacedId.parse(pack + ":" + entry.getKey()),
-                        dev.materione.content.glyphs.GlyphType.ALLOCATION_KIND)
-                        .map(dev.materione.api.content.AllocatedRange::parse)
-                        .orElse(null);
-            } catch (IllegalArgumentException malformedId) {
-                continue;
-            }
-            if (run == null) {
-                continue;
-            }
-            var info = new com.google.gson.JsonObject();
-            info.addProperty("codepoint", dev.materione.core.text.GlyphCodepoints.of(run.start()));
-            info.addProperty("count", run.count());
-            info.addProperty("char", String.valueOf((char) dev.materione.core.text.GlyphCodepoints.of(run.start())));
-            glyphs.add(entry.getKey(), info);
+        Map<String, Object> computed = computer.compute(pack, path, plainMap(parsed));
+        return computed == null ? null : (com.google.gson.JsonObject) jsonOf(computed);
+    }
+
+    /** JsonObject → plain Java maps/lists/scalars (the metadata computer's input shape). */
+    private static Map<String, Object> plainMap(com.google.gson.JsonObject object) {
+        Map<String, Object> out = new java.util.LinkedHashMap<>();
+        for (var entry : object.entrySet()) {
+            out.put(entry.getKey(), plainValue(entry.getValue()));
         }
-        if (glyphs.size() == 0) {
-            return null;
-        }
-        var out = new com.google.gson.JsonObject();
-        out.add("glyphs", glyphs);
         return out;
     }
 
+    private static Object plainValue(com.google.gson.JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        if (element.isJsonObject()) {
+            return plainMap(element.getAsJsonObject());
+        }
+        if (element.isJsonArray()) {
+            List<Object> items = new ArrayList<>();
+            for (var item : element.getAsJsonArray()) {
+                items.add(plainValue(item));
+            }
+            return items;
+        }
+        com.google.gson.JsonPrimitive primitive = element.getAsJsonPrimitive();
+        if (primitive.isBoolean()) {
+            return primitive.getAsBoolean();
+        }
+        if (primitive.isNumber()) {
+            return primitive.getAsNumber();
+        }
+        return primitive.getAsString();
+    }
+
+    /** Plain Java maps/lists/scalars → JsonObject (the wire shape). */
+    private static com.google.gson.JsonElement jsonOf(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            com.google.gson.JsonObject object = new com.google.gson.JsonObject();
+            for (var entry : map.entrySet()) {
+                object.add(String.valueOf(entry.getKey()), jsonOf(entry.getValue()));
+            }
+            return object;
+        }
+        if (value instanceof List<?> list) {
+            var array = new com.google.gson.JsonArray();
+            list.forEach(item -> array.add(jsonOf(item)));
+            return array;
+        }
+        if (value instanceof String text) {
+            return new com.google.gson.JsonPrimitive(text);
+        }
+        if (value instanceof Number number) {
+            return new com.google.gson.JsonPrimitive(number);
+        }
+        if (value instanceof Boolean flag) {
+            return new com.google.gson.JsonPrimitive(flag);
+        }
+        if (value == null) {
+            return com.google.gson.JsonNull.INSTANCE;
+        }
+        return new com.google.gson.JsonPrimitive(value.toString());
+    }
+
     /**
-     * Runs any scope through the pipeline off the main thread and broadcasts
-     * the outcome to every connected editor — the live preview loop's last
-     * mile, shared by save-triggered and manual reloads.
+     * Runs any scope through the one reload path — the plugin's
+     * {@link PipelineApi} — and broadcasts the outcome to every connected
+     * editor: the live preview loop's last mile, shared by save-triggered
+     * and manual reloads.
      */
     java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
             dev.materione.api.pipeline.ReloadScope scope,
@@ -280,43 +351,28 @@ public final class EditorTransportService {
             dev.materione.api.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways, String previewOwnerId, boolean stageCandidate) {
-        CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
-        scheduling.executeAsync(plugin, () -> {
-            try {
-                var summary = pipeline.reload(scope,
-                        storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
-                // the world datapack applies on every reload path, previews
-                // included — its restart-required ledger stays honest either way
-                if (plugin instanceof dev.materione.plugin.MaterionePlugin materione
-                        && materione.datapackService() != null) {
-                    materione.datapackService().apply(
-                            summary.stagedDatapackZip(), summary.datapackSha256());
-                }
-                if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null && delivery != null) {
-                    if (stageCandidate) {
-                        delivery.stageCandidate(
-                                summary.packZip(),
-                                summary.packSha256(),
-                                previewOwnerId == null || previewOwnerId.isBlank()
-                                        ? null : java.util.UUID.fromString(previewOwnerId));
-                    } else {
-                        delivery.publish(summary.packZip(), summary.packSha256());
+        ActorContext actor = new ActorContext(
+                "editor", dev.materione.api.auth.ActorContext.Kind.EDITOR_SESSION,
+                previewOwnerId == null || previewOwnerId.isBlank()
+                        ? Optional.empty()
+                        : Optional.of(UUID.fromString(previewOwnerId)),
+                node -> true);
+        PipelineApi.DeliveryMode mode = stageCandidate
+                ? PipelineApi.DeliveryMode.CANDIDATE_PREVIEW
+                : PipelineApi.DeliveryMode.PUBLISH_DEFAULT;
+        return pipelineApi
+                .reload(actor, new PipelineApi.ReloadRequest(scope, mode))
+                .thenApply(result -> result.ok()
+                        ? new ReloadTrigger.Outcome(
+                                true, result.value().noop(),
+                                result.value().itemsLive(), result.value().quarantined())
+                        : ReloadTrigger.Outcome.rejected())
+                .whenComplete((outcome, error) -> {
+                    if (sessions != null && outcome != null && (announceAlways || !outcome.noop())) {
+                        dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
+                                outcome.noop(), outcome.itemsLive(), outcome.quarantined());
                     }
-                }
-                future.complete(new ReloadTrigger.Outcome(
-                        !summary.skipped(), summary.noop(),
-                        summary.itemsLive(), summary.quarantined()));
-            } catch (Exception e) {
-                // fail-soft: a broken reload never breaks the save reply
-                future.complete(ReloadTrigger.Outcome.rejected());
-            }
-        });
-        return future.whenComplete((outcome, error) -> {
-            if (sessions != null && outcome != null && (announceAlways || !outcome.noop())) {
-                dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
-                        outcome.noop(), outcome.itemsLive(), outcome.quarantined());
-            }
-        });
+                });
     }
 
     /** Human-readable scope for push payloads and audit entries. */

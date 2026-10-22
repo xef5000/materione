@@ -66,8 +66,20 @@ class EditorTransportReloadTest {
         String initialUrl = delivery.currentUrl();
         assertThat(initialUrl).isNotEmpty();
 
+        var pipelineApi = new dev.materione.plugin.runtime.api.PipelineApiImpl(
+                null, scheduling, pipeline, quarantine,
+                dev.materione.core.storage.RestartStaging.open(temp.resolve("staged-restart")),
+                delivery, storage.contentPacksDir(), storage.generatedDir(),
+                storage.storageDir(), null);
+        var documents = new dev.materione.core.document.DocumentStore(
+                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        var audit = new dev.materione.core.document.AuditLog(
+                storage.storageDir().resolve("audit.log"));
+
         EditorTransportService transport = new EditorTransportService(
-                null, diagnostics, scheduling, pipeline, delivery);
+                null, diagnostics, scheduling, pipeline, delivery,
+                pipelineApi, documents, audit,
+                new dev.materione.plugin.runtime.api.GlyphMetadataComputer(pipeline), null);
 
         // Change an item definition in the pack
         Files.writeString(samplePack.resolve("items/ruby.yml"),

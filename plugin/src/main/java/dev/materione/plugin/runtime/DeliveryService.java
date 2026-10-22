@@ -164,7 +164,8 @@ public final class DeliveryService implements Listener {
                     null, null, "runtime changes are live; fix delivery and save again"));
             return;
         }
-        if (ownerId != null) {
+        // no server wiring (tests) → the candidate still stages; nobody to send to
+        if (ownerId != null && plugin != null) {
             String previewUrl = candidateUrl;
             byte[] previewSha1 = candidateSha1.clone();
             scheduling.executeGlobal(plugin, () -> {
@@ -244,6 +245,47 @@ public final class DeliveryService implements Listener {
         }
         acceptance.sent(player.getUniqueId());
         player.setResourcePack(currentUrl, currentSha1);
+    }
+
+    /**
+     * Sends the published or candidate pack to one player — the API's
+     * targeted send, modeled on the join path's per-player logic. Completes
+     * with {@code null} once the send is dispatched, or a short reason why
+     * it could not be; never throws (fail-soft, D6).
+     */
+    public java.util.concurrent.CompletableFuture<String> sendTo(UUID playerId, boolean candidate) {
+        java.util.concurrent.CompletableFuture<String> future = new java.util.concurrent.CompletableFuture<>();
+        if (backend == null) {
+            future.complete("delivery backend is not running");
+            return future;
+        }
+        String url;
+        byte[] sha1;
+        synchronized (this) {
+            url = candidate ? candidateUrl : currentUrl;
+            sha1 = (candidate ? candidateSha1 : currentSha1).clone();
+        }
+        if (url.isEmpty() || sha1.length == 0) {
+            future.complete(candidate
+                    ? "no candidate pack is staged"
+                    : "no published pack is available");
+            return future;
+        }
+        if (plugin == null || plugin.getServer() == null) {
+            future.complete(null); // best-effort no-op, like resendToOnline
+            return future;
+        }
+        scheduling.executeGlobal(plugin, () -> {
+            Player player = plugin.getServer().getPlayer(playerId);
+            if (player == null) {
+                future.complete("player is not online");
+                return;
+            }
+            acceptance.sent(playerId);
+            send(player, url, sha1);
+            future.complete(null);
+        });
+        return future;
     }
 
     @SuppressWarnings("deprecation")

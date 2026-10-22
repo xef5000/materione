@@ -1,4 +1,4 @@
-package dev.materione.web.rpc.ops;
+package dev.materione.core.document;
 
 import java.util.List;
 import java.util.Locale;

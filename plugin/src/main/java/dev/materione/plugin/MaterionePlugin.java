@@ -1,14 +1,23 @@
 package dev.materione.plugin;
 
+import dev.materione.api.MaterioneAPI;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.platform.ProbeResult;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.core.MaterioneApiImpl;
+import dev.materione.core.authoring.AuthoringApiImpl;
+import dev.materione.core.authoring.ReloadHook;
+import dev.materione.core.assets.AssetApiImpl;
 import dev.materione.core.bootstrap.BootstrapPhase;
 import dev.materione.core.bootstrap.BootstrapPhaseRunner;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
+import dev.materione.core.document.AssetStore;
+import dev.materione.core.document.AuditLog;
+import dev.materione.core.document.DocumentStore;
+import dev.materione.core.document.ModelTransactionService;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.core.settings.SettingsService;
 import dev.materione.core.settings.SettingsService.SettingsState;
@@ -21,10 +30,15 @@ import dev.materione.plugin.gui.GuiListener;
 import dev.materione.plugin.runtime.DeliveryService;
 import dev.materione.plugin.runtime.ItemAutoUpdater;
 import dev.materione.plugin.runtime.PipelineService;
+import dev.materione.plugin.runtime.api.DeliveryApiImpl;
+import dev.materione.plugin.runtime.api.GlyphMetadataComputer;
+import dev.materione.plugin.runtime.api.PipelineApiImpl;
 import dev.materione.plugin.runtime.behavior.BehaviorService;
 import dev.materione.plugin.runtime.behavior.ItemBehaviorListener;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -57,6 +71,17 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.DatapackService datapackService;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
+    /** API-first wiring (api.md §5 Phase 2); null before content load. */
+    private MaterioneAPI api;
+    private PipelineApiImpl pipelineApi;
+    private DocumentStore documents;
+    private AuditLog audit;
+    private AuthoringApiImpl authoringApi;
+
+    /** The API facade; null-tolerant before the content-load phase wires it. */
+    public MaterioneAPI api() {
+        return api;
+    }
 
     public DiagnosticsBusService diagnostics() {
         return diagnostics;
@@ -263,6 +288,7 @@ public final class MaterionePlugin extends JavaPlugin {
         delivery = new DeliveryService(this, diagnostics, scheduling, storage.storageDir());
         delivery.start(settings);
         getServer().getPluginManager().registerEvents(delivery, this);
+        wireApi();
         var summary = reloadContent();
         if (summary.skipped()) {
             diagnostics.publish(Diagnostic.warn(
@@ -319,6 +345,51 @@ public final class MaterionePlugin extends JavaPlugin {
         return summary;
     }
 
+    /**
+     * API-first wiring (api.md §5 Phase 2): assembles the four sub-APIs over
+     * the services the content-load phase created, so every authoring,
+     * asset, pipeline and delivery action has a typed surface. The editor
+     * transport shares these instances — one document store, one audit log,
+     * one reload path.
+     */
+    private void wireApi() {
+        java.nio.file.Path packsRoot = storage.contentPacksDir();
+        documents = new DocumentStore(packsRoot, storage.storageDir().resolve("revisions"));
+        audit = new AuditLog(storage.storageDir().resolve("audit.log"));
+        ModelTransactionService modelTransactions =
+                new ModelTransactionService(documents, packsRoot, audit);
+        AssetStore assetStore = new AssetStore(packsRoot, audit);
+        GlyphMetadataComputer glyphMeta = new GlyphMetadataComputer(pipeline);
+        pipelineApi = new PipelineApiImpl(
+                this, scheduling, pipeline, quarantine, restartStaging, delivery,
+                packsRoot, storage.generatedDir(), storage.storageDir(),
+                summary -> {
+                    if (datapackService != null) {
+                        datapackService.apply(
+                                summary.stagedDatapackZip(), summary.datapackSha256());
+                    }
+                });
+        // The live-preview seam: document saves reload exactly the touched
+        // file; pack-wide operations (assets, model transactions, folder
+        // moves) reload the whole pack — preview delivery to the actor.
+        ReloadHook previewReload = (actor, pack, changed) -> {
+            dev.materione.api.pipeline.ReloadScope scope = Files.isDirectory(changed)
+                    ? new dev.materione.api.pipeline.ReloadScope.OnePack(pack)
+                    : new dev.materione.api.pipeline.ReloadScope.FileSet(Set.of(changed));
+            pipelineApi.reload(actor, new dev.materione.api.pipeline.PipelineApi.ReloadRequest(
+                    scope, dev.materione.api.pipeline.PipelineApi.DeliveryMode.CANDIDATE_PREVIEW));
+        };
+        authoringApi = new AuthoringApiImpl(
+                documents, audit, packsRoot, modelTransactions, glyphMeta,
+                () -> pipeline.runner().lastGraph(), previewReload);
+        AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
+        DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
+        api = new MaterioneApiImpl(
+                MaterioneVersion.VERSION, registries, diagnostics,
+                this::descriptorOrNull, scheduling,
+                authoringApi, assetApi, pipelineApi, deliveryApi);
+    }
+
     /** The world-datapack applier; null until content load begins. */
     public dev.materione.plugin.runtime.DatapackService datapackService() {
         return datapackService;
@@ -326,8 +397,14 @@ public final class MaterionePlugin extends JavaPlugin {
 
     /** Phase 10 (plugin.md §1.1): the direct-mode editor listener, if enabled. */
     private void startEditorTransport() {
+        if (pipelineApi == null) {
+            // content never loaded — there is no API to serve the editor through
+            return;
+        }
         editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
-                this, diagnostics, scheduling, pipeline, delivery);
+                this, diagnostics, scheduling, pipeline, delivery,
+                pipelineApi, documents, audit,
+                new GlyphMetadataComputer(pipeline), authoringApi);
         editorTransport.start(settings, storage);
     }
 

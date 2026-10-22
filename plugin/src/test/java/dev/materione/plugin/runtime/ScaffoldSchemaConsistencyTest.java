@@ -7,7 +7,7 @@ import dev.materione.content.furniture.FurnitureType;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
 import dev.materione.core.document.LosslessYaml;
-import dev.materione.web.rpc.ops.Scaffolds;
+import dev.materione.core.document.Scaffolds;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
