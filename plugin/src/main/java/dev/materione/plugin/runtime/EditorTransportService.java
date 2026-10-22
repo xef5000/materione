@@ -151,7 +151,7 @@ public final class EditorTransportService {
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
                     java.util.Set<java.nio.file.Path> files) {
-                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files),
+                return runReload(new dev.materione.api.pipeline.ReloadScope.FileSet(files),
                         storage, false);
             }
 
@@ -159,12 +159,12 @@ public final class EditorTransportService {
             public java.util.concurrent.CompletableFuture<Outcome> reloadFilesForPreview(
                     java.util.Set<java.nio.file.Path> files, String sessionId) {
                 String ownerId = ownerForSession(sessionId);
-                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files), storage, false, ownerId);
+                return runReload(new dev.materione.api.pipeline.ReloadScope.FileSet(files), storage, false, ownerId);
             }
 
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadScopeForPreview(
-                    dev.materione.core.pipeline.ReloadScope scope, String sessionId) {
+                    dev.materione.api.pipeline.ReloadScope scope, String sessionId) {
                 return runReload(scope, storage, false, ownerForSession(sessionId));
             }
 
@@ -178,7 +178,7 @@ public final class EditorTransportService {
 
             @Override
             public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
-                    dev.materione.core.pipeline.ReloadScope scope) {
+                    dev.materione.api.pipeline.ReloadScope scope) {
                 // Manual reloads always announce, even no-ops/skips — the
                 // control-center button must not fail silently.
                 return runReload(scope, storage, true);
@@ -230,12 +230,12 @@ public final class EditorTransportService {
             if (!entry.getValue().isJsonObject()) {
                 continue;
             }
-            dev.materione.core.content.AllocatedRange run;
+            dev.materione.api.content.AllocatedRange run;
             try {
                 run = pipeline.allocation().allocationOf(
                         NamespacedId.parse(pack + ":" + entry.getKey()),
                         dev.materione.content.glyphs.GlyphType.ALLOCATION_KIND)
-                        .map(dev.materione.core.content.AllocatedRange::parse)
+                        .map(dev.materione.api.content.AllocatedRange::parse)
                         .orElse(null);
             } catch (IllegalArgumentException malformedId) {
                 continue;
@@ -263,21 +263,21 @@ public final class EditorTransportService {
      * mile, shared by save-triggered and manual reloads.
      */
     java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.api.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways) {
         return runReload(scope, storage, announceAlways, "", false);
     }
 
     java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.api.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways, String previewOwnerId) {
         return runReload(scope, storage, announceAlways, previewOwnerId, true);
     }
 
     private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
+            dev.materione.api.pipeline.ReloadScope scope,
             dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways, String previewOwnerId, boolean stageCandidate) {
         CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
@@ -320,11 +320,11 @@ public final class EditorTransportService {
     }
 
     /** Human-readable scope for push payloads and audit entries. */
-    private static String scopeLabel(dev.materione.core.pipeline.ReloadScope scope) {
-        if (scope instanceof dev.materione.core.pipeline.ReloadScope.OnePack pack) {
+    private static String scopeLabel(dev.materione.api.pipeline.ReloadScope scope) {
+        if (scope instanceof dev.materione.api.pipeline.ReloadScope.OnePack pack) {
             return "one-pack:" + pack.packId();
         }
-        return scope instanceof dev.materione.core.pipeline.ReloadScope.Everything
+        return scope instanceof dev.materione.api.pipeline.ReloadScope.Everything
                 ? "everything" : scope.toString();
     }
 

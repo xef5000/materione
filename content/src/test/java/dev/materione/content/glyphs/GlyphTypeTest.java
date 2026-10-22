@@ -3,8 +3,8 @@ package dev.materione.content.glyphs;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.AllocatedRange;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.AllocatedRange;
+import dev.materione.api.content.PackEmitter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -177,8 +177,8 @@ class GlyphTypeTest {
     private record GlyphDefinitionEmitted(String fontKey, Map<String, Object> provider) {}
 
     /** Fake allocation table: {@code runs} maps kind → the ranges it hands out. */
-    private static dev.materione.core.content.Allocations allocations(Map<String, String> runs) {
-        return new dev.materione.core.content.Allocations() {
+    private static dev.materione.api.content.Allocations allocations(Map<String, String> runs) {
+        return new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
                 throw new IllegalStateException("glyphs allocate via range only");
@@ -196,8 +196,8 @@ class GlyphTypeTest {
         };
     }
 
-    private static dev.materione.core.content.Allocations rejectingAllocations() {
-        return new dev.materione.core.content.Allocations() {
+    private static dev.materione.api.content.Allocations rejectingAllocations() {
+        return new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
                 throw new IllegalStateException("references must not allocate");

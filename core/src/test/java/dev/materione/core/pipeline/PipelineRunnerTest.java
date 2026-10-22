@@ -1,5 +1,6 @@
 package dev.materione.core.pipeline;
 
+import dev.materione.api.pipeline.ReloadScope;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;

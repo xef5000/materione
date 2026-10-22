@@ -1,4 +1,4 @@
-package dev.materione.core.content;
+package dev.materione.api.content;
 
 /**
  * One durable consecutive run from the allocation table — the shape glyph

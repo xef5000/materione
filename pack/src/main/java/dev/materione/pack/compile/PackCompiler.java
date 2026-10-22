@@ -5,8 +5,8 @@ import com.google.gson.JsonParser;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
 import dev.materione.core.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
@@ -98,7 +98,7 @@ public final class PackCompiler {
         /** Datapack artifact files ({@code data/...} → json) — paintings, songs, tags. */
         final Map<String, Map<String, Object>> datapackFiles = new TreeMap<>();
         /** Compiled text effects, in compile order — the shader ladder's input. */
-        final List<dev.materione.core.content.EffectSpec> textEffects = new ArrayList<>();
+        final List<dev.materione.api.content.EffectSpec> textEffects = new ArrayList<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
         final List<VanillaFragment> vanillaFragments = new ArrayList<>();
         /** User-shipped override files; they merge ahead of generated fragments. */
@@ -152,7 +152,7 @@ public final class PackCompiler {
         }
 
         @Override
-        public void textEffect(dev.materione.core.content.EffectSpec spec) {
+        public void textEffect(dev.materione.api.content.EffectSpec spec) {
             textEffects.add(spec);
         }
 
@@ -227,14 +227,14 @@ public final class PackCompiler {
             byDirectory.put(type.directory(), type);
         }
         var emitter = new Emitter();
-        dev.materione.core.content.Allocations allocations = new dev.materione.core.content.Allocations() {
+        dev.materione.api.content.Allocations allocations = new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
                 return allocation.allocate(resource, kind);
             }
 
             @Override
-            public dev.materione.core.content.AllocatedRange range(
+            public dev.materione.api.content.AllocatedRange range(
                     NamespacedId resource, String kind, int count) {
                 return allocation.range(resource, kind, count);
             }
@@ -296,7 +296,7 @@ public final class PackCompiler {
                         resource.id().value() + "_model");
                 try {
                     type.compile(parsed.get(), modelId, emitter, allocations);
-                } catch (dev.materione.core.content.CompileRejectException e) {
+                } catch (dev.materione.api.content.CompileRejectException e) {
                     Diagnostic rejected = new Diagnostic(
                             e.code(), Severity.ERROR, e.getMessage(), resource.id(), null, e.hint());
                     diagnostics.publish(rejected);

@@ -1,7 +1,7 @@
 package dev.materione.pack.allocation;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.AllocatedRange;
+import dev.materione.api.content.AllocatedRange;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

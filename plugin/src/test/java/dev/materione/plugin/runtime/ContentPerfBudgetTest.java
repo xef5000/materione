@@ -12,7 +12,7 @@ import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.PipelineResult;
 import dev.materione.core.pipeline.PipelineRunner;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRecipe;

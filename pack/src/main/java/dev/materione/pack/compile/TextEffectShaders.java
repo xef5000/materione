@@ -1,6 +1,6 @@
 package dev.materione.pack.compile;
 
-import dev.materione.core.content.EffectSpec;
+import dev.materione.api.content.EffectSpec;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;

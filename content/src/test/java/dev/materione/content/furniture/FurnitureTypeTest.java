@@ -89,7 +89,7 @@ class FurnitureTypeTest {
         var models = new java.util.ArrayList<String>();
         var definitions = new java.util.LinkedHashMap<NamespacedId, Map<String, Object>>();
         var vanilla = new java.util.LinkedHashMap<String, Map<String, Object>>();
-        dev.materione.core.content.PackEmitter emitter = new dev.materione.core.content.PackEmitter() {
+        dev.materione.api.content.PackEmitter emitter = new dev.materione.api.content.PackEmitter() {
             @Override
             public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {
                 definitions.put(itemId, itemModelJson);
@@ -113,7 +113,7 @@ class FurnitureTypeTest {
         };
 
         type.compile(chair, NamespacedId.of("sample", "chair_model"), emitter,
-                new dev.materione.core.content.Allocations() {
+                new dev.materione.api.content.Allocations() {
                     @Override
                     public String allocate(NamespacedId resource, String kind) {
                         throw new IllegalStateException("furniture allocates nothing");
@@ -155,9 +155,9 @@ class FurnitureTypeTest {
 
     // --- helpers -------------------------------------------------------------
 
-    private static dev.materione.core.content.PackEmitter capturingEmitter(
+    private static dev.materione.api.content.PackEmitter capturingEmitter(
             List<String> models, Map<NamespacedId, Map<String, Object>> definitions) {
-        return new dev.materione.core.content.PackEmitter() {
+        return new dev.materione.api.content.PackEmitter() {
             @Override
             public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {
                 definitions.put(itemId, itemModelJson);
@@ -179,8 +179,8 @@ class FurnitureTypeTest {
         };
     }
 
-    private static dev.materione.core.content.Allocations noAllocations() {
-        return new dev.materione.core.content.Allocations() {
+    private static dev.materione.api.content.Allocations noAllocations() {
+        return new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
                 throw new IllegalStateException("furniture allocates nothing");

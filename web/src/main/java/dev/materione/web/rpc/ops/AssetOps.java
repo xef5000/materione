@@ -239,7 +239,7 @@ public final class AssetOps {
         // Whole-pack scope for asset changes: texture edits can affect any
         // referencing item, and the fingerprint cache makes no-op cheap.
         reload.reloadScopeForPreview(
-                new dev.materione.core.pipeline.ReloadScope.OnePack(pack),
+                new dev.materione.api.pipeline.ReloadScope.OnePack(pack),
                 dev.materione.web.rpc.RpcDispatcher.currentSessionId())
                 .whenComplete((outcome, error) -> { });
     }

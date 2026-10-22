@@ -3,7 +3,7 @@ package dev.materione.content.sounds;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.PackEmitter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -159,8 +159,8 @@ class SoundTypeTest {
 
     private record VanillaEmitted(String path, Map<String, Object> json) {}
 
-    private static final dev.materione.core.content.Allocations NO_ALLOCATIONS =
-            new dev.materione.core.content.Allocations() {
+    private static final dev.materione.api.content.Allocations NO_ALLOCATIONS =
+            new dev.materione.api.content.Allocations() {
                 @Override
                 public String allocate(NamespacedId resource, String kind) {
                     throw new IllegalStateException("sounds allocate nothing");

@@ -1,4 +1,4 @@
-package dev.materione.core.content;
+package dev.materione.api.content;
 
 import dev.materione.api.NamespacedId;
 import java.util.Optional;

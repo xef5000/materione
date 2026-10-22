@@ -3,7 +3,7 @@ package dev.materione.content.paintings;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.PackEmitter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -96,8 +96,8 @@ class PaintingTypeTest {
                 NamespacedId.parse("sample:sunrise"), definition, Map.of()).orElseThrow();
     }
 
-    private static final dev.materione.core.content.Allocations NO_ALLOCATIONS =
-            new dev.materione.core.content.Allocations() {
+    private static final dev.materione.api.content.Allocations NO_ALLOCATIONS =
+            new dev.materione.api.content.Allocations() {
                 @Override
                 public String allocate(NamespacedId resource, String kind) {
                     throw new IllegalStateException("paintings allocate nothing");

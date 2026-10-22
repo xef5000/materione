@@ -2,7 +2,7 @@ package dev.materione.web;
 
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadScope;
 
 /**
  * The host side of the live preview loop (master §9.4): after an editor

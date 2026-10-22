@@ -1,4 +1,4 @@
-package dev.materione.core.pipeline;
+package dev.materione.api.pipeline;
 
 import java.nio.file.Path;
 import java.util.Set;

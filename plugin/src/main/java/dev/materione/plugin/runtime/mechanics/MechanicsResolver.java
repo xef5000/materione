@@ -21,7 +21,7 @@ import java.util.function.BiConsumer;
 public final class MechanicsResolver {
 
     /** The registry key every mechanic registers under (public addon seam). */
-    public static final RegistryKey REGISTRY_KEY = new RegistryKey("mechanics");
+    public static final RegistryKey REGISTRY_KEY = dev.materione.api.registry.RegistryKeys.MECHANICS;
 
     private final Optional<Registry<Mechanic>> registry;
 

@@ -1,5 +1,6 @@
 package dev.materione.core.pipeline;
 
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;

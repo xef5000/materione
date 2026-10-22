@@ -3,7 +3,7 @@ package dev.materione.content.items;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.PackEmitter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -182,8 +182,8 @@ class ItemTypeTest {
     private record Emitted(NamespacedId id, Map<String, Object> json) {}
 
     /** Items allocate nothing; a rejecting stub keeps accidental allocation loud. */
-    private static final dev.materione.core.content.Allocations NO_ALLOCATIONS =
-            new dev.materione.core.content.Allocations() {
+    private static final dev.materione.api.content.Allocations NO_ALLOCATIONS =
+            new dev.materione.api.content.Allocations() {
                 @Override
                 public String allocate(NamespacedId resource, String kind) {
                     throw new IllegalStateException("item compilation must not allocate");

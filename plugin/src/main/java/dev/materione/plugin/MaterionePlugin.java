@@ -303,7 +303,7 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     /** One composed reload: pipeline → compile → apply → deliver (§4). */
-    public PipelineService.ReloadSummary reloadContent() {
+    public dev.materione.api.pipeline.ReloadSummary reloadContent() {
         var summary = pipeline.reload(
                 storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
         if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {

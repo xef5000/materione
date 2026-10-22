@@ -38,7 +38,7 @@ class ScaffoldSchemaConsistencyTest {
     // ------------------------------------------------------------------
 
     private static void check(String dir, String id,
-            dev.materione.core.content.ContentType type) {
+            dev.materione.api.content.ContentType type) {
         String scaffold = Scaffolds.forPath(dir + "/" + id + ".yml", null);
         assertParses(scaffold, id);
 

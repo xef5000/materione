@@ -75,7 +75,7 @@ class EditorTransportReloadTest {
 
         // Reload via file-set scope (simulates editor save)
         ReloadTrigger.Outcome outcome = transport.runReload(
-                new dev.materione.core.pipeline.ReloadScope.FileSet(Set.of(samplePack.resolve("items/ruby.yml"))),
+                new dev.materione.api.pipeline.ReloadScope.FileSet(Set.of(samplePack.resolve("items/ruby.yml"))),
                 storage, false).join();
 
         assertThat(outcome.accepted()).isTrue();

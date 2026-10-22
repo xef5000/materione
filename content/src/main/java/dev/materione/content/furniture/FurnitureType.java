@@ -4,8 +4,8 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -201,7 +201,7 @@ public final class FurnitureType implements ContentType {
      */
     @Override
     public void compile(
-            Object definition, NamespacedId allocatedModelId, PackEmitter emitter, dev.materione.core.content.Allocations allocations) {
+            Object definition, NamespacedId allocatedModelId, PackEmitter emitter, dev.materione.api.content.Allocations allocations) {
         if (!(definition instanceof FurnitureDefinition furniture)) {
             return;
         }

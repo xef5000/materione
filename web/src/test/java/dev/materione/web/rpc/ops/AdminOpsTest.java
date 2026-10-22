@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.gson.JsonObject;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.Documents;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.core.settings.SettingsService;
 import dev.materione.web.ReloadTrigger;
 import dev.materione.web.protocol.Wire;

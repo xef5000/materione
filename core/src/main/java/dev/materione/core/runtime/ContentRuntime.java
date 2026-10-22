@@ -1,42 +1,17 @@
 package dev.materione.core.runtime;
 
+import dev.materione.api.pipeline.ApplyReport;
 import java.util.Objects;
 
 /**
  * The live runtime holder (plugin.md §4.5): apply builds a complete shadow
  * ({@link RuntimeRegistries} + compiled pack reference), reports the diff
- * (pre-apply report), then swaps atomically. Any exception after the swap
- * rolls back to the previous shadow — the server never sees a half-applied
- * state (D6).
+ * ({@link ApplyReport} — the pre-apply report, removals by policy
+ * keep-flagged, recipe enable/disable counts), then swaps atomically. Any
+ * exception after the swap rolls back to the previous shadow — the server
+ * never sees a half-applied state (D6).
  */
 public final class ContentRuntime {
-
-    /**
-     * The pre-apply report (plugin.md §4.5): change counts per type,
-     * removals by policy (M2 ships one policy — keep-flagged: the placed
-     * instances stay and resolve to orphans, flagged for admin resolution),
-     * and recipe enable/disable counts.
-     */
-    public record ApplyReport(
-            int added, int removed, int changed,
-            int blocksAdded, int blocksRemoved,
-            int furnitureAdded, int furnitureRemoved,
-            int recipesEnabled, int recipesDisabled,
-            String packSha256) {
-
-        /** Operator-facing summary lines (log + doctor). */
-        public void lines(java.util.function.Consumer<String> out) {
-            out.accept("items: +" + added() + " ~" + changed() + " -" + removed()
-                    + " (removed stay keep-flagged)");
-            if (blocksAdded() + blocksRemoved() > 0) {
-                out.accept("blocks: +" + blocksAdded() + " -" + blocksRemoved());
-            }
-            if (furnitureAdded() + furnitureRemoved() > 0) {
-                out.accept("furniture: +" + furnitureAdded() + " -" + furnitureRemoved());
-            }
-            out.accept("recipes: " + recipesEnabled() + " enabled, " + recipesDisabled() + " disabled");
-        }
-    }
 
     private volatile RuntimeRegistries registries = RuntimeRegistries.empty();
     private volatile String livePackSha256 = "";
