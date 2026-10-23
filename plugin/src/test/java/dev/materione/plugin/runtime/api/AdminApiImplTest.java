@@ -136,6 +136,9 @@ class AdminApiImplTest {
                 temp.resolve("settings"),
                 audit,
                 () -> null,
-                null);
+                null,
+                () -> null,
+                () -> null,
+                () -> null);
     }
 }

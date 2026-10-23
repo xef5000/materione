@@ -383,12 +383,14 @@ api      → (nothing internal)         core → api
 content  → api, core                  behavior → api, core
 pack     → api, core, platform-caps   delivery → api, core
 platform → api (only version-aware module)
-web      → api, core                  (nothing depends on web)
+web      → api only (R9)              (nothing depends on web)
 webui    → API contract only          importers/integrations → api, core
 ```
 
 Boundaries are enforced by Gradle module isolation + a ban-list test (no Bukkit scheduler
 outside the gateway, no version checks outside `platform/`, no I/O in validators, **no wire
 protocol outside `web/`** — `web/` owns both the server-side handlers and the plugin-side
-relay/store clients, so both directions of the editor transport evolve in one module).
+relay/store clients, so both directions of the editor transport evolve in one module,
+**web consumes only `api/`** (R9, [`api.md`](api.md) §4.2 — every editor action is a typed
+`MaterioneAPI` operation; the plugin is an implementation of the API).
 Violations fail the build, not the review.

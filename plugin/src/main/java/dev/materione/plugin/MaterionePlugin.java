@@ -393,7 +393,8 @@ public final class MaterionePlugin extends JavaPlugin {
                 () -> probeResult, registries, diagnostics, quarantine,
                 () -> pipeline, () -> restartStaging, () -> delivery,
                 getDataFolder().toPath().resolve("settings"), audit, () -> editorTransport,
-                new SettingsService());
+                new SettingsService(),
+                () -> settings, () -> storage, () -> datapackService);
         api = new MaterioneApiImpl(
                 MaterioneVersion.VERSION, registries, diagnostics,
                 this::descriptorOrNull, scheduling,

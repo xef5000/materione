@@ -228,6 +228,16 @@ Because every operation in `MaterioneAPI` is modeled as a self-contained request
 
 ## 5. Phased Implementation Plan
 
+> **As built (M5, 2026-10):** all five phases shipped. Phases 1–4 landed exactly as
+> planned; phase 5's command rewiring covers `doctor`, `reload` and the editor session
+> control (the web dashboard's future data source is `AdminApi.doctor()`), while the dev
+> subcommands, `give` and the in-game browser GUI keep their plugin-internal wiring until
+> `RuntimeApi` results carry the exact operator-facing detail those surfaces render
+> (ambiguous-query candidates, placement status lines, GUI catalog entries) — tracked as
+> the follow-up tail of the API-first issue. `MaterionePlugin` retains its getters for
+> those in-module consumers; the *public* surface is the ServicesManager-registered
+> `MaterioneAPI`.
+
 Each phase is a self-contained, testable slice that keeps all existing unit tests, ArchUnit rules, and headless-Paper harness gates green.
 
 ### Phase 1 — Promote Core SPIs & Domain Records to `api/`

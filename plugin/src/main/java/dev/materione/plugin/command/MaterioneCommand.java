@@ -76,30 +76,48 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     sender.sendMessage(Component.text("no permission (materione.pipeline)", NamedTextColor.RED));
                     return true;
                 }
-                // composed reload: pipeline → compile → apply → deliver (§4)
-                var summary = plugin.reloadContent();
-                // re-open → re-check → re-freeze (D5): windows reopen around the run
-                plugin.registries().reopenAllWindows();
-                if (summary.skipped()) {
+                // composed reload: pipeline → compile → apply → deliver (§4),
+                // through the one reload path the editor and future MCP callers use
+                var api = plugin.api();
+                if (api == null) {
                     sender.sendMessage(Component.text(
-                            "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                            "content never loaded — there is nothing to reload (see startup logs)",
                             NamedTextColor.RED));
-                } else if (summary.noop()) {
-                    sender.sendMessage(Component.text(
-                            "reload complete — no content changes (apply and delivery skipped)",
-                            NamedTextColor.GREEN));
-                } else {
-                    String packText = summary.packSha256() == null
-                            ? "pack bytes unchanged"
-                            : ", pack " + summary.packSha256().substring(0, 12) + "…";
-                    sender.sendMessage(Component.text(
-                            "reload complete — " + summary.itemsLive() + " item(s) live, "
-                                    + summary.quarantined() + " quarantined" + packText,
-                            NamedTextColor.GREEN));
+                    return true;
                 }
-                plugin.registries().freezeAll();
-                // Stable harness marker: a real reload ran.
-                plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
+                api.pipeline().reload(
+                                dev.materione.api.auth.ActorContext.console(),
+                                dev.materione.api.pipeline.PipelineApi.ReloadRequest.manual(
+                                        new dev.materione.api.pipeline.ReloadScope.Everything(),
+                                        dev.materione.api.pipeline.PipelineApi.DeliveryMode.PUBLISH_DEFAULT))
+                        .thenAccept(result -> {
+                            var summary = result.value();
+                            if (summary == null) {
+                                sender.sendMessage(Component.text(
+                                        "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                                        NamedTextColor.RED));
+                                return;
+                            }
+                            if (summary.skipped()) {
+                                sender.sendMessage(Component.text(
+                                        "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                                        NamedTextColor.RED));
+                            } else if (summary.noop()) {
+                                sender.sendMessage(Component.text(
+                                        "reload complete — no content changes (apply and delivery skipped)",
+                                        NamedTextColor.GREEN));
+                            } else {
+                                String packText = summary.packSha256() == null
+                                        ? "pack bytes unchanged"
+                                        : ", pack " + summary.packSha256().substring(0, 12) + "…";
+                                sender.sendMessage(Component.text(
+                                        "reload complete — " + summary.itemsLive() + " item(s) live, "
+                                                + summary.quarantined() + " quarantined" + packText,
+                                        NamedTextColor.GREEN));
+                            }
+                            // Stable harness marker: a real reload ran.
+                            plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
+                        });
             }
             case "give" -> give(sender, args);
             case "browser" -> {
@@ -246,17 +264,29 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         return List.of();
     }
 
+    /**
+     * Renders the structured {@link dev.materione.api.admin.AdminApi.DoctorReport}
+     * — the same record the web dashboard shows (api.md §3.8): one source,
+     * two presentations.
+     */
     private void doctor(CommandSender sender) {
         sender.sendMessage(Component.text("Materione doctor — " + MaterioneVersion.VERSION,
                 NamedTextColor.GREEN));
 
-        PlatformDescriptor descriptor = plugin.descriptorOrNull();
-        if (descriptor == null) {
-            ProbeResult.Unsupported unsupported =
-                    (ProbeResult.Unsupported) plugin.probeResult();
+        var report = plugin.api() == null ? null : plugin.api().admin().doctor();
+        if (report == null) {
             sender.sendMessage(Component.text(
-                    "platform: UNSUPPORTED — " + unsupported.reason(), NamedTextColor.RED));
+                    "content never loaded — the api is not wired (see startup logs)",
+                    NamedTextColor.RED));
+            plugin.getLogger().info("MATERIONE-DOCTOR-OK");
+            return;
+        }
+
+        if (report.platform() == null) {
+            sender.sendMessage(Component.text(
+                    "platform: UNSUPPORTED — " + report.unsupportedReason(), NamedTextColor.RED));
         } else {
+            var descriptor = report.platform();
             sender.sendMessage(Component.text(
                     "platform: " + descriptor.minecraftVersion()
                             + (descriptor.folia() ? " (Folia)" : " (Paper)")
@@ -266,119 +296,99 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                     NamedTextColor.GRAY));
         }
 
-        var settings = plugin.settings();
         sender.sendMessage(Component.text(
-                "settings: version " + (settings == null ? "not loaded" : settings.version())
-                        + (settings != null && !settings.diagnostics().isEmpty()
-                                ? " (" + settings.diagnostics().size() + " load diagnostic(s))"
+                "settings: version " + (report.settingsVersion() == null
+                        ? "not loaded" : report.settingsVersion())
+                        + (report.settingsLoadDiagnostics() > 0
+                                ? " (" + report.settingsLoadDiagnostics() + " load diagnostic(s))"
                                 : ""),
                 NamedTextColor.GRAY));
 
-        var storage = plugin.storage();
         sender.sendMessage(Component.text(
-                "storage: " + (storage == null
+                "storage: " + (report.storageFormatVersion() == null
                         ? "not initialized"
-                        : "format v" + storage.formatVersion()),
+                        : "format v" + report.storageFormatVersion()),
                 NamedTextColor.GRAY));
-        var allocation = plugin.pipeline() == null ? null : plugin.pipeline().allocation();
         sender.sendMessage(Component.text(
-                "allocation table: " + (allocation == null
+                "allocation table: " + (report.allocationLiveCount() < 0
                         ? "not loaded"
-                        : allocation.liveCount() + " live"
-                                + (allocation.isCorrupt() ? " (CORRUPT — rebuild available)" : "")
-                                + ", " + (plugin.storage() == null ? "?" : "format v" + plugin.storage().formatVersion())),
-                allocation != null && allocation.isCorrupt() ? NamedTextColor.RED : NamedTextColor.GRAY));
+                        : report.allocationLiveCount() + " live"
+                                + (report.allocationCorrupt() ? " (CORRUPT — rebuild available)" : "")
+                                + ", " + (report.storageFormatVersion() == null
+                                        ? "?" : "format v" + report.storageFormatVersion())),
+                report.allocationCorrupt() ? NamedTextColor.RED : NamedTextColor.GRAY));
 
-        var runtime = plugin.pipeline() == null ? null : plugin.pipeline().runtime();
         sender.sendMessage(Component.text(
-                "runtime: " + (runtime == null ? "not started"
-                        : runtime.registries().itemCount() + " item(s), pack "
-                                + (runtime.livePackSha256().isBlank() ? "none" : runtime.livePackSha256().substring(0, 12) + "…")),
+                "runtime: " + (report.packSha256() == null && report.liveItems() < 0
+                        ? "not started"
+                        : report.liveItems() + " item(s), pack "
+                                + (report.packSha256() == null
+                                        ? "none" : report.packSha256().substring(0, 12) + "…")),
                 NamedTextColor.GRAY));
 
-        var lastReport = plugin.pipeline() == null ? null : plugin.pipeline().lastReport();
+        var last = report.lastApply();
         sender.sendMessage(Component.text(
                 "pre-apply report (last apply): "
-                        + (lastReport == null ? "none yet"
-                                : "+" + lastReport.added() + " ~" + lastReport.changed()
-                                        + " -" + lastReport.removed() + " items, "
-                                        + "+" + lastReport.blocksAdded() + "/-" + lastReport.blocksRemoved()
-                                        + " blocks, +" + lastReport.furnitureAdded() + "/-"
-                                        + lastReport.furnitureRemoved() + " furniture"),
+                        + (last == null ? "none yet"
+                                : "+" + last.added() + " ~" + last.changed()
+                                        + " -" + last.removed() + " items, "
+                                        + "+" + last.blocksAdded() + "/-" + last.blocksRemoved()
+                                        + " blocks, +" + last.furnitureAdded() + "/-"
+                                        + last.furnitureRemoved() + " furniture"),
                 NamedTextColor.GRAY));
 
-        var restartStaging = plugin.restartStaging();
         sender.sendMessage(Component.text(
-                "staged-restart: " + (restartStaging == null ? "not initialized"
-                        : restartStaging.load().size() + " pending change(s)"),
+                "staged-restart: " + (report.pendingRestartCount() < 0
+                        ? "not initialized"
+                        : report.pendingRestartCount() + " pending change(s)"),
                 NamedTextColor.GRAY));
 
-        var datapack = plugin.datapackService();
-        if (datapack != null && datapack.isRegistryMode()) {
-            // registry mode: content registered at bootstrap, nothing deployed
-            boolean restartPending = datapack.pendingRestartRequired();
+        if (report.datapackRegistryMode() != null && report.datapackRegistryMode()) {
             sender.sendMessage(Component.text(
-                    "registry: paintings/jukebox registered at boot (content "
-                            + datapack.registeredHashOrNone() + ")"
-                            + (restartPending
+                    report.datapackSummary()
+                            + (report.datapackPendingRestart()
                                     ? " — RESTART REQUIRED (a reload changed registered content)"
                                     : " — current"),
-                    restartPending ? NamedTextColor.YELLOW : NamedTextColor.GRAY));
-        } else if (datapack != null) {
-            boolean restartPending = datapack.pendingRestartRequired();
+                    report.datapackPendingRestart() ? NamedTextColor.YELLOW : NamedTextColor.GRAY));
+        } else if (report.datapackRegistryMode() != null) {
             sender.sendMessage(Component.text(
-                    "datapack: deployed " + datapack.deployedHashOrNone()
-                            + ", loaded at boot " + datapack.activeAtBootOrNone()
-                            + (restartPending
+                    "datapack: " + report.datapackSummary().replaceFirst("^datapack: ", "")
+                            + (report.datapackPendingRestart()
                                     ? " — RESTART REQUIRED (paintings/jukebox stay vanilla until then)"
-                                    : datapack.isAcceptedByServer()
+                                    : report.datapackAccepted()
                                             ? " — current, accepted by the server"
                                             : " — NOT ACCEPTED by the server's pack repository"
                                                     + " (paintings/jukebox do not exist)"),
-                    restartPending || !datapack.isAcceptedByServer()
+                    report.datapackPendingRestart() || !report.datapackAccepted()
                             ? NamedTextColor.YELLOW : NamedTextColor.GRAY));
         }
 
-        var delivery = plugin.delivery();
         sender.sendMessage(Component.text(
-                "delivery: " + (delivery == null || delivery.currentUrl().isEmpty()
+                "delivery: " + (report.delivery() == null || !report.delivery().running()
                         ? "not started"
-                        : delivery.currentUrl()),
+                        : report.delivery().packUrl()),
                 NamedTextColor.GRAY));
-        if (delivery != null && !delivery.acceptanceSnapshot().isEmpty()) {
-            // why-is-my-glyph-tofu answerable from the server: only players
-            // in the loaded state can render custom glyphs
-            var lines = new java.util.ArrayList<String>();
-            delivery.acceptanceSnapshot().forEach((id, state) -> {
-                var player = plugin.getServer().getPlayer(id);
-                lines.add((player != null ? player.getName() : id.toString().substring(0, 8))
-                        + "=" + state.name().toLowerCase());
-            });
-            java.util.Collections.sort(lines);
+        if (!report.acceptanceLines().isEmpty()) {
             sender.sendMessage(Component.text(
-                    "pack acceptance: " + String.join(", ", lines)
+                    "pack acceptance: " + String.join(", ", report.acceptanceLines())
                             + " — glyph placeholders stay literal until a player loads the pack",
                     NamedTextColor.GRAY));
         }
 
         sender.sendMessage(Component.text(
-                "registries: " + plugin.registries().registryCount()
-                        + " (" + plugin.registries().totalEntries() + " entries)",
+                "registries: " + report.registryCount()
+                        + " (" + report.registryEntryCount() + " entries)",
                 NamedTextColor.GRAY));
-        plugin.registries().doctorLines().forEach(line ->
+        report.registryLines().forEach(line ->
                 sender.sendMessage(Component.text("  " + line, NamedTextColor.DARK_GRAY)));
 
-        QuarantineTracker quarantine = plugin.quarantine();
         sender.sendMessage(Component.text(
-                "quarantined: " + (quarantine == null ? 0 : quarantine.size()),
+                "quarantined: " + Math.max(0, report.quarantinedCount()),
                 NamedTextColor.GRAY));
 
-        var diagnostics = plugin.diagnostics();
         sender.sendMessage(Component.text(
-                "diagnostics: " + diagnostics.count(dev.materione.api.diagnostics.Severity.ERROR)
-                        + " error, " + diagnostics.count(dev.materione.api.diagnostics.Severity.WARN)
-                        + " warn, " + diagnostics.count(dev.materione.api.diagnostics.Severity.INFO)
-                        + " info",
+                "diagnostics: " + report.errorCount() + " error, "
+                        + report.warnCount() + " warn, " + report.infoCount() + " info",
                 NamedTextColor.GRAY));
 
         // Stable harness marker: doctor completed against an M0-empty system.

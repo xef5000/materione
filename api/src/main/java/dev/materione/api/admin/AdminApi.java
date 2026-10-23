@@ -73,7 +73,20 @@ public interface AdminApi {
             ApplyReport lastApply,
             List<String> registryLines,
             DeliveryStatus delivery,
-            List<Diagnostic> recentDiagnostics) {}
+            List<Diagnostic> recentDiagnostics,
+            Integer settingsVersion,
+            int settingsLoadDiagnostics,
+            Integer storageFormatVersion,
+            List<String> acceptanceLines,
+            long errorCount,
+            long warnCount,
+            long infoCount,
+            String datapackSummary,
+            Boolean datapackRegistryMode,
+            Boolean datapackPendingRestart,
+            Boolean datapackAccepted,
+            int registryCount,
+            int registryEntryCount) {}
 
     /** settings.yml content, its sha256, and the parsed view for form pre-fill. */
     record SettingsView(String content, String sha256, java.util.Map<String, Object> parsed) {}

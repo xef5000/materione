@@ -51,6 +51,9 @@ public final class AdminApiImpl implements AdminApi {
     private final AuditLog audit;
     private final Supplier<EditorTransportService> editorTransport;
     private final SettingsService settingsService;
+    private final Supplier<dev.materione.core.settings.SettingsService.SettingsState> settingsState;
+    private final Supplier<dev.materione.core.storage.StorageService.StorageState> storageState;
+    private final Supplier<dev.materione.plugin.runtime.DatapackService> datapack;
 
     public AdminApiImpl(
             Supplier<ProbeResult> probe,
@@ -63,7 +66,10 @@ public final class AdminApiImpl implements AdminApi {
             Path settingsDir,
             AuditLog audit,
             Supplier<EditorTransportService> editorTransport,
-            SettingsService settingsService) {
+            SettingsService settingsService,
+            Supplier<dev.materione.core.settings.SettingsService.SettingsState> settingsState,
+            Supplier<dev.materione.core.storage.StorageService.StorageState> storageState,
+            Supplier<dev.materione.plugin.runtime.DatapackService> datapack) {
         this.probe = Objects.requireNonNull(probe, "probe");
         this.registries = registries;
         this.diagnostics = diagnostics;
@@ -75,6 +81,9 @@ public final class AdminApiImpl implements AdminApi {
         this.audit = audit;
         this.editorTransport = editorTransport;
         this.settingsService = settingsService;
+        this.settingsState = settingsState;
+        this.storageState = storageState;
+        this.datapack = datapack;
     }
 
     @Override
@@ -133,6 +142,20 @@ public final class AdminApiImpl implements AdminApi {
             return Integer.compare(left, right);
         });
 
+        var settings = settingsState.get();
+        var storage = storageState.get();
+        dev.materione.plugin.runtime.DatapackService datapackService = datapack.get();
+
+        List<String> acceptance = new ArrayList<>();
+        if (deliveryService != null && !deliveryService.acceptanceSnapshot().isEmpty()) {
+            deliveryService.acceptanceSnapshot().forEach((id, state) -> {
+                var player = org.bukkit.Bukkit.getPlayer(id);
+                acceptance.add((player != null ? player.getName() : id.toString().substring(0, 8))
+                        + "=" + state.name().toLowerCase(java.util.Locale.ROOT));
+            });
+            java.util.Collections.sort(acceptance);
+        }
+
         return new DoctorReport(
                 descriptor,
                 unsupportedReason,
@@ -148,7 +171,33 @@ public final class AdminApiImpl implements AdminApi {
                 service == null ? null : service.lastReport(),
                 registryLines,
                 deliveryStatus,
-                recent);
+                recent,
+                settings == null ? null : settings.version(),
+                settings == null ? 0 : settings.diagnostics().size(),
+                storage == null ? null : storage.formatVersion(),
+                acceptance,
+                diagnostics.count(Severity.ERROR),
+                diagnostics.count(Severity.WARN),
+                diagnostics.count(Severity.INFO),
+                datapackSummary(datapackService),
+                datapackService == null ? null : datapackService.isRegistryMode(),
+                datapackService == null ? null : datapackService.pendingRestartRequired(),
+                datapackService == null ? null : datapackService.isAcceptedByServer(),
+                registries == null ? -1 : registries.registryCount(),
+                registries == null ? -1 : registries.totalEntries());
+    }
+
+    /** The registry-vs-datapack status line, rendered exactly as doctor shows it. */
+    private static String datapackSummary(dev.materione.plugin.runtime.DatapackService datapack) {
+        if (datapack == null) {
+            return null;
+        }
+        if (datapack.isRegistryMode()) {
+            return "registry: paintings/jukebox registered at boot (content "
+                    + datapack.registeredHashOrNone() + ")";
+        }
+        return "datapack: deployed " + datapack.deployedHashOrNone()
+                + ", loaded at boot " + datapack.activeAtBootOrNone();
     }
 
     @Override
