@@ -42,7 +42,7 @@ public final class PlatformProbe {
         if (version == null) {
             return new ProbeResult.Unsupported(
                     "unrecognizable server version string '" + bukkitVersion + "'",
-                    "report this at https://materione.dev — include the full version string");
+                    "report this at https://github.com/xef5000/materione/issues — include the full version string");
         }
         int[] floor = parse(FLOOR);
         if (compare(version, floor) < 0) {

@@ -99,7 +99,7 @@ These are the load-bearing decisions. Everything else in this document follows f
 | **D8** | **Async-first, Folia-native.** All IO, parsing, compilation, and delivery run off the main/regional threads; only world/entity mutation crosses onto the correct schedulers (FoliaLib). | Folia support is table stakes (Oraxen/Nexo have it); async-first is also what keeps pack rebuilds from lagging live servers. | Region/thread discipline is a review-level invariant in `platform/`. |
 | **D9** | **Blockbench is integrated as an unmodified, separately-distributed artifact**, driven through its plugin API across a messaging boundary. | Blockbench is GPL-3; its plugin exception explicitly allows proprietary plugins. Keeping it unmodified and out-of-process (in the browser) keeps our license surface clean regardless of the license we choose. | We never fork or vendor Blockbench source; we pin a version and adapt via a Blockbench plugin. |
 | **D10** | **Modern-Paper-only floor (1.21.4+), multi-client via pack output.** We anchor on ItemModels (1.21.4+), data components (1.20.5+), display entities (1.19.4+), and `equippable` (1.21.2+) as the *baseline*, per the parity doc's "be more modern than Nexo" guidance. | Supporting legacy server versions would tax every subsystem with compatibility branches; the component surface churns per release and must be isolated anyway (§8.2). | We deliberately abandon pre-1.21.4 servers. Lower *clients* are served via versioned pack output + ViaVersion, not by lowering the floor. |
-| **D11** | **Outbound-only editor connectivity (the LuckPerms pattern).** The server never accepts inbound connections for authoring. The editor is a stateless SPA (centrally hosted, self-hostable); server and browser meet through two open relay services — a payload store for bulk data and a signed WebSocket channel for interactive traffic — both dialed *out* to. A direct mode (embedded HTTP server) speaks the same API for LAN/air-gapped setups (§9.1). | The T1/T2 personas (§2) often cannot open ports. "Zero port-forwarding" is the difference between *every* server owner being able to use the editor and only VPS admins. LuckPerms proved the pattern at massive scale. | The project must operate (and open-source) relay infrastructure, and treat it as untrusted — content payloads are end-to-end encrypted (§9.2). |
+| **D11** | **Outbound-only editor connectivity (the LuckPerms pattern).** The server never accepts inbound connections for authoring. The editor is a stateless SPA (centrally hosted, self-hostable); server and browser meet through one open relay — a payload store for bulk data plus a signed **long-poll frame mailbox** for interactive traffic, plain HTTPS in both roles, dialed *out* to. *(Amended M5, 2026-10: the mailbox replaces the originally sketched WebSocket channel — no WebSocket, no Durable Objects, no long-lived cloud state; see web.md §3.2. The principle — outbound-only, zero port-forwarding — is unchanged.)* A direct mode (embedded HTTP server) speaks the same API for LAN/air-gapped setups (§9.1). | The T1/T2 personas (§2) often cannot open ports. "Zero port-forwarding" is the difference between *every* server owner being able to use the editor and only VPS admins. LuckPerms proved the pattern at massive scale; the HTTP-mailbox variant additionally keeps the cloud stateless, so the free tier's hard stops — not billing — are the only ceiling. | The project must operate (and open-source) relay infrastructure, and treat it as untrusted — content payloads are end-to-end encrypted (§9.2). |
 
 ---
 
@@ -112,8 +112,8 @@ Materione decomposes into five planes with strict data-flow direction:
                          │                WEB EDITOR PLANE               │
                          │  Browser SPA · Blockbench (unmodified) · API  │
                          └───────────────┬──────────────────────────────┘
-                                         │ outbound HTTPS / WSS via relay services
-                                         │ (payload store + signed WS channel),
+                                         │ outbound HTTPS via the relay
+                                         │ (payload store + signed frame mailbox),
                                          │ or direct to embedded server on LAN
  ┌──────────────┐        ┌───────────────▼──────────────────────────────┐
  │ CONTENT      │ files  │              AUTHORING / CONTROL PLANE        │
@@ -469,12 +469,13 @@ Editor connectivity comes in two modes, speaking the **same versioned API**:
 
 - **Relay mode (default, zero configuration).** The editor SPA is hosted centrally (by the
   project — open-source, self-hostable) and is *stateless*. The Minecraft server and the
-  browser never connect to each other; both dial **out** to two small, open relay services:
-  a **payload store** (HTTP GET/POST for bulk data — pack dumps, edited documents, compiled
-  previews) and a **WebSocket relay** (a channel the server joins; signed messages flow both
-  ways for interactive traffic). This is the proven LuckPerms editor model, adapted: an admin
-  runs `/materione editor`, gets a URL, and edits — no port-forwarding, no reverse proxy, no
-  static DNS, works identically behind shared hosting, NAT, or a proxy network.
+  browser never connect to each other; both dial **out** over plain HTTPS to one open relay:
+  a **payload store** (bulk data — pack dumps, edited documents, compiled previews) plus a
+  **signed frame mailbox** (a channel the server creates; sealed messages flow both ways by
+  long-polling — no WebSocket, no long-lived cloud state, per the D11 amendment). This is
+  the proven LuckPerms editor model, adapted: an admin runs `/materione editor`, gets a
+  URL, and edits — no port-forwarding, no reverse proxy, no static DNS, works identically
+  behind shared hosting, NAT, or a proxy network.
 - **Direct mode (opt-in).** The plugin embeds the same HTTP + WS API in a local server (bound
   to localhost by default; reverse-proxy pattern documented for teams). For LAN, air-gapped, or
   "I self-host everything" setups — and as the fallback if relay infrastructure is ever
@@ -610,9 +611,9 @@ materione/
 ├─ platform/       ← Version-sensitive surfaces + capability descriptor (§8.2).
 ├─ web/            ← Editor API implementation: document store endpoints, sessions, signed
 │                    handshake, auth, audit. Transport-agnostic — same handlers serve direct
-│                    mode (embedded HTTP/WS server) and relay mode (payload store + WS relay
-│                    clients). The relay services themselves are separate open-source
-│                    deployments, not plugin modules.
+│                    mode (embedded HTTP/WS server) and relay mode (payload store + frame-
+│                    mailbox clients). The relay service itself is a separate open-source
+│                    deployment, not a plugin module.
 ├─ webui/          ← Frontend SPA (TypeScript) + the Blockbench plugin source.
 │                    Not a Gradle module — its build lands in M3/M5.
 ├─ importers/      ← ItemsAdder / Oraxen / Nexo converters → native pack layout.
@@ -721,17 +722,19 @@ primary method (display entities only; legacy paths only if a converter needs th
    timing is open.
 4. **Web UI distribution** — bundled in the JAR (simplest, chosen default) vs. downloaded on
    first run (smaller JAR); decide before packaging design.
-5. **Relay services scope** — the payload store and WS relay are small, self-contained services
-   (bytebin/bytesocks are the reference designs, both open-source). Decide: fork-and-rebrand
-   them vs. write minimal equivalents; and what the shared free instance's quotas look like
-   (quota sketch in web doc §3.3).
+5. **Relay services scope** — *resolved (M5, 2026-10)*: **write minimal equivalents**
+   (bytebin/bytesocks remain reference designs only). The no-WebSocket amendment to D11
+   rules out a bytesocks fork outright, and our crypto/session model differs enough that a
+   bytebin fork buys nothing; the relay is one stateless Worker + D1 + a cron sweep
+   (web doc §2–§3) with the cost model and quotas in §3.3.
 6. **Community pack hub** — whether the project also hosts a public pack registry/marketplace
    (natural extension of constraint #3, but real infrastructure and moderation scope); decide
    after the editor proves out.
 
 > **Resolved since first draft:** project naming (Materione, everywhere), the ECA expression
-> engine (one universal engine — D4), relay pattern (LuckPerms-style, D11), and cloud platform
-> (Cloudflare Workers). **Reconciled with the parity research:** every target spec in
+> engine (one universal engine — D4), relay pattern (LuckPerms-style, D11), cloud platform
+> (Cloudflare Workers), and relay services scope (write minimal equivalents, §14.5 — the
+> D11 amendment to a long-poll frame mailbox settles it). **Reconciled with the parity research:** every target spec in
 > [`feature-parity.md`](feature-parity.md) now maps to an owning section or an explicit
 > "dropped because" in [`architecture/parity-reconciliation.md`](architecture/parity-reconciliation.md).
 > The build order lives in [`roadmap.md`](roadmap.md).
