@@ -1,5 +1,6 @@
 package dev.materione.api;
 
+import dev.materione.api.admin.AdminApi;
 import dev.materione.api.assets.AssetApi;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.delivery.DeliveryApi;
@@ -7,6 +8,7 @@ import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.registry.RegistryView;
+import dev.materione.api.runtime.RuntimeApi;
 import dev.materione.api.scheduling.SchedulingGateway;
 
 /**
@@ -49,4 +51,10 @@ public interface MaterioneAPI {
 
     /** Pack hosting & release promotion (master §8.4). */
     DeliveryApi delivery();
+
+    /** Live runtime & world operations (runtime-systems.md). */
+    RuntimeApi runtime();
+
+    /** Server health, settings, audit & editor sessions (plugin.md §5, §7.1). */
+    AdminApi admin();
 }

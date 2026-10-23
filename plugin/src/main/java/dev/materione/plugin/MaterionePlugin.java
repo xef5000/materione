@@ -30,9 +30,11 @@ import dev.materione.plugin.gui.GuiListener;
 import dev.materione.plugin.runtime.DeliveryService;
 import dev.materione.plugin.runtime.ItemAutoUpdater;
 import dev.materione.plugin.runtime.PipelineService;
+import dev.materione.plugin.runtime.api.AdminApiImpl;
 import dev.materione.plugin.runtime.api.DeliveryApiImpl;
 import dev.materione.plugin.runtime.api.GlyphMetadataComputer;
 import dev.materione.plugin.runtime.api.PipelineApiImpl;
+import dev.materione.plugin.runtime.api.RuntimeApiImpl;
 import dev.materione.plugin.runtime.behavior.BehaviorService;
 import dev.materione.plugin.runtime.behavior.ItemBehaviorListener;
 import java.nio.file.Files;
@@ -384,10 +386,22 @@ public final class MaterionePlugin extends JavaPlugin {
                 () -> pipeline.runner().lastGraph(), previewReload);
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
+        RuntimeApiImpl runtimeApi = new RuntimeApiImpl(
+                this, scheduling, pipeline,
+                () -> customBlocks, () -> furniture);
+        AdminApiImpl adminApi = new AdminApiImpl(
+                () -> probeResult, registries, diagnostics, quarantine,
+                () -> pipeline, () -> restartStaging, () -> delivery,
+                getDataFolder().toPath().resolve("settings"), audit, () -> editorTransport,
+                new SettingsService());
         api = new MaterioneApiImpl(
                 MaterioneVersion.VERSION, registries, diagnostics,
                 this::descriptorOrNull, scheduling,
-                authoringApi, assetApi, pipelineApi, deliveryApi);
+                authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi);
+        // the public surface any addon can look up (api.md §4.1)
+        getServer().getServicesManager().register(
+                dev.materione.api.MaterioneAPI.class, api, this,
+                org.bukkit.plugin.ServicePriority.Normal);
     }
 
     /** The world-datapack applier; null until content load begins. */

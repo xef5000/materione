@@ -414,13 +414,17 @@ public final class EditorTransportService {
         return out;
     }
 
-    /** Creates a session and prints its capability URL to the sender. */
-    public void openSession(CommandSender sender) {
+    /**
+     * Creates a session and prints its capability URL to the sender; returns
+     * the URL (null when the listener is not running) so API callers can hand
+     * it to their own surface.
+     */
+    public String openSession(CommandSender sender) {
         if (listener == null || !listener.isRunning()) {
             sender.sendMessage(Component.text(
                     "the editor listener is not running (disabled in settings or bind failed)",
                     NamedTextColor.RED));
-            return;
+            return null;
         }
         String ownerId = sender instanceof org.bukkit.entity.Player player ? player.getUniqueId().toString() : "";
         String url = listener.openSessionUrl(advertiseHost, ownerId);
@@ -433,6 +437,7 @@ public final class EditorTransportService {
                 "The part after # is secret and stays in your browser. Approve the connection in game "
                         + "within " + TRUST_PROMPT_TIMEOUT_SECONDS + "s.",
                 NamedTextColor.GRAY));
+        return url;
     }
 
     public void stop() {

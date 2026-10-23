@@ -1,6 +1,7 @@
 package dev.materione.core;
 
 import dev.materione.api.MaterioneAPI;
+import dev.materione.api.admin.AdminApi;
 import dev.materione.api.assets.AssetApi;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.delivery.DeliveryApi;
@@ -8,6 +9,7 @@ import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.registry.RegistryView;
+import dev.materione.api.runtime.RuntimeApi;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.core.registry.RegistryService;
 import java.util.Objects;
@@ -33,6 +35,8 @@ public final class MaterioneApiImpl implements MaterioneAPI {
     private final AssetApi assets;
     private final PipelineApi pipeline;
     private final DeliveryApi delivery;
+    private final RuntimeApi runtime;
+    private final AdminApi admin;
 
     public MaterioneApiImpl(
             String version,
@@ -44,6 +48,22 @@ public final class MaterioneApiImpl implements MaterioneAPI {
             AssetApi assets,
             PipelineApi pipeline,
             DeliveryApi delivery) {
+        this(version, registries, diagnostics, platform, scheduling,
+                authoring, assets, pipeline, delivery, null, null);
+    }
+
+    public MaterioneApiImpl(
+            String version,
+            RegistryService registries,
+            DiagnosticsBus diagnostics,
+            Supplier<PlatformDescriptor> platform,
+            SchedulingGateway scheduling,
+            AuthoringApi authoring,
+            AssetApi assets,
+            PipelineApi pipeline,
+            DeliveryApi delivery,
+            RuntimeApi runtime,
+            AdminApi admin) {
         this.version = Objects.requireNonNull(version, "version");
         this.registries = Objects.requireNonNull(registries, "registries");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
@@ -53,6 +73,8 @@ public final class MaterioneApiImpl implements MaterioneAPI {
         this.assets = assets;
         this.pipeline = pipeline;
         this.delivery = delivery;
+        this.runtime = runtime;
+        this.admin = admin;
     }
 
     @Override
@@ -98,6 +120,16 @@ public final class MaterioneApiImpl implements MaterioneAPI {
     @Override
     public DeliveryApi delivery() {
         return requireWired(delivery, "delivery");
+    }
+
+    @Override
+    public RuntimeApi runtime() {
+        return requireWired(runtime, "runtime");
+    }
+
+    @Override
+    public AdminApi admin() {
+        return requireWired(admin, "admin");
     }
 
     private static <T> T requireWired(T subApi, String name) {

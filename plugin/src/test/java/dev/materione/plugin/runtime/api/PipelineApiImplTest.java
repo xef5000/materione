@@ -157,7 +157,7 @@ class PipelineApiImplTest {
             RestartStaging restartStaging) {}
 
     /** Runs everything inline — the reload path stays synchronous in tests. */
-    private static final class DirectSchedulingGateway implements SchedulingGateway {
+    static final class DirectSchedulingGateway implements SchedulingGateway {
         @Override
         public void executeSync(Plugin plugin, Location location, Runnable task) {
             task.run();

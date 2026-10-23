@@ -34,6 +34,11 @@ public final class RuntimeEffects {
         return new RuntimeEffects(Map.of());
     }
 
+    /** All effect entries (insertion order). */
+    public java.util.Collection<Entry> all() {
+        return effects.values();
+    }
+
     public Optional<Entry> effect(NamespacedId id) {
         return Optional.ofNullable(effects.get(id));
     }
