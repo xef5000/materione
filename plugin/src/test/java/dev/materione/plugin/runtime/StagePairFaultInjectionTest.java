@@ -9,14 +9,14 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.content.items.ItemDefinition;
 import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.PipelineResult;
 import dev.materione.core.pipeline.PipelineRunner;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRegistries;
@@ -142,7 +142,7 @@ class StagePairFaultInjectionTest {
             @Override
             public void compile(
                     Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
-                    dev.materione.core.content.Allocations allocations) {
+                    dev.materione.api.content.Allocations allocations) {
                 if (definition instanceof ItemDefinition item
                         && item.id().value().equals("victim")) {
                     throw new IllegalStateException("emitter bug: boom");
@@ -320,7 +320,7 @@ class StagePairFaultInjectionTest {
         @Override
         public void compile(
                 Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
-                dev.materione.core.content.Allocations allocations) {
+                dev.materione.api.content.Allocations allocations) {
             delegate.compile(definition, allocatedModelId, emitter, allocations);
         }
     }

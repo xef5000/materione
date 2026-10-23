@@ -636,8 +636,10 @@ materione/
   `core` — never on each other's internals.
 - `platform` is the only module that knows a server version exists; `pack` and `content`
   consume capabilities, not versions.
-- `web` depends on `api`/`core` (+ content schemas for the document store) and **nothing
-  depends on `web`**. `webui` depends only on the API contract (and is transport-agnostic:
+- `web` depends on `api` **only** and **nothing depends on `web`** (API-first amendment,
+  M5: every editor action is a typed `MaterioneAPI` operation — see
+  [`architecture/api.md`](architecture/api.md); enforced by ban rule R9 + Gradle
+  isolation). `webui` depends only on the API contract (and is transport-agnostic:
   relay or direct).
 - The plugin JAR wires the modules together at bootstrap; runtime wiring order is:
   `core → registries → built-in registrations → load content → compile → serve`.

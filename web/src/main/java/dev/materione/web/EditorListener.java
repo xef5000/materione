@@ -2,7 +2,7 @@ package dev.materione.web;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import io.undertow.Handlers;

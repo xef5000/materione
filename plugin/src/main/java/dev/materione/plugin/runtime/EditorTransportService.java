@@ -1,23 +1,36 @@
 package dev.materione.plugin.runtime;
 
-import dev.materione.api.NamespacedId;
-import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.MaterioneAPI;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.api.assets.AssetApi;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.delivery.DeliveryApi;
 import dev.materione.api.diagnostics.DiagnosticsBus;
+import dev.materione.api.pipeline.PipelineApi;
+import dev.materione.api.registry.Registry;
+import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.core.authoring.AuthoringApiImpl;
+import dev.materione.core.document.AuditLog;
+import dev.materione.core.document.DocumentStore;
 import dev.materione.core.settings.SettingsService.SettingsState;
 import dev.materione.web.BaseOps;
 import dev.materione.web.EditorConfig;
 import dev.materione.web.EditorListener;
+import dev.materione.web.EditorSession;
 import dev.materione.web.EditorSessions;
 import dev.materione.web.EditorSockets;
 import dev.materione.web.IdentityKeystore;
-import dev.materione.web.ReloadTrigger;
 import dev.materione.web.TrustPrompt;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.io.IOException;
 import java.security.KeyPair;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import net.kyori.adventure.text.Component;
@@ -32,6 +45,11 @@ import org.bukkit.plugin.Plugin;
  * trust prompts through clickable chat, and hands out capability URLs. The
  * wire protocol itself never leaves {@code web/} (ban rule R8) — this class
  * only holds the facade.
+ *
+ * <p>Since the API-first transformation, every op is served from the
+ * {@link MaterioneAPI} facade — one reload path ({@code api.pipeline()}) for
+ * the editor, the commands and future MCP callers — and the file-watcher
+ * feed also reaches the authoring API's change subscription.
  */
 public final class EditorTransportService {
 
@@ -51,16 +69,27 @@ public final class EditorTransportService {
     private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
 
     private final PipelineService pipeline;
-    private final DeliveryService delivery;
+    /** The facade: the only surface the editor's ops are served through. */
+    private final MaterioneAPI api;
+    /** Host-shared document services; null → this transport builds its own. */
+    private final DocumentStore sharedDocuments;
+    private final AuditLog sharedAudit;
+    /** The authoring API's change feed; the watcher publishes into it. Nullable. */
+    private final AuthoringApiImpl authoringFeed;
+    private AutoCloseable reloadSubscription;
 
     public EditorTransportService(Plugin plugin, DiagnosticsBus diagnostics,
             SchedulingGateway scheduling, PipelineService pipeline,
-            DeliveryService delivery) {
+            MaterioneAPI api, DocumentStore documents, AuditLog audit,
+            AuthoringApiImpl authoringFeed) {
         this.plugin = plugin;
         this.diagnostics = diagnostics;
         this.scheduling = scheduling;
         this.pipeline = pipeline;
-        this.delivery = delivery;
+        this.api = java.util.Objects.requireNonNull(api, "api");
+        this.sharedDocuments = documents;
+        this.sharedAudit = audit;
+        this.authoringFeed = authoringFeed;
     }
 
     /** Starts the listener from settings ({@code editor_*} keys). False when disabled/unbound. */
@@ -100,6 +129,17 @@ public final class EditorTransportService {
             listener = null;
             sessions = null;
         }
+        if (bound) {
+            // One reload push channel: save-triggered and manual runs alike
+            // announce here (manual always, saves only on real changes).
+            reloadSubscription = api.pipeline().subscribeReloads(event -> {
+                EditorSessions current = sessions;
+                if (current != null && (event.announceAlways() || !event.noop())) {
+                    dev.materione.web.SessionPush.reload(current, event.scope(),
+                            event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
+                }
+            });
+        }
         if (bound && settings.getBoolean("editor_file_watcher", true)) {
             startFileWatcher(storage);
         }
@@ -115,8 +155,9 @@ public final class EditorTransportService {
      * itself inside).
      */
     private void startFileWatcher(dev.materione.core.storage.StorageService.StorageState storage) {
-        var documents = new dev.materione.core.document.DocumentStore(
-                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        var documents = sharedDocuments != null ? sharedDocuments
+                : new dev.materione.core.document.DocumentStore(
+                        storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
         try {
             var watcher = new dev.materione.core.document.PackWatcher(
                     storage.contentPacksDir(), documents,
@@ -125,6 +166,10 @@ public final class EditorTransportService {
                         if (current != null) {
                             dev.materione.web.SessionPush.documentChanged(
                                     current, change.pack(), change.path(), change.deleted());
+                        }
+                        AuthoringApiImpl feed = authoringFeed;
+                        if (feed != null) {
+                            feed.publishChange(change.pack(), change.path(), change.deleted());
                         }
                     });
             packWatcher = watcher;
@@ -138,233 +183,107 @@ public final class EditorTransportService {
 
     /**
      * Document-store ops (slice 3): browse/edit over {@code content/packs/}
-     * with revisions + audit, and a targeted reload after every save — the
-     * live preview loop's first half.
+     * served entirely from the {@link MaterioneAPI} sub-surfaces — this host
+     * supplies the session-bound {@link ActorContext}s and nothing else.
      */
     private void registerContentOps(RpcDispatcher dispatcher,
             dev.materione.core.storage.StorageService.StorageState storage) {
-        var documents = new dev.materione.core.document.DocumentStore(
-                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
-        var audit = new dev.materione.core.document.AuditLog(
-                storage.storageDir().resolve("audit.log"));
-        ReloadTrigger trigger = new ReloadTrigger() {
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
-                    java.util.Set<java.nio.file.Path> files) {
-                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files),
-                        storage, false);
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadFilesForPreview(
-                    java.util.Set<java.nio.file.Path> files, String sessionId) {
-                String ownerId = ownerForSession(sessionId);
-                return runReload(new dev.materione.core.pipeline.ReloadScope.FileSet(files), storage, false, ownerId);
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadScopeForPreview(
-                    dev.materione.core.pipeline.ReloadScope scope, String sessionId) {
-                return runReload(scope, storage, false, ownerForSession(sessionId));
-            }
-
-            private String ownerForSession(String sessionId) {
-                if (sessions == null) {
-                    return "";
-                }
-                var editorSession = sessions.find(sessionId);
-                return editorSession == null ? "" : editorSession.ownerId();
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
-                    dev.materione.core.pipeline.ReloadScope scope) {
-                // Manual reloads always announce, even no-ops/skips — the
-                // control-center button must not fail silently.
-                return runReload(scope, storage, true);
-            }
-        };
+        var audit = sharedAudit != null ? sharedAudit
+                : new dev.materione.core.document.AuditLog(
+                        storage.storageDir().resolve("audit.log"));
+        // Editor sessions act with their owner's identity; per-node checks ride
+        // the in-game trust flow (master §9.2) until relay mode tightens them.
+        java.util.function.Function<String, ActorContext> actorFor =
+                attribution -> new ActorContext(
+                        attribution, ActorContext.Kind.EDITOR_SESSION,
+                        ownerUuidOfCurrentSession(), node -> true);
         dev.materione.web.rpc.ops.EditorContentOps.register(
-                dispatcher, documents, audit, storage.contentPacksDir(), trigger,
-                this::typeCatalog,
-                () -> diagnostics.recent(100),
-                this::computedMeta);
+                dispatcher, api.authoring(), this::contentTypes,
+                () -> diagnostics.recent(100), actorFor);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
-                dispatcher, documents, storage.contentPacksDir(), audit, trigger);
-        dev.materione.web.rpc.ops.AssetOps.register(
-                dispatcher, storage.contentPacksDir(), audit, trigger);
+                dispatcher, api.authoring(), actorFor);
+        dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
         dev.materione.web.rpc.ops.AdminOps.register(
-                dispatcher, audit, trigger,
-                plugin.getDataFolder().toPath().resolve("settings").resolve("settings.yml"),
-                dev.materione.core.settings.SettingsService::validateDraft);
-        dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, new dev.materione.web.DeliveryControl() {
-            @Override
-            public Status status() {
-                if (delivery == null) {
-                    return new Status("", "");
-                }
-                var status = delivery.releaseStatus();
-                return new Status(status.publishedSha256(), status.candidateSha256());
-            }
-
-            @Override
-            public boolean publish(String expectedCandidateSha256) {
-                return delivery != null && delivery.publishCandidate(expectedCandidateSha256);
-            }
-        });
+                dispatcher, api.admin(), api.pipeline(), actorFor,
+                (actor, target) -> audit.record(actor, "pipeline.reload", target));
+        dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, api.delivery(), actorFor);
     }
 
-    /**
-     * Server-computed metadata for the studio: a glyph's allocated codepoint.
-     * The allocation table owns it (D7) — the form shows it, the file on disk
-     * never contains it.
-     */
-    @SuppressWarnings("unused") // parsed is part of the ComputedMeta contract
-    private com.google.gson.JsonObject computedMeta(
-            String pack, String path, com.google.gson.JsonObject parsed) {
-        if (!path.startsWith("glyphs/") || pipeline.allocation() == null || parsed == null) {
-            return null;
+    /** The session owner bound to the dispatching request, if any. */
+    private java.util.Optional<java.util.UUID> ownerUuidOfCurrentSession() {
+        EditorSessions current = sessions;
+        String sessionId = RpcDispatcher.currentSessionId();
+        if (current == null || sessionId == null) {
+            return java.util.Optional.empty();
         }
-        var glyphs = new com.google.gson.JsonObject();
-        for (var entry : parsed.entrySet()) {
-            if (!entry.getValue().isJsonObject()) {
-                continue;
-            }
-            dev.materione.core.content.AllocatedRange run;
-            try {
-                run = pipeline.allocation().allocationOf(
-                        NamespacedId.parse(pack + ":" + entry.getKey()),
-                        dev.materione.content.glyphs.GlyphType.ALLOCATION_KIND)
-                        .map(dev.materione.core.content.AllocatedRange::parse)
-                        .orElse(null);
-            } catch (IllegalArgumentException malformedId) {
-                continue;
-            }
-            if (run == null) {
-                continue;
-            }
-            var info = new com.google.gson.JsonObject();
-            info.addProperty("codepoint", dev.materione.core.text.GlyphCodepoints.of(run.start()));
-            info.addProperty("count", run.count());
-            info.addProperty("char", String.valueOf((char) dev.materione.core.text.GlyphCodepoints.of(run.start())));
-            glyphs.add(entry.getKey(), info);
+        EditorSession session = current.find(sessionId);
+        String owner = session == null ? null : session.ownerId();
+        try {
+            return owner == null || owner.isBlank()
+                    ? java.util.Optional.empty()
+                    : java.util.Optional.of(java.util.UUID.fromString(owner));
+        } catch (IllegalArgumentException e) {
+            return java.util.Optional.empty(); // console-origin session
         }
-        if (glyphs.size() == 0) {
-            return null;
-        }
-        var out = new com.google.gson.JsonObject();
-        out.add("glyphs", glyphs);
+    }
+
+    /** Registered content types through the api's registry view (D5). */
+    private java.util.List<ContentType> contentTypes() {
+        java.util.List<ContentType> out = new ArrayList<>();
+        api.registries().byKey(RegistryKeys.CONTENT_TYPES).ifPresent(view -> {
+            for (var entry : ((Registry<?>) view).entries()) {
+                if (entry.entry() instanceof ContentType type) {
+                    out.add(type);
+                }
+            }
+        });
         return out;
     }
 
     /**
-     * Runs any scope through the pipeline off the main thread and broadcasts
-     * the outcome to every connected editor — the live preview loop's last
-     * mile, shared by save-triggered and manual reloads.
+     * Runs any scope through the one reload path — the api's
+     * {@code pipeline()} — for host-side callers (the reload test, console
+     * flows). Push announcements happen once, in the reload subscription.
      */
-    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
-            boolean announceAlways) {
-        return runReload(scope, storage, announceAlways, "", false);
-    }
-
-    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
-            boolean announceAlways, String previewOwnerId) {
-        return runReload(scope, storage, announceAlways, previewOwnerId, true);
-    }
-
-    private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.core.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
+    java.util.concurrent.CompletableFuture<Outcome> runReload(
+            dev.materione.api.pipeline.ReloadScope scope,
             boolean announceAlways, String previewOwnerId, boolean stageCandidate) {
-        CompletableFuture<ReloadTrigger.Outcome> future = new CompletableFuture<>();
-        scheduling.executeAsync(plugin, () -> {
-            try {
-                var summary = pipeline.reload(scope,
-                        storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
-                // the world datapack applies on every reload path, previews
-                // included — its restart-required ledger stays honest either way
-                if (plugin instanceof dev.materione.plugin.MaterionePlugin materione
-                        && materione.datapackService() != null) {
-                    materione.datapackService().apply(
-                            summary.stagedDatapackZip(), summary.datapackSha256());
-                }
-                if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null && delivery != null) {
-                    if (stageCandidate) {
-                        delivery.stageCandidate(
-                                summary.packZip(),
-                                summary.packSha256(),
-                                previewOwnerId == null || previewOwnerId.isBlank()
-                                        ? null : java.util.UUID.fromString(previewOwnerId));
-                    } else {
-                        delivery.publish(summary.packZip(), summary.packSha256());
-                    }
-                }
-                future.complete(new ReloadTrigger.Outcome(
-                        !summary.skipped(), summary.noop(),
-                        summary.itemsLive(), summary.quarantined()));
-            } catch (Exception e) {
-                // fail-soft: a broken reload never breaks the save reply
-                future.complete(ReloadTrigger.Outcome.rejected());
-            }
-        });
-        return future.whenComplete((outcome, error) -> {
-            if (sessions != null && outcome != null && (announceAlways || !outcome.noop())) {
-                dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
-                        outcome.noop(), outcome.itemsLive(), outcome.quarantined());
-            }
-        });
+        ActorContext actor = new ActorContext(
+                "editor", ActorContext.Kind.EDITOR_SESSION,
+                previewOwnerId == null || previewOwnerId.isBlank()
+                        ? java.util.Optional.empty()
+                        : java.util.Optional.of(java.util.UUID.fromString(previewOwnerId)),
+                node -> true);
+        PipelineApi.DeliveryMode mode = stageCandidate
+                ? PipelineApi.DeliveryMode.CANDIDATE_PREVIEW
+                : PipelineApi.DeliveryMode.PUBLISH_DEFAULT;
+        return api.pipeline()
+                .reload(actor, new PipelineApi.ReloadRequest(scope, mode, announceAlways))
+                .thenApply(result -> result.ok()
+                        ? new Outcome(
+                                true, result.value().noop(),
+                                result.value().itemsLive(), result.value().quarantined())
+                        : Outcome.rejected());
     }
 
-    /** Human-readable scope for push payloads and audit entries. */
-    private static String scopeLabel(dev.materione.core.pipeline.ReloadScope scope) {
-        if (scope instanceof dev.materione.core.pipeline.ReloadScope.OnePack pack) {
-            return "one-pack:" + pack.packId();
+    /** The reload outcome host callers wait on. */
+    public record Outcome(boolean accepted, boolean noop, int itemsLive, int quarantined) {
+        public static Outcome rejected() {
+            return new Outcome(false, true, -1, -1);
         }
-        return scope instanceof dev.materione.core.pipeline.ReloadScope.Everything
-                ? "everything" : scope.toString();
     }
 
-    /** Registry self-description → transport-ready schema records (plugin.md §3). */
-    private java.util.List<dev.materione.web.TypeMeta> typeCatalog() {
-        var out = new java.util.ArrayList<dev.materione.web.TypeMeta>();
-        for (var type : pipeline.contentTypes()) {
-            var description = type.describe();
-            var params = new java.util.ArrayList<dev.materione.web.TypeMeta.Param>();
-            for (var parameter : description.parameters()) {
-                params.add(new dev.materione.web.TypeMeta.Param(
-                        parameter.id(),
-                        parameter.type().name().toLowerCase(java.util.Locale.ROOT),
-                        parameter.required(),
-                        parameter.defaultValue(),
-                        parameter.description(),
-                        parameter.allowedValues(),
-                        java.util.List.of(),
-                        parameter.uiHint(),
-                        parameter.editor().label(),
-                        parameter.editor().section(),
-                        parameter.editor().order(),
-                        parameter.editor().advanced(),
-                        parameter.editor().referenceKind(),
-                        parameter.editor().example()));
-            }
-            out.add(new dev.materione.web.TypeMeta(
-                    type.name(), type.directory(),
-                    description.displayName(), description.description(), params));
-        }
-        return out;
-    }
-
-    /** Creates a session and prints its capability URL to the sender. */
-    public void openSession(CommandSender sender) {
+    /**
+     * Creates a session and prints its capability URL to the sender; returns
+     * the URL (null when the listener is not running) so API callers can hand
+     * it to their own surface.
+     */
+    public String openSession(CommandSender sender) {
         if (listener == null || !listener.isRunning()) {
             sender.sendMessage(Component.text(
                     "the editor listener is not running (disabled in settings or bind failed)",
                     NamedTextColor.RED));
-            return;
+            return null;
         }
         String ownerId = sender instanceof org.bukkit.entity.Player player ? player.getUniqueId().toString() : "";
         String url = listener.openSessionUrl(advertiseHost, ownerId);
@@ -377,9 +296,18 @@ public final class EditorTransportService {
                 "The part after # is secret and stays in your browser. Approve the connection in game "
                         + "within " + TRUST_PROMPT_TIMEOUT_SECONDS + "s.",
                 NamedTextColor.GRAY));
+        return url;
     }
 
     public void stop() {
+        if (reloadSubscription != null) {
+            try {
+                reloadSubscription.close();
+            } catch (Exception e) {
+                // unsubscribing is best-effort (D6)
+            }
+            reloadSubscription = null;
+        }
         if (packWatcher != null) {
             try {
                 packWatcher.close();

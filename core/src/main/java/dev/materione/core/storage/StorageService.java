@@ -2,7 +2,7 @@ package dev.materione.core.storage;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;

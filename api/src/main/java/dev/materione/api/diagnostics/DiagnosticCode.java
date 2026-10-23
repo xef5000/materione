@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
  * A stable diagnostic code. Codes are API (plugin architecture §5): users
  * search them, addons emit them, docs document them — never renumber or
  * reuse. Format {@code MTR-####}; ranges are allocated in
- * {@code dev.materione.core.diagnostics.DiagnosticCodes}
+ * {@code dev.materione.api.diagnostics.DiagnosticCodes}
  * (MTR-0xxx bootstrap/platform/settings at M0).
  */
 public record DiagnosticCode(String code, Severity defaultSeverity, String summary) {

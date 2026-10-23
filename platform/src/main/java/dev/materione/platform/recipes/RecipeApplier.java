@@ -127,7 +127,7 @@ public final class RecipeApplier {
     /** Recipe book resync: players see the new set immediately (§4.5). */
     private static int resync(List<NamespacedKey> previousKeys, List<NamespacedKey> keys) {
         int players = 0;
-        for (Player player : Bukkit.getOnlinePlayers()) {
+        for (Player player : onlinePlayers()) {
             if (!previousKeys.isEmpty()) {
                 player.undiscoverRecipes(previousKeys);
             }
@@ -141,5 +141,14 @@ public final class RecipeApplier {
 
     private static NamespacedKey keyOf(NamespacedId id) {
         return new NamespacedKey(id.namespace(), id.value());
+    }
+
+    /** Online players, empty when no server is up (headless tests): nobody to resync. */
+    private static Iterable<? extends Player> onlinePlayers() {
+        try {
+            return Bukkit.getOnlinePlayers();
+        } catch (RuntimeException e) {
+            return java.util.List.of();
+        }
     }
 }

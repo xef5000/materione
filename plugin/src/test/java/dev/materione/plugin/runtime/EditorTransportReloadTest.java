@@ -10,7 +10,6 @@ import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.core.settings.SettingsService;
 import dev.materione.core.storage.StorageService;
-import dev.materione.web.ReloadTrigger;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -66,17 +65,31 @@ class EditorTransportReloadTest {
         String initialUrl = delivery.currentUrl();
         assertThat(initialUrl).isNotEmpty();
 
+        var pipelineApi = new dev.materione.plugin.runtime.api.PipelineApiImpl(
+                null, scheduling, pipeline, quarantine,
+                dev.materione.core.storage.RestartStaging.open(temp.resolve("staged-restart")),
+                delivery, storage.contentPacksDir(), storage.generatedDir(),
+                storage.storageDir(), null);
+        var documents = new dev.materione.core.document.DocumentStore(
+                storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
+        var audit = new dev.materione.core.document.AuditLog(
+                storage.storageDir().resolve("audit.log"));
+
+        var api = new dev.materione.core.MaterioneApiImpl(
+                "test", new RegistryService(), diagnostics, () -> null, scheduling,
+                null, null, pipelineApi,
+                new dev.materione.plugin.runtime.api.DeliveryApiImpl(delivery));
         EditorTransportService transport = new EditorTransportService(
-                null, diagnostics, scheduling, pipeline, delivery);
+                null, diagnostics, scheduling, pipeline, api, documents, audit, null);
 
         // Change an item definition in the pack
         Files.writeString(samplePack.resolve("items/ruby.yml"),
                 "ruby:\n  material: EMERALD\n  model: demo:ruby_emerald\n");
 
         // Reload via file-set scope (simulates editor save)
-        ReloadTrigger.Outcome outcome = transport.runReload(
-                new dev.materione.core.pipeline.ReloadScope.FileSet(Set.of(samplePack.resolve("items/ruby.yml"))),
-                storage, false).join();
+        EditorTransportService.Outcome outcome = transport.runReload(
+                new dev.materione.api.pipeline.ReloadScope.FileSet(Set.of(samplePack.resolve("items/ruby.yml"))),
+                false, "", false).join();
 
         assertThat(outcome.accepted()).isTrue();
         assertThat(outcome.noop()).isFalse();

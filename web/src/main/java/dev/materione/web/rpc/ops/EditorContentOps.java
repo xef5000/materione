@@ -1,23 +1,26 @@
 package dev.materione.web.rpc.ops;
 
 import com.google.gson.JsonObject;
-import dev.materione.core.document.AuditLog;
-import dev.materione.core.document.DocumentConflictException;
-import dev.materione.core.document.DocumentStore;
-import dev.materione.web.ReloadTrigger;
+import dev.materione.api.ApiResult;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.api.authoring.AuthoringApi;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.SelfDescription;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
-import dev.materione.web.TypeMeta;
-import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * The document-store RPC surface (web.md §4.2 groups browse/edit/validate).
- * Handlers stay thin: they translate JSON ↔ {@link DocumentStore} records and
- * never touch files themselves — the store owns atomicity, revisions and
- * conflict detection; the host's {@link ReloadTrigger} closes the live
- * preview loop after each successful save.
+ * Handlers are pure JSON translators: request frames → typed {@link
+ * AuthoringApi} calls → response frames. Every file mutation, revision
+ * journal, audit entry and reload trigger lives behind the API (the plugin
+ * is an implementation of the API — api.md §1); this layer owns nothing but
+ * the wire shapes.
  *
  * <p>Errors reuse diagnostic codes as strings (the wire error IS a rendered
  * diagnostic, plugin.md §5): MTR-0007 syntax, MTR-0034 conflict, MTR-0011
@@ -28,43 +31,20 @@ public final class EditorContentOps {
     private EditorContentOps() {}
 
     /**
-     * Server-computed, read-only document metadata — data the runtime owns
-     * (a glyph's allocated codepoint) that the form should show but the file
-     * must never contain. Returns null when nothing applies.
-     */
-    public interface ComputedMeta {
-        JsonObject compute(String pack, String path, JsonObject parsed);
-    }
-
-    /**
-     * Registers the ops. {@code packsRoot} is only needed to hand absolute
-     * file paths to the reload trigger; the suppliers feed {@code browse.types}
-     * (registry self-description → forms) and the diagnostics center.
+     * Registers the ops. {@code actorFor} maps this op set's audit
+     * attribution string to the acting {@link ActorContext}; {@code types}
+     * feeds {@code browse.types} (registry self-description → forms).
      */
     public static void register(
             RpcDispatcher dispatcher,
-            DocumentStore documents,
-            AuditLog audit,
-            Path packsRoot,
-            ReloadTrigger reload,
-            java.util.function.Supplier<List<TypeMeta>> types,
-            java.util.function.Supplier<List<dev.materione.api.diagnostics.Diagnostic>> diagnostics) {
-        register(dispatcher, documents, audit, packsRoot, reload, types, diagnostics, null);
-    }
-
-    public static void register(
-            RpcDispatcher dispatcher,
-            DocumentStore documents,
-            AuditLog audit,
-            Path packsRoot,
-            ReloadTrigger reload,
-            java.util.function.Supplier<List<TypeMeta>> types,
-            java.util.function.Supplier<List<dev.materione.api.diagnostics.Diagnostic>> diagnostics,
-            ComputedMeta computedMeta) {
+            AuthoringApi authoring,
+            Supplier<List<ContentType>> types,
+            Supplier<List<Diagnostic>> diagnostics,
+            Function<String, ActorContext> actorFor) {
         dispatcher.register("browse.packs", request -> {
             var payload = new JsonObject();
             var packs = new com.google.gson.JsonArray();
-            documents.listPacks().forEach(pack -> packs.add(pack.id()));
+            authoring.listPacks().value().forEach(pack -> packs.add(pack.id()));
             payload.add("packs", packs);
             return Wire.Response.success(request, payload);
         });
@@ -75,7 +55,8 @@ public final class EditorContentOps {
             String query = optionalString(request.payload(), "query");
             var payload = new JsonObject();
             var resources = new com.google.gson.JsonArray();
-            for (DocumentStore.ResourceRef ref : documents.listResources(pack, type, query)) {
+            for (AuthoringApi.ResourceRef ref : authoring.listResources(
+                    new AuthoringApi.ResourceFilter(pack, type, query)).value()) {
                 JsonObject resource = new JsonObject();
                 resource.addProperty("pack", ref.pack());
                 resource.addProperty("type", ref.type());
@@ -89,30 +70,22 @@ public final class EditorContentOps {
 
         dispatcher.register("browse.get", request -> {
             try {
-                DocumentStore.Document document = documents.read(
+                ApiResult<AuthoringApi.DocumentView> result = authoring.getDocument(
                         requiredString(request.payload(), "pack"),
                         requiredString(request.payload(), "path"));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
+                AuthoringApi.DocumentView document = result.value();
                 JsonObject payload = new JsonObject();
                 payload.addProperty("raw", document.raw());
                 payload.addProperty("rev", document.revision());
                 payload.addProperty("sha256", document.sha256());
-                var parsed = parsedView(document.raw());
-                payload.add("parsed", parsed);
-                if (computedMeta != null && parsed instanceof JsonObject parsedObject) {
-                    JsonObject computed = computedMeta.compute(
-                            request.payload().get("pack").getAsString(),
-                            request.payload().get("path").getAsString(),
-                            parsedObject);
-                    if (computed != null) {
-                        payload.add("computed", computed);
-                    }
+                payload.add("parsed", jsonOf(document.parsed()));
+                if (!document.computed().isEmpty()) {
+                    payload.add("computed", jsonOf(document.computed()));
                 }
                 return Wire.Response.success(request, payload);
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such document", null, null));
-            } catch (IllegalArgumentException e) {
-                return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -123,15 +96,18 @@ public final class EditorContentOps {
                 var limitElement = request.payload().get("limit");
                 int limit = limitElement != null && limitElement.isJsonPrimitive()
                         ? limitElement.getAsInt() : 50;
-                var revisions = documents.history(
+                ApiResult<List<AuthoringApi.RevisionInfo>> result = authoring.getHistory(
                         requiredString(request.payload(), "pack"),
                         requiredString(request.payload(), "path"),
                         limit);
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
                 JsonObject payload = new JsonObject();
                 var array = new com.google.gson.JsonArray();
-                for (DocumentStore.Revision revision : revisions) {
+                for (AuthoringApi.RevisionInfo revision : result.value()) {
                     JsonObject entry = new JsonObject();
-                    entry.addProperty("rev", revision.rev());
+                    entry.addProperty("rev", revision.revision());
                     entry.addProperty("ts", revision.timestampMs());
                     entry.addProperty("actor", revision.actor());
                     entry.addProperty("action", revision.action());
@@ -156,27 +132,20 @@ public final class EditorContentOps {
                 String path = requiredString(payload0, "path");
                 int expectedRev = payload0.get("rev").getAsInt();
                 String content = requiredString(payload0, "content");
-                int newRev = documents.write(pack, path, expectedRev, content, actorOf(request));
-                audit.record(actorOf(request), "edit.put", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.putDocument(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.PutDocumentRequest(pack, path, expectedRev, content));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(payload0), null);
+                }
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", newRev);
-                payload.add("parsed", parsedView(content));
+                payload.addProperty("rev", result.value().revision());
+                payload.add("parsed", jsonOf(result.value().parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (DocumentConflictException e) {
-                audit.record(actorOf(request), "edit.put.conflict",
-                        requiredString(payload0, "pack") + "/" + requiredString(payload0, "path"));
-                JsonObject data = new JsonObject();
-                data.addProperty("currentRev", e.currentRevision());
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(),
-                        requiredString(payload0, "pack") + "/" + requiredString(payload0, "path"),
-                        "re-read the document and re-apply your change"));
             } catch (IllegalArgumentException e) {
-                // syntax gate or path validation — the editor shows it inline
+                // malformed frame — the editor shows it inline
                 return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0007", e.getMessage(),
-                        safePath(payload0), null));
+                        "MTR-0007", e.getMessage(), safePath(payload0), null));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -185,16 +154,16 @@ public final class EditorContentOps {
         dispatcher.register("edit.delete", request -> {
             JsonObject payload0 = request.payload();
             try {
-                String pack = requiredString(payload0, "pack");
-                String path = requiredString(payload0, "path");
-                documents.delete(pack, path, payload0.get("rev").getAsInt(), actorOf(request));
-                audit.record(actorOf(request), "edit.delete", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                ApiResult<Void> result = authoring.deleteDocument(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.DeleteDocumentRequest(
+                                requiredString(payload0, "pack"),
+                                requiredString(payload0, "path"),
+                                payload0.get("rev").getAsInt()));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(payload0), null);
+                }
                 return Wire.Response.success(request, new JsonObject());
-            } catch (DocumentConflictException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(payload0),
-                        "re-read the document and retry"));
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
@@ -204,11 +173,14 @@ public final class EditorContentOps {
 
         dispatcher.register("edit.createPack", request -> {
             try {
-                String pack = requiredString(request.payload(), "pack");
-                documents.createPack(pack, actorOf(request));
-                audit.record(actorOf(request), "edit.createPack", pack);
+                ApiResult<AuthoringApi.PackInfo> result = authoring.createPack(
+                        actorFor.apply(actorOf(request)),
+                        requiredString(request.payload(), "pack"));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
                 return Wire.Response.success(request, new JsonObject());
-            } catch (IllegalArgumentException | IllegalStateException e) {
+            } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
@@ -220,37 +192,37 @@ public final class EditorContentOps {
         dispatcher.register("edit.create", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String path = requiredString(body, "path");
-                String content = Scaffolds.forPath(path, optionalString(body, "id"));
-                int rev = documents.createDocument(pack, path, content, actorOf(request));
-                audit.record(actorOf(request), "edit.create", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.createDocument(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.CreateDocumentRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                optionalString(body, "id"),
+                                null,
+                                null));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "open the existing document instead"));
+                }
+                AuthoringApi.DocumentView created = result.value();
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", rev);
-                payload.addProperty("raw", content);
-                payload.add("parsed", parsedView(content));
+                payload.addProperty("rev", created.revision());
+                payload.addProperty("raw", created.raw());
+                payload.add("parsed", jsonOf(created.parsed()));
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
-            } catch (IllegalStateException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0008", e.getMessage(), safePath(body),
-                        "open the existing document instead"));
             } catch (Exception e) {
                 return failure(request, e);
             }
         });
 
         // One studio save = one revision, one audit line, one reload. The
-        // edits are applied through the lossless layer, so untouched keys,
-        // comments and fields no studio can render survive verbatim (§5.6).
+        // edits ride the api's lossless layer, so untouched keys, comments and
+        // fields no studio can render survive verbatim (§5.6).
         dispatcher.register("authoring.setFields", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String path = requiredString(body, "path");
-                int expectedRev = body.get("rev").getAsInt();
                 var element = body.get("edits");
                 if (element == null || !element.isJsonArray() || element.getAsJsonArray().isEmpty()) {
                     throw new IllegalArgumentException("'edits' must be a non-empty array");
@@ -258,36 +230,32 @@ public final class EditorContentOps {
                 if (element.getAsJsonArray().size() > 256) {
                     throw new IllegalArgumentException("too many edits in one save");
                 }
-                List<DocumentStore.FieldEdit> edits = new java.util.ArrayList<>();
+                List<AuthoringApi.FieldEdit> edits = new java.util.ArrayList<>();
                 for (var entry : element.getAsJsonArray()) {
                     if (!entry.isJsonObject()) {
                         throw new IllegalArgumentException("'edits' entries must be objects");
                     }
                     JsonObject edit = entry.getAsJsonObject();
-                    edits.add(new DocumentStore.FieldEdit(
+                    edits.add(new AuthoringApi.FieldEdit(
                             stringList(edit.get("field")), nodeValue(edit.get("value"))));
                 }
-                String actor = actorOf(request);
-                DocumentStore.Document updated =
-                        documents.setScalars(pack, path, expectedRev, edits, actor);
-                audit.record(actor, "authoring.setFields",
-                        pack + "/" + path + " (" + edits.size() + " fields)");
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.setFields(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.SetFieldsRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                body.get("rev").getAsInt(),
+                                edits));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "reopen the entry and re-apply your change"));
+                }
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", updated.revision());
-                payload.addProperty("raw", updated.raw());
-                payload.add("parsed", parsedView(updated.raw()));
+                payload.addProperty("rev", result.value().revision());
+                payload.addProperty("raw", result.value().raw());
+                payload.add("parsed", jsonOf(result.value().parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (DocumentConflictException e) {
-                JsonObject data = new JsonObject();
-                data.addProperty("currentRev", e.currentRevision());
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(body),
-                        "reopen the entry and re-apply your change"));
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such document", safePath(body), null));
-            } catch (IllegalArgumentException | IllegalStateException e) {
+            } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
@@ -297,89 +265,67 @@ public final class EditorContentOps {
         dispatcher.register("authoring.createResource", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String id = requiredString(body, "id");
                 String name = requiredString(body, "name").trim();
-                boolean createPack = body.has("createPack") && body.get("createPack").getAsBoolean();
                 if (name.isEmpty() || name.length() > 128) {
                     throw new IllegalArgumentException("display name must be 1..128 characters");
                 }
-                // The content browser creates inside the type tab (and folder)
-                // the author is looking at; items stay the default so older
-                // clients keep working.
-                String type = optionalString(body, "type");
-                String folder = optionalString(body, "folder");
-                String path = documentPath(type == null ? "items" : type, folder, id);
-                String scaffold = Scaffolds.forPath(path, id);
-                // Recipes and templates have no display name; forcing one would
-                // invent a field the type's schema does not declare.
-                String content = scaffold.contains("display_name:")
-                        ? dev.materione.core.document.LosslessYaml.parse(scaffold)
-                                .withScalar(name, id, "display_name").save()
-                        : scaffold;
-                String actor = actorOf(request);
-                DocumentStore.Document created =
-                        documents.createResource(pack, path, content, createPack, actor);
-                audit.record(actor, "authoring.createResource", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                String id = requiredString(body, "id");
+                ApiResult<AuthoringApi.DocumentView> result = authoring.createResource(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.CreateResourceRequest(
+                                requiredString(body, "pack"),
+                                id,
+                                name,
+                                optionalString(body, "type"),
+                                optionalString(body, "folder"),
+                                body.has("createPack") && body.get("createPack").getAsBoolean()));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
+                AuthoringApi.DocumentView created = result.value();
                 JsonObject payload = new JsonObject();
-                payload.addProperty("pack", pack);
-                payload.addProperty("path", path);
+                payload.addProperty("pack", created.pack());
+                payload.addProperty("path", created.path());
                 payload.addProperty("id", id);
                 payload.addProperty("rev", created.revision());
                 payload.addProperty("raw", created.raw());
-                payload.add("parsed", parsedView(created.raw()));
+                payload.add("parsed", jsonOf(created.parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (IllegalArgumentException | IllegalStateException e) {
+            } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
             }
         });
 
-        // Copying an entry is one create: the scaffold is the source file's
-        // bytes with its root key re-keyed, so comments and unknown fields
-        // survive the copy exactly like every other authoring write (§5.6).
+        // Copying an entry is one create: the api re-keys the source file's
+        // bytes, so comments and unknown fields survive the copy (§5.6).
         dispatcher.register("authoring.duplicateResource", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String from = requiredString(body, "path");
                 String id = requiredString(body, "id");
-                String folder = optionalString(body, "folder");
-                String type = from.contains("/") ? from.substring(0, from.indexOf('/')) : "";
-                String path = documentPath(type, folder, id);
-                DocumentStore.Document source = documents.read(pack, from);
-                var parsed = dev.materione.core.document.LosslessYaml.parse(source.raw());
-                if (parsed.parseError().isPresent()) {
-                    throw new IllegalArgumentException(
-                            "cannot copy a file that does not parse: " + parsed.parseError().get());
+                ApiResult<AuthoringApi.DocumentView> result = authoring.duplicateResource(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.DuplicateResourceRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                id,
+                                optionalString(body, "folder")));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "choose a different id"));
                 }
-                String sourceId = String.valueOf(parsed.data().keySet().iterator().next());
-                String content = source.raw().replaceFirst(
-                        "(?m)^" + java.util.regex.Pattern.quote(sourceId) + ":",
-                        java.util.regex.Matcher.quoteReplacement(id + ":"));
-                String actor = actorOf(request);
-                int revision = documents.createDocument(pack, path, content, actor);
-                audit.record(actor, "authoring.duplicateResource", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                AuthoringApi.DocumentView created = result.value();
                 JsonObject payload = new JsonObject();
-                payload.addProperty("pack", pack);
-                payload.addProperty("path", path);
+                payload.addProperty("pack", created.pack());
+                payload.addProperty("path", created.path());
                 payload.addProperty("id", id);
-                payload.addProperty("rev", revision);
-                payload.addProperty("raw", content);
-                payload.add("parsed", parsedView(content));
+                payload.addProperty("rev", created.revision());
+                payload.addProperty("raw", created.raw());
+                payload.add("parsed", jsonOf(created.parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such document", safePath(body), null));
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
-            } catch (IllegalStateException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0008", e.getMessage(), safePath(body),
-                        "choose a different id"));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -388,7 +334,8 @@ public final class EditorContentOps {
         dispatcher.register("browse.folders", request -> {
             JsonObject payload = new JsonObject();
             var folders = new com.google.gson.JsonArray();
-            documents.listFolders(requiredString(request.payload(), "pack")).forEach(folders::add);
+            authoring.listFolders(requiredString(request.payload(), "pack"))
+                    .value().forEach(folders::add);
             payload.add("folders", folders);
             return Wire.Response.success(request, payload);
         });
@@ -396,16 +343,16 @@ public final class EditorContentOps {
         dispatcher.register("edit.createFolder", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String path = requiredString(body, "path");
-                documents.createFolder(pack, path);
-                audit.record(actorOf(request), "edit.createFolder", pack + "/" + path);
+                ApiResult<Void> result = authoring.createFolder(
+                        actorFor.apply(actorOf(request)),
+                        requiredString(body, "pack"),
+                        requiredString(body, "path"));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body), null);
+                }
                 return Wire.Response.success(request, new JsonObject());
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
-            } catch (IllegalStateException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0008", e.getMessage(), safePath(body), null));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -414,20 +361,17 @@ public final class EditorContentOps {
         dispatcher.register("edit.deleteFolder", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String path = requiredString(body, "path");
-                documents.deleteFolder(pack, path);
-                audit.record(actorOf(request), "edit.deleteFolder", pack + "/" + path);
+                ApiResult<Void> result = authoring.deleteFolder(
+                        actorFor.apply(actorOf(request)),
+                        requiredString(body, "pack"),
+                        requiredString(body, "path"));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "empty the folder first"));
+                }
                 return Wire.Response.success(request, new JsonObject());
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such folder", safePath(body), null));
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
-            } catch (IllegalStateException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0008", e.getMessage(), safePath(body),
-                        "empty the folder first"));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -436,25 +380,17 @@ public final class EditorContentOps {
         dispatcher.register("edit.moveFolder", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String from = requiredString(body, "from");
-                String to = requiredString(body, "to");
-                documents.moveFolder(pack, from, to, actorOf(request));
-                audit.record(actorOf(request), "edit.moveFolder", pack + "/" + from + " -> " + to);
-                queueReload(reload, packsRoot.resolve(pack));
+                ApiResult<Void> result = authoring.moveFolder(
+                        actorFor.apply(actorOf(request)),
+                        requiredString(body, "pack"),
+                        requiredString(body, "from"),
+                        requiredString(body, "to"));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body), null);
+                }
                 return Wire.Response.success(request, new JsonObject());
-            } catch (DocumentConflictException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(body),
-                        "reload the pack and try again"));
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such folder", safePath(body), null));
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
-            } catch (IllegalStateException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0008", e.getMessage(), safePath(body), null));
             } catch (Exception e) {
                 return failure(request, e);
             }
@@ -463,26 +399,21 @@ public final class EditorContentOps {
         dispatcher.register("edit.move", request -> {
             JsonObject body = request.payload();
             try {
-                String pack = requiredString(body, "pack");
-                String from = requiredString(body, "from");
-                String to = requiredString(body, "to");
-                DocumentStore.Document moved =
-                        documents.move(pack, from, body.get("rev").getAsInt(), to, actorOf(request));
-                audit.record(actorOf(request), "edit.move", pack + "/" + from + " -> " + to);
-                queueReload(reload, packsRoot.resolve(pack).resolve(from));
-                queueReload(reload, packsRoot.resolve(pack).resolve(to));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.moveDocument(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.MoveDocumentRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "from"),
+                                body.get("rev").getAsInt(),
+                                requiredString(body, "to")));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body), null);
+                }
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", moved.revision());
-                payload.add("parsed", parsedView(moved.raw()));
+                payload.addProperty("rev", result.value().revision());
+                payload.add("parsed", jsonOf(result.value().parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (DocumentConflictException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(body),
-                        "re-read the document and retry"));
-            } catch (java.nio.file.NoSuchFileException e) {
-                return Wire.Response.failure(request,
-                        new Wire.Error("MTR-0009", "no such document: " + e.getFile(), null, null));
-            } catch (IllegalArgumentException | IllegalStateException e) {
+            } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
@@ -493,11 +424,12 @@ public final class EditorContentOps {
             // v1: syntax-level gate (what write would reject); semantic
             // validation streams back from the pipeline run that follows.
             String content = requiredString(request.payload(), "content");
-            var parseError = dev.materione.core.document.LosslessYaml.parse(content).parseError();
+            ApiResult<Void> result = authoring.validateDraft(
+                    new AuthoringApi.ValidateDraftRequest(content));
             JsonObject payload = new JsonObject();
-            if (parseError.isPresent()) {
+            if (!result.ok()) {
                 payload.addProperty("ok", false);
-                payload.addProperty("error", parseError.get());
+                payload.addProperty("error", result.diagnostics().get(0).message());
             } else {
                 payload.addProperty("ok", true);
             }
@@ -507,26 +439,22 @@ public final class EditorContentOps {
         dispatcher.register("edit.setScalar", request -> {
             JsonObject body = request.payload();
             try {
-                DocumentStore.Document document = documents.setScalar(
-                        requiredString(body, "pack"),
-                        requiredString(body, "path"),
-                        body.get("rev").getAsInt(),
-                        stringList(body.get("field")),
-                        valueOf(body.get("value")),
-                        actorOf(request));
-                audit.record(actorOf(request), "edit.setScalar",
-                        requiredString(body, "pack") + "/" + requiredString(body, "path"));
-                queueReload(reload, packsRoot.resolve(requiredString(body, "pack"))
-                        .resolve(requiredString(body, "path")));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.setScalar(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.SetScalarRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                body.get("rev").getAsInt(),
+                                stringList(body.get("field")),
+                                valueOf(body.get("value"))));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body), null);
+                }
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", document.revision());
-                payload.addProperty("raw", document.raw());
+                payload.addProperty("rev", result.value().revision());
+                payload.addProperty("raw", result.value().raw());
                 return Wire.Response.success(request, payload);
-            } catch (DocumentConflictException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(body),
-                        "re-read the document and retry"));
-            } catch (IllegalArgumentException | IllegalStateException e) {
+            } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
                 return failure(request, e);
@@ -534,7 +462,7 @@ public final class EditorContentOps {
         });
 
         // The Item Studio commits a coherent draft through the same lossless
-        // document store in one revision and queues exactly one reload.
+        // api in one revision and queues exactly one reload.
         dispatcher.register("authoring.commit", request -> {
             JsonObject body = request.payload();
             try {
@@ -542,18 +470,18 @@ public final class EditorContentOps {
                 String path = requiredString(body, "path");
                 int revision = body.get("rev").getAsInt();
                 String content = requiredString(body, "content");
-                int newRevision = documents.write(pack, path, revision, content, actorOf(request));
-                audit.record(actorOf(request), "authoring.commit", pack + "/" + path);
-                queueReload(reload, packsRoot.resolve(pack).resolve(path));
+                ApiResult<AuthoringApi.DocumentView> result = authoring.commitDocument(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.PutDocumentRequest(pack, path, revision, content));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "re-read the item and re-apply your changes"));
+                }
                 JsonObject payload = new JsonObject();
-                payload.addProperty("rev", newRevision);
+                payload.addProperty("rev", result.value().revision());
                 payload.addProperty("raw", content);
-                payload.add("parsed", parsedView(content));
+                payload.add("parsed", jsonOf(result.value().parsed()));
                 return Wire.Response.success(request, payload);
-            } catch (DocumentConflictException e) {
-                return Wire.Response.failure(request, new Wire.Error(
-                        "MTR-0034", e.getMessage(), safePath(body),
-                        "re-read the item and re-apply your changes"));
             } catch (IllegalArgumentException e) {
                 return Wire.Response.failure(request, new Wire.Error(
                         "MTR-0007", e.getMessage(), safePath(body), null));
@@ -561,10 +489,11 @@ public final class EditorContentOps {
                 return failure(request, e);
             }
         });
+
         dispatcher.register("browse.types", request -> {
             JsonObject payload = new JsonObject();
             var array = new com.google.gson.JsonArray();
-            for (TypeMeta type : types.get()) {
+            for (ContentType type : types.get()) {
                 array.add(typeJson(type));
             }
             payload.add("types", array);
@@ -574,7 +503,7 @@ public final class EditorContentOps {
         dispatcher.register("admin.diagnostics.recent", request -> {
             JsonObject payload = new JsonObject();
             var array = new com.google.gson.JsonArray();
-            for (dev.materione.api.diagnostics.Diagnostic diagnostic : diagnostics.get()) {
+            for (Diagnostic diagnostic : diagnostics.get()) {
                 array.add(dev.materione.web.SessionPush.entryJson(diagnostic));
             }
             payload.add("diagnostics", array);
@@ -582,24 +511,28 @@ public final class EditorContentOps {
         });
     }
 
-    private static JsonObject typeJson(TypeMeta type) {
+    // ------------------------------------------------------------------
+
+    /** Registry self-description → the wire schema shape (identical to the old TypeMeta JSON). */
+    private static JsonObject typeJson(ContentType type) {
+        SelfDescription description = type.describe();
         JsonObject object = new JsonObject();
         object.addProperty("name", type.name());
         if (type.directory() != null) {
             object.addProperty("directory", type.directory());
         }
-        object.addProperty("displayName", type.displayName());
-        object.addProperty("description", type.description());
+        object.addProperty("displayName", description.displayName());
+        object.addProperty("description", description.description());
         var params = new com.google.gson.JsonArray();
-        type.parameters().forEach(param -> params.add(paramJson(param)));
+        description.parameters().forEach(param -> params.add(paramJson(param)));
         object.add("parameters", params);
         return object;
     }
 
-    private static JsonObject paramJson(TypeMeta.Param param) {
+    private static JsonObject paramJson(ParameterSchema param) {
         JsonObject object = new JsonObject();
         object.addProperty("id", param.id());
-        object.addProperty("type", param.type());
+        object.addProperty("type", param.type().name().toLowerCase(java.util.Locale.ROOT));
         object.addProperty("required", param.required());
         if (param.defaultValue() != null) {
             object.addProperty("default", param.defaultValue());
@@ -614,21 +547,21 @@ public final class EditorContentOps {
         }
         if (!param.nested().isEmpty()) {
             var nested = new com.google.gson.JsonArray();
-            param.nested().forEach(param1 -> nested.add(paramJson(param1)));
+            param.nested().forEach(EditorContentOps::paramJson);
             object.add("nested", nested);
         }
         if (param.uiHint() != null) {
             object.addProperty("uiHint", param.uiHint());
         }
-        object.addProperty("label", param.label());
-        object.addProperty("section", param.section());
-        object.addProperty("order", param.order());
-        object.addProperty("advanced", param.advanced());
-        if (!param.referenceKind().isBlank()) {
-            object.addProperty("referenceKind", param.referenceKind());
+        object.addProperty("label", param.editor().label());
+        object.addProperty("section", param.editor().section());
+        object.addProperty("order", param.editor().order());
+        object.addProperty("advanced", param.editor().advanced());
+        if (!param.editor().referenceKind().isBlank()) {
+            object.addProperty("referenceKind", param.editor().referenceKind());
         }
-        if (!param.example().isBlank()) {
-            object.addProperty("example", param.example());
+        if (!param.editor().example().isBlank()) {
+            object.addProperty("example", param.editor().example());
         }
         return object;
     }
@@ -714,56 +647,7 @@ public final class EditorContentOps {
 
     // ------------------------------------------------------------------
 
-    /**
-     * Builds the pack-relative path for a new document from the type tab and
-     * the folder the author is browsing. Both are validated here so a hostile
-     * client cannot smuggle a path outside the type's directory.
-     */
-    private static String documentPath(String type, String folder, String id) {
-        if (!Scaffolds.SCAFFOLD_TYPES.contains(type)) {
-            throw new IllegalArgumentException(
-                    "unknown content type '" + type + "' — expected one of "
-                            + Scaffolds.SCAFFOLD_TYPES);
-        }
-        if (!id.matches("[a-z0-9_-]{2,64}")) {
-            throw new IllegalArgumentException("id must be 2..64 chars of a-z 0-9 _ -");
-        }
-        String prefix = type;
-        if (folder != null && !folder.isBlank()) {
-            String cleaned = folder.replaceAll("^/+|/+$", "");
-            if (cleaned.startsWith(type + "/")) {
-                cleaned = cleaned.substring(type.length() + 1);
-            } else if (cleaned.equals(type)) {
-                cleaned = "";
-            }
-            if (!cleaned.isEmpty()) {
-                if (!cleaned.matches("[A-Za-z0-9_ -]+(/[A-Za-z0-9_ -]+)*")) {
-                    throw new IllegalArgumentException("bad folder: " + folder);
-                }
-                prefix = type + "/" + cleaned;
-            }
-        }
-        return prefix + "/" + id + ".yml";
-    }
-
-    private static void queueReload(ReloadTrigger reload, Path file) {
-        // Fire-and-forget at v1: the reload outcome reaches editors through
-        // the activity feed (slice 5's push channel), not through this reply.
-        reload.reloadFilesForPreview(
-                Set.of(file), RpcDispatcher.currentSessionId())
-                .whenComplete((outcome, error) -> { });
-    }
-
-    /** The data view for form pre-fill — scalars/maps/lists as JSON. */
-    private static com.google.gson.JsonElement parsedView(String raw) {
-        try {
-            var parsed = dev.materione.core.document.LosslessYaml.parse(raw);
-            return jsonOf(parsed.parseError().isEmpty() ? parsed.data() : java.util.Map.of());
-        } catch (RuntimeException e) {
-            return new JsonObject();
-        }
-    }
-
+    /** Plain maps/lists/scalars (the api's view) → JSON (the wire shape). */
     @SuppressWarnings("unchecked")
     private static com.google.gson.JsonElement jsonOf(Object value) {
         if (value instanceof java.util.Map<?, ?> map) {
@@ -791,6 +675,32 @@ public final class EditorContentOps {
             return com.google.gson.JsonNull.INSTANCE;
         }
         return new com.google.gson.JsonPrimitive(value.toString());
+    }
+
+    /**
+     * Renders a failed api call as the wire error it always was: the first
+     * diagnostic's code and message, the op's target, and {@code hintOverride}
+     * when the op historically carried its own hint.
+     */
+    private static Wire.Response error(
+            Wire.Request request, List<Diagnostic> diagnostics,
+            String target, String hintOverride) {
+        Diagnostic diagnostic = diagnostics.isEmpty()
+                ? null : diagnostics.get(0);
+        String code = diagnostic == null ? "MTR-0011" : diagnostic.code().code();
+        String message = diagnostic == null ? "request failed" : diagnostic.message();
+        String hint = hintOverride != null ? hintOverride
+                : diagnostic == null ? null : diagnostic.hint();
+        return Wire.Response.failure(request, new Wire.Error(code, message, target, hint));
+    }
+
+    /** The op's historical hint, applied when the api diagnostic carries a different one. */
+    private static String hintFor(List<Diagnostic> diagnostics, String fallback) {
+        if (diagnostics.isEmpty()) {
+            return fallback;
+        }
+        String hint = diagnostics.get(0).hint();
+        return hint != null ? hint : fallback;
     }
 
     private static Wire.Response failure(Wire.Request request, Exception e) {

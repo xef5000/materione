@@ -7,13 +7,13 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.content.blocks.BlockType;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.PipelineRunner;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.testing.golden.GoldenFiles;
 import java.io.IOException;
@@ -76,7 +76,7 @@ class PackCompilerTest {
         @Override
         public void compile(
                 Object definition, NamespacedId modelId, PackEmitter emitter,
-                dev.materione.core.content.Allocations allocations) {
+                dev.materione.api.content.Allocations allocations) {
             @SuppressWarnings("unchecked")
             var merged = (Map<String, Object>) definition;
             NamespacedId id = NamespacedId.parse((String) merged.get("__id"));
@@ -131,7 +131,7 @@ class PackCompilerTest {
         @Override
         public void compile(
                 Object definition, NamespacedId modelId, PackEmitter emitter,
-                dev.materione.core.content.Allocations allocations) {
+                dev.materione.api.content.Allocations allocations) {
             @SuppressWarnings("unchecked")
             var merged = (Map<String, Object>) definition;
             NamespacedId id = NamespacedId.parse((String) merged.get("__id"));

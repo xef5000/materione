@@ -3,7 +3,7 @@ package dev.materione.plugin.runtime;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.storage.RestartStaging;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

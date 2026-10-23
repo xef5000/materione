@@ -3,11 +3,16 @@ package dev.materione.web.rpc.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonObject;
+import dev.materione.api.ApiResult;
+import dev.materione.api.admin.AdminApi;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.api.pipeline.ApplyReport;
+import dev.materione.api.pipeline.PipelineApi;
+import dev.materione.api.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadSummary;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.Documents;
-import dev.materione.core.pipeline.ReloadScope;
 import dev.materione.core.settings.SettingsService;
-import dev.materione.web.ReloadTrigger;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.nio.charset.StandardCharsets;
@@ -36,8 +41,9 @@ class AdminOpsTest {
         ScopeCapturingTrigger trigger = new ScopeCapturingTrigger();
         Path settingsFile = temp.resolve("settings").resolve("settings.yml");
         RpcDispatcher dispatcher = new RpcDispatcher();
-        AdminOps.register(dispatcher, audit, trigger, settingsFile,
-                SettingsService::validateDraft);
+        AdminOps.register(dispatcher, admin(audit, settingsFile), trigger,
+                AdminOpsTest::actor,
+                (actor, target) -> audit.record(actor, "pipeline.reload", target));
 
         // Manual full reload: fire-and-forget — reaches the host as
         // ReloadScope.Everything, replies immediately, never blocks.
@@ -102,21 +108,119 @@ class AdminOpsTest {
 
     // ------------------------------------------------------------------
 
-    /** Records scopes so assertions can pin exactly what the host received. */
-    private static final class ScopeCapturingTrigger implements ReloadTrigger {
+    /** The api.pipeline() seam: records the scopes the ops ask for. */
+    private static final class ScopeCapturingTrigger implements PipelineApi {
         final List<ReloadScope> scopes = new ArrayList<>();
 
         @Override
-        public CompletableFuture<Outcome> reloadFiles(Set<Path> paths) {
-            scopes.add(new ReloadScope.FileSet(paths));
-            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
+        public java.util.concurrent.CompletableFuture<ApiResult<ReloadSummary>> reload(
+                ActorContext actor, ReloadRequest request) {
+            scopes.add(request.scope());
+            return java.util.concurrent.CompletableFuture.completedFuture(
+                    ApiResult.ok(new ReloadSummary(false, false, 1, 0, 53, 1, null, null, null, null)));
         }
 
         @Override
-        public CompletableFuture<Outcome> reloadScope(ReloadScope scope) {
-            scopes.add(scope);
-            return CompletableFuture.completedFuture(new Outcome(true, false, 53, 0));
+        public java.util.Optional<ApplyReport> lastApplyReport() {
+            return java.util.Optional.empty();
         }
+
+        @Override
+        public List<RestartStaged> pendingRestartChanges() {
+            return List.of();
+        }
+
+        @Override
+        public List<Quarantined> quarantinedResources() {
+            return List.of();
+        }
+
+        @Override
+        public AutoCloseable subscribeReloads(java.util.function.Consumer<ReloadEvent> listener) {
+            return () -> { };
+        }
+    }
+
+    /**
+     * The admin surface contract the ops consume: settings are hash-guarded
+     * and validated before any bytes land (the plugin's AdminApiImpl holds
+     * the real implementation; this pins the wire semantics).
+     */
+    private AdminApi admin(AuditLog audit, Path settingsFile) {
+        return new AdminApi() {
+            @Override
+            public DoctorReport doctor() {
+                throw new UnsupportedOperationException();
+            }
+
+            @Override
+            public ApiResult<SettingsView> getSettings(ActorContext actor) {
+                try {
+                    if (!Files.isRegularFile(settingsFile)) {
+                        return ApiResult.fail(new dev.materione.api.diagnostics.Diagnostic(
+                                dev.materione.api.diagnostics.DiagnosticCodes.UNRESOLVED_REFERENCE,
+                                dev.materione.api.diagnostics.Severity.ERROR,
+                                "settings file does not exist yet", null, null, null));
+                    }
+                    String raw = Files.readString(settingsFile, StandardCharsets.UTF_8);
+                    return ApiResult.ok(new SettingsView(raw, Documents.sha256(raw), java.util.Map.of()));
+                } catch (java.io.IOException e) {
+                    return ApiResult.fail(new dev.materione.api.diagnostics.Diagnostic(
+                            dev.materione.api.diagnostics.DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                            dev.materione.api.diagnostics.Severity.ERROR,
+                            String.valueOf(e.getMessage()), null, null, null));
+                }
+            }
+
+            @Override
+            public ApiResult<Void> putSettings(ActorContext actor, String content, String expectedSha256) {
+                List<dev.materione.api.diagnostics.Diagnostic> problems =
+                        SettingsService.validateDraft(content);
+                if (!problems.isEmpty()) {
+                    return ApiResult.fail(problems);
+                }
+                try {
+                    String current = Files.isRegularFile(settingsFile)
+                            ? Files.readString(settingsFile, StandardCharsets.UTF_8) : "";
+                    if (!Documents.sha256(current).equals(expectedSha256)) {
+                        return ApiResult.fail(new dev.materione.api.diagnostics.Diagnostic(
+                                dev.materione.api.diagnostics.DiagnosticCodes.EDITOR_DOCUMENT_CONFLICT,
+                                dev.materione.api.diagnostics.Severity.WARN,
+                                "settings changed elsewhere since you loaded them",
+                                null, null, "re-read settings and re-apply your change"));
+                    }
+                    Files.createDirectories(settingsFile.getParent());
+                    Files.writeString(settingsFile, content, StandardCharsets.UTF_8);
+                } catch (java.io.IOException e) {
+                    return ApiResult.fail(new dev.materione.api.diagnostics.Diagnostic(
+                            dev.materione.api.diagnostics.DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                            dev.materione.api.diagnostics.Severity.ERROR,
+                            String.valueOf(e.getMessage()), null, null, null));
+                }
+                audit.record(actor == null ? "test" : actor.actorId(),
+                        "admin.settings.put", "settings.yml");
+                return ApiResult.ok(null);
+            }
+
+            @Override
+            public List<AuditEntry> recentAudit(int limit) {
+                List<AuditEntry> out = new ArrayList<>();
+                for (AuditLog.Entry entry : audit.recent(limit)) {
+                    out.add(new AuditEntry(entry.ts(), entry.actor(), entry.op(), entry.target()));
+                }
+                return out;
+            }
+
+            @Override
+            public EditorSessionControl editorSessions() {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    private static ActorContext actor(String attribution) {
+        return new ActorContext(attribution, ActorContext.Kind.EDITOR_SESSION,
+                java.util.Optional.empty(), node -> true);
     }
 
     private static JsonObject settings(String content, String sha256) {

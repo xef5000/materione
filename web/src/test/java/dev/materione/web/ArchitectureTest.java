@@ -19,4 +19,7 @@ class ArchitectureTest {
 
     @ArchTest
     static final ArchRule wireProtocolOnlyInWeb = MaterioneArchRules.WIRE_PROTOCOL_ONLY_IN_WEB;
+
+    @ArchTest
+    static final ArchRule webOnlyConsumesApi = MaterioneArchRules.WEB_ONLY_CONSUMES_API;
 }

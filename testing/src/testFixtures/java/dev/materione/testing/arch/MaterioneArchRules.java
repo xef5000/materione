@@ -148,6 +148,52 @@ public final class MaterioneArchRules {
             .resideInAnyPackage("dev.materione.web.protocol..")
             .allowEmptyShould(true);
 
+    /**
+     * R9 — the web editor consumes ONLY the public API (api.md §4.2). Every
+     * class in {@code dev.materione.web..} may depend on: the api surface,
+     * web's own packages, the JDK, Gson (wire encoding) and Undertow (the
+     * embedded listener). Depending on {@code core..}, {@code plugin..},
+     * {@code content..}, {@code pack..}, {@code delivery..} or any other
+     * product module fails the build — mechanically guaranteeing the editor
+     * cannot perform any action that is not on {@code MaterioneAPI}.
+     *
+     * <p>Fixture classes nested in {@code *Test} files are exempt like their
+     * enclosing tests (they build real api implementations over core
+     * services on the test classpath).
+     */
+    public static final ArchRule WEB_ONLY_CONSUMES_API = noClasses()
+            .that().resideInAPackage("dev.materione.web..")
+            .and(isNotTestClass())
+            .should().dependOnClassesThat()
+            .resideInAnyPackage(
+                    "dev.materione.core..",
+                    "dev.materione.platform..",
+                    "dev.materione.plugin..",
+                    "dev.materione.content..",
+                    "dev.materione.behavior..",
+                    "dev.materione.pack..",
+                    "dev.materione.delivery..",
+                    "dev.materione.importers..",
+                    "dev.materione.integrations..",
+                    "dev.materione.harness..",
+                    "dev.materione.testing..")
+            .allowEmptyShould(true);
+
+    /** Product classes only: not a {@code *Test}, not nested inside one. */
+    private static DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass> isNotTestClass() {
+        return new DescribedPredicate<>("not test classes") {
+            @Override
+            public boolean test(com.tngtech.archunit.core.domain.JavaClass clazz) {
+                if (clazz.getSimpleName().endsWith("Test")) {
+                    return false;
+                }
+                return clazz.getEnclosingClass()
+                        .map(enclosing -> !enclosing.getSimpleName().endsWith("Test"))
+                        .orElse(true);
+            }
+        };
+    }
+
     private MaterioneArchRules() {}
 
     /** Matches calls to {@code org.bukkit.Bukkit#getBukkitVersion()}. */

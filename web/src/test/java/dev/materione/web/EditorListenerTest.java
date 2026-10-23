@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.gson.JsonObject;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.web.protocol.Envelope;
 import dev.materione.web.protocol.FrameCodec;

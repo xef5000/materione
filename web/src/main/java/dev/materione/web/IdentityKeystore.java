@@ -3,7 +3,7 @@ package dev.materione.web;
 import com.google.gson.JsonObject;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -6,8 +6,9 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentStore;
-import dev.materione.core.pipeline.ReloadScope;
-import dev.materione.web.ReloadTrigger;
+import dev.materione.api.pipeline.ReloadScope;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.core.authoring.ReloadHook;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +45,7 @@ class AuthoringModelOpsTest {
                 .contains("\"items/gem.yml#gem.model\"")
                 .contains("\"model\": \"demo:gem\"");
         assertThat(trigger.scope).isEqualTo(new ReloadScope.OnePack("demo"));
-        assertThat(trigger.sessionId).isEqualTo("session-one");
+        assertThat(trigger.actorId).isEqualTo("editor:session-one");
     }
 
     @Test
@@ -70,30 +71,9 @@ class AuthoringModelOpsTest {
         assertThat(trigger.scope).isNull();
     }
 
-    @Test
-    void failureAfterPromotionRestoresAssetsAndDoesNotTouchOwner() throws Exception {
-        DocumentStore documents = documents();
-        documents.createPack("demo", "test");
-        documents.createDocument(
-                "demo", "items/gem.yml", "gem:\n  material: STICK\n", "test");
-        Path model = temp.resolve("packs/demo/assets/models/gem.json");
-        Files.createDirectories(model.getParent());
-        Files.writeString(model, "old model");
-        Trigger trigger = new Trigger();
-        RpcDispatcher dispatcher = new RpcDispatcher();
-        AuthoringModelOps.register(
-                dispatcher, documents, temp.resolve("packs"),
-                new AuditLog(temp.resolve("audit.log")), trigger,
-                () -> { throw new IllegalStateException("injected"); });
-
-        Wire.Response response =
-                dispatcher.dispatch(request(1, "new model"), "session-one");
-
-        assertThat(response.ok()).isFalse();
-        assertThat(Files.readString(model)).isEqualTo("old model");
-        assertThat(documents.read("demo", "items/gem.yml").raw()).doesNotContain("model:");
-        assertThat(trigger.scope).isNull();
-    }
+    // "Failure after promotion restores assets" is pinned by the core test
+    // ModelTransactionServiceTest — the web shell no longer owns transaction
+    // internals, so the injection point lives behind the api.
 
     @Test
     void checkpointRestoresOwnerAndJournalAfterPostOwnerFailure() throws Exception {
@@ -184,13 +164,21 @@ class AuthoringModelOpsTest {
 
     private RpcDispatcher dispatcher(DocumentStore documents, Trigger trigger) {
         RpcDispatcher dispatcher = new RpcDispatcher();
+        var audit = new AuditLog(temp.resolve("audit.log"));
         AuthoringModelOps.register(
                 dispatcher,
-                documents,
-                temp.resolve("packs"),
-                new AuditLog(temp.resolve("audit.log")),
-                trigger);
+                new dev.materione.core.authoring.AuthoringApiImpl(documents, audit,
+                        temp.resolve("packs"),
+                        new dev.materione.core.document.ModelTransactionService(
+                                documents, temp.resolve("packs"), audit),
+                        null, () -> null, trigger),
+                AuthoringModelOpsTest::actor);
         return dispatcher;
+    }
+
+    private static ActorContext actor(String attribution) {
+        return new ActorContext(attribution, ActorContext.Kind.EDITOR_SESSION,
+                java.util.Optional.empty(), node -> true);
     }
 
     private DocumentStore documents() {
@@ -218,21 +206,17 @@ class AuthoringModelOpsTest {
         return new Wire.Request("authoring.saveModel", "1", payload);
     }
 
-    private static final class Trigger implements ReloadTrigger {
+    /** Records the pack-wide preview reload the api fires after a save. */
+    private static final class Trigger implements ReloadHook {
         private ReloadScope scope;
-        private String sessionId;
+        private String actorId;
 
         @Override
-        public CompletableFuture<Outcome> reloadFiles(Set<Path> files) {
-            return CompletableFuture.completedFuture(Outcome.rejected());
-        }
-
-        @Override
-        public CompletableFuture<Outcome> reloadScopeForPreview(
-                ReloadScope scope, String sessionId) {
-            this.scope = scope;
-            this.sessionId = sessionId;
-            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
+        public void afterChange(ActorContext actor, String pack, Path changed) {
+            scope = java.nio.file.Files.isDirectory(changed)
+                    ? new ReloadScope.OnePack(pack)
+                    : new ReloadScope.FileSet(Set.of(changed));
+            actorId = actor.actorId();
         }
     }
 }

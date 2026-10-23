@@ -1,5 +1,6 @@
 package dev.materione.core.diagnostics;
 
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.diagnostics.DiagnosticCode;

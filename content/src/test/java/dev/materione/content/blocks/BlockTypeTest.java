@@ -7,9 +7,9 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.core.blocks.BlockStateSpaces;
 import dev.materione.core.blocks.BlockStateSpaces.Technique;
-import dev.materione.core.content.Allocations;
-import dev.materione.core.content.CompileRejectException;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.content.Allocations;
+import dev.materione.api.content.CompileRejectException;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -284,7 +284,7 @@ class BlockTypeTest {
     }
 
     /** Collector mirroring the compiler's Emitter for the surfaces blocks touch. */
-    private final class PackEmitterOf implements dev.materione.core.content.PackEmitter {
+    private final class PackEmitterOf implements dev.materione.api.content.PackEmitter {
         @Override
         public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {}
 

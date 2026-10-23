@@ -64,6 +64,11 @@ public final class RuntimeGlyphs {
         return new RuntimeGlyphs(Map.of());
     }
 
+    /** All glyph entries (insertion order). */
+    public java.util.Collection<Entry> all() {
+        return glyphs.values();
+    }
+
     public Optional<Entry> glyph(NamespacedId id) {
         return Optional.ofNullable(glyphs.get(id));
     }

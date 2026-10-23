@@ -13,15 +13,18 @@ import dev.materione.content.recipes.RecipeType;
 import dev.materione.plugin.runtime.behavior.BlockBehaviors;
 import dev.materione.plugin.runtime.behavior.FurnitureBehaviors;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.PipelineResult;
 import dev.materione.core.pipeline.PipelineRunner;
-import dev.materione.core.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ApplyReport;
+import dev.materione.api.pipeline.ReloadScope;
+import dev.materione.api.pipeline.ReloadSummary;
 import dev.materione.api.registry.RegistryKey;
+import dev.materione.api.registry.RegistryKeys;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.core.runtime.RuntimeItem;
@@ -48,7 +51,7 @@ import org.bukkit.plugin.Plugin;
 public final class PipelineService {
 
     /** Registry holding content types (D5: built-ins and addons, one path). */
-    public static final RegistryKey CONTENT_TYPES = new RegistryKey("content-types");
+    public static final RegistryKey CONTENT_TYPES = RegistryKeys.CONTENT_TYPES;
 
     private final Plugin plugin;
     private final DiagnosticsBus diagnostics;
@@ -64,7 +67,7 @@ public final class PipelineService {
     private final int detectedPackFormat;
     /** Server-reported data-pack format (major.minor); null when detection failed. */
     private final PackFormats.Version detectedDataFormat;
-    private volatile dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport;
+    private volatile ApplyReport lastReport;
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
 
@@ -132,7 +135,7 @@ public final class PipelineService {
     }
 
     /** The last pre-apply report (doctor surface); null before the first apply. */
-    public dev.materione.core.runtime.ContentRuntime.ApplyReport lastReport() {
+    public ApplyReport lastReport() {
         return lastReport;
     }
 
@@ -152,12 +155,12 @@ public final class PipelineService {
      */
     public ReloadSummary reload(java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
             java.nio.file.Path storageDir) {
-        return reload(new dev.materione.core.pipeline.ReloadScope.Everything(),
+        return reload(new dev.materione.api.pipeline.ReloadScope.Everything(),
                 packsRoot, generatedDir, storageDir);
     }
 
     /** Targeted variant: {@code OnePack}/{@code FileSet} scopes splice onto the last full run. */
-    public ReloadSummary reload(dev.materione.core.pipeline.ReloadScope scope,
+    public ReloadSummary reload(dev.materione.api.pipeline.ReloadScope scope,
             java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
             java.nio.file.Path storageDir) {
         if (allocation == null) {
@@ -235,22 +238,16 @@ public final class PipelineService {
     }
 
     /** True when the pre-apply report shows nothing observable changing. */
-    private static boolean changesNothing(dev.materione.core.runtime.ContentRuntime.ApplyReport report) {
+    private static boolean changesNothing(ApplyReport report) {
         return report.added() == 0 && report.removed() == 0 && report.changed() == 0
                 && report.blocksAdded() == 0 && report.blocksRemoved() == 0
                 && report.furnitureAdded() == 0 && report.furnitureRemoved() == 0
                 && report.recipesEnabled() == 0 && report.recipesDisabled() == 0;
     }
 
-    /** Reload outcome for the operator. The datapack artifact is null when nothing produced one. */
-    public record ReloadSummary(
-            boolean skipped, boolean noop, int resourcesValid, int quarantined,
-            int itemsLive, int itemDefinitions, String packSha256, java.nio.file.Path packZip,
-            java.nio.file.Path stagedDatapackZip, String datapackSha256) {}
-
     private void applyShadow(
             RuntimeRegistries shadow, String sha,
-            dev.materione.core.runtime.ContentRuntime.ApplyReport report) {
+            ApplyReport report) {
         RuntimeRegistries previous = runtime.registries();
         String previousSha = runtime.livePackSha256();
         // the report was computed by the caller BEFORE the swap (§4.5): what
@@ -528,7 +525,7 @@ public final class PipelineService {
                         "shadow build skipped " + glyph.id() + ": no allocated codepoint"));
                 return null;
             }
-            var run = dev.materione.core.content.AllocatedRange.parse(value.get());
+            var run = dev.materione.api.content.AllocatedRange.parse(value.get());
             codepoints = new int[run.count()];
             for (int i = 0; i < run.count(); i++) {
                 codepoints[i] = dev.materione.core.text.GlyphCodepoints.of(run.start() + i);

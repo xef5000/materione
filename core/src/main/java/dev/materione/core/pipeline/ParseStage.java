@@ -1,10 +1,11 @@
 package dev.materione.core.pipeline;
 
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.SourceLocation;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
 import java.io.IOException;
@@ -118,7 +119,7 @@ public final class ParseStage {
         }
         if (expandReason != null) {
             context.diagnostics().publish(new Diagnostic(
-                    dev.materione.core.diagnostics.DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
+                    dev.materione.api.diagnostics.DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
                     "targeted scope expanded to everything: " + expandReason,
                     null, null, null));
             for (Path packDir : packDirs) {

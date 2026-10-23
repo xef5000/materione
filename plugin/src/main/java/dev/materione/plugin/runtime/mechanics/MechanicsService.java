@@ -7,7 +7,7 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.mechanics.Mechanic;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.platform.items.ItemListCodec;
 import dev.materione.platform.items.MaterioneStacks;

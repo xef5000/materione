@@ -4,11 +4,11 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
-import dev.materione.core.content.Allocations;
-import dev.materione.core.content.CompileRejectException;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.content.Allocations;
+import dev.materione.api.content.CompileRejectException;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.text.GlyphCodepoints;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
@@ -163,7 +163,7 @@ public final class GlyphType implements ContentType {
                 ? glyph.fontKey()
                 : glyph.id().namespace() + ":glyphs";
         int count = glyph.codepointCount();
-        dev.materione.core.content.AllocatedRange run =
+        dev.materione.api.content.AllocatedRange run =
                 allocations.range(glyph.id(), ALLOCATION_KIND, count);
         int first = GlyphCodepoints.of(run.start());
         if (first + count - 1 >= GlyphCodepoints.SHIFT_BLOCK_START) {

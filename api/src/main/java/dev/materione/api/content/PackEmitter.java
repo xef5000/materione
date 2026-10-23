@@ -1,4 +1,4 @@
-package dev.materione.core.content;
+package dev.materione.api.content;
 
 import java.nio.file.Path;
 import java.util.Map;

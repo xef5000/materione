@@ -1,48 +1,51 @@
 package dev.materione.web.rpc.ops;
 
 import com.google.gson.JsonObject;
+import dev.materione.api.admin.AdminApi;
+import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
-import dev.materione.core.document.AuditLog;
-import dev.materione.core.pipeline.ReloadScope;
-import dev.materione.web.ReloadTrigger;
+import dev.materione.api.pipeline.PipelineApi;
+import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 
 /**
  * The control-center surface (web.md §4.2 "pipeline" + "admin" groups):
  * manual reloads, the audit trail, and plugin settings editing. Settings are
  * deliberately NOT documents — they live outside the packs root, have no
- * revision journal, and take effect on restart — so this registrar guards
- * them with an expected-content-hash check and a parse validation that runs
- * BEFORE any bytes land on disk.
+ * revision journal, and take effect on restart — so {@link AdminApi#putSettings}
+ * guards them with an expected-content-hash check and a parse validation that
+ * runs BEFORE any bytes land on disk; this layer renders the same wire errors
+ * as always.
  */
 public final class AdminOps {
 
-    /** Serializes settings read-modify-write across concurrent editors. */
-    private static final Object SETTINGS_LOCK = new Object();
-
     private AdminOps() {}
 
+    /**
+     * Registers the ops. {@code audit} is the manual-reload audit seam (the
+     * api owns every other audit line; a user-initiated reload is an op-level
+     * event and records here, exactly as the inline implementation did).
+     */
     public static void register(
             RpcDispatcher dispatcher,
-            AuditLog audit,
-            ReloadTrigger reload,
-            Path settingsFile,
-            java.util.function.Function<String, List<Diagnostic>> settingsValidator) {
+            AdminApi admin,
+            PipelineApi pipeline,
+            Function<String, ActorContext> actorFor,
+            BiConsumer<String, String> audit) {
         dispatcher.register("pipeline.reload", request -> {
             try {
                 ReloadScope scope = scopeOf(request.payload());
                 // Fire-and-forget like every save: the outcome reaches editors
                 // as push.reload. Blocking this dispatch thread on the
                 // pipeline would stall the socket the reply rides on.
-                reload.reloadScope(scope);
-                audit.record(actorOf(request), "pipeline.reload", label(scope));
+                pipeline.reload(actorFor.apply(actorOf(request)),
+                        PipelineApi.ReloadRequest.manual(
+                                scope, PipelineApi.DeliveryMode.CANDIDATE_PREVIEW));
+                audit.accept(actorOf(request), label(scope));
                 JsonObject payload = new JsonObject();
                 payload.addProperty("queued", true);
                 return Wire.Response.success(request, payload);
@@ -59,11 +62,11 @@ public final class AdminOps {
                     ? limitElement.getAsInt() : 100;
             JsonObject payload = new JsonObject();
             var array = new com.google.gson.JsonArray();
-            for (AuditLog.Entry entry : audit.recent(limit)) {
+            for (AdminApi.AuditEntry entry : admin.recentAudit(limit)) {
                 JsonObject item = new JsonObject();
-                item.addProperty("ts", entry.ts());
+                item.addProperty("ts", entry.timestamp());
                 item.addProperty("actor", entry.actor());
-                item.addProperty("op", entry.op());
+                item.addProperty("op", entry.operation());
                 if (entry.target() != null) {
                     item.addProperty("target", entry.target());
                 }
@@ -75,15 +78,14 @@ public final class AdminOps {
 
         dispatcher.register("admin.settings.get", request -> {
             try {
-                if (!Files.isRegularFile(settingsFile)) {
-                    return Wire.Response.failure(request,
-                            new Wire.Error("MTR-0009", "settings file does not exist yet", null, null));
+                var result = admin.getSettings(actorFor.apply(actorOf(request)));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
                 }
-                String raw = Files.readString(settingsFile, StandardCharsets.UTF_8);
                 JsonObject payload = new JsonObject();
-                payload.addProperty("raw", raw);
-                payload.addProperty("sha256", dev.materione.core.document.Documents.sha256(raw));
-                payload.add("parsed", parsedView(raw));
+                payload.addProperty("raw", result.value().content());
+                payload.addProperty("sha256", result.value().sha256());
+                payload.add("parsed", jsonOf(result.value().parsed()));
                 return Wire.Response.success(request, payload);
             } catch (Exception e) {
                 return failure(request, e);
@@ -95,12 +97,19 @@ public final class AdminOps {
             try {
                 String content = requiredString(body, "content");
                 String expectedSha = requiredString(body, "sha256");
-                List<Diagnostic> problems = settingsValidator.apply(content);
-                if (!problems.isEmpty()) {
-                    // The wire error carries one message — fold the validator's
-                    // findings into it so the editor can show them inline.
+                var result = admin.putSettings(
+                        actorFor.apply(actorOf(request)), content, expectedSha);
+                if (!result.ok()) {
+                    // Validation findings fold into one MTR-0007 message; a
+                    // lost hash race stays the MTR-0034 it always was.
+                    boolean conflict = result.diagnostics().stream()
+                            .anyMatch(d -> "MTR-0034".equals(d.code().code()));
+                    if (conflict) {
+                        return error(request, result.diagnostics(), "settings.yml",
+                                "re-read settings and re-apply your change");
+                    }
                     var joined = new StringBuilder();
-                    for (Diagnostic problem : problems) {
+                    for (Diagnostic problem : result.diagnostics()) {
                         if (joined.length() > 0) {
                             joined.append("; ");
                         }
@@ -113,22 +122,9 @@ public final class AdminOps {
                             "MTR-0007", joined.toString(), "settings.yml",
                             "fix the reported problem and retry"));
                 }
-                synchronized (SETTINGS_LOCK) {
-                    String current = Files.isRegularFile(settingsFile)
-                            ? Files.readString(settingsFile, StandardCharsets.UTF_8) : "";
-                    if (!dev.materione.core.document.Documents.sha256(current).equals(expectedSha)) {
-                        return Wire.Response.failure(request, new Wire.Error(
-                                "MTR-0034", "settings changed elsewhere since you loaded them",
-                                "settings.yml", "re-read settings and re-apply your change"));
-                    }
-                    atomicWrite(settingsFile, content.getBytes(StandardCharsets.UTF_8));
-                }
-                audit.record(actorOf(request), "admin.settings.put", "settings.yml");
                 JsonObject payload = new JsonObject();
-                payload.addProperty("bytes", content.getBytes(StandardCharsets.UTF_8).length);
+                payload.addProperty("bytes", content.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
                 return Wire.Response.success(request, payload);
-            } catch (IOException e) {
-                return failure(request, e);
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
             } catch (Exception e) {
@@ -156,28 +152,7 @@ public final class AdminOps {
         return "everything";
     }
 
-    private static void atomicWrite(Path file, byte[] bytes) throws IOException {
-        Files.createDirectories(file.getParent());
-        Path temp = file.resolveSibling(file.getFileName() + ".tmp-" + System.nanoTime());
-        Files.write(temp, bytes);
-        try {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-            Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    /** The data view for the settings form pre-fill. */
-    @SuppressWarnings("unchecked")
-    private static com.google.gson.JsonElement parsedView(String raw) {
-        try {
-            var parsed = dev.materione.core.document.LosslessYaml.parse(raw);
-            return jsonOf(parsed.parseError().isEmpty() ? parsed.data() : java.util.Map.of());
-        } catch (RuntimeException e) {
-            return new JsonObject();
-        }
-    }
-
+    /** Plain maps/lists/scalars (the api's view) → JSON (the wire shape). */
     @SuppressWarnings("unchecked")
     private static com.google.gson.JsonElement jsonOf(Object value) {
         if (value instanceof java.util.Map<?, ?> map) {
@@ -205,6 +180,16 @@ public final class AdminOps {
             return com.google.gson.JsonNull.INSTANCE;
         }
         return new com.google.gson.JsonPrimitive(value.toString());
+    }
+
+    private static Wire.Response error(
+            Wire.Request request, List<Diagnostic> diagnostics, String target, String hint) {
+        Diagnostic diagnostic = diagnostics.isEmpty() ? null : diagnostics.get(0);
+        return Wire.Response.failure(request, new Wire.Error(
+                diagnostic == null ? "MTR-0011" : diagnostic.code().code(),
+                diagnostic == null ? "request failed" : diagnostic.message(),
+                target,
+                hint != null ? hint : diagnostic == null ? null : diagnostic.hint()));
     }
 
     private static Wire.Response failure(Wire.Request request, Exception e) {

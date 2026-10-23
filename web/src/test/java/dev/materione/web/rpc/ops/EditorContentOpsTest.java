@@ -3,9 +3,11 @@ package dev.materione.web.rpc.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonObject;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.api.authoring.AuthoringApi;
+import dev.materione.core.authoring.ReloadHook;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentStore;
-import dev.materione.web.ReloadTrigger;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.nio.file.Path;
@@ -32,8 +34,8 @@ class EditorContentOpsTest {
         CapturingTrigger trigger = new CapturingTrigger();
 
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit, temp.resolve("packs"), trigger,
-                java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit, trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
 
         Wire.Response packs = dispatcher.dispatch(request("browse.packs", "1"));
         assertThat(packs.data().getAsJsonObject().get("packs").toString()).isEqualTo("[]");
@@ -93,8 +95,8 @@ class EditorContentOpsTest {
         AuditLog audit = audit();
         CapturingTrigger trigger = new CapturingTrigger();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit, temp.resolve("packs"), trigger,
-                java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit, trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
         dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
         dispatcher.dispatch(request("edit.create", "2", object("pack", "demo", "path", "items/wand.yml")));
         trigger.files.clear();
@@ -115,8 +117,8 @@ class EditorContentOpsTest {
         DocumentStore store = store();
         CapturingTrigger trigger = new CapturingTrigger();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"), trigger,
-                java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit(), trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
 
         JsonObject body = object(
                 "pack", "demo", "id", "ruby_wand", "name", "Ruby \"Wand\"");
@@ -140,8 +142,8 @@ class EditorContentOpsTest {
         DocumentStore store = store();
         CapturingTrigger trigger = new CapturingTrigger();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"), trigger,
-                java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit(), trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
         dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
 
         Wire.Response block = dispatcher.dispatch(request("authoring.createResource", "2",
@@ -179,8 +181,8 @@ class EditorContentOpsTest {
     void duplicateCopiesBytesUnderANewIdAndKeepsComments() throws Exception {
         DocumentStore store = store();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"),
-                new CapturingTrigger(), java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit(), new CapturingTrigger()), java.util.List::of, java.util.List::of,
+                EditorContentOpsTest::actor);
         dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
         dispatcher.dispatch(request("edit.put", "2", object(
                 "pack", "demo", "path", "items/wand.yml", "rev", "0",
@@ -205,8 +207,8 @@ class EditorContentOpsTest {
     void foldersAreListedCreatedMovedAndOnlyDeletedWhenEmpty() throws Exception {
         DocumentStore store = store();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit(), temp.resolve("packs"),
-                new CapturingTrigger(), java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit(), new CapturingTrigger()), java.util.List::of, java.util.List::of,
+                EditorContentOpsTest::actor);
         dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
 
         assertThat(dispatcher.dispatch(request("edit.createFolder", "2",
@@ -262,8 +264,8 @@ class EditorContentOpsTest {
         AuditLog audit = audit();
         CapturingTrigger trigger = new CapturingTrigger();
         RpcDispatcher dispatcher = new RpcDispatcher();
-        EditorContentOps.register(dispatcher, store, audit, temp.resolve("packs"), trigger,
-                java.util.List::of, java.util.List::of);
+        EditorContentOps.register(dispatcher, api(store, audit, trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
         dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
 
         // Scaffolded create: valid YAML, rev 1, reload queued.
@@ -320,13 +322,13 @@ class EditorContentOpsTest {
     void diagnosticsCarrySourceLocationWhenPresent() {
         RpcDispatcher dispatcher = new RpcDispatcher();
         var diagnostic = new dev.materione.api.diagnostics.Diagnostic(
-                dev.materione.core.diagnostics.DiagnosticCodes.SETTINGS_PARSE_FAILED,
+                dev.materione.api.diagnostics.DiagnosticCodes.SETTINGS_PARSE_FAILED,
                 dev.materione.api.diagnostics.Severity.ERROR,
                 "broken line", null,
                 new dev.materione.api.diagnostics.SourceLocation("items/bad.yml", 4, 7),
                 "fix it");
-        EditorContentOps.register(dispatcher, store(), audit(), temp.resolve("packs"),
-                new CapturingTrigger(), java.util.List::of, () -> List.of(diagnostic));
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()), java.util.List::of,
+                () -> List.of(diagnostic), EditorContentOpsTest::actor);
 
         Wire.Response response = dispatcher.dispatch(request("admin.diagnostics.recent", "1"));
         assertThat(response.ok()).isTrue();
@@ -343,6 +345,21 @@ class EditorContentOpsTest {
 
     private AuditLog audit() {
         return new AuditLog(temp.resolve("audit.log"));
+    }
+
+    /** The real authoring api over the store; saves reload through the hook. */
+    private AuthoringApi api(DocumentStore store, AuditLog audit, CapturingTrigger trigger) {
+        return new dev.materione.core.authoring.AuthoringApiImpl(store, audit,
+                temp.resolve("packs"),
+                new dev.materione.core.document.ModelTransactionService(
+                        store, temp.resolve("packs"), audit),
+                null, () -> null, trigger);
+    }
+
+    /** Session-bound actor with today's audit attribution string. */
+    private static ActorContext actor(String attribution) {
+        return new ActorContext(attribution, ActorContext.Kind.EDITOR_SESSION,
+                java.util.Optional.empty(), node -> true);
     }
 
     private static Wire.Request request(String op, String id) {
@@ -373,13 +390,14 @@ class EditorContentOpsTest {
     }
 
     /** Records every queued reload so assertions can pin exact file sets. */
-    private static final class CapturingTrigger implements ReloadTrigger {
+    private static final class CapturingTrigger implements ReloadHook {
         private final Set<Path> files = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
         @Override
-        public CompletableFuture<Outcome> reloadFiles(Set<Path> paths) {
-            files.addAll(paths);
-            return CompletableFuture.completedFuture(new Outcome(true, false, 0, 0));
+        public void afterChange(ActorContext actor, String pack, Path changed) {
+            if (!java.nio.file.Files.isDirectory(changed)) {
+                files.add(changed);
+            }
         }
     }
 }

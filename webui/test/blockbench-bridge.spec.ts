@@ -170,15 +170,15 @@ describe('thumbnailPath', () => {
     const java = readFileSync(
       fileURLToPath(
         new URL(
-          '../../web/src/main/java/dev/materione/web/rpc/ops/AuthoringModelOps.java',
+          '../../core/src/main/java/dev/materione/core/document/ModelTransactionService.java',
           import.meta.url,
         ),
       ),
       'utf8',
     );
-    const literal = /THUMBNAIL_ASSET\s*=\s*java\.util\.regex\.Pattern\.compile\(\s*"([^"]+)"/
+    const literal = /THUMBNAIL_ASSET\s*=\s*(?:java\.util\.regex\.)?Pattern\.compile\(\s*"([^"]+)"/
       .exec(java)?.[1];
-    expect(literal, 'THUMBNAIL_ASSET pattern not found in AuthoringModelOps').toBeTruthy();
+    expect(literal, 'THUMBNAIL_ASSET pattern not found in ModelTransactionService').toBeTruthy();
     // Java string literal -> regex source: `\\.` in source is one `\.`
     const accepted = new RegExp(`^${literal!.replace(/\\\\/g, '\\')}$`);
 

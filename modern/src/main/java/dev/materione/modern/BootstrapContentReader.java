@@ -123,7 +123,7 @@ public final class BootstrapContentReader {
 
     private static <T> List<T> parseDir(
             Path packDir, String dir, String packId, Map<String, Map<String, Object>> templates,
-            dev.materione.core.content.ContentType type, Class<T> resultType,
+            dev.materione.api.content.ContentType type, Class<T> resultType,
             Consumer<String> warnings) {
         Path dirPath = packDir.resolve(dir);
         if (!Files.isDirectory(dirPath)) {

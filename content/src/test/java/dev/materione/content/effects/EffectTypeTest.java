@@ -3,8 +3,8 @@ package dev.materione.content.effects;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.core.content.EffectSpec;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.EffectSpec;
+import dev.materione.api.content.PackEmitter;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -70,7 +70,7 @@ class EffectTypeTest {
     @Test
     void exhaustedSignalSpaceIsRejectedWithMtr0047() {
         var parsed = type.parse(NamespacedId.parse("sample:wave"), map("kind", "wave"), Map.of());
-        org.junit.jupiter.api.Assertions.assertThrows(dev.materione.core.content.CompileRejectException.class,
+        org.junit.jupiter.api.Assertions.assertThrows(dev.materione.api.content.CompileRejectException.class,
                 () -> compile((EffectDefinition) parsed.orElseThrow(), 255));
     }
 
@@ -80,7 +80,7 @@ class EffectTypeTest {
 
     private PackEmitter captureCompile(EffectDefinition effect, int slot) {
         var emitter = new RecordingEmitter();
-        type.compile(effect, null, emitter, new dev.materione.core.content.Allocations() {
+        type.compile(effect, null, emitter, new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
                 return String.valueOf(slot);

@@ -4,8 +4,8 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
-import dev.materione.core.content.ContentType;
-import dev.materione.core.content.PackEmitter;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -149,7 +149,7 @@ public final class RecipeType implements ContentType {
     @Override
     public void compile(
             Object definition, NamespacedId allocatedModelId, PackEmitter emitter,
-            dev.materione.core.content.Allocations allocations) {
+            dev.materione.api.content.Allocations allocations) {
         // recipes contribute no pack output; apply goes through the
         // platform recipe API (RuntimeRecipe → RecipeApplier)
     }
