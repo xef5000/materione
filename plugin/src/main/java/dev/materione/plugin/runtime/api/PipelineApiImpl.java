@@ -9,7 +9,7 @@ import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.api.pipeline.ReloadSummary;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.storage.RestartStaging;
 import dev.materione.plugin.runtime.DeliveryService;
@@ -91,8 +91,10 @@ public final class PipelineApiImpl implements PipelineApi {
             ReloadSummary summary = result.value();
             ReloadEvent event = result.ok() && summary != null
                     ? new ReloadEvent(true, summary.noop(), summary.itemsLive(),
-                            summary.quarantined(), scopeLabel(request.scope()))
-                    : new ReloadEvent(false, true, -1, -1, scopeLabel(request.scope()));
+                            summary.quarantined(), scopeLabel(request.scope()),
+                            request.announceAlways())
+                    : new ReloadEvent(false, true, -1, -1, scopeLabel(request.scope()),
+                            request.announceAlways());
             for (Consumer<ReloadEvent> listener : listeners) {
                 try {
                     listener.accept(event);

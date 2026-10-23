@@ -5,7 +5,7 @@ import dev.materione.api.assets.AssetApi;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.core.authoring.ReloadHook;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.document.AssetStore;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;

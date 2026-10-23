@@ -2,7 +2,7 @@ package dev.materione.web;
 
 import com.google.gson.JsonObject;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.web.protocol.Envelope;
 import dev.materione.web.protocol.FrameCodec;
 import dev.materione.web.protocol.HelloMessage;

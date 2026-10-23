@@ -6,7 +6,7 @@ import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.runtime.RuntimeFurniture;
 import dev.materione.core.runtime.RuntimeFurnitures;
 import dev.materione.core.runtime.RuntimeRegistries;

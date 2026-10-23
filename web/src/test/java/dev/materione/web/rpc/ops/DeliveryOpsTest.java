@@ -3,7 +3,9 @@ package dev.materione.web.rpc.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonObject;
-import dev.materione.web.DeliveryControl;
+import dev.materione.api.ApiResult;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.api.delivery.DeliveryApi;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import org.junit.jupiter.api.Test;
@@ -14,7 +16,7 @@ class DeliveryOpsTest {
     void publishesOnlyTheExpectedCandidateHash() {
         FakeDelivery delivery = new FakeDelivery("published", "candidate");
         RpcDispatcher dispatcher = new RpcDispatcher();
-        DeliveryOps.register(dispatcher, delivery);
+        DeliveryOps.register(dispatcher, delivery, DeliveryOpsTest::actor);
 
         Wire.Response stale = dispatcher.dispatch(request("delivery.publish", "wrong"));
         assertThat(stale.ok()).isFalse();
@@ -30,7 +32,8 @@ class DeliveryOpsTest {
     @Test
     void reportsPublishedAndCandidatePointers() {
         RpcDispatcher dispatcher = new RpcDispatcher();
-        DeliveryOps.register(dispatcher, new FakeDelivery("one", "two"));
+        DeliveryOps.register(dispatcher, new FakeDelivery("one", "two"),
+                DeliveryOpsTest::actor);
 
         JsonObject data = dispatcher.dispatch(
                 new Wire.Request("delivery.status", "1", new JsonObject()))
@@ -45,7 +48,12 @@ class DeliveryOpsTest {
         return new Wire.Request(op, "1", payload);
     }
 
-    private static final class FakeDelivery implements DeliveryControl {
+    private static ActorContext actor(String attribution) {
+        return new ActorContext(attribution, ActorContext.Kind.EDITOR_SESSION,
+                java.util.Optional.empty(), node -> true);
+    }
+
+    private static final class FakeDelivery implements DeliveryApi {
         private String published;
         private String candidate;
 
@@ -55,18 +63,27 @@ class DeliveryOpsTest {
         }
 
         @Override
-        public Status status() {
-            return new Status(published, candidate);
+        public DeliveryStatus status() {
+            return new DeliveryStatus(published, candidate, null, true);
         }
 
         @Override
-        public boolean publish(String expectedCandidateSha256) {
-            if (!candidate.equals(expectedCandidateSha256)) {
-                return false;
+        public ApiResult<Void> publishCandidate(ActorContext actor, String expected) {
+            if (candidate == null || !candidate.equals(expected)) {
+                return ApiResult.fail(new dev.materione.api.diagnostics.Diagnostic(
+                        dev.materione.api.diagnostics.DiagnosticCodes.EDITOR_DOCUMENT_CONFLICT,
+                        dev.materione.api.diagnostics.Severity.WARN,
+                        "the candidate changed or is no longer available",
+                        null, null, "preview the latest candidate before publishing"));
             }
             published = candidate;
             candidate = "";
-            return true;
+            return ApiResult.ok(null);
+        }
+
+        @Override
+        public ApiResult<Void> sendPack(ActorContext actor, java.util.UUID player, PackTarget target) {
+            return ApiResult.ok(null);
         }
     }
 }

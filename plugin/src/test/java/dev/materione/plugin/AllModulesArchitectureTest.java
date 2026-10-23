@@ -34,4 +34,8 @@ class AllModulesArchitectureTest {
     /** M3 (R8): the wire protocol is reachable only from {@code dev.materione.web}. */
     @ArchTest
     static final ArchRule wireProtocolOnlyInWeb = MaterioneArchRules.WIRE_PROTOCOL_ONLY_IN_WEB;
+
+    /** API-first (R9, api.md §4.2): the web editor consumes only {@code dev.materione.api..}. */
+    @ArchTest
+    static final ArchRule webOnlyConsumesApi = MaterioneArchRules.WEB_ONLY_CONSUMES_API;
 }

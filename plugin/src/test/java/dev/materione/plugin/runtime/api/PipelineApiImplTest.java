@@ -96,7 +96,7 @@ class PipelineApiImplTest {
         quarantine.add(
                 dev.materione.api.NamespacedId.parse("demo:broken"),
                 dev.materione.api.diagnostics.Diagnostic.error(
-                        dev.materione.core.diagnostics.DiagnosticCodes.CONTENT_SCHEMA_INVALID,
+                        dev.materione.api.diagnostics.DiagnosticCodes.CONTENT_SCHEMA_INVALID,
                         "width must be a number"));
 
         List<PipelineApi.Quarantined> quarantined = fixture.api.quarantinedResources();

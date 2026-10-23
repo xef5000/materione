@@ -11,7 +11,7 @@ import dev.materione.content.items.ItemType;
 import dev.materione.content.recipes.RecipeType;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.PipelineResult;

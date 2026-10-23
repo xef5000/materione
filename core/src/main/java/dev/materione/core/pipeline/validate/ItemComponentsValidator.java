@@ -2,7 +2,7 @@ package dev.materione.core.pipeline.validate;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.ContentResource;
 import java.util.List;
 import java.util.Map;

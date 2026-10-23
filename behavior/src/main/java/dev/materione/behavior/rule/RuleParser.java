@@ -82,7 +82,7 @@ public final class RuleParser {
                 conditions.add(parseCondition(source));
             } catch (ExpressionException e) {
                 problems.add(new dev.materione.api.diagnostics.Diagnostic(
-                        dev.materione.core.diagnostics.DiagnosticCodes.EXPRESSION_INVALID,
+                        dev.materione.api.diagnostics.DiagnosticCodes.EXPRESSION_INVALID,
                         dev.materione.api.diagnostics.Severity.WARN,
                         owner + " rule '" + id + "': " + e.getMessage(),
                         owner, null, "fix the expression syntax; the rule was skipped"));
@@ -195,7 +195,7 @@ public final class RuleParser {
     private static dev.materione.api.diagnostics.Diagnostic ruleProblem(
             NamespacedId owner, String ruleId, String problem, String hint) {
         return new dev.materione.api.diagnostics.Diagnostic(
-                dev.materione.core.diagnostics.DiagnosticCodes.BEHAVIOR_RULE_INVALID,
+                dev.materione.api.diagnostics.DiagnosticCodes.BEHAVIOR_RULE_INVALID,
                 dev.materione.api.diagnostics.Severity.WARN,
                 owner + " rule '" + ruleId + "': " + problem,
                 owner, null, hint);

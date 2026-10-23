@@ -1,21 +1,26 @@
 package dev.materione.plugin.runtime;
 
+import dev.materione.api.MaterioneAPI;
 import dev.materione.api.auth.ActorContext;
+import dev.materione.api.assets.AssetApi;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.delivery.DeliveryApi;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.pipeline.PipelineApi;
+import dev.materione.api.registry.Registry;
+import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.core.authoring.AuthoringApiImpl;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.settings.SettingsService.SettingsState;
-import dev.materione.plugin.runtime.api.GlyphMetadataComputer;
 import dev.materione.web.BaseOps;
 import dev.materione.web.EditorConfig;
 import dev.materione.web.EditorListener;
+import dev.materione.web.EditorSession;
 import dev.materione.web.EditorSessions;
 import dev.materione.web.EditorSockets;
 import dev.materione.web.IdentityKeystore;
-import dev.materione.web.ReloadTrigger;
 import dev.materione.web.TrustPrompt;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.io.IOException;
@@ -41,10 +46,10 @@ import org.bukkit.plugin.Plugin;
  * wire protocol itself never leaves {@code web/} (ban rule R8) — this class
  * only holds the facade.
  *
- * <p>Since the API-first transformation, reloads delegate to the plugin's
- * {@link PipelineApi} implementation — one reload path for the editor, the
- * commands and future MCP callers — and the file-watcher feed also reaches
- * the authoring API's change subscription.
+ * <p>Since the API-first transformation, every op is served from the
+ * {@link MaterioneAPI} facade — one reload path ({@code api.pipeline()}) for
+ * the editor, the commands and future MCP callers — and the file-watcher
+ * feed also reaches the authoring API's change subscription.
  */
 public final class EditorTransportService {
 
@@ -64,31 +69,26 @@ public final class EditorTransportService {
     private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
 
     private final PipelineService pipeline;
-    private final DeliveryService delivery;
-    /** The one reload path (api.pipeline()); every editor reload funnels through it. */
-    private final PipelineApi pipelineApi;
+    /** The facade: the only surface the editor's ops are served through. */
+    private final MaterioneAPI api;
     /** Host-shared document services; null → this transport builds its own. */
     private final DocumentStore sharedDocuments;
     private final AuditLog sharedAudit;
-    /** Server-computed glyph metadata shared with the authoring API; nullable. */
-    private final GlyphMetadataComputer computedMetadata;
     /** The authoring API's change feed; the watcher publishes into it. Nullable. */
     private final AuthoringApiImpl authoringFeed;
+    private AutoCloseable reloadSubscription;
 
     public EditorTransportService(Plugin plugin, DiagnosticsBus diagnostics,
             SchedulingGateway scheduling, PipelineService pipeline,
-            DeliveryService delivery, PipelineApi pipelineApi,
-            DocumentStore documents, AuditLog audit,
-            GlyphMetadataComputer computedMeta, AuthoringApiImpl authoringFeed) {
+            MaterioneAPI api, DocumentStore documents, AuditLog audit,
+            AuthoringApiImpl authoringFeed) {
         this.plugin = plugin;
         this.diagnostics = diagnostics;
         this.scheduling = scheduling;
         this.pipeline = pipeline;
-        this.delivery = delivery;
-        this.pipelineApi = java.util.Objects.requireNonNull(pipelineApi, "pipelineApi");
+        this.api = java.util.Objects.requireNonNull(api, "api");
         this.sharedDocuments = documents;
         this.sharedAudit = audit;
-        this.computedMetadata = computedMeta;
         this.authoringFeed = authoringFeed;
     }
 
@@ -128,6 +128,17 @@ public final class EditorTransportService {
         } else {
             listener = null;
             sessions = null;
+        }
+        if (bound) {
+            // One reload push channel: save-triggered and manual runs alike
+            // announce here (manual always, saves only on real changes).
+            reloadSubscription = api.pipeline().subscribeReloads(event -> {
+                EditorSessions current = sessions;
+                if (current != null && (event.announceAlways() || !event.noop())) {
+                    dev.materione.web.SessionPush.reload(current, event.scope(),
+                            event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
+                }
+            });
         }
         if (bound && settings.getBoolean("editor_file_watcher", true)) {
             startFileWatcher(storage);
@@ -172,246 +183,94 @@ public final class EditorTransportService {
 
     /**
      * Document-store ops (slice 3): browse/edit over {@code content/packs/}
-     * with revisions + audit, and a targeted reload after every save — the
-     * live preview loop's first half.
+     * served entirely from the {@link MaterioneAPI} sub-surfaces — this host
+     * supplies the session-bound {@link ActorContext}s and nothing else.
      */
     private void registerContentOps(RpcDispatcher dispatcher,
             dev.materione.core.storage.StorageService.StorageState storage) {
-        var documents = sharedDocuments != null ? sharedDocuments
-                : new dev.materione.core.document.DocumentStore(
-                        storage.contentPacksDir(), storage.storageDir().resolve("revisions"));
         var audit = sharedAudit != null ? sharedAudit
                 : new dev.materione.core.document.AuditLog(
                         storage.storageDir().resolve("audit.log"));
-        ReloadTrigger trigger = new ReloadTrigger() {
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadFiles(
-                    java.util.Set<java.nio.file.Path> files) {
-                return runReload(new dev.materione.api.pipeline.ReloadScope.FileSet(files),
-                        storage, false);
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadFilesForPreview(
-                    java.util.Set<java.nio.file.Path> files, String sessionId) {
-                String ownerId = ownerForSession(sessionId);
-                return runReload(new dev.materione.api.pipeline.ReloadScope.FileSet(files), storage, false, ownerId);
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadScopeForPreview(
-                    dev.materione.api.pipeline.ReloadScope scope, String sessionId) {
-                return runReload(scope, storage, false, ownerForSession(sessionId));
-            }
-
-            private String ownerForSession(String sessionId) {
-                if (sessions == null) {
-                    return "";
-                }
-                var editorSession = sessions.find(sessionId);
-                return editorSession == null ? "" : editorSession.ownerId();
-            }
-
-            @Override
-            public java.util.concurrent.CompletableFuture<Outcome> reloadScope(
-                    dev.materione.api.pipeline.ReloadScope scope) {
-                // Manual reloads always announce, even no-ops/skips — the
-                // control-center button must not fail silently.
-                return runReload(scope, storage, true);
-            }
-        };
+        // Editor sessions act with their owner's identity; per-node checks ride
+        // the in-game trust flow (master §9.2) until relay mode tightens them.
+        java.util.function.Function<String, ActorContext> actorFor =
+                attribution -> new ActorContext(
+                        attribution, ActorContext.Kind.EDITOR_SESSION,
+                        ownerUuidOfCurrentSession(), node -> true);
         dev.materione.web.rpc.ops.EditorContentOps.register(
-                dispatcher, documents, audit, storage.contentPacksDir(), trigger,
-                this::typeCatalog,
-                () -> diagnostics.recent(100),
-                this::computedMeta);
+                dispatcher, api.authoring(), this::contentTypes,
+                () -> diagnostics.recent(100), actorFor);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
-                dispatcher, documents, storage.contentPacksDir(), audit, trigger);
-        dev.materione.web.rpc.ops.AssetOps.register(
-                dispatcher, storage.contentPacksDir(), audit, trigger);
+                dispatcher, api.authoring(), actorFor);
+        dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
         dev.materione.web.rpc.ops.AdminOps.register(
-                dispatcher, audit, trigger,
-                plugin.getDataFolder().toPath().resolve("settings").resolve("settings.yml"),
-                dev.materione.core.settings.SettingsService::validateDraft);
-        dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, new dev.materione.web.DeliveryControl() {
-            @Override
-            public Status status() {
-                if (delivery == null) {
-                    return new Status("", "");
-                }
-                var status = delivery.releaseStatus();
-                return new Status(status.publishedSha256(), status.candidateSha256());
-            }
+                dispatcher, api.admin(), api.pipeline(), actorFor,
+                (actor, target) -> audit.record(actor, "pipeline.reload", target));
+        dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, api.delivery(), actorFor);
+    }
 
-            @Override
-            public boolean publish(String expectedCandidateSha256) {
-                return delivery != null && delivery.publishCandidate(expectedCandidateSha256);
+    /** The session owner bound to the dispatching request, if any. */
+    private java.util.Optional<java.util.UUID> ownerUuidOfCurrentSession() {
+        EditorSessions current = sessions;
+        String sessionId = RpcDispatcher.currentSessionId();
+        if (current == null || sessionId == null) {
+            return java.util.Optional.empty();
+        }
+        EditorSession session = current.find(sessionId);
+        String owner = session == null ? null : session.ownerId();
+        try {
+            return owner == null || owner.isBlank()
+                    ? java.util.Optional.empty()
+                    : java.util.Optional.of(java.util.UUID.fromString(owner));
+        } catch (IllegalArgumentException e) {
+            return java.util.Optional.empty(); // console-origin session
+        }
+    }
+
+    /** Registered content types through the api's registry view (D5). */
+    private java.util.List<ContentType> contentTypes() {
+        java.util.List<ContentType> out = new ArrayList<>();
+        api.registries().byKey(RegistryKeys.CONTENT_TYPES).ifPresent(view -> {
+            for (var entry : ((Registry<?>) view).entries()) {
+                if (entry.entry() instanceof ContentType type) {
+                    out.add(type);
+                }
             }
         });
-    }
-
-    /**
-     * Server-computed metadata for the studio: a glyph's allocated codepoint,
-     * delegated to the shared {@link GlyphMetadataComputer} (the same
-     * implementation the authoring API uses — no duplication).
-     */
-    private com.google.gson.JsonObject computedMeta(
-            String pack, String path, com.google.gson.JsonObject parsed) {
-        GlyphMetadataComputer computer = computedMetadata;
-        if (computer == null) {
-            return null;
-        }
-        Map<String, Object> computed = computer.compute(pack, path, plainMap(parsed));
-        return computed == null ? null : (com.google.gson.JsonObject) jsonOf(computed);
-    }
-
-    /** JsonObject → plain Java maps/lists/scalars (the metadata computer's input shape). */
-    private static Map<String, Object> plainMap(com.google.gson.JsonObject object) {
-        Map<String, Object> out = new java.util.LinkedHashMap<>();
-        for (var entry : object.entrySet()) {
-            out.put(entry.getKey(), plainValue(entry.getValue()));
-        }
         return out;
     }
 
-    private static Object plainValue(com.google.gson.JsonElement element) {
-        if (element == null || element.isJsonNull()) {
-            return null;
-        }
-        if (element.isJsonObject()) {
-            return plainMap(element.getAsJsonObject());
-        }
-        if (element.isJsonArray()) {
-            List<Object> items = new ArrayList<>();
-            for (var item : element.getAsJsonArray()) {
-                items.add(plainValue(item));
-            }
-            return items;
-        }
-        com.google.gson.JsonPrimitive primitive = element.getAsJsonPrimitive();
-        if (primitive.isBoolean()) {
-            return primitive.getAsBoolean();
-        }
-        if (primitive.isNumber()) {
-            return primitive.getAsNumber();
-        }
-        return primitive.getAsString();
-    }
-
-    /** Plain Java maps/lists/scalars → JsonObject (the wire shape). */
-    private static com.google.gson.JsonElement jsonOf(Object value) {
-        if (value instanceof Map<?, ?> map) {
-            com.google.gson.JsonObject object = new com.google.gson.JsonObject();
-            for (var entry : map.entrySet()) {
-                object.add(String.valueOf(entry.getKey()), jsonOf(entry.getValue()));
-            }
-            return object;
-        }
-        if (value instanceof List<?> list) {
-            var array = new com.google.gson.JsonArray();
-            list.forEach(item -> array.add(jsonOf(item)));
-            return array;
-        }
-        if (value instanceof String text) {
-            return new com.google.gson.JsonPrimitive(text);
-        }
-        if (value instanceof Number number) {
-            return new com.google.gson.JsonPrimitive(number);
-        }
-        if (value instanceof Boolean flag) {
-            return new com.google.gson.JsonPrimitive(flag);
-        }
-        if (value == null) {
-            return com.google.gson.JsonNull.INSTANCE;
-        }
-        return new com.google.gson.JsonPrimitive(value.toString());
-    }
-
     /**
-     * Runs any scope through the one reload path — the plugin's
-     * {@link PipelineApi} — and broadcasts the outcome to every connected
-     * editor: the live preview loop's last mile, shared by save-triggered
-     * and manual reloads.
+     * Runs any scope through the one reload path — the api's
+     * {@code pipeline()} — for host-side callers (the reload test, console
+     * flows). Push announcements happen once, in the reload subscription.
      */
-    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
+    java.util.concurrent.CompletableFuture<Outcome> runReload(
             dev.materione.api.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
-            boolean announceAlways) {
-        return runReload(scope, storage, announceAlways, "", false);
-    }
-
-    java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.api.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
-            boolean announceAlways, String previewOwnerId) {
-        return runReload(scope, storage, announceAlways, previewOwnerId, true);
-    }
-
-    private java.util.concurrent.CompletableFuture<ReloadTrigger.Outcome> runReload(
-            dev.materione.api.pipeline.ReloadScope scope,
-            dev.materione.core.storage.StorageService.StorageState storage,
             boolean announceAlways, String previewOwnerId, boolean stageCandidate) {
         ActorContext actor = new ActorContext(
-                "editor", dev.materione.api.auth.ActorContext.Kind.EDITOR_SESSION,
+                "editor", ActorContext.Kind.EDITOR_SESSION,
                 previewOwnerId == null || previewOwnerId.isBlank()
-                        ? Optional.empty()
-                        : Optional.of(UUID.fromString(previewOwnerId)),
+                        ? java.util.Optional.empty()
+                        : java.util.Optional.of(java.util.UUID.fromString(previewOwnerId)),
                 node -> true);
         PipelineApi.DeliveryMode mode = stageCandidate
                 ? PipelineApi.DeliveryMode.CANDIDATE_PREVIEW
                 : PipelineApi.DeliveryMode.PUBLISH_DEFAULT;
-        return pipelineApi
-                .reload(actor, new PipelineApi.ReloadRequest(scope, mode))
+        return api.pipeline()
+                .reload(actor, new PipelineApi.ReloadRequest(scope, mode, announceAlways))
                 .thenApply(result -> result.ok()
-                        ? new ReloadTrigger.Outcome(
+                        ? new Outcome(
                                 true, result.value().noop(),
                                 result.value().itemsLive(), result.value().quarantined())
-                        : ReloadTrigger.Outcome.rejected())
-                .whenComplete((outcome, error) -> {
-                    if (sessions != null && outcome != null && (announceAlways || !outcome.noop())) {
-                        dev.materione.web.SessionPush.reload(sessions, scopeLabel(scope), outcome.accepted(),
-                                outcome.noop(), outcome.itemsLive(), outcome.quarantined());
-                    }
-                });
+                        : Outcome.rejected());
     }
 
-    /** Human-readable scope for push payloads and audit entries. */
-    private static String scopeLabel(dev.materione.api.pipeline.ReloadScope scope) {
-        if (scope instanceof dev.materione.api.pipeline.ReloadScope.OnePack pack) {
-            return "one-pack:" + pack.packId();
+    /** The reload outcome host callers wait on. */
+    public record Outcome(boolean accepted, boolean noop, int itemsLive, int quarantined) {
+        public static Outcome rejected() {
+            return new Outcome(false, true, -1, -1);
         }
-        return scope instanceof dev.materione.api.pipeline.ReloadScope.Everything
-                ? "everything" : scope.toString();
-    }
-
-    /** Registry self-description → transport-ready schema records (plugin.md §3). */
-    private java.util.List<dev.materione.web.TypeMeta> typeCatalog() {
-        var out = new java.util.ArrayList<dev.materione.web.TypeMeta>();
-        for (var type : pipeline.contentTypes()) {
-            var description = type.describe();
-            var params = new java.util.ArrayList<dev.materione.web.TypeMeta.Param>();
-            for (var parameter : description.parameters()) {
-                params.add(new dev.materione.web.TypeMeta.Param(
-                        parameter.id(),
-                        parameter.type().name().toLowerCase(java.util.Locale.ROOT),
-                        parameter.required(),
-                        parameter.defaultValue(),
-                        parameter.description(),
-                        parameter.allowedValues(),
-                        java.util.List.of(),
-                        parameter.uiHint(),
-                        parameter.editor().label(),
-                        parameter.editor().section(),
-                        parameter.editor().order(),
-                        parameter.editor().advanced(),
-                        parameter.editor().referenceKind(),
-                        parameter.editor().example()));
-            }
-            out.add(new dev.materione.web.TypeMeta(
-                    type.name(), type.directory(),
-                    description.displayName(), description.description(), params));
-        }
-        return out;
     }
 
     /**
@@ -441,6 +300,14 @@ public final class EditorTransportService {
     }
 
     public void stop() {
+        if (reloadSubscription != null) {
+            try {
+                reloadSubscription.close();
+            } catch (Exception e) {
+                // unsubscribing is best-effort (D6)
+            }
+            reloadSubscription = null;
+        }
         if (packWatcher != null) {
             try {
                 packWatcher.close();

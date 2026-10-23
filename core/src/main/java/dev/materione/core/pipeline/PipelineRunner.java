@@ -4,7 +4,7 @@ import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.graph.ContentGraph;
 import dev.materione.core.pipeline.validate.ValidateStage;

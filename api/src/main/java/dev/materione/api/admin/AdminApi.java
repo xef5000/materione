@@ -75,8 +75,8 @@ public interface AdminApi {
             DeliveryStatus delivery,
             List<Diagnostic> recentDiagnostics) {}
 
-    /** settings.yml content plus its sha256. */
-    record SettingsView(String content, String sha256) {}
+    /** settings.yml content, its sha256, and the parsed view for form pre-fill. */
+    record SettingsView(String content, String sha256, java.util.Map<String, Object> parsed) {}
 
     /** One audit log entry. */
     record AuditEntry(String timestamp, String actor, String operation, String target) {}

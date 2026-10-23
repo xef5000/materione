@@ -5,7 +5,7 @@ import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.core.delivery.PackDeliveryBackend;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.settings.SettingsService.SettingsState;
 import dev.materione.delivery.SelfHostBackend;
 import dev.materione.platform.delivery.PackAcceptance;

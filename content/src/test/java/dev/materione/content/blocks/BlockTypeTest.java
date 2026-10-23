@@ -9,7 +9,7 @@ import dev.materione.core.blocks.BlockStateSpaces;
 import dev.materione.core.blocks.BlockStateSpaces.Technique;
 import dev.materione.api.content.Allocations;
 import dev.materione.api.content.CompileRejectException;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;

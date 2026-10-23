@@ -5,7 +5,7 @@ import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentConflictException;
 import dev.materione.core.document.DocumentStore;
@@ -203,19 +203,34 @@ public final class AuthoringApiImpl implements AuthoringApi {
 
     @Override
     public ApiResult<DocumentView> putDocument(ActorContext actor, PutDocumentRequest request) {
+        return writeDocument(actor, request, "edit.put",
+                "re-read the document and re-apply your change", true);
+    }
+
+    @Override
+    public ApiResult<DocumentView> commitDocument(ActorContext actor, PutDocumentRequest request) {
+        return writeDocument(actor, request, "authoring.commit",
+                "re-read the item and re-apply your changes", false);
+    }
+
+    private ApiResult<DocumentView> writeDocument(
+            ActorContext actor, PutDocumentRequest request, String operation,
+            String conflictHint, boolean auditConflicts) {
         try {
             int revision = documents.write(
                     request.pack(), request.path(), request.expectedRevision(),
                     request.content(), actorId(actor));
-            audit.record(actorId(actor), "edit.put", request.pack() + "/" + request.path());
+            audit.record(actorId(actor), operation, request.pack() + "/" + request.path());
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), request.path()));
             return ApiResult.ok(new DocumentView(
                     request.pack(), request.path(), request.content(), parsed(request.content()),
                     revision, Documents.sha256(request.content()), Map.of()));
         } catch (DocumentConflictException e) {
-            audit.record(actorId(actor), "edit.put.conflict",
-                    request.pack() + "/" + request.path());
-            return conflict(e, "re-read the document and re-apply your change");
+            if (auditConflicts) {
+                audit.record(actorId(actor), operation + ".conflict",
+                        request.pack() + "/" + request.path());
+            }
+            return conflict(e, conflictHint);
         } catch (IllegalArgumentException e) {
             // syntax gate or path validation — the caller shows it inline
             return new ApiResult<DocumentView>(false, null, List.of(new Diagnostic(
@@ -348,13 +363,13 @@ public final class AuthoringApiImpl implements AuthoringApi {
             String content = source.raw().replaceFirst(
                     "(?m)^" + Pattern.quote(sourceId) + ":",
                     java.util.regex.Matcher.quoteReplacement(request.resourceId() + ":"));
-            documents.createDocument(request.pack(), path, content, actorId(actor));
+            int revision = documents.createDocument(request.pack(), path, content, actorId(actor));
             audit.record(actorId(actor), "authoring.duplicateResource",
                     request.pack() + "/" + path);
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
             return ApiResult.ok(new DocumentView(
                     request.pack(), path, content, parsed(content),
-                    1, Documents.sha256(content), Map.of()));
+                    revision, Documents.sha256(content), Map.of()));
         } catch (NoSuchFileException e) {
             return missing("no such document");
         } catch (IllegalArgumentException e) {

@@ -1,7 +1,7 @@
 package dev.materione.web;
 
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.web.protocol.HelloMessage;
 import dev.materione.web.protocol.ProtocolException;
 import dev.materione.web.protocol.Wire;

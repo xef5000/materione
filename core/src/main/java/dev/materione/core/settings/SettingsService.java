@@ -2,7 +2,7 @@ package dev.materione.core.settings;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

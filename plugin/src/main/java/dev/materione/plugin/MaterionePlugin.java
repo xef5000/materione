@@ -11,7 +11,7 @@ import dev.materione.core.authoring.ReloadHook;
 import dev.materione.core.assets.AssetApiImpl;
 import dev.materione.core.bootstrap.BootstrapPhase;
 import dev.materione.core.bootstrap.BootstrapPhaseRunner;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.document.AssetStore;
@@ -322,7 +322,7 @@ public final class MaterionePlugin extends JavaPlugin {
             }
             if (!accepted) {
                 diagnostics.publish(Diagnostic.warn(
-                        dev.materione.core.diagnostics.DiagnosticCodes.DATAPACK_NOT_ACCEPTED,
+                        dev.materione.api.diagnostics.DiagnosticCodes.DATAPACK_NOT_ACCEPTED,
                         "the deployed content datapack was not accepted by the server's pack"
                                 + " repository — paintings/jukebox content will not exist;"
                                 + " restart once more, then check /materione doctor"));
@@ -416,9 +416,8 @@ public final class MaterionePlugin extends JavaPlugin {
             return;
         }
         editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
-                this, diagnostics, scheduling, pipeline, delivery,
-                pipelineApi, documents, audit,
-                new GlyphMetadataComputer(pipeline), authoringApi);
+                this, diagnostics, scheduling, pipeline, api, documents, audit,
+                authoringApi);
         editorTransport.start(settings, storage);
     }
 

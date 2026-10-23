@@ -1,7 +1,7 @@
 package dev.materione.plugin.runtime.behavior;
 
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.platform.items.MaterioneStacks;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;

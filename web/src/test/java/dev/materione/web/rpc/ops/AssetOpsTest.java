@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.google.gson.JsonObject;
 import dev.materione.core.document.AuditLog;
 import dev.materione.api.pipeline.ReloadScope;
-import dev.materione.web.ReloadTrigger;
+import dev.materione.api.assets.AssetApi;
+import dev.materione.api.auth.ActorContext;
+import dev.materione.core.authoring.ReloadHook;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +38,8 @@ class AssetOpsTest {
         CapturingTrigger trigger = new CapturingTrigger();
 
         RpcDispatcher dispatcher = new RpcDispatcher();
-        AssetOps.register(dispatcher, packsRoot, audit, trigger);
+        AssetOps.register(dispatcher, assets(packsRoot, audit, trigger),
+                AssetOpsTest::actor);
 
         // Initially no assets
         Wire.Response listEmpty = dispatcher.dispatch(
@@ -104,8 +107,10 @@ class AssetOpsTest {
         Files.write(thumbnail, bytes);
         RpcDispatcher dispatcher = new RpcDispatcher();
         AssetOps.register(
-                dispatcher, packsRoot, new AuditLog(temp.resolve("audit.log")),
-                new CapturingTrigger());
+                dispatcher,
+                assets(packsRoot, new AuditLog(temp.resolve("audit.log")),
+                        new CapturingTrigger()),
+                AssetOpsTest::actor);
 
         Wire.Response get = dispatcher.dispatch(request("assets.get", "1",
                 object("pack", "demo", "path", ".materione/thumbnails/gem.png")));
@@ -125,20 +130,30 @@ class AssetOpsTest {
         assertThat(Files.readAllBytes(thumbnail)).isEqualTo(bytes);
     }
 
-    private static final class CapturingTrigger implements ReloadTrigger {
+    /** The real asset api over the store; mutations reload the pack (D6). */
+    private AssetApi assets(Path packsRoot, AuditLog audit, CapturingTrigger trigger) {
+        return new dev.materione.core.assets.AssetApiImpl(
+                new dev.materione.core.document.AssetStore(packsRoot, audit),
+                packsRoot, trigger);
+    }
+
+    private static ActorContext actor(String attribution) {
+        return new ActorContext(attribution, ActorContext.Kind.EDITOR_SESSION,
+                java.util.Optional.empty(), node -> true);
+    }
+
+    /** Records the pack-wide preview reloads the api fires after mutations. */
+    private static final class CapturingTrigger implements ReloadHook {
         final List<ReloadScope> scopes = new ArrayList<>();
         final List<Path> files = new ArrayList<>();
 
         @Override
-        public CompletableFuture<Outcome> reloadFiles(Set<Path> paths) {
-            files.addAll(paths);
-            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
-        }
-
-        @Override
-        public CompletableFuture<Outcome> reloadScope(ReloadScope scope) {
-            scopes.add(scope);
-            return CompletableFuture.completedFuture(new Outcome(true, false, 1, 0));
+        public void afterChange(ActorContext actor, String pack, Path changed) {
+            if (java.nio.file.Files.isDirectory(changed)) {
+                scopes.add(new ReloadScope.OnePack(pack));
+            } else {
+                files.add(changed);
+            }
         }
     }
 

@@ -9,7 +9,7 @@ import dev.materione.api.content.Allocations;
 import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

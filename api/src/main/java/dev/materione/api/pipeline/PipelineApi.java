@@ -42,10 +42,19 @@ public interface PipelineApi {
 
     // ------------------------------------------------------------------
 
-    /** One reload ask: what to touch, and how to deliver resulting pack bytes. */
-    record ReloadRequest(ReloadScope scope, DeliveryMode deliveryMode) {
+    /** One reload ask: what to touch, how to deliver pack bytes, whether a no-op still announces. */
+    record ReloadRequest(ReloadScope scope, DeliveryMode deliveryMode, boolean announceAlways) {
+        public ReloadRequest(ReloadScope scope, DeliveryMode deliveryMode) {
+            this(scope, deliveryMode, false);
+        }
+
         public static ReloadRequest everything() {
-            return new ReloadRequest(new ReloadScope.Everything(), DeliveryMode.PUBLISH_DEFAULT);
+            return new ReloadRequest(new ReloadScope.Everything(), DeliveryMode.PUBLISH_DEFAULT, false);
+        }
+
+        /** A user-initiated reload (control center): no-ops announce too. */
+        public static ReloadRequest manual(ReloadScope scope, DeliveryMode mode) {
+            return new ReloadRequest(scope, mode, true);
         }
     }
 
@@ -63,7 +72,12 @@ public interface PipelineApi {
     /** One quarantined resource and why. */
     record Quarantined(NamespacedId resource, Diagnostic reason) {}
 
-    /** Reload outcome event ({@code push.reload} shape). */
+    /**
+     * Reload outcome event ({@code push.reload} shape). {@code
+     * announceAlways} mirrors the request: manual reloads announce even when
+     * they no-op, save-triggered ones announce only real changes.
+     */
     record ReloadEvent(
-            boolean accepted, boolean noop, int itemsLive, int quarantined, String scope) {}
+            boolean accepted, boolean noop, int itemsLive, int quarantined, String scope,
+            boolean announceAlways) {}
 }

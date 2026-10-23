@@ -1,12 +1,12 @@
-// Pure-JVM content module: compiles against api+core only, no Paper types
-// visible (master §10). Code lands with its milestone (see docs/roadmap.md).
+// The editor transport: depends ONLY on :api (R9, WEB_ONLY_CONSUMES_API) —
+// every action it serves is a typed MaterioneAPI operation; no Paper types
+// visible (master §10).
 plugins {
     id("materione.library-conventions")
 }
 
 dependencies {
     api(project(":api"))
-    api(project(":core"))
     // Wire-protocol JSON encoding. Server-provided at runtime (Paper ships
     // Gson) — compileOnly like SnakeYAML/Gson everywhere else (build.md §1);
     // the shaded artifact must not pick it up (plugin-conventions relocates
@@ -16,4 +16,6 @@ dependencies {
     // Embedded editor listener (web.md §4.4). Shaded + relocated by
     // plugin-conventions; R8 keeps every reference inside this module.
     implementation(libs.undertow.core)
+    // Test fixtures build the real api implementations (core-owned).
+    testImplementation(project(":core"))
 }

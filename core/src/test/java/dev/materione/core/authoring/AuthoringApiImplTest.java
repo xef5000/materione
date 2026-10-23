@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.ApiResult;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.authoring.AuthoringApi;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.ModelTransactionService;

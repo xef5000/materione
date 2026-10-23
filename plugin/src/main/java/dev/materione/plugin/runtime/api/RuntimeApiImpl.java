@@ -6,7 +6,7 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.runtime.RuntimeApi;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.PipelineRunner;
 import dev.materione.core.pipeline.graph.ContentGraph;
 import dev.materione.core.runtime.ContentRuntime;

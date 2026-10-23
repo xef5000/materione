@@ -3,7 +3,7 @@ package dev.materione.core.pipeline.validate;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.graph.ContentEdgeType;

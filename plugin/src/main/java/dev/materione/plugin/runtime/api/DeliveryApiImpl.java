@@ -5,7 +5,7 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.delivery.DeliveryApi;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.plugin.runtime.DeliveryService;
 import java.util.Objects;
 import java.util.UUID;

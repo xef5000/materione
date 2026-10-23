@@ -7,7 +7,7 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.platform.ProbeResult;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.Documents;
@@ -160,7 +160,7 @@ public final class AdminApiImpl implements AdminApi {
                         "settings file does not exist yet");
             }
             String raw = Files.readString(settingsFile, StandardCharsets.UTF_8);
-            return ApiResult.ok(new SettingsView(raw, Documents.sha256(raw)));
+            return ApiResult.ok(new SettingsView(raw, Documents.sha256(raw), parsedView(raw)));
         } catch (IOException e) {
             return ApiResult.fail(DiagnosticCodes.PIPELINE_STAGE_FAILED,
                     "settings read failed: " + e.getMessage());
@@ -315,6 +315,18 @@ public final class AdminApiImpl implements AdminApi {
                     java.nio.file.StandardCopyOption.ATOMIC_MOVE);
         } catch (java.nio.file.AtomicMoveNotSupportedException e) {
             Files.move(temp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        }
+    }
+
+    /** The data view for the settings form pre-fill (plain maps/lists/scalars). */
+    private static java.util.Map<String, Object> parsedView(String raw) {
+        try {
+            var parsed = dev.materione.core.document.LosslessYaml.parse(raw);
+            return parsed.parseError().isEmpty()
+                    ? dev.materione.core.document.LosslessYaml.stringKeyed(parsed.data())
+                    : java.util.Map.of();
+        } catch (RuntimeException e) {
+            return java.util.Map.of();
         }
     }
 }

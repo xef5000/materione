@@ -67,6 +67,13 @@ public interface AuthoringApi {
     /** Revision-guarded raw YAML write ({@code edit.put}). */
     ApiResult<DocumentView> putDocument(ActorContext actor, PutDocumentRequest request);
 
+    /**
+     * Studio commit: {@link #putDocument} semantics, audited under its own
+     * operation name ({@code authoring.commit}) — the audit trail records
+     * what the actor invoked, and a studio commit is not a raw edit.
+     */
+    ApiResult<DocumentView> commitDocument(ActorContext actor, PutDocumentRequest request);
+
     /** Lossless single-field or scalar-list patch preserving comments and formatting ({@code edit.setScalar}). */
     ApiResult<DocumentView> setScalar(ActorContext actor, SetScalarRequest request);
 

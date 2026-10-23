@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.testing.golden.GoldenFiles;

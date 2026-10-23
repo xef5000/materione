@@ -146,7 +146,7 @@ public final class RuleEngine {
         }
         lastFailureLog.put(subject, now);
         diagnostics.accept(new Diagnostic(
-                dev.materione.core.diagnostics.DiagnosticCodes.ACTION_FAILED,
+                dev.materione.api.diagnostics.DiagnosticCodes.ACTION_FAILED,
                 Severity.WARN,
                 subject + ": " + problem,
                 null, null,

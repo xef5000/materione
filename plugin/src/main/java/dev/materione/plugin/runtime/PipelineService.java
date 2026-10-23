@@ -14,7 +14,7 @@ import dev.materione.plugin.runtime.behavior.BlockBehaviors;
 import dev.materione.plugin.runtime.behavior.FurnitureBehaviors;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.api.content.ContentType;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;

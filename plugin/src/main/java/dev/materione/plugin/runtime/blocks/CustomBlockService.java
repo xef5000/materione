@@ -7,7 +7,7 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.core.blocks.BlockStateSpaces;
 import dev.materione.api.diagnostics.DiagnosticCode;
-import dev.materione.core.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.runtime.RuntimeBlock;
 import dev.materione.core.runtime.RuntimeBlocks;
 import dev.materione.core.runtime.RuntimeItem;

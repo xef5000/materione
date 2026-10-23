@@ -1,4 +1,4 @@
-package dev.materione.core.diagnostics;
+package dev.materione.api.diagnostics;
 
 import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.diagnostics.Severity;
