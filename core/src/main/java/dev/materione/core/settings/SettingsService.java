@@ -73,6 +73,8 @@ public final class SettingsService {
         defaults.put("editor_file_watcher", true);
         defaults.put("editor_host", "127.0.0.1");
         defaults.put("editor_port", 8089);
+        defaults.put("editor_mode", "cloud");
+        defaults.put("relay_base_url", "https://editor.materione.com");
         return defaults;
     }
 

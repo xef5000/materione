@@ -60,8 +60,9 @@ class EditorListenerTest {
     void fullHandshakeAndRpcRoundTripOverRealSocket() throws Exception {
         int port = PORT_BASE + new SecureRandom().nextInt(PORT_SPREAD);
         KeyPair identity = KeyFormat.generateEd25519(new SecureRandom());
-        TrustPrompt autoApprove = (prefix, browser) -> CompletableFuture.completedFuture(true);
-        EditorSessions sessions = new EditorSessions(identity, autoApprove, bus);
+        TrustPrompt autoApprove = (prefix, browser) ->
+                CompletableFuture.completedFuture(TrustPrompt.Decision.APPROVED);
+        EditorSessions sessions = new EditorSessions(identity, autoApprove, null, bus);
 
         RpcDispatcher dispatcher = new RpcDispatcher();
         dispatcher.register("ping", request -> {
@@ -155,7 +156,9 @@ class EditorListenerTest {
         int port = PORT_BASE + new SecureRandom().nextInt(PORT_SPREAD);
         KeyPair identity = KeyFormat.generateEd25519(new SecureRandom());
         EditorSessions sessions = new EditorSessions(
-                identity, (prefix, browser) -> CompletableFuture.completedFuture(true), bus);
+                identity, (prefix, browser) ->
+                        CompletableFuture.completedFuture(TrustPrompt.Decision.APPROVED),
+                null, bus);
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, new RpcDispatcher(), bus), new RpcDispatcher(), bus);
         assertThat(listener.start(new EditorConfig("127.0.0.1", port))).isTrue();

@@ -269,16 +269,26 @@ public final class AdminApiImpl implements AdminApi {
 
         @Override
         public ApiResult<String> openSession(ActorContext actor) {
+            return openForMode(actor, transport -> transport.openSession(senderOf(actor)));
+        }
+
+        @Override
+        public ApiResult<String> openLocalSession(ActorContext actor) {
+            return openForMode(actor, transport -> transport.openLocalSession(senderOf(actor)));
+        }
+
+        private ApiResult<String> openForMode(ActorContext actor, java.util.function.Function<
+                EditorTransportService, String> opener) {
             requirePermission(actor, "materione.editor");
             EditorTransportService transport = editorTransport.get();
             if (transport == null) {
                 return ApiResult.fail(DiagnosticCodes.PIPELINE_STAGE_FAILED,
                         "editor transport is not running");
             }
-            String url = transport.openSession(senderOf(actor));
+            String url = opener.apply(transport);
             return url == null
                     ? ApiResult.fail(DiagnosticCodes.EDITOR_LISTENER_FAILED,
-                            "the editor listener is not running (disabled in settings or bind failed)")
+                            "no editor surface is available (listener down and relay unreachable)")
                     : ApiResult.ok(url);
         }
 
@@ -286,16 +296,25 @@ public final class AdminApiImpl implements AdminApi {
         public EditorListenerStatus status() {
             EditorTransportService transport = editorTransport.get();
             if (transport == null) {
-                return new EditorListenerStatus(false, -1, 0);
+                return new EditorListenerStatus(false, false, -1, 0, "cloud");
             }
             return new EditorListenerStatus(
-                    transport.isRunning(), transport.boundPort(), transport.activeEditors());
+                    transport.isRunning(),
+                    transport.localListenerRunning(),
+                    transport.boundPort(),
+                    transport.activeEditors(),
+                    transport.editorMode());
         }
 
         @Override
         public ApiResult<Void> approve(ActorContext actor, String noncePrefix) {
+            return approve(actor, noncePrefix, false);
+        }
+
+        @Override
+        public ApiResult<Void> approve(ActorContext actor, String noncePrefix, boolean trustWorkstation) {
             return sessionMutation(actor, "materione.admin", noncePrefix,
-                    (transport, sender) -> transport.approve(sender, noncePrefix));
+                    (transport, sender) -> transport.approve(sender, noncePrefix, trustWorkstation));
         }
 
         @Override
@@ -308,6 +327,12 @@ public final class AdminApiImpl implements AdminApi {
         public ApiResult<Void> revokeAll(ActorContext actor) {
             return sessionMutation(actor, "materione.admin", null,
                     (transport, sender) -> transport.revokeAll(sender));
+        }
+
+        @Override
+        public ApiResult<Void> revokeWorkstations(ActorContext actor, String selector) {
+            return sessionMutation(actor, "materione.admin", null,
+                    (transport, sender) -> transport.revokeWorkstations(sender, selector));
         }
 
         @Override

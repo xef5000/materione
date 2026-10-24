@@ -97,21 +97,47 @@ public interface AdminApi {
     /** The editor transport control surface. */
     interface EditorSessionControl {
 
-        /** Opens a session and returns the capability URL (in-game trust flow, master §9.2). */
+        /**
+         * Opens a session per {@code editor_mode} (cloud relay by default,
+         * local per settings) and returns the capability URL (in-game trust
+         * flow, master §9.2).
+         */
         ApiResult<String> openSession(ActorContext actor);
+
+        /**
+         * Opens a direct-mode (local listener) session regardless of
+         * {@code editor_mode} — the always-available surface.
+         */
+        ApiResult<String> openLocalSession(ActorContext actor);
 
         EditorListenerStatus status();
 
         ApiResult<Void> approve(ActorContext actor, String noncePrefix);
 
+        /** Approves with an optional trusted-workstation flag (web.md §5.2). */
+        ApiResult<Void> approve(ActorContext actor, String noncePrefix, boolean trustWorkstation);
+
         ApiResult<Void> deny(ActorContext actor, String noncePrefix);
 
         ApiResult<Void> revokeAll(ActorContext actor);
+
+        /** Revokes trusted workstations: one key-hash prefix, or all with "workstations". */
+        ApiResult<Void> revokeWorkstations(ActorContext actor, String selector);
 
         /** Stops the embedded listener (direct mode). */
         ApiResult<Void> stopListener(ActorContext actor);
     }
 
-    /** Listener health for the editor transport. */
-    record EditorListenerStatus(boolean running, int boundPort, int activeSessions) {}
+    /**
+     * Editor transport health: any surface up ({@code running}), the local
+     * listener specifically, and the configured mode.
+     */
+    record EditorListenerStatus(
+            boolean running, boolean localListener, int boundPort, int activeSessions, String editorMode) {
+
+        /** Compatibility shape for callers that only check liveness. */
+        public EditorListenerStatus(boolean running, int boundPort, int activeSessions) {
+            this(running, false, boundPort, activeSessions, "cloud");
+        }
+    }
 }

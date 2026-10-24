@@ -7,3 +7,5 @@ editor_enabled: true
 editor_file_watcher: true
 editor_host: 127.0.0.1
 editor_port: 8089
+editor_mode: cloud
+relay_base_url: https://editor.materione.com

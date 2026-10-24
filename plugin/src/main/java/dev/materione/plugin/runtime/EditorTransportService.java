@@ -5,6 +5,8 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.assets.AssetApi;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.delivery.DeliveryApi;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.registry.Registry;
@@ -62,11 +64,16 @@ public final class EditorTransportService {
 
     private EditorListener listener;
     private EditorSessions sessions;
+    private dev.materione.web.relay.RelaySessions relaySessions;
+    private dev.materione.web.EditorWorkstations workstations;
+    private String relayBaseUrl = "";
+    private String editorMode = "cloud";
     private AutoCloseable diagnosticsSubscription;
     private dev.materione.core.document.PackWatcher packWatcher;
     private String advertiseHost = "";
     /** Trust prompts awaiting an in-game answer, keyed by nonce prefix. */
-    private final Map<String, CompletableFuture<Boolean>> pendingTrust = new ConcurrentHashMap<>();
+    private final Map<String, CompletableFuture<dev.materione.web.TrustPrompt.Decision>> pendingTrust =
+            new ConcurrentHashMap<>();
 
     private final PipelineService pipeline;
     /** The facade: the only surface the editor's ops are served through. */
@@ -92,7 +99,7 @@ public final class EditorTransportService {
         this.authoringFeed = authoringFeed;
     }
 
-    /** Starts the listener from settings ({@code editor_*} keys). False when disabled/unbound. */
+    /** Starts the listener from settings ({@code editor_*} keys). False when disabled. */
     public boolean start(SettingsState settings, dev.materione.core.storage.StorageService.StorageState storage) {
         if (!settings.getBoolean("editor_enabled", true)) {
             return false;
@@ -100,50 +107,62 @@ public final class EditorTransportService {
         String host = settings.getString("editor_host", "127.0.0.1");
         int port = settings.getInt("editor_port", 8089);
         advertiseHost = settings.getString("editor_public_host", "");
+        relayBaseUrl = settings.getString("relay_base_url", "https://editor.materione.com");
+        editorMode = settings.getString("editor_mode", "cloud");
 
         KeyPair identity = new IdentityKeystore(diagnostics, new SecureRandom()).load(storage.storageDir());
-        sessions = new EditorSessions(identity, this::prompt, diagnostics);
+        workstations = new dev.materione.web.EditorWorkstations(
+                storage.storageDir().resolve("editor-workstations.json"));
+        sessions = new EditorSessions(identity, this::prompt, workstations, diagnostics);
         RpcDispatcher dispatcher = new RpcDispatcher();
         BaseOps.register(dispatcher, dev.materione.plugin.MaterioneVersion.VERSION,
                 () -> java.util.Map.of(
-                        "editorRunning", listener != null && listener.isRunning(),
-                        "editorPort", boundPort()));
+                        "editorRunning", editorRunning(),
+                        "editorPort", boundPort(),
+                        "editorMode", editorMode,
+                        "relayBaseUrl", relayBaseUrl));
         registerContentOps(dispatcher, storage);
+        relaySessions = new dev.materione.web.relay.RelaySessions(sessions, dispatcher, diagnostics);
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, dispatcher, diagnostics), dispatcher, diagnostics);
         boolean bound = listener.start(new EditorConfig(host, port));
-        if (bound) {
-            // Live diagnostics stream: every connected editor hears failures
-            // as they happen instead of polling (web.md §4.2 admin feed).
-            try {
-                diagnosticsSubscription = diagnostics.subscribe(diagnostic -> {
-                    EditorSessions current = sessions;
-                    if (current != null) {
-                        dev.materione.web.SessionPush.diagnostic(current, diagnostic);
-                    }
-                });
-            } catch (Exception e) {
-                plugin.getLogger().warning("editor diagnostics stream unavailable: " + e.getMessage());
-            }
-        } else {
+        // Relay mode needs no listener: sessions and the dispatcher live on
+        // even when the local bind fails, so the cloud editor still works.
+        if (!bound) {
             listener = null;
-            sessions = null;
         }
-        if (bound) {
-            // One reload push channel: save-triggered and manual runs alike
-            // announce here (manual always, saves only on real changes).
-            reloadSubscription = api.pipeline().subscribeReloads(event -> {
+        // Live diagnostics stream: every connected editor hears failures
+        // as they happen instead of polling (web.md §4.2 admin feed).
+        try {
+            diagnosticsSubscription = diagnostics.subscribe(diagnostic -> {
                 EditorSessions current = sessions;
-                if (current != null && (event.announceAlways() || !event.noop())) {
-                    dev.materione.web.SessionPush.reload(current, event.scope(),
-                            event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
+                if (current != null) {
+                    dev.materione.web.SessionPush.diagnostic(current, diagnostic);
                 }
             });
+        } catch (Exception e) {
+            plugin.getLogger().warning("editor diagnostics stream unavailable: " + e.getMessage());
         }
+        // One reload push channel: save-triggered and manual runs alike
+        // announce here (manual always, saves only on real changes).
+        reloadSubscription = api.pipeline().subscribeReloads(event -> {
+            EditorSessions current = sessions;
+            if (current != null && (event.announceAlways() || !event.noop())) {
+                dev.materione.web.SessionPush.reload(current, event.scope(),
+                        event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
+            }
+        });
         if (bound && settings.getBoolean("editor_file_watcher", true)) {
             startFileWatcher(storage);
         }
-        return bound;
+        return true;
+    }
+
+    /** True when any editor surface is up (local listener and/or relay). */
+    public boolean editorRunning() {
+        boolean local = listener != null && listener.isRunning();
+        boolean cloud = relaySessions != null && !relaySessions.liveSessions().isEmpty();
+        return local || cloud;
     }
 
     /**
@@ -274,14 +293,23 @@ public final class EditorTransportService {
     }
 
     /**
-     * Creates a session and prints its capability URL to the sender; returns
-     * the URL (null when the listener is not running) so API callers can hand
-     * it to their own surface.
+     * Opens a session per {@code editor_mode} — cloud relay (default) or
+     * local — prints the capability URL to the sender, and returns it (null
+     * when no surface is available) so API callers can hand it to their own
+     * surface.
      */
     public String openSession(CommandSender sender) {
+        return "local".equalsIgnoreCase(editorMode)
+                ? openLocalSession(sender)
+                : openCloudSession(sender);
+    }
+
+    /** The always-available direct-mode session (power users / relay outage). */
+    public String openLocalSession(CommandSender sender) {
         if (listener == null || !listener.isRunning()) {
             sender.sendMessage(Component.text(
-                    "the editor listener is not running (disabled in settings or bind failed)",
+                    "the local editor listener is not running — enable it with editor_enabled: true "
+                            + "in settings.yml (or check the boot log for MTR-0030)",
                     NamedTextColor.RED));
             return null;
         }
@@ -289,7 +317,7 @@ public final class EditorTransportService {
         String url = listener.openSessionUrl(advertiseHost, ownerId);
         // Stable harness marker: the harness scrapes the URL from the log.
         plugin.getLogger().info("MATERIONE-EDITOR " + url);
-        sender.sendMessage(Component.text("Editor session ready — open:", NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("Editor session ready (local) — open:", NamedTextColor.GREEN));
         sender.sendMessage(Component.text(url, NamedTextColor.AQUA)
                 .clickEvent(ClickEvent.openUrl(url)));
         sender.sendMessage(Component.text(
@@ -299,7 +327,64 @@ public final class EditorTransportService {
         return url;
     }
 
+    /**
+     * The default path (web.md §4.1 over the mailbox): create the channel,
+     * upload the sealed blob, print the cloud editor URL. Falls back to the
+     * local listener when the relay is unreachable (MTR-0050).
+     */
+    public String openCloudSession(CommandSender sender) {
+        if (relaySessions == null) {
+            sender.sendMessage(Component.text(
+                    "the editor transport never started this boot", NamedTextColor.RED));
+            return null;
+        }
+        String ownerId = sender instanceof org.bukkit.entity.Player player ? player.getUniqueId().toString() : "";
+        String directHint = localDirectBase();
+        try {
+            var client = new dev.materione.web.relay.RelayClient(java.net.URI.create(relayBaseUrl));
+            var ticket = relaySessions.open(client, relayBaseUrl, ownerId, directHint);
+            scheduling.executeAsync(plugin, ticket.session()::runLoop);
+            // Stable harness marker: same shape as local mode, cloud origin.
+            plugin.getLogger().info("MATERIONE-EDITOR " + ticket.url());
+            sender.sendMessage(Component.text("Editor session ready (cloud) — open:", NamedTextColor.GREEN));
+            sender.sendMessage(Component.text(ticket.url(), NamedTextColor.AQUA)
+                    .clickEvent(ClickEvent.openUrl(ticket.url())));
+            String extra = directHint == null ? ""
+                    : " A local listener was detected; the editor will prefer it when reachable.";
+            sender.sendMessage(Component.text(
+                    "The part after # is secret and stays in your browser. Approve the connection in game "
+                            + "within " + TRUST_PROMPT_TIMEOUT_SECONDS + "s." + extra,
+                    NamedTextColor.GRAY));
+            return ticket.url();
+        } catch (dev.materione.web.relay.RelayException e) {
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.EDITOR_RELAY_UNREACHABLE,
+                    dev.materione.api.diagnostics.Severity.WARN,
+                    "relay " + relayBaseUrl + " unavailable: " + e.getMessage(),
+                    null, null,
+                    "check relay_base_url in settings.yml, or edit via /materione editor local"));
+            sender.sendMessage(Component.text(
+                    "cloud editor unreachable (" + e.getMessage() + ") — trying the local listener",
+                    NamedTextColor.YELLOW));
+            return openLocalSession(sender);
+        }
+    }
+
+    /** Direct-mode base for the blob's LAN hint, or null when not listening. */
+    private String localDirectBase() {
+        if (listener == null || !listener.isRunning()) {
+            return null;
+        }
+        String host = advertiseHost == null || advertiseHost.isBlank()
+                ? ("0.0.0.0".equals(listener.boundHost()) ? "127.0.0.1" : listener.boundHost())
+                : advertiseHost;
+        return "http://" + host + ":" + listener.boundPort();
+    }
+
     public void stop() {
+        if (relaySessions != null) {
+            relaySessions.stopAll();
+        }
         if (reloadSubscription != null) {
             try {
                 reloadSubscription.close();
@@ -327,42 +412,79 @@ public final class EditorTransportService {
         if (listener != null) {
             listener.stop();
             listener = null;
-            sessions = null;
         }
-        pendingTrust.values().forEach(future -> future.complete(false));
+        sessions = null;
+        pendingTrust.values().forEach(future -> future.complete(TrustPrompt.Decision.DENIED));
         pendingTrust.clear();
     }
 
     public boolean isRunning() {
+        return editorRunning();
+    }
+
+    /** True when the loopback listener is up (the relay needs no listener). */
+    public boolean localListenerRunning() {
         return listener != null && listener.isRunning();
     }
 
+    /** The configured default surface ("cloud" relay or "local"). */
+    public String editorMode() {
+        return editorMode;
+    }
+
     public int activeEditors() {
-        return listener == null ? 0 : listener.activeSessions();
+        // One shared session registry serves both transports — counting it
+        // once per surface would double every relay session (the listener's
+        // count already includes them).
+        return sessions == null ? 0 : sessions.active().size();
     }
 
     public int boundPort() {
         return listener == null ? -1 : listener.boundPort();
     }
 
-    /** In-game approval of one pending hello (command: {@code editor approve <prefix>}). */
-    public void approve(CommandSender sender, String noncePrefix) {
-        resolve(sender, noncePrefix, true);
+    /**
+     * In-game approval of one pending hello (command:
+     * {@code editor approve <prefix> [trust]}).
+     */
+    public void approve(CommandSender sender, String noncePrefix, boolean trustWorkstation) {
+        resolve(sender, noncePrefix, trustWorkstation
+                ? TrustPrompt.Decision.APPROVED_AND_TRUST : TrustPrompt.Decision.APPROVED);
     }
 
     /** In-game denial of one pending hello. */
     public void deny(CommandSender sender, String noncePrefix) {
-        resolve(sender, noncePrefix, false);
+        resolve(sender, noncePrefix, TrustPrompt.Decision.DENIED);
     }
 
     /** Closes every live session and pending prompt (no listener restart needed). */
     public void revokeAll(CommandSender sender) {
+        if (relaySessions != null) {
+            relaySessions.stopAll();
+        }
         if (sessions != null) {
             sessions.closeAll();
         }
-        pendingTrust.values().forEach(future -> future.complete(false));
+        pendingTrust.values().forEach(future -> future.complete(TrustPrompt.Decision.DENIED));
         pendingTrust.clear();
         sender.sendMessage(Component.text("all editor sessions revoked", NamedTextColor.GREEN));
+    }
+
+    /** Revokes trusted workstations: one by key-hash prefix, or all with "workstations". */
+    public void revokeWorkstations(CommandSender sender, String selector) {
+        if (workstations == null) {
+            sender.sendMessage(Component.text("the editor transport never started this boot",
+                    NamedTextColor.RED));
+            return;
+        }
+        if (selector.equalsIgnoreCase("workstations")) {
+            workstations.revokeAll();
+            sender.sendMessage(Component.text("all trusted workstations revoked", NamedTextColor.GREEN));
+            return;
+        }
+        sender.sendMessage(workstations.revoke(selector)
+                ? Component.text("trusted workstation " + selector + "… revoked", NamedTextColor.GREEN)
+                : Component.text("no trusted workstation starts with " + selector, NamedTextColor.RED));
     }
 
     // ------------------------------------------------------------------
@@ -371,19 +493,23 @@ public final class EditorTransportService {
      * The trust decision point: broadcasts an actionable prompt to every
      * admin online plus the console, and completes when someone answers.
      */
-    private CompletableFuture<Boolean> prompt(String noncePrefix, String browser) {
-        CompletableFuture<Boolean> future = new CompletableFuture<>();
-        CompletableFuture<Boolean> previous = pendingTrust.put(noncePrefix, future);
+    private CompletableFuture<TrustPrompt.Decision> prompt(String noncePrefix, String browser) {
+        CompletableFuture<TrustPrompt.Decision> future = new CompletableFuture<>();
+        CompletableFuture<TrustPrompt.Decision> previous = pendingTrust.put(noncePrefix, future);
         if (previous != null) {
-            previous.complete(false); // prefix collision: the older request loses
+            previous.complete(TrustPrompt.Decision.DENIED); // prefix collision: the older loses
         }
-        future.whenComplete((approved, error) -> pendingTrust.remove(noncePrefix, future));
+        future.whenComplete((decision, error) -> pendingTrust.remove(noncePrefix, future));
 
         Component prompt = Component.text("[Materione] ", NamedTextColor.GOLD)
                 .append(Component.text("'" + browser + "' wants to connect as editor", NamedTextColor.YELLOW))
                 .append(Component.text(" (nonce " + noncePrefix + ") ", NamedTextColor.AQUA))
                 .append(Component.text("[Approve]", NamedTextColor.GREEN)
                         .clickEvent(ClickEvent.runCommand("/materione editor approve " + noncePrefix)))
+                .append(Component.text(" "))
+                .append(Component.text("[Approve & trust this browser]", NamedTextColor.DARK_GREEN)
+                        .clickEvent(ClickEvent.runCommand(
+                                "/materione editor approve " + noncePrefix + " trust")))
                 .append(Component.text(" "))
                 .append(Component.text("[Deny]", NamedTextColor.RED)
                         .clickEvent(ClickEvent.runCommand("/materione editor deny " + noncePrefix)));
@@ -398,20 +524,21 @@ public final class EditorTransportService {
         return future;
     }
 
-    private void resolve(CommandSender sender, String noncePrefix, boolean approved) {
+    private void resolve(CommandSender sender, String noncePrefix, TrustPrompt.Decision decision) {
         if (!sender.hasPermission("materione.admin")) {
             sender.sendMessage(Component.text("no permission (materione.admin)", NamedTextColor.RED));
             return;
         }
-        CompletableFuture<Boolean> future = pendingTrust.get(noncePrefix);
+        CompletableFuture<TrustPrompt.Decision> future = pendingTrust.get(noncePrefix);
         if (future == null || future.isDone()) {
             sender.sendMessage(Component.text(
                     "no pending editor request with nonce " + noncePrefix, NamedTextColor.RED));
             return;
         }
-        future.complete(approved);
+        future.complete(decision);
         sender.sendMessage(Component.text(
-                (approved ? "approved" : "denied") + " editor request " + noncePrefix,
-                approved ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
+                (decision.approved() ? "approved" : "denied") + " editor request " + noncePrefix
+                        + (decision.trustWorkstation() ? " (browser trusted for next time)" : ""),
+                decision.approved() ? NamedTextColor.GREEN : NamedTextColor.YELLOW));
     }
 }

@@ -113,6 +113,11 @@ public final class EditorListener {
         return boundPort;
     }
 
+    /** The host the listener actually bound (for the relay blob's LAN hint). */
+    public String boundHost() {
+        return boundHost;
+    }
+
     public int activeSessions() {
         return sessions.active().size();
     }
