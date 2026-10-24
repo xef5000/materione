@@ -19,7 +19,8 @@ class PaperEditorHandshakeIT {
     @Test
     void editorHandshakeWorksLiveOnPaper() {
         HarnessResult result = new EditorHandshakeRunner().run(HarnessOptions.fromProperties());
-        assertThat(result.summary()).contains("harness run OK");
+        // The summary carries every recorded problem + the log tail — a bare
+        // AssertionError here once cost a full CI round-trip to diagnose.
         assertThat(result.ok()).as(result.summary()).isTrue();
     }
 }
