@@ -1,0 +1,69 @@
+{
+  "version": 1,
+  "description": "Materione relay mailbox protocol v1 (web.md §3). Shared golden fixture: the Worker tests, the plugin RelayClient tests (web/), and the SPA LongPollTransport tests (webui/) all consume this file — drift fails every side. Sealed-frame CONTENT is pinned separately by editor-protocol-v1.json; this file pins the mailbox transport around it.",
+  "tokenHashing": {
+    "algorithm": "sha256-hex-of-utf8-bearer-token",
+    "vector": {
+      "input": "mailbox-fixture-token-0123456789abcdef",
+      "sha256Hex": "5f87582509043db393a700efb0b392067a35be89587d89e76236b90235b549ae"
+    }
+  },
+  "directions": {
+    "pluginTokenPosts": "p2e",
+    "editorTokenPosts": "e2p",
+    "pluginReads": "e2p",
+    "editorReads": "p2e"
+  },
+  "createChannel": {
+    "method": "POST",
+    "path": "/v1/channels",
+    "response": ["channelId", "pluginToken", "editorToken", "expires", "ttlSeconds"],
+    "note": "editorToken travels only inside the plugin's E2E-encrypted session blob; the relay stores hashes only",
+    "status": 201
+  },
+  "postFrames": {
+    "method": "POST",
+    "path": "/v1/channels/{channelId}/frames",
+    "auth": "Bearer <pluginToken|editorToken>",
+    "body": { "frames": ["<sealed frame object {seq, nonce, ct, sig}>"] },
+    "limits": { "maxFramesPerBatch": 32, "maxFrameBytes": 1048576 },
+    "response": { "accepted": 1 },
+    "status": 202
+  },
+  "pollFrames": {
+    "method": "GET",
+    "path": "/v1/channels/{channelId}/frames?after={cursor}&wait={seconds}",
+    "auth": "Bearer <pluginToken|editorToken>",
+    "response": {
+      "closed": false,
+      "frames": [{ "id": 1, "frame": { "seq": 0, "nonce": "...", "ct": "...", "sig": "..." } }],
+      "oldest": 1,
+      "more": false
+    },
+    "semantics": {
+      "cursor": "server-assigned monotonic frame id; pass the last received id as 'after'",
+      "oldest": "lowest retained frame id in the reader's direction; a cursor below it means the reader fell behind the retention horizon and must re-handshake",
+      "order": "strict ascending id within one direction; never reordered",
+      "waitMaxSeconds": 25
+    }
+  },
+  "closeChannel": {
+    "method": "POST",
+    "path": "/v1/channels/{channelId}/close",
+    "auth": "Bearer <either token>",
+    "response": { "closed": true }
+  },
+  "envelope": {
+    "shape": { "v": 1, "sess": "<session id>", "nonce": "<b64url>", "ct": "<b64url>" },
+    "rejectIf": ["not json", "v != 1", "missing sess/nonce/ct", "size > 786432 bytes"]
+  },
+  "errors": {
+    "401": "missing_token",
+    "403": "invalid_token | invalid_delete_token",
+    "404": "no_such_channel | no_such_blob | not_found",
+    "410": "channel_closed | channel_expired",
+    "413": "frame_too_large | blob_too_large",
+    "415": "not_an_envelope",
+    "429": "rate_limited | quota_exceeded | too_many_channels | store_full"
+  }
+}
