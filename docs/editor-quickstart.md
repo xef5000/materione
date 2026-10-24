@@ -1,8 +1,8 @@
 # Editor quickstart
 
 The built-in web editor lets you create and edit content from the browser —
-no YAML knowledge required, no restart needed. Everything you save reaches
-your server in about a second.
+no YAML knowledge required, no restart needed, no ports to open. Everything
+you save reaches your server in about a second.
 
 ## 1. Open the editor
 
@@ -12,19 +12,27 @@ your server in about a second.
    /materione editor
    ```
 
-2. A clickable URL prints, for example
-   `http://127.0.0.1:8089/?s=…#…`. Open it in a desktop browser
-   (Chrome/Edge 133+, Firefox 129+, or Safari 17+).
+2. A clickable URL prints — by default it points at the hosted editor,
+   `https://editor.materione.com/s/…#…`. Open it in a desktop browser
+   (Chrome/Edge 133+, Firefox 129+, or Safari 17+). Your server dials out
+   to the relay; nothing listens inbound, so this works identically behind
+   NAT, shared hosting, or a proxy network. If you are on the same LAN as
+   the server, the editor automatically prefers the faster local listener
+   when one is reachable.
 
 3. The first connection asks for trust in game: an **[Approve]** /
    **[Deny]** prompt appears for every admin online (and the console).
-   Approve it within two minutes. The part of the URL after `#` is the
-   session key — it never leaves your browser; do not share the URL.
+   Approve it within two minutes. Choose **[Approve & trust this browser]**
+   to skip the prompt for that browser next time (revoke later with
+   `/materione editor revoke <prefix>`). The part of the URL after `#` is
+   the session key — it never leaves your browser; do not share the URL.
 
-The listener binds to `127.0.0.1` by default (`editor_host` /
-`editor_port` in `settings.yml`); disable it entirely with
-`editor_enabled: false`. Editing from another machine is a documented
-reverse-proxy pattern — the listener is authenticated end to end either way.
+Prefer everything local? `/materione editor local` always opens the
+embedded listener (`editor_host`/`editor_port` in `settings.yml`, loopback
+by default) — the power-user and air-gapped path, no cloud involved. If the
+relay is ever unreachable, `/materione editor` falls back to it
+automatically and says so. Servers can also point `relay_base_url` at their
+own relay instance (self-hosting: `cloud/editor-worker/README.md`).
 
 ## 2. Create your first item
 
