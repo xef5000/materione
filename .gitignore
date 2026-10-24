@@ -58,3 +58,4 @@ qa/results/
 cloud/editor-worker/node_modules/
 cloud/editor-worker/dist/
 cloud/editor-worker/.wrangler/
+.wrangler/
