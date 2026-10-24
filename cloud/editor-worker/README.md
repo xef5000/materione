@@ -45,26 +45,26 @@ vars (dashboard or wrangler `vars`) without redeploying logic.
 One-time setup on your Cloudflare account (free plan, no card-charged
 products activated):
 
-```
-npx wrangler d1 create editor-relay
-# put the printed database_id into wrangler.jsonc (d1_databases[0].database_id)
-npx wrangler deploy            # first deploy; attaches the worker
-```
+1. **API token** (dash.cloudflare.com → My Profile → API Tokens → Create
+   Token → Custom token), all on the account that owns `materione.com`:
+   Account · Workers Scripts · Edit; Account · D1 · Edit; Zone · Zone · Read;
+   Zone · DNS · Edit (zone resources: materione.com).
+2. **Database**: `npx wrangler d1 create editor-relay` (after
+   `npx wrangler login`; the dashboard works too) and put the printed
+   `database_id` into `wrangler.jsonc` (`d1_databases[0].database_id`).
+3. **Repo secrets** (Settings → Secrets and variables → Actions, or
+   `gh secret set` from the repo root so the token never leaves your
+   machine): `CLOUDFLARE_API_TOKEN` (the token) and `CLOUDFLARE_ACCOUNT_ID`
+   (dashboard right sidebar, or `npx wrangler whoami`).
+4. **Dispatch** the `deploy editor relay` workflow. It builds the SPA, runs
+   the worker tests, applies the D1 migrations, deploys, and attaches the
+   custom domain — the `routes` block in `wrangler.jsonc` creates the
+   `editor.materione.com` record in the `materione.com` zone automatically
+   (the zone must be on the same account).
 
-Then attach the route/custom domain in the dashboard (or via wrangler):
-
-```
-npx wrangler domains attach ... # or dashboard: Workers -> materione-editor
-                                #   -> Settings -> Domains & Routes -> Add -> editor.materione.com
-```
-
-DNS: the custom-domain attach creates the `editor.materione.com` CNAME in the
-`materione.com` zone automatically if the zone is on the same account.
-
-The `deploy.yml` workflow at the repo root does the build + deploy on manual
-dispatch using the `CLOUDFLARE_API_TOKEN` secret (token scopes: Workers
-Scripts:Edit, D1:Edit, Zone DNS:Edit for `materione.com`) — create the token
-once at dash.cloudflare.com → My Profile → API Tokens.
+Manual equivalent from `cloud/editor-worker/` on your machine
+(after `npx wrangler login`): `npx wrangler d1 migrations apply editor-relay
+--remote` then `npx wrangler deploy`.
 
 ## Self-hosting (constraint #3)
 

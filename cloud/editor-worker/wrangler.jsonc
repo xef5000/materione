@@ -3,6 +3,12 @@
   "name": "materione-editor",
   "main": "src/index.ts",
   "compatibility_date": "2026-10-01",
+  "routes": [
+    {
+      "pattern": "editor.materione.com",
+      "custom_domain": true
+    }
+  ],
   "assets": {
     "directory": "../../webui/build/spa",
     "not_found_handling": "single-page-application",
