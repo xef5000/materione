@@ -510,7 +510,7 @@ public final class EditorHandshakeRunner {
             problems.addAll(drive(console, log, options, "materione reload",
                     "MATERIONE-RELOAD-OK items=57"));
             problems.addAll(drive(console, log, options, "materione editor status",
-                    "editor listener: running"));
+                    "editor transport: running"));
             console.send("materione editor stop");
             if (log.awaitLine("MATERIONE-EDITOR-STOPPED", options.commandTimeout(), log.mark()) == null) {
                 problems.add("MATERIONE-EDITOR-STOPPED missing after 'materione editor stop'");
