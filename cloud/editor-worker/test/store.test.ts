@@ -39,6 +39,24 @@ describe("payload store", () => {
     expect((await worker.fetch(new Request(`https://relay.test/v1/store/${code}`), env)).status).toBe(404);
   });
 
+  it("serves the capability fetch route /s/{code} with the same envelope", async () => {
+    const code = "capability-route-code-0001";
+    const putResponse = await put(ENVELOPE, `?code=${code}`);
+    expect(putResponse.status).toBe(201);
+    const fetched = await worker.fetch(new Request(`https://relay.test/s/${code}`), env);
+    expect(fetched.status).toBe(200);
+    expect(fetched.headers.get("content-type")).toContain("application/json");
+    expect(await fetched.text()).toBe(ENVELOPE);
+    expect(
+      (await worker.fetch(new Request("https://relay.test/s/unknown-code-00000000000"), env)).status,
+    ).toBe(404);
+    expect(
+      (
+        await worker.fetch(new Request(`https://relay.test/s/${code}`, { method: "POST" }), env)
+      ).status,
+    ).toBe(405);
+  });
+
   it("dedups content-addressed uploads", async () => {
     const code = "content-addressed-code-0001";
     const first = await put(ENVELOPE, `?code=${code}`);

@@ -12,7 +12,7 @@
   "assets": {
     "directory": "../../webui/build/spa",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/v1/*", "/healthz"]
+    "run_worker_first": ["/v1/*", "/healthz", "/s/*"]
   },
   "d1_databases": [
     {

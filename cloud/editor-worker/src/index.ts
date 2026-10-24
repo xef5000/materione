@@ -7,6 +7,7 @@ import { nowSeconds } from "./http";
 
 const CHANNEL_PATH = /^\/v1\/channels\/([A-Za-z0-9_-]+)(\/frames|\/close)?$/;
 const STORE_PATH = /^\/v1\/store\/([A-Za-z0-9_-]+)(\/meta)?$/;
+const CAPABILITY_PATH = /^\/s\/([A-Za-z0-9_-]+)$/;
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
@@ -47,6 +48,17 @@ export default {
       if (request.method === "GET") return getBlob(env, code);
       if (request.method === "DELETE") return deleteBlob(env, request, code);
       return errorResponse(405, "method_not_allowed");
+    }
+
+    // The capability URL's first half (web.md §4.1): the SPA fetches the
+    // sealed blob from /s/{code} on the editor origin — the same shape the
+    // direct-mode listener serves, so one SPA build works on both hosts.
+    const capabilityMatch = CAPABILITY_PATH.exec(path);
+    if (capabilityMatch) {
+      const code = capabilityMatch[1];
+      if (!code) return errorResponse(404, "no_such_blob");
+      if (request.method !== "GET") return errorResponse(405, "method_not_allowed");
+      return getBlob(env, code);
     }
 
     if (path === "/healthz") {
