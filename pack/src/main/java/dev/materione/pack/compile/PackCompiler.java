@@ -887,6 +887,12 @@ public final class PackCompiler {
     private static void patchMcmeta(Path zip) throws IOException {
         try (var fs = java.nio.file.FileSystems.newFileSystem(zip, java.util.Map.of())) {
             Path mcmeta = fs.getPath("pack.mcmeta");
+            // keep the entry's timestamp: the golden lock pins the zip bytes,
+            // and a rewritten entry would otherwise stamp "now" and make the
+            // output differ per build
+            java.nio.file.attribute.FileTime stamped =
+                    Files.readAttributes(mcmeta, java.nio.file.attribute.BasicFileAttributes.class)
+                            .lastModifiedTime();
             JsonObject root;
             try (var reader = java.nio.file.Files.newBufferedReader(mcmeta)) {
                 root = com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
@@ -909,6 +915,8 @@ public final class PackCompiler {
             try (var writer = java.nio.file.Files.newBufferedWriter(mcmeta)) {
                 writer.write(root.toString());
             }
+            Files.getFileAttributeView(mcmeta, java.nio.file.attribute.BasicFileAttributeView.class)
+                    .setTimes(stamped, stamped, stamped);
         }
     }
 
