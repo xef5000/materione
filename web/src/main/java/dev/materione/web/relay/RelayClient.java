@@ -10,6 +10,9 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * HTTP client for the relay worker's /v1 API (web.md §3): channel create,
@@ -69,6 +72,32 @@ public final class RelayClient {
     /** Long-poll; blocks up to {@code waitSeconds} when nothing is queued. */
     public Poll poll(String channelId, String token, long after, int waitSeconds)
             throws RelayException {
+        try {
+            return pollAsync(channelId, token, after, waitSeconds)
+                    .get(waitSeconds + 15, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof RelayException relay) {
+                throw relay;
+            }
+            throw new RelayException("poll failed: " + cause, 0, null, cause);
+        } catch (InterruptedException e) {
+            // R5: thread management is the host gateway's business; the loop
+            // exits on its next boundary instead of re-flagging here.
+            throw new RelayException("interrupted", 0, null, e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new RelayException("poll timed out", 0, null, e);
+        }
+    }
+
+    /**
+     * Cancellable long-poll — the exact request {@link #poll} makes, as a
+     * future: cancelling it aborts the in-flight HTTP wait, so the session
+     * pump can flush a queued outbound frame immediately instead of staying
+     * parked until the wait expires (server-pushed events keep their
+     * sub-second latency rather than lagging up to one poll window).
+     */
+    public CompletableFuture<Poll> pollAsync(String channelId, String token, long after, int waitSeconds) {
         URI uri = base.resolve("/v1/channels/" + channelId + "/frames?after=" + after
                 + "&wait=" + waitSeconds);
         HttpRequest request = HttpRequest.newBuilder(uri)
@@ -76,7 +105,16 @@ public final class RelayClient {
                 .timeout(Duration.ofSeconds(waitSeconds + 15))
                 .GET()
                 .build();
-        JsonObject body = send(request, 200);
+        return http.sendAsync(request, HttpResponse.BodyHandlers.ofString())
+                .thenApply(response -> {
+                    if (response.statusCode() != 200) {
+                        throw new java.util.concurrent.CompletionException(relayError(response));
+                    }
+                    return parsePoll(Wire.parseObject(response.body()));
+                });
+    }
+
+    private static Poll parsePoll(JsonObject body) {
         boolean closed = body.has("closed") && body.get("closed").getAsBoolean();
         var out = new java.util.ArrayList<Delivered>();
         if (body.has("frames") && body.get("frames").isJsonArray()) {

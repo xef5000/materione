@@ -137,6 +137,7 @@ class RelaySessionTest {
 
         // --- sealed RPC round trip through the mailbox
         FrameCodec browserSender = FrameCodec.sender();
+        FrameCodec pluginFrames = FrameCodec.receiver();
         JsonObject ping = new JsonObject();
         ping.addProperty("op", "ping");
         ping.addProperty("id", "p1");
@@ -145,13 +146,31 @@ class RelaySessionTest {
                 browserSender.seal(sessionKey, editorSigning.getPrivate(), Wire.canonicalBytes(ping)))));
 
         String responseFrame = browser.next();
-        byte[] plaintext = FrameCodec.receiver().open(
+        byte[] plaintext = pluginFrames.open(
                 sessionKey, KeyFormat.ed25519Public(blob.pluginSigningPubKey()),
                 Wire.parseObject(responseFrame));
         Wire.Response response =
                 Wire.Response.fromJson(Wire.parseObject(new String(plaintext, StandardCharsets.UTF_8)));
         assertThat(response.ok()).isTrue();
         assertThat(response.data().toString()).contains("pong");
+
+        // --- server-push wake: a push (what MTR-0032 feeds and push.reload
+        // ride on) must wake the parked pump instead of waiting out the poll
+        // window — sub-second push latency is the live-preview contract
+        dev.materione.api.diagnostics.DiagnosticCode wakeCode =
+                dev.materione.api.diagnostics.DiagnosticCodes.EDITOR_PROTOCOL_VIOLATION;
+        dev.materione.web.SessionPush.diagnostic(
+                sessions, dev.materione.api.diagnostics.Diagnostic.warn(wakeCode, "wake probe"));
+        long pushStart = System.currentTimeMillis();
+        String pushedFrame = browser.next();
+        long pushLag = System.currentTimeMillis() - pushStart;
+        JsonObject pushed = Wire.parseObject(new String(pluginFrames.open(
+                sessionKey, KeyFormat.ed25519Public(blob.pluginSigningPubKey()),
+                Wire.parseObject(pushedFrame)), StandardCharsets.UTF_8));
+        assertThat(pushed.get("op").getAsString()).isEqualTo("push.diagnostic");
+        assertThat(pushLag)
+                .as("push lag over the mailbox (a parked pump would add one full poll wait)")
+                .isLessThan(10_000);
 
         // --- close is observed by the pump
         client.closeChannel(blob.relay().channelId(), editorToken);
