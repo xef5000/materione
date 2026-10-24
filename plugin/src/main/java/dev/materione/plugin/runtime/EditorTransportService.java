@@ -433,9 +433,10 @@ public final class EditorTransportService {
     }
 
     public int activeEditors() {
-        int local = listener == null ? 0 : listener.activeSessions();
-        int cloud = relaySessions == null ? 0 : relaySessions.liveSessions().size();
-        return local + cloud;
+        // One shared session registry serves both transports — counting it
+        // once per surface would double every relay session (the listener's
+        // count already includes them).
+        return sessions == null ? 0 : sessions.active().size();
     }
 
     public int boundPort() {
