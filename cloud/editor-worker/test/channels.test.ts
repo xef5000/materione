@@ -126,11 +126,18 @@ describe("channel lifecycle", () => {
       new Request(`https://relay.test/v1/channels/${caps.channelId}/frames`, {
         method: "POST",
         headers: { authorization: `Bearer ${caps.pluginToken}` },
-        body: JSON.stringify({ frames: [{ seq: "no" }] }),
+        body: JSON.stringify({ frames: ["not an object"] }),
       }),
       env,
     );
     expect(malformed.status).toBe(400);
+
+    // Handshake messages (hello) are not sealed frames — the mailbox relays
+    // them opaquely alongside frames.
+    const handshake = await postFrames(caps.pluginToken, [
+      { nonce: "n", sessionId: "s", editorSigningPubKey: "k", editorEphemeralPubKey: "e", browser: "Chrome" },
+    ]);
+    expect(handshake.status).toBe(202);
 
     const big = "x".repeat(1024 * 1024 + 1);
     const oversized = await postFrames(caps.pluginToken, [

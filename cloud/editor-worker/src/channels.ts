@@ -129,21 +129,16 @@ export async function postFrames(
   const bodies: string[] = [];
   let total = 0;
   for (const frame of frames) {
-    if (typeof frame !== "object" || frame === null) {
-      return errorResponse(400, "invalid_frame", "each frame must be an object");
+    // Opaque channel messages: the mailbox must not know the wire schema —
+    // batches carry handshake messages (hello/hello-reply) as well as sealed
+    // frames. Only object-ness and size are enforced here; authenticity and
+    // ordering are end-to-end (seq numbers) between plugin and browser.
+    if (typeof frame !== "object" || frame === null || Array.isArray(frame)) {
+      return errorResponse(400, "invalid_message", "each message must be a JSON object");
     }
-    const record = frame as Record<string, unknown>;
-    if (
-      typeof record.seq !== "number" ||
-      typeof record.nonce !== "string" ||
-      typeof record.ct !== "string" ||
-      typeof record.sig !== "string"
-    ) {
-      return errorResponse(400, "invalid_frame", "frame must carry {seq, nonce, ct, sig}");
-    }
-    const body = JSON.stringify(record);
+    const body = JSON.stringify(frame);
     if (body.length > config.maxFrameBytes) {
-      return errorResponse(413, "frame_too_large", `frames are capped at ${config.maxFrameBytes} bytes`);
+      return errorResponse(413, "frame_too_large", `messages are capped at ${config.maxFrameBytes} bytes`);
     }
     bodies.push(body);
     total += body.length;
