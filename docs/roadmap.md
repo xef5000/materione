@@ -326,11 +326,17 @@ M6 HUDs.
 
 **Goal:** `/materione editor` works from behind NAT.
 
-- Payload store + WS relay Workers (manifest+chunk flow, content addressing, quotas).
-- The full handshake (§4.1 of web.md): fragment-key blob, ECDH, key confirmation, encrypted
-  signed sequenced frames, in-game trust, workstation whitelisting.
-- Editor served centrally; direct-mode auto-preference on LAN.
-- Website (`materione.dev`) with docs rendered from the repo.
+- Relay Worker at `editor.materione.com` — long-poll **frame mailbox** + payload store
+  (manifest+chunk flow, content addressing, quotas) on one stateless Worker + D1; no
+  WebSocket, no Durable Objects (D11 amended — web.md §3.2/§3.3 carry the cost model: the
+  free tier's hard stops make the shared instance $0 by construction).
+- The full handshake (§4.1 of web.md) over the relay: fragment-key blob, ECDH, key
+  confirmation, encrypted signed sequenced frames, in-game trust, workstation whitelisting.
+- Editor served centrally (the same SPA build as the jar embeds); direct-mode auto-preference
+  on LAN; the cloud editor becomes the default (`/materione editor`), direct mode the
+  always-available power-user option (`/materione editor local`).
+- Website: `materione.com` is reserved; the marketing site is **deferred** to its own
+  milestone (docs live in-repo; `materione.dev` abandoned).
 
 **Exit:** an admin on shared hosting edits their server through the public editor URL.
 

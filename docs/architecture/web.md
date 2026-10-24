@@ -19,17 +19,18 @@ pipes are exactly what Workers are good at:
 
 | Property | Fit |
 |---|---|
-| Outbound-only from the MC server | The plugin dials out to Workers over HTTPS/WSS; no inbound to the server, ever (D11) |
-| Stateless request handling | The editor SPA is stateless; relay services store opaque encrypted blobs (bytebin-style) |
-| WebSocket support | Durable Objects give us stateful channels for the signed WS relay (bytesocks-style) |
-| Free tier generosity | Fits constraint #3 — community-project traffic sits comfortably in free tiers |
+| Outbound-only from the MC server | The plugin dials out to Workers over HTTPS; no inbound to the server, ever (D11) |
+| Stateless request handling | The editor SPA is stateless; the relay is one stateless Worker plus D1 rows — opaque encrypted blobs (bytebin-style) and cursor-paged frames |
+| Plain HTTPS everywhere | The interactive channel is a **long-poll frame mailbox** — no WebSocket, no Durable Objects, no long-lived cloud state (D11 amendment) |
+| A free tier that cannot bill | Workers Free and D1 Free **hard-stop** at their daily limits (Error 1027 / query errors) and static assets are free and unlimited — the shared instance is $0 by construction (§3.3) |
 | Global edge anycast | Admins get a nearby editor endpoint regardless of where the server lives |
 | No servers to operate | Zero VMs for an OSS project to maintain |
 
 Commitments we accept: TypeScript everywhere on the cloud side (Workers runtime, no JVM);
 per-request CPU limits (fine — heavy work like pack compilation never runs in the cloud; it
-runs on the MC server's pipeline); Cloudflare-specific bindings (R2, DOs, Cron) contained
-behind small adapter seams so self-hosters can swap them (§8).
+runs on the MC server's pipeline); Cloudflare bindings kept to **D1 + Cron** only, contained
+behind small adapter seams so self-hosters can swap them (§8) — and D1 is plain SQL over a
+tiny schema, not a proprietary data model.
 
 **Design rule carried throughout: the cloud never sees plaintext.** All relayed payloads are
 E2E encrypted between plugin and browser (master §9.2); Workers store and forward ciphertext
@@ -43,20 +44,20 @@ only. The cloud is untrusted by construction.
                         ┌────────────────────────────────────────────┐
                         │            cloudflare edge (workers)       │
                         │                                            │
-  editor SPA ◄──────────┤  editor.materione.dev   static assets      │
-  (browser, stateless)  │                         (Workers Sites)    │
-       │                │                                            │
-       │ WSS (signed    │  relay.materione.dev   Worker + Durable    │
-       │ frames)        │                         Objects (channels) │
-  plugin ──────────────►│                                            │
-  (MC server,           │  store.materione.dev   Worker + R2         │
-   outbound HTTPS,      │                         (payload store)    │
-   E2E-encrypted blobs) │                                            │
-       │                │  materione.dev         Workers Sites       │
-       │                │                         (project website)  │
-       │                │                                            │
-       │                │  cron trigger          scheduled Worker    │
-       │                │                         (TTL sweeps)       │
+  editor SPA ◄──────────┤  editor.materione.com   Worker + static    │
+  (browser, stateless)  │                         assets (the SPA)  │
+       │  same-origin   │                         + /v1/* API:      │
+       │  HTTPS         │                         frame mailbox +   │
+  plugin ──────────────►│  (outbound)             payload store     │
+  (MC server,           │                                            │
+   outbound HTTPS,      │  cron trigger          scheduled Worker   │
+   E2E-encrypted        │                         (TTL sweeps)      │
+   blobs + frames)      │                                            │
+       │                │  D1 "editor-relay"     channels / frames / │
+       │                │                         blobs rows        │
+       │                │  materione.com         (reserved — the    │
+       │                │                         website is        │
+       │                │                         deferred, §7)     │
        └────────────────┴────────────────────────────────────────────┘
 
   NOT in the cloud: player-facing pack hosting (master §8.4) — that stays
@@ -64,88 +65,157 @@ only. The cloud is untrusted by construction.
   public files the server already uploads.
 ```
 
-Five Cloudflare products, one job each:
+One Worker, one D1 database, one cron trigger, one zone — each product has one job:
 
-| Product | URL | Job |
+| Product | URL / binding | Job |
 |---|---|---|
-| Workers Sites (static) | `editor.materione.dev` | Serve the editor SPA build |
-| Workers + Durable Objects | `relay.materione.dev` | Signed WS relay channels |
-| Workers + R2 | `store.materione.dev` | Payload store (encrypted blobs) |
-| Workers Sites | `materione.dev` | Project website (docs, downloads, hub later) |
-| Cron Triggers | — | TTL sweep of expired payloads/channels |
+| Workers (static assets) | `editor.materione.com` | Serve the editor SPA build (the *same* artifact embedded in the jar) — free, unlimited requests |
+| Workers (fetch handler) | `editor.materione.com/v1/*` | Relay API: frame mailbox (§3.2) + payload store (§3.1) + quotas (§3.3) |
+| D1 | `editor-relay` | `channels`, `frames`, `blobs` rows — the relay's entire state |
+| Cron Triggers | hourly | TTL sweep of expired channels/frames/blobs (§3.4) |
+
+Deliberately **not** used: Durable Objects (no WebSocket, no long-lived state — D11
+amendment), R2 (its beyond-free-allowance billing is the one product that could ever charge;
+D1-only avoids that class entirely), KV, Queues, Workers AI, and Workers Sites (superseded
+by static assets). The zone stays on the free plan; nothing here requires — or can spend
+on — a paid plan.
 
 ---
 
-## 3. The relay services — specs
+## 3. The relay service — spec
 
-Two small services, bytebin/bytesocks-inspired but written to our spec (master open question
-#5: fork-and-rebrand vs. write-ourselves — this doc assumes **write minimal equivalents**,
-because our requirements differ in crypto and session model).
+> *Status: M5 build in progress. This section is the spec; per-section "as built" notes land
+> with the implementing PRs.*
 
-### 3.1 Payload store (`store.materione.dev`)
+One small service, bytebin-inspired but written to our spec (master open question #5,
+resolved: **write minimal equivalents** — the no-WebSocket amendment to D11 rules out a
+bytesocks fork outright, and our crypto/session model differs enough that a bytebin fork
+buys nothing). It is a single Worker behind two URL namespaces — a dumb blob store and a
+frame mailbox. Both are dumb pipes: they store and forward ciphertext only, know no
+accounts, and hold no state beyond D1 rows with TTLs.
+
+### 3.1 Payload store (`editor.materione.com/v1/store`)
 
 A dumb, opaque blob store with TTL. Endpoints:
 
 | Method & path | Purpose |
 |---|---|
-| `POST /` | Upload encrypted payload → `{code, deleteToken, expires}` |
-| `GET /{code}` | Fetch encrypted payload by unguessable code |
-| `DELETE /{code}` | Delete (requires the per-blob delete token from upload) |
-| `GET /{code}/meta` | Size, expiry — no plaintext metadata leaks |
+| `POST /v1/store` | Upload encrypted payload → `{code, deleteToken, expires}` |
+| `GET /v1/store/{code}` | Fetch encrypted payload by unguessable code |
+| `DELETE /v1/store/{code}` | Delete (requires the per-blob delete token from upload) |
+| `GET /v1/store/{code}/meta` | Size, expiry — no plaintext metadata leaks |
 
-Semantics:
+Semantics (storage is D1 rows, not R2 — chunk-sized envelopes fit a SQL row comfortably,
+and D1's free tier hard-stops instead of billing):
 
 - **Codes** are unguessable (§5.3), short base-N strings, capability-style.
-- **Max size** 50 MB per payload (a full pack dump with assets), streamed and enforced during
-  upload. Payloads larger than ~1 MB are expected to use the **manifest + content-addressed
-  chunks** flow (§4.3) rather than one monolithic blob.
-- **TTL classes**: 1 h (default), 24 h, 7 d. Expiry via cron sweep + lazy check on read.
-  Nothing persists forever; the relay deletes only by TTL or delete token.
+- **Max size** 50 MB per payload (a full pack dump with assets), arriving as the
+  **manifest + content-addressed chunks** flow (§4.3); each POST is one chunk-sized
+  envelope (default 512 KiB — a constant, verified against D1 row limits).
+- **TTL classes**: 1 h (default), 24 h, 7 d. Expiry via cron sweep (§3.4) + lazy check on
+  read. Nothing persists forever; the relay deletes only by TTL or delete token.
 - **Envelope content-type only** — the store refuses anything that is not a Materione payload
   envelope; it is not a general file host.
-- **No accounts.** Auth is code secrecy + E2E encryption. Rate limits are per-IP edge rules.
+- **No accounts.** Auth is code secrecy + E2E encryption. Rate limits are per-IP (§3.3).
   There is no user database in the cloud at all (constraint #3; also nothing to leak).
+- **Dedup for free**: chunks are content-addressed by their ciphertext hash
+  (`INSERT OR IGNORE`) — an unchanged asset across uploads stores and transfers nothing.
 
-### 3.2 WebSocket relay (`relay.materione.dev`)
+### 3.2 Frame mailbox (`editor.materione.com/v1/channels`)
 
-A signed-message channel service. Each **channel** is a Durable Object.
+A signed-message channel service with **no long-lived server state**: each side speaks plain
+HTTPS; a "channel" is two D1 frame queues. (Amends the original WebSocket-relay design per
+D11: no WSS, no Durable Objects — a stateless Worker serves every request.)
 
 Connection model:
 
-1. Plugin runs `/materione editor` → generates session keys (§5), creates a relay channel
-   (DO), joins it, uploads an E2E-encrypted session blob to the store, and prints the admin a
-   URL: `https://editor.materione.dev/s/{code}`.
-2. The browser decrypts the session blob locally (§5.4); it contains the channel id and the
-   key material needed to complete the handshake.
-3. Browser opens WSS to the relay and joins the channel. The DO relays frames between the two
-   parties — it sees only `{msg, sig}` frames (plaintext JSON packet + detached signature,
-   LuckPerms' frame format) and cannot read or forge contents.
+1. Plugin runs `/materione editor` → generates session keys (§5), creates a channel
+   (`POST /v1/channels` → `{channelId, pluginToken}`), joins it, uploads an E2E-encrypted
+   session blob to the store, and prints the admin a URL:
+   `https://editor.materione.com/s/{code}`.
+2. The browser decrypts the session blob locally (§5.4); it contains the channel id, an
+   editor capability token, and the key material needed to complete the handshake.
+3. Both sides speak the **same sealed-frame protocol as direct mode**: frames are posted to
+   the channel and fetched by long-poll. The mailbox sees only `{seq, nonce, ct, sig}` frames
+   (ciphertext + detached signature, LuckPerms' frame format) and can neither read nor
+   forge contents.
+
+API:
+
+| Method & path | Purpose |
+|---|---|
+| `POST /v1/channels` | Create channel → `{channelId, pluginToken}` (plugin-only; rate-limited) |
+| `POST /v1/channels/{id}/frames` | Post a batch of sealed frames (≤ 1 MiB each, ≤ 32/batch); the caller's token selects the direction |
+| `GET /v1/channels/{id}/frames?after={cursor}&wait={s}` | Long-poll the frames addressed to the caller; non-destructive cursor reads |
+| `POST /v1/channels/{id}/close` | Close the channel (either capability) |
 
 Channel rules:
 
-- **Max 2 parties** (plugin + 1 editor). A second browser joining → plugin is prompted to
-  approve/trust it explicitly (nonce disambiguation, LuckPerms-style).
+- **Two capabilities per channel**: the `pluginToken` (from creation) and the editor token
+  (inside the encrypted session blob — so only the URL holder can join). Both are ≥128-bit
+  unguessable strings (§5.3); possession is the transport-level auth. The server stores
+  only their hashes.
 - **Max frame 1 MiB**; larger data goes through the payload store (§4.3).
-- **Keepalive**: the DO answers transport pings; the plugin answers editor `ping` packets with
-  `pong` (also signaling intentional disconnect, as in LuckPerms).
-- **Channel TTL 24 h**, renewable by plugin presence; channels die when the server stops.
-- **Reconnect**: either party may drop and rejoin the same channel id within TTL; session keys
-  are channel-independent, so rejoin is seamless.
-- **Bounded catch-up buffer**: the DO retains the last ~64 frames per channel so a briefly
-  disconnected editor can catch up after rejoining.
+- **Long-poll**: `wait` ≤ 25 s; the Worker internally re-checks D1 roughly every 1.5 s
+  (`scheduler.wait()` — wall-clock time is free on Workers; only CPU counts, and awaits are
+  not CPU). Interactive RPC round-trip latency is typically 0.3–2 s; direct mode remains
+  the low-latency path on LAN (§4.4).
+- **Ordered, non-destructive reads**: frames return in strict insertion order by cursor and
+  are retained until the channel's cap/TTL — so the protocol's strict per-direction
+  sequence numbers work unchanged, and the retained frames *are* the catch-up buffer: a
+  briefly disconnected editor resumes `after={cursor}` and continues the same session. A
+  reader that falls behind the retention horizon gets a clean error and re-handshakes —
+  never silent corruption.
+- **Keepalive**: presence is the long-poll itself (reads, not writes); the plugin posts a
+  channel heartbeat every ~2 min, and the editor's application-level `ping` rides frames
+  sparsely. Channels whose both sides stop polling are swept (§3.4).
+- **Channel TTL 12 h**, renewable by plugin presence; channels also die on explicit close
+  or when the server stops.
+- **Frame retention cap** per channel (2 000 frames / 16 MiB) keeps the shared instance
+  bounded; the sweep prunes oldest-first.
 
-### 3.3 Abuse & economics (quota sketch — to be validated against live free-tier behavior)
+### 3.3 Cost model, quotas & abuse (free tier, verified 2026-10)
 
-- Per-IP rate limiting at the edge (WAF / Workers rate-limiter binding).
-- Quotas sized for free tiers with headroom; hard caps return clear 429s pointing at
-  self-hosting docs (constraint #3). Sketch (per server instance, per day, on the shared free
-  instance): **8 GB** payload-store egress, **2 GB** stored at any moment, **20k** store
-  requests, **10** concurrent relay channels, **12 h** max channel life. Content-addressed
-  chunk dedup (§4.3) keeps repeated full-pack dumps off the quota — a re-upload of a
-  near-identical pack transfers only changed chunks.
-- Sustainability posture: the shared instance is a convenience, not a promise — abuse or cost
-  pressure shrinks quotas before it degrades the project, and self-hosting is always the
-  documented escape hatch.
+**Billing facts** (Cloudflare docs): Workers Free = 100 000 requests/day, then **Error 1027
+hard stop**; D1 Free = 5 M rows read + 100 k rows written per day + 5 GB storage,
+**hard-enforced since 2026-09-01** (queries fail — nothing bills); **static asset requests
+are free and unlimited**; one cron trigger is free. The account stays on the free plan
+(cost guardrails, CLAUDE.md) and R2 is never activated. The shared instance is therefore
+**$0/month by construction**: the worst case is 429s and availability, never a charge.
+
+Per-session economics (long-poll wait 20 s, internal poll ~1.5 s, sparse heartbeats):
+≈ 430 Worker requests/h, ≈ 10 k D1 row reads/h, and ≤ ~1.5 k row writes/h while both sides
+are connected and busy.
+
+| Daily scenario (sessions × length) | Worker requests | D1 reads | D1 new-row writes |
+|---|---|---|---|
+| Light — 10 × 1 h | 4.3 k (4%) | 100 k (2%) | 3 k (3%) |
+| Expected — 30 × 2 h | 26 k (26%) | 600 k (12%) | 30 k (30%) |
+| Busy — 60 × 3 h | 77 k (77%) | 1.8 M (36%) | 40 k (40%) — quota-capped |
+
+Row-*write* accounting is the binding constraint, and D1 also bills the sweep's **deletes**
+as rows written: steady-state total ≈ 2 × new-row writes (insert now, delete at expiry), so
+the quotas below cap *new* rows at 40 k/day and the true total stays under ~80 % of the
+100 k ceiling even on a fully-quota'd day.
+
+In-Worker quotas (config vars) keep the shared instance under the ceilings and degrade with
+clear 429s pointing at the self-hosting docs (constraint #3): **20 concurrent channels**,
+**12 h channel TTL**, **8 h idle sweep**, **40 k new-row writes/day self-cap**, **2 GB
+stored**, **50 MB max payload**, blob TTL classes 1 h / 24 h / 7 d, **20 k store POSTs/day**.
+Row reads carry no separate self-cap: every query is index-pointed (~1–3 rows), projections
+sit far under the 5 M/day hard stop, and D1's own enforcement is the backstop.
+
+Abuse posture: a Workers **Rate Limiting binding** (per-IP, per-endpoint) on every public
+route, plus envelope-only content type, unguessable tokens, and the hard quotas above. The
+sustainability posture is unchanged: the shared instance is a convenience, not a promise —
+abuse or cost pressure shrinks quotas before it degrades the project, and self-hosting is
+always the documented escape hatch.
+
+### 3.4 TTL sweep
+
+One hourly cron invocation deletes expired blobs, dead channels and their frames, and
+prunes channels over the retention cap (oldest frames first). Deletes are idempotent; the
+sweep is also the stored-below-2 GB enforcement point.
 
 ---
 
@@ -162,9 +232,11 @@ The session blob is the trust root of the whole exchange, so its key transport i
    an Ed25519 signing keypair.
 2. Plugin creates the relay channel, joins it, and uploads the **session blob** to the store,
    encrypted with the wrapping key (AES-256-GCM). The blob contains: session id, channel id,
-   plugin signing public key, protocol versions supported.
+   editor capability token, plugin signing public key, protocol versions supported — plus,
+   when the embedded listener is reachable from the admin's machine, a **direct-mode hint**
+   (LAN auto-preference, §4.4).
 3. Plugin prints the admin a URL of the form
-   `https://editor.materione.dev/s/{code}#{wrapping-key}` — **the store code identifies the
+   `https://editor.materione.com/s/{code}#{wrapping-key}` — **the store code identifies the
    blob, the URL fragment carries the wrapping key**. Fragments are never sent to any server
    (not logged by the store, not in Referer, not in edge logs). The code alone is useless;
    the key alone is useless.
@@ -202,7 +274,8 @@ plugin                                  browser
 
 After the handshake, requests flow both ways: the plugin pushes live state; the browser issues
 document-store reads/writes. Both sides verify every signature and sequence number; either
-drops the session on a bad value.
+drops the session on a bad value. The wire format is identical in direct mode (M3, shipped);
+the mailbox transport arrives with M5 and changes no bytes on the wire.
 
 ### 4.2 API surface (document-store operations)
 
@@ -266,8 +339,8 @@ eager full-pack traversal a scale boundary.
 
 ### 4.3 Large payloads — manifest + content-addressed chunks
 
-Documents are small (KBs) and ride the WS channel. Assets (textures, models, sounds — tens of
-MB) never ride the channel; they flow through the **payload store as a manifest + chunks**,
+Documents are small (KBs) and ride the frame channel. Assets (textures, models, sounds — tens
+of MB) never ride the channel; they flow through the **payload store as a manifest + chunks**,
 in both relay and direct mode (direct mode embeds a store-compatible endpoint):
 
 ```
@@ -301,6 +374,16 @@ Security notes: the embedded server binds loopback only unless explicitly config
 otherwise; binding `0.0.0.0` triggers a startup warning; and the **same signed-handshake auth
 applies in direct mode** — loopback binding is a convenience, not the auth (anything that can
 reach the port still must complete the handshake and in-game trust).
+
+M5 additions: the embedded listener also serves the **store-compatible routes**
+(`/v1/store*`) so the §4.3 chunk flow is one client implementation on both transports, and it
+sends CORS headers on its read routes (`GET /s/{code}`, `GET /v1/store/*`) so the
+centrally-hosted SPA can probe a reachable local server and prefer it — **LAN
+auto-preference**: the session blob carries the direct hint when the listener is likely
+reachable, the cloud-hosted SPA probes it with a short timeout before the first frame and
+switches to the local WebSocket transport when it answers, falling back to the relay
+otherwise. Manual override is a URL parameter. Direct mode exists so relay outage ≠ editor
+outage, and for air-gapped setups.
 
 ---
 
@@ -456,13 +539,16 @@ cannot read, forge, replay, or reorder anything.
 
 ---
 
-## 7. Project website (`materione.dev`)
+## 7. Project website (deferred)
 
-Static site on Workers Sites: landing page, documentation (the `docs/` tree rendered — the
-architecture docs you are reading), download links (GitHub releases), and later the community
-pack hub (master open question #6 — if built, it's a separate Worker + KV/R2 read path, not
-part of the editor path). Docs deploy from the repo on merge: one pipeline, no manual sync
-between repo docs and website docs.
+`materione.com` is purchased and reserved. The website originally planned here for M5
+(landing page + docs rendered from the repo) is **deferred** (decision 2026-10-23):
+documentation lives in the repository (`docs/`), the repo README is the landing page, and a
+future marketing site — closed-source, in a private repo, links-first (download, Discord,
+GitHub, Modrinth, editor) — will sit at the apex as its own milestone. The editor at
+`editor.materione.com` is the only web surface M5 ships. `materione.dev` is abandoned (no
+redirect planned). The community pack hub (master open question #6) remains undecided and,
+if built, would be a separate Worker with its own read path — not part of the editor path.
 
 ---
 
@@ -470,15 +556,17 @@ between repo docs and website docs.
 
 Everything in §2 is self-hostable by a third party:
 
-- **Editor SPA**: static files; host anywhere, point it at any relay/store (they're configured
-  by URL at build or runtime).
-- **Relay + store**: standard `wrangler deploy` projects (open-source repos); R2 → any S3-compatible
-  bucket, DOs → Cloudflare only (documented as the one hard Cloudflare coupling; a
-  single-node WebSocket fallback implementation is provided for non-CF self-hosters, with
-  reduced scale).
-- **Federation defaults**: servers can pin custom relay/store URLs in `settings/` — an
-  organization can run fully private infrastructure with zero code changes. The plugin treats
-  relay/store endpoints as configurable, never hardcoded.
+- **Editor SPA**: static files; host anywhere, point it at any relay (configured by URL at
+  build or runtime).
+- **Relay (mailbox + store)**: one `wrangler deploy` of `cloud/editor-worker/` with a D1
+  binding and a cron trigger — open-source in this repo, no secrets required. The one hard
+  Cloudflare coupling left is D1 itself; the storage seam is a tiny SQL schema, so a
+  single-node variant on any SQL store is a documented weekend port (the original design's
+  Durable-Objects coupling is gone with the WebSocket relay).
+- **Federation defaults**: servers pin the relay base URL in `settings/` (`relay_base_url`,
+  default `https://editor.materione.com`) — an organization can run fully private
+  infrastructure with zero code changes. The plugin treats relay endpoints as configurable,
+  never hardcoded.
 
 ---
 
@@ -486,13 +574,15 @@ Everything in §2 is self-hostable by a third party:
 
 | Artifact | Pipeline |
 |---|---|
-| Editor SPA | build → deploy to `editor.materione.dev` on tag (preview URL per PR) |
-| Relay/store Workers | `wrangler deploy` on tag; staging worker pair on every PR; protocol conformance tests run against staging |
-| Website | build docs → deploy on merge to main |
-| Protocol fixtures | golden handshake/frames checked in; plugin tests and Worker tests run against the same fixtures (drift fails both sides) |
+| Editor SPA | one vite build → embedded in the jar (M3 path) **and** bundled as the Worker's static assets |
+| Relay Worker | `cloud/` tests (vitest on the Workers runtime) on every PR; deploy via manual-dispatch `deploy.yml` using an owner-provided API token (cost guardrails: agents never deploy) |
+| Harness relay gate | CI boots real Paper + `wrangler dev` locally and drives the full relay handshake + one save→apply round trip (the "local" environment below) |
+| Protocol fixtures | golden handshake/frames/mailbox files checked in; plugin tests, SPA tests and Worker tests run against the same fixtures (drift fails all sides) |
 
-Environments: **local** (miniflare + plugin dev server), **staging** (`*.staging.materione.dev`),
-**production**. Secrets via Wrangler secrets; nothing secret in the repo.
+Environments: **local** (`wrangler dev` + plugin dev server — the harness gate proves it),
+**staging** (same Worker config, separate D1 and route; nightly conformance), **production**
+(`editor.materione.com`). No secrets live in the Worker; the only secret is the deploy token
+in CI.
 
 ---
 
@@ -501,7 +591,7 @@ Environments: **local** (miniflare + plugin dev server), **staging** (`*.staging
 | Threat | Mitigation |
 |---|---|
 | Relay operator reads content | E2E encryption; relay stores/forwards ciphertext envelopes only (§5) |
-| Relay drops/reorders/replays frames | Per-direction sequence numbers; receivers reject gaps/replays/reorder (§5.4) |
+| Relay drops/delays/replays frames | Per-direction sequence numbers; receivers reject gaps/replays/reorder (§5.4); ordered cursor reads make reordering impossible in practice (§3.2) |
 | Forged messages via relay | Per-message signatures both directions (sign-after-encrypt); keys trusted only after in-game confirmation |
 | Session blob interception (code or key alone) | Wrapping key travels in URL fragment, never to any server; code alone is useless (§4.1) |
 | Capability URL guessing | ≥100-bit codes, short TTLs, rate limits (§5.3) |
@@ -509,7 +599,8 @@ Environments: **local** (miniflare + plugin dev server), **staging** (`*.staging
 | Replay of old payloads | Envelope nonces + session binding; GCM rejects reuse |
 | Direct-mode port exposed on LAN/hosting | Loopback-by-default, `0.0.0.0` warning, handshake auth applies regardless of binding (§4.4) |
 | Relay/store outage | Direct mode is a complete fallback (master D11, §4.4) |
-| Compromised `materione.dev` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
+| Compromised `materione.com` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
+| Abuse of the shared free instance | Rate-limiter binding per IP, envelope-only store, hard quotas below free-tier ceilings; the free plan's hard stops mean abuse causes 429s and availability loss — never billing (§3.3) |
 | Abuse of free store as file host | Envelope-only content type, size caps, TTLs, per-IP limits, content-addressed dedup keeps honest traffic cheap (§3, §4.3) |
 | Traffic analysis by the relay | Accepted, documented residual: sizes/timing/metadata are visible; contents are not (§5.4) |
 
