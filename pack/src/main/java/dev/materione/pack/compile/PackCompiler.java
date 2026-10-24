@@ -885,22 +885,59 @@ public final class PackCompiler {
      * No-op without an overlays section.
      */
     private static void patchMcmeta(Path zip) throws IOException {
-        try (var fs = java.nio.file.FileSystems.newFileSystem(zip, java.util.Map.of())) {
-            Path mcmeta = fs.getPath("pack.mcmeta");
-            // keep the entry's timestamp: the golden lock pins the zip bytes,
-            // and a rewritten entry would otherwise stamp "now" and make the
-            // output differ per build
-            java.nio.file.attribute.FileTime stamped =
-                    Files.readAttributes(mcmeta, java.nio.file.attribute.BasicFileAttributes.class)
-                            .lastModifiedTime();
-            JsonObject root;
-            try (var reader = java.nio.file.Files.newBufferedReader(mcmeta)) {
-                root = com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
+        // pass one: read the serialized mcmeta, if present
+        byte[] replacement = null;
+        try (var zin = new java.util.zip.ZipInputStream(Files.newInputStream(zip))) {
+            for (java.util.zip.ZipEntry entry; (entry = zin.getNextEntry()) != null; ) {
+                if (entry.getName().equals("pack.mcmeta")) {
+                    JsonObject root = com.google.gson.JsonParser.parseReader(
+                            new java.io.InputStreamReader(zin, StandardCharsets.UTF_8))
+                            .getAsJsonObject();
+                    replacement = withOverlayMinMax(root);
+                    break;
+                }
             }
-            var overlays = root.getAsJsonObject("overlays");
-            if (overlays == null || !overlays.has("entries")) {
-                return;
+        }
+        if (replacement == null) {
+            return;
+        }
+        // pass two: rewrite the zip entry-for-entry, faithful metadata except
+        // the patched mcmeta — ZipOutputStream output is deterministic for a
+        // given input, unlike an in-place fs rewrite (the golden pins bytes)
+        Path patched = zip.resolveSibling("pack.patched.zip");
+        try (var in = new java.util.zip.ZipInputStream(Files.newInputStream(zip));
+             var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(patched))) {
+            for (java.util.zip.ZipEntry entry; (entry = in.getNextEntry()) != null; ) {
+                java.util.zip.ZipEntry copy = new java.util.zip.ZipEntry(entry.getName());
+                copy.setTime(entry.getTime());
+                copy.setMethod(entry.getMethod());
+                if (entry.getName().equals("pack.mcmeta")) {
+                    out.putNextEntry(copy);
+                    out.write(replacement);
+                } else {
+                    if (copy.getMethod() == java.util.zip.ZipEntry.STORED) {
+                        copy.setSize(entry.getSize());
+                        copy.setCompressedSize(entry.getCompressedSize());
+                        copy.setCrc(entry.getCrc());
+                    }
+                    out.putNextEntry(copy);
+                    in.transferTo(out);
+                }
+                out.closeEntry();
             }
+        }
+        Files.move(patched, zip, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /**
+     * The mcmeta transform: overlay entries gain {@code min_format}/
+     * {@code max_format} mirrored from their {@code formats} pair — the new
+     * schema's gating fields, which pre-25w31a clients ignore. No-op without
+     * an overlays section.
+     */
+    private static byte[] withOverlayMinMax(JsonObject root) {
+        var overlays = root.getAsJsonObject("overlays");
+        if (overlays != null && overlays.has("entries")) {
             for (var element : overlays.getAsJsonArray("entries")) {
                 JsonObject entry = element.getAsJsonObject();
                 if (!entry.has("formats") || entry.has("min_format")) {
@@ -912,12 +949,8 @@ public final class PackCompiler {
                     entry.add("max_format", formats.getAsJsonArray().get(1));
                 }
             }
-            try (var writer = java.nio.file.Files.newBufferedWriter(mcmeta)) {
-                writer.write(root.toString());
-            }
-            Files.getFileAttributeView(mcmeta, java.nio.file.attribute.BasicFileAttributeView.class)
-                    .setTimes(stamped, stamped, stamped);
         }
+        return root.toString().getBytes(StandardCharsets.UTF_8);
     }
 
     /** Deterministic JSON: sorted keys, no insignificant whitespace. */
