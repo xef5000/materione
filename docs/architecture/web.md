@@ -187,17 +187,23 @@ Per-session economics (long-poll wait 20 s, internal poll ~1.5 s, sparse heartbe
 ≈ 430 Worker requests/h, ≈ 10 k D1 row reads/h, and ≤ ~1.5 k row writes/h while both sides
 are connected and busy.
 
-| Daily scenario (sessions × length) | Worker requests | D1 reads | D1 writes |
+| Daily scenario (sessions × length) | Worker requests | D1 reads | D1 new-row writes |
 |---|---|---|---|
 | Light — 10 × 1 h | 4.3 k (4%) | 100 k (2%) | 3 k (3%) |
 | Expected — 30 × 2 h | 26 k (26%) | 600 k (12%) | 30 k (30%) |
-| Busy — 60 × 3 h | 77 k (77%) | 1.8 M (36%) | 90 k (90%) — at ceiling |
+| Busy — 60 × 3 h | 77 k (77%) | 1.8 M (36%) | 40 k (40%) — quota-capped |
+
+Row-*write* accounting is the binding constraint, and D1 also bills the sweep's **deletes**
+as rows written: steady-state total ≈ 2 × new-row writes (insert now, delete at expiry), so
+the quotas below cap *new* rows at 40 k/day and the true total stays under ~80 % of the
+100 k ceiling even on a fully-quota'd day.
 
 In-Worker quotas (config vars) keep the shared instance under the ceilings and degrade with
 clear 429s pointing at the self-hosting docs (constraint #3): **20 concurrent channels**,
-**12 h channel TTL**, **8 h idle sweep**, **60 k rows written/day self-cap (60%)**, **3 M
-rows read/day self-cap**, **2 GB stored**, **50 MB max payload**, blob TTL classes
-1 h / 24 h / 7 d, **20 k store POSTs/day**.
+**12 h channel TTL**, **8 h idle sweep**, **40 k new-row writes/day self-cap**, **2 GB
+stored**, **50 MB max payload**, blob TTL classes 1 h / 24 h / 7 d, **20 k store POSTs/day**.
+Row reads carry no separate self-cap: every query is index-pointed (~1–3 rows), projections
+sit far under the 5 M/day hard stop, and D1's own enforcement is the backstop.
 
 Abuse posture: a Workers **Rate Limiting binding** (per-IP, per-endpoint) on every public
 route, plus envelope-only content type, unguessable tokens, and the hard quotas above. The
