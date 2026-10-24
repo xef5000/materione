@@ -83,7 +83,9 @@ public final class EditorHandshakeRunner {
 
             // 1. open a session via console, scrape the capability URL
             int cursor = log.mark();
-            console.send("materione editor");
+            // The direct-mode gate: pin the local surface explicitly — bare 'materione
+            // editor' now defaults to the cloud relay, which CI runners must not dial.
+            console.send("materione editor local");
             String urlLine = log.awaitLine("MATERIONE-EDITOR http://", options.commandTimeout(), cursor);
             if (urlLine == null) {
                 problems.add("MATERIONE-EDITOR url missing after 'materione editor'");
