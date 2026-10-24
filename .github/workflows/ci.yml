@@ -3,6 +3,7 @@
 # Jobs:
 #   build          — unit + ArchUnit tests, shaded jar artifact (every push/PR)
 #   integration    — real headless Paper 1.21.4 boot of the shaded jar
+#   cloud          — editor relay Worker: vitest on the Workers runtime + deploy dry-run
 #   windows-canary — full suite on Windows; nightly schedule + manual dispatch
 #                    only (windows-latest bills 2x Actions minutes, and the
 #                    canary is advisory signal, not a gate); non-blocking
@@ -97,6 +98,31 @@ jobs:
           path: harness/build/work/
           if-no-files-found: ignore
           retention-days: 3
+
+  cloud:
+    name: relay worker (ubuntu)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloud/editor-worker/package-lock.json
+
+      - name: Worker tests (real Workers runtime + local D1)
+        working-directory: cloud/editor-worker
+        run: |
+          npm ci
+          npx tsc --noEmit
+          npx vitest run
+
+      # Bundle + config validation only; deploys are the owner's, via the
+      # manual deploy.yml workflow (CLAUDE.md cost guardrails).
+      - name: Wrangler dry-run
+        working-directory: cloud/editor-worker
+        run: npx wrangler deploy --dry-run --outdir dist
 
   windows-canary:
     name: build (windows canary)
