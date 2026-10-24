@@ -22,6 +22,8 @@ dependencies {
     // The editor scenario builds JSON on the browser side of the wire; the
     // harness JVM has no server to provide Gson, so it carries its own.
     implementation(libs.gson)
+    // (the relay IT's FakeMailbox comes from :testing's test fixtures —
+    // wired into testImplementation by the library conventions)
 }
 
 val catalog = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
