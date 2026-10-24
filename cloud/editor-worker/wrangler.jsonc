@@ -18,7 +18,7 @@
     {
       "binding": "DB",
       "database_name": "editor-relay",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "35d7567b-728f-4ddb-a695-89269799e555",
       "migrations_dir": "migrations"
     }
   ],
