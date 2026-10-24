@@ -18,6 +18,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import com.google.gson.JsonObject;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -52,7 +53,11 @@ import team.unnamed.creative.serialize.minecraft.MinecraftResourcePackWriter;
  * entries covering them (MTR-0017 flags a user atlas that cannot be
  * parsed). 26.x clients additionally bake item models from the items atlas,
  * and one model may not span two atlases — the same single-source set is
- * mirrored into {@code items.json} inside a 26.x-scoped overlay (#46).
+ * mirrored into {@code items.json} in the pack base (#46; the base
+ * placement is the post-65 mcmeta schema's price — see
+ * writeItemAtlasOverlay). Overlay entries also carry
+ * {@code min_format}/{@code max_format} alongside the legacy {@code formats}
+ * (patchMcmeta) so one pack.mcmeta parses on both schema generations.
  */
 public final class PackCompiler {
 
@@ -66,10 +71,6 @@ public final class PackCompiler {
      * vanilla sources gather only item/-convention sprites (#46).
      */
     private static final String ITEMS_ATLAS_PATH = "assets/minecraft/atlases/items.json";
-
-    /** Overlay dir + format floor carrying the items-atlas mirror (26.x train). */
-    private static final String ITEMS_ATLAS_OVERLAY_DIR = "materione_items_26";
-    private static final int ITEMS_ATLAS_MIN_FORMAT = 84;
 
     /** Texture dirs vanilla's block atlas already scans for every namespace. */
     private static final Set<String> VANILLA_COVERED_DIRS = Set.of("item", "block");
@@ -791,31 +792,29 @@ public final class PackCompiler {
     }
 
     /**
-     * Mirrors the generated atlas single-sources into {@code items.json}
-     * inside a 26.x-scoped overlay: those clients bake item models from the
-     * items atlas, whose vanilla sources gather only item/-convention
-     * sprites, and one model may not span two atlases (the bake is rejected,
-     * #46). With the mirror, a model mixing custom-dir and item/-convention
+     * Mirrors the generated atlas single-sources into {@code items.json} in
+     * the pack <em>base</em>: 26.x clients bake item models from the items
+     * atlas, whose vanilla sources gather only item/-convention sprites,
+     * and one model may not span two atlases (the bake is rejected, #46).
+     * With the mirror, a model mixing custom-dir and item/-convention
      * sprites resolves within the items atlas while block models keep the
-     * base {@code blocks.json}. Pre-26.x clients never apply the overlay —
-     * their item models bake from the blocks atlas — and a user-shipped
-     * items.json suppresses the mirror (buildAtlas).
+     * base {@code blocks.json}. It shipped in a 26.x-scoped overlay until
+     * the pack.mcmeta schema split made that impossible: since pack format
+     * 65 an overlay entry may not carry {@code formats} when its
+     * {@code min_format} is 65+, while pre-65 clients require
+     * {@code formats} on every entry and one entry without it drops the
+     * whole overlays section (verified against the real 1.21.4 and 26.1.2
+     * parsers). A 26-only entry can therefore never serve both client
+     * generations, and in the base it is simply ignored by pre-26 clients —
+     * their item models bake from the blocks atlas. A user-shipped
+     * items.json still suppresses the mirror (buildAtlas).
      */
-    private static void writeItemAtlasOverlay(
-            Emitter emitter, ResourcePack pack, List<Object> overlayEntries) {
+    private static void writeItemAtlasOverlay(Emitter emitter, ResourcePack pack) {
         if (emitter.itemsAtlasJson == null) {
             return;
         }
-        var overlay = team.unnamed.creative.overlay.Overlay.overlay(ITEMS_ATLAS_OVERLAY_DIR);
-        overlay.unknownFile(ITEMS_ATLAS_PATH,
+        pack.unknownFile(ITEMS_ATLAS_PATH,
                 team.unnamed.creative.base.Writable.stringUtf8(emitter.itemsAtlasJson));
-        pack.overlay(overlay);
-        overlayEntries.add(team.unnamed.creative.metadata.overlays.OverlayEntry.of(
-                team.unnamed.creative.metadata.pack.PackFormat.format(
-                        team.unnamed.creative.metadata.pack.FormatVersion.of(ITEMS_ATLAS_MIN_FORMAT),
-                        team.unnamed.creative.metadata.pack.FormatVersion.of(
-                                TextEffectShaders.RUNGS.get(TextEffectShaders.RUNGS.size() - 1).maxFormat())),
-                ITEMS_ATLAS_OVERLAY_DIR));
     }
 
     private static Outcome writeStaged(
@@ -826,7 +825,7 @@ public final class PackCompiler {
         pack.packMeta(PackFormats.spec(detectedMaxFormat), Component.text(emitter.description));
         var overlayEntries = new ArrayList<Object>();
         writeTextEffectShaders(emitter, pack, detectedMaxFormat, diagnostics, overlayEntries);
-        writeItemAtlasOverlay(emitter, pack, overlayEntries);
+        writeItemAtlasOverlay(emitter, pack);
         if (!overlayEntries.isEmpty()) {
             pack.overlaysMeta(team.unnamed.creative.metadata.overlays.OverlaysMeta.of(
                     overlayEntries.stream().map(e -> (team.unnamed.creative.metadata.overlays.OverlayEntry) e)
@@ -859,6 +858,7 @@ public final class PackCompiler {
         try {
             Files.createDirectories(staging);
             MinecraftResourcePackWriter.minecraft().writeToZipFile(zip, pack);
+            patchMcmeta(zip);
         } catch (IOException e) {
             return null;
         }
@@ -873,6 +873,43 @@ public final class PackCompiler {
     /** Shared with {@link DatapackWriter}: deterministic sorted-key JSON. */
     static String toJsonPublic(Map<String, Object> json) {
         return toJson(json);
+    }
+
+    /**
+     * Adds {@code min_format}/{@code max_format} to every overlay entry,
+     * mirroring its {@code formats} pair. creative's serializer emits only
+     * the legacy {@code formats}, which 1.21.9+/26.x clients read as
+     * deprecated (and reject outright on entries at format 65+); the new
+     * fields are what those clients gate overlays on, while pre-25w31a
+     * clients ignore the unknown keys and keep reading {@code formats}.
+     * No-op without an overlays section.
+     */
+    private static void patchMcmeta(Path zip) throws IOException {
+        try (var fs = java.nio.file.FileSystems.newFileSystem(zip, java.util.Map.of())) {
+            Path mcmeta = fs.getPath("pack.mcmeta");
+            JsonObject root;
+            try (var reader = java.nio.file.Files.newBufferedReader(mcmeta)) {
+                root = com.google.gson.JsonParser.parseReader(reader).getAsJsonObject();
+            }
+            var overlays = root.getAsJsonObject("overlays");
+            if (overlays == null || !overlays.has("entries")) {
+                return;
+            }
+            for (var element : overlays.getAsJsonArray("entries")) {
+                JsonObject entry = element.getAsJsonObject();
+                if (!entry.has("formats") || entry.has("min_format")) {
+                    continue;
+                }
+                var formats = entry.get("formats");
+                if (formats.isJsonArray() && formats.getAsJsonArray().size() == 2) {
+                    entry.add("min_format", formats.getAsJsonArray().get(0));
+                    entry.add("max_format", formats.getAsJsonArray().get(1));
+                }
+            }
+            try (var writer = java.nio.file.Files.newBufferedWriter(mcmeta)) {
+                writer.write(root.toString());
+            }
+        }
     }
 
     /** Deterministic JSON: sorted keys, no insignificant whitespace. */

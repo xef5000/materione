@@ -194,19 +194,24 @@ class PackCompilerTest {
             // items-atlas mirror (#46): 26.x bakes item models from the items
             // atlas, whose vanilla sources gather only item/-convention
             // sprites, and one model may not span two atlases — the generated
-            // singles ship in a 26.x-scoped overlay (never the base layer,
-            // never the pre-26.x overlays)
-            assertThat(zip.getEntry("assets/minecraft/atlases/items.json")).isNull();
-            assertThat(zip.getEntry(
-                    "materione_1_21_4/assets/minecraft/atlases/items.json")).isNull();
-            assertThat(entryText(zip, "materione_items_26/assets/minecraft/atlases/items.json"))
+            // singles ship in the pack BASE: the post-65 mcmeta schema forbids
+            // `formats` on min_format>=65 overlay entries while pre-65
+            // clients require it on every entry, so a 26-only overlay entry
+            // can never serve both client generations (pre-26 clients just
+            // ignore the extra atlas sources)
+            assertThat(entryText(zip, "assets/minecraft/atlases/items.json"))
                     .contains("\"resource\":\"sample:obsidian/axe\"")
                     .doesNotContain("item/ruby");
+            assertThat(zip.getEntry(
+                    "materione_1_21_4/assets/minecraft/atlases/items.json")).isNull();
+            assertThat(entryNames(zip)).noneMatch(name -> name.startsWith("materione_items_26"));
 
             // mcmeta: floor base plus a range reaching past newer clients, in
             // BOTH schema generations — supported_formats for pre-25w31a
             // clients, min_format/max_format for 1.21.9+/26.x clients (which
-            // ignore supported_formats entirely)
+            // ignore supported_formats entirely). Overlay entries carry the
+            // min/max pair too (patchMcmeta) so new clients gate them by the
+            // current schema.
             String mcmeta = entryText(zip, "pack.mcmeta");
             assertThat(mcmeta)
                     .contains("\"pack_format\":46")
@@ -214,7 +219,10 @@ class PackCompilerTest {
                     .contains("min_format")
                     .contains("max_format")
                     .contains(String.valueOf(PackFormats.MAX_KNOWN_FORMAT))
-                    .contains("materione_items_26");
+                    // the ladder's own rungs, per entry (the top-level min is
+                    // the 46 floor, so the 63 rung pins the entry-level pair)
+                    .contains("\"min_format\":63")
+                    .contains("\"max_format\":83");
         }
     }
 
@@ -505,15 +513,21 @@ class PackCompilerTest {
                     name -> name.startsWith("assets/minecraft/atlases/painting"));
             // text-effect shader ladder: every verified rung carries the
             // replacement text vertex shader + the generated include, never
-            // the base layer
+            // the base layer. The ladder tops out at format 83 — the 26.x
+            // rungs would need overlay entries the post-65 mcmeta schema
+            // forbids (min_format>=65 entries may not carry `formats`),
+            // so 26.x clients take the shader-free path (MTR-0044).
             String mcmeta = entryText(zip, "pack.mcmeta");
             assertThat(mcmeta).contains("\"overlays\"");
-            for (String dir : new String[] {
-                    "materione_1_21_4", "materione_1_21_6", "materione_26_1", "materione_26_2"}) {
+            for (String dir : new String[] {"materione_1_21_4", "materione_1_21_6"}) {
                 assertThat(entryNames(zip)).anyMatch(name -> name.startsWith(dir + "/"));
             }
-            assertThat(entryText(zip, "materione_26_1/assets/minecraft/shaders/core/rendertype_text.vsh"))
-                    .contains("#version 330")
+            assertThat(entryNames(zip)).noneMatch(name ->
+                    name.startsWith("materione_26_1/") || name.startsWith("materione_26_2/"));
+            assertThat(entryText(zip, "materione_1_21_6/assets/minecraft/shaders/core/rendertype_text.vsh"))
+                    .contains("#version 150")
+                    // the 1.21.6+ rung reads GameTime from the Globals UBO
+                    .contains("#moj_import <minecraft:globals.glsl>")
                     .contains("vec3 mtrPosition = Position;")
                     .contains("materionePreTransform(mtrPosition);")
                     .contains("materionePostTransform(mtrPosition);")
@@ -522,7 +536,7 @@ class PackCompilerTest {
                     // makes the client drop the whole pack (#39)
                     .doesNotContain("vec4(Position, 1.0)");
             String effects = entryText(zip,
-                    "materione_26_1/assets/minecraft/shaders/include/materione_text_effects.glsl");
+                    "materione_1_21_6/assets/minecraft/shaders/include/materione_text_effects.glsl");
             assertThat(effects)
                     .contains("void materionePreTransform(inout vec3 pos)")
                     .contains("void materionePostTransform(in vec3 pos)")

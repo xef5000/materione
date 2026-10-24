@@ -1,12 +1,12 @@
 {
   "commands.version": {
-    "sha": "2595b1d39f5896310be4cd6b0c7e532f0bc6a71e",
+    "sha": "85fbed03ff4154d9e35ba6badd727ee0dce0bef7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "3ea4945cd2390e62bd043d3a69045bc76bd40040749fa9d92d64a096924cbb0c",
     "result": "pass",
-    "at": "2026-10-12T18:28:10.228Z",
-    "run": "run-2026-10-12T18-27-17",
+    "at": "2026-10-24T20:03:39.019Z",
+    "run": "run-2026-10-24T20-02-33",
     "eyes": null
   },
   "commands.unknown-subcommand": {
@@ -30,13 +30,13 @@
     "eyes": null
   },
   "commands.give-basic": {
-    "sha": "2595b1d39f5896310be4cd6b0c7e532f0bc6a71e",
+    "sha": "85fbed03ff4154d9e35ba6badd727ee0dce0bef7",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "7958c826ba1978645de8797dc5b76b92bcdf311c6ab567518e65afdeebe511f0",
     "result": "pass",
-    "at": "2026-10-12T18:28:13.874Z",
-    "run": "run-2026-10-12T18-27-17",
+    "at": "2026-10-24T20:03:42.989Z",
+    "run": "run-2026-10-24T20-02-33",
     "eyes": null
   },
   "commands.give-amount": {

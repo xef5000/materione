@@ -18,7 +18,9 @@ import java.util.Locale;
  * vanilla varyings, so the client's own fragment shader (alpha cutout,
  * fog) keeps working unmodified. Shader files never ship in the base
  * layer: a client whose format matches no rung receives a shader-free
- * pack (Nexo's overlay strategy).
+ * pack (Nexo's overlay strategy). The ladder tops out at format 83 —
+ * the 26.x schema forbids overlay entries that would serve newer
+ * clients alongside the floor (see the rung list).
  *
  * <p>The include detects effect text by its <strong>signal color</strong>
  * ({@link EffectSpec#signalRgb()} — the color the runtime paints the span
@@ -34,12 +36,20 @@ final class TextEffectShaders {
             String overlayDir, String variantDir, String shaderName,
             int minFormat, int maxFormat, int bakeFormat, boolean shipJson) {}
 
-    /** The verified ladder — formats follow the pack's advertising range (46..88). */
+    /**
+     * The verified ladder — formats 46..83. The 26.x rungs (84+) are gone
+     * on purpose: since pack format 65 the mcmeta schema forbids
+     * {@code formats} on entries whose {@code min_format} is 65+, while
+     * pre-65 clients require {@code formats} on <em>every</em> entry and
+     * drop the whole overlays section when one lacks it (pinned against
+     * real parsers — see PackCompiler#patchMcmeta). One pack.mcmeta cannot
+     * carry a 65+ overlay entry and still serve the floor. A 26.x client
+     * matches no rung and receives a shader-free view — text effects
+     * render as static text, flagged by MTR-0044's out-of-ladder warning.
+     */
     static final List<Rung> RUNGS = List.of(
             new Rung("materione_1_21_4", "v1_21_4", "rendertype_text", 46, 62, 46, true),
-            new Rung("materione_1_21_6", "v1_21_6", "rendertype_text", 63, 83, 63, true),
-            new Rung("materione_26_1", "v26_1", "rendertype_text", 84, 87, 84, false),
-            new Rung("materione_26_2", "v26_2", "text", 88, 999, 88, true));
+            new Rung("materione_1_21_6", "v1_21_6", "rendertype_text", 63, 83, 63, true));
 
     private static final String INCLUDE_PATH = "assets/minecraft/shaders/include/materione_text_effects.glsl";
 
