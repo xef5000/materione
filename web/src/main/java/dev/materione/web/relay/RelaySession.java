@@ -8,6 +8,9 @@ import dev.materione.web.EditorSessions;
 import dev.materione.web.SessionDriver;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
@@ -38,6 +41,7 @@ public final class RelaySession implements SessionDriver.Out {
     private final SessionDriver driver;
     private final DiagnosticsBus diagnostics;
     private final LinkedBlockingQueue<String> outbound = new LinkedBlockingQueue<>();
+    private volatile CompletableFuture<RelayClient.Poll> inFlight;
     private volatile boolean stopped;
 
     RelaySession(
@@ -59,8 +63,7 @@ public final class RelaySession implements SessionDriver.Out {
         while (!stopped) {
             try {
                 postOutbound();
-                RelayClient.Poll poll = client.poll(
-                        channel.channelId(), channel.pluginToken(), cursor, POLL_WAIT_SECONDS);
+                RelayClient.Poll poll = awaitPoll(cursor);
                 if (poll.closed()) {
                     endQuietly("channel closed");
                     return;
@@ -100,10 +103,17 @@ public final class RelaySession implements SessionDriver.Out {
         bestEffortChannelClose();
     }
 
-    /** Frames the session sealed (RPC replies, pushes) — queued for posting. */
+    /** Frames the session sealed (RPC replies, pushes) — queued for posting.
+     * A parked long-poll is cancelled so the loop wakes and flushes now: a
+     * push.reload announcing an apply lands in the same sub-second window as
+     * direct mode instead of lagging up to one poll wait. */
     @Override
     public void send(String text) {
         outbound.add(text);
+        CompletableFuture<RelayClient.Poll> parked = inFlight;
+        if (parked != null) {
+            parked.cancel(false);
+        }
     }
 
     @Override
@@ -130,6 +140,34 @@ public final class RelaySession implements SessionDriver.Out {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * Parks on one long-poll. The future is kept in {@link #inFlight} so a
+     * queued {@link #send} can cancel the wait; a cancelled park returns an
+     * empty poll, and the loop's next {@code postOutbound} flushes the queue
+     * before parking again — no request is wasted, no frame waits.
+     */
+    private RelayClient.Poll awaitPoll(long cursor) throws RelayException {
+        CompletableFuture<RelayClient.Poll> request = client.pollAsync(
+                channel.channelId(), channel.pluginToken(), cursor, POLL_WAIT_SECONDS);
+        inFlight = request;
+        try {
+            return request.get(POLL_WAIT_SECONDS + 15, TimeUnit.SECONDS);
+        } catch (CancellationException wake) {
+            return new RelayClient.Poll(false, List.of(), null, false);
+        } catch (ExecutionException e) {
+            if (e.getCause() instanceof RelayException relay) {
+                throw relay;
+            }
+            throw new RelayException("poll failed: " + e.getCause(), 0, null, e.getCause());
+        } catch (InterruptedException e) {
+            throw new RelayException("interrupted", 0, null, e);
+        } catch (java.util.concurrent.TimeoutException e) {
+            throw new RelayException("poll timed out", 0, null, e);
+        } finally {
+            inFlight = null;
+        }
+    }
 
     private void postOutbound() throws RelayException {
         List<String> batch = new ArrayList<>();
