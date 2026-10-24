@@ -19,13 +19,19 @@ public final class EditorSessions {
 
     private final KeyPair serverIdentity;
     private final TrustPrompt trustPrompt;
+    private final EditorWorkstations workstations;
     private final DiagnosticsBus diagnostics;
     private final SecureRandom random = new SecureRandom();
     private final Map<String, EditorSession> sessions = new ConcurrentHashMap<>();
 
-    public EditorSessions(KeyPair serverIdentity, TrustPrompt trustPrompt, DiagnosticsBus diagnostics) {
+    public EditorSessions(
+            KeyPair serverIdentity,
+            TrustPrompt trustPrompt,
+            EditorWorkstations workstations,
+            DiagnosticsBus diagnostics) {
         this.serverIdentity = serverIdentity;
         this.trustPrompt = trustPrompt;
+        this.workstations = workstations;
         this.diagnostics = diagnostics;
     }
 
@@ -40,7 +46,8 @@ public final class EditorSessions {
         byte[] wrappingKey = new byte[32];
         random.nextBytes(wrappingKey);
         EditorSession session = new EditorSession(
-                sessionId, ownerId, wrappingKey, serverIdentity, trustPrompt, diagnostics);
+                sessionId, ownerId, wrappingKey, serverIdentity, trustPrompt, workstations,
+                diagnostics);
         sessions.put(sessionId, session);
         diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.info(
                 DiagnosticCodes.EDITOR_SESSION_CREATED,

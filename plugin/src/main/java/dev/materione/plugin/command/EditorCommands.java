@@ -7,14 +7,16 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.CommandSender;
 
 /**
- * {@code /materione editor} — the direct-mode surface (master §9.5): open a
- * session, watch or answer trust prompts, stop and revoke. Reads need
- * {@code materione.editor}; answers/stop/revoke need {@code materione.admin}.
+ * {@code /materione editor} — the editor surface (master §9.5): open a
+ * session (cloud relay by default, {@code local} for the always-available
+ * direct mode), watch or answer trust prompts, revoke sessions or trusted
+ * workstations, stop. Reads need {@code materione.editor}; answers/stop/
+ * revoke need {@code materione.admin}.
  */
 public final class EditorCommands {
 
     private static final List<String> ACTIONS =
-            List.of("open", "status", "approve", "deny", "revoke", "stop");
+            List.of("open", "local", "status", "approve", "deny", "revoke", "stop");
 
     private final MaterionePlugin plugin;
 
@@ -30,11 +32,13 @@ public final class EditorCommands {
         String action = args.length >= 2 ? args[1].toLowerCase() : "open";
         switch (action) {
             case "open" -> open(sender);
+            case "local" -> openLocal(sender);
             case "status" -> status(sender);
             case "approve" -> {
                 var service = requireService(sender);
                 if (service != null) {
-                    service.approve(sender, argOrEmpty(args, 2));
+                    service.approve(sender, argOrEmpty(args, 2),
+                            "trust".equalsIgnoreCase(argOrEmpty(args, 3)));
                 }
             }
             case "deny" -> {
@@ -46,7 +50,12 @@ public final class EditorCommands {
             case "revoke" -> {
                 var service = requireService(sender);
                 if (service != null) {
-                    service.revokeAll(sender);
+                    String selector = argOrEmpty(args, 2);
+                    if (selector.isEmpty()) {
+                        service.revokeAll(sender);
+                    } else {
+                        service.revokeWorkstations(sender, selector);
+                    }
                 }
             }
             case "stop" -> stop(sender);
@@ -58,32 +67,42 @@ public final class EditorCommands {
         if (args.length == 2) {
             return ACTIONS.stream().filter(a -> a.startsWith(args[1].toLowerCase())).toList();
         }
+        if (args.length == 4 && "approve".equalsIgnoreCase(argOrEmpty(args, 1))) {
+            return List.of("trust");
+        }
         return List.of();
     }
 
     // ------------------------------------------------------------------
 
+    /** Default: cloud relay when {@code editor_mode: cloud}, else local. */
     private void open(CommandSender sender) {
-        var service = plugin.editorTransport();
-        if (service == null || !service.isRunning()) {
-            sender.sendMessage(Component.text(
-                    "the editor listener is not running — enable it with editor_enabled: true "
-                            + "in settings.yml (or check the boot log for MTR-0030)",
-                    NamedTextColor.RED));
-            return;
+        var service = requireService(sender);
+        if (service != null) {
+            service.openSession(sender);
         }
-        service.openSession(sender);
+    }
+
+    /** The direct-mode session (loopback/reverse-proxy; power users). */
+    private void openLocal(CommandSender sender) {
+        var service = requireService(sender);
+        if (service != null) {
+            service.openLocalSession(sender);
+        }
     }
 
     private void status(CommandSender sender) {
         var service = plugin.editorTransport();
         if (service == null || !service.isRunning()) {
-            sender.sendMessage(Component.text("editor listener: stopped", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("editor transport: stopped", NamedTextColor.GRAY));
             return;
         }
         sender.sendMessage(Component.text(
-                "editor listener: running on port " + service.boundPort()
-                        + ", " + service.activeEditors() + " active editor(s)",
+                "editor transport: running (" + service.activeEditors() + " active editor(s)"
+                        + (service.localListenerRunning()
+                                ? ", local listener port " + service.boundPort()
+                                : ", no local listener")
+                        + ")",
                 NamedTextColor.GREEN));
         plugin.diagnostics().recent(32).stream()
                 .filter(d -> d.code().code().startsWith("MTR-003"))
@@ -100,13 +119,13 @@ public final class EditorCommands {
         }
         var service = plugin.editorTransport();
         if (service == null || !service.isRunning()) {
-            sender.sendMessage(Component.text("editor listener already stopped", NamedTextColor.GRAY));
+            sender.sendMessage(Component.text("editor transport already stopped", NamedTextColor.GRAY));
             return;
         }
         service.stop();
         // Stable harness marker: the transport stopped on command.
         plugin.getLogger().info("MATERIONE-EDITOR-STOPPED");
-        sender.sendMessage(Component.text("editor listener stopped", NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("editor transport stopped", NamedTextColor.GREEN));
     }
 
     private dev.materione.plugin.runtime.EditorTransportService requireService(CommandSender sender) {
@@ -124,7 +143,8 @@ public final class EditorCommands {
 
     private void usage(CommandSender sender) {
         sender.sendMessage(Component.text(
-                "/materione editor <open|status|approve <nonce>|deny <nonce>|revoke|stop>",
+                "/materione editor <open|local|status|approve <nonce> [trust]|deny <nonce>"
+                        + "|revoke [workstation-prefix|workstations]|stop>",
                 NamedTextColor.YELLOW));
     }
 }

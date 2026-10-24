@@ -47,6 +47,7 @@ public final class EditorSession {
     private final KeyPair pluginSigning;
     private KeyPair pluginEphemeral;
     private final TrustPrompt trustPrompt;
+    private final EditorWorkstations workstations;
     private final DiagnosticsBus diagnostics;
     private final FrameCodec sendFrames = FrameCodec.sender();
     private final FrameCodec receiveFrames = FrameCodec.receiver();
@@ -56,7 +57,7 @@ public final class EditorSession {
     private PublicKey editorSigning;
     private SecretKey sessionKey;
     private FrameSink sink;
-    private CompletableFuture<Boolean> pendingTrust;
+    private CompletableFuture<TrustPrompt.Decision> pendingTrust;
 
     EditorSession(
             String sessionId,
@@ -64,12 +65,14 @@ public final class EditorSession {
             byte[] wrappingKey,
             KeyPair pluginSigning,
             TrustPrompt trustPrompt,
+            EditorWorkstations workstations,
             DiagnosticsBus diagnostics) {
         this.sessionId = sessionId;
         this.ownerId = ownerId == null ? "" : ownerId;
         this.wrappingKey = wrappingKey.clone();
         this.pluginSigning = pluginSigning;
         this.trustPrompt = trustPrompt;
+        this.workstations = workstations;
         this.diagnostics = diagnostics;
         this.pluginEphemeral = dev.materione.web.protocol.KeyFormat.generateP256(new java.security.SecureRandom());
     }
@@ -93,13 +96,31 @@ public final class EditorSession {
 
     /** Seals the session blob under the wrapping key for the /s/{code} fetch. */
     public JsonObject sealedBlob() {
+        return sealedBlob(sessionId, null, null);
+    }
+
+    /**
+     * Seals the session blob, optionally carrying relay-mode routing (the
+     * mailbox channel + editor capability) and a direct-mode LAN hint — both
+     * ride inside the wrapping-key encryption (web.md §3.2/§4.4). The
+     * envelope binds to {@code envelopeBinding}: the capability string the
+     * browser will have used to fetch the blob — the session id in direct
+     * mode, the store code in relay mode (the browser cannot know the
+     * session id before decrypting).
+     */
+    public JsonObject sealedBlob(
+            String envelopeBinding,
+            dev.materione.web.protocol.SessionBlob.RelayInfo relay,
+            dev.materione.web.protocol.SessionBlob.DirectInfo direct) {
         SessionBlob blob = new SessionBlob(
                 sessionId,
                 java.util.List.of(Wire.VERSION),
-                dev.materione.web.protocol.KeyFormat.ed25519RawPublic(pluginSigning.getPublic()));
+                dev.materione.web.protocol.KeyFormat.ed25519RawPublic(pluginSigning.getPublic()),
+                relay,
+                direct);
         return Envelope.seal(
                 new javax.crypto.spec.SecretKeySpec(wrappingKey, "AES"),
-                sessionId, SessionBlob.TYPE, blob.bodyBytes());
+                envelopeBinding, SessionBlob.TYPE, blob.bodyBytes());
     }
 
     /**
@@ -139,14 +160,29 @@ public final class EditorSession {
         state = State.AWAITING_TRUST;
         String noncePrefix = HexFormat.of().formatHex(
                 java.util.Arrays.copyOfRange(hello.nonce(), 0, Math.min(4, hello.nonce().length)));
-        pendingTrust = trustPrompt.prompt(noncePrefix, hello.browser());
+        boolean knownWorkstation =
+                workstations != null && workstations.isTrusted(hello.editorSigningPubKey());
+        if (knownWorkstation) {
+            // Trusted workstation (web.md §5.2): the key was explicitly
+            // whitelisted in-game before — reconnect without a new prompt.
+            diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.info(
+                    DiagnosticCodes.EDITOR_PEER_TRUSTED,
+                    "known workstation returns (key " + EditorWorkstations.keyHash(
+                            hello.editorSigningPubKey()).substring(0, 8) + ") — skipping prompt"));
+            pendingTrust = CompletableFuture.completedFuture(TrustPrompt.Decision.APPROVED);
+        } else {
+            pendingTrust = trustPrompt.prompt(noncePrefix, hello.browser());
+        }
         return pendingTrust
                 .orTimeout(TRUST_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-                .thenCompose(approved -> {
-                    if (!Boolean.TRUE.equals(approved)) {
+                .thenCompose(decision -> {
+                    if (!decision.approved()) {
                         close();
                         return CompletableFuture.failedFuture(new ProtocolException(
                                 ProtocolException.Kind.HANDSHAKE, "editor was not approved in game"));
+                    }
+                    if (decision.trustWorkstation() && workstations != null) {
+                        workstations.trust(hello.editorSigningPubKey(), hello.browser());
                     }
                     return CompletableFuture.completedFuture(completeHandshake());
                 })
