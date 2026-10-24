@@ -1,8 +1,8 @@
 <script lang="ts">
   import Login from './lib/components/Login.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import { EditorChannel } from './lib/protocol/session';
-  import type { ChannelState } from './lib/protocol/session';
+  import { openChannel } from './lib/protocol/connect';
+  import type { ChannelState, EditorChannel } from './lib/protocol/session';
   import type { PushFrame } from './lib/events';
   import type { DiagnosticEntry } from './lib/api';
   import { documentChangedEffect, type DocumentChanged } from './lib/external';
@@ -36,15 +36,14 @@
     }
   }
 
-  async function connect(code: string, fragmentKey: string) {
+  async function connect(code: string, fragmentKey: string, origin?: string) {
     phase = 'connecting';
     error = '';
     try {
-      const wsProtocol = location.protocol === 'https:' ? 'wss' : 'ws';
-      const wsUrl = `${wsProtocol}://${location.host}/editor/ws`;
-      channel = await EditorChannel.open(location.origin, wsUrl, code, fragmentKey, browserLabel, {
-        onState: handleHandshakeState,
-      });
+      // Transport selection lives in connect.ts: the blob decides relay vs
+      // direct, with a reachable local listener preferred (LAN auto-preference).
+      const opened = await openChannel(code, fragmentKey, browserLabel, handleHandshakeState, origin);
+      channel = opened.channel;
       session.channel = channel;
       // The channel allows a single listener per kind; everything below
       // subscribes through the fan-out signals instead.

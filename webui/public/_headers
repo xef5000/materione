@@ -1,0 +1,9 @@
+# Served by Workers static assets alongside the SPA build (free, unlimited).
+# Hashed bundles and the pinned Blockbench build are immutable; the shell is
+# always revalidated.
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/blockbench/*
+  Cache-Control: public, max-age=604800

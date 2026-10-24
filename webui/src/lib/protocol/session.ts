@@ -32,10 +32,24 @@ import {
 import { canonicalJson } from './wire';
 import type { Request, Response } from './wire';
 
+/** Relay-mode routing carried inside the encrypted blob (web.md §3.2). */
+export interface RelayInfo {
+  base: string;
+  channelId: string;
+  editorToken: string;
+}
+
+/** Best-effort direct-mode hint for LAN auto-preference (web.md §4.4). */
+export interface DirectInfo {
+  url: string;
+}
+
 export interface SessionBlob {
   sessionId: string;
   protocolVersions: number[];
   pluginSigningPubKey: Uint8Array;
+  relay?: RelayInfo;
+  direct?: DirectInfo;
 }
 
 export type ChannelState =
@@ -192,17 +206,22 @@ export async function fetchSessionBlob(
     sessionId: string;
     protocolVersions: number[];
     pluginSigningPubKey: string;
+    relay?: { base: string; channelId: string; editorToken: string };
+    direct?: { url: string };
   };
   return {
     sessionId: parsed.sessionId,
     protocolVersions: parsed.protocolVersions,
     pluginSigningPubKey: b64d(parsed.pluginSigningPubKey),
+    relay: parsed.relay,
+    direct: parsed.direct,
   };
 }
 
 export interface OpenOptions {
   nonceOverride?: Uint8Array; // golden-fixture determinism only
   transport?: Transport; // in-memory transport for tests
+  blob?: SessionBlob; // already-fetched blob (transport selection did it)
   onState?: (state: ChannelState) => void;
 }
 
@@ -256,7 +275,7 @@ export class EditorChannel {
     options: OpenOptions = {},
   ): Promise<EditorChannel> {
     options.onState?.({ kind: 'connecting' });
-    const blob = await fetchSessionBlob(httpBase, code, fragmentKey);
+    const blob = options.blob ?? (await fetchSessionBlob(httpBase, code, fragmentKey));
 
     const signing = await generateSigningPair();
     const ephemeral = await generateEphemeralPair();

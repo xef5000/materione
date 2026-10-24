@@ -3,7 +3,7 @@
     phase: 'login' | 'connecting' | 'awaiting' | 'closed' | 'error';
     error: string;
     noncePrefix: string;
-    onConnect: (code: string, fragmentKey: string) => void;
+    onConnect: (code: string, fragmentKey: string, origin?: string) => void;
   }
 
   let { phase, error, noncePrefix, onConnect }: Props = $props();
@@ -21,8 +21,11 @@
     const params = new URLSearchParams(url.slice(question + 1, hash));
     const code = params.get('s');
     const key = url.slice(hash + 1);
+    // A pasted direct-mode URL speaks to ITS origin, not this page's host —
+    // the blob fetch honors it (relay URLs always match this page anyway).
+    const origin = url.startsWith('http') ? new URL(url).origin : undefined;
     if (code && key) {
-      onConnect(code, key);
+      onConnect(code, key, origin);
     }
   }
 </script>
