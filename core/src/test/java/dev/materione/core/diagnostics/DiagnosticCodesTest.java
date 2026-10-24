@@ -21,6 +21,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(48); // MTR-0048 flags the unapplied item components block.
+        assertThat(DiagnosticCodes.all()).hasSize(50); // MTR-0049/0050: relay session ended, relay unreachable (M5).
     }
 }

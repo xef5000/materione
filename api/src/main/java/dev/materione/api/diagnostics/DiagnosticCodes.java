@@ -215,6 +215,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode ITEM_COMPONENTS_NOT_APPLIED =
             new DiagnosticCode("MTR-0048", Severity.WARN, "Item components block not applied");
 
+    /** A relay-mode editor session ended (channel closed/expired or reader fell behind). */
+    public static final DiagnosticCode EDITOR_RELAY_SESSION_ENDED =
+            new DiagnosticCode("MTR-0049", Severity.INFO, "Relay editor session ended");
+
+    /** The editor relay was unreachable or quota-limited; local mode used as fallback. */
+    public static final DiagnosticCode EDITOR_RELAY_UNREACHABLE =
+            new DiagnosticCode("MTR-0050", Severity.WARN, "Editor relay unreachable; fell back to local mode");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -263,7 +271,9 @@ public final class DiagnosticCodes {
             GLYPH_CODEPOINT_EXHAUSTED,
             DATAPACK_NOT_ACCEPTED,
             EFFECT_SIGNAL_EXHAUSTED,
-            ITEM_COMPONENTS_NOT_APPLIED);
+            ITEM_COMPONENTS_NOT_APPLIED,
+            EDITOR_RELAY_SESSION_ENDED,
+            EDITOR_RELAY_UNREACHABLE);
 
     private DiagnosticCodes() {}
 
