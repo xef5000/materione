@@ -63,7 +63,10 @@ public final class RelaySessions {
                 directUrl == null || directUrl.isBlank() ? null : new SessionBlob.DirectInfo(directUrl);
         String envelopeJson = Wire.canonicalJson(session.sealedBlob(code, relay, direct));
         client.storePut(envelopeJson, code, BLOB_TTL_SECONDS);
-        String url = trim(editorOrigin) + "/s/" + code + "#" + session.wrappingKeyFragment();
+        // Same grammar as direct mode: the SPA boots from / and reads ?s=,
+        // then fetches the sealed blob from /s/{code} on this origin — one
+        // URL shape and one fetch rule for both hosts.
+        String url = trim(editorOrigin) + "/?s=" + code + "#" + session.wrappingKeyFragment();
 
         RelaySession pump = new RelaySession(client, channel, sessions, dispatcher, diagnostics);
         live.put(session.sessionId(), pump);

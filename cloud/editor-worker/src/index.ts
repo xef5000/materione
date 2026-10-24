@@ -50,9 +50,9 @@ export default {
       return errorResponse(405, "method_not_allowed");
     }
 
-    // The capability URL's first half (web.md §4.1): the SPA fetches the
-    // sealed blob from /s/{code} on the editor origin — the same shape the
-    // direct-mode listener serves, so one SPA build works on both hosts.
+    // The SPA's blob fetch (web.md §4.1): after booting from /?s={code} the
+    // app fetches the sealed blob from /s/{code} on this origin — the same
+    // shape the direct-mode listener serves, so one SPA build serves both.
     const capabilityMatch = CAPABILITY_PATH.exec(path);
     if (capabilityMatch) {
       const code = capabilityMatch[1];

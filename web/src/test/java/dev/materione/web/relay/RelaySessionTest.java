@@ -89,9 +89,9 @@ class RelaySessionTest {
 
         // --- plugin side: channel + sealed blob + URL + parked pump
         RelaySessions.Ticket ticket = relay.open(client, base, "owner-1", null);
-        assertThat(ticket.url()).startsWith(base + "/s/");
+        assertThat(ticket.url()).startsWith(base + "/?s=");
         String[] halves = ticket.url().substring(base.length() + 1).split("#", 2);
-        String code = halves[0].substring("s/".length());
+        String code = halves[0].substring("?s=".length());
         String fragment = halves[1];
         pump = CompletableFuture.runAsync(ticket.session()::runLoop);
 

@@ -81,7 +81,7 @@ public final class RelayEditorRunner {
             // relay now; the gate fails if anything but the cloud path answers
             console.send("materione editor");
             String urlLine = log.awaitLine(
-                    "MATERIONE-EDITOR " + relayBase + "/s/", options.commandTimeout(), log.mark());
+                    "MATERIONE-EDITOR " + relayBase + "/?s=", options.commandTimeout(), log.mark());
             if (urlLine == null) {
                 problems.add("MATERIONE-EDITOR cloud url missing after 'materione editor'"
                         + " (the relay path fell back — see MTR-0050 in the log)");
@@ -89,14 +89,14 @@ public final class RelayEditorRunner {
             }
             String url = urlLine.substring(urlLine.indexOf("http://")).trim();
             URI uri = URI.create(url);
-            // Relay URLs carry the code as a PATH segment (/s/<code>#<key>) —
-            // direct mode's ?s= query shape is the SPA's other half.
-            String path = uri.getPath();
-            if (path == null || !path.startsWith("/s/") || uri.getFragment() == null) {
+            // Capability URLs are origin + ?s={code}#{key} — the SPA boots
+            // from / and fetches the blob from /s/{code} on the same origin.
+            String query = uri.getQuery();
+            if (query == null || !query.startsWith("s=") || uri.getFragment() == null) {
                 problems.add("MATERIONE-EDITOR url is not a relay capability shape: " + uri);
                 return finish(process, log, options, problems, workspace);
             }
-            String code = path.substring("/s/".length());
+            String code = query.substring("s=".length());
             String fragmentKey = uri.getFragment();
 
             // 2. browser step one: fetch the sealed blob from the payload

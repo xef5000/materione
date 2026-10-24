@@ -132,7 +132,7 @@ Connection model:
 1. Plugin runs `/materione editor` → generates session keys (§5), creates a channel
    (`POST /v1/channels` → `{channelId, pluginToken}`), joins it, uploads an E2E-encrypted
    session blob to the store, and prints the admin a URL:
-   `https://editor.materione.com/s/{code}`.
+   `https://editor.materione.com/?s={code}`.
 2. The browser decrypts the session blob locally (§5.4); it contains the channel id, an
    editor capability token, and the key material needed to complete the handshake.
 3. Both sides speak the **same sealed-frame protocol as direct mode**: frames are posted to
@@ -236,8 +236,10 @@ The session blob is the trust root of the whole exchange, so its key transport i
    when the embedded listener is reachable from the admin's machine, a **direct-mode hint**
    (LAN auto-preference, §4.4).
 3. Plugin prints the admin a URL of the form
-   `https://editor.materione.com/s/{code}#{wrapping-key}` — **the store code identifies the
-   blob, the URL fragment carries the wrapping key**. Fragments are never sent to any server
+   `https://editor.materione.com/?s={code}#{wrapping-key}` — **the store code identifies the
+   blob, the URL fragment carries the wrapping key** (same grammar as direct mode: the SPA
+   boots from `/`, reads `?s=`, and fetches the blob from `GET /s/{code}` on the same
+   origin). Fragments are never sent to any server
    (not logged by the store, not in Referer, not in edge logs). The code alone is useless;
    the key alone is useless.
 4. Browser fetches the blob by code, decrypts with the fragment key, and learns the channel
@@ -259,7 +261,7 @@ plugin                                  browser
   │ wrapping key + signing keypair         │
   │ create channel, join it                │
   │ upload wrapped session blob            │
-  │ print /s/{code}#{wrapping-key}         │
+  │ print /?s={code}#{wrapping-key}        │
   │ ◄────── admin opens URL ──────────────►│
   │                                        │ fetch blob by code, decrypt with fragment key
   │ ◄──── hello {nonce, sessionId,         │
