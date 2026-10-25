@@ -425,8 +425,11 @@ export default [
       await ctx.waitForServerLog(
         new RegExp(`MATERIONE-DEV-REMOVE ok=true removed world:chorus_pillar world ${pillar1.join(' ')}`),
         { timeoutMs: 45_000 });
-      for (const cell of [stoneCell, padB]) {
-        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      await ctx.rcon(`setblock ${stoneCell.join(' ')} minecraft:air`);
+      for (const cell of [padA, padB]) {
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:grass_block`);
+        ctx.expect(await ctx.rcon(
+          `execute if block ${cell.join(' ')} minecraft:grass_block`)).toBe('Test passed');
       }
 
       // the placement index is back to empty: everything torn down
@@ -574,8 +577,13 @@ export default [
       await ctx.rcon(`setblock ${vanilla.join(' ')} minecraft:air`);
       ctx.expect(await ctx.rcon(`execute if block ${vanilla.join(' ')} minecraft:air`))
         .toBe('Test passed');
-      for (const cell of [stoneCell, padA, padB]) {
-        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
+      await ctx.rcon(`setblock ${stoneCell.join(' ')} minecraft:air`);
+      for (const cell of [padA, padB]) {
+        // Restore the superflat surface; leaving these pads as air makes a
+        // hole in the approach path for later client movement scenes.
+        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:grass_block`);
+        ctx.expect(await ctx.rcon(
+          `execute if block ${cell.join(' ')} minecraft:grass_block`)).toBe('Test passed');
       }
       await ctx.rcon('materione dev sweep');
       await ctx.waitForServerLog(/MATERIONE-DEV-SWEEP indexed=0 ok=0 /, { timeoutMs: 45_000 });
