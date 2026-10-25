@@ -858,7 +858,9 @@ public final class PackCompiler {
         try {
             Files.createDirectories(staging);
             MinecraftResourcePackWriter.minecraft().writeToZipFile(zip, pack);
-            patchMcmeta(zip);
+            if (!overlayEntries.isEmpty()) {
+                patchMcmeta(zip);
+            }
         } catch (IOException e) {
             return null;
         }

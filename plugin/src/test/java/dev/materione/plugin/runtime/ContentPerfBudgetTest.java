@@ -94,8 +94,13 @@ class ContentPerfBudgetTest {
                 runner.lastPacks(), List.of(new ItemType(), new RecipeType()),
                 first.allocation(), workDir.resolve("generated"), diagnostics, quarantine, -1);
         boolean noOp = second.sha256().contentEquals(first.outcome().sha256());
-        long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
+        long elapsedNanos = System.nanoTime() - start;
+        long elapsedMs = Duration.ofNanos(elapsedNanos).toMillis();
 
+        System.out.println("MATERIONE_NOOP_PERF wallNanos=" + elapsedNanos
+                + " wallMillis=" + elapsedMs
+                + " budgetMillis=" + NO_OP_DECISION_BUDGET_MS
+                + " shaEqual=" + noOp);
         assertThat(noOp).as("deterministic compile: unchanged corpus → identical sha").isTrue();
         assertThat(elapsedMs)
                 .as("no-op decision (recompile + sha comparison; M2 adds fingerprint skipping)")

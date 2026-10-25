@@ -19,6 +19,16 @@ dependencies {
     api(project(":web"))
 }
 
+tasks.named<org.gradle.api.tasks.testing.Test>("test") {
+    addTestOutputListener { descriptor, event ->
+        if (descriptor.className == "dev.materione.plugin.runtime.ContentPerfBudgetTest"
+            && descriptor.name.startsWith("noOpReloadDecisionUnder100Milliseconds")
+            && event.message.startsWith("MATERIONE_NOOP_PERF ")) {
+            logger.lifecycle(event.message.trim())
+        }
+    }
+}
+
 // The editor SPA builds with Node (:webui) and rides inside the shaded jar
 // under webui/ — the direct-mode listener serves it from classpath resources.
 val spaDist = rootProject.project(":webui").layout.buildDirectory.dir("spa")
