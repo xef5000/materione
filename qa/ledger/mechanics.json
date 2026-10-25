@@ -1,52 +1,78 @@
 {
   "mechanics.commands-and-cooldown": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
-    "def": "ad99ba36c9ec42fc42ae50ef08c9c176b8e515753cddffa7944065b23b3aff63",
+    "def": "194e569400cea6e37fc7b344d0dcafe2677f1a875dd2ae3452b0fbd47a3a5abe",
     "result": "pass",
-    "at": "2026-10-16T23:34:22.344Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:23:57.459Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "mechanics.custom-durability": {
-    "sha": "60280ea115b7acdf688aa38e3b34303c46f62baa",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "b5b409ebffbd535bc13e3a9aa4e6a3228667374762b5a7108ba03cbee14d16d8",
-    "result": "pass",
-    "at": "2026-10-16T23:39:06.794Z",
-    "run": "run-2026-10-16T23-38-15",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:24:15.109Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\mechanics.custom-durability\\dossier.md",
+    "issue": 126,
+    "issueUrl": "https://github.com/xef5000/materione/issues/126",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/mechanics.custom-durability/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/mechanics.custom-durability/transcript.jsonl"
+    ]
   },
   "mechanics.custom-food": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "d6dcc7bc20490d73788129041cd7ca8c83735090de62ad3a7f44ca2bd2eb951f",
     "result": "pass",
-    "at": "2026-10-16T23:35:03.865Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:24:27.402Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "mechanics.soulbound": {
-    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "b98aede53b71cb66988df203865f97c2181497ac6e5e32ca927777a2a94601f2",
     "result": "pass",
-    "at": "2026-10-16T23:38:02.013Z",
-    "run": "run-2026-10-16T23-36-17",
+    "at": "2026-10-25T15:24:42.462Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "mechanics.backpack": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "58e9930eee2c54967d2c9a656f06e714ebd40bcd2d1c9bd938e30edb0810be01",
     "result": "pass",
-    "at": "2026-10-16T23:35:41.038Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:25:00.786Z",
+    "run": "run-2026-10-25T15-13-52",
+    "eyes": null
+  },
+  "mechanics.commands-reload-once": {
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "7933af6a5ff491e69ff385a3dd9ab85eb2ed9a5af5e5b5de377b8c83c1c7ed4c",
+    "result": "pass",
+    "at": "2026-10-25T15:23:37.209Z",
+    "run": "run-2026-10-25T15-13-52",
+    "eyes": null
+  },
+  "mechanics.soulbound-keep-inventory": {
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "fff48e1c1d264bd907f56caedce464858dd777ab19b0986d096b7d016e2abb4d",
+    "result": "pass",
+    "at": "2026-10-25T15:23:47.802Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   }
 }

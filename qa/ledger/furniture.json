@@ -1,102 +1,138 @@
 {
   "furniture.light-emission": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "cb4daaeaa0357b84329ca7548556100cf55cecff461b447f88b4b564b5612d53",
     "result": "pass",
-    "at": "2026-10-16T23:22:07.853Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:17:30.019Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "furniture.storage": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "bdc4fa71e53c03e4dc7277522603ce6f094064573f20501d2f41ac1174364852",
     "result": "pass",
-    "at": "2026-10-16T23:22:28.807Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:17:52.505Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "furniture.limited-placing": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "02ef13d14ac6bf41c55ff7207c31430eeca13328ee8373c6ee4c073c9d1b98f0",
-    "result": "pass",
-    "at": "2026-10-16T23:23:04.402Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:18:21.815Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.limited-placing\\dossier.md",
+    "issue": 119,
+    "issueUrl": "https://github.com/xef5000/materione/issues/119",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.limited-placing/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.limited-placing/transcript.jsonl"
+    ]
   },
   "furniture.display-entity": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "8639ca212dfdbfdeee872c3b7346be424529cce5da050cf73f28a2f729408d75",
     "result": "pass",
-    "at": "2026-10-16T23:23:49.162Z",
-    "run": "run-2026-10-16T23-21-07",
+    "at": "2026-10-25T15:19:03.098Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "furniture.hitboxes": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "56a513212e35db160b4285fdd6cbd8fc85263a38b2f3c80f9ba44e03833734ee",
-    "result": "pass",
-    "at": "2026-10-16T23:24:07.812Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:19:14.456Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.hitboxes\\dossier.md",
+    "issue": 120,
+    "issueUrl": "https://github.com/xef5000/materione/issues/120",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.hitboxes/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.hitboxes/transcript.jsonl"
+    ]
   },
   "furniture.seats": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "f873f00ae3b67a818b10d4ad4dc31cfef45155d67558c5482913e101145c8d5b",
-    "result": "pass",
-    "at": "2026-10-16T23:24:29.382Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:19:34.454Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.seats\\dossier.md",
+    "issue": 121,
+    "issueUrl": "https://github.com/xef5000/materione/issues/121",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.seats/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.seats/transcript.jsonl"
+    ]
   },
   "furniture.light-toggle": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "e15a4a6e116a5a821c7986bddf1f101667a4234c44c259b8557d1c2bf9c8176c",
-    "result": "pass",
-    "at": "2026-10-16T23:24:53.977Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:19:54.022Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.light-toggle\\dossier.md",
+    "issue": 122,
+    "issueUrl": "https://github.com/xef5000/materione/issues/122",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.light-toggle/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.light-toggle/transcript.jsonl"
+    ]
   },
   "furniture.storage-capacity": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "511075dcc37875f60397c4c9e89d1ddb59c78e026abf76343cc530dd11f6a7a4",
-    "result": "pass",
-    "at": "2026-10-16T23:25:31.380Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:20:10.063Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.storage-capacity\\dossier.md",
+    "issue": 123,
+    "issueUrl": "https://github.com/xef5000/materione/issues/123",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.storage-capacity/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.storage-capacity/transcript.jsonl"
+    ]
   },
   "furniture.evolution": {
-    "sha": "a022d4eafd416136e751ad0011ca7ebbb75f7a85",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "c3615a9adbc067116d90713970fb826edc6c7b4f0250c78f6a980f297b28b01b",
-    "result": "pass",
-    "at": "2026-10-16T23:33:18.267Z",
-    "run": "run-2026-10-16T23-21-07",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:20:22.425Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\furniture.evolution\\dossier.md",
+    "issue": 124,
+    "issueUrl": "https://github.com/xef5000/materione/issues/124",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.evolution/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/furniture.evolution/transcript.jsonl"
+    ]
   },
   "furniture.rotation": {
-    "sha": "e85a6c86645153878e44099d179b5367aae9cbff",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "3ca6e43737c6d75303f65fd64de34ae32f6cfa5b3d17509d36b83a54cd74a6a0",
     "result": "pass",
-    "at": "2026-10-16T23:37:28.986Z",
-    "run": "run-2026-10-16T23-36-17",
+    "at": "2026-10-25T15:21:01.219Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   }
 }
