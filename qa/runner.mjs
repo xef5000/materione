@@ -21,6 +21,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { redactEvidence } from './evidence-redaction.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const QA = path.join(ROOT, 'qa');
@@ -197,7 +198,7 @@ function writeLedgerEntry(test, entry) {
 function atomicWrite(file, content) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = `${file}.tmp-${process.pid}`;
-  fs.writeFileSync(tmp, content);
+  fs.writeFileSync(tmp, redactEvidence(content));
   fs.renameSync(tmp, file);
 }
 
@@ -1025,6 +1026,8 @@ function promoteEvidence(runId, testId, { dry = false } = {}) {
     let content = fs.readFileSync(path.join(srcDir, file));
     if (file === 'dossier.md') {
       content = Buffer.from(promoteRewrite(content.toString('utf8'), runId, testId), 'utf8');
+    } else if (file === 'transcript.jsonl') {
+      content = Buffer.from(redactEvidence(content.toString('utf8')), 'utf8');
     }
     fs.writeFileSync(path.join(dstDir, file), content);
   }
@@ -1035,7 +1038,7 @@ function promoteEvidence(runId, testId, { dry = false } = {}) {
 // promotion those live under qa/evidence/.
 function promoteRewrite(md, runId, testId) {
   const promoted = `qa/evidence/${runId}/${testId}`;
-  return md
+  return redactEvidence(md)
     .split(`qa\\results\\${runId}\\${testId}`).join(promoted)
     .split(`qa/results/${runId}/${testId}`).join(promoted);
 }
