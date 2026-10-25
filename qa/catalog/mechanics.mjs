@@ -229,18 +229,22 @@ player.setRot(yaw, pitch)
 return 'probed-air'`);
       const wearPath = 'data get entity Probe SelectedItem.components."minecraft:custom_data"'
         + '.PublicBukkitValues."materione:durability-used"';
-      const wearValue = async () => {
-        const reply = String(await ctx.rcon(wearPath));
+      const maxPath = 'data get entity Probe SelectedItem.components."minecraft:custom_data"'
+        + '.PublicBukkitValues."materione:durability-max"';
+      const pdcValue = async (path) => {
+        const reply = String(await ctx.rcon(path));
         const match = reply.match(/:\s*(-?\d+)\s*$/);
         return match ? Number(match[1]) : null;
       };
       const waitForPdcWear = async (want, timeoutMs = 10_000) => {
         const deadline = Date.now() + timeoutMs;
         for (;;) {
-          const actual = await wearValue();
-          if (actual === want) return;
+          const actual = await pdcValue(wearPath);
+          const maximum = await pdcValue(maxPath);
+          if (actual === want && maximum === 3) return;
           if (Date.now() > deadline) {
             ctx.expect(actual).toBe(want);
+            ctx.expect(maximum).toBe(3);
           }
           await ctx.sleep(300);
         }

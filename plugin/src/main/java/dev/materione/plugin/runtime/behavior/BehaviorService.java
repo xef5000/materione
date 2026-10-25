@@ -206,24 +206,7 @@ public final class BehaviorService {
         worldVars.put("time", world == null ? 0L : world.getTime());
         root.put("world", worldVars);
 
-        var itemVars = new LinkedHashMap<String, Object>();
-        Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);
-        itemVars.put("id", identity.map(NamespacedId::toString).orElse(""));
-        itemVars.put("material", stack == null ? "" : stack.getType().name().toLowerCase(java.util.Locale.ROOT));
-        itemVars.put("amount", stack == null ? 0 : stack.getAmount());
-        if (stack != null && stack.getItemMeta() != null) {
-            // custom-durability counters (MechanicsService writes them together)
-            var pdc = stack.getItemMeta().getPersistentDataContainer();
-            Integer used = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-used"),
-                    org.bukkit.persistence.PersistentDataType.INTEGER);
-            Integer max = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-max"),
-                    org.bukkit.persistence.PersistentDataType.INTEGER);
-            if (used != null && max != null) {
-                itemVars.put("durability_used", used);
-                itemVars.put("durability_max", max);
-            }
-        }
-        root.put("item", itemVars);
+        root.put("item", itemContext(stack));
 
         var serverVars = new LinkedHashMap<String, Object>();
         serverVars.put("online", Bukkit.getOnlinePlayers().size());
@@ -232,6 +215,30 @@ public final class BehaviorService {
 
         root.put("vars", new LinkedHashMap<String, Object>());
         return new EvaluationContext(root);
+    }
+
+    private static Map<String, Object> itemContext(ItemStack stack) {
+        var itemVars = new LinkedHashMap<String, Object>();
+        Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);
+        itemVars.put("id", identity.map(NamespacedId::toString).orElse(""));
+        itemVars.put("material", stack == null ? "" : stack.getType().name().toLowerCase(java.util.Locale.ROOT));
+        itemVars.put("amount", stack == null ? 0 : stack.getAmount());
+        if (stack != null && stack.getItemMeta() != null) {
+            addDurabilityContext(itemVars, stack.getItemMeta().getPersistentDataContainer());
+        }
+        return itemVars;
+    }
+
+    static void addDurabilityContext(
+            Map<String, Object> itemVars, org.bukkit.persistence.PersistentDataContainer pdc) {
+        Integer used = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-used"),
+                org.bukkit.persistence.PersistentDataType.INTEGER);
+        Integer max = pdc.get(new org.bukkit.NamespacedKey("materione", "durability-max"),
+                org.bukkit.persistence.PersistentDataType.INTEGER);
+        if (used != null && max != null) {
+            itemVars.put("durability_used", used);
+            itemVars.put("durability_max", max);
+        }
     }
 
     /**
