@@ -59,6 +59,27 @@ const clearFurnitureCells = async (ctx, cells) => {
   }
 };
 
+const waitForClientAir = async (ctx, cells, timeoutMs = 15_000) => {
+  const positions = cells
+    .map((cell) => `new net.minecraft.core.BlockPos(${cell.join(', ')})`)
+    .join(', ');
+  const expected = cells.map(() => 'air').join('|');
+  const deadline = Date.now() + timeoutMs;
+  let states;
+  do {
+    states = String(await ctx.exec(
+      `def positions = [${positions}]
+return positions.collect { pos ->
+  def state = mc.level.getBlockState(pos)
+  state.isAir() ? 'air' : state.toString()
+}.join('|')`,
+      15_000));
+    if (states === expected) return;
+    await ctx.sleep(250);
+  } while (Date.now() < deadline);
+  ctx.expect(states).toBe(expected);
+};
+
 export default [
   test({
     id: 'furniture.light-emission',
@@ -552,11 +573,15 @@ return 'use:' + result.toString()`, 15_000);
       // from the spawn point (1,-60,3) heading south. Clear the whole path so
       // earlier tests cannot turn the baseline into an obstacle course.
       const anchor = [1, -60, 7];
-      const light = [1, -59, 7];
       const spawn = 'tp Probe 1 -60 3';
-      await clearFurnitureCells(ctx, [
-        anchor, light, [1, -60, 4], [1, -60, 5], [1, -60, 6],
-      ]);
+      const corridor = [];
+      for (let x = 0; x <= 2; x++) {
+        for (let y = -60; y <= -59; y++) {
+          for (let z = 3; z <= 9; z++) corridor.push([x, y, z]);
+        }
+      }
+      await clearFurnitureCells(ctx, corridor);
+      await waitForClientAir(ctx, corridor);
 
       // movement is hold-driven: walk south for 1.2s, release, let the
       // server-corrected position settle, then read the player z
@@ -611,6 +636,7 @@ return 'use:' + result.toString()`, 15_000);
         { timeoutMs: 45_000 });
       ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:air`))
         .toBe('Test passed');
+      await waitForClientAir(ctx, corridor);
       const reopenedZ = await walk();
       ctx.expect(reopenedZ).toBeGreaterThan(7.5);
       await ctx.rcon('clear Probe');
