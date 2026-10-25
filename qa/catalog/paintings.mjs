@@ -53,6 +53,13 @@ async function devPainting(ctx, key) {
 return 'sent'`, 15_000);
 }
 
+async function paintingFacingId(ctx, selector) {
+  const output = await ctx.rcon(`data get entity ${selector} facing`);
+  const match = /entity data:\s*(-?\d+)b\s*$/.exec(output);
+  if (!match) throw new Error(`expected a painting facing byte, got ${output}`);
+  return Number(match[1]);
+}
+
 async function clearPaintingScene(ctx) {
   await ctx.rcon('kill @e[type=painting]');
   await ctx.rcon('fill -3 -62 2 3 -58 8 minecraft:air');
@@ -120,8 +127,9 @@ export default [
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-PAINTING ok=true key=sample:sunrise/)).toBeTruthy();
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
         .toContain('sample:sunrise');
-      ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1] facing'))
-        .toContain('2b'); // Paper 26.x stores north as the painting facing byte 2
+      ctx.expect(await paintingFacingId(
+        ctx, '@e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1]'))
+        .toBe(2); // Paper's standard painting-facing id for north
 
       await aimAt(ctx, -20, 11, [2, -60, 8], 'north');
       await devPainting(ctx, 'sample:moonrise');
@@ -129,8 +137,9 @@ export default [
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-PAINTING ok=true key=sample:moonrise/)).toBeTruthy();
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
         .toContain('sample:moonrise');
-      ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1] facing'))
-        .toContain('2b');
+      ctx.expect(await paintingFacingId(
+        ctx, '@e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1]'))
+        .toBe(2);
 
       // --- a variant that doesn't fit the aim: the sunrise painting already
       // occupies the moonrise aim's hanging cell
