@@ -71,7 +71,7 @@ public final class ItemBehaviorListener implements Listener {
      * gate it is exactly the signal needed.
      */
     @SuppressWarnings("deprecation")
-    private static boolean blockInteractionCancelled(PlayerInteractEvent event) {
+    static boolean blockInteractionCancelled(PlayerInteractEvent event) {
         return (event.getAction() == Action.LEFT_CLICK_BLOCK
                 || event.getAction() == Action.RIGHT_CLICK_BLOCK)
                 && event.isCancelled();
