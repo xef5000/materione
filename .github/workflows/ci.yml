@@ -50,7 +50,9 @@ jobs:
       # QA catalog integrity + ledger drift (issue #38) — pure Node, no
       # Minecraft. The in-game suite itself stays a local dev tool.
       - name: QA catalog check
-        run: node qa/runner.mjs check
+        run: |
+          node --test qa/evidence-redaction.test.mjs
+          node qa/runner.mjs check
 
       # Artifacts bill against the Actions storage quota (500 MB on the
       # free plan). The jar is reproducible from any commit; two days of
