@@ -186,6 +186,13 @@ already asserts.
   this is the public method called by the private `Minecraft.pick(float)`
   refresh. It returns the `HitResult` without updating the cached `mc.hitResult`,
   so verify and act on that same result in one Groovy call.
+  Item-use packets take a different path: the server block-raycasts them
+  without considering the entity under the crosshair, then emits
+  `RIGHT_CLICK_AIR` on a block miss or `RIGHT_CLICK_BLOCK` on a block hit.
+  To probe an air-use rule, aim into clear sky and verify a fresh
+  `player.pick(20.0D, 1.0F, false)` returns `MISS` before calling
+  `mc.gameMode.useItem`; a cancelled block click is intentionally vetoed by
+  the behavior bridge.
   `setDown(true)` on `keyAttack` does drive
   continuous mining; `mc.gameMode.useItemOn(player, hand, hitResult)` is the
   direct-packet alternative (26.1.2 signature takes a `BlockHitResult`).

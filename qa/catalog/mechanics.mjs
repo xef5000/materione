@@ -211,10 +211,22 @@ return hit.getType().toString() == 'ENTITY'
   : hit.getType().toString()`);
       ctx.expect(String(await aim())).toBe('entity.minecraft.villager');
 
-      // A separate air-use packet tests click:right and its ${item.*}
-      // interpolation. Its chat is not evidence that a melee wear event ran.
-      const probe = () => ctx.exec(
-        'mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND); return "probed"');
+      // ServerboundUseItemPacket raytraces blocks, not the client's entity
+      // crosshair. Aim into the sky and prove that server-side block ray is a
+      // miss so this specifically exercises RIGHT_CLICK_AIR (a cancelled
+      // RIGHT_CLICK_BLOCK is intentionally vetoed by the behavior bridge).
+      const probe = () => ctx.exec(`def yaw = player.getYRot()
+def pitch = player.getXRot()
+player.setRot(yaw, -89.0F)
+def blockHit = player.pick(20.0D, 1.0F, false)
+def blockHitType = blockHit.getType().toString()
+if (blockHitType != 'MISS') {
+  player.setRot(yaw, pitch)
+  return 'not-air:' + blockHitType
+}
+mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND)
+player.setRot(yaw, pitch)
+return 'probed-air'`);
       const wearPath = 'data get entity Probe SelectedItem.components."minecraft:custom_data"'
         + '.PublicBukkitValues."materione:durability-used"';
       const wearValue = async () => {
@@ -270,7 +282,7 @@ return 'attacked'`);
       await hit();
       await waitForPdcWear(1);
       const preFirstWearMessage = await wearMessageCount(1);
-      ctx.expect(String(await probe())).toBe('probed');
+      ctx.expect(String(await probe())).toBe('probed-air');
       await waitForWearMessage(1, preFirstWearMessage + 1);
       ctx.expect(String(await ctx.exec(
         'return player.getMainHandItem().getDamageValue()'))).toBe('0');
@@ -279,7 +291,7 @@ return 'attacked'`);
       await hit();
       await waitForPdcWear(2);
       const preSecondWearMessage = await wearMessageCount(2);
-      ctx.expect(String(await probe())).toBe('probed');
+      ctx.expect(String(await probe())).toBe('probed-air');
       await waitForWearMessage(2, preSecondWearMessage + 1);
       ctx.expect(String(await ctx.exec(
         'return player.getMainHandItem().getDamageValue()'))).toBe('0');
@@ -290,7 +302,7 @@ return 'attacked'`);
       await ctx.rcon('materione reload');
       await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
       await waitForPdcWear(2);
-      ctx.expect(String(await probe())).toBe('probed');
+      ctx.expect(String(await probe())).toBe('probed-air');
       await waitForWearMessage(2, preTwos + 1);
 
       // use 3 hits max: the blade breaks — the slot empties and no third
