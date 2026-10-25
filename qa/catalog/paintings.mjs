@@ -60,20 +60,23 @@ async function paintingFacingId(ctx, selector) {
   return Number(match[1]);
 }
 
+const PAINTING_SCENE = { playerY: 31, floorY: 30, wallZ: 8 };
+
 async function clearPaintingScene(ctx) {
   await ctx.rcon('kill @e[type=painting]');
-  await ctx.rcon('fill -3 -62 2 3 -58 8 minecraft:air');
+  await ctx.rcon(
+    `fill -3 ${PAINTING_SCENE.floorY} 2 3 ${PAINTING_SCENE.floorY + 4} 8 minecraft:air`);
 }
 
 async function stageAimedWall(ctx) {
   await clearPaintingScene(ctx);
-  await ctx.rcon('setblock 0 -61 2 minecraft:smooth_stone');
-  await ctx.rcon('fill -2 -61 8 2 -58 8 minecraft:smooth_stone');
-  // Keep a deliberate floor target for the wall-only hint assertion. The
-  // cleared approach prevents the probe world's old platform from occluding
-  // the wall ray before it reaches the authored scene.
-  await ctx.rcon('setblock 0 -61 5 minecraft:smooth_stone');
-  await ctx.rcon('tp Probe 0 -60 2');
+  await ctx.rcon(
+    `fill -2 ${PAINTING_SCENE.floorY} 2 2 ${PAINTING_SCENE.floorY} 6 minecraft:smooth_stone`);
+  await ctx.rcon(
+    `fill -2 ${PAINTING_SCENE.floorY} ${PAINTING_SCENE.wallZ} 2 ${PAINTING_SCENE.floorY + 3} ${PAINTING_SCENE.wallZ} minecraft:smooth_stone`);
+  // The elevated scene has its own floor target and never clears the
+  // superflat terrain used by the other suites.
+  await ctx.rcon(`tp Probe 0 ${PAINTING_SCENE.playerY} 2`);
   await ctx.sleep(1_000);
 }
 
@@ -115,35 +118,35 @@ export default [
       ctx.expect(read).toContain('sample:nope=MISSING'); // registration is real
       ctx.expect(read).toMatch(/minecraft:alban size=1x1 asset=minecraft:alban/); // vanilla stays vanilla
 
-      // --- own a cleared approach and wall: ctx.reset does not clear blocks,
-      // and the probe platform otherwise occludes this downward wall ray.
+      // --- own an elevated approach and wall: ctx.reset does not clear blocks,
+      // and this scene must not clear the superflat floor other suites use.
       await stageAimedWall(ctx);
 
       // --- dev painting places each custom variant; the placed entity's
       // variant and facing read back through the server
-      await aimAt(ctx, 0, 12, [0, -60, 8], 'north');
+      await aimAt(ctx, 0, 12, [0, PAINTING_SCENE.playerY, PAINTING_SCENE.wallZ], 'north');
       await devPainting(ctx, 'sample:sunrise');
       await ctx.waitForChat(/dev painting: placed sample:sunrise/);
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-PAINTING ok=true key=sample:sunrise/)).toBeTruthy();
-      ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
+      ctx.expect(await ctx.rcon(`data get entity @e[type=painting,x=0.5,y=${PAINTING_SCENE.playerY + 0.5},z=7.5,distance=..2,limit=1] variant`))
         .toContain('sample:sunrise');
       ctx.expect(await paintingFacingId(
-        ctx, '@e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1]'))
+        ctx, `@e[type=painting,x=0.5,y=${PAINTING_SCENE.playerY + 0.5},z=7.5,distance=..2,limit=1]`))
         .toBe(2); // Paper's standard painting-facing id for north
 
-      await aimAt(ctx, -20, 11, [2, -60, 8], 'north');
+      await aimAt(ctx, -20, 11, [2, PAINTING_SCENE.playerY, PAINTING_SCENE.wallZ], 'north');
       await devPainting(ctx, 'sample:moonrise');
       await ctx.waitForChat(/dev painting: placed sample:moonrise/);
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-PAINTING ok=true key=sample:moonrise/)).toBeTruthy();
-      ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
+      ctx.expect(await ctx.rcon(`data get entity @e[type=painting,x=2.5,y=${PAINTING_SCENE.playerY + 0.5},z=7.5,distance=..2,limit=1] variant`))
         .toContain('sample:moonrise');
       ctx.expect(await paintingFacingId(
-        ctx, '@e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1]'))
+        ctx, `@e[type=painting,x=2.5,y=${PAINTING_SCENE.playerY + 0.5},z=7.5,distance=..2,limit=1]`))
         .toBe(2);
 
       // --- a variant that doesn't fit the aim: the sunrise painting already
       // occupies the moonrise aim's hanging cell
-      await aimAt(ctx, 0, 12, [0, -60, 8], 'north');
+      await aimAt(ctx, 0, 12, [0, PAINTING_SCENE.playerY, PAINTING_SCENE.wallZ], 'north');
       await devPainting(ctx, 'sample:panorama');
       await ctx.waitForChat(/doesn't fit on that wall/);
       ctx.expect(await ctx.serverLogLine(/MATERIONE-DEV-PAINTING failed reason=no-space key=sample:panorama/))
@@ -157,11 +160,12 @@ export default [
 
       // --- floor/ceiling aims are refused with the wall hint (a non-
       // horizontal face used to crash the command outright, #101)
-      await aimAt(ctx, 0, 28, [0, -61, 5], 'up');
+      await aimAt(ctx, 0, 28, [0, PAINTING_SCENE.floorY, 5], 'up');
       await devPainting(ctx, 'sample:sunrise');
       await ctx.waitForChat(/look at a wall \(not the floor or ceiling\)/);
 
-      await ctx.rcon('kill @e[type=painting]');
+      await ctx.rcon('tp Probe 0 -60 3');
+      await clearPaintingScene(ctx);
     },
   }),
 
@@ -181,9 +185,9 @@ export default [
       // --- scene: an isolated 3×2 slab (the only support around) with clear
       // air on every face and a separate pad for the player
       await clearPaintingScene(ctx);
-      await ctx.rcon('setblock 0 -61 3 minecraft:smooth_stone');
-      await ctx.rcon('fill 0 -61 7 2 -60 7 minecraft:smooth_stone');
-      await ctx.rcon('tp Probe 0 -60 3');
+      await ctx.rcon(`setblock 0 ${PAINTING_SCENE.floorY} 3 minecraft:smooth_stone`);
+      await ctx.rcon(`fill 0 ${PAINTING_SCENE.floorY} 7 2 ${PAINTING_SCENE.floorY + 1} 7 minecraft:smooth_stone`);
+      await ctx.rcon(`tp Probe 0 ${PAINTING_SCENE.playerY} 3`);
       await ctx.sleep(600);
       await ctx.rcon('give Probe minecraft:painting 64');
       const hand = await ctx.exec('return mc.player.getMainHandItem().toString()', 15_000);
@@ -192,9 +196,9 @@ export default [
       // --- the click surface the driver uses, same as a real player's
       // right-click; the slab's north face hangs paintings at z=6
       const CLICK = `def hit = new net.minecraft.world.phys.BlockHitResult(
-    new net.minecraft.world.phys.Vec3(1.5, -60.5, 7.0),
+    new net.minecraft.world.phys.Vec3(1.5, ${PAINTING_SCENE.floorY + 0.5}, 7.0),
     net.minecraft.core.Direction.NORTH,
-    new net.minecraft.core.BlockPos(0, -61, 7), false)
+    new net.minecraft.core.BlockPos(0, ${PAINTING_SCENE.floorY}, 7), false)
 mc.gameMode.useItemOn(mc.player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
 return 'clicked'`;
       const seen = new Set();
@@ -203,7 +207,7 @@ return 'clicked'`;
         await ctx.exec(CLICK, 15_000);
         await ctx.sleep(400); // the placement round-trips and the entity spawns
         const reply = await ctx.rcon(
-          'data get entity @e[type=painting,x=1.5,y=-60.5,z=6.5,distance=..3,limit=1] variant');
+          `data get entity @e[type=painting,x=1.5,y=${PAINTING_SCENE.floorY + 0.5},z=6.5,distance=..3,limit=1] variant`);
         if (!/data: "(sample|minecraft):/.test(reply)) {
           ctx.expect(reply).toMatch(/data: "(sample|minecraft):/); // fails with the rcon reply as evidence
         }
@@ -212,7 +216,8 @@ return 'clicked'`;
       ctx.expect(seen.has('sample:moonrise')).toBe(false); // non-placeable: never in the pool
       ctx.expect(seen.size).toBeGreaterThan(1); // a real random pool, not one pinned variant
 
-      await ctx.rcon('kill @e[type=painting]');
+      await ctx.rcon('tp Probe 0 -60 3');
+      await clearPaintingScene(ctx);
       await ctx.rcon('clear Probe');
     },
   }),
@@ -232,10 +237,10 @@ return 'clicked'`;
 
       await stageAimedWall(ctx);
 
-      await aimAt(ctx, 0, 12, [0, -60, 8], 'north');
+      await aimAt(ctx, 0, 12, [0, PAINTING_SCENE.playerY, PAINTING_SCENE.wallZ], 'north');
       await devPainting(ctx, 'sample:sunrise');
       await ctx.waitForChat(/dev painting: placed sample:sunrise/);
-      await aimAt(ctx, -20, 11, [2, -60, 8], 'north');
+      await aimAt(ctx, -20, 11, [2, PAINTING_SCENE.playerY, PAINTING_SCENE.wallZ], 'north');
       await devPainting(ctx, 'sample:moonrise');
       await ctx.waitForChat(/dev painting: placed sample:moonrise/);
       await ctx.sleep(1_500); // the entity sync and atlas sprites settle
@@ -243,6 +248,8 @@ return 'clicked'`;
       await ctx.shot('paintings-render');
       await ctx.needsEyes(
         'the 2×1 sunrise art (warm rainbow gradient) hangs left of the 1×2 moonrise (night-blue panel, pale moon, star) on the stone wall — pack textures, not checkerboard or vanilla placeholders');
+      await ctx.rcon('tp Probe 0 -60 3');
+      await clearPaintingScene(ctx);
     },
   }),
 ];
