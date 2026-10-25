@@ -1,0 +1,22 @@
+{"t":0,"kind":"note","msg":"test start: furniture.evolution (auto)"}
+{"t":263,"kind":"rcon","req":{"command":"clear Probe"},"res":"Removed 1 item(s) from player Probe"}
+{"t":528,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":794,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"Killed Paper"}
+{"t":1059,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1726,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1991,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2256,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2522,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":8194,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":8459,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":8724,"kind":"rcon","req":{"command":"materione dev remove 1 -60 11 world"},"res":""}
+{"t":8986,"kind":"rcon","req":{"command":"setblock 1 -60 11 minecraft:air"},"res":"Could not set the block"}
+{"t":9251,"kind":"rcon","req":{"command":"materione dev place world:seedling 1 -60 7 world"},"res":""}
+{"t":9519,"kind":"rcon","req":{"command":"materione dev place world:seedling 1 -60 11 world"},"res":""}
+{"t":9785,"kind":"rcon","req":{"command":"materione dev inspect 1 -60 7 world"},"res":""}
+{"t":10049,"kind":"rcon","req":{"command":"materione dev inspect 1 -60 11 world"},"res":""}
+{"t":10314,"kind":"rcon","req":{"command":"data get entity f5ae9329-8f1a-42b3-b6b4-9f27e4376b1e BukkitValues.\"materione:furniture-id\""},"res":"Item Display has the following entity data: \"world:seedling\""}
+{"t":10577,"kind":"rcon","req":{"command":"data get entity 725e350e-04a2-427d-8db2-bbfc3e8f43f1 BukkitValues.\"materione:furniture-id\""},"res":"Item Display has the following entity data: \"world:seedling\""}
+{"t":10843,"kind":"rcon","req":{"command":"data get entity f5ae9329-8f1a-42b3-b6b4-9f27e4376b1e BukkitValues.\"materione:members\""},"res":"Item Display has the following entity data: \"960e7876-1156-4f8e-bbea-f035167d4b79\""}
+{"t":11107,"kind":"rcon","req":{"command":"tp Probe 1 -60 5"},"res":"Teleported Probe to 1.500000, -60.000000, 5.500000"}
+{"t":11373,"kind":"rcon","req":{"command":"give Probe minecraft:diamond 1"},"res":"Gave 1 [Diamond] to Probe"}
