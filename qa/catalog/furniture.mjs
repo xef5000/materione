@@ -69,10 +69,12 @@ const waitForClientAir = async (ctx, cells, timeoutMs = 15_000) => {
   do {
     states = String(await ctx.exec(
       `def positions = [${positions}]
-return positions.collect { pos ->
-  def state = mc.level.getBlockState(pos)
-  state.isAir() ? 'air' : state.toString()
-}.join('|')`,
+def states = []
+for (int i = 0; i < positions.size(); i++) {
+  def state = mc.level.getBlockState(positions.get(i))
+  states.add(state.isAir() ? 'air' : state.toString())
+}
+return states.join('|')`,
       15_000));
     if (states === expected) return;
     await ctx.sleep(250);
