@@ -205,7 +205,7 @@ return count.toString()`);
         'execute as Probe at @s run summon minecraft:villager ^ ^ ^2 '
         + '{NoAI:1b,AbsorptionAmount:40f}');
       await ctx.sleep(800); // entity tracker + crosshair pick settle
-      const aim = () => ctx.exec(`def hit = mc.player.pick(20.0D, 1.0F, false)
+      const aim = () => ctx.exec(`def hit = player.raycastHitResult(1.0F, mc.getCameraEntity())
 return hit.getType().toString() == 'ENTITY'
   ? hit.getEntity().getType().toString()
   : hit.getType().toString()`);
@@ -248,11 +248,12 @@ return hit.getType().toString() == 'ENTITY'
         .filter((line) => line.includes('blade-wear')).length;
 
       const hit = async () => {
-        // Fresh pick and attack in one client call: mc.hitResult is a
-        // render-frame cache. The direct attack packet avoids the #63
-        // keybind-decay lead, while the server PDC read below proves the
-        // damage event actually reached the durability listener.
-        const result = await ctx.exec(`def hit = mc.player.pick(20.0D, 1.0F, false)
+        // LocalPlayer.raycastHitResult is the fresh, entity-aware client ray
+        // (Entity.pick / mc.player.pick is block-only); attack that result in
+        // the same call instead of relying on mc.hitResult's render cache.
+        // Keep the direct attack packet for the #63 input-decay lead; the PDC
+        // read below proves the server damage event actually reached durability.
+        const result = await ctx.exec(`def hit = player.raycastHitResult(1.0F, mc.getCameraEntity())
 if (hit.getType().toString() != 'ENTITY'
     || hit.getEntity().getType().toString() != 'entity.minecraft.villager') {
   return hit.getType().toString()

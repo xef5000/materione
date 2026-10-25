@@ -181,6 +181,11 @@ already asserts.
   `mc.player.pick(20.0D, 1.0F, false)` — the `mc.hitResult` field is a
   render-frame cache and can report a stale MISS even when the crosshair
   genuinely holds the target (`getType()`/`getBlockPos()`/`getDirection()`).
+  That `Entity.pick` ray is block-only. For a fresh entity-aware crosshair
+  result, use `player.raycastHitResult(1.0F, mc.getCameraEntity())`; in 26.1.2
+  this is the public method called by the private `Minecraft.pick(float)`
+  refresh. It returns the `HitResult` without updating the cached `mc.hitResult`,
+  so verify and act on that same result in one Groovy call.
   `setDown(true)` on `keyAttack` does drive
   continuous mining; `mc.gameMode.useItemOn(player, hand, hitResult)` is the
   direct-packet alternative (26.1.2 signature takes a `BlockHitResult`).
