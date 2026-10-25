@@ -14,7 +14,7 @@ import java.util.Optional;
 
 /**
  * Registry implementation. Freezing/reopening is owned by
- * {@link RegistryService} (window semantics span all registries at once).
+ * {@link RegistryService}, including bounded writes for managed extensions.
  * Registration order is preserved (stable for docs and the editor).
  */
 final class RegistryImpl<T> implements Registry<T> {
@@ -23,6 +23,7 @@ final class RegistryImpl<T> implements Registry<T> {
     private final Class<T> entryType;
     private final Map<NamespacedId, RegistryEntry<T>> entries = new LinkedHashMap<>();
     private volatile boolean frozen;
+    private long nextGeneration = 1;
 
     RegistryImpl(RegistryKey key, Class<T> entryType) {
         this.key = key;
@@ -49,11 +50,18 @@ final class RegistryImpl<T> implements Registry<T> {
 
     @Override
     public void register(NamespacedId id, T entry, SelfDescription description, String registeredBy) {
-        if (frozen) {
-            throw new RegistryException(
-                    "registry '" + key + "' is frozen: registration window closed"
-                            + " (register during bootstrap or a reload's re-check)");
+        synchronized (entries) {
+            if (frozen) {
+                throw new RegistryException(
+                        "registry '" + key + "' is frozen: registration window closed"
+                                + " (register during bootstrap or a reload's re-check)");
+            }
+            registerBounded(id, entry, description, registeredBy);
         }
+    }
+
+    /** One service-authorized write, without reopening this or any other registry. */
+    void registerBounded(NamespacedId id, T entry, SelfDescription description, String registeredBy) {
         if (id.isReservedNamespace()) {
             throw new RegistryException(
                     "namespace 'minecraft' is reserved and cannot be registered in '" + key + "'");
@@ -65,7 +73,18 @@ final class RegistryImpl<T> implements Registry<T> {
                         "duplicate '" + id + "' in registry '" + key + "'"
                                 + " (already registered by " + existing.registeredBy() + ")");
             }
-            entries.put(id, new RegistryEntry<>(id, entry, description, registeredBy));
+            entries.put(id, new RegistryEntry<>(id, entry, description, registeredBy, nextGeneration++));
+        }
+    }
+
+    boolean unregisterBounded(NamespacedId id, T expected) {
+        synchronized (entries) {
+            RegistryEntry<T> existing = entries.get(id);
+            if (existing == null || existing.entry() != expected) {
+                return false;
+            }
+            entries.remove(id);
+            return true;
         }
     }
 

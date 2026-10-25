@@ -88,6 +88,14 @@ through the same mechanic registry addons use**. A mechanic needing packet-level
 work the ECA engine can't express may be a **native mechanic** (Java implementation) — same
 registry, same self-description; the ECA-vs-native distinction is invisible to authors.
 
+**Executable extension contract:** `Mechanic` is a factory with pure per-item
+parsing and one managed runtime per registration, not a metadata marker.
+`MechanicInstance` carries typed parameters, shared ECA contributions and ordered
+item-building hooks. The host owns native listeners and cleanup; lookups are
+namespaced, snapshot-based and registration-scoped. All five existing built-ins
+use the same public `MaterioneAPI.mechanics()` path as addons.
+[`mechanics.md`](mechanics.md) specifies the lifecycle and extension example.
+
 ---
 
 ## 3. Items

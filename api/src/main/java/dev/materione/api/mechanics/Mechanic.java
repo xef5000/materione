@@ -8,9 +8,9 @@ import dev.materione.api.registry.SelfDescription;
  * through the identical path; entries are self-described so the web editor
  * renders parameter forms from the description alone.
  *
- * <p>The interface carries identity only: execution is wired natively per
- * mechanic (listeners resolving the live registries at event entry). A
- * future shared execution SPI grows here without breaking implementors.
+ * <p>A mechanic is a factory, not an item binding. Parsing runs off-thread
+ * and must be pure; listeners and owned resources belong to its runtime.
+ * Built-ins implement this same contract as external plugins.
  */
 public interface Mechanic {
 
@@ -19,4 +19,25 @@ public interface Mechanic {
 
     /** Editor/doc metadata: display name, summary, parameter schema. */
     SelfDescription describe();
+
+    /**
+     * Compiles one item's parameters into an immutable binding. Reject bad
+     * content with {@link IllegalArgumentException}; the pipeline diagnoses
+     * and skips that declaration without disabling its siblings.
+     *
+     * <p>The default keeps metadata-only implementations binary-compatible,
+     * but explicitly rejects their use instead of pretending they execute.
+     */
+    default MechanicInstance parse(MechanicConfiguration configuration) {
+        throw new UnsupportedOperationException("mechanic does not implement parsing");
+    }
+
+    /**
+     * Creates one runtime per registration, never one per item or reload.
+     * Do not mutate live content here. Register listeners through the returned
+     * runtime and track other resources through the context.
+     */
+    default MechanicRuntime createRuntime(MechanicContext context) {
+        return new MechanicRuntime() {};
+    }
 }

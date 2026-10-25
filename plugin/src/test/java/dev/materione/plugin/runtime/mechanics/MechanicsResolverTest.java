@@ -3,155 +3,206 @@ package dev.materione.plugin.runtime.mechanics;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.Mechanic;
+import dev.materione.api.mechanics.MechanicConfiguration;
+import dev.materione.api.mechanics.MechanicInstance;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.Registry;
+import dev.materione.api.registry.SelfDescription;
+import dev.materione.core.registry.RegistryService;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
-/**
- * Mechanic resolution: known names resolve with parameters, unknown names
- * and parameter violations are rejected through the sink (MTR-0027) and
- * never throw — fail-soft per definition (D6).
- */
 class MechanicsResolverTest {
-
-    private final MechanicsResolver resolver =
-            new MechanicsResolver(java.util.Optional.of(new FakeRegistry()));
+    private static final NamespacedId ITEM = NamespacedId.parse("sample:sword");
+    private final RegistryService registries = new RegistryService();
+    private final Registry<Mechanic> registry = registries.registry(MechanicsResolver.REGISTRY_KEY, Mechanic.class);
+    private final MechanicsResolver resolver = new MechanicsResolver(Optional.of(registry));
+    private final List<String> rejects = new ArrayList<>();
 
     @Test
-    void resolvesKnownMechanicsWithParams() {
-        var declarations = List.of(
-                map("soulbound", Map.of()),
-                map("durability", map("max", 500)),
-                map("food", map("nutrition", 6, "saturation", 8.0)),
-                map("backpack", map("rows", 3)),
-                map("commands", map("on_right_click", List.of("spawn"))));
-        var rejects = new ArrayList<String>();
-
-        List<ActiveMechanic> active = resolver.resolve(
-                NamespacedId.parse("sample:sword"), declarations, (name, reason) -> rejects.add(name));
+    void resolvesEveryBuiltinThroughItsOwnParser() {
+        NativeMechanics.all().forEach(mechanic -> register("materione:" + mechanic.name(), mechanic));
+        var active = resolve(List.of(
+                Map.of("soulbound", Map.of()),
+                Map.of("durability", Map.of("max", 500)),
+                Map.of("food", Map.of("nutrition", 6, "saturation", 8.0)),
+                Map.of("backpack", Map.of("rows", 3)),
+                Map.of("commands", Map.of("on_right_click", List.of("spawn")))));
 
         assertThat(rejects).isEmpty();
         assertThat(active).hasSize(5);
         assertThat(active.get(1).params()).containsEntry("max", 500);
-        assertThat(active.get(4).params()).containsEntry("on_right_click", List.of("spawn"));
+        assertThat(active.get(4).behaviorRules()).hasSize(1);
+        assertThat(active.get(2).itemModifiers()).hasSize(1);
     }
 
     @Test
-    void unknownMechanicIsRejectedNotFatal() {
-        var declarations = List.of(
-                map("soulbound", Map.of()),
-                map("thor_glove", Map.of()));
-        var rejects = new ArrayList<String>();
+    void namespacedAddonCompilesToTypedInstanceExactlyOnce() {
+        var parses = new AtomicInteger();
+        register("addon:charge", new Charge(parses));
+        var active = resolve(List.of(Map.of("addon:charge", Map.of("power", 7))));
+        var snapshot = new ItemMechanics(Map.of(ITEM, active));
 
-        List<ActiveMechanic> active = resolver.resolve(
-                NamespacedId.parse("sample:glove"), declarations, (name, reason) -> rejects.add(name));
+        assertThat(snapshot.onItem(ITEM, NamespacedId.parse("addon:charge"), Power.class))
+                .contains(new Power(7, "ready"));
+        assertThat(snapshot.onItem(ITEM, NamespacedId.parse("other:charge"), Power.class)).isEmpty();
+        assertThat(snapshot.onItem(ITEM, NamespacedId.parse("addon:charge"), Other.class)).isEmpty();
+        assertThat(parses).hasValue(1);
+        assertThat(rejects).isEmpty();
+    }
 
-        assertThat(rejects).containsExactly("thor_glove");
+    @Test
+    void shortNamesOnlyAliasTheMaterioneNamespace() {
+        register("addon:soulbound", new Charge(new AtomicInteger()));
+        var active = resolve(List.of(Map.of("soulbound", Map.of("power", 2)),
+                Map.of("addon:soulbound", Map.of("power", 3))));
+
         assertThat(active).hasSize(1);
+        assertThat(active.getFirst().id()).isEqualTo(NamespacedId.parse("addon:soulbound"));
+        assertThat(rejects).singleElement().asString().contains("materione:soulbound");
     }
 
     @Test
-    void parameterViolationsAreRejectedPerMechanic() {
-        var rejects = new ArrayList<String>();
-        var bad = new java.util.LinkedHashMap<String, Map<String, Object>>();
-        bad.put("durability", map("max", -3));
-        bad.put("backpack", map("rows", 9));
-        bad.put("food", map("nutrition", 99, "saturation", 1));
-        bad.put("commands", map("on_right_click", "not-a-list"));
+    void duplicateFullIdentityIsRejectedIncludingItsShortAlias() {
+        register("materione:charge", new Charge(new AtomicInteger()));
+        var active = resolve(List.of(Map.of("charge", Map.of("power", 1)),
+                Map.of("materione:charge", Map.of("power", 2))));
 
-        for (Map.Entry<String, Map<String, Object>> entry : bad.entrySet()) {
-            resolver.resolve(
-                    NamespacedId.parse("sample:x"),
-                    List.of(map(entry.getKey(), entry.getValue())),
-                    (name, reason) -> rejects.add(name + ": " + reason));
-        }
+        assertThat(active).hasSize(1);
+        assertThat(rejects).singleElement().asString().contains("duplicate");
+    }
+
+    @Test
+    void schemaEnforcesRequiredTypesAndSuppliesDefaultsBeforeAddonParsing() {
+        register("addon:charge", new Charge(new AtomicInteger()));
+        var active = resolve(List.of(
+                Map.of("addon:charge", Map.of()),
+                Map.of("addon:charge", Map.of("power", 2.5)),
+                Map.of("addon:charge", Map.of("power", 4, "label", false)),
+                Map.of("addon:charge", Map.of("power", 8))));
+
+        assertThat(rejects).hasSize(3);
+        assertThat(active).singleElement().extracting(ActiveMechanic::instance)
+                .isEqualTo(new Power(8, "ready"));
+    }
+
+    @Test
+    void malformedContentIsReportedWithoutLosingValidSiblings() {
+        register("materione:charge", new Charge(new AtomicInteger()));
+        var active = resolve(List.of("not-a-map", Map.of(1, Map.of()),
+                Map.of("BAD:name", Map.of()), Map.of("charge", false),
+                Map.of("charge", Map.of("power", 3))));
+
+        assertThat(active).hasSize(1);
         assertThat(rejects).hasSize(4);
-        assertThat(rejects.get(0)).startsWith("durability: ");
-        assertThat(rejects.get(1)).startsWith("backpack: ");
-        assertThat(rejects.get(2)).startsWith("food: ");
-        assertThat(rejects.get(3)).startsWith("commands: ");
+        resolve(Map.of("charge", Map.of("power", 3)));
+        assertThat(rejects).last().asString().contains("list");
     }
 
     @Test
-    void missingRegistryResolvesToNothing() {
-        var empty = new MechanicsResolver(java.util.Optional.empty());
-        var rejects = new ArrayList<String>();
-        List<ActiveMechanic> active = empty.resolve(
-                NamespacedId.parse("sample:x"),
-                List.of(map("soulbound", Map.of())),
-                (name, reason) -> rejects.add(name));
+    void missingRegistryReportsEveryDeclaration() {
+        var empty = new MechanicsResolver(Optional.empty());
+        assertThat(empty.resolve(ITEM, List.of(Map.of("soulbound", Map.of())),
+                (name, reason) -> rejects.add(reason))).isEmpty();
+        assertThat(rejects).singleElement().asString().contains("unknown mechanic");
+    }
+
+    @Test
+    void extensionFailureAndMetadataOnlyImplementationsAreNotSuccessShaped() {
+        register("addon:metadata", metadataOnly());
+        register("addon:broken", new Charge(new AtomicInteger()) {
+            @Override
+            public MechanicInstance parse(MechanicConfiguration configuration) {
+                throw new IllegalStateException("broken parser");
+            }
+        });
+        register("addon:good", new Charge(new AtomicInteger()));
+        var active = resolve(List.of(Map.of("addon:metadata", Map.of()),
+                Map.of("addon:broken", Map.of("power", 1)),
+                Map.of("addon:good", Map.of("power", 2))));
+
+        assertThat(active).hasSize(1);
+        assertThat(rejects).hasSize(2);
+        assertThat(rejects.getFirst()).contains("does not implement parsing");
+        assertThat(rejects.getLast()).contains("broken parser");
+    }
+
+    @Test
+    void nestedSchemaIsValidatedAndDefaultsAreVisibleToTheParser() {
+        register("addon:nested", new Charge(new AtomicInteger()) {
+            @Override
+            public SelfDescription describe() {
+                return new SelfDescription("Nested", "", List.of(new ParameterSchema(
+                        "effects", ParameterType.LIST, true, null, "", null,
+                        List.of(ParameterSchema.of("type", ParameterType.STRING, true)))), "1");
+            }
+
+            @Override
+            public MechanicInstance parse(MechanicConfiguration configuration) {
+                return new Power(configuration.sections("effects").size(), "nested");
+            }
+        });
+        var active = resolve(List.of(Map.of("addon:nested",
+                Map.of("effects", List.of(Map.of("amplifier", 1))))));
         assertThat(active).isEmpty();
-        assertThat(rejects).isEmpty(); // feature inactive, not an authoring error
+        assertThat(rejects).singleElement().asString().contains("type");
     }
 
-    @Test
-    void validateCoversEveryNative() {
-        assertThat(MechanicsResolver.validate("soulbound", Map.of())).isNull();
-        assertThat(MechanicsResolver.validate(
-                "food", map("nutrition", 5, "saturation", 2.5))).isNull();
-        assertThat(MechanicsResolver.validate(
-                "food", map("nutrition", 5, "saturation", 2.5,
-                        "effects", List.of(map("type", "SPEED"))))).isNull();
-        assertThat(MechanicsResolver.validate(
-                "food", map("nutrition", 5, "saturation", 2.5,
-                        "effects", List.of(map("amplifier", 1))))).isNotNull();
-        assertThat(MechanicsResolver.validate("unknown_addon", Map.of())).isNull();
+    private List<ActiveMechanic> resolve(Object declarations) {
+        return resolver.resolve(ITEM, declarations, (name, reason) -> rejects.add(name + ": " + reason));
     }
 
-    // --- helpers -------------------------------------------------------------
-
-    private static Map<String, Object> map(Object... pairs) {
-        var out = new LinkedHashMap<String, Object>();
-        for (int i = 0; i < pairs.length; i += 2) {
-            out.put((String) pairs[i], pairs[i + 1]);
-        }
-        return out;
+    private void register(String id, Mechanic mechanic) {
+        registry.register(NamespacedId.parse(id), mechanic, mechanic.describe(), "test");
     }
 
-    /** Minimal registry stand-in exposing the five built-in mechanic names. */
-    private static final class FakeRegistry
-            implements dev.materione.api.registry.Registry<dev.materione.api.mechanics.Mechanic> {
-        @Override
-        public dev.materione.api.registry.RegistryKey key() {
-            return MechanicsResolver.REGISTRY_KEY;
+    private static Mechanic metadataOnly() {
+        return new Mechanic() {
+            @Override
+            public String name() {
+                return "metadata";
+            }
+
+            @Override
+            public SelfDescription describe() {
+                return SelfDescription.of("Metadata", "");
+            }
+        };
+    }
+
+    private record Power(int power, String label) implements MechanicInstance {}
+    private record Other() implements MechanicInstance {}
+
+    private static class Charge implements Mechanic {
+        private final AtomicInteger parses;
+
+        Charge(AtomicInteger parses) {
+            this.parses = parses;
         }
 
         @Override
-        public Class<dev.materione.api.mechanics.Mechanic> entryType() {
-            return dev.materione.api.mechanics.Mechanic.class;
+        public String name() {
+            return "charge";
         }
 
         @Override
-        public void register(
-                NamespacedId id, dev.materione.api.mechanics.Mechanic entry,
-                dev.materione.api.registry.SelfDescription description, String registeredBy) {}
-
-        @Override
-        public java.util.Optional<dev.materione.api.registry.RegistryEntry<dev.materione.api.mechanics.Mechanic>> get(
-                NamespacedId id) {
-            return java.util.Optional.empty();
+        public SelfDescription describe() {
+            return new SelfDescription("Charge", "", List.of(
+                    ParameterSchema.of("power", ParameterType.INTEGER, true),
+                    new ParameterSchema("label", ParameterType.STRING, false, "ready", "", null, null)), "1");
         }
 
         @Override
-        public java.util.Collection<dev.materione.api.registry.RegistryEntry<dev.materione.api.mechanics.Mechanic>>
-                entries() {
-            return NativeMechanics.all().stream()
-                    .map(mechanic -> new dev.materione.api.registry.RegistryEntry<>(
-                            NamespacedId.of("materione", mechanic.name()), mechanic,
-                            mechanic.describe(), "materione"))
-                    .toList();
-        }
-
-        @Override
-        public boolean isFrozen() {
-            return true;
-        }
-
-        @Override
-        public int size() {
-            return NativeMechanics.all().size();
+        public MechanicInstance parse(MechanicConfiguration configuration) {
+            parses.incrementAndGet();
+            return new Power(configuration.integer("power", -1, 0, 100),
+                    configuration.text("label", "ready"));
         }
     }
 }

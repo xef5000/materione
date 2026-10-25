@@ -123,6 +123,13 @@ Rules (enforced in review + by an ArchUnit-style ban test):
 - **Inter-addon dependencies** are manifest-declared (`depends: [x, y]`), resolved
   topologically; a cycle quarantines all members with one diagnostic each.
 - **Built-ins use the identical registration path** as addons — no internal route (D5).
+- **Mechanic registration windows are bounded public operations.** The executable
+  `MaterioneAPI.mechanics().register(owner, id, factory)` opens a window for one
+  mechanic entry, including late registrations, without reopening unrelated
+  registries or applying content. Its owner-scoped runtime closes on unregister
+  or plugin disable; content sees new bindings on the next normal reload.
+  This is the implemented Bukkit-plugin extension path, distinct from the
+  child-first addon loader design above. See [`mechanics.md`](mechanics.md).
 - **Self-description.** Every registry entry carries metadata the web editor renders forms
   from: display name, description, parameter schema (id/type/range/default/required),
   since-version. One source of truth for editor forms, docs, and tab completion. Hand-written

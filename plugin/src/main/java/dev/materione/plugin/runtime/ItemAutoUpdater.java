@@ -113,18 +113,9 @@ public final class ItemAutoUpdater implements Listener {
             if (item == null) {
                 continue; // unknown id: vanilla render, flagged for admin via doctor
             }
-            MaterioneStacks.refresh(stack, toSpec(item));
+            MaterioneStacks.refresh(stack, MaterioneStacks.specOf(item));
             inventory.setItem(slot, stack);
         }
     }
 
-    private static MaterioneStacks.StackSpec toSpec(RuntimeItem item) {
-        return new MaterioneStacks.StackSpec(
-                item.id(), item.material(), item.modelId(), item.displayName(), item.lore(),
-                item.food() == null ? null
-                        : new MaterioneStacks.StackFood(
-                                item.food().nutrition(), item.food().saturation(),
-                                item.food().canAlwaysEat()),
-                item.jukeboxSong());
-    }
 }

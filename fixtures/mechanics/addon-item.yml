@@ -1,0 +1,10 @@
+wand:
+  material: BLAZE_ROD
+  display_name: Addon Wand
+  mechanics:
+    - example:charge:
+        power: 4
+  behavior:
+    - on: click:left
+      do:
+        - message: authored-rule

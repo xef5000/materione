@@ -1,27 +1,28 @@
 package dev.materione.plugin.runtime.mechanics;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.ItemModifier;
+import dev.materione.api.mechanics.Mechanic;
+import dev.materione.api.mechanics.MechanicConfiguration;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryKey;
-import dev.materione.api.mechanics.Mechanic;
+import dev.materione.api.registry.RegistryKeys;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.SelfDescription;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 
-/**
- * Resolves an item's raw {@code mechanics:} maps against the mechanics
- * registry at apply time: unknown names and parameter-shape violations are
- * reported through {@code reject} (diagnostic MTR-0027) and skipped —
- * fail-soft, the item keeps its remaining mechanics (D6). Pure over its
- * inputs; the plugin service supplies the diagnostics sink.
- */
+/** Pure per-item compilation; no built-in names or gameplay dispatch live here. */
 public final class MechanicsResolver {
-
-    /** The registry key every mechanic registers under (public addon seam). */
-    public static final RegistryKey REGISTRY_KEY = dev.materione.api.registry.RegistryKeys.MECHANICS;
+    public static final RegistryKey REGISTRY_KEY = RegistryKeys.MECHANICS;
 
     private final Optional<Registry<Mechanic>> registry;
 
@@ -29,101 +30,159 @@ public final class MechanicsResolver {
         this.registry = registry;
     }
 
-    /**
-     * Resolves one item's declarations. {@code reject} receives
-     * {@code (mechanicName, reason)} per skipped declaration.
-     */
     public List<ActiveMechanic> resolve(
             NamespacedId itemId,
-            List<Map<String, Object>> declarations,
+            Object declarations,
             BiConsumer<String, String> reject) {
         var active = new ArrayList<ActiveMechanic>();
-        if (declarations.isEmpty()) {
-            return active;
+        var seen = new HashSet<NamespacedId>();
+        if (declarations == null) {
+            return List.of();
         }
-        if (registry.isEmpty()) {
-            return active; // no mechanic surface registered — nothing to resolve against
+        if (!(declarations instanceof List<?> list)) {
+            reject.accept("mechanics", "mechanics must be a list of mappings");
+            return List.of();
         }
-        for (Map<String, Object> declaration : declarations) {
-            for (Map.Entry<String, Object> entry : declaration.entrySet()) {
-                String name = entry.getKey();
-                if (!known(name)) {
-                    reject.accept(name, "unknown mechanic");
+        for (Object raw : list) {
+            if (!(raw instanceof Map<?, ?> declaration)) {
+                reject.accept("mechanics", "each mechanic declaration must be a mapping");
+                continue;
+            }
+            for (var entry : declaration.entrySet()) {
+                if (!(entry.getKey() instanceof String name)) {
+                    reject.accept("mechanics", "mechanic names must be strings");
                     continue;
                 }
-                @SuppressWarnings("unchecked")
-                var params = entry.getValue() instanceof Map<?, ?> mapping
-                        ? (Map<String, Object>) mapping : Map.<String, Object>of();
-                String problem = validate(name, params);
-                if (problem != null) {
-                    reject.accept(name, problem);
-                    continue;
+                try {
+                    NamespacedId id = name.contains(":")
+                            ? NamespacedId.parse(name) : NamespacedId.of("materione", name);
+                    var registered = registry.flatMap(entries -> entries.get(id))
+                            .orElseThrow(() -> new IllegalArgumentException("unknown mechanic '" + id + "'"));
+                    if (seen.contains(id)) {
+                        throw new IllegalArgumentException("duplicate mechanic declaration '" + id + "'");
+                    }
+                    Map<String, Object> params = validateSchema(
+                            parameters(entry.getValue()), registered.description());
+                    var configuration = new MechanicConfiguration(itemId, params);
+                    Mechanic factory = registered.entry();
+                    BooleanSupplier available = () -> registry.flatMap(entries -> entries.get(id))
+                            .map(current -> current.entry() == factory).orElse(false);
+                    var instance = Objects.requireNonNull(factory.parse(configuration), "mechanic parser returned null");
+                    var rules = new ArrayList<Map<String, Object>>();
+                    for (Map<String, Object> rule : instance.behaviorRules()) {
+                        rules.add(new MechanicConfiguration(itemId, rule).parameters());
+                    }
+                    var modifiers = new ArrayList<ItemModifier>();
+                    for (ItemModifier modifier : instance.itemModifiers()) {
+                        Objects.requireNonNull(modifier, "item modifier");
+                        AtomicLong lastFailure = new AtomicLong();
+                        modifiers.add(stack -> {
+                            // Old stack specs cannot execute a disabled/replaced extension.
+                            if (!available.getAsBoolean()) {
+                                return;
+                            }
+                            try {
+                                var candidate = stack.clone();
+                                modifier.apply(candidate);
+                                if (candidate.getType() != stack.getType()
+                                        || candidate.getAmount() != stack.getAmount()) {
+                                    throw new IllegalArgumentException("item modifiers must preserve material and amount");
+                                }
+                                var identity = dev.materione.platform.items.MaterioneStacks.identityOf(stack);
+                                if (!identity.equals(dev.materione.platform.items.MaterioneStacks.identityOf(candidate))) {
+                                    throw new IllegalArgumentException("item modifiers must preserve Materione identity");
+                                }
+                                stack.setItemMeta(candidate.getItemMeta());
+                            } catch (RuntimeException failure) {
+                                long now = System.nanoTime();
+                                long previous = lastFailure.get();
+                                if ((previous == 0 || now - previous >= 1_000_000_000L)
+                                        && lastFailure.compareAndSet(previous, now)) {
+                                    reject.accept(name, "item modifier failed: " + failure);
+                                }
+                            }
+                        });
+                    }
+                    active.add(new ActiveMechanic(id, configuration.parameters(), instance,
+                            rules, modifiers, available, registered.generation()));
+                    seen.add(id);
+                } catch (RuntimeException failure) {
+                    // Extension parsing/contribution construction is a containment boundary.
+                    reject.accept(name, failure.getMessage() == null ? failure.toString() : failure.getMessage());
                 }
-                active.add(new ActiveMechanic(name, params));
             }
         }
         return List.copyOf(active);
     }
 
-    private boolean known(String name) {
-        // matched on the id's value part: built-ins register as materione:<name>,
-        // addons may re-register the same mechanic name under their namespace
-        return registry.orElseThrow().entries().stream()
-                .anyMatch(entry -> entry.id().value().equals(name));
+    private static Map<String, Object> parameters(Object value) {
+        if (value == null) {
+            return Map.of();
+        }
+        if (!(value instanceof Map<?, ?> mapping)) {
+            throw new IllegalArgumentException("parameters must be a mapping");
+        }
+        var params = new LinkedHashMap<String, Object>();
+        for (var entry : mapping.entrySet()) {
+            if (!(entry.getKey() instanceof String key)) {
+                throw new IllegalArgumentException("parameter names must be strings");
+            }
+            params.put(key, entry.getValue());
+        }
+        return params;
     }
 
-    /**
-     * Parameter validation per native mechanic — the same checks the
-     * runtime listeners rely on. Returns null when the parameters are
-     * usable.
-     */
-    public static String validate(String name, Map<String, Object> params) {
-        return switch (name) {
-            case "food" -> {
-                int nutrition = ActiveMechanic.intParam(params, "nutrition", -1);
-                if (nutrition < 0 || nutrition > 20) {
-                    yield "nutrition must be 0..20";
+    private static Map<String, Object> validateSchema(Map<String, Object> raw, SelfDescription schema) {
+        var params = new LinkedHashMap<>(raw);
+        for (ParameterSchema field : schema.parameters()) {
+            if (!params.containsKey(field.id())) {
+                if (field.defaultValue() != null) {
+                    params.put(field.id(), defaultValue(field));
+                } else if (field.required()) {
+                    throw new IllegalArgumentException("missing required parameter '" + field.id() + "'");
+                } else {
+                    continue;
                 }
-                double saturation = ActiveMechanic.doubleParam(params, "saturation", -1);
-                if (saturation < 0 || saturation > 40) {
-                    yield "saturation must be 0..40";
+            }
+            Object value = params.get(field.id());
+            boolean valid = switch (field.type()) {
+                case STRING, REFERENCE -> value instanceof String;
+                case ENUM -> value instanceof String text && field.allowedValues().contains(text);
+                case BOOLEAN -> value instanceof Boolean;
+                case INTEGER -> value instanceof Number number && Double.isFinite(number.doubleValue())
+                        && number.doubleValue() == Math.rint(number.doubleValue());
+                case DECIMAL -> value instanceof Number number && Double.isFinite(number.doubleValue());
+                case LIST -> value instanceof List<?>;
+                case RAW -> true;
+            };
+            if (!valid) {
+                throw new IllegalArgumentException(field.id() + " must match schema type " + field.type());
+            }
+            if (value instanceof List<?> children && !field.nested().isEmpty()) {
+                var validated = new ArrayList<Map<String, Object>>();
+                for (Object child : children) {
+                    validated.add(validateSchema(parameters(child),
+                            new SelfDescription(field.id(), "", field.nested(), "")));
                 }
-                yield effectsValid(params);
+                params.put(field.id(), validated);
             }
-            case "durability" -> ActiveMechanic.intParam(params, "max", -1) > 0
-                    ? null : "max must be a positive integer";
-            case "backpack" -> {
-                int rows = ActiveMechanic.intParam(params, "rows", -1);
-                yield rows >= 1 && rows <= 6 ? null : "rows must be 1..6";
+        }
+        return params;
+    }
+
+    private static Object defaultValue(ParameterSchema field) {
+        String text = field.defaultValue();
+        return switch (field.type()) {
+            case INTEGER -> Long.valueOf(text);
+            case DECIMAL -> Double.valueOf(text);
+            case BOOLEAN -> {
+                if (!"true".equals(text) && !"false".equals(text)) {
+                    throw new IllegalArgumentException("invalid boolean schema default for " + field.id());
+                }
+                yield Boolean.valueOf(text);
             }
-            case "commands" -> commandsValid(params);
-            case "soulbound" -> null; // no parameters
-            default -> null; // addon mechanic: shape is its own business
+            case STRING, ENUM, REFERENCE, RAW -> text;
+            case LIST -> throw new IllegalArgumentException("list schema defaults are not supported: " + field.id());
         };
-    }
-
-    private static String effectsValid(Map<String, Object> params) {
-        Object value = params.get("effects");
-        if (!(value instanceof List<?> list)) {
-            return null;
-        }
-        for (Object entry : list) {
-            if (!(entry instanceof Map<?, ?> effect)
-                    || !(effect.get("type") instanceof String type) || type.isBlank()) {
-                return "each effect needs {type, amplifier?, duration_ticks?}";
-            }
-        }
-        return null;
-    }
-
-    private static String commandsValid(Map<String, Object> params) {
-        for (String key : List.of("on_right_click", "on_left_click")) {
-            Object value = params.get(key);
-            if (value != null && !(value instanceof List<?> list
-                    && list.stream().allMatch(String.class::isInstance))) {
-                return key + " must be a list of command strings";
-            }
-        }
-        return null;
     }
 }

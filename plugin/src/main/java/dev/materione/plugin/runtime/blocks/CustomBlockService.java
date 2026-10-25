@@ -460,9 +460,8 @@ public final class CustomBlockService implements Listener {
                     Optional<RuntimeItem> item = runtime.registries().item(drop);
                     if (item.isPresent()) {
                         RuntimeItem spec = item.get();
-                        location.getWorld().dropItemNaturally(location, MaterioneStacks.build(
-                                new MaterioneStacks.StackSpec(spec.id(), spec.material(), spec.modelId(),
-                                        spec.displayName(), spec.lore())));
+                        location.getWorld().dropItemNaturally(location,
+                                MaterioneStacks.build(MaterioneStacks.specOf(spec)));
                     }
                 }
             } catch (RuntimeException e) {
@@ -909,8 +908,7 @@ public final class CustomBlockService implements Listener {
             return;
         }
         RuntimeItem spec = item.get();
-        ItemStack stack = MaterioneStacks.build(new MaterioneStacks.StackSpec(
-                spec.id(), spec.material(), spec.modelId(), spec.displayName(), spec.lore()));
+        ItemStack stack = MaterioneStacks.build(MaterioneStacks.specOf(spec));
         int slot = event.getTargetSlot();
         scheduling.executeEntity(plugin, player, () -> player.getInventory().setItem(slot, stack));
     }

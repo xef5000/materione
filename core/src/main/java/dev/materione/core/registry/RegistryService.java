@@ -1,8 +1,10 @@
 package dev.materione.core.registry;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryKey;
 import dev.materione.api.registry.RegistryView;
+import dev.materione.api.registry.SelfDescription;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -65,6 +67,29 @@ public final class RegistryService implements RegistryView {
         registries.values().forEach(RegistryImpl::reopen);
     }
 
+    /**
+     * Authorizes exactly one managed entry registration. Normal registration
+     * windows, including all unrelated registries' frozen state, are unchanged.
+     */
+    public synchronized <T> void registerBounded(
+            RegistryKey key, Class<T> entryType, NamespacedId id, T entry,
+            SelfDescription description, String registeredBy) {
+        registry(key, entryType);
+        RegistryImpl<T> registry = castImpl(registries.get(key));
+        registry.registerBounded(id, entry, description, registeredBy);
+    }
+
+    /** Removes only the same managed entry, never a later registration of its id. */
+    public synchronized <T> boolean unregisterBounded(
+            RegistryKey key, Class<T> entryType, NamespacedId id, T expected) {
+        RegistryImpl<?> found = registries.get(key);
+        if (found == null || found.entryType() != entryType) {
+            return false;
+        }
+        RegistryImpl<T> registry = castImpl(found);
+        return registry.unregisterBounded(id, expected);
+    }
+
     public synchronized int registryCount() {
         return registries.size();
     }
@@ -87,5 +112,10 @@ public final class RegistryService implements RegistryView {
     @SuppressWarnings("unchecked")
     private static <T> Registry<T> cast(RegistryImpl<?> registry) {
         return (Registry<T>) registry;
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <T> RegistryImpl<T> castImpl(RegistryImpl<?> registry) {
+        return (RegistryImpl<T>) registry;
     }
 }

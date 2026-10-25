@@ -197,6 +197,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (delivery != null) {
                 delivery.stop();
             }
+            if (mechanics != null) {
+                mechanics.close();
+            }
             if (placements != null) {
                 placements.close();
             }
@@ -259,7 +262,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // native mechanics through the identical registry path (D5), before
         // content load — item definitions reference them by name
         mechanics = new dev.materione.plugin.runtime.mechanics.MechanicsService(
-                this, diagnostics, scheduling, pipeline.runtime());
+                this, diagnostics, scheduling, pipeline.runtime(), registries);
         mechanics.registerNatives(registries);
     }
 
@@ -398,7 +401,7 @@ public final class MaterionePlugin extends JavaPlugin {
         api = new MaterioneApiImpl(
                 MaterioneVersion.VERSION, registries, diagnostics,
                 this::descriptorOrNull, scheduling,
-                authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi);
+                authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi, mechanics);
         // the public surface any addon can look up (api.md §4.1)
         getServer().getServicesManager().register(
                 dev.materione.api.MaterioneAPI.class, api, this,
@@ -462,9 +465,8 @@ public final class MaterionePlugin extends JavaPlugin {
         furniture = new dev.materione.plugin.runtime.furniture.FurnitureService(
                 this, diagnostics, scheduling, pipeline.runtime(), behavior);
         getServer().getPluginManager().registerEvents(furniture, this);
-        // mechanic listeners are static wiring: registered once, resolving
-        // the live shadow at event entry (no register/unregister churn)
-        getServer().getPluginManager().registerEvents(mechanics, this);
+        // Preserve HIGH-priority ordering: the ECA bridge precedes native mechanics.
+        mechanics.start();
         // text pipeline (M4 runtime-systems §6): glyph tags in item text,
         // chat, signs, books and anvil renames; the supplier reads the live
         // shadow, so registry swaps apply without listener churn

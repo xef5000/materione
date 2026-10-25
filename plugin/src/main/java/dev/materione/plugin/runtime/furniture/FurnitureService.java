@@ -507,9 +507,7 @@ public final class FurnitureService implements Listener {
                             runtime.registries().item(itemId);
                     item.ifPresent(value -> root.getWorld().dropItemNaturally(center,
                             dev.materione.platform.items.MaterioneStacks.build(
-                                    new dev.materione.platform.items.MaterioneStacks.StackSpec(
-                                            value.id(), value.material(), value.modelId(),
-                                            value.displayName(), value.lore()))));
+                                    dev.materione.platform.items.MaterioneStacks.specOf(value))));
                 });
             }
         }
