@@ -569,6 +569,11 @@ export default [
 
       // --- teardown: the vanilla block (fail-soft remove), staging, sweep ----
       await cleanCell(ctx, vanilla);
+      // A vanilla control block has no custom record for `dev remove` to
+      // clear. Remove it explicitly so later in-game scenes start unobstructed.
+      await ctx.rcon(`setblock ${vanilla.join(' ')} minecraft:air`);
+      ctx.expect(await ctx.rcon(`execute if block ${vanilla.join(' ')} minecraft:air`))
+        .toBe('Test passed');
       for (const cell of [stoneCell, padA, padB]) {
         await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
       }
