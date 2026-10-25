@@ -1,0 +1,27 @@
+{"t":0,"kind":"note","msg":"test start: furniture.light-toggle (auto)"}
+{"t":257,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":521,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":787,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1051,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1721,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1986,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2252,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2517,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":13196,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":13461,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":13727,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":13994,"kind":"rcon","req":{"command":"materione dev remove 1 -59 7 world"},"res":""}
+{"t":14258,"kind":"rcon","req":{"command":"setblock 1 -59 7 minecraft:air"},"res":"Could not set the block"}
+{"t":14523,"kind":"rcon","req":{"command":"materione dev remove 2 -60 7 world"},"res":""}
+{"t":14788,"kind":"rcon","req":{"command":"setblock 2 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":15048,"kind":"exec","req":{"code":"return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(1, -59, 7))","timeoutMs":15000},"res":0}
+{"t":15147,"kind":"exec","req":{"code":"return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(2, -60, 7))","timeoutMs":15000},"res":0}
+{"t":15408,"kind":"rcon","req":{"command":"materione dev place world:lamp 1 -60 7 world"},"res":""}
+{"t":15672,"kind":"rcon","req":{"command":"execute if block 1 -59 7 minecraft:light[level=8]"},"res":"Test passed"}
+{"t":15936,"kind":"rcon","req":{"command":"execute if block 1 -59 7 minecraft:light[level=7]"},"res":"Test failed"}
+{"t":16202,"kind":"rcon","req":{"command":"execute if block 2 -60 7 minecraft:light[level=7]"},"res":"Test passed"}
+{"t":16464,"kind":"rcon","req":{"command":"execute if block 2 -60 7 minecraft:light[level=8]"},"res":"Test failed"}
+{"t":18054,"kind":"exec","req":{"code":"return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(1, -59, 7))","timeoutMs":15000},"res":8}
+{"t":18154,"kind":"exec","req":{"code":"return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(2, -60, 7))","timeoutMs":15000},"res":7}
+{"t":18254,"kind":"exec","req":{"code":"return mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(2, -59, 7))","timeoutMs":15000},"res":7}
+{"t":18519,"kind":"rcon","req":{"command":"tp Probe 1 -60 5"},"res":"Teleported Probe to 1.500000, -60.000000, 5.500000"}
