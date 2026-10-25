@@ -761,17 +761,15 @@ public final class PackCompiler {
         var entries = overlayEntries;
         for (TextEffectShaders.Rung rung : TextEffectShaders.RUNGS) {
             var overlay = team.unnamed.creative.overlay.Overlay.overlay(rung.overlayDir());
-            for (TextEffectShaders.ShaderTemplate shader : rung.shaders()) {
-                overlay.unknownFile(shader.includePath(),
-                        team.unnamed.creative.base.Writable.stringUtf8(
-                                TextEffectShaders.include(emitter.textEffects, shader.bakeFormat())));
-                String core = "assets/minecraft/shaders/core/" + shader.shaderName();
-                overlay.unknownFile(core + ".vsh", team.unnamed.creative.base.Writable.stringUtf8(
-                        TextEffectShaders.template(shader.variantDir(), shader.shaderName() + ".vsh")));
-                if (shader.shipJson()) {
-                    overlay.unknownFile(core + ".json", team.unnamed.creative.base.Writable.stringUtf8(
-                            TextEffectShaders.template(shader.variantDir(), shader.shaderName() + ".json")));
-                }
+            overlay.unknownFile(rung.includePath(),
+                    team.unnamed.creative.base.Writable.stringUtf8(
+                            TextEffectShaders.include(emitter.textEffects, rung.bakeFormat())));
+            String core = "assets/minecraft/shaders/core/" + rung.shaderName();
+            overlay.unknownFile(core + ".vsh", team.unnamed.creative.base.Writable.stringUtf8(
+                    TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".vsh")));
+            if (rung.shipJson()) {
+                overlay.unknownFile(core + ".json", team.unnamed.creative.base.Writable.stringUtf8(
+                        TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".json")));
             }
             pack.overlay(overlay);
             entries.add(team.unnamed.creative.metadata.overlays.OverlayEntry.of(

@@ -569,6 +569,7 @@ return out.join(' | ')`, 15_000);
       'core/src/main/java/dev/materione/core/runtime/RuntimeEffects.java',
       'pack/src/main/java/dev/materione/pack/compile/PackCompiler.java',
       'pack/src/main/java/dev/materione/pack/compile/TextEffectShaders.java',
+      'pack/src/main/resources/shaders/**',
       'pack/src/test/java/dev/materione/pack/compile/PackCompilerTest.java',
       'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
       'plugin/src/main/java/dev/materione/plugin/runtime/text/**',

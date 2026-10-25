@@ -513,49 +513,53 @@ class PackCompilerTest {
                     name -> name.startsWith("assets/minecraft/atlases/painting"));
             // text-effect shader ladder: every verified rung carries the
             // replacement vertex shader + generated include, never the base
-            // layer. The shared 26.x entry declares the same 64..88 range in
-            // both metadata schemas; it precedes the more-specific 1.21.x
-            // entries, which override rendertype_text for formats 64..83.
+            // layer. The 26.x entries use matching broad ranges in both
+            // metadata schemas, then the more-specific 1.21.x overlays
+            // override rendertype_text for formats 64..83.
             String mcmeta = entryText(zip, "pack.mcmeta");
             assertThat(mcmeta)
                     .contains("\"overlays\"")
-                    .contains("\"formats\":[64,88],\"directory\":\"materione_26\","
+                    .contains("\"formats\":[64,88],\"directory\":\"materione_26_2\","
                             + "\"min_format\":64,\"max_format\":88")
+                    .contains("\"formats\":[64,87],\"directory\":\"materione_26_1\","
+                            + "\"min_format\":64,\"max_format\":87")
                     .contains("\"formats\":[63,83],\"directory\":\"materione_1_21_6\","
                             + "\"min_format\":63,\"max_format\":83")
                     .contains("\"formats\":[46,62],\"directory\":\"materione_1_21_4\","
                             + "\"min_format\":46,\"max_format\":62");
-            assertThat(mcmeta.indexOf("\"directory\":\"materione_26\""))
+            assertThat(mcmeta.indexOf("\"directory\":\"materione_26_2\""))
+                    .isLessThan(mcmeta.indexOf("\"directory\":\"materione_26_1\""));
+            assertThat(mcmeta.indexOf("\"directory\":\"materione_26_1\""))
                     .isLessThan(mcmeta.indexOf("\"directory\":\"materione_1_21_6\""));
             for (String dir : new String[] {
-                    "materione_26", "materione_1_21_6", "materione_1_21_4"}) {
+                    "materione_26_2", "materione_26_1", "materione_1_21_6", "materione_1_21_4"}) {
                 assertThat(entryNames(zip)).anyMatch(name -> name.startsWith(dir + "/"));
             }
             assertThat(entryNames(zip)).noneMatch(name ->
                     name.startsWith("assets/minecraft/shaders/core/rendertype_text.vsh")
                             || name.startsWith("assets/minecraft/shaders/core/text.vsh"));
-            assertThat(entryText(zip, "materione_26/assets/minecraft/shaders/core/rendertype_text.vsh"))
+            assertThat(entryText(zip, "materione_26_1/assets/minecraft/shaders/core/rendertype_text.vsh"))
                     .contains("#version 330")
                     .contains("#moj_import <minecraft:materione_text_effects.glsl>")
                     .contains("materionePreTransform(mtrPosition);")
                     .contains("materionePostTransform(mtrPosition);")
                     .doesNotContain("vec4(Position, 1.0)");
-            assertThat(entryText(zip, "materione_26/assets/minecraft/shaders/core/text.vsh"))
+            assertThat(entryText(zip, "materione_26_2/assets/minecraft/shaders/core/text.vsh"))
                     .contains("#version 330")
                     .contains("#moj_import <minecraft:materione_text_effects_26_2.glsl>")
                     .contains("materionePreTransform(mtrPosition);")
                     .contains("materionePostTransform(mtrPosition);")
                     .doesNotContain("vec4(Position, 1.0)");
-            assertThat(entryText(zip, "materione_26/assets/minecraft/shaders/core/text.json"))
+            assertThat(entryText(zip, "materione_26_2/assets/minecraft/shaders/core/text.json"))
                     .contains("\"vertex\": \"minecraft:core/text\"");
             assertThat(entryText(zip,
-                    "materione_26/assets/minecraft/shaders/include/materione_text_effects.glsl"))
+                    "materione_26_1/assets/minecraft/shaders/include/materione_text_effects.glsl"))
                     .contains("#define MATERIONE_PACK_FORMAT 84")
                     .contains("void materionePreTransform(inout vec3 pos)")
                     .contains("void materionePostTransform(in vec3 pos)")
                     .contains("pos.y += sin(");
             assertThat(entryText(zip,
-                    "materione_26/assets/minecraft/shaders/include/materione_text_effects_26_2.glsl"))
+                    "materione_26_2/assets/minecraft/shaders/include/materione_text_effects_26_2.glsl"))
                     .contains("#define MATERIONE_PACK_FORMAT 88");
             assertThat(entryText(zip, "materione_1_21_4/assets/minecraft/shaders/core/rendertype_text.vsh"))
                     .contains("#version 150")
@@ -643,7 +647,7 @@ class PackCompilerTest {
         assertThat(TextEffectShaders.covers(87)).isTrue();
         assertThat(TextEffectShaders.covers(88)).isTrue();
         assertThat(TextEffectShaders.covers(89)).isFalse();
-        assertThat(TextEffectShaders.formatRanges()).isEqualTo("46..62, 63..83, 84..88");
+        assertThat(TextEffectShaders.formatRanges()).isEqualTo("46..62, 63..83, 84..87, 88..88");
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
