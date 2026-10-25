@@ -1,42 +1,42 @@
 {
   "glyphs.basic": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "645a1ae54b9ae860bc60587b16de6fa89b9e6e17430fc4d18b4b083b9c42d7f0",
     "result": "pass",
-    "at": "2026-10-18T00:24:12.116Z",
-    "run": "run-2026-10-18T00-23-15",
+    "at": "2026-10-25T15:21:10.586Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "glyphs.sheet": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "67309b5244bcad30026d3f08d1cc4ee754105a9b49ab1e7c4b8f2b03df1e4d97",
     "result": "pass",
-    "at": "2026-10-18T00:24:20.634Z",
-    "run": "run-2026-10-18T00-23-15",
+    "at": "2026-10-25T15:21:19.319Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "glyphs.grid": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "16ebb4986b174aeca3209a616b3bb4f1f937cc5491d35087281209639cc0f483",
     "result": "pass",
-    "at": "2026-10-18T00:24:29.116Z",
-    "run": "run-2026-10-18T00-23-15",
+    "at": "2026-10-25T15:21:28.114Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "glyphs.alias": {
-    "sha": "4d69b3bded453685c1545d48581bb42354e13fd7",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "46b9f62314d136e765640fe4cbf277cb1f3b0ca30ab15d0607d5beed05c80591",
     "result": "pass",
-    "at": "2026-10-18T00:24:40.732Z",
-    "run": "run-2026-10-18T00-23-15",
+    "at": "2026-10-25T15:21:40.055Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "glyphs.shift": {
@@ -50,25 +50,29 @@
     "eyes": null
   },
   "glyphs.emoji": {
-    "sha": "f12acdcd04989533237ae67fbe29eae3f0e30505",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "f7fc6b1701687f10cd382ab5a4599e4dd31dfbe862375439522e456da4db44b1",
     "result": "pass",
-    "at": "2026-10-18T00:38:58.823Z",
-    "run": "run-2026-10-18T00-36-12",
+    "at": "2026-10-25T15:22:45.512Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "glyphs.effects": {
-    "sha": "964bafb96a0718b540e46fe73b5feb20c7944f58",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "269210cfcaafe15a357bd2feb2d694d4bd14319afec44951ffc70a1dfdcb650a",
-    "result": "pass",
-    "at": "2026-10-18T01:24:58.975Z",
-    "run": "run-2026-10-18T01-22-19",
-    "eyes": "the four effect words (rainbow, wave, shake, pulse) render animated by the injected text shader — rainbow cycling hues, wave rippling vertically, shake jittering, pulse fading — visibly DIFFERENT between the two frames while the plain A/B words stay static, and no unshaded fallback (the effect words are not plain solid magenta-family signal text)",
-    "markedBy": "user",
-    "note": null
+    "result": "fail",
+    "at": "2026-10-25T15:22:53.617Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\glyphs.effects\\dossier.md",
+    "issue": 125,
+    "issueUrl": "https://github.com/xef5000/materione/issues/125",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/glyphs.effects/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/glyphs.effects/transcript.jsonl"
+    ]
   }
 }
