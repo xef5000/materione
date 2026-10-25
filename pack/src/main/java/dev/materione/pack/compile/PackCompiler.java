@@ -761,21 +761,23 @@ public final class PackCompiler {
         var entries = overlayEntries;
         for (TextEffectShaders.Rung rung : TextEffectShaders.RUNGS) {
             var overlay = team.unnamed.creative.overlay.Overlay.overlay(rung.overlayDir());
-            overlay.unknownFile(TextEffectShaders.includePath(),
-                    team.unnamed.creative.base.Writable.stringUtf8(
-                            TextEffectShaders.include(emitter.textEffects, rung.bakeFormat())));
-            String core = "assets/minecraft/shaders/core/" + rung.shaderName();
-            overlay.unknownFile(core + ".vsh", team.unnamed.creative.base.Writable.stringUtf8(
-                    TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".vsh")));
-            if (rung.shipJson()) {
-                overlay.unknownFile(core + ".json", team.unnamed.creative.base.Writable.stringUtf8(
-                        TextEffectShaders.template(rung.variantDir(), rung.shaderName() + ".json")));
+            for (TextEffectShaders.ShaderTemplate shader : rung.shaders()) {
+                overlay.unknownFile(shader.includePath(),
+                        team.unnamed.creative.base.Writable.stringUtf8(
+                                TextEffectShaders.include(emitter.textEffects, shader.bakeFormat())));
+                String core = "assets/minecraft/shaders/core/" + shader.shaderName();
+                overlay.unknownFile(core + ".vsh", team.unnamed.creative.base.Writable.stringUtf8(
+                        TextEffectShaders.template(shader.variantDir(), shader.shaderName() + ".vsh")));
+                if (shader.shipJson()) {
+                    overlay.unknownFile(core + ".json", team.unnamed.creative.base.Writable.stringUtf8(
+                            TextEffectShaders.template(shader.variantDir(), shader.shaderName() + ".json")));
+                }
             }
             pack.overlay(overlay);
             entries.add(team.unnamed.creative.metadata.overlays.OverlayEntry.of(
                     team.unnamed.creative.metadata.pack.PackFormat.format(
-                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.minFormat()),
-                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.maxFormat())),
+                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.overlayMinFormat()),
+                            team.unnamed.creative.metadata.pack.FormatVersion.of(rung.overlayMaxFormat())),
                     rung.overlayDir()));
         }
         pack.sodiumMeta(team.unnamed.creative.metadata.sodium.SodiumMeta.sodium(
@@ -879,9 +881,9 @@ public final class PackCompiler {
      * Adds {@code min_format}/{@code max_format} to every overlay entry.
      * creative's serializer emits the legacy {@code formats}; pre-25w31a
      * clients require it, while current clients gate overlays on the new
-     * fields. Shader rungs supply their schema ranges explicitly because the
-     * 26.x entries must keep {@code min_format} below 65 for old parsers to
-     * accept the same pack; other overlays mirror their legacy range.
+     * fields. Shader rungs supply their overlay ranges explicitly; the
+     * current parser validates that they match the legacy {@code formats},
+     * while pre-25w31a parsers ignore the new fields.
      * No-op without an overlays section.
      */
     private static void patchMcmeta(Path zip) throws IOException {
@@ -950,8 +952,8 @@ public final class PackCompiler {
                         ? null
                         : TextEffectShaders.rungForOverlay(directory);
                 if (rung != null) {
-                    entry.addProperty("min_format", rung.schemaMinFormat());
-                    entry.addProperty("max_format", rung.schemaMaxFormat());
+                    entry.addProperty("min_format", rung.overlayMinFormat());
+                    entry.addProperty("max_format", rung.overlayMaxFormat());
                     continue;
                 }
                 if (entry.has("min_format")) {

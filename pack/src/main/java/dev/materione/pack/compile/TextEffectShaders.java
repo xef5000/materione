@@ -10,9 +10,8 @@ import java.util.Locale;
 /**
  * Composes the injected text-shader set from the pack's compiled text
  * effects (runtime-systems §6): one version-matched <em>overlay</em> per
- * shader-format rung, each carrying the pack's replacement
- * {@code rendertype_text} vertex shader plus a generated
- * {@code materione_text_effects.glsl} include with one branch per effect.
+ * shader-format rung, each carrying the replacement shader variants and
+ * generated effect includes needed by that client line.
  *
  * <p>Only the vertex shader is replaced — the replacement outputs the
  * vanilla varyings, so the client's own fragment shader (alpha cutout,
@@ -29,33 +28,39 @@ import java.util.Locale;
  */
 final class TextEffectShaders {
 
+    private static final String INCLUDE_PATH = "assets/minecraft/shaders/include/materione_text_effects.glsl";
+    private static final String INCLUDE_PATH_26_2 =
+            "assets/minecraft/shaders/include/materione_text_effects_26_2.glsl";
+
+    /** One shader program file in an overlay; a format may have multiple client entry points. */
+    record ShaderTemplate(
+            String variantDir, String shaderName, int bakeFormat, String includePath, boolean shipJson) {}
+
     /**
      * One version rung. {@code minFormat}/{@code maxFormat} are the exact
-     * legacy {@code formats} range; {@code schemaMinFormat}/{@code schemaMaxFormat}
-     * are the current {@code min_format}/{@code max_format} range.
+     * client formats covered; overlay ranges may be broader where both
+     * metadata schemas require matching {@code formats} and {@code min/max}.
      */
     record Rung(
-            String overlayDir, String variantDir, String shaderName,
-            int minFormat, int maxFormat, int schemaMinFormat, int schemaMaxFormat,
-            int bakeFormat, boolean shipJson) {}
+            String overlayDir, int minFormat, int maxFormat,
+            int overlayMinFormat, int overlayMaxFormat, List<ShaderTemplate> shaders) {}
 
     /**
-     * The verified ladder. Every entry carries the exact legacy
-     * {@code formats} interval, required by pre-25w31a clients. The 26.x
-     * entries use {@code min_format}=64: the current schema rejects the
-     * legacy key only when that value is 65 or greater. Their broad
-     * current-schema intervals intentionally overlap older rungs; those
-     * entries are emitted first so the later, version-matched 1.21.x rung
-     * wins on current-schema clients that also fall in its range. This
-     * keeps one pack compatible with both schema generations.
+     * The verified ladder, in overlay precedence order. Both metadata
+     * schemas require the same inclusive range on each entry: pre-25w31a
+     * clients need {@code formats}, and current clients reject mismatched
+     * {@code formats} versus {@code min/max}. The 26.x overlay therefore
+     * carries both shader entry points in one shared 64..88 range; for 64..83
+     * the later 1.21.6 rung replaces its {@code rendertype_text} shader.
      */
     static final List<Rung> RUNGS = List.of(
-            new Rung("materione_26_2", "v26_2", "text", 88, 88, 64, 88, 88, true),
-            new Rung("materione_26_1", "v26_1", "rendertype_text", 84, 87, 64, 87, 84, false),
-            new Rung("materione_1_21_6", "v1_21_6", "rendertype_text", 63, 83, 63, 83, 63, true),
-            new Rung("materione_1_21_4", "v1_21_4", "rendertype_text", 46, 62, 46, 62, 46, true));
-
-    private static final String INCLUDE_PATH = "assets/minecraft/shaders/include/materione_text_effects.glsl";
+            new Rung("materione_26", 84, 88, 64, 88, List.of(
+                    new ShaderTemplate("v26_2", "text", 88, INCLUDE_PATH_26_2, true),
+                    new ShaderTemplate("v26_1", "rendertype_text", 84, INCLUDE_PATH, false))),
+            new Rung("materione_1_21_6", 63, 83, 63, 83, List.of(
+                    new ShaderTemplate("v1_21_6", "rendertype_text", 63, INCLUDE_PATH, true))),
+            new Rung("materione_1_21_4", 46, 62, 46, 62, List.of(
+                    new ShaderTemplate("v1_21_4", "rendertype_text", 46, INCLUDE_PATH, true))));
 
     private TextEffectShaders() {}
 
@@ -83,7 +88,11 @@ final class TextEffectShaders {
 
     /** The shader names the ladder overrides (for Sodium's ignored_shaders). */
     static List<String> overriddenShaders() {
-        return RUNGS.stream().map(Rung::shaderName).distinct().toList();
+        return RUNGS.stream()
+                .flatMap(rung -> rung.shaders().stream())
+                .map(ShaderTemplate::shaderName)
+                .distinct()
+                .toList();
     }
 
     /**
@@ -221,8 +230,4 @@ final class TextEffectShaders {
         }
     }
 
-    /** The generated include path inside every overlay. */
-    static String includePath() {
-        return INCLUDE_PATH;
-    }
 }
