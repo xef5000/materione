@@ -48,10 +48,10 @@ Server log tail (harness\build\probe\server\logs\latest.log):
 [11:17:13] [RCON Listener #1/INFO]: Thread RCON Client /127.0.0.1 started
 [11:17:13] [RCON Client /127.0.0.1 #210/INFO]: Thread RCON Client /127.0.0.1 shutting down
 [11:17:14] [RCON Listener #1/INFO]: Thread RCON Client /127.0.0.1 started
-[11:17:14] [Server thread/INFO]: [Materione] MTR-0031: editor session ecqQn8U1qDfam-a48ZyuIQ created; awaiting browser
-[11:17:14] [Server thread/INFO]: [Materione] MATERIONE-EDITOR http://127.0.0.1:8092/?s=ecqQn8U1qDfam-a48ZyuIQ#MGFYxE0J7gASHFbwQ6lUlgZA3H6lWsmgotHW-3L3BY8
+[11:17:14] [Server thread/INFO]: [Materione] MTR-0031: editor session [REDACTED] created; awaiting browser
+[11:17:14] [Server thread/INFO]: [Materione] MATERIONE-EDITOR http://127.0.0.1:8092/?s=[REDACTED]#[REDACTED]
 [11:17:14] [Server thread/INFO]: Editor session ready (local) — open:
-[11:17:14] [Server thread/INFO]: http://127.0.0.1:8092/?s=ecqQn8U1qDfam-a48ZyuIQ#MGFYxE0J7gASHFbwQ6lUlgZA3H6lWsmgotHW-3L3BY8
+[11:17:14] [Server thread/INFO]: http://127.0.0.1:8092/?s=[REDACTED]#[REDACTED]
 [11:17:14] [Server thread/INFO]: The part after # is secret and stays in your browser. Approve the connection in game within 120s.
 [11:17:14] [RCON Client /127.0.0.1 #211/INFO]: Thread RCON Client /127.0.0.1 shutting down
 [11:17:14] [RCON Listener #1/INFO]: Thread RCON Client /127.0.0.1 started
