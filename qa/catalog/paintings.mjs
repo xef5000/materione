@@ -247,7 +247,7 @@ return 'clicked'`;
 
       await ctx.shot('paintings-render');
       await ctx.needsEyes(
-        'the 2×1 sunrise art (warm rainbow gradient) hangs left of the 1×2 moonrise (night-blue panel, pale moon, star) on the stone wall — pack textures, not checkerboard or vanilla placeholders');
+        'the 2×1 sunrise art (warm rainbow gradient) and 1×2 moonrise (night-blue panel, pale moon, star) hang side by side on the stone wall — pack textures, not checkerboard or vanilla placeholders');
       await ctx.rcon('tp Probe 0 -60 3');
       await clearPaintingScene(ctx);
     },
