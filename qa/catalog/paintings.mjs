@@ -121,7 +121,7 @@ export default [
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
         .toContain('sample:sunrise');
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=0.5,y=-59.5,z=7.5,distance=..2,limit=1] facing'))
-        .toContain('north');
+        .toContain('2b'); // Paper 26.x stores north as the painting facing byte 2
 
       await aimAt(ctx, -20, 11, [2, -60, 8], 'north');
       await devPainting(ctx, 'sample:moonrise');
@@ -130,7 +130,7 @@ export default [
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1] variant'))
         .toContain('sample:moonrise');
       ctx.expect(await ctx.rcon('data get entity @e[type=painting,x=2.5,y=-59.5,z=7.5,distance=..2,limit=1] facing'))
-        .toContain('north');
+        .toContain('2b');
 
       // --- a variant that doesn't fit the aim: the sunrise painting already
       // occupies the moonrise aim's hanging cell
