@@ -1332,11 +1332,6 @@ return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' +
         await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
       }
 
-      const stackCount = async () => Number(await ctx.exec(`def n = 0
-for (int i = 0; i < 36; i++) {
-  if (!player.getInventory().items.get(i).isEmpty()) n = n + 1
-}
-return n`));
       const parseHit = (s) => {
         const m = /^(\w+) (-?\d+),(-?\d+),(-?\d+) (\w+)$/.exec(String(s));
         if (!m) return null;
@@ -1463,7 +1458,9 @@ return 'slot-' + slot`, 15_000);
           new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
           { timeoutMs: 45_000 });
       }
-      ctx.expect(await stackCount()).toBe(0); // all three placements consumed
+      ctx.expect(await ctx.exec(
+        "return player.getInventory().isEmpty() ? 'empty' : 'occupied'",
+      )).toBe('empty'); // all three placements consumed
       await ctx.rcon('kill @e[type=item]');
       await ctx.rcon('clear Probe');
     },
