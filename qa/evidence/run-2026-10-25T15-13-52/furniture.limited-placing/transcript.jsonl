@@ -1,0 +1,27 @@
+{"t":0,"kind":"note","msg":"test start: furniture.limited-placing (auto)"}
+{"t":259,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":525,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":788,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1052,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1720,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1986,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2251,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2514,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":13195,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":13458,"kind":"rcon","req":{"command":"materione dev remove 1 -59 7 world"},"res":""}
+{"t":13722,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":13988,"kind":"rcon","req":{"command":"setblock 1 -59 7 minecraft:air"},"res":"Could not set the block"}
+{"t":14256,"kind":"rcon","req":{"command":"setblock 0 -60 5 minecraft:air"},"res":"Could not set the block"}
+{"t":14520,"kind":"rcon","req":{"command":"setblock 0 -60 5 minecraft:stone"},"res":"Changed the block at 0, -60, 5"}
+{"t":14783,"kind":"rcon","req":{"command":"execute if block 1 -61 7 minecraft:air"},"res":"Test failed"}
+{"t":15045,"kind":"rcon","req":{"command":"materione give world:workbench Probe"},"res":""}
+{"t":15069,"kind":"chat","req":{"limit":30},"res":{"messages":[{"plain":"Given world:workbench ×1","addedTime":4073},{"plain":"Probe has made the advancement [Diamonds!]","addedTime":3618},{"plain":"Given sample:ruby_sword ×1","addedTime":2967},{"plain":"Given sample:ruby_disc ×1","addedTime":2910},{"plain":"Given world:feast_bread ×1","addedTime":2879},{"plain":"Given sample:ruby_sword ×1","addedTime":2821},{"plain":"Given corpus:gem_red ×5","addedTime":2536},{"plain":"Given world:ghost_panel ×1","addedTime":2059},{"plain":"Given world:chorus_pillar ×1","addedTime":1333},{"plain":"Given world:chorus_pillar ×1","addedTime":1252},{"plain":"The lamp hums softly.","addedTime":739},{"plain":"The lamp hums softly.","addedTime":720},{"plain":"Given sample:ruby ×1","addedTime":595},{"plain":"[DebugBridge] Web UI: http://localhost:9976","addedTime":129},{"plain":"Probe joined the game","addedTime":128}],"count":15}}
+{"t":15329,"kind":"rcon","req":{"command":"tp Probe 1 -60 3"},"res":"Teleported Probe to 1.500000, -60.000000, 3.500000"}
+{"t":15437,"kind":"exec","req":{"code":"player.getInventory().selected = 0","timeoutMs":10000},"res":0}
+{"t":16371,"kind":"exec","req":{"code":"player.setRot(30F, 33F)\nThread.sleep(500)\ndef hit = mc.hitResult\ndef t = hit.getType().toString()\nif (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()\nreturn t","timeoutMs":15000},"res":"BLOCK 0,-60,5 north"}
+{"t":16972,"kind":"exec","req":{"code":"def hit = mc.hitResult\nif (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != 0 || hit.getBlockPos().getY() != -60 || hit.getBlockPos().getZ() != 5 || hit.getDirection().toString() != 'north') return 'AIM-DRIFT'\ndef result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)\nreturn 'use:' + result.toString()","timeoutMs":15000},"res":"use:Pass[]"}
+{"t":17230,"kind":"rcon","req":{"command":"execute if block 0 -60 4 minecraft:air"},"res":"Test passed"}
+{"t":24461,"kind":"exec","req":{"code":"def n = 0\nfor (int i = 0; i < 36; i++) {\n  if (!player.getInventory().items.get(i).isEmpty()) n = n + 1\n}\nreturn n","timeoutMs":10000},"res":1}
+{"t":25396,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\ndef t = hit.getType().toString()\nif (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()\nreturn t","timeoutMs":15000},"res":"BLOCK 1,-60,6 north"}
+{"t":26999,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\ndef t = hit.getType().toString()\nif (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()\nreturn t","timeoutMs":15000},"res":"BLOCK 1,-60,6 north"}
+{"t":28604,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\ndef t = hit.getType().toString()\nif (t == 'BLOCK') return 'BLOCK ' + hit.getBlockPos().getX() + ',' + hit.getBlockPos().getY() + ',' + hit.getBlockPos().getZ() + ' ' + hit.getDirection().toString()\nreturn t","timeoutMs":15000},"res":"BLOCK 1,-60,6 north"}
