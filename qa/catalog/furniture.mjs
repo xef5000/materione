@@ -25,18 +25,10 @@ const blockLightAt = (ctx, cell) => ctx.exec(
 const clientEntity = (ctx, uuid) => ctx.exec(`def e = mc.level.getEntity(java.util.UUID.fromString('${uuid}'))
 return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' + e.getBlockY() + ',' + e.getBlockZ()`, 15_000);
 
-const lastServerLogLine = (ctx, pattern) => {
-  try {
-    return ctx.serverLogLine(pattern);
-  } catch {
-    return null;
-  }
-};
-
 const waitForNewServerLogLine = async (ctx, pattern, previous, timeoutMs = 45_000) => {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const line = lastServerLogLine(ctx, pattern);
+    const line = ctx.serverLogText(pattern);
     if (line && line !== previous) return line;
     if (Date.now() > deadline) {
       ctx.expect(line && line !== previous ? line : '(no new matching server log line)')
@@ -58,7 +50,7 @@ const clearFurnitureCells = async (ctx, cells) => {
     const coords = cell.join(' ');
     const marker = new RegExp(
       `MATERIONE-DEV-FURNITURE-REMOVE ok=(?:true|false).* world ${coords}`);
-    const previous = lastServerLogLine(ctx, marker);
+    const previous = ctx.serverLogText(marker);
     await ctx.rcon(`materione dev remove ${coords} world`);
     await waitForNewServerLogLine(ctx, marker, previous);
     await ctx.rcon(`setblock ${coords} minecraft:air`);
