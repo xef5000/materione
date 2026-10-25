@@ -134,6 +134,9 @@ Scratch and truth are different things:
   (issue links depend on it).
 - Growth is bounded by construction: only failures are promoted (passes keep
   their run id), and evidence is JPEG + text — a few dozen KB per failure.
+- Text evidence redacts editor capability URLs and session-creation identifiers
+  before writing or promoting it. Screenshots still require review before sharing;
+  never capture an editor capability URL on screen.
 
 The flow runs `file` from main (the swarm policy) so pushed evidence and the
 main-branch raw URLs agree.

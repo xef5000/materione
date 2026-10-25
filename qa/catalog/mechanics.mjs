@@ -205,45 +205,78 @@ return count.toString()`);
         'execute as Probe at @s run summon minecraft:villager ^ ^ ^2 '
         + '{NoAI:1b,AbsorptionAmount:40f}');
       await ctx.sleep(800); // entity tracker + crosshair pick settle
-      const aim = () => ctx.exec("return mc.hitResult.getEntity().getType().toString()");
+      const aim = () => ctx.exec(`def hit = player.raycastHitResult(1.0F, mc.getCameraEntity())
+return hit.getType().toString() == 'ENTITY'
+  ? hit.getEntity().getType().toString()
+  : hit.getType().toString()`);
       ctx.expect(String(await aim())).toBe('entity.minecraft.villager');
 
-      // The wear probe: right-click air fires the click:right rule whose
-      // message interpolates the live PDC counters (${item.*} surface).
-      const probe = () => ctx.exec(
-        'mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND); return "probed"');
-      const wearCount = async () =>
-        (await ctx.chat(60)).filter((l) => l.includes('blade-wear')).length;
-      const baseline = await wearCount();
-      const waitForWear = async (want, timeoutMs = 10_000) => {
+      // ServerboundUseItemPacket raytraces blocks, not the client's entity
+      // crosshair. Aim into the sky and prove that server-side block ray is a
+      // miss so this specifically exercises RIGHT_CLICK_AIR (a cancelled
+      // RIGHT_CLICK_BLOCK is intentionally vetoed by the behavior bridge).
+      const probe = () => ctx.exec(`def yaw = player.getYRot()
+def pitch = player.getXRot()
+player.setRot(yaw, -89.0F)
+def blockHit = player.pick(20.0D, 1.0F, false)
+def blockHitType = blockHit.getType().toString()
+if (blockHitType != 'MISS') {
+  player.setRot(yaw, pitch)
+  return 'not-air:' + blockHitType
+}
+mc.gameMode.useItem(player, net.minecraft.world.InteractionHand.MAIN_HAND)
+player.setRot(yaw, pitch)
+return 'probed-air'`);
+      const wearPath = 'data get entity Probe SelectedItem.components."minecraft:custom_data"'
+        + '.PublicBukkitValues."materione:durability-used"';
+      const maxPath = 'data get entity Probe SelectedItem.components."minecraft:custom_data"'
+        + '.PublicBukkitValues."materione:durability-max"';
+      const pdcValue = async (path) => {
+        const reply = String(await ctx.rcon(path));
+        const match = reply.match(/:\s*(-?\d+)\s*$/);
+        return match ? Number(match[1]) : null;
+      };
+      const waitForPdcWear = async (want, timeoutMs = 10_000) => {
         const deadline = Date.now() + timeoutMs;
         for (;;) {
-          if ((await wearCount()) >= want) return;
+          const actual = await pdcValue(wearPath);
+          const maximum = await pdcValue(maxPath);
+          if (actual === want && maximum === 3) return;
           if (Date.now() > deadline) {
-            ctx.expect((await wearCount()) - baseline).toBe(want - baseline);
+            ctx.expect(actual).toBe(want);
+            ctx.expect(maximum).toBe(3);
           }
           await ctx.sleep(300);
         }
       };
-      const waitForTwos = async (want, timeoutMs = 10_000) => {
+      const wearMessageCount = async (wear) =>
+        (await ctx.chat(60)).filter((line) => line.includes(`blade-wear ${wear}/3`)).length;
+      const waitForWearMessage = async (wear, want, timeoutMs = 10_000) => {
         const deadline = Date.now() + timeoutMs;
         for (;;) {
-          const twos = (await ctx.chat(60)).filter((l) => l.includes('blade-wear 2/3')).length;
-          if (twos >= want) return;
-          if (Date.now() > deadline) ctx.expect(twos).toBe(want);
+          const actual = await wearMessageCount(wear);
+          if (actual >= want) return;
+          if (Date.now() > deadline) ctx.expect(actual).toBe(want);
           await ctx.sleep(300);
         }
       };
+      const baselineWearMessages = (await ctx.chat(60))
+        .filter((line) => line.includes('blade-wear')).length;
 
       const hit = async () => {
-        ctx.expect(String(await aim())).toBe('entity.minecraft.villager');
-        // direct attack packet — the keybind click path decays over a long
-        // client session (issue #63) and silently stops landing; the packet
-        // is the same ServerboundInteractPacket(ATTACK) a charged click
-        // produces, without the client-side sub-charge gate
-        await ctx.exec(`def target = mc.hitResult.getEntity()
-mc.gameMode.attack(player, target)
+        // LocalPlayer.raycastHitResult is the fresh, entity-aware client ray
+        // (Entity.pick / mc.player.pick is block-only); attack that result in
+        // the same call instead of relying on mc.hitResult's render cache.
+        // Keep the direct attack packet for the #63 input-decay lead; the PDC
+        // read below proves the server damage event actually reached durability.
+        const result = await ctx.exec(`def hit = player.raycastHitResult(1.0F, mc.getCameraEntity())
+if (hit.getType().toString() != 'ENTITY'
+    || hit.getEntity().getType().toString() != 'entity.minecraft.villager') {
+  return hit.getType().toString()
+}
+mc.gameMode.attack(player, hit.getEntity())
 return 'attacked'`);
+        ctx.expect(String(result)).toBe('attacked');
         // the server-side attack cooldown still scales damage — spacing
         // keeps it full (the villager's 40f absorption absorbs any hit)
         await ctx.sleep(1700);
@@ -251,23 +284,30 @@ return 'attacked'`);
 
       // use 1: the counter appears in PDC (1/3), vanilla bar untouched
       await hit();
-      ctx.expect(String(await probe())).toBe('probed');
-      await waitForWear(baseline + 1);
+      await waitForPdcWear(1);
+      const preFirstWearMessage = await wearMessageCount(1);
+      ctx.expect(String(await probe())).toBe('probed-air');
+      await waitForWearMessage(1, preFirstWearMessage + 1);
       ctx.expect(String(await ctx.exec(
         'return player.getMainHandItem().getDamageValue()'))).toBe('0');
 
       // use 2: counter advances (2/3) — the probe re-reads it from chat
       await hit();
-      ctx.expect(String(await probe())).toBe('probed');
-      await waitForWear(baseline + 2);
+      await waitForPdcWear(2);
+      const preSecondWearMessage = await wearMessageCount(2);
+      ctx.expect(String(await probe())).toBe('probed-air');
+      await waitForWearMessage(2, preSecondWearMessage + 1);
+      ctx.expect(String(await ctx.exec(
+        'return player.getMainHandItem().getDamageValue()'))).toBe('0');
 
       // reload: the auto-updater refreshes held stacks but must carry the
       // per-instance counters across — a second wear probe still reads 2/3.
-      const preTwos = (await ctx.chat(60)).filter((l) => l.includes('blade-wear 2/3')).length;
+      const preTwos = await wearMessageCount(2);
       await ctx.rcon('materione reload');
       await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
-      ctx.expect(String(await probe())).toBe('probed');
-      await waitForTwos(preTwos + 1);
+      await waitForPdcWear(2);
+      ctx.expect(String(await probe())).toBe('probed-air');
+      await waitForWearMessage(2, preTwos + 1);
 
       // use 3 hits max: the blade breaks — the slot empties and no third
       // wear value can come (the PDC was cleared with the stack; the three
@@ -275,10 +315,12 @@ return 'attacked'`);
       await hit();
       ctx.expect(String(await ctx.exec(
         'return player.getMainHandItem().isEmpty()'))).toBe('true');
-      ctx.expect((await wearCount()) - baseline).toBe(3);
+      ctx.expect((await ctx.chat(60)).filter((line) => line.includes('blade-wear')).length
+        - baselineWearMessages).toBe(3);
       ctx.expect(
         (await ctx.chat(60)).filter((l) => l.includes('blade-wear 3/3')).length,
       ).toBe(0);
+      ctx.expect(String(await ctx.rcon(wearPath))).toContain('Found no elements');
 
       await ctx.rcon('execute as Probe at @s run kill @e[type=villager,distance=..8]');
     },

@@ -181,6 +181,18 @@ already asserts.
   `mc.player.pick(20.0D, 1.0F, false)` — the `mc.hitResult` field is a
   render-frame cache and can report a stale MISS even when the crosshair
   genuinely holds the target (`getType()`/`getBlockPos()`/`getDirection()`).
+  That `Entity.pick` ray is block-only. For a fresh entity-aware crosshair
+  result, use `player.raycastHitResult(1.0F, mc.getCameraEntity())`; in 26.1.2
+  this is the public method called by the private `Minecraft.pick(float)`
+  refresh. It returns the `HitResult` without updating the cached `mc.hitResult`,
+  so verify and act on that same result in one Groovy call.
+  Item-use packets take a different path: the server block-raycasts them
+  without considering the entity under the crosshair, then emits
+  `RIGHT_CLICK_AIR` on a block miss or `RIGHT_CLICK_BLOCK` on a block hit.
+  To probe an air-use rule, aim into clear sky and verify a fresh
+  `player.pick(20.0D, 1.0F, false)` returns `MISS` before calling
+  `mc.gameMode.useItem`; a cancelled block click is intentionally vetoed by
+  the behavior bridge.
   `setDown(true)` on `keyAttack` does drive
   continuous mining; `mc.gameMode.useItemOn(player, hand, hitResult)` is the
   direct-packet alternative (26.1.2 signature takes a `BlockHitResult`).
@@ -286,6 +298,13 @@ already asserts.
   `SelectedItem.components."minecraft:custom_data"` dump cuts off partway
   through a byte-array value, so later PDC keys never print — read targeted
   paths instead (`..."minecraft:custom_data".PublicBukkitValues."materione:key"`).
+  Full item-entity `Item` and player `Inventory` dumps can also exceed the
+  RCON response limit; read leaf paths (`Item.id`, `Item.count`,
+  `Item.components."minecraft:custom_name".extra[0].extra[0].text`,
+  `Item.components."minecraft:custom_data".PublicBukkitValues."materione:id"`)
+  and, for inventory, prefix them with `Inventory[{Slot:0b}]`. A client-side
+  one-stack read via `getHoverName().getString()` avoids reflecting over every
+  inventory slot when only the picked-up item matters.
   A missing path answers `Found no elements matching <path>` (echoing the
   path text — don't assert presence by matching the key name in that reply).
   Two different NBT roots carry PDC: **entities** (and chunks) under
@@ -361,15 +380,24 @@ already asserts.
   z+2 — the wire's `power` in the client block state is the honest
   end-to-end channel (a playing disc's authored comparator output lands
   there within a second).
-- **Jukebox discs through a real client**: hold the disc in the main hand
-  and `useItemOn` the jukebox to insert (`has_record=true` in the client
-  block state); an empty-hand `useItemOn` ejects — the disc pops as an item
-  entity AT the jukebox (tp adjacent to vacuum it). Two timing traps: eject
-  late enough that the sound is fully live (an eject racing the engine's
-  queue can leave the young instance playing its course — wait for the
-  active instance, then ~1.5s), and the ejected instance retires off-thread
-  (poll ~10s). Upstream: a jukebox-song event authored `stream: true` keeps
-  playing past eject (#98) — non-streamed events stop instantly.
+- **Jukebox discs through a real client**: set the player to survival, hold
+  the disc in the main hand and `useItemOn` the jukebox to insert
+  (`has_record=true` in the client block state); verify the server inventory
+  no longer contains the source disc so a creative-mode copy cannot mask a
+  failed pickup. An empty-hand `useItemOn` ejects the disc as an item entity
+  at the jukebox. For a pickup assertion, read the dropped entity's `Item`
+  and `Pos`, then teleport the player to the entity (for example,
+  `execute positioned 2.5 -59.5 3.5 as @e[type=item,distance=..4,limit=1,sort=nearest] at @s run tp Probe ~ ~ ~`),
+  and poll the server-side `Inventory` before the client's inventory; a
+  fixed adjacent-block teleport can miss the item's pickup collision (#128).
+  Stage a solid floor under the player start and jukebox/comparator/wire
+  before the test's reset/teleport; without support the wire drops and the
+  client reads air instead of comparator power.
+  Two timing traps: eject late enough that the sound is fully live (an eject
+  racing the engine's queue can leave the young instance playing its course —
+  wait for the active instance, then ~1.5s), and the ejected instance retires
+  off-thread (poll ~10s). Upstream: a jukebox-song event authored `stream:
+  true` keeps playing past eject (#98) — non-streamed events stop instantly.
 - **Forcing a chunk-load replay** (furniture evolution applies only in
   `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
   hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before

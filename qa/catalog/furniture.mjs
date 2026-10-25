@@ -25,6 +25,63 @@ const blockLightAt = (ctx, cell) => ctx.exec(
 const clientEntity = (ctx, uuid) => ctx.exec(`def e = mc.level.getEntity(java.util.UUID.fromString('${uuid}'))
 return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' + e.getBlockY() + ',' + e.getBlockZ()`, 15_000);
 
+const waitForNewServerLogLine = async (ctx, pattern, previous, timeoutMs = 45_000) => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const line = ctx.serverLogText(pattern);
+    if (line && line !== previous) return line;
+    if (Date.now() > deadline) {
+      ctx.expect(line && line !== previous ? line : '(no new matching server log line)')
+        .toMatch(pattern);
+    }
+    await ctx.sleep(400);
+  }
+};
+
+// Furniture dev operations run on the region thread; an empty RCON reply is
+// only acceptance, not completion. Finish cleanup before staging block cells.
+const clearFurnitureCells = async (ctx, cells) => {
+  const seen = new Set();
+  for (const cell of cells) {
+    const key = cell.join(',');
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    const coords = cell.join(' ');
+    const marker = new RegExp(
+      `MATERIONE-DEV-FURNITURE-REMOVE ok=(?:true|false).* world ${coords}`);
+    const previous = ctx.serverLogText(marker);
+    await ctx.rcon(`materione dev remove ${coords} world`);
+    await waitForNewServerLogLine(ctx, marker, previous);
+    await ctx.rcon(`setblock ${coords} minecraft:air`);
+    ctx.expect(await ctx.rcon(`execute if block ${coords} minecraft:air`))
+      .toBe('Test passed');
+  }
+};
+
+const waitForClientAir = async (ctx, cells, timeoutMs = 15_000) => {
+  const positions = cells
+    .map((cell) => `new net.minecraft.core.BlockPos(${cell.join(', ')})`)
+    .join(', ');
+  const expected = cells.map(() => 'air').join('|');
+  const deadline = Date.now() + timeoutMs;
+  let states;
+  do {
+    states = String(await ctx.exec(
+      `def positions = [${positions}]
+def states = []
+for (int i = 0; i < positions.size(); i++) {
+  def state = mc.level.getBlockState(positions.get(i))
+  states.add(state.isAir() ? 'air' : state.toString())
+}
+return states.join('|')`,
+      15_000));
+    if (states === expected) return;
+    await ctx.sleep(250);
+  } while (Date.now() < deadline);
+  ctx.expect(states).toBe(expected);
+};
+
 export default [
   test({
     id: 'furniture.light-emission',
@@ -277,19 +334,15 @@ return 'AIM-DRIFT'`, 15_000);
 
       // --- scene: the floor cell [1,-61,7] (solid ground, top face at y=-60)
       // carries the allowed placement; the stone bump at [0,-60,5] offers the
-      // denied wall face (its north side). The player stands one block east
-      // (1,-60,3): the x=1.5 sight line to the floor clears the bump, while
-      // the bump's north face stays clickable with a slight west yaw.
+      // denied wall face (its north side). Clear the approach corridor too:
+      // the blocks suite's vanilla bone-block control can otherwise occlude
+      // the floor target at [1,-60,6].
       const ground = [1, -61, 7];
       const anchor = [1, -60, 7];
       const light = [1, -59, 7];
       const bump = [0, -60, 5];
-      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
-      for (const cell of [anchor, light, bump]) {
-        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
-      }
-      await ctx.rcon(`setblock ${bump.join(' ')} minecraft:stone`);
+      const approach = [[1, -60, 4], [1, -60, 5], [1, -60, 6]];
+      await clearFurnitureCells(ctx, [anchor, light, ...approach, bump, [0, -60, 4]]);
       ctx.expect(await ctx.rcon(`execute if block ${ground.join(' ')} minecraft:air`))
         .toBe('Test failed'); // the ground is solid
 
@@ -341,9 +394,16 @@ return 'use:' + result.toString()`, 15_000);
       // any placement on a non-UP face and the paper item has no vanilla
       // use. The vanilla anchor for such a click would be [0,-60,4] — it
       // must stay air.
-      await clickFace(bump, 'north', 30, 33);
-      ctx.expect(await ctx.rcon('execute if block 0 -60 4 minecraft:air')).toBe('Test passed');
-      ctx.expect(await stackCount()).toBe(1);
+      await ctx.rcon(`setblock ${bump.join(' ')} minecraft:stone`);
+      try {
+        await clickFace(bump, 'north', 30, 33);
+        ctx.expect(await ctx.rcon('execute if block 0 -60 4 minecraft:air')).toBe('Test passed');
+        ctx.expect(await stackCount()).toBe(1);
+      } finally {
+        await ctx.rcon(`setblock ${bump.join(' ')} minecraft:air`);
+        ctx.expect(await ctx.rcon(`execute if block ${bump.join(' ')} minecraft:air`))
+          .toBe('Test passed');
+      }
 
       // --- scene B: the floor is allowed — cluster spawns, one item consumed
       await clickFace(ground, 'up', 0, 22);
@@ -380,7 +440,6 @@ return 'use:' + result.toString()`, 15_000);
       await ctx.waitForServerLog(
         new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
         { timeoutMs: 45_000 });
-      await ctx.rcon(`setblock ${bump.join(' ')} minecraft:air`);
       await ctx.rcon('clear Probe');
       await ctx.rcon('kill @e[type=item]');
     },
@@ -513,14 +572,18 @@ return 'use:' + result.toString()`, 15_000);
 
       // --- scene: the cluster anchors at [1,-60,7]; the barrier hitbox
       // (offset [0,0,0]) occupies the anchor cell, dead in the walk path
-      // from the spawn point (1,-60,3) heading south.
+      // from the spawn point (1,-60,3) heading south. Clear the full-width
+      // approach and headspace so earlier tests cannot leave an obstacle.
       const anchor = [1, -60, 7];
-      const light = [1, -59, 7];
       const spawn = 'tp Probe 1 -60 3';
-      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
-      await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
-      await ctx.rcon(`setblock ${light.join(' ')} minecraft:air`);
+      const corridor = [];
+      for (let x = 0; x <= 2; x++) {
+        for (let y = -60; y <= -58; y++) {
+          for (let z = 3; z <= 9; z++) corridor.push([x, y, z]);
+        }
+      }
+      await clearFurnitureCells(ctx, corridor);
+      await waitForClientAir(ctx, corridor);
 
       // movement is hold-driven: walk south for 1.2s, release, let the
       // server-corrected position settle, then read the player z
@@ -575,6 +638,7 @@ return 'use:' + result.toString()`, 15_000);
         { timeoutMs: 45_000 });
       ctx.expect(await ctx.rcon(`execute if block ${anchor.join(' ')} minecraft:air`))
         .toBe('Test passed');
+      await waitForClientAir(ctx, corridor);
       const reopenedZ = await walk();
       ctx.expect(reopenedZ).toBeGreaterThan(7.5);
       await ctx.rcon('clear Probe');
@@ -606,10 +670,7 @@ return 'use:' + result.toString()`, 15_000);
       // onCellInteract routes on any face of the tagged cell.
       const anchor = [1, -60, 7];
       const light = [1, -59, 7];
-      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-      await ctx.rcon(`materione dev remove ${light.join(' ')} world`);
-      await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
-      await ctx.rcon(`setblock ${light.join(' ')} minecraft:air`);
+      await clearFurnitureCells(ctx, [anchor, light, [1, -60, 6]]);
       await ctx.rcon(`materione dev place world:bench ${anchor.join(' ')} world`);
       await ctx.waitForServerLog(
         new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:bench world ${anchor.join(' ')}`),
@@ -633,13 +694,20 @@ return v == null ? 'none' : v.getType().toString() + ' ' + v.getUUID().toString(
 
       // click the barrier's north face — the sit runs on the region thread
       const sit = async (tries = 3) => {
+        let last = '(no attempt)';
         for (let i = 0; i < tries; i++) {
-          await ctx.exec('player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\nreturn hit.getType().toString()');
-          const reply = await ctx.exec(`def hit = mc.hitResult
-if (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != ${anchor[0]} || hit.getBlockPos().getY() != ${anchor[1]} || hit.getBlockPos().getZ() != ${anchor[2]} || hit.getDirection().toString() != 'north') return 'AIM-DRIFT'
+          last = String(await ctx.exec(`player.setRot(0F, 22F)
+Thread.sleep(500)
+def hit = mc.hitResult
+def type = hit.getType().toString()
+if (type != 'BLOCK') return 'AIM-DRIFT ' + type
+def pos = hit.getBlockPos()
+def face = hit.getDirection().toString()
+if (pos.getX() != ${anchor[0]} || pos.getY() != ${anchor[1]} || pos.getZ() != ${anchor[2]} || face != 'north')
+  return 'AIM-DRIFT BLOCK ' + pos.getX() + ',' + pos.getY() + ',' + pos.getZ() + ' ' + face
 def result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)
-return 'use:' + result.toString()`, 15_000);
-          if (String(reply).startsWith('use:')) {
+return 'use:' + result.toString()`, 15_000));
+          if (last.startsWith('use:')) {
             // the seat mount lands a beat later (region-thread teleport +
             // passenger sync)
             const deadline = Date.now() + 8000;
@@ -711,17 +779,16 @@ return 'use:' + result.toString()`, 15_000);
       // level client-visible: the 8-cell floods only 6 into the 7-cell, so
       // the client reads 8 and 7 — a level-15 sibling would dominate the
       // pair (its flood reaches 13 two steps away) and mask the 7. No
-      // barrier hitbox: the anchor cell stays air and every click targets
-      // the interaction entity.
+      // barrier hitbox: the anchor cell stays air and the click targets the
+      // interaction entity. Clear the approach block so an earlier control
+      // block cannot replace the expected entity hit.
       const anchor = [1, -60, 7];
       const cellA = [1, -59, 7]; // level 8, above
       const cellB = [2, -60, 7]; // level 7, east
       const shared = [2, -59, 7]; // adjacent to both: max(7, 6)
-      await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-      for (const cell of [anchor, cellA, cellB]) {
-        await ctx.rcon(`materione dev remove ${cell.join(' ')} world`);
-        await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
-      }
+      await clearFurnitureCells(ctx, [
+        anchor, cellA, cellB, [1, -60, 6],
+      ]);
 
       // baseline: the scene is dark
       ctx.expect(await blockLightAt(ctx, cellA)).toBe(0);
@@ -766,11 +833,22 @@ return v == null ? 'none' : v.getType().toString()`, 15_000);
           last = String(await ctx.exec(`player.setRot(0F, 24F)
 Thread.sleep(500)
 def hit = mc.hitResult
-return hit.getType().toString() + ' ' + (hit.getEntity() == null ? '-' : hit.getEntity().getType().toString())`, 15_000));
+def type = hit.getType().toString()
+if (type == 'ENTITY') {
+  def entity = hit.getEntity()
+  return 'ENTITY ' + (entity == null ? 'none' : entity.getType().toString())
+}
+if (type == 'BLOCK') {
+  def pos = hit.getBlockPos()
+  return 'BLOCK ' + pos.getX() + ',' + pos.getY() + ',' + pos.getZ() + ' ' + hit.getDirection().toString()
+}
+return type`, 15_000));
           if (last === 'ENTITY entity.minecraft.interaction') {
             const reply = await ctx.exec(`def hit = mc.hitResult
-if (hit.getType().toString() != 'ENTITY' || hit.getEntity() == null || hit.getEntity().getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT'
-def result = mc.gameMode.interact(player, hit.getEntity(), hit, net.minecraft.world.InteractionHand.MAIN_HAND)
+if (hit.getType().toString() != 'ENTITY') return 'AIM-DRIFT ' + hit.getType().toString()
+def entity = hit.getEntity()
+if (entity == null || entity.getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT entity'
+def result = mc.gameMode.interact(player, entity, hit, net.minecraft.world.InteractionHand.MAIN_HAND)
 return 'interact:' + result.toString()`, 15_000);
             if (String(reply).startsWith('interact:')) return;
             last = String(reply);
@@ -831,10 +909,9 @@ return 'interact:' + result.toString()`, 15_000);
       // interaction entity.
       const anchorA = [1, -60, 7];
       const anchorB = [1, -60, 11];
-      for (const anchor of [anchorA, anchorB]) {
-        await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-        await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
-      }
+      await clearFurnitureCells(ctx, [
+        anchorA, anchorB, [1, -60, 6], [1, -60, 10],
+      ]);
       await ctx.rcon(`materione dev place world:crate ${anchorA.join(' ')} world`);
       await ctx.waitForServerLog(
         new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:crate world ${anchorA.join(' ')}`),
@@ -873,20 +950,31 @@ return 'clicked'`);
       const screenTitle = () => ctx.exec(
         "return mc.screen == null ? 'none' : mc.screen.getTitle().getString()");
 
-      // right-click the crate's interaction entity (same geometry the
-      // light-toggle test proves: box (1.5,-59.5,7.5) from an eye at
-      // (1.5,-58.62,5.5), pitch 24, ~2.2 away, inside the 3.0 reach)
+      // right-click the crate's interaction entity (box centered over the
+      // anchor, inside the 3.0 reach). Do not assume every HitResult has an
+      // entity accessor: report and reject a block/miss without clicking it.
       const openCrate = async (anchor, tries = 3) => {
         let last = '(no attempt)';
         for (let i = 0; i < tries; i++) {
           last = String(await ctx.exec(`player.setRot(0F, 24F)
 Thread.sleep(500)
 def hit = mc.hitResult
-return hit.getType().toString() + ' ' + (hit.getEntity() == null ? '-' : hit.getEntity().getType().toString())`, 15_000));
+def type = hit.getType().toString()
+if (type != 'ENTITY') {
+  if (type == 'BLOCK') {
+    def pos = hit.getBlockPos()
+    return 'BLOCK ' + pos.getX() + ',' + pos.getY() + ',' + pos.getZ() + ' ' + hit.getDirection().toString()
+  }
+  return type
+}
+def entity = hit.getEntity()
+return 'ENTITY ' + (entity == null ? 'none' : entity.getType().toString())`, 15_000));
           if (last === 'ENTITY entity.minecraft.interaction') {
             const reply = await ctx.exec(`def hit = mc.hitResult
-if (hit.getType().toString() != 'ENTITY' || hit.getEntity() == null || hit.getEntity().getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT'
-def result = mc.gameMode.interact(player, hit.getEntity(), hit, net.minecraft.world.InteractionHand.MAIN_HAND)
+if (hit.getType().toString() != 'ENTITY') return 'AIM-DRIFT ' + hit.getType().toString()
+def entity = hit.getEntity()
+if (entity == null || entity.getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT entity'
+def result = mc.gameMode.interact(player, entity, hit, net.minecraft.world.InteractionHand.MAIN_HAND)
 return 'interact:' + result.toString()`, 15_000);
             if (String(reply).startsWith('interact:')) {
               await waitForMenu('open');
@@ -1029,10 +1117,9 @@ return 'interact:' + result.toString()`, 15_000);
       };
       const anchorA = [1, -60, 7];
       const anchorB = [1, -60, 11];
-      for (const anchor of [anchorA, anchorB]) {
-        await ctx.rcon(`materione dev remove ${anchor.join(' ')} world`);
-        await ctx.rcon(`setblock ${anchor.join(' ')} minecraft:air`);
-      }
+      await clearFurnitureCells(ctx, [
+        anchorA, anchorB, [1, -60, 6], [1, -60, 10],
+      ]);
       await ctx.rcon(`materione dev place world:seedling ${anchorA.join(' ')} world`);
       await ctx.waitForServerLog(
         new RegExp(`MATERIONE-DEV-FURNITURE-PLACE ok=true placed world:seedling world ${anchorA.join(' ')}`),
@@ -1090,11 +1177,22 @@ return s.isEmpty() ? 'empty' : s.getHoverName().getString()`);
           last = String(await ctx.exec(`player.setRot(0F, 24F)
 Thread.sleep(500)
 def hit = mc.hitResult
-return hit.getType().toString() + ' ' + (hit.getEntity() == null ? '-' : hit.getEntity().getType().toString())`, 15_000));
+def type = hit.getType().toString()
+if (type != 'ENTITY') {
+  if (type == 'BLOCK') {
+    def pos = hit.getBlockPos()
+    return 'BLOCK ' + pos.getX() + ',' + pos.getY() + ',' + pos.getZ() + ' ' + hit.getDirection().toString()
+  }
+  return type
+}
+def entity = hit.getEntity()
+return 'ENTITY ' + (entity == null ? 'none' : entity.getType().toString())`, 15_000));
           if (last === 'ENTITY entity.minecraft.interaction') {
             const reply = await ctx.exec(`def hit = mc.hitResult
-if (hit.getType().toString() != 'ENTITY' || hit.getEntity() == null || hit.getEntity().getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT'
-def result = mc.gameMode.interact(player, hit.getEntity(), hit, net.minecraft.world.InteractionHand.MAIN_HAND)
+if (hit.getType().toString() != 'ENTITY') return 'AIM-DRIFT ' + hit.getType().toString()
+def entity = hit.getEntity()
+if (entity == null || entity.getType().toString() != 'entity.minecraft.interaction') return 'AIM-DRIFT entity'
+def result = mc.gameMode.interact(player, entity, hit, net.minecraft.world.InteractionHand.MAIN_HAND)
 return 'interact:' + result.toString()`, 15_000);
             if (String(reply).startsWith('interact:')) {
               await waitForMenu('open');
@@ -1234,11 +1332,6 @@ return e == null ? 'null' : e.getType().toString() + '@' + e.getBlockX() + ',' +
         await ctx.rcon(`setblock ${cell.join(' ')} minecraft:air`);
       }
 
-      const stackCount = async () => Number(await ctx.exec(`def n = 0
-for (int i = 0; i < 36; i++) {
-  if (!player.getInventory().items.get(i).isEmpty()) n = n + 1
-}
-return n`));
       const parseHit = (s) => {
         const m = /^(\w+) (-?\d+),(-?\d+),(-?\d+) (\w+)$/.exec(String(s));
         if (!m) return null;
@@ -1365,7 +1458,9 @@ return 'slot-' + slot`, 15_000);
           new RegExp(`MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture world ${anchor.join(' ')}`),
           { timeoutMs: 45_000 });
       }
-      ctx.expect(await stackCount()).toBe(0); // all three placements consumed
+      ctx.expect(await ctx.exec(
+        "return player.getInventory().isEmpty() ? 'empty' : 'occupied'",
+      )).toBe('empty'); // all three placements consumed
       await ctx.rcon('kill @e[type=item]');
       await ctx.rcon('clear Probe');
     },

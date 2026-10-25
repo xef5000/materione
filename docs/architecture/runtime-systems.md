@@ -385,19 +385,29 @@ signal color (allocation kind `effect-signal`: the band `#FF00FF` downward, blue
 `RuntimeEffects` runtime view. The text pipeline resolves paired spans —
 `<effect:pack:id>…</effect>` (alias `<e:…>`; no nesting) — coloring the span's plain runs
 with the signal; glyph codepoints inside keep their forced white, explicit `&`-codes keep
-theirs. The pack injects the client's `rendertype_text` **vertex** shader per version-matched
-overlay (`materione_1_21_4` 46–62, `materione_1_21_6` 63–83, `materione_26_1` 84–87,
-`materione_26_2` 88+): the replacement outputs the vanilla varyings, so the client's own
-fragment shader (alpha cutout, fog) keeps working unmodified; only the `.vsh` is replaced
-(plus the program `.json` pre-26.x with the `GameTime` uniform — since 1.21.6 `GameTime`
-rides the Globals UBO). The generated `materione_text_effects.glsl` include bakes one branch
-per effect keyed on its signal: wave/shake displace the vertex pre-transform, rainbow/pulse
-recolor post-lightmap (authored `colors` stops become a mix-chain; rainbow falls back to a
-cosine palette). Shaders never ship in the base layer — a client matching no rung gets a
-shader-free pack — and pack.mcmeta carries the `overlays` ladder plus
-`sodium.ignored_shaders`. `MTR-0044` survives as the honest conditional: when the server's
-detected client format is outside the ladder, the effects compile but a WARN says they will
-not animate. `MTR-0047` fires when the 254-slot signal band is exhausted (signals are
+theirs. The pack injects the client's text **vertex** shader per version-matched overlay
+(`materione_1_21_4` formats 46–62, `materione_1_21_6` 63–83,
+`materione_26_1` 84–87, `materione_26_2` 88). The 26.1 `rendertype_text` and 26.2 `text`
+entry points each import an include baked for their own format. The replacement outputs
+the vanilla varyings, so the client's own fragment shader (alpha cutout, fog) keeps working
+unmodified; only the vertex shader is replaced (plus the program `.json` through 1.21.8 with
+the `GameTime` uniform — since 1.21.6 `GameTime` rides the Globals UBO). The generated
+`materione_text_effects.glsl` include bakes one branch per effect keyed on its signal:
+wave/shake displace the vertex pre-transform, rainbow/pulse recolor post-lightmap (authored
+`colors` stops become a mix-chain; rainbow falls back to a cosine palette).
+
+Overlay entries carry both metadata schemas with matching ranges because current clients
+validate `formats` against `min_format`/`max_format`, while pre-25w31a clients require
+`formats`. The 26.1 entry advertises 64–87 in both declarations, and the 26.2 entry 64–88,
+while their verified client ranges remain 84–87 and 88 respectively. Both broad entries are
+emitted before the more-specific 1.21.6 entry, which shadows `rendertype_text` and its include
+for formats 64–83; the 1.21.4 entry remains 46–62. The extra 26.2 `text` shader path is not
+referenced by those earlier clients' `rendertype_text` pipelines. Shaders never ship in the
+base layer — a client matching no effective rung gets a shader-free pack — and pack.mcmeta
+carries the `overlays` ladder plus `sodium.ignored_shaders`.
+`MTR-0044` survives as the honest conditional: when the server's detected client format is
+outside the verified 46–88 ladder, the effects compile but a WARN says they will not animate.
+`MTR-0047` fires when the 254-slot signal band is exhausted (signals are
 durable; deleting an effect does not release its color to a new one automatically). Test
 in-game with `/materione dev effect <pack>:<id> <text>`.
 

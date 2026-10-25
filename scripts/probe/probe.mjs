@@ -149,6 +149,7 @@ async function fetchText(url) {
 // wrapper: the jars themselves stay hash-verified on disk, so when the meta
 // endpoint is unreachable the last good metadata keeps launches working.
 async function fetchTextCached(url, cacheFile) {
+  fs.mkdirSync(path.dirname(cacheFile), { recursive: true });
   try {
     const text = await fetchText(url);
     fs.writeFileSync(cacheFile, text);

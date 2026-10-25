@@ -25,7 +25,7 @@ out float cylindricalVertexDistance;
 out vec4 vertexColor;
 out vec2 texCoord0;
 
-#moj_import <minecraft:materione_text_effects.glsl>
+#moj_import <minecraft:materione_text_effects_26_2.glsl>
 
 void main() {
     // attributes are read-only: the hooks animate a local copy

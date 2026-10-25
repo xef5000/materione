@@ -172,7 +172,19 @@ return 'stopped'`, 15_000);
     timeoutMs: 180_000,
     steps: async (ctx) => {
       const spot = { x: 2, y: -60, z: 3 };
+      const floorY = spot.y - 1;
+      await ctx.rcon(
+        `fill ${spot.x - 3} ${floorY} ${spot.z - 1} ${spot.x + 3} ${floorY} ${spot.z + 2} minecraft:stone`,
+      );
       await ctx.reset();
+      ctx.expect(await ctx.rcon(
+        `execute if block 0 ${floorY} ${spot.z} minecraft:stone`)).toBe('Test passed');
+      for (let z = spot.z; z <= spot.z + 2; z++) {
+        ctx.expect(await ctx.rcon(
+          `execute if block ${spot.x} ${floorY} ${z} minecraft:stone`)).toBe('Test passed');
+      }
+      await ctx.rcon('gamemode survival Probe');
+      await ctx.sleep(400);
       await ctx.rcon('materione give sample:ruby_disc Probe 1');
 
       // --- the disc's component, resolved against the loaded datapack song
@@ -218,6 +230,8 @@ return jukebox.toString() + ' ' + wire.toString()`, 15_000);
       ctx.expect(String(now)).toContain('power=7'); // the authored comparator_output
       ctx.expect(await waitForActiveSound(ctx, 'sample:ui/anthem', 4_000)).toBe(true);
       ctx.expect(await ctx.shot('jukebox-playing')).toBeTruthy();
+      const inventoryAfterInsert = await ctx.rcon('data get entity Probe Inventory');
+      ctx.expect(String(inventoryAfterInsert).includes('Ruby disc')).toBe(false);
 
       // --- eject with an empty hand (the disc left the hand on insert),
       // late enough that the sound is fully live — an eject that races the
@@ -240,22 +254,62 @@ return 'ejected'`, 15_000);
       }
       ctx.expect(String(after)).toContain('has_record=false');
       ctx.expect(String(after)).toContain('power=0');
-      // the streamed jukebox instance retires off-thread once the eject
-      // broadcast lands — poll, don't race it
+      // the sound engine retires instances off-thread once the eject
+      // broadcast lands — poll, don't race the stop update
       const stillPlaying = await waitForActiveSound(ctx, 'sample:ui/anthem', 10_000);
       ctx.expect(stillPlaying).toBe(false);
 
-      // --- the popped disc returns to the inventory
-      await ctx.rcon('tp Probe 1.5 -60 3.5');
-      await ctx.sleep(1_200);
-      const inv = await ctx.exec(`def out = []
-def playerInv = mc.player.getInventory()
-for (int i = 0; i < 46; i++) {
-  def st = playerInv.getItem(i)
-  if (!st.isEmpty()) out.add(st.getHoverName().getString())
-}
-return out.join(' | ')`, 15_000);
-      ctx.expect(String(inv)).toContain('Ruby disc');
+      // --- observe the server-side drop, then move onto its actual position.
+      // A fixed "nearby" teleport can leave the player outside the item hitbox.
+      const itemAtJukebox =
+        'execute positioned 2.5 -59.5 3.5 as @e[type=item,distance=..4,limit=1,sort=nearest]';
+      const droppedField = async (path) =>
+        ctx.rcon(`${itemAtJukebox} run data get entity @s Item.${path}`);
+      const dropIdentityPath =
+        'components."minecraft:custom_data".PublicBukkitValues."materione:id"';
+      const dropDeadline = Date.now() + 5_000;
+      let dropIdentity = await droppedField(dropIdentityPath);
+      while (!String(dropIdentity).includes('sample:ruby_disc') && Date.now() <= dropDeadline) {
+        await ctx.sleep(250);
+        dropIdentity = await droppedField(dropIdentityPath);
+      }
+      ctx.expect(String(await droppedField('id'))).toContain('minecraft:music_disc_cat');
+      ctx.expect(String(await droppedField('count'))).toMatch(/\b1\b/);
+      ctx.expect(String(await droppedField(
+        'components."minecraft:custom_name".extra[0].extra[0].text',
+      ))).toContain('Ruby disc');
+      ctx.expect(String(dropIdentity)).toContain('sample:ruby_disc');
+      await ctx.rcon(`${itemAtJukebox} run data get entity @s Pos`);
+      const movedToDrop = await ctx.rcon(`${itemAtJukebox} at @s run tp Probe ~ ~ ~`);
+      ctx.expect(String(movedToDrop)).toContain('Teleported Probe to');
+
+      // Poll the authoritative inventory through pickup, then wait for the
+      // client inventory to reflect the server's pickup update. The reset and
+      // single-disc give leave slot 0 as the first empty slot on pickup.
+      const inventorySlot = 'Inventory[{Slot:0b}]';
+      const inventoryField = async (path) =>
+        ctx.rcon(`data get entity Probe ${inventorySlot}.${path}`);
+      const inventoryIdentityPath =
+        'components."minecraft:custom_data".PublicBukkitValues."materione:id"';
+      const pickupDeadline = Date.now() + 5_000;
+      let inventoryIdentity = await inventoryField(inventoryIdentityPath);
+      while (!String(inventoryIdentity).includes('sample:ruby_disc') && Date.now() <= pickupDeadline) {
+        await ctx.sleep(250);
+        inventoryIdentity = await inventoryField(inventoryIdentityPath);
+      }
+      ctx.expect(String(await inventoryField('id'))).toContain('minecraft:music_disc_cat');
+      ctx.expect(String(await inventoryField('count'))).toMatch(/\b1\b/);
+      ctx.expect(String(inventoryIdentity)).toContain('sample:ruby_disc');
+
+      const clientDiscName = async () => ctx.exec(`def st = mc.player.getInventory().getItem(0)
+return st.isEmpty() ? 'EMPTY' : st.getHoverName().getString()`, 15_000);
+      const clientDeadline = Date.now() + 5_000;
+      let name = await clientDiscName();
+      while (!String(name).includes('Ruby disc') && Date.now() <= clientDeadline) {
+        await ctx.sleep(250);
+        name = await clientDiscName();
+      }
+      ctx.expect(String(name)).toBe('Ruby disc');
     },
   }),
 ];

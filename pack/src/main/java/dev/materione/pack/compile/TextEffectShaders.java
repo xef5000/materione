@@ -10,17 +10,14 @@ import java.util.Locale;
 /**
  * Composes the injected text-shader set from the pack's compiled text
  * effects (runtime-systems §6): one version-matched <em>overlay</em> per
- * shader-format rung, each carrying the pack's replacement
- * {@code rendertype_text} vertex shader plus a generated
- * {@code materione_text_effects.glsl} include with one branch per effect.
+ * shader-format rung, each carrying its replacement vertex shader and
+ * generated effect include.
  *
  * <p>Only the vertex shader is replaced — the replacement outputs the
  * vanilla varyings, so the client's own fragment shader (alpha cutout,
  * fog) keeps working unmodified. Shader files never ship in the base
  * layer: a client whose format matches no rung receives a shader-free
- * pack (Nexo's overlay strategy). The ladder tops out at format 83 —
- * the 26.x schema forbids overlay entries that would serve newer
- * clients alongside the floor (see the rung list).
+ * pack (Nexo's overlay strategy).
  *
  * <p>The include detects effect text by its <strong>signal color</strong>
  * ({@link EffectSpec#signalRgb()} — the color the runtime paints the span
@@ -31,27 +28,37 @@ import java.util.Locale;
  */
 final class TextEffectShaders {
 
-    /** One version rung: overlay directory, template variant, shipped shader name, format range. */
-    record Rung(
-            String overlayDir, String variantDir, String shaderName,
-            int minFormat, int maxFormat, int bakeFormat, boolean shipJson) {}
+    private static final String INCLUDE_PATH = "assets/minecraft/shaders/include/materione_text_effects.glsl";
+    private static final String INCLUDE_PATH_26_2 =
+            "assets/minecraft/shaders/include/materione_text_effects_26_2.glsl";
 
     /**
-     * The verified ladder — formats 46..83. The 26.x rungs (84+) are gone
-     * on purpose: since pack format 65 the mcmeta schema forbids
-     * {@code formats} on entries whose {@code min_format} is 65+, while
-     * pre-65 clients require {@code formats} on <em>every</em> entry and
-     * drop the whole overlays section when one lacks it (pinned against
-     * real parsers — see PackCompiler#patchMcmeta). One pack.mcmeta cannot
-     * carry a 65+ overlay entry and still serve the floor. A 26.x client
-     * matches no rung and receives a shader-free view — text effects
-     * render as static text, flagged by MTR-0044's out-of-ladder warning.
+     * One version rung. {@code minFormat}/{@code maxFormat} are the exact
+     * client formats covered; overlay ranges may be broader where both
+     * metadata schemas require matching {@code formats} and {@code min/max}.
+     */
+    record Rung(
+            String overlayDir, String variantDir, String shaderName,
+            int minFormat, int maxFormat, int overlayMinFormat, int overlayMaxFormat,
+            int bakeFormat, String includePath, boolean shipJson) {}
+
+    /**
+     * The verified ladder, in overlay precedence order. Both metadata
+     * schemas require the same inclusive range on each entry: pre-25w31a
+     * clients need {@code formats}, and current clients reject mismatched
+     * {@code formats} versus {@code min/max}. The 26.x entries therefore
+     * advertise matching broad ranges beginning at 64; the later 1.21.6
+     * overlay replaces {@code rendertype_text} on formats 64..83.
      */
     static final List<Rung> RUNGS = List.of(
-            new Rung("materione_1_21_4", "v1_21_4", "rendertype_text", 46, 62, 46, true),
-            new Rung("materione_1_21_6", "v1_21_6", "rendertype_text", 63, 83, 63, true));
-
-    private static final String INCLUDE_PATH = "assets/minecraft/shaders/include/materione_text_effects.glsl";
+            new Rung("materione_26_2", "v26_2", "text",
+                    88, 88, 64, 88, 88, INCLUDE_PATH_26_2, true),
+            new Rung("materione_26_1", "v26_1", "rendertype_text",
+                    84, 87, 64, 87, 84, INCLUDE_PATH, false),
+            new Rung("materione_1_21_6", "v1_21_6", "rendertype_text",
+                    63, 83, 63, 83, 63, INCLUDE_PATH, true),
+            new Rung("materione_1_21_4", "v1_21_4", "rendertype_text",
+                    46, 62, 46, 62, 46, INCLUDE_PATH, true));
 
     private TextEffectShaders() {}
 
@@ -59,6 +66,22 @@ final class TextEffectShaders {
     static boolean covers(int resourceFormat) {
         return RUNGS.stream().anyMatch(rung ->
                 resourceFormat >= rung.minFormat() && resourceFormat <= rung.maxFormat());
+    }
+
+    /** The rung for a generated overlay directory, or {@code null} for other overlays. */
+    static Rung rungForOverlay(String overlayDir) {
+        return RUNGS.stream()
+                .filter(rung -> rung.overlayDir().equals(overlayDir))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /** Human-readable exact legacy range list, in ascending format order. */
+    static String formatRanges() {
+        return RUNGS.stream()
+                .sorted(java.util.Comparator.comparingInt(Rung::minFormat))
+                .map(rung -> rung.minFormat() + ".." + rung.maxFormat())
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     /** The shader names the ladder overrides (for Sodium's ignored_shaders). */
@@ -201,8 +224,4 @@ final class TextEffectShaders {
         }
     }
 
-    /** The generated include path inside every overlay. */
-    static String includePath() {
-        return INCLUDE_PATH;
-    }
 }
