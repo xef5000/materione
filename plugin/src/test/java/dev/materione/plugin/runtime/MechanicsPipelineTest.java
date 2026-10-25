@@ -25,6 +25,7 @@ import dev.materione.platform.items.MaterioneStacks;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.plugin.runtime.mechanics.ItemMechanics;
 import dev.materione.plugin.runtime.mechanics.builtin.CommandsMechanic;
+import dev.materione.plugin.runtime.mechanics.builtin.DurabilityMechanic;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,6 +57,39 @@ class MechanicsPipelineTest {
         assertThat(shadow.view(ItemBehaviors.KEY).forItem(ITEM).orElseThrow()).hasSize(2);
         assertThat(item.itemModifiers()).hasSize(1);
         assertThat(MaterioneStacks.specOf(item).itemModifiers()).containsExactlyElementsOf(item.itemModifiers());
+        assertThat(diagnostics.recent(64)).isEmpty();
+    }
+
+    @Test
+    void customDurabilityFixtureLoadsItsTypedMechanicAndExpressionRule() throws IOException {
+        pipeline.registerBuiltins();
+        var durability = new DurabilityMechanic();
+        registries.registry(RegistryKeys.MECHANICS, Mechanic.class).register(
+                NamespacedId.parse("materione:durability"),
+                durability, durability.describe(), "materione");
+        NamespacedId bladeId = NamespacedId.parse("world:crucible_blade");
+        Path fixturePath = Path.of(System.getProperty("materione.fixtures.root"))
+                .resolve("packs").resolve("world").resolve("items").resolve("crucible_blade.yml");
+        var document = LosslessYaml.parse(Files.readString(fixturePath));
+        var resource = new ContentResource(bladeId, "item",
+                Path.of("items", "crucible_blade.yml"), document);
+        var manifest = new PackManifest(
+                "world", "1", 1, List.of(), LosslessYaml.parse("id: world\n"));
+        var shadow = pipeline.buildShadow(List.of(new ContentPack(
+                "world", Path.of("world"), manifest, List.of(resource))));
+
+        assertThat(shadow.view(ItemMechanics.KEY).onItem(
+                bladeId, NamespacedId.parse("materione:durability"), DurabilityMechanic.Instance.class))
+                .contains(new DurabilityMechanic.Instance(3));
+        var rules = shadow.view(ItemBehaviors.KEY).forItem(bladeId).orElseThrow();
+        assertThat(rules).hasSize(1);
+        assertThat(rules.getFirst().on().matches("click", "right")).isTrue();
+        assertThat(rules.getFirst().actions()).singleElement()
+                .satisfies(action -> {
+                    assertThat(action.type()).isEqualTo("message");
+                    assertThat(action.scalarParam())
+                            .isEqualTo("blade-wear ${item.durability_used}/${item.durability_max}");
+                });
         assertThat(diagnostics.recent(64)).isEmpty();
     }
 

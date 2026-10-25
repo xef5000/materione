@@ -34,6 +34,15 @@ class TemplateTest {
     }
 
     @Test
+    void rendersCustomDurabilityCountersFromTheItemExpressionTree() {
+        var ctx = new EvaluationContext(Map.<String, Object>of(
+                "item", Map.<String, Object>of("durability_used", 2, "durability_max", 3)));
+        assertThat(Template.render(
+                "blade-wear ${item.durability_used}/${item.durability_max}", ctx))
+                .isEqualTo("blade-wear 2/3");
+    }
+
+    @Test
     void unterminatedExpressionsStayLiteral() {
         var ctx = new EvaluationContext(Map.of());
         // guessing would be worse than showing the raw text
