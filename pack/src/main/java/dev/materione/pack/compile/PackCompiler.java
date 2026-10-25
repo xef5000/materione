@@ -786,8 +786,8 @@ public final class PackCompiler {
                     "text effects compiled, but this server's client format " + detectedMaxFormat
                             + " is outside the verified shader ladder — effects will not animate"
                             + " for its players",
-                    null, null, "the shader ladder covers formats 46.."
-                            + TextEffectShaders.RUNGS.get(TextEffectShaders.RUNGS.size() - 1).maxFormat()));
+                    null, null, "the shader ladder covers client formats "
+                            + TextEffectShaders.formatRanges()));
         }
     }
 
@@ -876,12 +876,12 @@ public final class PackCompiler {
     }
 
     /**
-     * Adds {@code min_format}/{@code max_format} to every overlay entry,
-     * mirroring its {@code formats} pair. creative's serializer emits only
-     * the legacy {@code formats}, which 1.21.9+/26.x clients read as
-     * deprecated (and reject outright on entries at format 65+); the new
-     * fields are what those clients gate overlays on, while pre-25w31a
-     * clients ignore the unknown keys and keep reading {@code formats}.
+     * Adds {@code min_format}/{@code max_format} to every overlay entry.
+     * creative's serializer emits the legacy {@code formats}; pre-25w31a
+     * clients require it, while current clients gate overlays on the new
+     * fields. Shader rungs supply their schema ranges explicitly because the
+     * 26.x entries must keep {@code min_format} below 65 for old parsers to
+     * accept the same pack; other overlays mirror their legacy range.
      * No-op without an overlays section.
      */
     private static void patchMcmeta(Path zip) throws IOException {
@@ -940,7 +940,21 @@ public final class PackCompiler {
         if (overlays != null && overlays.has("entries")) {
             for (var element : overlays.getAsJsonArray("entries")) {
                 JsonObject entry = element.getAsJsonObject();
-                if (!entry.has("formats") || entry.has("min_format")) {
+                if (!entry.has("formats")) {
+                    continue;
+                }
+                String directory = entry.has("directory")
+                        ? entry.get("directory").getAsString()
+                        : null;
+                TextEffectShaders.Rung rung = directory == null
+                        ? null
+                        : TextEffectShaders.rungForOverlay(directory);
+                if (rung != null) {
+                    entry.addProperty("min_format", rung.schemaMinFormat());
+                    entry.addProperty("max_format", rung.schemaMaxFormat());
+                    continue;
+                }
+                if (entry.has("min_format")) {
                     continue;
                 }
                 var formats = entry.get("formats");

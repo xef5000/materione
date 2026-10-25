@@ -563,7 +563,9 @@ return out.join(' | ')`, 15_000);
     covers: [
       'content/src/main/java/dev/materione/content/effects/**',
       'core/src/main/java/dev/materione/core/runtime/RuntimeEffects.java',
+      'pack/src/main/java/dev/materione/pack/compile/PackCompiler.java',
       'pack/src/main/java/dev/materione/pack/compile/TextEffectShaders.java',
+      'pack/src/test/java/dev/materione/pack/compile/PackCompilerTest.java',
       'platform/src/main/java/dev/materione/platform/text/GlyphText.java',
       'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
       'fixtures/packs/sample/effects/**',
@@ -583,7 +585,11 @@ def rl = idc.fromNamespaceAndPath('minecraft', 'shaders/core/rendertype_text.vsh
 def opt = rm.getResource(rl)
 if (!opt.isPresent()) return 'NOT PRESENT'
 return new String(opt.get().open().readAllBytes().@target, java.nio.charset.StandardCharsets.UTF_8)`, 20_000);
-      ctx.expect(String(shader)).toContain('materione');
+      const source = String(shader);
+      ctx.expect(source).toContain('#version 330');
+      ctx.expect(source).toContain('#moj_import <minecraft:materione_text_effects.glsl>');
+      ctx.expect(source).toContain('materionePreTransform(mtrPosition);');
+      ctx.expect(source).toContain('materionePostTransform(mtrPosition);');
 
       // the generated include: the client's own pack format baked (84 = the
       // 26.1 rung this probe client resolves to), one branch per effect keyed
