@@ -570,13 +570,13 @@ return 'use:' + result.toString()`, 15_000);
 
       // --- scene: the cluster anchors at [1,-60,7]; the barrier hitbox
       // (offset [0,0,0]) occupies the anchor cell, dead in the walk path
-      // from the spawn point (1,-60,3) heading south. Clear the whole path so
-      // earlier tests cannot turn the baseline into an obstacle course.
+      // from the spawn point (1,-60,3) heading south. Clear the full-width
+      // approach and headspace so earlier tests cannot leave an obstacle.
       const anchor = [1, -60, 7];
       const spawn = 'tp Probe 1 -60 3';
       const corridor = [];
       for (let x = 0; x <= 2; x++) {
-        for (let y = -60; y <= -59; y++) {
+        for (let y = -60; y <= -58; y++) {
           for (let z = 3; z <= 9; z++) corridor.push([x, y, z]);
         }
       }
