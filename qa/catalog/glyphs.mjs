@@ -570,7 +570,8 @@ return out.join(' | ')`, 15_000);
       'plugin/src/main/java/dev/materione/plugin/runtime/text/**',
       'fixtures/packs/sample/effects/**',
     ],
-    dependsOn: ['glyphs.emoji'],
+    // Shared chat decoration is the prerequisite; emoji's join-time completion list is orthogonal.
+    dependsOn: ['glyphs.alias'],
     timeoutMs: 240_000,
     steps: async (ctx) => {
       await ctx.reset();
