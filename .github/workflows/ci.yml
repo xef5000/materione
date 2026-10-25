@@ -56,8 +56,12 @@ jobs:
       # free plan). The jar is reproducible from any commit; two days of
       # history keeps a testable build around while several runs per day
       # stay an order of magnitude under the ceiling.
+      # continue-on-error: a blown storage quota takes 6-12h for GitHub's
+      # billing cron to clear after deletion and must never block the build
+      # or downstream integration job (which builds from source via Gradle).
       - name: Upload plugin jar
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: materione-plugin
           path: plugin/build/libs/Materione-*.jar
