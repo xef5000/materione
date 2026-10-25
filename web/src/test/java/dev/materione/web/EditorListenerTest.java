@@ -94,6 +94,12 @@ class EditorListenerTest {
         SessionBlob sessionBlob = SessionBlob.fromBodyBytes(opened.body());
         assertThat(sessionBlob.pluginSigningPubKey())
                 .isEqualTo(KeyFormat.ed25519RawPublic(identity.getPublic()));
+        // The blob is the self-description the panel negotiates against: it
+        // must advertise exactly what this build accepts at hello.
+        assertThat(sessionBlob.protocolVersions())
+                .containsExactlyElementsOf(Wire.SUPPORTED_VERSIONS);
+        assertThat(sessionBlob.capabilities())
+                .containsExactlyElementsOf(SessionBlob.CURRENT_CAPABILITIES);
 
         // --- WS connect, hello, signed reply, key confirmation
         KeyPair editorSigning = KeyFormat.generateEd25519(new SecureRandom());
@@ -184,13 +190,63 @@ class EditorListenerTest {
         ws.abort();
     }
 
+    @Test
+    void unsupportedProtocolVersionIsRejectedWithTheSpokenList() throws Exception {
+        int port = PORT_BASE + new SecureRandom().nextInt(PORT_SPREAD);
+        KeyPair identity = KeyFormat.generateEd25519(new SecureRandom());
+        EditorSessions sessions = new EditorSessions(
+                identity, (prefix, browser) ->
+                        CompletableFuture.completedFuture(TrustPrompt.Decision.APPROVED),
+                null, bus);
+        listener = new EditorListener(
+                sessions, new EditorSockets(sessions, new RpcDispatcher(), bus), new RpcDispatcher(), bus);
+        assertThat(listener.start(new EditorConfig("127.0.0.1", port))).isTrue();
+
+        // A real session id: the version check sits after the session lookup,
+        // so only the version must be wrong to land on its error.
+        String url = listener.openSessionUrl(null);
+        String code = URI.create(url).getQuery().substring("s=".length());
+
+        HttpClient http = HttpClient.newHttpClient();
+        WsClient client = new WsClient();
+        WebSocket ws = http.newWebSocketBuilder()
+                .buildAsync(URI.create("ws://127.0.0.1:" + listener.boundPort() + "/editor/ws"), client)
+                .get(10, TimeUnit.SECONDS);
+        HelloMessage future = new HelloMessage(
+                nonce(), code, 999,
+                KeyFormat.ed25519RawPublic(KeyFormat.generateEd25519(new SecureRandom()).getPublic()),
+                KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) KeyFormat
+                        .generateP256(new SecureRandom()).getPublic()),
+                "time-traveller");
+        ws.sendText(Wire.canonicalJson(future.toJson()), true).get(5, TimeUnit.SECONDS);
+
+        long deadline = System.currentTimeMillis() + 5000;
+        while (!published.contains("MTR-0033") && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        assertThat(published).contains("MTR-0033");
+        // The violation names the refusal AND what the server does speak —
+        // the hint an admin pastes into an issue when versions drift.
+        Diagnostic violation = ((Bus) bus).full.stream()
+                .filter(d -> d.code().code().equals("MTR-0033"))
+                .findFirst()
+                .orElseThrow();
+        assertThat(violation.message())
+                .contains("protocol version 999")
+                .contains("server speaks " + Wire.VERSION);
+        ws.abort();
+    }
+
     // ------------------------------------------------------------------
 
     /** Thin bus wrapper collecting codes; the real service works too but this keeps tests hermetic. */
     private final class Bus implements DiagnosticsBus {
+        final ConcurrentLinkedQueue<Diagnostic> full = new ConcurrentLinkedQueue<>();
+
         @Override
         public void publish(Diagnostic diagnostic) {
             published.offer(diagnostic.code().code());
+            full.offer(diagnostic);
         }
 
         @Override

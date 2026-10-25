@@ -15,15 +15,44 @@ import java.util.List;
  *
  * <p>Sealed with the 256-bit wrapping key through {@link Envelope} (type
  * {@code session-blob}); the code alone is useless, the key alone is useless.
+ *
+ * <p>Besides the routing it carries the <em>self-description</em> the panel
+ * needs before any RPC: the protocol versions this build accepts at hello
+ * (negotiated against the panel's own list) and the {@link #capabilities()}
+ * naming the editor features this build implements — so a panel newer than
+ * the connected jar hides unsupported UI instead of collecting per-call
+ * "unknown op" errors (web.md §4.2).
  */
 public record SessionBlob(
         String sessionId,
         List<Integer> protocolVersions,
+        List<String> capabilities,
         byte[] pluginSigningPubKey,
         RelayInfo relay,
         DirectInfo direct) {
 
     public static final String TYPE = "session-blob";
+
+    /**
+     * The capability vocabulary this build implements — user-visible editor
+     * feature areas the panel may gate UI on, not RPC op names (ops come and
+     * go without changing what the editor does). Content-type names follow
+     * the content module's registrations; {@code models}, {@code assets} and
+     * {@code delivery} cover the non-type authoring surface. Keep sorted:
+     * the list rides into the golden fixture byte-for-byte.
+     */
+    public static final List<String> CURRENT_CAPABILITIES = List.of(
+            "assets",
+            "blocks",
+            "delivery",
+            "furniture",
+            "glyphs",
+            "items",
+            "models",
+            "paintings",
+            "recipes",
+            "sounds",
+            "text-effects");
 
     /** How a browser reaches the relay mailbox and proves itself there. */
     public record RelayInfo(String base, String channelId, String editorToken) {}
@@ -33,11 +62,7 @@ public record SessionBlob(
 
     public SessionBlob {
         protocolVersions = protocolVersions == null ? List.of() : List.copyOf(protocolVersions);
-    }
-
-    /** Direct-mode shape (no relay/direct blocks). */
-    public SessionBlob(String sessionId, List<Integer> protocolVersions, byte[] pluginSigningPubKey) {
-        this(sessionId, protocolVersions, pluginSigningPubKey, null, null);
+        capabilities = capabilities == null ? List.of() : List.copyOf(capabilities);
     }
 
     public byte[] bodyBytes() {
@@ -50,6 +75,9 @@ public record SessionBlob(
         var versions = new com.google.gson.JsonArray();
         protocolVersions.forEach(versions::add);
         object.add("protocolVersions", versions);
+        var caps = new com.google.gson.JsonArray();
+        capabilities.forEach(caps::add);
+        object.add("capabilities", caps);
         Wire.putBinary(object, "pluginSigningPubKey", pluginSigningPubKey);
         if (relay != null) {
             JsonObject block = new JsonObject();
@@ -72,8 +100,16 @@ public record SessionBlob(
             throw new ProtocolException(ProtocolException.Kind.MALFORMED, "session id malformed");
         }
         var versions = new java.util.ArrayList<Integer>();
-        for (var element : object.getAsJsonArray("protocolVersions")) {
-            versions.add(element.getAsInt());
+        if (object.has("protocolVersions") && object.get("protocolVersions").isJsonArray()) {
+            for (var element : object.getAsJsonArray("protocolVersions")) {
+                versions.add(element.getAsInt());
+            }
+        }
+        var capabilities = new java.util.ArrayList<String>();
+        if (object.has("capabilities") && object.get("capabilities").isJsonArray()) {
+            for (var element : object.getAsJsonArray("capabilities")) {
+                capabilities.add(element.getAsString());
+            }
         }
         RelayInfo relay = null;
         if (object.has("relay") && object.get("relay").isJsonObject()) {
@@ -90,6 +126,7 @@ public record SessionBlob(
         return new SessionBlob(
                 Wire.requiredString(object, "sessionId"),
                 versions,
+                capabilities,
                 Wire.requiredBinary(object, "pluginSigningPubKey"),
                 relay,
                 direct);

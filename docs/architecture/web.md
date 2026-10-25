@@ -232,9 +232,16 @@ The session blob is the trust root of the whole exchange, so its key transport i
    an Ed25519 signing keypair.
 2. Plugin creates the relay channel, joins it, and uploads the **session blob** to the store,
    encrypted with the wrapping key (AES-256-GCM). The blob contains: session id, channel id,
-   editor capability token, plugin signing public key, protocol versions supported — plus,
+   editor capability token, plugin signing public key, protocol versions supported, the
+   **capabilities** naming the editor features this build implements — plus,
    when the embedded listener is reachable from the admin's machine, a **direct-mode hint**
-   (LAN auto-preference, §4.4).
+   (LAN auto-preference, §4.4). The self-description travels inside the encryption so the
+   panel can negotiate and gate before any RPC: `protocolVersions` is the jar's accepted
+   hello versions (§4.2); `capabilities` lists named feature areas (`items`, `blocks`,
+   `furniture`, `paintings`, `glyphs`, `text-effects`, `sounds`, `recipes`, `models`,
+   `assets`, `delivery` for the v1 surface) that a newer panel hides or annotates UI for
+   when the connected jar does not advertise them — an absent list means a
+   pre-capabilities jar, and the panel assumes full support (never worse than today).
 3. Plugin prints the admin a URL of the form
    `https://editor.materione.com/?s={code}#{wrapping-key}` — **the store code identifies the
    blob, the URL fragment carries the wrapping key** (same grammar as direct mode: the SPA
@@ -297,8 +304,13 @@ A small, versioned RPC set over the established channel:
 | **admin** | diagnostics feed, doctor summary, audit query, settings read (security keys never leave the server) |
 
 Requests carry `{op, id, payload}`; responses `{op, id, ok, data|error}`. Errors reuse the
-plugin's structured diagnostic codes. **Protocol version is negotiated at hello**; unknown ops
-return a clean error, never a disconnect.
+plugin's structured diagnostic codes. **Protocol version is negotiated at hello**: the blob
+advertises the jar's accepted versions, the panel picks the highest one its own build also
+speaks, and the server accepts any version it advertised (membership, not exact-match) — a
+cached cloud panel one release behind or ahead of the jar still connects. Disjoint lists
+fail before any socket opens, with a message naming both sides. Unknown ops
+return a clean error, never a disconnect; capabilities (§4.1) let the panel avoid calling
+ops the connected jar predates.
 
 *As built (M3 + workbench update):* session `ping` / `session.info` (host status
 extras); browse packs / resources (type + query filters) / **folders** / get / history / types;
@@ -536,8 +548,11 @@ cannot read, forge, replay, or reorder anything.
   asset API knows: `assets.get` may read it, `authoring.saveModel` may stage it, and
   `assets.put/move/delete` may not touch it — metadata is written by the transaction that owns
   it, never by a free-form upload.
-- **Versioning**: the SPA declares the protocol versions it speaks; the plugin serves hints if
-  the cached SPA is stale ("a newer editor is available — refresh").
+- **Versioning**: implemented for the handshake (§4.2) — the SPA intersects the blob's
+  advertised versions with its own and the hello speaks the common one, so jar and panel
+  releases land independently; capabilities (§4.1) let a newer panel hide features the
+  connected jar predates instead of surfacing per-call errors. Not yet built: the plugin
+  serving "a newer editor is available — refresh" hints when the cached SPA is stale.
 
 ---
 
