@@ -1,0 +1,6 @@
+{"t":0,"kind":"note","msg":"test start: editor.local-url (auto)"}
+{"t":261,"kind":"rcon","req":{"command":"clear Probe"},"res":"Removed 1 item(s) from player Probe"}
+{"t":528,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":790,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1053,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1724,"kind":"rcon","req":{"command":"materione editor local"},"res":""}
