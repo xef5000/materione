@@ -26,8 +26,23 @@ import java.util.Map;
  */
 public final class Wire {
 
-    /** Protocol version this build speaks; negotiated at hello (web.md §4.2). */
+    /**
+     * Protocol version this build prefers — the newest one in
+     * {@link #SUPPORTED_VERSIONS}; handshake transcripts still record the
+     * single version actually spoken (web.md §4.2).
+     */
     public static final int VERSION = 1;
+
+    /**
+     * Every protocol version this build accepts at hello — the same list the
+     * session blob advertises (web.md §4.1): the browser intersects it with
+     * the versions its own SPA build speaks and sends the highest common
+     * one, so a cached cloud panel one release behind (or ahead of) the jar
+     * still connects. Bump {@link #VERSION} and append here when a release
+     * breaks compatibility; an old panel then negotiates down instead of
+     * being hard-rejected.
+     */
+    public static final List<Integer> SUPPORTED_VERSIONS = List.of(VERSION);
 
     private static final Base64.Encoder B64 = Base64.getUrlEncoder().withoutPadding();
     private static final Base64.Decoder B64D = Base64.getUrlDecoder();

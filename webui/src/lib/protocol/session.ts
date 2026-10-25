@@ -47,9 +47,69 @@ export interface DirectInfo {
 export interface SessionBlob {
   sessionId: string;
   protocolVersions: number[];
+  capabilities?: string[];
   pluginSigningPubKey: Uint8Array;
   relay?: RelayInfo;
   direct?: DirectInfo;
+}
+
+/**
+ * Protocol versions this SPA build speaks (web.md §4.2). The session blob
+ * advertises the jar's list; the hello carries the highest version present
+ * in BOTH lists — so a cloud panel served from cache one release behind (or
+ * ahead of) the connected jar negotiates instead of being hard-rejected.
+ * Keep in lockstep with the jar's Wire.SUPPORTED_VERSIONS (web.md §4.2).
+ */
+export const SUPPORTED_PROTOCOL_VERSIONS = [1];
+
+/**
+ * Intersects the two sides' protocol versions and returns the one the hello
+ * will speak. Throws before any transport is opened when the lists are
+ * disjoint — the panel cannot serve this jar at all, and the message says
+ * which side to move.
+ */
+export function negotiateProtocolVersion(blob: {
+  protocolVersions?: number[];
+}): number {
+  const offered = blob.protocolVersions ?? [];
+  const common = SUPPORTED_PROTOCOL_VERSIONS.filter((v) => offered.includes(v));
+  if (common.length === 0) {
+    throw new Error(
+      `no common protocol version — this panel speaks [${SUPPORTED_PROTOCOL_VERSIONS.join(', ')}] ` +
+        `but the server offers [${offered.join(', ')}]; update the Materione plugin or hard-refresh this page`,
+    );
+  }
+  return Math.max(...common);
+}
+
+/**
+ * Capability names this SPA build knows, mirroring the jar's
+ * SessionBlob.CURRENT_CAPABILITIES (dev.materione.web.protocol) — the
+ * golden fixture test pins the two lists together.
+ */
+export const CURRENT_CAPABILITIES = [
+  'assets',
+  'blocks',
+  'delivery',
+  'furniture',
+  'glyphs',
+  'items',
+  'models',
+  'paintings',
+  'recipes',
+  'sounds',
+  'text-effects',
+] as const;
+
+/**
+ * Capability gating (web.md §4.1): the blob names the editor features the
+ * connected jar implements; the panel hides or annotates the rest instead
+ * of collecting per-call "unknown op" errors. An absent list is a
+ * pre-capabilities jar — assume the full surface so old jars keep working
+ * against new panels.
+ */
+export function hasCapability(blob: SessionBlob, name: string): boolean {
+  return blob.capabilities === undefined || blob.capabilities.includes(name);
 }
 
 export type ChannelState =
@@ -205,6 +265,7 @@ export async function fetchSessionBlob(
   const parsed = JSON.parse(utf8Decode(opened.body)) as {
     sessionId: string;
     protocolVersions: number[];
+    capabilities?: string[];
     pluginSigningPubKey: string;
     relay?: { base: string; channelId: string; editorToken: string };
     direct?: { url: string };
@@ -212,6 +273,7 @@ export async function fetchSessionBlob(
   return {
     sessionId: parsed.sessionId,
     protocolVersions: parsed.protocolVersions,
+    capabilities: parsed.capabilities,
     pluginSigningPubKey: b64d(parsed.pluginSigningPubKey),
     relay: parsed.relay,
     direct: parsed.direct,
@@ -276,6 +338,9 @@ export class EditorChannel {
   ): Promise<EditorChannel> {
     options.onState?.({ kind: 'connecting' });
     const blob = options.blob ?? (await fetchSessionBlob(httpBase, code, fragmentKey));
+    // Negotiate before any transport is opened: a disjoint version list
+    // throws a readable error instead of a socket-level mystery.
+    const protocolVersion = negotiateProtocolVersion(blob);
 
     const signing = await generateSigningPair();
     const ephemeral = await generateEphemeralPair();
@@ -291,7 +356,7 @@ export class EditorChannel {
       type: 'hello',
       nonce: b64e(nonce),
       sessionId: blob.sessionId,
-      protocolVersion: 1,
+      protocolVersion,
       editorSigningPubKey: b64e(editorSigningPub),
       editorEphemeralPubKey: b64e(ephemeralPub),
       browser: browserLabel,

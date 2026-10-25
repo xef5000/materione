@@ -113,6 +113,7 @@ class GoldenProtocolFixturesTest {
         SessionBlob blob = SessionBlob.fromBodyBytes(opened.body());
         assertThat(blob.sessionId()).isEqualTo(hello.sessionId());
         assertThat(blob.protocolVersions()).containsExactly(Wire.VERSION);
+        assertThat(blob.capabilities()).containsExactlyElementsOf(SessionBlob.CURRENT_CAPABILITIES);
     }
 
     // ------------------------------------------------------------------
@@ -179,7 +180,8 @@ class GoldenProtocolFixturesTest {
         Wire.putBinary(handshake, "sessionKey", sessionKey.getEncoded());
         Wire.putBinary(handshake, "confirmation", confirmation);
 
-        SessionBlob blob = new SessionBlob(SESSION_ID, List.of(Wire.VERSION), PLUGIN_PUB);
+        SessionBlob blob = new SessionBlob(
+                SESSION_ID, List.of(Wire.VERSION), SessionBlob.CURRENT_CAPABILITIES, PLUGIN_PUB, null, null);
         JsonObject envelope = Envelope.seal(
                 new javax.crypto.spec.SecretKeySpec(WRAPPING_KEY, "AES"),
                 SESSION_ID, SessionBlob.TYPE, blob.bodyBytes(), queueOf(0x40));

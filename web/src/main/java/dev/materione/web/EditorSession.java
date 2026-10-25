@@ -114,7 +114,8 @@ public final class EditorSession {
             dev.materione.web.protocol.SessionBlob.DirectInfo direct) {
         SessionBlob blob = new SessionBlob(
                 sessionId,
-                java.util.List.of(Wire.VERSION),
+                Wire.SUPPORTED_VERSIONS,
+                SessionBlob.CURRENT_CAPABILITIES,
                 dev.materione.web.protocol.KeyFormat.ed25519RawPublic(pluginSigning.getPublic()),
                 relay,
                 direct);
@@ -148,10 +149,16 @@ public final class EditorSession {
             return CompletableFuture.failedFuture(
                     new ProtocolException(ProtocolException.Kind.HANDSHAKE, "hello names another session"));
         }
-        if (received.protocolVersion() != Wire.VERSION) {
+        // Membership, not exact-match (web.md §4.2): the browser picked the
+        // highest version both sides advertised in the blob — anything on
+        // that list is acceptable even when it is not this build's newest.
+        if (!Wire.SUPPORTED_VERSIONS.contains(received.protocolVersion())) {
+            String supported = Wire.SUPPORTED_VERSIONS.stream()
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining(", "));
             return CompletableFuture.failedFuture(new ProtocolException(
                     ProtocolException.Kind.UNSUPPORTED, "protocol version " + received.protocolVersion()
-                            + " not supported (server speaks " + Wire.VERSION + ")"));
+                            + " not supported (server speaks " + supported + ")"));
         }
         hello = Objects.requireNonNull(received, "hello");
         sink = outbound;
