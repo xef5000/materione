@@ -495,7 +495,11 @@ return out.join(' | ')`, 15_000);
       };
 
       await ctx.reset();
-      await ctx.sleep(5_000); // fresh-boot settle; the pack loads at join
+      // Completion suggestions are sent only at join. The alias test may
+      // promote Probe after a deopped join without refreshing that packet.
+      await ctx.rcon('op Probe');
+      await ctx.rejoin();
+      await ctx.sleep(5_000); // settle the pack and operator-gated completions
 
       // --- resolution matrix in one line: two regular emoji + the alias
       // placeholder (resolves through its target's bitmaps)
