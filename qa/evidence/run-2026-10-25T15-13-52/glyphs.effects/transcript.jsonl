@@ -1,0 +1,10 @@
+{"t":0,"kind":"note","msg":"test start: glyphs.effects (visual)"}
+{"t":262,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":526,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":792,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1059,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1728,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1993,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2258,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2524,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":8098,"kind":"exec","req":{"code":"def rm = mc.getResourceManager()\ndef idc = Class.forName('net.minecraft.resources.Identifier')\ndef rl = idc.fromNamespaceAndPath('minecraft', 'shaders/core/rendertype_text.vsh')\ndef opt = rm.getResource(rl)\nif (!opt.isPresent()) return 'NOT PRESENT'\nreturn new String(opt.get().open().readAllBytes().@target, java.nio.charset.StandardCharsets.UTF_8)","timeoutMs":20000},"res":"#version 330\n\n#moj_import <minecraft:fog.glsl>\n#moj_import <minecraft:dynamictransforms.glsl>\n#moj_import <minecraft:projection.glsl>\n#moj_import <minecraft:sample_lightmap.glsl>\n\nin vec3 Position;\nin vec4 Color;\nin vec2 UV0;\nin ivec2 UV2;\n\nuniform sampler2D Sampler2;\n\nout float sphericalVertexDistance;\nout float cylindricalVertexDistance;\nout vec4 vertexColor;\nout vec2 texCoord0;\n\nvoid main() {\n    gl_Position = ProjMat * ModelViewMat * vec4(Position, 1.0);\n\n    sphericalVertexDistance = fog_spherical_distance(Position);\n    cylindricalVertexDistance = fog_cylindrical_distance(Position);\n    vertexColor = Color * sample_lightmap(Sampler2, UV2);\n    texCoord0 = UV0;\n}\n"}
