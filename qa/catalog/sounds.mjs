@@ -173,6 +173,8 @@ return 'stopped'`, 15_000);
     steps: async (ctx) => {
       const spot = { x: 2, y: -60, z: 3 };
       await ctx.reset();
+      await ctx.rcon('gamemode survival Probe');
+      await ctx.sleep(400);
       await ctx.rcon('materione give sample:ruby_disc Probe 1');
 
       // --- the disc's component, resolved against the loaded datapack song
@@ -218,6 +220,8 @@ return jukebox.toString() + ' ' + wire.toString()`, 15_000);
       ctx.expect(String(now)).toContain('power=7'); // the authored comparator_output
       ctx.expect(await waitForActiveSound(ctx, 'sample:ui/anthem', 4_000)).toBe(true);
       ctx.expect(await ctx.shot('jukebox-playing')).toBeTruthy();
+      const inventoryAfterInsert = await ctx.rcon('data get entity Probe Inventory');
+      ctx.expect(String(inventoryAfterInsert).includes('Ruby disc')).toBe(false);
 
       // --- eject with an empty hand (the disc left the hand on insert),
       // late enough that the sound is fully live — an eject that races the
@@ -240,21 +244,53 @@ return 'ejected'`, 15_000);
       }
       ctx.expect(String(after)).toContain('has_record=false');
       ctx.expect(String(after)).toContain('power=0');
-      // the streamed jukebox instance retires off-thread once the eject
-      // broadcast lands — poll, don't race it
+      // the sound engine retires instances off-thread once the eject
+      // broadcast lands — poll, don't race the stop update
       const stillPlaying = await waitForActiveSound(ctx, 'sample:ui/anthem', 10_000);
       ctx.expect(stillPlaying).toBe(false);
 
-      // --- the popped disc returns to the inventory
-      await ctx.rcon('tp Probe 1.5 -60 3.5');
-      await ctx.sleep(1_200);
-      const inv = await ctx.exec(`def out = []
+      // --- observe the server-side drop, then move onto its actual position.
+      // A fixed "nearby" teleport can leave the player outside the item hitbox.
+      const itemAtJukebox =
+        'execute positioned 2.5 -59.5 3.5 as @e[type=item,distance=..4,limit=1,sort=nearest]';
+      const dropped = async () => ctx.rcon(`${itemAtJukebox} run data get entity @s Item`);
+      const dropDeadline = Date.now() + 5_000;
+      let drop = await dropped();
+      while (!String(drop).includes('sample:ruby_disc') && Date.now() <= dropDeadline) {
+        await ctx.sleep(250);
+        drop = await dropped();
+      }
+      ctx.expect(String(drop)).toContain('Ruby disc');
+      ctx.expect(String(drop)).toContain('sample:ruby_disc');
+      await ctx.rcon(`${itemAtJukebox} run data get entity @s Pos`);
+      const movedToDrop = await ctx.rcon(`${itemAtJukebox} at @s run tp Probe ~ ~ ~`);
+      ctx.expect(String(movedToDrop)).toContain('Teleported Probe to');
+
+      // Poll the authoritative inventory through pickup, then wait for the
+      // client inventory to reflect the server's pickup update.
+      const serverInventory = async () => ctx.rcon('data get entity Probe Inventory');
+      const pickupDeadline = Date.now() + 5_000;
+      let serverInv = await serverInventory();
+      while (!String(serverInv).includes('sample:ruby_disc') && Date.now() <= pickupDeadline) {
+        await ctx.sleep(250);
+        serverInv = await serverInventory();
+      }
+      ctx.expect(String(serverInv)).toContain('Ruby disc');
+      ctx.expect(String(serverInv)).toContain('sample:ruby_disc');
+
+      const clientInventory = async () => ctx.exec(`def out = []
 def playerInv = mc.player.getInventory()
 for (int i = 0; i < 46; i++) {
   def st = playerInv.getItem(i)
   if (!st.isEmpty()) out.add(st.getHoverName().getString())
 }
 return out.join(' | ')`, 15_000);
+      const clientDeadline = Date.now() + 5_000;
+      let inv = await clientInventory();
+      while (!String(inv).includes('Ruby disc') && Date.now() <= clientDeadline) {
+        await ctx.sleep(250);
+        inv = await clientInventory();
+      }
       ctx.expect(String(inv)).toContain('Ruby disc');
     },
   }),

@@ -361,15 +361,21 @@ already asserts.
   z+2 — the wire's `power` in the client block state is the honest
   end-to-end channel (a playing disc's authored comparator output lands
   there within a second).
-- **Jukebox discs through a real client**: hold the disc in the main hand
-  and `useItemOn` the jukebox to insert (`has_record=true` in the client
-  block state); an empty-hand `useItemOn` ejects — the disc pops as an item
-  entity AT the jukebox (tp adjacent to vacuum it). Two timing traps: eject
-  late enough that the sound is fully live (an eject racing the engine's
-  queue can leave the young instance playing its course — wait for the
-  active instance, then ~1.5s), and the ejected instance retires off-thread
-  (poll ~10s). Upstream: a jukebox-song event authored `stream: true` keeps
-  playing past eject (#98) — non-streamed events stop instantly.
+- **Jukebox discs through a real client**: set the player to survival, hold
+  the disc in the main hand and `useItemOn` the jukebox to insert
+  (`has_record=true` in the client block state); verify the server inventory
+  no longer contains the source disc so a creative-mode copy cannot mask a
+  failed pickup. An empty-hand `useItemOn` ejects the disc as an item entity
+  at the jukebox. For a pickup assertion, read the dropped entity's `Item`
+  and `Pos`, then teleport the player to the entity (for example,
+  `execute positioned 2.5 -59.5 3.5 as @e[type=item,distance=..4,limit=1,sort=nearest] at @s run tp Probe ~ ~ ~`),
+  and poll the server-side `Inventory` before the client's inventory; a
+  fixed adjacent-block teleport can miss the item's pickup collision (#128).
+  Two timing traps: eject late enough that the sound is fully live (an eject
+  racing the engine's queue can leave the young instance playing its course —
+  wait for the active instance, then ~1.5s), and the ejected instance retires
+  off-thread (poll ~10s). Upstream: a jukebox-song event authored `stream:
+  true` keeps playing past eject (#98) — non-streamed events stop instantly.
 - **Forcing a chunk-load replay** (furniture evolution applies only in
   `EntityAddToWorld`, never on a timer): tp the player ~400 blocks away and
   hold — Paper keeps player-less chunks ~60s, so sleep a fixed 120s before
