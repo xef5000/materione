@@ -3,21 +3,18 @@
   import Workbench from './lib/components/Workbench.svelte';
   import { openChannel } from './lib/protocol/connect';
   import type { ChannelState, EditorChannel } from './lib/protocol/session';
-  import type { PushFrame } from './lib/events';
-  import type { DiagnosticEntry } from './lib/api';
-  import { documentChangedEffect, type DocumentChanged } from './lib/external';
+  import { encodeBase64Url } from './lib/protocol/wire';
+  import { draftStore, ensureDocumentDraft, reconcileDocumentDraft } from './lib/drafts.svelte';
   import {
-    bus,
+    confirmDisconnect,
     connection,
-    diagnostics,
+    handlePush,
+    hasUnsavedChanges,
     loadWorkspace,
-    logActivity,
-    markDocStale,
-    refreshPack,
+    markConnectionLost,
     refreshDelivery,
     resetWorkspace,
     session,
-    workspace,
   } from './lib/state.svelte';
 
   type Phase = 'login' | 'connecting' | 'awaiting' | 'active' | 'closed' | 'error';
@@ -26,6 +23,9 @@
   let error = $state('');
   let noncePrefix = $state('');
   let channel = $state<EditorChannel | null>(null);
+  let hasWorkspace = $state(false);
+  let reconnecting = $state(false);
+  let serverIdentity = '';
   let browserLabel = navigator.userAgent.replace(/^.*\)\s*/, '').slice(0, 40) || 'browser';
 
   // Fires mid-handshake, before EditorChannel.open resolves.
@@ -43,34 +43,69 @@
       // Transport selection lives in connect.ts: the blob decides relay vs
       // direct, with a reachable local listener preferred (LAN auto-preference).
       const opened = await openChannel(code, fragmentKey, browserLabel, handleHandshakeState, origin);
+      const identity = encodeBase64Url(opened.channel.blob.pluginSigningPubKey);
+      if (serverIdentity && identity !== serverIdentity) {
+        opened.channel.close();
+        throw new Error('This session belongs to a different server. Existing drafts were kept; disconnect and discard them before switching servers.');
+      }
+      serverIdentity = identity;
       channel = opened.channel;
       session.channel = channel;
+      connection.error = '';
       // The channel allows a single listener per kind; everything below
       // subscribes through the fan-out signals instead.
       channel.onState((state: ChannelState) => {
         if (state.kind === 'closed') {
-          resetWorkspace();
+          if (channel !== opened.channel) return;
+          markConnectionLost(state.reason);
           phase = 'closed';
           error = state.reason;
         }
       });
       channel.onPush((push) => {
-        bus.push.emit({ op: push.op, payload: push.payload as Record<string, unknown> });
+        if (channel === opened.channel) {
+          handlePush({ op: push.op, payload: push.payload as Record<string, unknown> });
+        }
       });
       noncePrefix = '';
       await loadWorkspace();
+      if (hasWorkspace) {
+        for (const draft of draftStore.documents) {
+          if (draft.loaded) await reconcileDocumentDraft(draft, opened.channel);
+          else await ensureDocumentDraft(draft, opened.channel);
+        }
+      }
       await refreshDelivery();
+      if (session.channel !== opened.channel) {
+        throw new Error('The connection closed while loading server state. Drafts were kept.');
+      }
+      connection.connected = true;
+      hasWorkspace = true;
+      reconnecting = false;
       phase = 'active';
     } catch (e) {
-      resetWorkspace();
+      if (!hasWorkspace) resetWorkspace();
       phase = 'error';
       error = e instanceof Error ? e.message : String(e);
     }
   }
 
   function disconnect() {
-    channel?.close();
-    location.reload();
+    if (!confirmDisconnect()) return;
+    const closing = channel;
+    channel = null;
+    closing?.close();
+    resetWorkspace();
+    serverIdentity = '';
+    hasWorkspace = false;
+    reconnecting = false;
+    phase = 'login';
+  }
+
+  function warnBeforeUnload(event: BeforeUnloadEvent) {
+    if (!hasUnsavedChanges()) return;
+    event.preventDefault();
+    event.returnValue = '';
   }
 
   // Auto-connect when opened straight from the capability URL: /?s=<code>#<key>.
@@ -87,45 +122,23 @@
     }
   });
 
-  // Keep the pipeline dock fed with server pushes even before any view cares.
-  $effect(() => {
-    return bus.push.add((frame: PushFrame) => {
-      if (frame.op === 'push.reload') {
-        const accepted = Boolean(frame.payload.accepted);
-        const line =
-          `reload ${accepted ? 'applied' : 'rejected'} — items live: ${String(frame.payload.itemsLive)}` +
-          ` (${String(frame.payload.files)})`;
-        connection.lastReload = line;
-        logActivity('reload', line);
-        void refreshDelivery();
-      } else if (frame.op === 'push.diagnostic') {
-        const entry = frame.payload as unknown as DiagnosticEntry;
-        diagnostics.entries = [entry, ...diagnostics.entries].slice(0, 200);
-      } else if (frame.op === 'push.document.changed') {
-        const payload = frame.payload as Record<string, unknown>;
-        const change: DocumentChanged = {
-          pack: String(payload.pack ?? ''),
-          path: String(payload.path ?? ''),
-          deleted: Boolean(payload.deleted),
-        };
-        const openDocKeys = workspace.tabs
-          .filter((t) => t.kind === 'doc')
-          .map((t) => t.key);
-        const effect = documentChangedEffect(change, workspace.activePack, openDocKeys);
-        if (effect.refreshPack) {
-          void refreshPack();
-        }
-        for (const key of effect.staleKeys) {
-          markDocStale(change.pack, change.path);
-        }
-        logActivity('info', effect.log);
-      }
-    });
-  });
 </script>
 
+<svelte:window onbeforeunload={warnBeforeUnload} />
+
 <main>
-  {#if phase === 'active' && channel}
+  {#if hasWorkspace}
+    {#if !connection.connected}
+      <div class="offline" role="status">
+        Disconnected. Drafts remain in this tab; runtime and pack status are unknown.
+        <button onclick={() => (reconnecting = !reconnecting)}>Reconnect</button>
+      </div>
+    {/if}
+    {#if reconnecting}
+      <div class="reconnect">
+        <Login phase={phase === 'active' ? 'closed' : phase} {error} {noncePrefix} onConnect={connect} />
+      </div>
+    {/if}
     <Workbench {browserLabel} onDisconnect={disconnect} />
   {:else}
     <Login
@@ -143,4 +156,12 @@
     display: flex;
     flex-direction: column;
   }
+  .offline {
+    background: var(--warn-bg);
+    color: var(--warn);
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+  .offline button { margin-left: 12px; }
+  .reconnect { max-height: 55vh; overflow: auto; flex: none; }
 </style>

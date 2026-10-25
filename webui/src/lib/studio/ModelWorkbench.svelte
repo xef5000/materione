@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   /**
    * Blockbench, opened as "I am editing this entry's model" rather than as a
    * second application. The author never sees the start screen or a format
@@ -11,7 +12,7 @@
    * The vendored build stays untouched (D9); everything here happens over the
    * postMessage bridge.
    */
-  import { assetOps, ops, unwrap } from '../api';
+  import { assetOps, ops, RpcError, unwrap } from '../api';
   import {
     BRIDGE_MARK,
     dataUrlToBase64,
@@ -24,7 +25,8 @@
     type SaveData,
     type TextureTarget,
   } from '../blockbench/protocol';
-  import { errorMessage, logActivity, refreshPack, session } from '../state.svelte';
+  import { sameModelOwnerContext } from '../studio';
+  import { connection, errorMessage, logActivity, refreshPack, session } from '../state.svelte';
 
   interface Props {
     pack: string;
@@ -42,7 +44,9 @@
     textureRef: string;
     typeDirectory: string;
     onClose: () => void;
-    onSaved: (modelRef: string) => void;
+    onSaved: (modelRef: string) => void | Promise<void>;
+    onSavingChange?: (saving: boolean) => void;
+    active?: boolean;
   }
 
   let {
@@ -57,21 +61,40 @@
     typeDirectory,
     onClose,
     onSaved,
+    onSavingChange,
+    active = true,
   }: Props = $props();
+
+  const openedContext = untrack(() => ({
+    pack,
+    ownerPath,
+    ownerId,
+    ownerName,
+    rev,
+    field: [...field],
+    modelRef,
+    textureRef,
+    typeDirectory,
+  }));
 
   let frame = $state<HTMLIFrameElement | null>(null);
   let ready = $state(false);
   let opened = $state(false);
+  let modelReady = $state(false);
   let status = $state('starting Blockbench…');
   let error = $state('');
   let saving = $state(false);
   let advanced = $state(false);
   let nextId = 1;
 
-  const targets = $derived(modelTargetsFor(pack, ownerId, modelRef));
+  const targets = modelTargetsFor(openedContext.pack, openedContext.ownerId, openedContext.modelRef);
   let modelPath = $state('');
   let sourcePath = $state('');
   let saveSource = $state(true);
+
+  $effect(() => {
+    onSavingChange?.(saving);
+  });
 
   $effect(() => {
     modelPath = targets.modelPath;
@@ -87,6 +110,7 @@
   }
 
   $effect(() => {
+    const isActive = active;
     function onMessage(event: MessageEvent) {
       if (
         event.origin !== location.origin ||
@@ -97,13 +121,16 @@
       }
       if (event.data.type === 'ready') {
         ready = true;
-        send('configure', { origin: location.origin });
-      } else if (event.data.type === 'bridgeError' && !event.data.id) {
+      } else if (isActive && event.data.type === 'bridgeError' && !event.data.id) {
         error = String(event.data.error ?? 'bridge failure');
       }
     }
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
+  });
+
+  $effect(() => {
+    if (active && ready) send('configure', { origin: location.origin });
   });
 
   function send(type: string, extra: Record<string, unknown> = {}) {
@@ -148,7 +175,7 @@
   }
 
   $effect(() => {
-    if (ready && !opened) {
+    if (active && ready && !opened) {
       opened = true;
       void openModel();
     }
@@ -158,16 +185,25 @@
   async function openModel() {
     status = 'opening the model…';
     try {
+      if (!connection.connected || !session.channel) {
+        throw new Error('Connect to the server before opening an immediate-write model editor.');
+      }
       const existing = await loadSource();
       if (existing) {
         await call('importProject', { project: existing });
+        modelReady = true;
         status = 'editing the saved model';
         return;
       }
       const texture = await loadTexture();
       await call('importProject', {
-        project: synthesiseProject({ name: ownerId, typeDirectory, texture }),
+        project: synthesiseProject({
+          name: openedContext.ownerId,
+          typeDirectory: openedContext.typeDirectory,
+          texture,
+        }),
       });
+      modelReady = true;
       status = texture ? 'new model, texture attached' : 'new model';
     } catch (e) {
       error = errorMessage(e);
@@ -176,38 +212,58 @@
   }
 
   async function loadSource(): Promise<string | null> {
-    if (!modelRef || !session.channel) return null;
+    if (!openedContext.modelRef) return null;
+    const channel = session.channel;
+    if (!connection.connected || !channel) throw new Error('Reconnect before loading the saved model source.');
     try {
-      const asset = unwrap(await assetOps.get(session.channel, pack, targets.sourcePath));
+      const asset = unwrap(await assetOps.get(channel, openedContext.pack, targets.sourcePath));
       const binary = atob(String(asset.data ?? ''));
       return new TextDecoder().decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
-    } catch {
-      // A model compiled without its .bbmodel source is still editable, just
-      // not resumable — start from a fresh project rather than refusing.
-      return null;
+    } catch (e) {
+      if (e instanceof RpcError && e.code === 'MTR-0009') return null;
+      throw e;
     }
   }
 
   async function loadTexture(): Promise<{ link: string; dataUrl: string } | undefined> {
-    if (!textureRef || !session.channel) return undefined;
+    if (!openedContext.textureRef) return undefined;
+    const channel = session.channel;
+    if (!connection.connected || !channel) throw new Error('Reconnect before loading the model texture.');
     try {
       const asset = unwrap(
-        await assetOps.get(session.channel, pack, `assets/textures/${textureRef}.png`),
+        await assetOps.get(
+          channel,
+          openedContext.pack,
+          `assets/textures/${openedContext.textureRef}.png`,
+        ),
       );
-      return { link: textureRef, dataUrl: `data:image/png;base64,${String(asset.data)}` };
-    } catch {
-      return undefined;
+      return {
+        link: openedContext.textureRef,
+        dataUrl: `data:image/png;base64,${String(asset.data)}`,
+      };
+    } catch (e) {
+      if (e instanceof RpcError && e.code === 'MTR-0009') return undefined;
+      throw e;
     }
   }
 
   async function save() {
-    if (!session.channel) return;
+    const channel = session.channel;
+    if (!active || !ready || !modelReady || saving) return;
+    if (openingContextChanged()) {
+      error = 'The owner document, model reference, or revision changed while this model was open. No assets were saved; close and reopen the editor.';
+      return;
+    }
+    if (!connection.connected || !channel) {
+      error = 'Reconnect before applying this model.';
+      return;
+    }
     saving = true;
     error = '';
     try {
       const reply = await call('collect');
       const data: SaveData = {
-        projectName: String(reply.projectName ?? ownerId),
+        projectName: String(reply.projectName ?? openedContext.ownerId),
         model: String(reply.model ?? ''),
         textures: (reply.textures as SaveData['textures']) ?? [],
         project: String(reply.project ?? ''),
@@ -218,8 +274,8 @@
         // The entry's own texture keeps its path; anything new the author added
         // in Blockbench lands where its link says.
         target:
-          data.textures.length === 1 && textureRef
-            ? textureRef
+          data.textures.length === 1 && openedContext.textureRef
+            ? openedContext.textureRef
             : defaultTextureTarget(texture),
       }));
       const assets: { path: string; data: string }[] = [];
@@ -230,7 +286,7 @@
         });
       });
 
-      const normalized = normalizeModel(data.model, pack, textureTargets);
+      const normalized = normalizeModel(data.model, openedContext.pack, textureTargets);
       assets.push({ path: modelPath, data: encode(normalized.model) });
       if (saveSource && data.project) {
         assets.push({ path: sourcePath, data: encode(data.project) });
@@ -238,6 +294,9 @@
       const thumbnail = await renderThumbnail();
       if (thumbnail) {
         assets.push({ path: thumbnailPath(targets.modelRef), data: thumbnail });
+      }
+      if (openingContextChanged()) {
+        throw new Error('The owner document, model reference, or revision changed while this model was open. No assets were saved; close and reopen the editor.');
       }
       if (normalized.unresolved.length > 0) {
         logActivity(
@@ -247,27 +306,40 @@
       }
 
       unwrap(
-        await ops.saveModel(session.channel, {
-          pack,
-          ownerPath,
-          rev,
-          field,
+        await ops.saveModel(channel, {
+          pack: openedContext.pack,
+          ownerPath: openedContext.ownerPath,
+          rev: openedContext.rev,
+          field: openedContext.field,
           modelRef: targets.modelRef,
           sourcePath: saveSource ? sourcePath : undefined,
           assets,
         }),
       );
-      logActivity('save', `${ownerId}: model saved; targeted reload queued`);
+      logActivity('save', `${openedContext.ownerId}: model saved; targeted reload queued`);
       void refreshPack();
-      onSaved(targets.modelRef);
+      await onSaved(targets.modelRef);
     } catch (e) {
       const message = errorMessage(e);
       error = message.includes('MTR-0034')
-        ? `${ownerId} changed on disk while Blockbench was open. Close, reopen the entry, and try again.`
+        ? `${openedContext.ownerId} changed on disk while Blockbench was open. Close, reopen the entry, and try again.`
         : message;
     } finally {
       saving = false;
     }
+  }
+
+  function openingContextChanged(): boolean {
+    return !sameModelOwnerContext(openedContext, {
+      pack,
+      ownerPath,
+      ownerId,
+      rev,
+      field,
+      modelRef,
+      textureRef,
+      typeDirectory,
+    });
   }
 
   /**
@@ -289,7 +361,11 @@
   }
 
   function close() {
-    if (!confirm('Close the model editor? Unsaved modelling is lost.')) return;
+    if (saving) {
+      error = 'Wait for this model save to finish before closing.';
+      return;
+    }
+    if (!confirm('Close the model editor? Unsaved model changes will be lost; already-applied assets stay applied.')) return;
     onClose();
   }
 </script>
@@ -297,15 +373,17 @@
 <div class="workbench">
   <header>
     <span class="what">Model</span>
-    <span class="owner" title={ownerPath}>{ownerName || ownerId}</span>
+    <span class="owner" title={openedContext.ownerPath}>
+      {openedContext.ownerName || openedContext.ownerId}
+    </span>
     <span class="status">{error ? '' : status}</span>
     <span class="spacer"></span>
     <button type="button" class="ghost" onclick={() => (advanced = !advanced)}>
       Targets {advanced ? '▴' : '▾'}
     </button>
-    <button type="button" class="ghost" onclick={close}>Cancel</button>
-    <button type="button" class="primary" disabled={!ready || saving} onclick={save}>
-      {saving ? 'Saving…' : 'Save model'}
+    <button type="button" class="ghost" onclick={close}>Close</button>
+    <button type="button" class="primary" disabled={!active || !ready || !modelReady || saving} onclick={save}>
+      {saving ? 'Saving…' : 'Save & apply'}
     </button>
   </header>
 

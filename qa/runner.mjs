@@ -22,6 +22,7 @@ import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { redactEvidence } from './evidence-redaction.mjs';
+import { createQaBrowserAdapter } from '../webui/test-support/qa-browser.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const QA = path.join(ROOT, 'qa');
@@ -57,7 +58,7 @@ class QaAssertionError extends Error {
 }
 
 main(process.argv.slice(2)).catch((e) => {
-  process.stderr.write(`qa: ${e.message ?? e}\n`);
+  process.stderr.write(`qa: ${redactEvidence(e.message ?? String(e))}\n`);
   process.exit(e instanceof QaError ? 1 : 1);
 });
 
@@ -452,14 +453,14 @@ async function cmdRun(argv) {
           // would produce noise, not evidence. Abort the run as infra.
           infra = true;
           outcomes.set(id, { outcome: 'infra', ms: Date.now() - started, error: e.message });
-          line(`⚡ ${id.padEnd(38)} INFRA   — ${e.message}`);
+          line(`⚡ ${id.padEnd(38)} INFRA   — ${redactEvidence(e.message)}`);
           break;
         }
       }
     }
   } catch (e) {
     infra = true;
-    line(`⚡ INFRA: ${e.message}`);
+    line(`⚡ INFRA: ${redactEvidence(e.message)}`);
   } finally {
     if (!flags.keepServer) {
       try { await agent.call('quit', {}, 60_000); } catch { /* already gone */ }
@@ -507,10 +508,12 @@ async function runTest(test, agent, runDir, { head, dirty }) {
       throw new QaError(`${test.id}: mode is "visual" but steps never called ctx.needsEyes(...)`);
     }
     if (test.mode === 'visual' && ctx.shots.length === 0) {
-      throw new QaError(`${test.id}: mode is "visual" but steps never captured a screenshot (ctx.shot)`);
+      throw new QaError(`${test.id}: mode is "visual" but steps never captured a screenshot (ctx.shot or ctx.browser.browserShot)`);
     }
   } catch (e) {
     stepsError = e;
+  } finally {
+    await ctx.browser.close();
   }
 
   const ms = Date.now();
@@ -567,9 +570,9 @@ class TestFailure extends Error {}
 
 function failureMessage(error) {
   if (error instanceof QaAssertionError) {
-    return `${error.message} [${error.operator}] expected=${trim(error.expected)} actual=${trim(error.actual)}`;
+    return redactEvidence(`${error.message} [${error.operator}] expected=${trim(error.expected)} actual=${trim(error.actual)}`);
   }
-  return error.message ?? String(error);
+  return redactEvidence(error.message ?? String(error));
 }
 
 function trim(v) {
@@ -651,6 +654,7 @@ function spawnAgent() {
 function makeCtx({ test, agent, testDir, transcript, logOffset }) {
   const started = Date.now();
   const shots = [];
+  const browserShots = new Set();
   let eyesNote = null;
   const record = (kind, req, res) => {
     transcript.push({ t: Date.now() - started, kind, req, res });
@@ -661,9 +665,35 @@ function makeCtx({ test, agent, testDir, transcript, logOffset }) {
     return record(kind, args, res && pick ? pick(res) : res);
   };
   const anchor = (process.env.MTR_QA_ANCHOR ?? '0,-60,3').split(',').map(Number);
+  // Console replies echo capability URLs and approval nonces; keep these calls out of transcripts.
+  const privateConsole = async (command) => {
+    try {
+      await agent.call('rcon', { command }, 60_000);
+    } catch {
+      throw new QaError('private editor console request failed');
+    }
+  };
+  const browser = createQaBrowserAdapter({
+    testDir,
+    openSession: async () => {
+      await privateConsole('materione editor local');
+      // waitForServerLog is scoped to this test's start offset; take the listener's logged port.
+      const marker = await ctx.waitForServerLog(/MATERIONE-EDITOR http:\/\/127\.0\.0\.1:\d+\/\?s=/);
+      const capabilityUrl = marker.match(/MATERIONE-EDITOR (http:\/\/127\.0\.0\.1:\d+\/\?s=[A-Za-z0-9_-]+#[A-Za-z0-9_-]+)/)?.[1];
+      if (!capabilityUrl) throw new QaError('local editor capability marker was unavailable');
+      return capabilityUrl;
+    },
+    approveNonce: (nonce) => privateConsole(`materione editor approve ${nonce}`),
+    onScreenshot: (name, file) => {
+      shots.push(file);
+      browserShots.add(file);
+      record('browser-shot', { name }, { path: file });
+    },
+  });
   const ctx = {
     test,
     shots,
+    browser,
     get eyesNote() { return eyesNote; },
     rcon: async (command) => {
       const reply = await agentCall('rcon', 'rcon', { command }, (r) => r.reply, 60_000);
@@ -749,6 +779,7 @@ function makeCtx({ test, agent, testDir, transcript, logOffset }) {
       }
     },
   };
+  ctx.browserShots = browserShots;
   return ctx;
 }
 
@@ -798,7 +829,7 @@ function writeTranscript(testDir, transcript) {
 
 function writeDossier({ test, testDir, transcript, error, meta, ctx }) {
   const rel = (p) => path.relative(ROOT, p);
-  const shots = ctx.shots.map((p) => `- \`${rel(p)}\``).join('\n') || '- (none captured)';
+  const shots = ctx.shots.map((p) => `- \`${rel(p)}\` (${ctx.browserShots.has(p) ? 'browser App' : 'Minecraft client'})`).join('\n') || '- (none captured)';
   const chatDump = transcript.filter((e) => e.kind === 'chat').at(-1)?.res;
   const chatLines = Array.isArray(chatDump) ? chatDump.map(chatText).slice(-15) : [];
   const serverTail = tailLines(SERVER_LOG, meta.logOffset, 40);
@@ -831,7 +862,7 @@ ${error.stack ?? error.message}
 
 ## Evidence
 
-Screenshots (JPEG, read directly from disk):
+Screenshots (JPEG/PNG, read directly from disk; browser captures are scoped to the editor App):
 
 ${shots}
 

@@ -19,8 +19,13 @@
 //   ctx.waitForChat(regex, opts?) → poll chat until a line matches (throws
 //                                   AssertionError on timeout)
 //   ctx.state()                   → client snapshot (position, screen, …)
-//   ctx.shot(name)                → screenshot into this test's evidence dir;
-//                                   returns the absolute path
+//   ctx.shot(name)                -> Minecraft client screenshot in this test's
+//                                   evidence dir; returns the absolute path
+//   ctx.browser.openEditor()      -> optional real local plugin App using the
+//                                   normal capability handshake and approval
+//   ctx.browser.page              -> current Playwright page after openEditor()
+//   ctx.browser.browserShot(name) -> scoped App screenshot, recorded separately
+//   ctx.browser.close()           -> close this test's isolated browser
 //   ctx.serverLogLine(regex)      → last server-log line matching since this
 //                                   test started (boot markers are stable)
 //   ctx.waitForServerLog(regex)   → poll the server log until it matches

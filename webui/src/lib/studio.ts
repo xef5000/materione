@@ -21,6 +21,54 @@ export interface StudioSection {
   fields: TypeParam[];
 }
 
+/** The YAML root belonging to a selected resource, not an arbitrary first root in a multi-resource file. */
+export function rootIdForResource(resourceId: string): string {
+  return resourceId.slice(resourceId.lastIndexOf(':') + 1);
+}
+
+export function rootIdForResourceSelection(
+  resources: readonly { path: string; id: string }[],
+  path: string,
+  rootId: string,
+): string | null {
+  const selected = resources.find(
+    (resource) => resource.path === path && rootIdForResource(resource.id) === rootId,
+  );
+  return selected ? rootIdForResource(selected.id) : null;
+}
+
+export type AssetSnapshot =
+  | { kind: 'missing' }
+  | { kind: 'present'; data: string };
+
+export function sameAssetSnapshot(left: AssetSnapshot, right: AssetSnapshot): boolean {
+  return left.kind === right.kind &&
+    (left.kind === 'missing' || (right.kind === 'present' && left.data === right.data));
+}
+
+export interface ModelOwnerContext {
+  pack: string;
+  ownerPath: string;
+  ownerId: string;
+  rev: number;
+  field: string[];
+  modelRef: string;
+  textureRef: string;
+  typeDirectory: string;
+}
+
+export function sameModelOwnerContext(opened: ModelOwnerContext, current: ModelOwnerContext): boolean {
+  return opened.pack === current.pack &&
+    opened.ownerPath === current.ownerPath &&
+    opened.ownerId === current.ownerId &&
+    opened.rev === current.rev &&
+    opened.field.length === current.field.length &&
+    opened.field.every((part, index) => part === current.field[index]) &&
+    opened.modelRef === current.modelRef &&
+    opened.textureRef === current.textureRef &&
+    opened.typeDirectory === current.typeDirectory;
+}
+
 const SECTION_ORDER = ['identity', 'appearance', 'audio', 'crafting', 'placement', 'gameplay', 'behavior'];
 
 const SECTION_LABELS: Record<string, string> = {

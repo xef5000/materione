@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   /**
    * A pixel editor for pack textures. It exists so that "change three pixels"
    * does not mean "boot a 3D modelling application": it opens in place over
@@ -6,8 +7,9 @@
    * the way. All drawing rules live in `pixels.ts` and are unit-tested; this
    * component only turns pointer events into calls and paints the result.
    */
-  import { assetOps, unwrap } from '../api';
-  import { errorMessage, logActivity, session } from '../state.svelte';
+  import { assetOps, RpcError, unwrap } from '../api';
+  import { connection, errorMessage, logActivity, session } from '../state.svelte';
+  import { sameAssetSnapshot, type AssetSnapshot } from '../studio';
   import {
     History,
     applyRatio,
@@ -36,10 +38,23 @@
     /** Pack-relative PNG path; created if it does not exist yet. */
     path: string;
     onClose: () => void;
-    onSaved?: () => void;
+    onSaved?: () => void | Promise<void>;
+    onDirtyChange?: (dirty: boolean) => void;
+    onSavingChange?: (saving: boolean) => void;
+    draftError?: string;
+    active?: boolean;
   }
 
-  let { pack, path, onClose, onSaved }: Props = $props();
+  let {
+    pack,
+    path,
+    onClose,
+    onSaved,
+    onDirtyChange,
+    onSavingChange,
+    draftError = '',
+    active = true,
+  }: Props = $props();
 
   type Tool = 'pencil' | 'eraser' | 'fill' | 'pick' | 'line' | 'rect' | 'crop';
 
@@ -79,6 +94,11 @@
   let saving = $state(false);
   let error = $state('');
   let missing = $state(false);
+  let loadState = $state<'loading' | 'ready' | 'error'>('loading');
+  let sourceSnapshot = $state<AssetSnapshot | null>(null);
+  let loadedPack = $state('');
+  let loadedPath = $state('');
+  let loadToken = 0;
   let recents = $state<string[]>([]);
   let cursor = $state<{ x: number; y: number } | null>(null);
   // The crop marquee persists after the drag ends so the panel can adjust it.
@@ -103,12 +123,25 @@
   const color = $derived(hexToColor(hex, alpha));
   const palette = $derived(usedColors(bitmap, 12).map(colorToHex));
   const name = $derived(path.split('/').pop() ?? path);
+  const canEdit = $derived(loadState === 'ready');
   const toolNeedsColor = $derived(
     TOOLS.find((entry) => entry.id === tool)?.needsColor ?? false,
   );
 
   $effect(() => {
-    void load(path);
+    const targetPack = pack;
+    const target = path;
+    untrack(() => {
+      void load(targetPack, target);
+    });
+  });
+
+  $effect(() => {
+    onDirtyChange?.(dirty);
+  });
+
+  $effect(() => {
+    onSavingChange?.(saving);
   });
 
   // Repaint whenever the bitmap, the view, the hover or the marquee changes.
@@ -127,25 +160,65 @@
     if (tool !== 'crop') selection = null;
   });
 
-  async function load(target: string) {
+  async function load(targetPack: string, target: string) {
+    const token = ++loadToken;
+    const channel = session.channel;
+    const connected = connection.connected;
+    if (saving) {
+      loadState = 'error';
+      error = 'Wait for the texture write to finish before changing its asset context.';
+      return;
+    }
+    if (dirty && loadedPack && (loadedPack !== targetPack || loadedPath !== target)) {
+      loadState = 'error';
+      error = 'The texture asset changed while pixels were pending. Close this editor without reloading to preserve them.';
+      return;
+    }
     error = '';
     missing = false;
-    try {
-      const payload = unwrap(await assetOps.get(session.channel!, pack, target));
-      bitmap = await decode(String(payload.data));
-    } catch (e) {
-      const message = errorMessage(e);
-      if (message.includes('MTR-0009') || message.toLowerCase().includes('not found')) {
-        // A texture that does not exist yet is a blank one, not an error.
-        bitmap = createBitmap(16, 16);
-        missing = true;
-        dirty = true;
-      } else {
-        error = message;
-      }
+    loadState = 'loading';
+    sourceSnapshot = null;
+    loadedPack = '';
+    loadedPath = '';
+    if (!connected || !channel) {
+      loadState = 'error';
+      error = 'Connect to the server before opening an immediate-write texture editor.';
+      return;
     }
+    try {
+      const snapshot = await readSnapshot(channel, targetPack, target);
+      const loadedBitmap =
+        snapshot.kind === 'present' ? await decode(snapshot.data) : createBitmap(16, 16);
+      if (token !== loadToken) return;
+      bitmap = loadedBitmap;
+      sourceSnapshot = snapshot;
+      loadedPack = targetPack;
+      loadedPath = target;
+      missing = snapshot.kind === 'missing';
+      dirty = false;
+      loadState = 'ready';
+    } catch (e) {
+      if (token !== loadToken) return;
+      loadState = 'error';
+      error = `Could not read this texture; the canvas cannot be safely applied. Close and reopen after reconnecting to retry. ${errorMessage(e)}`;
+    }
+    if (token !== loadToken) return;
     history.clear();
     fitToView();
+  }
+
+  async function readSnapshot(
+    channel: NonNullable<typeof session.channel>,
+    targetPack: string,
+    targetPath: string,
+  ): Promise<AssetSnapshot> {
+    try {
+      const payload = unwrap(await assetOps.get(channel, targetPack, targetPath));
+      return { kind: 'present', data: String(payload.data ?? '') };
+    } catch (e) {
+      if (e instanceof RpcError && e.code === 'MTR-0009') return { kind: 'missing' };
+      throw e;
+    }
   }
 
   function decode(base64: string): Promise<Bitmap> {
@@ -454,19 +527,67 @@
   }
 
   async function save() {
+    const channel = session.channel;
+    if (!active || !dirty || saving) return;
+    const targetPack = pack;
+    const targetPath = path;
+    if (
+      loadState !== 'ready' ||
+      !sourceSnapshot ||
+      loadedPack !== targetPack ||
+      loadedPath !== targetPath
+    ) {
+      error = 'This texture has no verified source. Reopen it before applying pixels.';
+      return;
+    }
+    if (!connection.connected || !channel) {
+      error = 'Reconnect before applying this texture.';
+      return;
+    }
     saving = true;
     try {
-      unwrap(await assetOps.put(session.channel!, pack, path, await encode()));
+      const bytes = await encode();
+      let currentSnapshot: AssetSnapshot;
+      try {
+        currentSnapshot = await readSnapshot(channel, targetPack, targetPath);
+      } catch (e) {
+        error = `Could not verify the texture before writing; no upload was attempted and your pixels are preserved. ${errorMessage(e)}`;
+        return;
+      }
+      if (!sameAssetSnapshot(sourceSnapshot, currentSnapshot)) {
+        error = 'This texture changed on the server since it was opened. No upload was attempted; your pixels are preserved. Reopen the texture to inspect the current file.';
+        return;
+      }
+      if (!connection.connected || session.channel !== channel) {
+        error = 'The connection changed during verification; no upload was attempted and your pixels are preserved.';
+        return;
+      }
+      if (pack !== targetPack || path !== targetPath) {
+        error = 'The texture asset context changed during verification; no upload was attempted and your pixels are preserved.';
+        return;
+      }
+      unwrap(await assetOps.put(channel, targetPack, targetPath, bytes));
+      sourceSnapshot = { kind: 'present', data: base64FromBytes(bytes) };
+      loadedPack = targetPack;
+      loadedPath = targetPath;
       remember(hex);
       dirty = false;
       missing = false;
-      logActivity('save', `${path} saved; targeted reload queued`);
-      onSaved?.();
+      logActivity('save', `${targetPath} saved; targeted reload queued`);
+      await onSaved?.();
     } catch (e) {
-      error = errorMessage(e);
+      error = `Texture apply failed; your pixels are preserved. ${errorMessage(e)}`;
     } finally {
       saving = false;
     }
+  }
+
+  function base64FromBytes(bytes: Uint8Array): string {
+    let binary = '';
+    for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000));
+    }
+    return btoa(binary);
   }
 
   function remember(value: string) {
@@ -474,6 +595,7 @@
   }
 
   async function importPng(event: Event) {
+    if (!active || !canEdit) return;
     const input = event.currentTarget as HTMLInputElement;
     const file = input.files?.[0];
     input.value = '';
@@ -488,6 +610,7 @@
   }
 
   async function exportPng() {
+    if (!canEdit) return;
     const blob = new Blob([await encode()], { type: 'image/png' });
     const url = URL.createObjectURL(blob);
     const anchorElement = document.createElement('a');
@@ -497,12 +620,25 @@
     URL.revokeObjectURL(url);
   }
 
+  function onResize() {
+    if (active && canEdit) fitToView();
+  }
+
   function close() {
+    if (saving) {
+      error = 'Wait for this texture save to finish before closing.';
+      return;
+    }
     if (dirty && !confirm('Close without saving this texture?')) return;
     onClose();
   }
 
   function onKeydown(event: KeyboardEvent) {
+    if (!active) return;
+    if (!canEdit) {
+      if (event.key === 'Escape') close();
+      return;
+    }
     const typing = (event.target as HTMLElement)?.tagName === 'INPUT';
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
       event.preventDefault();
@@ -533,32 +669,36 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} onresize={fitToView} />
+<svelte:window onkeydown={onKeydown} onresize={onResize} />
 
 <div class="texture-editor">
   <header>
     <span class="title" title={path}>{name}</span>
     <span class="dims">{bitmap.width}×{bitmap.height}</span>
+    {#if loadState === 'loading'}<span class="loading">loading…</span>{/if}
     {#if missing}<span class="new">new</span>{/if}
     <span class="spacer"></span>
-    <button type="button" onclick={undo} disabled={!history.canUndo} title="undo (Ctrl+Z)">↶</button>
-    <button type="button" onclick={redo} disabled={!history.canRedo} title="redo (Ctrl+Shift+Z)">
+    <button type="button" onclick={undo} disabled={!canEdit || !history.canUndo} title="undo (Ctrl+Z)">↶</button>
+    <button type="button" onclick={redo} disabled={!canEdit || !history.canRedo} title="redo (Ctrl+Shift+Z)">
       ↷
     </button>
     <label class="ghost" title="replace with a PNG">
       Import
-      <input type="file" accept="image/png" onchange={importPng} hidden />
+      <input type="file" accept="image/png" onchange={importPng} disabled={!active || !canEdit} hidden />
     </label>
-    <button type="button" class="ghost" onclick={exportPng}>Export</button>
+    <button type="button" class="ghost" onclick={exportPng} disabled={!canEdit}>Export</button>
     <button type="button" class="ghost" onclick={close}>Close</button>
-    <button type="button" class="primary" onclick={save} disabled={!dirty || saving}>
-      {saving ? 'Saving…' : 'Save'}
+    <button type="button" class="primary" onclick={save} disabled={!active || !canEdit || !dirty || saving}>
+      {saving ? 'Saving…' : 'Save & apply'}
     </button>
   </header>
 
-  {#if error}<p class="error">{error}</p>{/if}
+  {#if error || draftError}<p class="error">{error || draftError}</p>{/if}
+  <p class="source-note">
+    Save checks the current bytes first. The asset API cannot make that check atomic with the upload.
+  </p>
 
-  <div class="work">
+  <div class="work" inert={!canEdit}>
     <aside class="tools">
       {#each TOOLS as entry (entry.id)}
         <button
@@ -1028,5 +1168,15 @@
     background: var(--error-bg);
     color: var(--error);
     font-size: 12px;
+  }
+  .loading {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .source-note {
+    margin: 0;
+    padding: 4px 10px;
+    color: var(--faint);
+    font-size: 10px;
   }
 </style>

@@ -10,6 +10,10 @@ import {
   gridFrom,
   gridTo,
   isRenderable,
+  rootIdForResource,
+  rootIdForResourceSelection,
+  sameAssetSnapshot,
+  sameModelOwnerContext,
   sanitizeSoundName,
   sectionsOf,
   soundAssetPath,
@@ -74,6 +78,62 @@ describe('sectionsOf', () => {
 
   it('survives a type with no schema', () => {
     expect(sectionsOf(undefined)).toEqual([]);
+  });
+});
+
+describe('resource root selection', () => {
+  it('selects the requested root in a multi-resource document', () => {
+    const parsed: Record<string, { display_name: string }> = {
+      first: { display_name: 'First' },
+      second: { display_name: 'Second' },
+    };
+    expect(parsed[rootIdForResource('second')]!.display_name).toBe('Second');
+  });
+
+  it('strips a namespace from the resource reference before selecting its YAML root', () => {
+    expect(rootIdForResource('sample:ruby_sword')).toBe('ruby_sword');
+  });
+
+  it('selects the exact resource root when candidates share one YAML path', () => {
+    expect(
+      rootIdForResourceSelection(
+        [
+          { path: 'items/tools.yml', id: 'ruby_a' },
+          { path: 'items/tools.yml', id: 'sample:ruby_b' },
+        ],
+        'items/tools.yml',
+        'ruby_b',
+      ),
+    ).toBe('ruby_b');
+  });
+});
+
+describe('texture source snapshots', () => {
+  it('allows applying only while existing or missing source bytes still match', () => {
+    expect(sameAssetSnapshot({ kind: 'present', data: 'old' }, { kind: 'present', data: 'old' })).toBe(true);
+    expect(sameAssetSnapshot({ kind: 'present', data: 'old' }, { kind: 'present', data: 'new' })).toBe(false);
+    expect(sameAssetSnapshot({ kind: 'missing' }, { kind: 'missing' })).toBe(true);
+    expect(sameAssetSnapshot({ kind: 'missing' }, { kind: 'present', data: 'new' })).toBe(false);
+  });
+});
+
+describe('model opening context', () => {
+  const opened = {
+    pack: 'sample',
+    ownerPath: 'items/tools.yml',
+    ownerId: 'ruby_a',
+    rev: 4,
+    field: ['ruby_a', 'model'],
+    modelRef: 'sample:models/ruby_a',
+    textureRef: 'items/ruby_a',
+    typeDirectory: 'items',
+  };
+
+  it('accepts the same resource context and rejects a changed revision or reference', () => {
+    expect(sameModelOwnerContext(opened, { ...opened })).toBe(true);
+    expect(sameModelOwnerContext(opened, { ...opened, rev: 5 })).toBe(false);
+    expect(sameModelOwnerContext(opened, { ...opened, modelRef: 'sample:models/other' })).toBe(false);
+    expect(sameModelOwnerContext(opened, { ...opened, field: ['ruby_b', 'model'] })).toBe(false);
   });
 });
 

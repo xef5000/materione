@@ -1,69 +1,53 @@
 <script lang="ts">
-  import { diagnostics, openDoc, workspace } from '../state.svelte';
+  import { diagnostics, revealInAdvanced, workspace } from '../state.svelte';
   import type { DiagnosticEntry } from '../api';
+  import { diagnosticSource } from '../diagnostics';
 
   let filter = $state<'all' | 'error' | 'warn'>('all');
+
+  function severityOf(entry: DiagnosticEntry): string {
+    return entry.severity.toLowerCase();
+  }
 
   const shown = $derived(
     filter === 'all'
       ? diagnostics.entries
-      : diagnostics.entries.filter((entry) => entry.severity === filter),
+      : diagnostics.entries.filter((entry) => severityOf(entry) === filter),
   );
-  const errors = $derived(diagnostics.entries.filter((d) => d.severity === 'error').length);
-  const warnings = $derived(diagnostics.entries.filter((d) => d.severity === 'warn').length);
+  const errors = $derived(diagnostics.entries.filter((entry) => severityOf(entry) === 'error').length);
+  const warnings = $derived(diagnostics.entries.filter((entry) => severityOf(entry) === 'warn').length);
 
-  /**
-   * Best-effort click-through: when the diagnostic's source location names a
-   * file of a known pack, open it. Runtime diagnostics (no file) stay inert.
-   */
-  function locationFile(entry: DiagnosticEntry): { pack: string; path: string } | null {
-    if (!entry.location) return null;
-    const file = (entry.location.split(':')[0] ?? '').replace('\\', '/');
-    for (const pack of workspace.packs) {
-      if (file.startsWith(pack + '/')) {
-        return { pack, path: file.slice(pack.length + 1) };
-      }
-    }
-    return null;
-  }
-
-  function open(entry: DiagnosticEntry) {
-    const target = locationFile(entry);
-    if (!target || !workspace.activePack) return;
-    if (!target.path.endsWith('.yml') && !target.path.endsWith('.yaml')) return;
-    openDoc({
-      pack: target.pack,
-      type: target.path.split('/')[0] ?? '',
-      path: target.path,
-      id: '',
-    });
-  }
 </script>
 
 <p class="summary">
-  <button class:active={filter === 'all'} onclick={() => (filter = 'all')}>
+  <button type="button" class:active={filter === 'all'} aria-pressed={filter === 'all'} onclick={() => (filter = 'all')}>
     all {diagnostics.entries.length}
   </button>
-  <button class:active={filter === 'error'} onclick={() => (filter = 'error')}>
+  <button type="button" class:active={filter === 'error'} aria-pressed={filter === 'error'} onclick={() => (filter = 'error')}>
     <span class="err">{errors} errors</span>
   </button>
-  <button class:active={filter === 'warn'} onclick={() => (filter = 'warn')}>
+  <button type="button" class:active={filter === 'warn'} aria-pressed={filter === 'warn'} onclick={() => (filter = 'warn')}>
     <span class="warn">{warnings} warnings</span>
   </button>
 </p>
 <ul>
   {#each shown as entry (entry.code + '/' + entry.message)}
-    {@const target = locationFile(entry)}
-    <li class={entry.severity}>
+    {@const target = diagnosticSource(entry, workspace.packs, workspace.resources)}
+    <li class={severityOf(entry)}>
       <code>{entry.code}</code>
       <span class="msg">{entry.message}</span>
       {#if entry.location}
-        <button
-          class="loc"
-          disabled={!target}
-          title={target ? 'open ' + target.path : ''}
-          onclick={() => open(entry)}>at {entry.location}</button
-        >
+        {#if target}
+          <button
+            class="loc"
+            type="button"
+            title={`Open ${target.resource.path} in Files`}
+            aria-label={`Open ${target.resource.path} in Files at ${entry.location}`}
+            onclick={() => void revealInAdvanced(target.resource, target.source)}>at {entry.location}</button
+          >
+        {:else}
+          <span class="loc">at {entry.location}</span>
+        {/if}
       {/if}
       {#if entry.hint}<span class="hint">{entry.hint}</span>{/if}
     </li>
@@ -76,6 +60,7 @@
 <style>
   .summary {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
     font-size: 12px;
     margin: 4px 0 10px;
@@ -124,8 +109,12 @@
   }
   .msg {
     display: block;
+    overflow-wrap: anywhere;
   }
   .loc {
+    display: inline-block;
+    max-width: 100%;
+    overflow-wrap: anywhere;
     background: none;
     border: none;
     color: var(--faint);
@@ -133,6 +122,10 @@
     padding: 0;
     cursor: pointer;
     text-decoration: underline dotted;
+  }
+  span.loc {
+    cursor: default;
+    text-decoration: none;
   }
   .loc:hover:not(:disabled) {
     color: var(--accent);

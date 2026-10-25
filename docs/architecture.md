@@ -427,11 +427,12 @@ Authoring separates **candidate hosting** from **published delivery** without cr
 content or runtime environment. Every successful editor change still updates canonical files and
 runs the one pipeline through the normal shadow-swap (D1/D6). When pack bytes change, the resulting
 immutable hash is the candidate: it is sent immediately only to the player who opened that editor
-session. The durable published hash remains the join/default version for everyone else. An explicit
-publish operation promotes only the exact candidate hash that the author previewed; promotion is
-rejected if a newer candidate exists. Promotion moves a version pointer and sends that version to
-online players -- it never recompiles or substitutes newer bytes. Runtime-only changes with
-identical pack bytes apply normally and need no promotion.
+session. The durable published hash remains the join/default version for everyone else. The editor
+reports the candidate hash as available; that status alone does not prove delivery or player
+acceptance. An explicit publish operation promotes only the exact candidate hash submitted by the
+publisher; promotion is rejected if a newer candidate exists. Promotion moves a version
+pointer and sends that version to online players -- it never recompiles or substitutes newer bytes.
+Runtime-only changes with identical pack bytes apply normally and need no promotion.
 
 The delivery backend retains every published version and any active candidate within its bounded
 version window. The published pointer lives in `storage/`, survives restart, and is the only
@@ -494,6 +495,13 @@ furniture, glyph, HUD, menu, dialog, recipe, sound, painting) · **Asset manager
 whole main area; the pack switcher and release state live in the app header, because they belong
 to the session rather than to any one screen. Pack creation is a one-time project onboarding step;
 normal T2/T3 authoring does not expose content directories or require file operations.
+
+**As built (M5 editor-trust follow-up):** the authoring shell is items-first: Content opens on Items,
+with Files as the full-fidelity authoring surface. Problems, Activity, and Server are support
+destinations; rail labels are expanded by default, and the Activity dock starts collapsed. The
+separate Start/Dashboard and Assets screens in the product inventory are not present in this slice;
+assets are reached through studio slots and Files. This keeps the flagship resource flow first
+without creating a parallel content model.
 
 ### 9.2 Auth & trust — the relay is untrusted
 
@@ -562,10 +570,13 @@ module pinned by tests.
 ### 9.4 Editing model & concurrency
 
 The API exposes the filesystem as a **document store**: structured reads/writes per resource,
-atomic per-save writes, revision numbers per resource (stale writes are rejected — last-writer
-wins *with a visible warning*, never silent clobbering). The file watcher feeds external edits
-(hand-edited YAML, git pulls) back into all connected editors in real time. Live preview closes
+atomic per-save writes, revision numbers per resource (stale writes are rejected with a visible
+conflict; the author must inspect and reapply rather than silently clobbering). The file watcher
+feeds external edits (hand-edited YAML, git pulls) back into all connected editors in real time.
+Live preview closes
 the loop: save → pipeline → targeted reload → visible in a connected game client within seconds.
+The editor's reload push is server-wide, not correlated to one save; when the UI has no matching
+outcome signal, it must leave that save's runtime result unknown rather than infer success.
 
 The primary editor is resource-first. A short creation flow derives safe ids and paths, then opens
 one visual studio organized by the domain facets in D3 (identity, appearance, gameplay, behavior,
@@ -581,6 +592,15 @@ are server-side transactions: validate every path and revision, stage all bytes,
 the set, record one audit summary, and enqueue one reload. Failure leaves no partial assets,
 attachments, revisions, or success-shaped response. The stateless SPA may hold a bounded unsaved
 draft, but durable draft, candidate, and publication state remain server/filesystem-owned.
+
+The M5 editor-trust follow-up implements that allowance as a cap of 32 per-document drafts held
+only in the current browser tab's memory and shared by Content and Files. Explicit **Save & apply**
+uses one revision-checked field batch or a full-document write; unchanged files are not written.
+Drafts survive workspace navigation and an unexpected disconnect in the same tab. Reconnect checks
+the plugin signing identity and reconciles drafts against server files without replaying writes;
+refreshing or closing the tab has no durable draft recovery. The header's candidate state means a
+candidate hash is available, not that a player received or accepted it. **Publish pack** promotes
+the exact current candidate hash; the global reload signal does not prove a per-save result.
 
 ### 9.5 In-game surface (for tiers without a browser open)
 
