@@ -1,0 +1,24 @@
+{"t":0,"kind":"note","msg":"test start: furniture.seats (auto)"}
+{"t":267,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":532,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":798,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1065,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1736,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":2000,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2267,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2531,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":13211,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":13476,"kind":"rcon","req":{"command":"materione dev remove 1 -59 7 world"},"res":""}
+{"t":13739,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":14005,"kind":"rcon","req":{"command":"setblock 1 -59 7 minecraft:air"},"res":"Could not set the block"}
+{"t":14270,"kind":"rcon","req":{"command":"materione dev place world:bench 1 -60 7 world"},"res":""}
+{"t":14534,"kind":"rcon","req":{"command":"materione dev inspect 1 -60 7 world"},"res":""}
+{"t":14800,"kind":"rcon","req":{"command":"data get entity cb291544-8dec-4682-87c7-3eaf272ef923 BukkitValues.\"materione:seats\""},"res":"Item Display has the following entity data: \"3db83bc7-b14f-4ef9-947c-1d02d61c4b6a,7aa6f367-f789-42c2-a3f3-bfaf1d89f878\""}
+{"t":15065,"kind":"rcon","req":{"command":"tp Probe 1 -60 3"},"res":"Teleported Probe to 1.500000, -60.000000, 3.500000"}
+{"t":15665,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\nreturn hit.getType().toString()","timeoutMs":10000},"res":"BLOCK"}
+{"t":15964,"kind":"exec","req":{"code":"def hit = mc.hitResult\nif (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != 1 || hit.getBlockPos().getY() != -60 || hit.getBlockPos().getZ() != 7 || hit.getDirection().toString() != 'north') return 'AIM-DRIFT'\ndef result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)\nreturn 'use:' + result.toString()","timeoutMs":15000},"res":"AIM-DRIFT"}
+{"t":17281,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\nreturn hit.getType().toString()","timeoutMs":10000},"res":"BLOCK"}
+{"t":17430,"kind":"exec","req":{"code":"def hit = mc.hitResult\nif (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != 1 || hit.getBlockPos().getY() != -60 || hit.getBlockPos().getZ() != 7 || hit.getDirection().toString() != 'north') return 'AIM-DRIFT'\ndef result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)\nreturn 'use:' + result.toString()","timeoutMs":15000},"res":"AIM-DRIFT"}
+{"t":18748,"kind":"exec","req":{"code":"player.setRot(0F, 22F)\nThread.sleep(500)\ndef hit = mc.hitResult\nreturn hit.getType().toString()","timeoutMs":10000},"res":"BLOCK"}
+{"t":18897,"kind":"exec","req":{"code":"def hit = mc.hitResult\nif (hit.getType().toString() != 'BLOCK' || hit.getBlockPos().getX() != 1 || hit.getBlockPos().getY() != -60 || hit.getBlockPos().getZ() != 7 || hit.getDirection().toString() != 'north') return 'AIM-DRIFT'\ndef result = mc.gameMode.useItemOn(player, net.minecraft.world.InteractionHand.MAIN_HAND, hit)\nreturn 'use:' + result.toString()","timeoutMs":15000},"res":"AIM-DRIFT"}
+{"t":19664,"kind":"exec","req":{"code":"def v = player.getVehicle()\nreturn v == null ? 'none' : v.getType().toString() + ' ' + v.getUUID().toString()","timeoutMs":15000},"res":"none"}
