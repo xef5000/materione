@@ -722,15 +722,17 @@ public final class PipelineService {
             Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> behaviors,
             Map<String, java.util.function.BooleanSupplier> availability) {
         var declarations = new ArrayList<Map<String, Object>>(item.behavior());
+        int bindingIndex = 0;
         for (var mechanic : mechanics) {
             int index = 0;
             for (var rule : mechanic.behaviorRules()) {
                 var scoped = new LinkedHashMap<>(rule);
-                String ruleId = item.id() + "/mechanic/" + mechanic.id() + "/" + index++;
+                String ruleId = item.id() + "/mechanic/" + mechanic.id() + "/" + bindingIndex + "/" + index++;
                 scoped.put("id", ruleId);
                 availability.put(ruleId, mechanic::isAvailable);
                 declarations.add(scoped);
             }
+            bindingIndex++;
         }
         if (declarations.isEmpty()) {
             return;

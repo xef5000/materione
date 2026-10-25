@@ -22,6 +22,7 @@ class MechanicExtensionContractTest {
         MechanicRuntime runtime = extension.createRuntime(null);
 
         assertThat(binding).isEqualTo(new Greeting("Hello"));
+        assertThat(extension.repeatable()).isTrue();
         assertThat(binding.behaviorRules()).containsExactly(Map.of(
                 "on", "click:right", "do", List.of(Map.of("message", "Hello"))));
         assertThat(runtime.listeners()).singleElement().satisfies(listener -> {
@@ -46,6 +47,11 @@ class MechanicExtensionContractTest {
         }
 
         @Override
+        public boolean repeatable() {
+            return true;
+        }
+
+        @Override
         public SelfDescription describe() {
             return new SelfDescription("Greeting", "", List.of(
                     ParameterSchema.of("message", ParameterType.STRING, true)), "1");
@@ -63,8 +69,8 @@ class MechanicExtensionContractTest {
                 public List<MechanicListener<?>> listeners() {
                     return List.of(new MechanicListener<>(PlayerItemDamageEvent.class,
                             EventPriority.HIGH, true, MechanicListener.ThreadClass.REGION,
-                            (event, lookup) -> lookup.onItem(event.getItem(), Greeting.class)
-                                    .ifPresent(ignored -> event.setCancelled(true))));
+                            (event, lookup) -> lookup.allOnItem(event.getItem(), Greeting.class)
+                                    .forEach(ignored -> event.setCancelled(true))));
                 }
             };
         }

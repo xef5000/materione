@@ -24,6 +24,7 @@ import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.platform.items.MaterioneStacks;
 import dev.materione.plugin.runtime.behavior.ItemBehaviors;
 import dev.materione.plugin.runtime.mechanics.ItemMechanics;
+import dev.materione.plugin.runtime.mechanics.builtin.CommandsMechanic;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -86,6 +87,34 @@ class MechanicsPipelineTest {
         assertThat(shadow.item(ITEM)).isPresent();
         assertThat(diagnostics.recent(64)).singleElement()
                 .extracting(diagnostic -> diagnostic.code().toString()).isEqualTo("MTR-0027");
+    }
+
+    @Test
+    void repeatedCommandsPreserveBothExecutionModesAndHaveDistinctRuleIdentities() {
+        pipeline.registerBuiltins();
+        var commands = new CommandsMechanic();
+        registries.registry(RegistryKeys.MECHANICS, Mechanic.class)
+                .register(NamespacedId.parse("materione:commands"), commands, commands.describe(), "materione");
+        var shadow = shadow("""
+                wand:
+                  material: BLAZE_ROD
+                  mechanics:
+                    - commands:
+                        on_left_click: ["say console"]
+                    - materione:commands:
+                        as_player: true
+                        on_left_click: ["materione version"]
+                """);
+        var rules = shadow.view(ItemBehaviors.KEY).forItem(ITEM).orElseThrow();
+
+        assertThat(rules).hasSize(2);
+        assertThat(rules).extracting(rule -> rule.id()).doesNotHaveDuplicates();
+        assertThat(rules).extracting(rule -> rule.actions().getFirst().param("as"))
+                .containsExactly("console", "player");
+        assertThat(rules).extracting(rule -> rule.actions().getFirst().param("command"))
+                .containsExactly("say console", "materione version");
+        assertThat(shadow.view(ItemMechanics.KEY).forItem(ITEM)).hasSize(2);
+        assertThat(diagnostics.recent(64)).isEmpty();
     }
 
     @Test

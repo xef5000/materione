@@ -58,13 +58,13 @@ public final class MechanicsResolver {
                             ? NamespacedId.parse(name) : NamespacedId.of("materione", name);
                     var registered = registry.flatMap(entries -> entries.get(id))
                             .orElseThrow(() -> new IllegalArgumentException("unknown mechanic '" + id + "'"));
-                    if (seen.contains(id)) {
+                    Mechanic factory = registered.entry();
+                    if (seen.contains(id) && !factory.repeatable()) {
                         throw new IllegalArgumentException("duplicate mechanic declaration '" + id + "'");
                     }
                     Map<String, Object> params = validateSchema(
                             parameters(entry.getValue()), registered.description());
                     var configuration = new MechanicConfiguration(itemId, params);
-                    Mechanic factory = registered.entry();
                     BooleanSupplier available = () -> registry.flatMap(entries -> entries.get(id))
                             .map(current -> current.entry() == factory).orElse(false);
                     var instance = Objects.requireNonNull(factory.parse(configuration), "mechanic parser returned null");

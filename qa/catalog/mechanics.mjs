@@ -22,7 +22,7 @@ return 'left-clicked'`, 15_000);
 export default [
   test({
     id: 'mechanics.commands-reload-once',
-    title: 'world:storm_wand runs its command exactly once per left-click after a content reload',
+    title: 'world:storm_wand retains both repeated command bindings after reload: console tellraw exactly once and the player version command',
     mode: 'auto',
     covers: [
       'api/src/main/java/dev/materione/api/mechanics/**',
@@ -43,6 +43,7 @@ export default [
       const before = await count();
       await groundSwing(ctx);
       await ctx.waitForChat(/The wand sparks\./);
+      await ctx.waitForServerLog(/MATERIONE-VERSION/);
       await ctx.sleep(700);
       ctx.expect((await count()) - before).toBe(1);
     },

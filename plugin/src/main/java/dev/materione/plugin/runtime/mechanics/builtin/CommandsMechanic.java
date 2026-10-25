@@ -53,6 +53,11 @@ public final class CommandsMechanic implements Mechanic {
     }
 
     @Override
+    public boolean repeatable() {
+        return true;
+    }
+
+    @Override
     public SelfDescription describe() {
         return new SelfDescription(
                 "Commands",

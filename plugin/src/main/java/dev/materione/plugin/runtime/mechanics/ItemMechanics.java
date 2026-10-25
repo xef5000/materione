@@ -44,4 +44,15 @@ public final class ItemMechanics {
         }
         return Optional.empty();
     }
+
+    /** Every matching binding, including repeats, in authored declaration order. */
+    public <T extends MechanicInstance> List<T> allOnItem(
+            NamespacedId id, NamespacedId mechanicId, Class<T> type) {
+        return forItem(id).stream()
+                .filter(active -> active.id().equals(mechanicId) && active.isAvailable())
+                .map(ActiveMechanic::instance)
+                .filter(type::isInstance)
+                .map(type::cast)
+                .toList();
+    }
 }

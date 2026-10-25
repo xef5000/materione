@@ -92,6 +92,8 @@ class BuiltinMechanicsTest {
         assertThat(new CommandsMechanic().describe().parameters().get(2).defaultValue()).isEqualTo("false");
         assertThat(new FoodMechanic().describe().parameters().get(2).defaultValue()).isEqualTo("false");
         assertThat(new BackpackMechanic().describe().parameters().get(1).defaultValue()).isEqualTo("Backpack");
+        assertThat(NativeMechanics.all().stream().filter(Mechanic::repeatable))
+                .extracting(Mechanic::name).containsExactly("commands");
     }
 
     @Test

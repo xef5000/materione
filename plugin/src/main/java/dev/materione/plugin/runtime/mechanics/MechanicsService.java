@@ -104,14 +104,16 @@ public final class MechanicsService implements MechanicsApi, AutoCloseable, List
         Registration registration = new Registration(owner, id);
         final SelfDescription description;
         final String name;
+        final boolean repeatable;
         try {
             description = Objects.requireNonNull(mechanic.describe(), "mechanic description");
             name = Objects.requireNonNull(mechanic.name(), "mechanic name");
+            repeatable = mechanic.repeatable();
         } catch (RuntimeException failure) {
             registration.warn("metadata failed", failure);
             throw failure;
         }
-        registration.entry = registration.managed(mechanic, name, description);
+        registration.entry = registration.managed(mechanic, name, description, repeatable);
         metadata.registerBounded(
                 MechanicsResolver.REGISTRY_KEY, Mechanic.class, id,
                 registration.entry, description, owner.getName());
@@ -272,7 +274,7 @@ public final class MechanicsService implements MechanicsApi, AutoCloseable, List
             }
         }
 
-        private Mechanic managed(Mechanic delegate, String name, SelfDescription description) {
+        private Mechanic managed(Mechanic delegate, String name, SelfDescription description, boolean repeatable) {
             return new Mechanic() {
                 @Override
                 public String name() {
@@ -282,6 +284,11 @@ public final class MechanicsService implements MechanicsApi, AutoCloseable, List
                 @Override
                 public SelfDescription describe() {
                     return description;
+                }
+
+                @Override
+                public boolean repeatable() {
+                    return repeatable;
                 }
 
                 @Override
@@ -356,6 +363,20 @@ public final class MechanicsService implements MechanicsApi, AutoCloseable, List
         public <T extends MechanicInstance> Optional<T> onItem(ItemStack stack, Class<T> type) {
             Objects.requireNonNull(type, "type");
             return MaterioneStacks.identityOf(stack).flatMap(item -> onItem(item, type));
+        }
+
+        @Override
+        public <T extends MechanicInstance> List<T> allOnItem(NamespacedId item, Class<T> type) {
+            Objects.requireNonNull(item, "item");
+            Objects.requireNonNull(type, "type");
+            return bindings == null || !active.getAsBoolean()
+                    ? List.of() : bindings.allOnItem(item, mechanicId, type);
+        }
+
+        @Override
+        public <T extends MechanicInstance> List<T> allOnItem(ItemStack stack, Class<T> type) {
+            Objects.requireNonNull(type, "type");
+            return MaterioneStacks.identityOf(stack).map(item -> allOnItem(item, type)).orElse(List.of());
         }
     }
 }

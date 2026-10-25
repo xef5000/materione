@@ -338,6 +338,39 @@ class MechanicsServiceTest {
     }
 
     @Test
+    void managedRepeatableFactoryExposesEveryBindingInOneLifetimeGuardedSnapshot() throws EventException {
+        List<MechanicContext> contexts = new ArrayList<>();
+        List<List<Binding>> observed = new ArrayList<>();
+        var handle = service.register(addon, PULSE, mechanic(true, context -> {
+            contexts.add(context);
+            return listening((event, lookup) -> {
+                observed.add(lookup.allOnItem(ITEM, Binding.class));
+                assertThat(lookup.onItem(ITEM, Binding.class)).contains(new Binding("first"));
+                assertThat(lookup.allOnItem(ITEM, OtherBinding.class)).isEmpty();
+                assertThat(lookup.allOnItem((org.bukkit.inventory.ItemStack) null, Binding.class)).isEmpty();
+                installBindings("after");
+                observed.add(lookup.allOnItem(ITEM, Binding.class));
+            });
+        }));
+        assertThat(metadata().get(PULSE).orElseThrow().entry().repeatable()).isTrue();
+        installBindings("first", "second");
+        var retained = contexts.getFirst().snapshot();
+        events.fire(new TestEvent());
+
+        assertThat(observed).containsExactly(
+                List.of(new Binding("first"), new Binding("second")),
+                List.of(new Binding("first"), new Binding("second")));
+        assertThat(contexts.getFirst().snapshot().allOnItem(ITEM, Binding.class))
+                .containsExactly(new Binding("after"));
+        assertThat(retained.allOnItem(ITEM, Binding.class))
+                .containsExactly(new Binding("first"), new Binding("second"));
+        assertThatThrownBy(() -> retained.allOnItem(ITEM, Binding.class).clear())
+                .isInstanceOf(UnsupportedOperationException.class);
+        handle.close();
+        assertThat(retained.allOnItem(ITEM, Binding.class)).isEmpty();
+    }
+
+    @Test
     void boundedUnregisterCannotRemoveAReplacementEntry() {
         service.register(addon, PULSE, mechanic(context -> new MechanicRuntime() {}));
         Mechanic stale = metadata().get(PULSE).orElseThrow().entry();
@@ -494,9 +527,11 @@ class MechanicsServiceTest {
         return result;
     }
 
-    private void installBindings(String value) {
+    private void installBindings(String... values) {
         List<Map<String, Object>> declarations = new ArrayList<>();
-        declarations.add(Map.of(PULSE.toString(), Map.of("value", value)));
+        for (String value : values) {
+            declarations.add(Map.of(PULSE.toString(), Map.of("value", value)));
+        }
         if (metadata().get(OTHER).isPresent()) {
             declarations.add(Map.of(OTHER.toString(), Map.of("value", "wrong-namespace")));
         }
@@ -509,6 +544,10 @@ class MechanicsServiceTest {
     }
 
     private static Mechanic mechanic(Function<MechanicContext, MechanicRuntime> factory) {
+        return mechanic(false, factory);
+    }
+
+    private static Mechanic mechanic(boolean repeatable, Function<MechanicContext, MechanicRuntime> factory) {
         return new Mechanic() {
             @Override
             public String name() {
@@ -518,6 +557,11 @@ class MechanicsServiceTest {
             @Override
             public SelfDescription describe() {
                 return SelfDescription.of("Pulse", "Test extension");
+            }
+
+            @Override
+            public boolean repeatable() {
+                return repeatable;
             }
 
             @Override

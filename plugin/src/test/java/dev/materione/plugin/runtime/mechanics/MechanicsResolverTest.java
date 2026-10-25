@@ -1,6 +1,7 @@
 package dev.materione.plugin.runtime.mechanics;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.mechanics.Mechanic;
@@ -76,6 +77,47 @@ class MechanicsResolverTest {
 
         assertThat(active).hasSize(1);
         assertThat(rejects).singleElement().asString().contains("duplicate");
+    }
+
+    @Test
+    void repeatableDeclarationsAreIndependentAndOrderedAcrossShortAndFullAliases() {
+        var parses = new AtomicInteger();
+        register("materione:charge", new Charge(parses) {
+            @Override
+            public boolean repeatable() {
+                return true;
+            }
+        });
+        var active = resolve(List.of(Map.of("charge", Map.of("power", 2)),
+                Map.of("materione:charge", Map.of("power", "bad")),
+                Map.of("materione:charge", Map.of("power", 7)),
+                Map.of("charge", Map.of("power", 2))));
+        var snapshot = new ItemMechanics(Map.of(ITEM, active));
+        var bindings = snapshot.allOnItem(ITEM, NamespacedId.parse("materione:charge"), Power.class);
+
+        assertThat(parses).hasValue(3);
+        assertThat(bindings).containsExactly(new Power(2, "ready"), new Power(7, "ready"), new Power(2, "ready"));
+        assertThat(snapshot.onItem(ITEM, NamespacedId.parse("materione:charge"), Power.class))
+                .contains(bindings.getFirst());
+        assertThat(snapshot.allOnItem(ITEM, NamespacedId.parse("other:charge"), Power.class)).isEmpty();
+        assertThat(snapshot.allOnItem(ITEM, NamespacedId.parse("materione:charge"), Other.class)).isEmpty();
+        assertThatThrownBy(bindings::clear).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(rejects).singleElement().asString().contains("power");
+    }
+
+    @Test
+    void singletonBuiltinDuplicatesKeepTheFirstValidDeclaration() {
+        NativeMechanics.all().forEach(mechanic -> register("materione:" + mechanic.name(), mechanic));
+        var active = resolve(List.of(
+                Map.of("food", Map.of("nutrition", 6, "saturation", 8)),
+                Map.of("materione:food", Map.of("nutrition", 2, "saturation", 1)),
+                Map.of("backpack", Map.of("rows", 3)),
+                Map.of("backpack", Map.of("rows", 6))));
+
+        assertThat(active).hasSize(2);
+        assertThat(active.getFirst().params()).containsEntry("nutrition", 6);
+        assertThat(active.getLast().params()).containsEntry("rows", 3);
+        assertThat(rejects).hasSize(2).allSatisfy(message -> assertThat(message).contains("duplicate"));
     }
 
     @Test

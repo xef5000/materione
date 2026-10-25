@@ -21,6 +21,15 @@ public interface Mechanic {
     SelfDescription describe();
 
     /**
+     * Whether an item may declare this mechanic more than once. Repeated
+     * declarations are independent bindings, processed in authored order.
+     * Stateful single-slot mechanics should retain the default.
+     */
+    default boolean repeatable() {
+        return false;
+    }
+
+    /**
      * Compiles one item's parameters into an immutable binding. Reject bad
      * content with {@link IllegalArgumentException}; the pipeline diagnoses
      * and skips that declaration without disabling its siblings.
