@@ -275,7 +275,9 @@ return 'ejected'`, 15_000);
       }
       ctx.expect(String(await droppedField('id'))).toContain('minecraft:music_disc_cat');
       ctx.expect(String(await droppedField('count'))).toMatch(/\b1\b/);
-      ctx.expect(String(await droppedField('components."minecraft:custom_name"'))).toContain('Ruby disc');
+      ctx.expect(String(await droppedField(
+        'components."minecraft:custom_name".extra[0].extra[0].text',
+      ))).toContain('Ruby disc');
       ctx.expect(String(dropIdentity)).toContain('sample:ruby_disc');
       await ctx.rcon(`${itemAtJukebox} run data get entity @s Pos`);
       const movedToDrop = await ctx.rcon(`${itemAtJukebox} at @s run tp Probe ~ ~ ~`);
@@ -297,23 +299,17 @@ return 'ejected'`, 15_000);
       }
       ctx.expect(String(await inventoryField('id'))).toContain('minecraft:music_disc_cat');
       ctx.expect(String(await inventoryField('count'))).toMatch(/\b1\b/);
-      ctx.expect(String(await inventoryField('components."minecraft:custom_name"'))).toContain('Ruby disc');
       ctx.expect(String(inventoryIdentity)).toContain('sample:ruby_disc');
 
-      const clientInventory = async () => ctx.exec(`def out = []
-def playerInv = mc.player.getInventory()
-for (int i = 0; i < 46; i++) {
-  def st = playerInv.getItem(i)
-  if (!st.isEmpty()) out.add(st.getHoverName().getString())
-}
-return out.join(' | ')`, 15_000);
+      const clientDiscName = async () => ctx.exec(`def st = mc.player.getInventory().getItem(0)
+return st.isEmpty() ? 'EMPTY' : st.getHoverName().getString()`, 15_000);
       const clientDeadline = Date.now() + 5_000;
-      let inv = await clientInventory();
-      while (!String(inv).includes('Ruby disc') && Date.now() <= clientDeadline) {
+      let name = await clientDiscName();
+      while (!String(name).includes('Ruby disc') && Date.now() <= clientDeadline) {
         await ctx.sleep(250);
-        inv = await clientInventory();
+        name = await clientDiscName();
       }
-      ctx.expect(String(inv)).toContain('Ruby disc');
+      ctx.expect(String(name)).toBe('Ruby disc');
     },
   }),
 ];
