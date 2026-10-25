@@ -172,7 +172,17 @@ return 'stopped'`, 15_000);
     timeoutMs: 180_000,
     steps: async (ctx) => {
       const spot = { x: 2, y: -60, z: 3 };
+      const floorY = spot.y - 1;
+      await ctx.rcon(
+        `fill ${spot.x - 3} ${floorY} ${spot.z - 1} ${spot.x + 3} ${floorY} ${spot.z + 2} minecraft:stone`,
+      );
       await ctx.reset();
+      ctx.expect(await ctx.rcon(
+        `execute if block 0 ${floorY} ${spot.z} minecraft:stone`)).toBe('Test passed');
+      for (let z = spot.z; z <= spot.z + 2; z++) {
+        ctx.expect(await ctx.rcon(
+          `execute if block ${spot.x} ${floorY} ${z} minecraft:stone`)).toBe('Test passed');
+      }
       await ctx.rcon('gamemode survival Probe');
       await ctx.sleep(400);
       await ctx.rcon('materione give sample:ruby_disc Probe 1');

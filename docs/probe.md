@@ -383,6 +383,9 @@ already asserts.
   `execute positioned 2.5 -59.5 3.5 as @e[type=item,distance=..4,limit=1,sort=nearest] at @s run tp Probe ~ ~ ~`),
   and poll the server-side `Inventory` before the client's inventory; a
   fixed adjacent-block teleport can miss the item's pickup collision (#128).
+  Stage a solid floor under the player start and jukebox/comparator/wire
+  before the test's reset/teleport; without support the wire drops and the
+  client reads air instead of comparator power.
   Two timing traps: eject late enough that the sound is fully live (an eject
   racing the engine's queue can leave the young instance playing its course —
   wait for the active instance, then ~1.5s), and the ejected instance retires
