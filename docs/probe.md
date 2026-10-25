@@ -298,6 +298,11 @@ already asserts.
   `SelectedItem.components."minecraft:custom_data"` dump cuts off partway
   through a byte-array value, so later PDC keys never print — read targeted
   paths instead (`..."minecraft:custom_data".PublicBukkitValues."materione:key"`).
+  Full item-entity `Item` and player `Inventory` dumps can also exceed the
+  RCON response limit; read leaf paths (`Item.id`, `Item.count`,
+  `Item.components."minecraft:custom_name"`,
+  `Item.components."minecraft:custom_data".PublicBukkitValues."materione:id"`)
+  and, for inventory, prefix them with `Inventory[{Slot:0b}]`.
   A missing path answers `Found no elements matching <path>` (echoing the
   path text — don't assert presence by matching the key name in that reply).
   Two different NBT roots carry PDC: **entities** (and chunks) under
