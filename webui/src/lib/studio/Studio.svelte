@@ -17,12 +17,24 @@
   import ModelWorkbench from './ModelWorkbench.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
-  import { changedFields, sectionsOf, unrenderableKeys } from '../studio';
   import {
-    clearDocStale,
+    draftDirty,
+    ensureDocumentDraft,
+    fieldValue,
+    getDocumentDraft,
+    rawDraftDirty,
+    reconcileDocumentDraft,
+    retainDocumentDraft,
+    saveDocumentDraft,
+    setDraftField,
+  } from '../drafts.svelte';
+  import { rootIdForResource, sectionsOf, unrenderableKeys } from '../studio';
+  import {
     diagnostics,
+    connection,
     errorMessage,
     logActivity,
+    registerEditorGuard,
     refreshPack,
     revealInAdvanced,
     session,
@@ -32,37 +44,57 @@
   interface Props {
     resource: ResourceRef;
     onClose: () => void;
+    active?: boolean;
   }
 
-  let { resource, onClose }: Props = $props();
+  let { resource, onClose, active = true }: Props = $props();
 
-  let rev = $state(0);
-  let loaded = $state<Record<string, unknown>>({});
-  let draft = $state<Record<string, unknown>>({});
-  let rootId = $state('');
+  const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
+  const rootId = $derived(rootIdForResource(resource.id));
+  const loaded = $derived(recordOf(documentDraft.base[rootId]));
+  const draft = $derived(recordOf(documentDraft.values[rootId]));
+  const rev = $derived(documentDraft.rev);
+  const dirty = $derived(draftDirty(documentDraft));
+  const saving = $derived(documentDraft.saving);
+  const loading = $derived(documentDraft.loading);
+  const error = $derived(documentDraft.error);
   /** Server-computed read-only metadata (a glyph's allocated codepoint). */
-  let computed = $state<Record<string, Record<string, { codepoint: number; count: number }>>>({});
-  let error = $state('');
-  let saving = $state(false);
+  const computed = $derived(documentDraft.computed as Record<
+    string,
+    Record<string, { codepoint: number; count: number }>
+  >);
   /** The texture slot currently open in the pixel editor, if any. */
   let texturing = $state<{ field: string; reference: string } | null>(null);
+  let textureDirty = $state(false);
+  let textureSaving = $state(false);
   /** Bumped when the pixel editor writes, so the preview re-reads the bytes. */
   let textureVersion = $state(0);
   /** The model field currently open in the Blockbench workbench, if any. */
   let modelling = $state<string | null>(null);
-  const modelField = $derived(modelling ?? 'model');
+  let modelSaving = $state(false);
+  const glyphMeta = $derived(computed.glyphs?.[rootId] ?? null);
 
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
   const schema = $derived(
     workspace.types.find((type: TypeInfo) => type.directory === typeDirectory) ??
       workspace.types.find((type: TypeInfo) => type.name === resource.type),
   );
-  const glyphMeta = $derived(computed.glyphs?.[rootId] ?? null);
   const sections = $derived(sectionsOf(schema));
   const advancedOnly = $derived(unrenderableKeys(loaded, schema));
-  const dirty = $derived(changedFields(loaded, draft).length > 0);
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
   const name = $derived(String(draft.display_name ?? '') || resource.id);
+  const pendingRoots = $derived([
+    ...new Set(
+      documentDraft.edits
+        .map((edit) => edit.field[0])
+        .filter((root): root is string => typeof root === 'string' && root.length > 0),
+    ),
+  ]);
+  const pendingSummary = $derived(
+    !rawDraftDirty(documentDraft) && pendingRoots.some((root) => root !== rootId)
+      ? `Save & apply will apply ${documentDraft.edits.length} pending field${documentDraft.edits.length === 1 ? '' : 's'} across ${pendingRoots.length} resource${pendingRoots.length === 1 ? '' : 's'} in this file (${pendingRoots.map(resourceIdForRoot).join(', ')}).`
+      : '',
+  );
   const issues = $derived(
     diagnostics.entries.filter((entry) => (entry.resource ?? '').includes(resource.id)),
   );
@@ -84,75 +116,121 @@
     return (materials ?? []).map((value) => ({ value, label: value.toLowerCase(), group: 'vanilla' }));
   }
 
+  function recordOf(value: unknown): Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : {};
+  }
+
+  function resourceIdForRoot(root: string): string {
+    return workspace.resources.find((entry) =>
+      entry.pack === resource.pack &&
+      entry.path === resource.path &&
+      rootIdForResource(entry.id) === root,
+    )?.id ?? root;
+  }
+
   $effect(() => {
-    // Re-read whenever the browser opens a different entry.
-    const key = `${resource.pack}/${resource.path}`;
-    void load(key);
+    const current = documentDraft;
+    return retainDocumentDraft(current);
   });
 
-  async function load(_key: string) {
-    try {
-      const payload = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
-      rev = Number(payload.rev ?? 0);
-      const parsed = (payload.parsed as Record<string, unknown>) ?? {};
-      rootId = String(Object.keys(parsed)[0] ?? resource.id);
-      const body = (parsed[rootId] as Record<string, unknown>) ?? {};
-      loaded = { ...body };
-      draft = structuredClone(body);
-      computed = (payload.computed as typeof computed) ?? {};
-      error = '';
-      clearDocStale(`${resource.pack}/${resource.path}`);
-    } catch (e) {
-      error = errorMessage(e);
+  $effect(() => {
+    const current = documentDraft;
+    const channel = session.channel;
+    if (
+      channel &&
+      !current.loaded &&
+      !current.loading &&
+      !current.saving &&
+      !draftDirty(current) &&
+      !current.error
+    ) {
+      void ensureDocumentDraft(current, channel);
     }
-  }
+  });
+
+  $effect(() => {
+    return registerEditorGuard('studio', () => {
+      if (textureSaving || modelSaving) return false;
+      if (modelling) {
+        return confirm('Leave the open model editor? Unsaved model work may be lost.');
+      }
+      if (texturing && textureDirty) {
+        return confirm('Leave the texture editor without applying its unsaved pixels?');
+      }
+      return true;
+    }, () => Boolean(texturing || modelling || textureSaving || modelSaving));
+  });
 
   function valueOf(field: TypeParam): unknown {
     return draft[field.id];
   }
 
   function set(field: string, value: unknown) {
-    draft = { ...draft, [field]: value };
+    if (rawDraftDirty(documentDraft)) {
+      documentDraft.error = 'Apply or discard the Advanced Files YAML draft before editing fields here.';
+      return;
+    }
+    try {
+      setDraftField(documentDraft, [rootId, field], value);
+    } catch (e) {
+      documentDraft.error = errorMessage(e);
+    }
+  }
+
+  function canEditAsset(): boolean {
+    if (!connection.connected || !session.channel) {
+      documentDraft.error = 'Connect to the server before opening immediate-write texture or model editors.';
+      return false;
+    }
+    if (!documentDraft.loaded || documentDraft.saving || documentDraft.loading ||
+      documentDraft.uncertain || documentDraft.stale) {
+      documentDraft.error = 'Reconcile the document draft before saving texture or model assets.';
+      return false;
+    }
+    if (rawDraftDirty(documentDraft)) {
+      documentDraft.error = 'Apply or discard the Advanced Files YAML draft before saving texture or model changes.';
+      return false;
+    }
+    return true;
   }
 
   async function save() {
-    const changed = changedFields(loaded, draft);
-    if (changed.length === 0) return;
-    saving = true;
+    const channel = session.channel;
+    if (!active || !draftDirty(documentDraft)) return;
+    if (!channel) {
+      documentDraft.error = 'Reconnect before applying this document.';
+      return;
+    }
+    const changed = documentDraft.edits.length || (rawDraftDirty(documentDraft) ? 1 : 0);
     try {
-      const result = unwrap(
-        await ops.setFields(
-          session.channel!,
-          resource.pack,
-          resource.path,
-          rev,
-          changed.map((key) => ({ field: [rootId, key], value: draft[key] })),
-        ),
-      );
-      rev = Number(result.rev ?? rev);
-      logActivity('save', `${resource.path} saved (${changed.length} fields)`);
-      await load(`${resource.pack}/${resource.path}`);
-      await refreshPack();
+      if (await saveDocumentDraft(documentDraft, channel)) {
+        logActivity('save', `${resource.path} saved (${changed} pending changes)`);
+        await refreshPack();
+      }
     } catch (e) {
-      const message = errorMessage(e);
-      error = message.includes('MTR-0034')
-        ? 'This file changed on disk since it was opened. Reload to see the new version.'
-        : message;
-    } finally {
-      saving = false;
+      documentDraft.error = errorMessage(e);
     }
   }
 
   function editModel(field: TypeParam) {
+    if (!canEditAsset()) return;
     modelling = field.id;
   }
 
-  async function modelSaved(reference: string) {
+  async function modelSaved(_reference: string) {
+    const field = modelling ?? 'model';
+    const committedField = [rootId, field];
+    textureVersion += 1;
     modelling = null;
-    if (draft[modelField] !== reference) {
-      draft = { ...draft, [modelField]: reference };
+    const channel = session.channel;
+    if (channel) {
+      await reconcileDocumentDraft(documentDraft, channel, [committedField]);
+    } else {
+      documentDraft.stale = true;
+      documentDraft.error = 'Model assets were applied, but the document draft could not be reconciled while disconnected.';
     }
-    await load(`${resource.pack}/${resource.path}`);
   }
 
   /**
@@ -162,7 +240,9 @@
    * left pointing at nothing.
    */
   function editTexture(field: TypeParam) {
+    if (!canEditAsset()) return;
     const reference = String(draft[field.id] ?? '') || `${typeDirectory}/${resource.id}`;
+    textureDirty = false;
     texturing = { field: field.id, reference };
   }
 
@@ -170,9 +250,47 @@
     if (!texturing) return;
     textureVersion += 1;
     const { field, reference } = texturing;
-    if (draft[field] !== reference) {
-      draft = { ...draft, [field]: reference };
-      await save();
+    const channel = session.channel;
+    if (!channel) {
+      try {
+        setDraftField(documentDraft, [rootId, field], reference);
+      } catch {
+        // Keep the error below; an asset may have been saved just as the channel closed.
+      }
+      documentDraft.error = 'The texture was saved, but its document reference could not be applied while disconnected.';
+      return;
+    }
+    await refreshPack();
+    if (rawDraftDirty(documentDraft)) {
+      documentDraft.error = 'The texture asset was saved, but its reference was not applied because an Advanced Files YAML draft is pending.';
+      return;
+    }
+    const committedField = [rootId, field];
+    const committedValue = fieldValue(documentDraft.base, committedField);
+    if (committedValue !== reference) {
+      if (documentDraft.saving || documentDraft.loading || documentDraft.uncertain || documentDraft.stale) {
+        documentDraft.error = 'The texture asset was saved, but its reference needs draft reconciliation before it can be applied.';
+        return;
+      }
+      try {
+        unwrap(await ops.setFields(
+          channel,
+          resource.pack,
+          resource.path,
+          documentDraft.rev,
+          [{ field: committedField, value: reference }],
+        ));
+        await reconcileDocumentDraft(documentDraft, channel, [committedField]);
+      } catch (e) {
+        const message = `The texture asset was saved, but its reference was not applied: ${errorMessage(e)}`;
+        await reconcileDocumentDraft(documentDraft, channel);
+        try {
+          setDraftField(documentDraft, committedField, reference);
+          documentDraft.error = `${message} The reference is staged and has not been applied.`;
+        } catch {
+          documentDraft.error = `${message} Reconcile the document draft before applying the reference.`;
+        }
+      }
     }
   }
 
@@ -187,7 +305,7 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (texturing || modelling) return; // the overlay owns the keyboard
+    if (!active || texturing || modelling) return; // the active overlay owns the keyboard
     if (event.key === 'Escape' && !dirty) onClose();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
@@ -208,17 +326,23 @@
       type="button"
       class="yaml"
       onclick={() => revealInAdvanced(resource)}
-      title="open this file in Advanced Files"
+      title="open this resource in Files"
     >
-      Open as YAML
+      Open in Files
     </button>
-    <button type="button" class="save" disabled={!dirty || saving} onclick={save}>
-      {saving ? 'Saving…' : 'Save'}
+    <button type="button" class="save" disabled={!active || !documentDraft.loaded || !dirty || saving || loading || documentDraft.uncertain || documentDraft.stale} onclick={save}>
+      {saving ? 'Saving…' : 'Save & apply'}
     </button>
   </header>
 
   {#if error}
     <p class="error">{error}</p>
+  {/if}
+  {#if documentDraft.notice}
+    <p class="notice">{documentDraft.notice}</p>
+  {/if}
+  {#if pendingSummary}
+    <p class="notice pending-summary">{pendingSummary}</p>
   {/if}
 
   <div class="body">
@@ -259,38 +383,52 @@
     </aside>
 
     <div class="form">
+      {#if rawDraftDirty(documentDraft)}
+        <p class="pending-yaml">
+          Advanced Files YAML changes are pending. Apply or discard them there before editing structured fields.
+        </p>
+      {/if}
+      <fieldset
+        class="field-controls"
+        disabled={documentDraft.loading || documentDraft.saving || rawDraftDirty(documentDraft) || documentDraft.uncertain || documentDraft.stale}
+      >
       {#if !schema}
         <p class="error">No registered type owns {typeDirectory}/ — edit this file as YAML.</p>
+      {:else if !documentDraft.loaded}
+        <p class="loading">Loading document…</p>
+      {:else}
+        {#each sections as section (section.id)}
+          <fieldset>
+            <legend>{section.label}</legend>
+            {#each section.fields as field (field.id)}
+              {#if field.uiHint === 'structured-list'}
+                <StructuredList {field} value={valueOf(field)} onChange={(v) => set(field.id, v)} />
+              {:else if field.uiHint === 'recipe-grid' && field.id === 'shape'}
+                <RecipeGrid
+                  shape={draft.shape}
+                  ingredients={draft.ingredients}
+                  {choices}
+                  onChange={(next) => {
+                    set('shape', next.shape);
+                    set('ingredients', next.ingredients);
+                  }}
+                />
+              {:else if field.uiHint === 'recipe-grid'}
+                <!-- ingredients ride along with the grid above -->
+              {:else}
+                <Field
+                  {field}
+                  value={valueOf(field)}
+                  pack={resource.pack}
+                  onChange={(v) => set(field.id, v)}
+                  action={actionFor(field)}
+                />
+              {/if}
+            {/each}
+          </fieldset>
+        {/each}
       {/if}
-      {#each sections as section (section.id)}
-        <fieldset>
-          <legend>{section.label}</legend>
-          {#each section.fields as field (field.id)}
-            {#if field.uiHint === 'structured-list'}
-              <StructuredList {field} value={valueOf(field)} onChange={(v) => set(field.id, v)} />
-            {:else if field.uiHint === 'recipe-grid' && field.id === 'shape'}
-              <RecipeGrid
-                shape={draft.shape}
-                ingredients={draft.ingredients}
-                {choices}
-                onChange={(next) => {
-                  draft = { ...draft, shape: next.shape, ingredients: next.ingredients };
-                }}
-              />
-            {:else if field.uiHint === 'recipe-grid'}
-              <!-- ingredients ride along with the grid above -->
-            {:else}
-              <Field
-                {field}
-                value={valueOf(field)}
-                pack={resource.pack}
-                onChange={(v) => set(field.id, v)}
-                action={actionFor(field)}
-              />
-            {/if}
-          {/each}
-        </fieldset>
-      {/each}
+      </fieldset>
     </div>
   </div>
 
@@ -306,15 +444,20 @@
       </span>
       <button type="button" class="link" onclick={() => revealInAdvanced(resource)}>Open</button>
     {/if}
+    {#if saving}<span>Applying…</span>{/if}
   </footer>
 
   {#if texturing}
     <div class="overlay">
       <TextureEditor
+        active={active}
         pack={resource.pack}
         path={`assets/textures/${texturing.reference}.png`}
         onClose={() => (texturing = null)}
+        onDirtyChange={(dirty) => (textureDirty = dirty)}
+        onSavingChange={(saving) => (textureSaving = saving)}
         onSaved={textureSaved}
+        draftError={documentDraft.error}
       />
     </div>
   {/if}
@@ -322,6 +465,7 @@
   {#if modelling}
     <div class="overlay">
       <ModelWorkbench
+        active={active}
         pack={resource.pack}
         ownerPath={resource.path}
         ownerId={resource.id}
@@ -333,6 +477,7 @@
         {typeDirectory}
         onClose={() => (modelling = null)}
         onSaved={modelSaved}
+        onSavingChange={(saving) => (modelSaving = saving)}
       />
     </div>
   {/if}
@@ -446,6 +591,11 @@
     padding: 12px 0 0;
     min-width: 0;
   }
+  .field-controls {
+    border: none;
+    margin: 0;
+    padding: 0;
+  }
   legend {
     font-size: 11px;
     letter-spacing: 0.08em;
@@ -479,6 +629,25 @@
     background: var(--error-bg);
     color: var(--error);
     font-size: 12px;
+  }
+  .notice,
+  .loading {
+    margin: 0;
+    padding: 6px 12px;
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .pending-yaml {
+    margin: 0 0 12px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--warn);
+    font-size: 12px;
+  }
+  .pending-summary {
+    border-bottom: 1px solid var(--border);
+    color: var(--warn);
   }
   @media (max-width: 720px) {
     .body {

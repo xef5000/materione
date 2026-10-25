@@ -1,28 +1,70 @@
 <script lang="ts">
+  import { onMount, tick, untrack } from 'svelte';
   import AssetPicker from './AssetPicker.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
-  import { clearDocStale, logActivity, openBlockbench, session, setTabDirty, workspace } from '../state.svelte';
+  import {
+    connection, logActivity, openBlockbench, registerEditorGuard, revealInStudio,
+    session, setTabDirty, workspace, type DocTab,
+  } from '../state.svelte';
+  import {
+    discardDocumentDraft, draftDirty, ensureDocumentDraft, getDocumentDraft,
+    rawDraftDirty, reconcileDocumentDraft, reloadDocumentDraft,
+    retainDocumentDraft, saveDocumentDraft, setDraftField,
+  } from '../drafts.svelte';
 
   interface Props {
     resource: ResourceRef;
     tabKey: string;
+    active?: boolean;
+    source?: DocTab['source'];
   }
 
-  let { resource, tabKey }: Props = $props();
-
-  let raw = $state('');
-  let rev = $state(0);
-  let data = $state<Record<string, unknown>>({});
-  let error = $state('');
-  let dirty = $state(false);
-  let saving = $state(false);
-  // Form is the default surface; YAML is the dev-tool view. Files without a
-  // schema (pack.yml) start in YAML directly.
+  let { resource, tabKey, active = true, source }: Props = $props();
+  const draft = untrack(() => getDocumentDraft(resource.pack, resource.path));
+  const data = $derived(draft.values);
+  const rev = $derived(draft.rev);
+  const dirty = $derived(draftDirty(draft));
+  const saving = $derived(draft.saving);
+  const error = $derived(draft.error);
   let mode = $state<'form' | 'yaml'>('form');
   let advancedOpen = $state(false);
+  let sourceArea: HTMLTextAreaElement | undefined = $state();
+  let numericInputs = $state<Record<string, string>>({});
+  let numericErrors = $state<Record<string, string>>({});
+  const invalidNumbers = $derived(Object.values(numericErrors).filter(Boolean));
 
-  const rootId = $derived(String(Object.keys(data)[0] ?? resource.id));
+  $effect(() => registerEditorGuard(tabKey, () => {
+    if (!invalidNumbers.length) return true;
+    if (!confirm('Discard incomplete number inputs? Other pending fields are kept.')) return false;
+    numericInputs = {};
+    numericErrors = {};
+    return true;
+  }, () => invalidNumbers.length > 0));
+
+  $effect(() => {
+    if (!active || !source || !draft.loaded || !sourceArea) return;
+    const target = source;
+    const area = sourceArea;
+    const raw = draft.savedRaw;
+    void tick().then(() => {
+      if (!active || source !== target || sourceArea !== area) return;
+      const lines = raw.replace(/\r\n?/g, '\n').split('\n');
+      const row = Math.min(target.line - 1, lines.length - 1);
+      const start = lines.slice(0, row).reduce((offset, line) => offset + line.length + 1, 0);
+      const column = Math.min(target.column - 1, lines[row]!.length);
+      area.focus();
+      area.setSelectionRange(start + column, start + lines[row]!.length);
+      area.scrollTop = Math.max(0, row * 20 - area.clientHeight / 2);
+    });
+  });
+
+  const rootIds = $derived(Object.keys(data));
+  const rootId = $derived(
+    Object.hasOwn(data, resource.id) ? resource.id :
+      Object.hasOwn(data, resource.id.split(':').pop() ?? '') ? resource.id.split(':').pop()! :
+        rootIds[0] ?? resource.id,
+  );
   // Schemas are keyed by the type's DIRECTORY (where the file lives) — the
   // registry name ("item") never equals the path prefix ("items").
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
@@ -50,10 +92,8 @@
     }),
   );
 
-  function markDirty(value: boolean) {
-    dirty = value;
-    setTabDirty(tabKey, value);
-  }
+  $effect(() => { setTabDirty(tabKey, dirty || invalidNumbers.length > 0); });
+  const blocked = $derived(draft.loading || saving || draft.uncertain || draft.stale || !connection.connected);
 
   function isScalarListField(key: string): boolean {
     const current = (data[rootId] as Record<string, unknown>)?.[key];
@@ -63,91 +103,54 @@
   }
 
   async function load() {
-    try {
-      const payload = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
-      raw = String(payload.raw ?? '');
-      rev = Number(payload.rev ?? 0);
-      data = (payload.parsed as Record<string, unknown>) ?? {};
-      error = '';
-      clearDocStale(tabKey);
-      markDirty(false);
-      if (!schema) mode = 'yaml';
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (message.includes('MTR-0009')) {
-        raw = skeleton();
-        rev = 0;
-        data = {};
-        error = '';
-        markDirty(true);
-        mode = 'yaml';
-      } else {
-        raw = '';
-        rev = 0;
-        data = {};
-        error = message;
-      }
-    }
+    if (!session.channel) return;
+    if ((dirty || draft.uncertain) &&
+        !confirm('Discard this document draft and reload server files? Cancel to return and Save & apply first.')) return;
+    if (invalidNumbers.length && !confirm('Discard incomplete number inputs and reload?')) return;
+    numericInputs = {};
+    numericErrors = {};
+    await reloadDocumentDraft(draft, session.channel, true);
+    if (!schema) mode = 'yaml';
   }
 
-  const staleOnDisk = $derived(workspace.staleDocs[tabKey] === true);
+  const staleOnDisk = $derived(draft.stale);
 
   // External edits reach open tabs as a flag. A clean tab re-fetches the
   // authoritative bytes right away; a dirty tab keeps its edits and shows
   // the banner — the watcher must never clobber unsaved work.
   $effect(() => {
-    if (staleOnDisk && !dirty) {
-      void load();
+    if (staleOnDisk && !dirty && !saving && !draft.loading && !draft.uncertain && !draft.error && session.channel) {
+      const channel = session.channel;
+      untrack(() => { void reloadDocumentDraft(draft, channel, true); });
     }
   });
 
-  function skeleton(): string {
-    const id =
-      resource.id === '<parse error>' || resource.id.includes(' ') ? 'new_entry' : resource.id;
-    const lines = [`# ${resource.pack}:${id}`, `${id}:`];
-    for (const field of fields) {
-      lines.push(`  ${field.id}: ${field.default ?? ''}`);
+  function setMode(next: 'form' | 'yaml') {
+    if (next === mode) return;
+    if (invalidNumbers.length) {
+      if (!confirm('Discard incomplete number inputs before changing representation?')) return;
+      numericInputs = {};
+      numericErrors = {};
     }
-    return lines.join('\n') + '\n';
+    if ((next === 'yaml' && draft.edits.length) || (next === 'form' && rawDraftDirty(draft))) {
+      if (!confirm('Discard pending edits before changing representation? Cancel to return and Save & apply first.')) return;
+      discardDocumentDraft(draft);
+    }
+    mode = next;
   }
 
-  /** Full-document save (YAML view / advanced pane / new files). */
-  async function saveRaw() {
-    saving = true;
-    try {
-      const result = unwrap(await ops.put(session.channel!, resource.pack, resource.path, rev, raw));
-      rev = Number(result.rev);
-      data = (result.parsed as Record<string, unknown>) ?? {};
-      markDirty(false);
-      error = '';
-      logActivity(
-        'save',
-        `saved ${resource.pack}/${resource.path} → rev ${rev}; targeted reload queued`,
-      );
-    } catch (e) {
-      error = describe(e);
-    } finally {
-      saving = false;
+  async function save() {
+    if (!session.channel || invalidNumbers.length) return;
+    if (await saveDocumentDraft(draft, session.channel)) {
+      logActivity('save', `${resource.pack}/${resource.path} saved to files; reload requested`);
     }
   }
 
-  /**
-   * Form edits patch ONE node through the lossless layer — comments and
-   * untouched lines survive. The response re-read keeps the JSON view
-   * authoritative instead of re-parsing YAML client-side.
-   */
-  async function patch(fieldId: string, value: string | number | boolean | string[]) {
+  function patch(fieldId: string, value: string | number | boolean | string[]) {
     try {
-      const result = unwrap(
-        await ops.setScalar(session.channel!, resource.pack, resource.path, rev, [rootId, fieldId], value),
-      );
-      rev = Number(result.rev);
-      const fresh = unwrap(await ops.get(session.channel!, resource.pack, resource.path));
-      raw = String(fresh.raw);
-      data = (fresh.parsed as Record<string, unknown>) ?? {};
-      logActivity('save', `${resource.pack}:${rootId} · ${fieldId} updated → rev ${rev}`);
+      setDraftField(draft, [rootId, fieldId], value);
     } catch (e) {
-      error = describe(e);
+      draft.error = describe(e);
     }
   }
 
@@ -178,24 +181,30 @@
     return Array.isArray(current) ? current.map((item) => String(item)).join('\n') : String(current);
   }
 
-  // Text-like fields commit on BLUR (or Enter), not `change`: blur does not
-  // depend on the browser's dirty-value flag, so every edit path — typing,
-  // paste, programmatic — commits exactly once when focus leaves.
   function commitText(field: TypeParam, element: HTMLInputElement, rendered: string): void {
     if (element.value !== rendered) {
-      void patch(field.id, element.value);
+      patch(field.id, element.value);
     }
   }
 
   function commitNumber(field: TypeParam, element: HTMLInputElement, rendered: string): void {
+    const key = JSON.stringify([rootId, field.id]);
+    numericInputs[key] = element.value;
+    const number = Number(element.value);
+    if (!element.value.trim() || !Number.isFinite(number) ||
+        (field.type === 'integer' && !Number.isInteger(number))) {
+      numericErrors[key] = `Enter a valid ${field.type === 'integer' ? 'whole number' : 'number'} for ${field.label || field.id}.`;
+      return;
+    }
+    delete numericErrors[key];
     if (element.value !== rendered) {
-      void patch(field.id, Number(element.value));
+      patch(field.id, number);
     }
   }
 
   function commitList(field: TypeParam, element: HTMLTextAreaElement, rendered: string): void {
-    const items = element.value.split('\n').map((line) => line.trim()).filter(Boolean);
-    const before = rendered.split('\n').map((line) => line.trim()).filter(Boolean);
+    const items = element.value === '' ? [] : element.value.split('\n');
+    const before = rendered === '' ? [] : rendered.split('\n');
     if (JSON.stringify(items) !== JSON.stringify(before)) {
       void patch(field.id, items);
     }
@@ -203,17 +212,28 @@
 
   async function validate() {
     try {
-      const payload = unwrap(await ops.dryRun(session.channel!, raw));
-      error = payload.ok ? '' : `syntax: ${payload.error}`;
+      const payload = unwrap(await ops.dryRun(session.channel!, draft.raw));
+      draft.error = payload.ok ? '' : `syntax: ${payload.error}`;
     } catch (e) {
-      error = describe(e);
+      draft.error = describe(e);
     }
   }
 
-  $effect(() => {
-    void load();
+  onMount(() => {
+    if (session.channel) void ensureDocumentDraft(draft, session.channel);
+    return retainDocumentDraft(draft);
   });
+
+  function onKeydown(event: KeyboardEvent) {
+    if (!active || blocked) return;
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault();
+      void save();
+    }
+  }
 </script>
+
+<svelte:window onkeydown={onKeydown} />
 
 <article>
   <header>
@@ -225,39 +245,78 @@
           role="tab"
           aria-selected={mode === 'form'}
           class:active={mode === 'form'}
-          onclick={() => (mode = 'form')}>form</button>
+          onclick={() => setMode('form')}>form</button>
         <button
           role="tab"
           aria-selected={mode === 'yaml'}
           class:active={mode === 'yaml'}
           title="the underlying file — a dev tool"
-          onclick={() => (mode = 'yaml')}>yaml</button>
+          onclick={() => setMode('yaml')}>yaml</button>
       </div>
     {/if}
-    <button onclick={() => void load()}>reload</button>
-    <button class="primary" disabled={saving || !dirty} onclick={() => void saveRaw()}>
-      {saving ? 'saving…' : 'save'}
+    {#if schema}
+      <button onclick={() => void revealInStudio({ ...resource, id: rootId })}>Open in Studio</button>
+    {/if}
+    <button disabled={saving || draft.loading || !connection.connected} onclick={() => void load()}>reload</button>
+    <button class="primary" disabled={blocked || !dirty || invalidNumbers.length > 0} onclick={() => void save()}>
+      {saving ? 'Saving...' : 'Save & apply'}
     </button>
   </header>
+  <p class="impact">Saving applies gameplay changes server-wide. Publish pack releases the resource pack to other players.</p>
+  {#if source && draft.loaded}
+    <section class="source">
+      <p class="impact">
+        Saved source · line {source.line}, column {source.column}.
+        Read-only; pending edits below are preserved. Locations refer to the last saved version.
+        <button onclick={() => {
+          const tab = workspace.tabs.find((entry) => entry.key === tabKey);
+          if (tab?.kind === 'doc') tab.source = undefined;
+        }}>Close source</button>
+      </p>
+      <textarea class="code source-code" rows="6" readonly spellcheck="false"
+        aria-label="Saved source" value={draft.savedRaw} bind:this={sourceArea}></textarea>
+    </section>
+  {/if}
+  {#if rootIds.length > 1 && mode === 'form'}
+    <label>Resource
+      <select value={rootId} onchange={(event) => {
+        const tab = workspace.tabs.find((item) => item.key === tabKey);
+        if (tab?.kind === 'doc') tab.id = event.currentTarget.value;
+      }}>
+        {#each rootIds as id}<option value={id}>{id}</option>{/each}
+      </select>
+    </label>
+  {/if}
 
   {#if staleOnDisk}
     <div class="stale-banner">
       changed on disk — your unsaved edits are kept
-      <button onclick={() => {
-        if (dirty && !confirm('Reload this file from disk and discard unsaved changes?')) {
-          return;
-        }
-        clearDocStale(tabKey);
-        void load();
-      }}>reload</button>
+      <button onclick={() => void load()}>discard and reload</button>
     </div>
   {/if}
 
   {#if error}
     <p class="error">{error}</p>
   {/if}
+  {#each invalidNumbers as message}<p class="error">{message}</p>{/each}
+  {#if draft.notice}<p class="impact" role="status">{draft.notice}</p>{/if}
+  {#if draft.edits.length}
+    <p class="impact">
+      {draft.edits.length} pending fields in this file
+      ({[...new Set(draft.edits.map((edit) => edit.field[0]))].join(', ')}).
+    </p>
+  {/if}
+  {#if draft.uncertain}
+    <button disabled={!connection.connected || draft.loading} onclick={() => {
+      if (session.channel) void reconcileDocumentDraft(draft, session.channel);
+    }}>Reconcile server files</button>
+  {/if}
 
   {#if mode === 'form' && schema}
+    {#if rawDraftDirty(draft)}
+      <p class="stale-banner">Pending YAML edits are preserved. <button onclick={() => (mode = 'yaml')}>View pending YAML</button></p>
+    {/if}
+    <fieldset disabled={blocked || rawDraftDirty(draft)}>
     <div class="form">
       {#each sections as section (section)}
         <section class="studio-section">
@@ -275,7 +334,7 @@
               pack={resource.pack}
               hint={field.uiHint}
               value={value}
-              onChange={(next) => void patch(field.id, next)}
+              onChange={(next) => patch(field.id, next)}
             />
             {#if field.uiHint === 'model'}
               <button
@@ -286,6 +345,7 @@
                   path: resource.path,
                   rev,
                   modelRef: value,
+                  rootId,
                 })}
               >
                 {value ? 'Edit model' : 'Create model'}
@@ -309,10 +369,14 @@
             />
           {:else if field.type === 'integer' || field.type === 'decimal'}
             <input
-              type="number"
-              step={field.type === 'decimal' ? 'any' : '1'}
-              value={value}
-              onblur={(event) => commitNumber(field, event.currentTarget, value)}
+              type="text"
+              inputmode={field.type === 'decimal' ? 'decimal' : 'numeric'}
+              value={numericInputs[JSON.stringify([rootId, field.id])] ?? value}
+              oninput={(event) => commitNumber(field, event.currentTarget, value)}
+              onblur={() => {
+                const key = JSON.stringify([rootId, field.id]);
+                if (!numericErrors[key]) delete numericInputs[key];
+              }}
               onkeydown={(event) => {
                 if (event.key === 'Enter') {
                   event.currentTarget.blur();
@@ -326,14 +390,14 @@
               spellcheck="false"
               value={listValue(field)}
               placeholder="one entry per line"
-              onblur={(event) => commitList(field, event.currentTarget, listValue(field))}
+              oninput={(event) => commitList(field, event.currentTarget, listValue(field))}
             ></textarea>
           {:else}
             <input
               value={value}
               placeholder={field.default ?? ''}
               title={field.description ?? field.example ?? ''}
-              onblur={(event) => commitText(field, event.currentTarget, value)}
+              oninput={(event) => commitText(field, event.currentTarget, value)}
               onkeydown={(event) => {
                 if (event.key === 'Enter') {
                   event.currentTarget.blur();
@@ -355,27 +419,20 @@
             advanced ({advancedKeys.length}) — edited as YAML:
             <span class="keys">{advancedKeys.join(', ')}</span>
           </summary>
-          <textarea
-            class="code"
-            bind:value={raw}
-            oninput={() => markDirty(true)}
-            rows="14"
-            spellcheck="false"
-            aria-label="advanced YAML"
-          ></textarea>
           <div class="advrow">
-            <button disabled={!dirty} onclick={() => void saveRaw()}>
-              apply advanced changes
+            <button onclick={() => setMode('yaml')}>
+              Open YAML
             </button>
           </div>
         </details>
       {/if}
     </div>
+    </fieldset>
   {:else}
     <textarea
       class="code full"
-      bind:value={raw}
-      oninput={() => markDirty(true)}
+      bind:value={draft.raw}
+      disabled={blocked}
       rows="22"
       spellcheck="false"
       aria-label="raw YAML"
@@ -387,6 +444,12 @@
 </article>
 
 <style>
+  .source-code {
+    width: 100%;
+    box-sizing: border-box;
+    line-height: 20px;
+    resize: vertical;
+  }
   article {
     background: var(--bg-panel);
     border: 1px solid var(--border);
@@ -401,6 +464,7 @@
     display: flex;
     align-items: baseline;
     gap: 12px;
+    flex-wrap: wrap;
   }
   h2 {
     margin: 0 auto 0 0;
@@ -454,6 +518,8 @@
     gap: 4px 20px;
     align-content: start;
   }
+  fieldset { border: 0; padding: 0; margin: 0; min-width: 0; overflow: auto; }
+  .impact { color: var(--muted); font-size: 12px; margin: 8px 0; }
   .studio-section { display: contents; }
   .studio-section h3 { grid-column: 1 / -1; margin: 14px 0 2px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
   .studio-section:first-child h3 { margin-top: 0; }
@@ -515,9 +581,6 @@
     color: var(--faint);
     font-family: var(--mono);
     font-size: 11.5px;
-  }
-  .advanced textarea {
-    margin-top: 8px;
   }
   .advrow {
     display: flex;

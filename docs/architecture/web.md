@@ -300,7 +300,7 @@ A small, versioned RPC set over the established channel:
 | **pipeline** | trigger targeted/full reload, pre-apply report, apply confirm |
 | **assets** | upload (chunked via payload store), delete, list |
 | **preview** | subscribe to live preview events, request preview renders |
-| **delivery** | candidate/published status, publish an exact previewed hash |
+| **delivery** | candidate/published status, publish an exact candidate hash |
 | **admin** | diagnostics feed, doctor summary, audit query, settings read (security keys never leave the server) |
 
 Requests carry `{op, id, payload}`; responses `{op, id, ok, data|error}`. Errors reuse the
@@ -344,12 +344,14 @@ assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
 
-*Planned:* `authoring.describe` completes the capability handshake. `delivery.status`
-exposes candidate/published hashes and `delivery.publish` promotes an expected candidate
-hash or returns a visible stale error (as built). These are
-capability-negotiated additions; the primitive M3 operations remain available to Advanced Files
-and older clients. Resource and asset listings gain pagination/filtering before relay mode makes
-eager full-pack traversal a scale boundary.
+*As built:* `delivery.status` returns the current candidate and published hashes;
+`delivery.publish` promotes only the expected candidate hash and returns a visible stale error
+when that hash is no longer current. Candidate availability is not a receipt that a player
+received or accepted the pack. `push.reload` reports a server-wide pipeline outcome and carries
+no per-save correlation id, so the UI does not present it as proof that a specific save applied.
+
+*Planned:* `authoring.describe` completes the capability handshake. Resource and asset listings
+gain pagination/filtering before relay mode makes eager full-pack traversal a scale boundary.
 
 ### 4.3 Large payloads — manifest + content-addressed chunks
 
@@ -467,8 +469,9 @@ cannot read, forge, replay, or reorder anything.
 - **Stack**: TypeScript, a lightweight reactive framework (framework choice is an
   implementation decision — the architecture requires: build to static files, no SSR need,
   embed-capable), Vite build, output deployed as static assets.
-- **Stateless by design**: all state lives in the open session; a refresh re-fetches the
-  document snapshot from the plugin. Undo/redo is client-side per editor session and bounded.
+- **Stateless by design**: durable content state lives in server files; a refresh re-fetches the
+  document snapshot from the plugin. Unsaved edits are bounded browser-session state, not a
+  second content store. Undo/redo is client-side per editor session and bounded.
 - **Layered like the plugin**: an API client (transport-agnostic: relay | direct), a normalized
   resource/asset/schema cache, bounded per-resource drafts, editors rendered **from registry
   self-description** (plugin.md §3 -- forms are generated from parameter schemas, never
@@ -488,6 +491,26 @@ cannot read, forge, replay, or reorder anything.
   asserted by a test over the surfaces' own CSS, because each of them was regressed once. In
   particular a full-height surface stacks with flex rather than positional grid rows: an optional
   error line or toolbar that is absent must not shift every following child into the wrong track.
+- *As built (M5 editor-trust follow-up):* the initial Content surface is items-first. The authoring
+  group is Content and Files; Problems, Activity and Server are support destinations. Rail labels
+  start expanded and may be collapsed; Activity starts collapsed. Visited workspaces stay mounted
+  and hidden so navigation does not destroy their editor state. There is no separate Start or
+  Assets workspace in this slice; assets are opened from studio slots or Files. Files↔Studio
+  navigation carries pack, path, and selected resource identity, including the selected root in a
+  multi-resource document. The header keeps the actions distinct: **Save & apply** changes gameplay
+  server-wide; **Publish pack** releases the resource pack. Candidate status reports hash
+  availability only, not player delivery or acceptance.
+- **Draft lifecycle (as built, M5):** one in-memory store holds at most 32 document drafts keyed by
+  pack/path and shared between Content and Files. Studio and Files form edits use one
+  revision-checked `authoring.setFields` batch; raw YAML uses a revision-checked full-document
+  write. Unchanged documents are not written, and switching between field and YAML representations
+  requires an explicit apply or discard. The store is not persisted to browser storage: drafts
+  survive workspace navigation and unexpected disconnection in the same tab, but not a confirmed
+  page reload or tab close. The browser-unload guard also checks active editor guards for texture,
+  asset, and model work; it is intentionally conservative and may warn while one of these editors
+  is open even when unchanged. Reconnect checks the plugin signing identity and reconciles against
+  server files without automatically replaying a save. Conflicting or overlapping changes block
+  further apply until the author resolves them; unrelated pending fields remain pending.
 - **Schema-driven studios**: registry metadata declares labels, sections/facets, ordering,
   constraints, reference targets, structured children, conditional visibility, widgets, and
   creation capabilities. The UI provides reusable controls and domain previews; it does not
@@ -509,6 +532,15 @@ cannot read, forge, replay, or reorder anything.
   size (1–1024 px, non-square included — glyphs and paintings are not squares). All pixel
   arithmetic lives in a pure module (`pixels.ts`) pinned by vitest, per the repo's pure-seam
   convention; the server's 2 MiB asset cap is the honest upper bound on canvas size.
+  Its **Save & apply** commits the edited asset and its owning reference when needed; other
+  pending document fields remain pending. Reconciliation preserves unrelated fields, while an
+  overlapping or revision-conflicting change blocks further apply until the author resolves it.
+  Failed reads do not become empty canvases to overwrite existing files. Before each upload,
+  the editor compares current source bytes with its opening snapshot; a mismatch preserves
+  the canvas and refuses apply. This read-before-write check is not an atomic asset
+  compare-and-write, so it does not guarantee isolation from concurrent asset writers.
+  Model workbenches retain their opening reference and owner revision rather than silently
+  retargeting a loaded project when another view changes the shared document.
 - **Sound editing**: a sound's studio is self-sufficient — the preview panel plays the first
   source and every source row carries an upload/replace control, so the .ogg never needs a
   detour through Advanced Files. "Add…" uploads a file and appends its ref to the sources

@@ -30,12 +30,14 @@
     logActivity,
     openStudio,
     refreshPack,
+    requireSavedDocument,
     revealInAdvanced,
     selectPack,
     session,
     workspace,
   } from '../state.svelte';
 
+  let { active = true }: { active?: boolean } = $props();
   let error = $state('');
   let busy = $state(false);
   let menu = $state<{ x: number; y: number; items: MenuItem[] } | null>(null);
@@ -185,6 +187,7 @@
         dialog = null;
         void run('rename', async () => {
           const pack = workspace.activePack!;
+          requireSavedDocument(pack, entry.path, isFolder);
           if (isFolder) {
             const target = `${folder}/${value}`;
             unwrap(await ops.moveFolder(session.channel!, pack, entry.path, target));
@@ -192,6 +195,7 @@
             const id = idFromName(value);
             if (!id) throw new Error('use at least one letter or number');
             const rev = await currentRev(entry.path);
+            requireSavedDocument(pack, entry.path);
             unwrap(await ops.move(session.channel!, pack, entry.path, `${folder}/${id}.yml`, rev));
             closeTab(`${pack}/${entry.path}`);
           }
@@ -234,11 +238,13 @@
         void run('move', async () => {
           const pack = workspace.activePack!;
           const target = value.replace(/\/+$/, '');
+          requireSavedDocument(pack, entry.path, entry.kind === 'folder');
           if (entry.kind === 'folder') {
             unwrap(await ops.moveFolder(session.channel!, pack, entry.path, `${target}/${entry.name}`));
           } else {
             const rev = await currentRev(entry.path);
             const file = entry.path.slice(entry.path.lastIndexOf('/') + 1);
+            requireSavedDocument(pack, entry.path);
             unwrap(await ops.move(session.channel!, pack, entry.path, `${target}/${file}`, rev));
             closeTab(`${pack}/${entry.path}`);
           }
@@ -253,10 +259,12 @@
     if (!confirm(`Delete ${what}? This cannot be undone.`)) return;
     void run('delete', async () => {
       const pack = workspace.activePack!;
+      requireSavedDocument(pack, entry.path, entry.kind === 'folder');
       if (entry.kind === 'folder') {
         unwrap(await ops.deleteFolder(session.channel!, pack, entry.path));
       } else {
         const rev = await currentRev(entry.path);
+        requireSavedDocument(pack, entry.path);
         unwrap(await ops.remove(session.channel!, pack, entry.path, rev));
         closeTab(`${pack}/${entry.path}`);
       }
@@ -323,7 +331,9 @@
 </script>
 
 {#if content.open}
-  <Studio resource={content.open} onClose={() => openStudio(null)} />
+  {#key `${content.open.pack}/${content.open.path}#${content.open.id}`}
+    <Studio {active} resource={content.open} onClose={() => openStudio(null)} />
+  {/key}
 {:else}
   <div class="content">
     <nav class="types" aria-label="content types">

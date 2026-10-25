@@ -12,6 +12,7 @@
   import FileTree from './FileTree.svelte';
   import { activeTab, workspace } from '../state.svelte';
 
+  let { active = true }: { active?: boolean } = $props();
   const tab = $derived(activeTab());
 </script>
 
@@ -30,9 +31,12 @@
               <DocEditor
                 resource={{ pack: t.pack, type: t.type, path: t.path, id: t.id }}
                 tabKey={t.key}
+                source={t.source}
+                active={active && t.key === workspace.activeKey}
               />
             {:else if t.kind === 'asset'}
-              <AssetPreviewTab pack={t.pack} path={t.path} name={t.name} />
+              <AssetPreviewTab pack={t.pack} path={t.path} name={t.name}
+                active={active && t.key === workspace.activeKey} tabKey={t.key} />
             {:else if t.kind === 'settings'}
               <SettingsTab />
             {:else if t.kind === 'blockbench'}
@@ -41,6 +45,9 @@
                 ownerPath={t.path}
                 expectedRev={t.rev}
                 modelRef={t.modelRef}
+                rootId={t.rootId}
+                active={active && t.key === workspace.activeKey}
+                tabKey={t.key}
               />
             {/if}
           </div>

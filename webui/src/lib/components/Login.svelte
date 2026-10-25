@@ -26,6 +26,7 @@
     const origin = url.startsWith('http') ? new URL(url).origin : undefined;
     if (code && key) {
       onConnect(code, key, origin);
+      pasted = '';
     }
   }
 </script>
@@ -42,6 +43,7 @@
       placeholder="http://127.0.0.1:8089/?s=…#…"
       bind:value={pasted}
       spellcheck="false"
+      aria-label="Editor session URL"
     ></textarea>
     <button type="submit" disabled={phase === 'connecting' || pasted.trim().length < 10}>
       Connect

@@ -1,6 +1,16 @@
 /** Typed helpers over the sealed channel — one place that knows the op names. */
-import type { EditorChannel } from './protocol/session';
+import type { EditorChannel as SealedEditorChannel } from './protocol/session';
 import type { Response } from './protocol/wire';
+
+export type RpcChannel = Pick<SealedEditorChannel, 'call'>;
+type EditorChannel = RpcChannel;
+
+export class RpcError extends Error {
+  constructor(readonly code: string, message: string) {
+    super(`${code}: ${message}`);
+    this.name = 'RpcError';
+  }
+}
 
 export interface TypeParam {
   id: string;
@@ -55,7 +65,7 @@ export interface AssetRef {
 
 export function unwrap(response: Response): Record<string, unknown> {
   if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`);
+    throw new RpcError(response.error.code, response.error.message);
   }
   return response.data as Record<string, unknown>;
 }

@@ -1,22 +1,34 @@
 <script lang="ts">
   import TextureEditor from '../studio/TextureEditor.svelte';
   import { assetOps, unwrap } from '../api';
-  import { errorMessage, logActivity, session } from '../state.svelte';
+  import { connection, errorMessage, logActivity, registerEditorGuard, session } from '../state.svelte';
 
   interface Props {
     pack: string;
     path: string;
     name: string;
+    active?: boolean;
+    tabKey: string;
   }
 
-  let { pack, path, name }: Props = $props();
+  let { pack, path, name, active = true, tabKey }: Props = $props();
 
   let dataUrl = $state('');
   let editing = $state(false);
+  let saving = $state(false);
   /** Re-reads the bytes after the pixel editor wrote them. */
   let version = $state(0);
 
   const editable = $derived(path.toLowerCase().endsWith('.png'));
+  $effect(() => registerEditorGuard(tabKey,
+    () => {
+      if (saving) {
+        logActivity('error', 'Wait for the texture apply to finish before closing this editor.');
+        return false;
+      }
+      return !editing || confirm('Close this pixel editor and discard any unapplied pixels?');
+    },
+    () => editing || saving));
 
   $effect(() => {
     version;
@@ -39,15 +51,17 @@
     <TextureEditor
       {pack}
       {path}
+      {active}
       onClose={() => (editing = false)}
-      onSaved={() => (version += 1)}
+      onSaved={() => { version += 1; }}
+      onSavingChange={(value) => (saving = value)}
     />
   {:else}
     <header>
       <h2>{name}</h2>
       <span class="meta">{path}</span>
       {#if editable}
-        <button type="button" onclick={() => (editing = true)}>Edit pixels</button>
+        <button type="button" disabled={!connection.connected} onclick={() => (editing = true)}>Edit pixels</button>
       {/if}
     </header>
     {#if dataUrl}

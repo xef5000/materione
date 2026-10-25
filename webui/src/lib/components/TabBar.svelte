@@ -19,7 +19,7 @@
           : tab.kind === 'settings'
             ? 'plugin settings'
             : 'embedded Blockbench'}
-      {@const dirty = tab.kind === 'doc' && tab.dirty}
+      {@const dirty = (tab.kind === 'doc' || tab.kind === 'settings') && tab.dirty}
       <div
         class="tab"
         class:active={tab.key === workspace.activeKey}

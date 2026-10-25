@@ -60,8 +60,29 @@ hand", never "this block does not render".
 
 Every test is **self-contained**: its steps stage their own scene
 (`ctx.reset()` gives a clean inventory/effects/drops baseline and teleports to
-the anchor). `dependsOn` is *epistemic* — "this result only means something
-if that one passes" — never shared setup.
+the anchor). `dependsOn` is *epistemic* - "this result only means something
+if that one passes" - never shared setup.
+
+The editor catalog also has an optional **live browser** adapter for local
+integration evidence. Browser entries call `ctx.browser.openEditor()` to launch
+an isolated Playwright Chromium against the real local plugin App; the runner
+closes it after each test. The runner opens `/materione editor local`, reads that
+test's `MATERIONE-EDITOR` URL marker (including its actual listener port) only
+in memory, and waits for the normal server approval handshake. It does not
+bypass login, start a separate web server, capture browser chrome, or write
+canonical fixtures; server content changes stay in the probe's disposable copy.
+The adapter and `@playwright/test` are lazy, so `check` and non-browser suites do
+not require Playwright. Install the `webui` dev dependencies and Chromium before
+selecting `editor.browser-*` catalog tests. In Windows PowerShell, use
+`npm.cmd ci` (if needed) and `npm.cmd run browser:install` from `webui`; use the
+corresponding `npm` commands in shells without the restricted PowerShell shim.
+For the focused local slice run:
+
+```
+node qa/runner.mjs run editor.browser-files-draft-save editor.browser-files-visual
+```
+
+Failure diagnostics retain only state flags/counts and a bounded, redacted App text excerpt after the address is scrubbed. No browser trace or network dump is recorded.
 
 ## Commands
 
@@ -133,10 +154,12 @@ Scratch and truth are different things:
   is missing from the repo, and promoted evidence is never moved or renamed
   (issue links depend on it).
 - Growth is bounded by construction: only failures are promoted (passes keep
-  their run id), and evidence is JPEG + text — a few dozen KB per failure.
-- Text evidence redacts editor capability URLs and session-creation identifiers
-  before writing or promoting it. Screenshots still require review before sharing;
-  never capture an editor capability URL on screen.
+  their run id), and evidence is JPEG/PNG + text — sized for targeted review.
+- Text evidence redacts query-style and path-style editor capability URLs and
+  session-creation identifiers before writing or promoting it. Minecraft client
+  shots remain `ctx.shot()` JPEGs; `ctx.browser.browserShot()` writes a separate
+  App-scoped PNG and records `browser-shot` in the transcript. Screenshots still
+  require review before sharing; never capture an editor capability URL on screen.
 
 The flow runs `file` from main (the swarm policy) so pushed evidence and the
 main-branch raw URLs agree.

@@ -340,6 +340,13 @@ M6 HUDs.
 
 **Exit:** an admin on shared hosting edits their server through the public editor URL.
 
+**Editor-trust follow-up (M5 as built; independent of the relay/cloud exit):** the editor is
+items-first, with shared Content/Files navigation and a bounded, session-memory-only draft store.
+**Save & apply** remains explicit; reconnect checks the same server identity and reconciles
+without replaying writes. **Publish pack** promotes an exact candidate hash, while candidate
+availability is not presented as proof of player delivery or acceptance. This does not mark M5
+complete or change the D1–D11 architecture.
+
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).

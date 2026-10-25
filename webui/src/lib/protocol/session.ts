@@ -380,10 +380,10 @@ export class EditorChannel {
         resolve(text);
       });
       transport.send(canonicalJson(hello));
-    });
-    options.onState?.({
-      kind: 'awaiting-approval',
-      noncePrefix: hexPrefix(nonce),
+      options.onState?.({
+        kind: 'awaiting-approval',
+        noncePrefix: hexPrefix(nonce),
+      });
     });
 
     const payload = JSON.parse(replyText) as Record<string, unknown>;

@@ -41,6 +41,44 @@ val npmTest = tasks.named("npm_run_test")
 val npmBuild = tasks.named("npm_run_build")
 val npmCheck = tasks.named("npm_run_check")
 
+// Playwright is an opt-in browser tier. Installing Chromium and running these
+// tests are deliberately separate from assembleSpa and the plugin build.
+val npmBrowserInstall = tasks.register<com.github.gradle.node.npm.task.NpmTask>("npmBrowserInstall") {
+    dependsOn(tasks.named("npmInstall"))
+    args.set(listOf("run", "browser:install"))
+}
+
+val npmBrowserInstallCi = tasks.register<com.github.gradle.node.npm.task.NpmTask>("npmBrowserInstallCi") {
+    dependsOn(tasks.named("npmInstall"))
+    args.set(listOf("run", "browser:install:ci"))
+}
+
+val npmBrowserTest = tasks.register<com.github.gradle.node.npm.task.NpmTask>("npmBrowserTest") {
+    dependsOn(tasks.named("npmInstall"))
+    args.set(listOf("run", "test:browser"))
+    inputs.dir("browser")
+    inputs.file("playwright.config.ts")
+    inputs.dir("src")
+}
+
+tasks.register("installPlaywrightChromium") {
+    group = "verification"
+    description = "Installs the pinned Playwright Chromium browser for local editor tests."
+    dependsOn(npmBrowserInstall)
+}
+
+tasks.register("installPlaywrightChromiumCi") {
+    group = "verification"
+    description = "Installs Playwright Chromium and its Linux dependencies in CI."
+    dependsOn(npmBrowserInstallCi)
+}
+
+tasks.register("browserTest") {
+    group = "verification"
+    description = "Runs the focused editor browser regression suite."
+    dependsOn(npmBrowserTest)
+}
+
 tasks.named("check") {
     // The protocol fixture spec runs with every build — drift fails both sides.
     dependsOn(npmTest)

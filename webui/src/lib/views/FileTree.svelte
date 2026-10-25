@@ -13,6 +13,7 @@
     openAsset,
     openDoc,
     refreshPack,
+    requireSavedDocument,
     session,
     workspace,
   } from '../state.svelte';
@@ -98,7 +99,9 @@
             unwrap(await assetOps.move(session.channel!, pack, node.path, to));
             closeTab(`a:${pack}/${node.path}`);
           } else {
+            requireSavedDocument(pack, node.path);
             const rev = await currentRev(pack, node.path);
+            requireSavedDocument(pack, node.path);
             unwrap(await ops.move(session.channel!, pack, node.path, to, rev));
             closeTab(`${pack}/${node.path}`);
           }
@@ -120,7 +123,9 @@
           unwrap(await assetOps.remove(session.channel!, pack, node.path));
           closeTab(`a:${pack}/${node.path}`);
         } else {
+          requireSavedDocument(pack, node.path);
           const rev = await currentRev(pack, node.path);
+          requireSavedDocument(pack, node.path);
           unwrap(await ops.remove(session.channel!, pack, node.path, rev));
           closeTab(`${pack}/${node.path}`);
         }

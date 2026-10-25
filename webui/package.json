@@ -6,12 +6,17 @@
   "description": "The Materione web editor SPA (M3) — authoring without YAML knowledge.",
   "scripts": {
     "dev": "vite",
+    "dev:browser": "vite --config browser/vite.config.ts",
     "build": "vite build",
     "check": "svelte-check",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:browser": "playwright test --config=playwright.config.ts",
+    "browser:install": "playwright install chromium",
+    "browser:install:ci": "playwright install --with-deps chromium"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@playwright/test": "1.64.1",
     "@types/node": "^22.15.21",
     "svelte": "^5.30.0",
     "svelte-check": "^4.7.6",

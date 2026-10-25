@@ -4,8 +4,9 @@ How the Materione codebase is built — and how the build itself enforces the ar
 Traces to master §10 (codebase division) and §11 (enforced, not aspirational); the module
 boundaries here are the same ones described there, made mechanical.
 
-Status: **as shipped for M0 + M1 + M2 + M3** (roadmap rule 1 — this doc reflects what
-exists, not what's planned). Anything marked *M-later* is reserved, not built.
+Status: **M0–M4 shipped; the editor-trust follow-up and browser regression tier are M5 additions**
+(roadmap rule 1 — this doc reflects what exists, not what's planned). The M5 relay/cloud
+exit remains separate; anything else marked *M-later* is reserved, not built.
 
 ---
 
@@ -25,6 +26,7 @@ exists, not what's planned). Anything marked *M-later* is reserved, not built.
 | creative | 1.14.4 | MIT. The **Nexo-maintained fork** of `team.unnamed/creative` — same coordinates, resolved from `repo.nexomc.com/releases/` (filtered to `team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. The fork (not upstream 1.7.3) because it tracks new Minecraft versions in Nexo production: 1.14.x writes `pack.mcmeta` `min_format`/`max_format`, the only range schema 25w31a+ (1.21.9/26.x) clients honor. |
 | undertow | 2.3.26.Final | Apache-2.0. **M3**: the embedded editor listener's HTTP+WS server (`web/` only — ban rule R8). Chosen over Jetty after Jetty 12's reworked websocket API proved unstable ground for a shaded long-term dependency; Undertow's embedded API has been stable across its whole 2.x line. Shaded + relocated with its XNIO/JBoss runtime (§4). |
 | Node / npm | node 22.17.0 | **M3**: provisions hermetically via `com.github.node-gradle.node` 7.1.0 for `:webui` (the SPA build). No local Node required; CI included. The Node distribution resolves through an Ivy repo declared in settings (`org.nodejs:node`). SPA deps pin via committed `package-lock.json`. |
+| Playwright | `@playwright/test` 1.64.1 | Dev-only browser regression tier for `webui/`; Chromium is installed separately and is not shipped in the SPA or plugin jar. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins
@@ -147,10 +149,17 @@ Two false-green traps already caught and closed, worth remembering:
 | Perf budgets | `test` | plugin.md §9 budgets against the fixture corpus (`plugin` `ContentPerfBudgetTest`): regressions block merge. | `plugin/` |
 | Architecture | `test` | R1–R6 per module + whole-jar in `plugin`. | every module |
 | Integration | `:harness:integrationTest` | Real headless Paper 1.21.4 boot of the **shaded** jar; marker assertions, hot-reload sequence, live fault injection. | `harness/` |
+| Browser UI | `npm run test:browser` (Chromium install: `npm run browser:install`; Gradle: `:webui:browserTest`) | Playwright mounts the real Workbench in Chromium using a typed deterministic RPC fixture. This is UI evidence, separate from Vitest logic and the real Paper wire harness. | `webui/` |
 
 Fixtures live in `fixtures/` (never a Gradle module; grow-only per roadmap rule 2), reached
 via the `materione.fixtures.root` property. Golden files regenerate with
 `-Dmaterione.golden.regen=true` — review the diff, then commit; CI never regenerates.
+
+The browser tier is also run in CI: it installs the Playwright-managed Chromium through
+`:webui:installPlaywrightChromiumCi`, then runs `:webui:browserTest`. Its fake RPC fixture
+exercises the rendered SPA, not the plugin protocol or in-game pack delivery; those remain the
+responsibility of the Paper integration gate. Vitest (`npm run test`) continues to pin pure
+reducers, editor rules, and protocol fixtures.
 
 ## 7. The harness (`harness/`)
 
