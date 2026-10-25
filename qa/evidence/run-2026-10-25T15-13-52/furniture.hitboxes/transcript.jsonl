@@ -1,0 +1,18 @@
+{"t":0,"kind":"note","msg":"test start: furniture.hitboxes (auto)"}
+{"t":257,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":521,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":785,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":1051,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1728,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1991,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2255,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2519,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":8205,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":8471,"kind":"rcon","req":{"command":"materione dev remove 1 -59 7 world"},"res":""}
+{"t":8736,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":9000,"kind":"rcon","req":{"command":"setblock 1 -59 7 minecraft:air"},"res":"Could not set the block"}
+{"t":9267,"kind":"rcon","req":{"command":"tp Probe 1 -60 3"},"res":"Teleported Probe to 1.500000, -60.000000, 3.500000"}
+{"t":9334,"kind":"exec","req":{"code":"player.setRot(0F, 0F)\nreturn 'faced-south'","timeoutMs":10000},"res":"faced-south"}
+{"t":9400,"kind":"exec","req":{"code":"mc.options.keyUp.setDown(true)\nreturn 'walking'","timeoutMs":10000},"res":"walking"}
+{"t":10683,"kind":"exec","req":{"code":"mc.options.keyUp.setDown(false)\nreturn 'released'","timeoutMs":10000},"res":"released"}
+{"t":11351,"kind":"exec","req":{"code":"return player.getZ()","timeoutMs":10000},"res":5.699999988079071}
