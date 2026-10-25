@@ -1,0 +1,17 @@
+{"t":0,"kind":"note","msg":"test start: furniture.storage-capacity (auto)"}
+{"t":262,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":527,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":792,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"Killed Paper"}
+{"t":1056,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":1725,"kind":"rcon","req":{"command":"clear Probe"},"res":"No items were found on player Probe"}
+{"t":1989,"kind":"rcon","req":{"command":"effect clear Probe"},"res":"Target has no effects to remove"}
+{"t":2254,"kind":"rcon","req":{"command":"kill @e[type=item]"},"res":"No entity was found"}
+{"t":2518,"kind":"rcon","req":{"command":"tp Probe 0 -60 3"},"res":"Teleported Probe to 0.500000, -60.000000, 3.500000"}
+{"t":13195,"kind":"rcon","req":{"command":"materione dev remove 1 -60 7 world"},"res":""}
+{"t":13460,"kind":"rcon","req":{"command":"setblock 1 -60 7 minecraft:air"},"res":"Could not set the block"}
+{"t":13723,"kind":"rcon","req":{"command":"materione dev remove 1 -60 11 world"},"res":""}
+{"t":13989,"kind":"rcon","req":{"command":"setblock 1 -60 11 minecraft:air"},"res":"Could not set the block"}
+{"t":14256,"kind":"rcon","req":{"command":"materione dev place world:crate 1 -60 7 world"},"res":""}
+{"t":14519,"kind":"rcon","req":{"command":"materione dev place world:crate 1 -60 11 world"},"res":""}
+{"t":14787,"kind":"rcon","req":{"command":"tp Probe 1 -60 5"},"res":"Teleported Probe to 1.500000, -60.000000, 5.500000"}
+{"t":15053,"kind":"rcon","req":{"command":"give Probe minecraft:diamond 1"},"res":"Gave 1 [Diamond] to Probe"}
