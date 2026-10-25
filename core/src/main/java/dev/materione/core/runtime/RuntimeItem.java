@@ -1,6 +1,7 @@
 package dev.materione.core.runtime;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.ItemModifier;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -27,10 +28,20 @@ public record RuntimeItem(
         String definitionHash,
         Food food,
         boolean synthetic,
-        String jukeboxSong) {
+        String jukeboxSong,
+        List<ItemModifier> itemModifiers) {
 
     public RuntimeItem {
         lore = List.copyOf(lore);
+        itemModifiers = List.copyOf(itemModifiers);
+    }
+
+    /** Compatibility constructor for callers without extension item hooks. */
+    public RuntimeItem(
+            NamespacedId id, String material, NamespacedId modelId,
+            String displayName, List<String> lore, String definitionHash, Food food,
+            boolean synthetic, String jukeboxSong) {
+        this(id, material, modelId, displayName, lore, definitionHash, food, synthetic, jukeboxSong, List.of());
     }
 
     /** Pre-mechanics arity kept for tests and simple builders. */
@@ -70,12 +81,19 @@ public record RuntimeItem(
      */
     public static String hashOf(
             NamespacedId id, String material, NamespacedId modelId, String displayName, List<String> lore) {
+        return hashOf(id, material, modelId, displayName, lore, List.of());
+    }
+
+    /** Includes behavior and mechanic parameters so runtime-only edits cannot be no-ops. */
+    public static String hashOf(
+            NamespacedId id, String material, NamespacedId modelId, String displayName,
+            List<String> lore, Object runtimeState) {
         String canonical = String.join("|",
                 id.toString(),
                 material,
                 modelId == null ? "-" : modelId.toString(),
                 displayName == null ? "-" : displayName,
-                String.join("\u0000", lore));
+                String.join("\u0000", lore), canonical(runtimeState));
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             return HexFormat.of().formatHex(digest.digest(canonical.getBytes(StandardCharsets.UTF_8)));
@@ -83,5 +101,23 @@ public record RuntimeItem(
             // SHA-256 is mandated by the JVM spec — unreachable
             return Integer.toHexString(canonical.hashCode());
         }
+
+    }
+
+    private static String canonical(Object value) {
+        if (value instanceof java.util.Map<?, ?> map) {
+            var sorted = new java.util.TreeMap<String, Object>();
+            map.forEach((key, entry) -> sorted.put(String.valueOf(key), entry));
+            var result = new StringBuilder("{");
+            sorted.forEach((key, entry) -> result.append(canonical(key)).append(canonical(entry)));
+            return result.append('}').toString();
+        }
+        if (value instanceof List<?> list) {
+            var result = new StringBuilder("[");
+            list.forEach(entry -> result.append(canonical(entry)));
+            return result.append(']').toString();
+        }
+        String text = value == null ? "" : value.getClass().getName() + ":" + value;
+        return text.length() + ":" + text;
     }
 }

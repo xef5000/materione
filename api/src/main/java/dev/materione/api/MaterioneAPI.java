@@ -40,6 +40,11 @@ public interface MaterioneAPI {
     /** Thread hops for world/entity work (Folia-safe, D8). */
     SchedulingGateway scheduling();
 
+    /** Register executable mechanics without depending on implementation modules. */
+    default dev.materione.api.mechanics.MechanicsApi mechanics() {
+        throw new IllegalStateException("MaterioneAPI sub-api 'mechanics' is not wired yet");
+    }
+
     /** Content & document authoring on canonical files (D1, master §5.6). */
     AuthoringApi authoring();
 

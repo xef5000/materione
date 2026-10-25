@@ -220,6 +220,9 @@ public final class PipelineService {
         boolean noop = packUnchanged && changesNothing(preApply);
         if (!noop) {
             applyShadow(shadow, sha, preApply);
+        } else {
+            // Replaced registrations may produce the same data but new typed bindings.
+            scheduling.executeGlobal(plugin, () -> runtime.apply(shadow, sha));
         }
         return new ReloadSummary(
                 false,
@@ -286,7 +289,7 @@ public final class PipelineService {
         });
     }
 
-    private RuntimeRegistries buildShadow(List<ContentPack> packs) {
+    RuntimeRegistries buildShadow(List<ContentPack> packs) {
         var itemType = contentTypes().stream().filter(t -> t.name().equals("item")).findFirst();
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
@@ -295,6 +298,7 @@ public final class PipelineService {
         var effectType = contentTypes().stream().filter(t -> t.name().equals("effect")).findFirst();
         var builder = RuntimeRegistries.builder();
         var behaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
+        var mechanicAvailability = new LinkedHashMap<String, java.util.function.BooleanSupplier>();
         var blockBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var furnitureBehaviors = new LinkedHashMap<NamespacedId, List<dev.materione.behavior.rule.Rule>>();
         var itemMechanics = new LinkedHashMap<NamespacedId, List<dev.materione.plugin.runtime.mechanics.ActiveMechanic>>();
@@ -374,14 +378,14 @@ public final class PipelineService {
                     ItemDefinition item = parsedItems.get(resource.id());
                     if (item != null) {
                         List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> active =
-                                mechanicsResolver().resolve(item.id(), item.mechanics(), (name, reason) ->
+                                mechanicsResolver().resolve(item.id(), item.raw().get("mechanics"), (name, reason) ->
                                         diagnostics.publish(new Diagnostic(
                                                 DiagnosticCodes.UNKNOWN_MECHANIC, dev.materione.api.diagnostics.Severity.WARN,
                                                 "mechanic '" + name + "' on " + item.id() + ": " + reason,
                                                 item.id(), null,
                                                 "check the name and parameters against the registry self-description")));
                         builder.item(toRuntimeItem(item, active));
-                        compileBehaviors(item, behaviors);
+                        compileBehaviors(item, active, behaviors, mechanicAvailability);
                         itemMechanics.put(item.id(), active);
                     }
                 } else if ("recipe".equals(resource.contentType()) && recipeType.isPresent()) {
@@ -492,7 +496,7 @@ public final class PipelineService {
                 }
             }
         }
-        builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors));
+        builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors, mechanicAvailability));
         builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
         builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
         builder.view(dev.materione.plugin.runtime.mechanics.ItemMechanics.KEY,
@@ -714,15 +718,44 @@ public final class PipelineService {
      */
     private void compileBehaviors(
             ItemDefinition item,
-            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> behaviors) {
-        if (item.behavior().isEmpty()) {
+            List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> mechanics,
+            Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> behaviors,
+            Map<String, java.util.function.BooleanSupplier> availability) {
+        var declarations = new ArrayList<Map<String, Object>>(item.behavior());
+        int bindingIndex = 0;
+        for (var mechanic : mechanics) {
+            int index = 0;
+            for (var rule : mechanic.behaviorRules()) {
+                var scoped = new LinkedHashMap<>(rule);
+                String ruleId = item.id() + "/mechanic/" + mechanic.id() + "/" + bindingIndex + "/" + index++;
+                scoped.put("id", ruleId);
+                availability.put(ruleId, mechanic::isAvailable);
+                declarations.add(scoped);
+            }
+            bindingIndex++;
+        }
+        if (declarations.isEmpty()) {
             return;
         }
-        dev.materione.behavior.rule.ParsedRules parsedRules =
-                dev.materione.behavior.rule.RuleParser.compile(item.id(), item.behavior());
-        parsedRules.problems().forEach(diagnostics::publish);
-        if (!parsedRules.isEmpty()) {
-            behaviors.put(item.id(), parsedRules.rules());
+        var compiled = new ArrayList<dev.materione.behavior.rule.Rule>();
+        for (int index = 0; index < declarations.size(); index++) {
+            var declaration = new LinkedHashMap<>(declarations.get(index));
+            if (!(declaration.get("id") instanceof String named) || named.isBlank()) {
+                declaration.put("id", item.id() + "#" + index);
+            }
+            try {
+                var parsed = dev.materione.behavior.rule.RuleParser.compile(item.id(), List.of(declaration));
+                parsed.problems().forEach(diagnostics::publish);
+                compiled.addAll(parsed.rules());
+            } catch (RuntimeException failure) {
+                diagnostics.publish(new Diagnostic(
+                        DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
+                        item.id() + " rule '" + declaration.get("id") + "': " + failure,
+                        item.id(), null, "fix the rule parameters; only this rule was skipped"));
+            }
+        }
+        if (!compiled.isEmpty()) {
+            behaviors.put(item.id(), List.copyOf(compiled));
         }
     }
 
@@ -738,27 +771,22 @@ public final class PipelineService {
                     item.id().namespace(),
                     raw.contains(":") ? raw.substring(raw.indexOf(':') + 1) : raw);
         }
-        RuntimeItem.Food food = null;
-        for (dev.materione.plugin.runtime.mechanics.ActiveMechanic mechanic : mechanics) {
-            if ("food".equals(mechanic.name())) {
-                food = new RuntimeItem.Food(
-                        dev.materione.plugin.runtime.mechanics.ActiveMechanic.intParam(
-                                mechanic.params(), "nutrition", 1),
-                        (float) dev.materione.plugin.runtime.mechanics.ActiveMechanic.doubleParam(
-                                mechanic.params(), "saturation", 0),
-                        dev.materione.plugin.runtime.mechanics.ActiveMechanic.boolParam(
-                                mechanic.params(), "can_always_eat", false));
-            }
-        }
+        var runtimeState = new LinkedHashMap<String, Object>();
+        runtimeState.put("behavior", item.behavior());
+        runtimeState.put("mechanics", mechanics.stream().map(mechanic ->
+                Map.of("id", mechanic.id().toString(), "params", mechanic.params(),
+                        "rules", mechanic.behaviorRules(), "generation", mechanic.generation())).toList());
+        runtimeState.put("jukebox_song", item.jukeboxSong());
         return new RuntimeItem(
                 item.id(),
                 item.material(),
                 modelId,
                 item.displayName(),
                 item.lore(),
-                RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore()),
-                food,
-                item.jukeboxSong());
+                RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore(), runtimeState),
+                null, false,
+                item.jukeboxSong(),
+                mechanics.stream().flatMap(mechanic -> mechanic.itemModifiers().stream()).toList());
     }
 
     /** Resolves mechanics against the frozen-at-apply registry snapshot. */

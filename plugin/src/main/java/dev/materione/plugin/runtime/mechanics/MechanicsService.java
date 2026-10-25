@@ -2,406 +2,381 @@ package dev.materione.plugin.runtime.mechanics;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.mechanics.Mechanic;
-import dev.materione.api.registry.Registry;
+import dev.materione.api.mechanics.MechanicConfiguration;
+import dev.materione.api.mechanics.MechanicContext;
+import dev.materione.api.mechanics.MechanicInstance;
+import dev.materione.api.mechanics.MechanicListener;
+import dev.materione.api.mechanics.MechanicLookup;
+import dev.materione.api.mechanics.MechanicRegistration;
+import dev.materione.api.mechanics.MechanicRuntime;
+import dev.materione.api.mechanics.MechanicsApi;
+import dev.materione.api.registry.SelfDescription;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.api.diagnostics.DiagnosticCodes;
-import dev.materione.core.runtime.RuntimeRegistries;
-import dev.materione.platform.items.ItemListCodec;
+import dev.materione.core.registry.RegistryService;
+import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.platform.items.MaterioneStacks;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Supplier;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import org.bukkit.Bukkit;
-import org.bukkit.Sound;
-import org.bukkit.command.CommandSender;
-import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
+import java.util.function.BooleanSupplier;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventPriority;
+import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.Action;
-import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.player.PlayerInteractEvent;
-import org.bukkit.event.player.PlayerItemConsumeEvent;
-import org.bukkit.event.player.PlayerItemDamageEvent;
-import org.bukkit.event.player.PlayerJoinEvent;
-import org.bukkit.event.player.PlayerRespawnEvent;
-import org.bukkit.inventory.EquipmentSlot;
-import org.bukkit.inventory.Inventory;
+import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
+import org.bukkit.plugin.PluginManager;
 
 /**
- * The M2 native mechanics runtime ({@link NativeMechanics} carry identity
- * and self-description; this class carries the wiring). Listeners are
- * registered once at boot and resolve the applied shadow at event entry —
- * reloads swap views atomically, so no register/unregister churn is needed.
- * All inventory/effect mutation goes through the scheduling gateway (R1).
+ * Registration-owned mechanic runtimes (D5): built-ins and addons use the same
+ * factory, listener and resource lifecycle. Content reloads only swap bindings.
  */
-public final class MechanicsService implements Listener {
-
-    /** Player-PDC key holding the soulbound stash while the player is dead. */
-    private static final String SOULBOUND_KEY = "soulbound";
-    /** Stack-PDC key giving each backpack instance a stable identity. */
-    private static final String BACKPACK_ID_KEY = "backpack-id";
-    /** Stack-PDC key holding the backpack contents. */
-    private static final String BACKPACK_DATA_KEY = "backpack-data";
-    /** Stack-PDC keys of the custom durability counter (written together). */
-    private static final String DURABILITY_USED_KEY = "durability-used";
-    private static final String DURABILITY_MAX_KEY = "durability-max";
-
-    private static final int DEFAULT_FOOD_DURATION_TICKS = 200;
+public final class MechanicsService implements MechanicsApi, AutoCloseable, Listener {
 
     private final Plugin plugin;
     private final DiagnosticsBus diagnostics;
     private final SchedulingGateway scheduling;
-    private final Supplier<RuntimeRegistries> registries;
-    private final AtomicLong lastRuntimeWarningNanos = new AtomicLong();
+    private final ContentRuntime runtime;
+    private final PluginManager events;
+    private final Map<NamespacedId, Registration> registrations = new LinkedHashMap<>();
+    private RegistryService registryService;
+    private boolean started;
+    private boolean closed;
+
+    /** Compatibility constructor; {@link #registerNatives} supplies the metadata registries. */
+    public MechanicsService(
+            Plugin plugin, DiagnosticsBus diagnostics, SchedulingGateway scheduling, ContentRuntime runtime) {
+        this(plugin, diagnostics, scheduling, runtime, null);
+    }
 
     public MechanicsService(
             Plugin plugin,
             DiagnosticsBus diagnostics,
             SchedulingGateway scheduling,
-            dev.materione.core.runtime.ContentRuntime runtime) {
-        this.plugin = plugin;
-        this.diagnostics = diagnostics;
-        this.scheduling = scheduling;
-        // resolved per event, never captured: reloads swap the reference
-        this.registries = runtime::registries;
+            ContentRuntime runtime,
+            RegistryService registryService) {
+        this.plugin = Objects.requireNonNull(plugin, "plugin");
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.scheduling = Objects.requireNonNull(scheduling, "scheduling");
+        this.runtime = Objects.requireNonNull(runtime, "runtime");
+        this.registryService = registryService;
+        events = plugin.getServer().getPluginManager();
+        events.registerEvent(
+                PluginDisableEvent.class, this, EventPriority.MONITOR,
+                (listener, event) -> onOwnerDisable(PluginDisableEvent.class.cast(event)), plugin);
     }
 
-    /** Registers the five built-ins through the registry path (D5) — phase 4, before content load. */
-    public void registerNatives(dev.materione.core.registry.RegistryService registryService) {
-        Registry<Mechanic> registry =
-                registryService.registry(MechanicsResolver.REGISTRY_KEY, Mechanic.class);
+    /** Compatibility bootstrap helper: native factories use the public registration path. */
+    public synchronized void registerNatives(RegistryService registries) {
+        Objects.requireNonNull(registries, "registries");
+        if (registryService != null && registryService != registries) {
+            throw new IllegalArgumentException("mechanics service already owns different registries");
+        }
+        registryService = registries;
         for (Mechanic mechanic : NativeMechanics.all()) {
-            registry.register(
-                    NamespacedId.of("materione", mechanic.name()),
-                    mechanic,
-                    mechanic.describe(),
-                    "materione");
+            register(plugin, NamespacedId.of("materione", mechanic.name()), mechanic);
         }
     }
 
-    private ItemMechanics mechanics() {
-        return registries.get().view(ItemMechanics.KEY);
+    @Override
+    public synchronized MechanicRegistration register(Plugin owner, NamespacedId id, Mechanic mechanic) {
+        Objects.requireNonNull(owner, "owner");
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(mechanic, "mechanic");
+        if (closed) {
+            throw new IllegalStateException("mechanics service is closed");
+        }
+        if (!owner.isEnabled()) {
+            throw new IllegalStateException("mechanic owner '" + owner.getName() + "' is disabled");
+        }
+        RegistryService metadata = Objects.requireNonNull(registryService, "mechanics registries not wired");
+        Registration registration = new Registration(owner, id);
+        final SelfDescription description;
+        final String name;
+        final boolean repeatable;
+        try {
+            description = Objects.requireNonNull(mechanic.describe(), "mechanic description");
+            name = Objects.requireNonNull(mechanic.name(), "mechanic name");
+            repeatable = mechanic.repeatable();
+        } catch (RuntimeException failure) {
+            registration.warn("metadata failed", failure);
+            throw failure;
+        }
+        registration.entry = registration.managed(mechanic, name, description, repeatable);
+        metadata.registerBounded(
+                MechanicsResolver.REGISTRY_KEY, Mechanic.class, id,
+                registration.entry, description, owner.getName());
+        registrations.put(id, registration);
+        try {
+            MechanicRuntime wiring = registration.track(
+                    Objects.requireNonNull(mechanic.createRuntime(registration), "mechanic runtime"));
+            registration.descriptors = List.copyOf(wiring.listeners());
+            registration.requireActive();
+            if (started) {
+                activate(registration);
+            }
+            return registration;
+        } catch (RuntimeException failure) {
+            registration.warn("initialization failed", failure);
+            registration.close();
+            throw failure;
+        }
     }
 
-    // --- commands + backpack: item clicks -----------------------------------
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) {
-            return; // main hand owns mechanics; the off-hand pass is a duplicate
+    /** Attaches staged descriptors after the behavior bridge; later registrations attach immediately. */
+    public synchronized void start() {
+        if (closed) {
+            throw new IllegalStateException("mechanics service is closed");
         }
-        boolean right = event.getAction() == Action.RIGHT_CLICK_AIR
-                || event.getAction() == Action.RIGHT_CLICK_BLOCK;
-        boolean left = event.getAction() == Action.LEFT_CLICK_AIR
-                || event.getAction() == Action.LEFT_CLICK_BLOCK;
-        if (!right && !left) {
+        if (started) {
             return;
         }
-        ItemStack stack = event.getItem();
-        NamespacedId id = MaterioneStacks.identityOf(stack).orElse(null);
-        if (id == null) {
-            return;
-        }
-        List<ActiveMechanic> active = mechanics().forItem(id);
-        if (active.isEmpty()) {
-            return;
-        }
-        for (ActiveMechanic mechanic : active) {
-            switch (mechanic.name()) {
-                case "commands" -> runCommands(mechanic, event.getPlayer(), right);
-                case "backpack" -> {
-                    if (right) {
-                        event.setCancelled(true); // never place/use through an open attempt
-                        openBackpack(mechanic, event.getPlayer());
-                    }
-                }
-                default -> { }
+        started = true;
+        for (Registration registration : List.copyOf(registrations.values())) {
+            try {
+                activate(registration);
+            } catch (RuntimeException failure) {
+                registration.warn("listener activation failed", failure);
+                registration.close();
             }
         }
     }
 
-    private void runCommands(ActiveMechanic mechanic, Player player, boolean rightClick) {
-        Object value = mechanic.params().get(rightClick ? "on_right_click" : "on_left_click");
-        if (!(value instanceof List<?> commands)) {
+    private void activate(Registration registration) {
+        for (MechanicListener<?> descriptor : registration.descriptors) {
+            registerListener(registration, descriptor);
+        }
+        registration.requireActive();
+        registration.ready = true;
+    }
+
+    private <E extends Event> void registerListener(
+            Registration registration, MechanicListener<E> descriptor) {
+        registration.requireActive();
+        events.registerEvent(
+                descriptor.eventType(), registration.listener, descriptor.priority(),
+                (listener, event) -> dispatch(registration, descriptor, event),
+                registration.owner, descriptor.ignoreCancelled());
+    }
+
+    private <E extends Event> void dispatch(
+            Registration registration, MechanicListener<E> descriptor, Event event) {
+        if (!registration.ready || !registration.active.get() || !registration.owner.isEnabled()
+                || !descriptor.eventType().isInstance(event)) {
             return;
         }
-        boolean asPlayer = ActiveMechanic.boolParam(mechanic.params(), "as_player", false);
-        for (Object entry : commands) {
-            if (!(entry instanceof String command) || command.isBlank()) {
-                continue;
-            }
-            String filled = command.replace("%player%", player.getName());
-            scheduling.executeEntity(plugin, player, () -> {
-                CommandSender sender = asPlayer ? player : Bukkit.getConsoleSender();
-                Bukkit.dispatchCommand(sender, filled);
-            });
-        }
-    }
-
-    private void openBackpack(ActiveMechanic mechanic, Player player) {
-        PlayerInventory inventory = player.getInventory();
-        ItemStack held = inventory.getItemInMainHand();
-        String instanceId = pdcString(held, BACKPACK_ID_KEY);
-        if (instanceId == null) {
-            String fresh = UUID.randomUUID().toString();
-            instanceId = fresh;
-            held.editMeta(meta -> meta.getPersistentDataContainer()
-                    .set(key(BACKPACK_ID_KEY), PersistentDataType.STRING, fresh));
-        }
-        int rows = Math.min(6, Math.max(1, ActiveMechanic.intParam(mechanic.params(), "rows", 3)));
-        String title = ActiveMechanic.textParam(mechanic.params(), "title", "Backpack");
-        Inventory menu = Bukkit.createInventory(
-                new BackpackHolder(instanceId),
-                rows * 9,
-                LegacyComponentSerializer.legacyAmpersand().deserialize(title));
-        ItemStack[] contents = new ItemStack[rows * 9];
-        List<ItemStack> stored = ItemListCodec.decode(pdcBytes(held, BACKPACK_DATA_KEY));
-        for (int i = 0; i < contents.length && i < stored.size(); i++) {
-            contents[i] = stored.get(i);
-        }
-        menu.setContents(contents);
-        player.openInventory(menu);
-    }
-
-    /** Writes backpack contents back into the stack that owns them. */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onInventoryClose(InventoryCloseEvent event) {
-        if (!(event.getInventory().getHolder() instanceof BackpackHolder holder)
-                || !(event.getPlayer() instanceof Player player)) {
+        MechanicLookup snapshot = registration.snapshot();
+        if (event.isAsynchronous() != (descriptor.thread() == MechanicListener.ThreadClass.ASYNC)) {
+            registration.warn("listener thread mismatch for " + descriptor.eventType().getSimpleName(), null);
             return;
-        }
-        ItemStack stack = findBackpackStack(player, holder.instanceId());
-        if (stack == null) {
-            return; // dropped or moved while open: contents keep their old state
-        }
-        byte[] encoded = ItemListCodec.encode(Arrays.asList(event.getInventory().getContents()));
-        stack.editMeta(meta -> meta.getPersistentDataContainer()
-                .set(key(BACKPACK_DATA_KEY), PersistentDataType.BYTE_ARRAY, encoded));
-    }
-
-    /** The holder records which backpack instance an open inventory belongs to. */
-    private record BackpackHolder(String instanceId)
-            implements org.bukkit.inventory.InventoryHolder {
-        @Override
-        public Inventory getInventory() {
-            throw new IllegalStateException("holder has no inventory of its own");
-        }
-    }
-
-    private ItemStack findBackpackStack(Player player, String instanceId) {
-        PlayerInventory inventory = player.getInventory();
-        ItemStack[] storage = inventory.getStorageContents();
-        for (ItemStack candidate : storage) {
-            if (candidate != null && instanceId.equals(pdcString(candidate, BACKPACK_ID_KEY))) {
-                return candidate;
-            }
-        }
-        ItemStack offHand = inventory.getItemInOffHand();
-        return offHand != null && instanceId.equals(pdcString(offHand, BACKPACK_ID_KEY))
-                ? offHand : null;
-    }
-
-    // --- soulbound -----------------------------------------------------------
-
-    @EventHandler(priority = EventPriority.HIGH)
-    public void onDeath(PlayerDeathEvent event) {
-        Player player = event.getEntity();
-        var stash = new ArrayList<ItemStack>();
-        Iterator<ItemStack> drops = event.getDrops().iterator();
-        while (drops.hasNext()) {
-            ItemStack drop = drops.next();
-            NamespacedId id = MaterioneStacks.identityOf(drop).orElse(null);
-            if (id != null && mechanics().onItem(id, "soulbound").isPresent()) {
-                stash.add(drop);
-                drops.remove();
-            }
-        }
-        if (stash.isEmpty()) {
-            return;
-        }
-        List<ItemStack> combined = ItemListCodec.decode(
-                player.getPersistentDataContainer()
-                        .get(key(SOULBOUND_KEY), PersistentDataType.BYTE_ARRAY));
-        combined.addAll(stash);
-        player.getPersistentDataContainer().set(
-                key(SOULBOUND_KEY), PersistentDataType.BYTE_ARRAY, ItemListCodec.encode(combined));
-    }
-
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onRespawn(PlayerRespawnEvent event) {
-        restoreStash(event.getPlayer());
-    }
-
-    /** Join-time fallback: covers respawn interference or a crash between death and respawn. */
-    @EventHandler(priority = EventPriority.MONITOR)
-    public void onJoin(PlayerJoinEvent event) {
-        restoreStash(event.getPlayer());
-    }
-
-    private void restoreStash(Player player) {
-        byte[] raw = player.getPersistentDataContainer()
-                .get(key(SOULBOUND_KEY), PersistentDataType.BYTE_ARRAY);
-        if (raw == null || raw.length == 0) {
-            return;
-        }
-        player.getPersistentDataContainer()
-                .set(key(SOULBOUND_KEY), PersistentDataType.BYTE_ARRAY, new byte[0]);
-        List<ItemStack> stashed = ItemListCodec.decode(raw);
-        scheduling.executeEntity(plugin, player, () -> {
-            player.getInventory().addItem(stashed.toArray(ItemStack[]::new)).values()
-                    .forEach(leftover -> player.getWorld()
-                            .dropItemNaturally(player.getLocation(), leftover));
-        });
-    }
-
-    // --- durability ----------------------------------------------------------
-
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
-    public void onItemDamage(PlayerItemDamageEvent event) {
-        ItemStack stack = event.getItem();
-        NamespacedId id = MaterioneStacks.identityOf(stack).orElse(null);
-        if (id == null) {
-            return;
-        }
-        ActiveMechanic durability = mechanics().onItem(id, "durability").orElse(null);
-        if (durability == null) {
-            return;
-        }
-        int max = ActiveMechanic.intParam(durability.params(), "max", 0);
-        event.setCancelled(true); // the vanilla damage bar is inert; our counter owns wear
-
-        Player player = event.getPlayer();
-        int used = pdcInt(stack, DURABILITY_USED_KEY) + 1;
-        if (used >= max) {
-            clearPdc(stack, DURABILITY_USED_KEY, DURABILITY_MAX_KEY);
-            stack.setAmount(stack.getAmount() - 1);
-            player.getWorld().playSound(player.getLocation(), Sound.ENTITY_ITEM_BREAK, 1f, 1f);
-        } else {
-            writeDurability(stack, used, max);
-        }
-    }
-
-    private static void writeDurability(ItemStack stack, int used, int max) {
-        stack.editMeta(meta -> {
-            meta.getPersistentDataContainer()
-                    .set(key(DURABILITY_USED_KEY), PersistentDataType.INTEGER, used);
-            meta.getPersistentDataContainer()
-                    .set(key(DURABILITY_MAX_KEY), PersistentDataType.INTEGER, max);
-        });
-    }
-
-    // --- food ----------------------------------------------------------------
-
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
-    public void onConsume(PlayerItemConsumeEvent event) {
-        NamespacedId id = MaterioneStacks.identityOf(event.getItem()).orElse(null);
-        if (id == null) {
-            return;
-        }
-        ActiveMechanic food = mechanics().onItem(id, "food").orElse(null);
-        if (food == null) {
-            return;
-        }
-        Object effects = food.params().get("effects");
-        if (!(effects instanceof List<?> list) || list.isEmpty()) {
-            return;
-        }
-        Player player = event.getPlayer();
-        scheduling.executeEntity(plugin, player, () -> applyEffects(player, list));
-    }
-
-    private void applyEffects(Player player, List<?> effects) {
-        for (Object entry : effects) {
-            if (!(entry instanceof Map<?, ?> effect)) {
-                continue;
-            }
-            String type = effect.get("type") instanceof String text ? text : null;
-            PotionEffectType potionType = potionType(type);
-            if (potionType == null) {
-                warnLimited("food effect type '" + type + "' is not a potion type");
-                continue;
-            }
-            int amplifier = effect.get("amplifier") instanceof Number number
-                    ? number.intValue() : 0;
-            int duration = effect.get("duration_ticks") instanceof Number number
-                    ? number.intValue() : DEFAULT_FOOD_DURATION_TICKS;
-            player.addPotionEffect(new PotionEffect(potionType, duration, amplifier));
-        }
-    }
-
-    // --- helpers -------------------------------------------------------------
-
-    /** Registry lookup (the deprecated getByName path); invalid keys read as unknown. */
-    private static PotionEffectType potionType(String type) {
-        if (type == null || type.isBlank()) {
-            return null;
         }
         try {
-            return org.bukkit.Registry.POTION_EFFECT_TYPE.get(
-                    org.bukkit.NamespacedKey.minecraft(type.toLowerCase(Locale.ROOT)));
-        } catch (IllegalArgumentException e) {
-            return null; // characters a NamespacedKey can't carry
+            descriptor.handler().accept(descriptor.eventType().cast(event), snapshot);
+        } catch (RuntimeException failure) {
+            registration.warn("handler failed for " + descriptor.eventType().getSimpleName(), failure);
         }
     }
 
-    private static org.bukkit.NamespacedKey key(String name) {
-        return new org.bukkit.NamespacedKey("materione", name);
-    }
-
-    private static String pdcString(ItemStack stack, String name) {
-        return stack.getItemMeta() == null
-                ? null : stack.getItemMeta().getPersistentDataContainer()
-                        .get(key(name), PersistentDataType.STRING);
-    }
-
-    private static byte[] pdcBytes(ItemStack stack, String name) {
-        return stack.getItemMeta() == null
-                ? null : stack.getItemMeta().getPersistentDataContainer()
-                        .get(key(name), PersistentDataType.BYTE_ARRAY);
-    }
-
-    private static int pdcInt(ItemStack stack, String name) {
-        Integer value = stack.getItemMeta() == null
-                ? null : stack.getItemMeta().getPersistentDataContainer()
-                        .get(key(name), PersistentDataType.INTEGER);
-        return value == null ? 0 : value;
-    }
-
-    private static void clearPdc(ItemStack stack, String... names) {
-        stack.editMeta(meta -> {
-            for (String name : names) {
-                meta.getPersistentDataContainer().remove(key(name));
-            }
-        });
-    }
-
-    /** Runtime mechanic failures are rate-limited WARNs on the action-failure code. */
-    private void warnLimited(String message) {
-        long now = System.nanoTime();
-        long last = lastRuntimeWarningNanos.get();
-        if (now - last < 1_000_000_000L || !lastRuntimeWarningNanos.compareAndSet(last, now)) {
+    private synchronized void onOwnerDisable(PluginDisableEvent event) {
+        if (event.getPlugin() == plugin) {
+            close();
             return;
         }
-        diagnostics.publish(new Diagnostic(
-                DiagnosticCodes.ACTION_FAILED, Severity.WARN, message, null, null,
-                "repeated occurrences are suppressed for one second"));
+        for (Registration registration : List.copyOf(registrations.values())) {
+            if (registration.owner == event.getPlugin()) {
+                registration.close();
+            }
+        }
+    }
+
+    @Override
+    public synchronized void close() {
+        if (closed) {
+            return;
+        }
+        closed = true;
+        List<Registration> owned = List.copyOf(registrations.values());
+        for (int index = owned.size() - 1; index >= 0; index--) {
+            owned.get(index).close();
+        }
+        HandlerList.unregisterAll(this);
+    }
+
+    private final class Registration implements MechanicRegistration, MechanicContext {
+        private final Plugin owner;
+        private final NamespacedId id;
+        private final Listener listener = new Listener() {};
+        private final AtomicBoolean active = new AtomicBoolean(true);
+        private final AtomicLong lastWarning = new AtomicLong();
+        private final Deque<AutoCloseable> resources = new ArrayDeque<>();
+        private List<MechanicListener<?>> descriptors = List.of();
+        private volatile boolean ready;
+        private Mechanic entry;
+
+        private Registration(Plugin owner, NamespacedId id) {
+            this.owner = owner;
+            this.id = id;
+        }
+
+        @Override
+        public NamespacedId id() {
+            return id;
+        }
+
+        @Override
+        public Plugin plugin() {
+            return owner;
+        }
+
+        @Override
+        public DiagnosticsBus diagnostics() {
+            return diagnostics;
+        }
+
+        @Override
+        public SchedulingGateway scheduling() {
+            return scheduling;
+        }
+
+        @Override
+        public MechanicLookup snapshot() {
+            return new Lookup(runtime.registries().view(ItemMechanics.KEY), id,
+                    () -> active.get() && owner.isEnabled());
+        }
+
+        @Override
+        public <T extends AutoCloseable> T track(T resource) {
+            Objects.requireNonNull(resource, "resource");
+            synchronized (resources) {
+                if (active.get()) {
+                    resources.push(resource);
+                    return resource;
+                }
+            }
+            closeResource(resource);
+            throw new IllegalStateException("mechanic '" + id + "' is closed");
+        }
+
+        private void requireActive() {
+            if (!active.get() || !owner.isEnabled()) {
+                throw new IllegalStateException("mechanic '" + id + "' is closed or its owner is disabled");
+            }
+        }
+
+        private Mechanic managed(Mechanic delegate, String name, SelfDescription description, boolean repeatable) {
+            return new Mechanic() {
+                @Override
+                public String name() {
+                    return name;
+                }
+
+                @Override
+                public SelfDescription describe() {
+                    return description;
+                }
+
+                @Override
+                public boolean repeatable() {
+                    return repeatable;
+                }
+
+                @Override
+                public MechanicInstance parse(MechanicConfiguration configuration) {
+                    requireActive();
+                    MechanicInstance instance = delegate.parse(configuration);
+                    requireActive();
+                    return Objects.requireNonNull(instance, "mechanic instance");
+                }
+            };
+        }
+
+        @Override
+        public void close() {
+            if (!active.compareAndSet(true, false)) {
+                return;
+            }
+            synchronized (MechanicsService.this) {
+                registrations.remove(id, this);
+                registryService.unregisterBounded(
+                        MechanicsResolver.REGISTRY_KEY, Mechanic.class, id, entry);
+            }
+            HandlerList.unregisterAll(listener);
+            while (true) {
+                AutoCloseable resource;
+                synchronized (resources) {
+                    resource = resources.pollFirst();
+                }
+                if (resource == null) {
+                    return;
+                }
+                closeResource(resource);
+            }
+        }
+
+        private void closeResource(AutoCloseable resource) {
+            try {
+                resource.close();
+            } catch (Exception failure) {
+                diagnostics.publish(new Diagnostic(
+                        DiagnosticCodes.ACTION_FAILED, Severity.WARN,
+                        "mechanic '" + id + "' resource close failed: " + failure,
+                        null, null, "other owned resources will still be closed"));
+            }
+        }
+
+        private void warn(String operation, RuntimeException failure) {
+            long now = System.nanoTime();
+            long previous = lastWarning.get();
+            if ((previous != 0 && now - previous < 1_000_000_000L)
+                    || !lastWarning.compareAndSet(previous, now)) {
+                return;
+            }
+            diagnostics.publish(new Diagnostic(
+                    DiagnosticCodes.ACTION_FAILED, Severity.WARN,
+                    "mechanic '" + id + "' " + operation + (failure == null ? "" : ": " + failure),
+                    null, null, "repeated failures for this registration are suppressed for one second"));
+        }
+    }
+
+    private record Lookup(
+            ItemMechanics bindings, NamespacedId mechanicId, BooleanSupplier active) implements MechanicLookup {
+        @Override
+        public <T extends MechanicInstance> Optional<T> onItem(NamespacedId item, Class<T> type) {
+            Objects.requireNonNull(item, "item");
+            Objects.requireNonNull(type, "type");
+            return bindings == null || !active.getAsBoolean()
+                    ? Optional.empty() : bindings.onItem(item, mechanicId, type);
+        }
+
+        @Override
+        public <T extends MechanicInstance> Optional<T> onItem(ItemStack stack, Class<T> type) {
+            Objects.requireNonNull(type, "type");
+            return MaterioneStacks.identityOf(stack).flatMap(item -> onItem(item, type));
+        }
+
+        @Override
+        public <T extends MechanicInstance> List<T> allOnItem(NamespacedId item, Class<T> type) {
+            Objects.requireNonNull(item, "item");
+            Objects.requireNonNull(type, "type");
+            return bindings == null || !active.getAsBoolean()
+                    ? List.of() : bindings.allOnItem(item, mechanicId, type);
+        }
+
+        @Override
+        public <T extends MechanicInstance> List<T> allOnItem(ItemStack stack, Class<T> type) {
+            Objects.requireNonNull(type, "type");
+            return MaterioneStacks.identityOf(stack).map(item -> allOnItem(item, type)).orElse(List.of());
+        }
     }
 }

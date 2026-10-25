@@ -1,6 +1,7 @@
 package dev.materione.platform.items;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.ItemModifier;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -44,7 +45,20 @@ public final class MaterioneStacks {
             String displayName,
             List<String> lore,
             StackFood food,
-            String jukeboxSong) {
+            String jukeboxSong,
+            List<ItemModifier> itemModifiers) {
+
+        public StackSpec {
+            lore = List.copyOf(lore);
+            itemModifiers = List.copyOf(itemModifiers);
+        }
+
+        /** Compatibility constructor for callers without extension item hooks. */
+        public StackSpec(
+                NamespacedId id, String material, NamespacedId modelId,
+                String displayName, List<String> lore, StackFood food, String jukeboxSong) {
+            this(id, material, modelId, displayName, lore, food, jukeboxSong, List.of());
+        }
 
         /** Pre-food arity kept for callers that carry no mechanic state. */
         public StackSpec(
@@ -82,7 +96,7 @@ public final class MaterioneStacks {
                         : new StackFood(
                                 item.food().nutrition(), item.food().saturation(),
                                 item.food().canAlwaysEat()),
-                item.jukeboxSong());
+                item.jukeboxSong(), item.itemModifiers());
     }
 
     /** Builds the stack for a spec (the apply-stage factory output). */
@@ -96,12 +110,14 @@ public final class MaterioneStacks {
         }
         ItemStack stack = new ItemStack(material);
         stack.editMeta(MetaEditors.forSpec(item));
+        item.itemModifiers().forEach(modifier -> modifier.apply(stack));
         return stack;
     }
 
     /** Re-applies appearance components to an existing stack (auto-updater). */
     public static void refresh(ItemStack stack, StackSpec item) {
         stack.editMeta(MetaEditors.forSpec(item));
+        item.itemModifiers().forEach(modifier -> modifier.apply(stack));
     }
 
     /** Reads the Materione identity from a stack (the ~10–50 µs cold-detect path). */

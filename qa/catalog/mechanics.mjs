@@ -3,7 +3,91 @@
 
 import { test } from './_lib.mjs';
 
+async function groundSwing(ctx, tries = 3) {
+  let last = '(no attempt)';
+  for (let i = 0; i < tries; i++) {
+    const reply = await ctx.exec(`player.setRot(0F, 50F)
+Thread.sleep(400)
+def hit = mc.hitResult
+if (hit.getType().toString() != 'BLOCK') return 'AIR'
+mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())
+return 'left-clicked'`, 15_000);
+    if (String(reply) === 'left-clicked') return;
+    last = String(reply);
+    await ctx.sleep(700);
+  }
+  ctx.expect(last).toBe('left-clicked');
+}
+
 export default [
+  test({
+    id: 'mechanics.commands-reload-once',
+    title: 'world:storm_wand retains both repeated command bindings after reload: console tellraw exactly once and the player version command',
+    mode: 'auto',
+    covers: [
+      'api/src/main/java/dev/materione/api/mechanics/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give world:storm_wand Probe');
+      await ctx.waitForChat(/Given world:storm_wand/);
+      await ctx.exec('player.getInventory().selected = 0');
+      await ctx.rcon('materione reload');
+      await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
+      const count = async () => (await ctx.chat(60))
+        .filter((line) => line.includes('The wand sparks.')).length;
+      const before = await count();
+      await groundSwing(ctx);
+      await ctx.waitForChat(/The wand sparks\./);
+      await ctx.waitForServerLog(/MATERIONE-VERSION/);
+      await ctx.sleep(700);
+      ctx.expect((await count()) - before).toBe(1);
+    },
+  }),
+
+  test({
+    id: 'mechanics.soulbound-keep-inventory',
+    title: 'world:talisman is retained exactly once on death with keepInventory enabled',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/builtin/SoulboundMechanic.java',
+      'platform/src/main/java/dev/materione/platform/items/ItemListCodec.java',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      const original = await ctx.rcon('gamerule keep_inventory');
+      ctx.expect(original).toMatch(/\b(true|false)\b/);
+      const restore = /\btrue\b/.test(original) ? 'true' : 'false';
+      try {
+        await ctx.rcon('gamerule keep_inventory true');
+        await ctx.rcon('gamemode survival Probe');
+        await ctx.rcon('materione give world:talisman Probe');
+        await ctx.waitForChat(/Given world:talisman/);
+        await ctx.rcon('kill Probe');
+        await ctx.sleep(800);
+        ctx.expect(String(await ctx.exec(`player.respawn()
+return 'respawned'`))).toBe('respawned');
+        await ctx.sleep(1500);
+        const count = await ctx.exec(`int count = 0
+for (int i = 0; i < 36; i++) {
+  def stack = player.getInventory().items.get(i)
+  if (!stack.isEmpty() && stack.getHoverName().getString() == "Warden's Talisman") {
+    count += stack.getCount()
+  }
+}
+return count.toString()`);
+        ctx.expect(Number(count)).toBe(1);
+      } finally {
+        await ctx.rcon(`gamerule keep_inventory ${restore}`);
+      }
+    },
+  }),
+
   test({
     id: 'mechanics.commands-and-cooldown',
     title: 'storm_wand left-click runs console + player commands on every swing; the behavior rule is suppressed inside its cooldown window',
@@ -44,21 +128,6 @@ export default [
       // aim at the ground and left-click it — atomic (the crosshair must not
       // drift off the block between verify and click), retrying against
       // desktop-mouse nudges; a momentary click starts no dig progress
-      const groundSwing = async (tries = 3) => {
-        let last = '(no attempt)';
-        for (let i = 0; i < tries; i++) {
-          const reply = await ctx.exec(`player.setRot(0F, 50F)
-Thread.sleep(400)
-def hit = mc.hitResult
-if (hit.getType().toString() != 'BLOCK') return 'AIR'
-mc.options.keyAttack.click(mc.options.keyAttack.getDefaultKey())
-return 'left-clicked'`, 15_000);
-          if (String(reply) === 'left-clicked') return;
-          last = String(reply);
-          await ctx.sleep(700);
-        }
-        ctx.expect(last).toBe('left-clicked');
-      };
       const waitForCount = async (name, want, timeoutMs = 8000) => {
         const deadline = Date.now() + timeoutMs;
         for (;;) {
@@ -77,20 +146,20 @@ return 'left-clicked'`, 15_000);
       const baseline = await counts();
 
       // left-click 1: cooldown fresh — every surface fires
-      await groundSwing();
+      await groundSwing(ctx);
       await waitForCount('sparks', baseline.sparks + 1);
       await ctx.waitForServerLog(/MATERIONE-VERSION/);
       await waitForCount('crackles', baseline.crackles + 1, 3000);
 
       // left-click 2 immediately: the mechanics fire again, the rule is suppressed
-      await groundSwing();
+      await groundSwing(ctx);
       await waitForCount('sparks', baseline.sparks + 2);
       const suppressed = await counts();
       ctx.expect(suppressed.crackles - baseline.crackles).toBe(1);
 
       // after the 3s window the rule fires again
       await ctx.sleep(3300);
-      await groundSwing();
+      await groundSwing(ctx);
       await waitForCount('sparks', baseline.sparks + 3);
       await waitForCount('crackles', baseline.crackles + 2, 3000);
     },

@@ -1,38 +1,31 @@
 package dev.materione.plugin.runtime.mechanics;
 
+import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.ItemModifier;
+import dev.materione.api.mechanics.MechanicInstance;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BooleanSupplier;
 
-/**
- * One mechanic declaration on one item, resolved against the mechanics
- * registry at apply: the registry entry exists and its parameters passed
- * validation. {@code params} is the raw YAML parameter map — natives read
- * their typed values out of it (they validated the shape at resolve time).
- */
-public record ActiveMechanic(String name, Map<String, Object> params) {
-
+/** One fully compiled declaration, ready to publish in the runtime shadow. */
+public record ActiveMechanic(
+        NamespacedId id,
+        Map<String, Object> params,
+        MechanicInstance instance,
+        List<Map<String, Object>> behaviorRules,
+        List<ItemModifier> itemModifiers,
+        BooleanSupplier available,
+        long generation) {
     public ActiveMechanic {
-        params = params == null ? Map.of() : Map.copyOf(params);
+        Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(instance, "instance");
+        Objects.requireNonNull(available, "available");
+        behaviorRules = List.copyOf(behaviorRules);
+        itemModifiers = List.copyOf(itemModifiers);
     }
 
-    // --- typed parameter reads shared by resolver and service ---------------
-
-    public static int intParam(Map<String, Object> params, String key, int fallback) {
-        Object value = params.get(key);
-        return value instanceof Number number ? number.intValue() : fallback;
-    }
-
-    public static double doubleParam(Map<String, Object> params, String key, double fallback) {
-        Object value = params.get(key);
-        return value instanceof Number number ? number.doubleValue() : fallback;
-    }
-
-    public static boolean boolParam(Map<String, Object> params, String key, boolean fallback) {
-        Object value = params.get(key);
-        return value instanceof Boolean b ? b : fallback;
-    }
-
-    public static String textParam(Map<String, Object> params, String key, String fallback) {
-        Object value = params.get(key);
-        return value instanceof String s && !s.isBlank() ? s : fallback;
+    public boolean isAvailable() {
+        return available.getAsBoolean();
     }
 }

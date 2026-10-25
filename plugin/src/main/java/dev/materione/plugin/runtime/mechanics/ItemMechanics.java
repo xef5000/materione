@@ -1,6 +1,7 @@
 package dev.materione.plugin.runtime.mechanics;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.mechanics.MechanicInstance;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -19,7 +20,9 @@ public final class ItemMechanics {
     private final Map<NamespacedId, List<ActiveMechanic>> byItem;
 
     public ItemMechanics(Map<NamespacedId, List<ActiveMechanic>> byItem) {
-        this.byItem = Map.copyOf(byItem);
+        var copy = new java.util.LinkedHashMap<NamespacedId, List<ActiveMechanic>>();
+        byItem.forEach((id, mechanics) -> copy.put(id, List.copyOf(mechanics)));
+        this.byItem = Map.copyOf(copy);
     }
 
     public static ItemMechanics empty() {
@@ -31,13 +34,25 @@ public final class ItemMechanics {
         return byItem.getOrDefault(id, List.of());
     }
 
-    /** The first mechanic of the given name on an item, if declared. */
-    public Optional<ActiveMechanic> onItem(NamespacedId id, String mechanicName) {
+    /** Typed lookup scoped by full mechanic identity, never by a short name. */
+    public <T extends MechanicInstance> Optional<T> onItem(
+            NamespacedId id, NamespacedId mechanicId, Class<T> type) {
         for (ActiveMechanic active : forItem(id)) {
-            if (active.name().equals(mechanicName)) {
-                return Optional.of(active);
+            if (active.id().equals(mechanicId) && active.isAvailable() && type.isInstance(active.instance())) {
+                return Optional.of(type.cast(active.instance()));
             }
         }
         return Optional.empty();
+    }
+
+    /** Every matching binding, including repeats, in authored declaration order. */
+    public <T extends MechanicInstance> List<T> allOnItem(
+            NamespacedId id, NamespacedId mechanicId, Class<T> type) {
+        return forItem(id).stream()
+                .filter(active -> active.id().equals(mechanicId) && active.isAvailable())
+                .map(ActiveMechanic::instance)
+                .filter(type::isInstance)
+                .map(type::cast)
+                .toList();
     }
 }

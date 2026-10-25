@@ -109,6 +109,12 @@ Currently, `ContentType` lives in `dev.materione.core.content.ContentType`, whic
   - ECA `ActionExecutor` / action & condition registration contracts expose clean SPIs in `dev.materione.api.behavior`.
 - **Typed Registry Keys:** Standard `RegistryKey` constants (`RegistryKeys.CONTENT_TYPES`, `RegistryKeys.MECHANICS`, `RegistryKeys.ACTIONS`, `RegistryKeys.CONDITIONS`, `RegistryKeys.DELIVERY_BACKENDS`) live in `api/`.
 - **Window Management:** `Registry<T>` remains open during bootstrap Phase 4 and reload re-checks; built-in registrations (`ItemType`, `BlockType`, `FurnitureType`, `GlyphType`, `SoundType`, `PaintingType`, `EffectType`, `RecipeType`, `NativeMechanics`) register strictly through `api.registries()`.
+- **Executable mechanics:** `MaterioneAPI.mechanics()` owns bounded mechanic
+  registration windows and native runtime lifetimes. Built-in and addon mechanics
+  implement the same parsing, ECA/item-contribution and managed-listener contracts;
+  `registries()` remains their introspection surface. This supersedes the
+  metadata-only mechanic entry and the mechanics-specific registration route
+  described above; see [`mechanics.md`](mechanics.md).
 
 ### 3.3 `AuthoringApi` (`dev.materione.api.authoring`)
 
