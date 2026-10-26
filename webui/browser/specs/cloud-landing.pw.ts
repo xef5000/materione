@@ -38,7 +38,9 @@ test('View Demo opens the real workbench over the recorded sample server', async
 
   await expect(page).toHaveURL(/\/\?demo$/);
   const banner = page.getByRole('status').filter({ hasText: 'Sample content in this tab only' });
-  await expect(banner).toBeVisible();
+  // The first load pulls the lazy demo chunk and replays the whole recording:
+  // allow for a slow CI runner.
+  await expect(banner).toBeVisible({ timeout: 20_000 });
   // The recorded real server: the sample fixture pack, every content type tab.
   await expect(page.getByRole('combobox').first()).toHaveValue('sample');
   await expect(page.getByText('Ruby Sword', { exact: true }).first()).toBeVisible();
