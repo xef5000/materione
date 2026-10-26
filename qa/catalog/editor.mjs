@@ -97,6 +97,27 @@ async function openSampleItemFile(page) {
   await waitForDisplayName(page, 'Ruby Sword');
 }
 
+const VANILLA_ICON_COVERS = [
+  ...CATALOG_COVERS,
+  'webui/src/lib/vanilla-icons.ts',
+  'webui/src/lib/studio/ItemPreview.svelte',
+];
+
+const MODEL_PREVIEW_COVERS = [
+  ...CATALOG_COVERS,
+  'webui/src/lib/model-render.ts',
+  'webui/src/lib/model-preview.ts',
+  'webui/src/lib/studio/StudioPreview.svelte',
+  'webui/src/lib/studio/Studio.svelte',
+  'api/src/main/java/dev/materione/api/content/ResourcePresentation.java',
+  'api/src/main/java/dev/materione/api/authoring/AuthoringApi.java',
+  'content/src/main/java/dev/materione/content/blocks/BlockType.java',
+  'content/src/main/java/dev/materione/content/furniture/FurnitureType.java',
+  'core/src/main/java/dev/materione/core/authoring/ResourceSummaryComputer.java',
+  'fixtures/packs/sample/blocks/**',
+  'fixtures/packs/sample/furnitures/**',
+];
+
 async function openSampleItemCatalog(page) {
   await page.getByLabel('project').selectOption('sample');
   await page.getByRole('button', { name: 'Content', exact: true }).click();
@@ -325,6 +346,94 @@ export default [
       await loreField.fill(originalLore);
       await studio.getByRole('button', { name: 'Save & apply' }).click();
       await assertHeldRubySwordName(ctx, 'Ruby Sword');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-vanilla-item-icons',
+    title: 'sample:ruby_disc has no custom visual and shows the pinned vanilla MUSIC_DISC_CAT icon from jsDelivr',
+    covers: VANILLA_ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      // Needs outbound access to cdn.jsdelivr.net; the icon is a runtime CDN load, never bundled.
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.locator('input.search').fill('Ruby disc');
+      const row = page.getByRole('option', { name: /Ruby disc/i }).first();
+      const image = row.locator('.thumbnail.vanilla img');
+      await image.waitFor({ state: 'visible', timeout: 20_000 });
+      const icon = await image.evaluate((entry) => ({
+        src: entry.src, loaded: entry.complete && entry.naturalWidth === 32,
+      }));
+      ctx.expect(icon.src).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/npm\/minecraft-textures@26\.3\.0\/dist\/textures\/assets\/[0-9a-f]+\.png$/);
+      ctx.expect(icon.loaded).toBeTruthy();
+      ctx.expect(await row.locator('.thumbnail').getAttribute('title')).toMatch(/Vanilla item icon/);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-vanilla-item-icons-visual',
+    title: 'sample item catalog shows recognizable vanilla icons for items without a custom visual',
+    mode: 'visual',
+    dependsOn: ['editor.browser-vanilla-item-icons'],
+    covers: VANILLA_ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('button', { name: 'Compact grid' }).click();
+      await page.locator('.thumbnail.vanilla img').first().waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('sample-vanilla-item-icons');
+      ctx.needsEyes(
+        'items without a custom texture or model (e.g. sample:ruby_disc) show the matching vanilla inventory icon, crisp at grid size; items with their own texture still show it, and unsupported models keep their honest fallback',
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-block-model-previews',
+    title: 'sample blocks and furniture render live model previews (cube, slab, stairs) from their compiled models',
+    covers: MODEL_PREVIEW_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('button', { name: 'Blocks', exact: true }).click();
+      for (const name of ['Amethyst Lamp', 'Marble Slab', 'Marble Stairs']) {
+        const image = page.getByRole('option', { name: new RegExp(name) }).first().locator('.thumbnail.live img');
+        await image.waitFor({ state: 'visible', timeout: 20_000 });
+        ctx.expect(await image.evaluate((entry) => entry.complete && entry.naturalWidth === 128)).toBeTruthy();
+      }
+      await page.getByRole('button', { name: 'Furniture', exact: true }).click();
+      const chair = page.getByRole('option', { name: /Chair/ }).first().locator('.thumbnail.live img');
+      await chair.waitFor({ state: 'visible', timeout: 20_000 });
+    },
+  }),
+
+  test({
+    id: 'editor.browser-block-model-previews-visual',
+    title: 'sample block catalog and stairs studio show recognizable inventory-style model renders',
+    mode: 'visual',
+    dependsOn: ['editor.browser-block-model-previews'],
+    covers: MODEL_PREVIEW_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('button', { name: 'Blocks', exact: true }).click();
+      await page.getByRole('button', { name: 'Compact grid' }).click();
+      await page.locator('.thumbnail.live img').first().waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('sample-block-model-previews');
+      await page.getByRole('option', { name: /Marble Stairs/ }).first().dblclick();
+      await page.locator('.preview .thumbnail.live img').waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('sample-marble-stairs-studio-preview');
+      ctx.needsEyes(
+        'sample:amethyst_lamp, marble_slab and marble_stairs show 3D inventory-angle renders (top brightest, left side lighter than right) matching their in-game inventory icons in shape and orientation; the stairs studio preview shows the same render at 180 px; vanilla textures, if any, appear as grey checkers',
+      );
     },
   }),
 

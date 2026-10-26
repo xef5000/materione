@@ -103,6 +103,16 @@ public final class EditorContentOps {
                                 ? "texture" : "model-thumbnail");
                         resource.add("visual", visual);
                     }
+                    if (summary.render() != null) {
+                        JsonObject render = new JsonObject();
+                        render.addProperty("pack", summary.render().pack());
+                        if (summary.render().path() != null) {
+                            render.addProperty("path", summary.render().path());
+                        } else {
+                            render.add("model", jsonOf(summary.render().model()));
+                        }
+                        resource.add("render", render);
+                    }
                     resource.addProperty("health",
                             summary.health().name().toLowerCase(java.util.Locale.ROOT));
                     if (summary.healthMessage() != null) {

@@ -153,6 +153,21 @@ public interface AuthoringApi {
     /** Safe preview identity; the path is a server-resolved readable asset path. */
     record ResourceVisual(String pack, String path, VisualKind kind) {}
 
+    /**
+     * What the editor needs to draw a resource's model live: either a
+     * readable model asset ({@code path}, under {@code pack}) or the inline
+     * model the type compiles for it ({@code model}, texture references
+     * resolved against {@code pack}). Exactly one of path/model is set.
+     */
+    record ResourceRender(String pack, String path, java.util.Map<String, Object> model) {
+        public ResourceRender {
+            if ((path == null) == (model == null)) {
+                throw new IllegalArgumentException("render needs exactly one of path or model");
+            }
+            model = model == null ? null : java.util.Map.copyOf(model);
+        }
+    }
+
     enum VisualKind {
         TEXTURE,
         MODEL_THUMBNAIL
@@ -175,11 +190,19 @@ public interface AuthoringApi {
             String material,
             ResourceVisual visual,
             ResourceHealth health,
-            String healthMessage) {
+            String healthMessage,
+            ResourceRender render) {
 
         public ResourceSummary {
             name = name == null || name.isBlank() ? resourceId : name;
             health = health == null ? ResourceHealth.UNKNOWN : health;
+        }
+
+        /** Source-compatible constructor for summaries without a live render. */
+        public ResourceSummary(
+                String pack, String type, String path, String resourceId, String name,
+                String material, ResourceVisual visual, ResourceHealth health, String healthMessage) {
+            this(pack, type, path, resourceId, name, material, visual, health, healthMessage, null);
         }
     }
 

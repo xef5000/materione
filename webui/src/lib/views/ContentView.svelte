@@ -513,6 +513,8 @@
           {:else}
             <ResourceThumbnail
               visual={row.summary?.visual}
+              render={row.summary?.render}
+              material={row.summary?.material}
               label={row.name}
               size={presentation.layout === 'grid' ? 56 : 34}
               version={workspace.visualVersion}

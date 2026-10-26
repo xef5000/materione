@@ -1,6 +1,12 @@
 import { expect, test } from '@playwright/test';
 import '../contract';
 
+// Vanilla item icons load from jsDelivr at runtime; keep these specs offline
+// and deterministic (vanilla-icons.pw.ts serves a fake manifest instead).
+test.beforeEach(async ({ page }) => {
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+});
+
 test('glyphs show decoded source textures in list and grid without per-row document reads', async ({
   page,
 }, testInfo) => {

@@ -279,6 +279,36 @@ class BlockTypeTest {
                 .isEqualTo(Map.of("model", "sample:marble_slab_model_double"));
     }
 
+    @Test
+    void presentationCarriesExactlyTheModelCompileEmits() {
+        for (String technique : List.of("note_block", "chorus", "string", "stairs", "slab")) {
+            models.clear();
+            modelJsons.clear();
+            vanilla.clear();
+            NamespacedId block = NamespacedId.of("sample", "preview_" + technique);
+            Object parsed = type.parse(block, Map.of(
+                    "technique", technique, "texture", "block/marble"), Map.of()).orElseThrow();
+
+            type.compile(parsed, NamespacedId.of("sample", "preview_" + technique + "_model"),
+                    emitterOf(), allocations);
+
+            var presentation = type.presentation(parsed).orElseThrow();
+            assertThat(presentation.generatedModel())
+                    .as(technique)
+                    .isEqualTo(modelJsons.get("sample:preview_" + technique + "_model"));
+        }
+    }
+
+    @Test
+    void handAuthoredModelsPresentByReferenceOnly() {
+        Object parsed = type.parse(id, Map.of("model", "block/custom"), Map.of()).orElseThrow();
+
+        var presentation = type.presentation(parsed).orElseThrow();
+
+        assertThat(presentation.generatedModel()).isNull();
+        assertThat(presentation.model()).isEqualTo("block/custom");
+    }
+
     private PackEmitterOf emitterOf() {
         return new PackEmitterOf();
     }

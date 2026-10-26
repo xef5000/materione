@@ -335,6 +335,10 @@ class AuthoringApiImplTest {
         assertThat(wand.visual()).isEqualTo(new AuthoringApi.ResourceVisual(
                 "other", ".materione/thumbnails/item/wand.png",
                 AuthoringApi.VisualKind.MODEL_THUMBNAIL));
+        // the live render reads the model file itself, not the cached thumbnail
+        assertThat(wand.render()).isEqualTo(new AuthoringApi.ResourceRender(
+                "other", "assets/models/item/wand.json", null));
+        assertThat(ruby.render()).isNull();
 
         AuthoringApi.ResourceSummary missingModel = api.listResourceSummaries(
                 new AuthoringApi.ResourceFilter("demo", "items", "missing_model"), 0, 10)
@@ -343,11 +347,44 @@ class AuthoringApiImplTest {
                 "other", "assets/textures/item/skin.png", AuthoringApi.VisualKind.TEXTURE));
         assertThat(missingModel.health()).isEqualTo(AuthoringApi.ResourceHealth.ERROR);
         assertThat(missingModel.healthMessage()).contains("model asset is missing");
+        assertThat(missingModel.render()).isNull();
 
         assertThat(documents.listResourceDocuments("demo", "blocks")).isEmpty();
         assertThat(temp.resolve("revisions")).doesNotExist();
         assertThat(temp.resolve("audit.log")).doesNotExist();
         assertThat(reloads.files).isEmpty();
+    }
+
+    @Test
+    void generatedModelsReachTheSummaryAsAnInlineRender() throws Exception {
+        Path packsRoot = temp.resolve("packs");
+        Path demo = packsRoot.resolve("demo");
+        Files.createDirectories(demo.resolve("items"));
+        Files.createDirectories(demo.resolve("assets/textures/block"));
+        Files.writeString(demo.resolve("pack.yml"), "id: demo\n");
+        Files.writeString(demo.resolve("items/shapes.yml"), """
+                crate:
+                  material: PAPER
+                  texture: demo:block/crate
+                  shape: block/cube_all
+                """);
+        Files.writeString(demo.resolve("assets/textures/block/crate.png"), "png");
+        DocumentStore documents = new DocumentStore(packsRoot, temp.resolve("revisions"));
+        AuditLog audit = new AuditLog(temp.resolve("audit.log"));
+        AuthoringApi api = new AuthoringApiImpl(
+                documents, audit, packsRoot,
+                new ModelTransactionService(documents, packsRoot, audit),
+                null, () -> null, reloads, new AssetStore(packsRoot, audit),
+                () -> List.of(new SummaryItemType()));
+
+        AuthoringApi.ResourceSummary crate = api.listResourceSummaries(
+                new AuthoringApi.ResourceFilter("demo", "items", null), 0, 10)
+                .value().resources().get(0);
+
+        assertThat(crate.render()).isEqualTo(new AuthoringApi.ResourceRender("demo", null, Map.of(
+                "parent", "block/cube_all", "textures", Map.of("all", "demo:block/crate"))));
+        assertThat(crate.visual()).isEqualTo(new AuthoringApi.ResourceVisual(
+                "demo", "assets/textures/block/crate.png", AuthoringApi.VisualKind.TEXTURE));
     }
 
     @Test
@@ -964,11 +1001,17 @@ class AuthoringApiImplTest {
             if (!(parsedDefinition instanceof Map<?, ?> parsed)) {
                 return Optional.empty();
             }
+            // `shape:` stands in for a type that compiles a generated model
+            Map<String, Object> generated = parsed.get("shape") instanceof String shape
+                    ? Map.of("parent", shape, "textures", Map.of("all", String.valueOf(parsed.get("texture"))))
+                    : null;
             return Optional.of(new ResourcePresentation(
                     (String) parsed.get("display_name"),
                     (String) parsed.get("material"),
                     (String) parsed.get("texture"),
-                    (String) parsed.get("model")));
+                    (String) parsed.get("model"),
+                    null,
+                    generated));
         }
 
         @Override

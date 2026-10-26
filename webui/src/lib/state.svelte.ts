@@ -177,6 +177,8 @@ export const delivery = $state({
 
 export const server = $state({
   version: '',
+  /** Probed Minecraft version; empty from plugins that predate the field. */
+  minecraftVersion: '',
   protocolVersion: 0,
   editorRunning: false,
   editorPort: 0,
@@ -319,6 +321,7 @@ export async function loadWorkspace(): Promise<void> {
       ((unwrap(await ops.diagnostics(channel)).diagnostics as DiagnosticEntry[]) ?? []);
     const info = unwrap(await ops.sessionInfo(channel));
     server.version = String(info.serverVersion ?? '');
+    server.minecraftVersion = String(info.minecraftVersion ?? '');
     server.protocolVersion = Number(info.protocolVersion ?? 0);
     server.editorRunning = Boolean(info.editorRunning);
     server.editorPort = Number(info.editorPort ?? 0);
@@ -543,6 +546,7 @@ export function resetWorkspace(): void {
   connection.connected = false;
   connection.error = '';
   server.version = '';
+  server.minecraftVersion = '';
   server.protocolVersion = 0;
   session.channel = null;
   bus.push.clear();

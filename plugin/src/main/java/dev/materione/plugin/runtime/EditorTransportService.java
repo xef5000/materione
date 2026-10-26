@@ -120,7 +120,9 @@ public final class EditorTransportService {
                         "editorRunning", editorRunning(),
                         "editorPort", boundPort(),
                         "editorMode", editorMode,
-                        "relayBaseUrl", relayBaseUrl));
+                        "relayBaseUrl", relayBaseUrl,
+                        // picks the editor's vanilla icon manifest (web.md §4.2)
+                        "minecraftVersion", minecraftVersion()));
         registerContentOps(dispatcher, storage);
         relaySessions = new dev.materione.web.relay.RelaySessions(sessions, dispatcher, diagnostics);
         listener = new EditorListener(
@@ -447,6 +449,15 @@ public final class EditorTransportService {
 
     public int boundPort() {
         return listener == null ? -1 : listener.boundPort();
+    }
+
+    /** The probed Minecraft version, or empty before the probe resolves (never null: Map.of). */
+    private String minecraftVersion() {
+        try {
+            return api.platform().minecraftVersion();
+        } catch (RuntimeException e) {
+            return "";
+        }
     }
 
     /**

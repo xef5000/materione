@@ -207,6 +207,61 @@ const RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'glyphs', path: 'glyphs/icons.yml', id: 'missing_icon' },
 ];
 
+/**
+ * Opt-in (`?modelGallery`) blocks with live-render specs, kept out of the
+ * default fixture so existing specs see the same catalog and RPC calls.
+ */
+const CRATE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAnklEQVR4nGOIMZH5TwlmABHTYgz+H+kJAuNNVQ5wNj4M0gM3ACaATSE2A2Fq4QbAFOEyBBm3eMnB2XADNlQ4wTHIkHlpBihiyHLIfBQvYHMisjewuQ7FAHS/ImvAZiCGAdgCD6QRX7hgDQN0P8P8jS1cMFyA7A18XoCpJRiIuAzEGoj4FGJLA1jDAF8awJYWqJeU0Z2GDyMne7gBlGAAtARNyxEyZukAAAAASUVORK5CYII=';
+const CRATE_TEXTURE = `${PACK}:block/crate`;
+const LAMP_MODEL = {
+  parent: 'minecraft:block/block',
+  textures: { wood: CRATE_TEXTURE, stone: 'minecraft:block/stone', particle: CRATE_TEXTURE },
+  elements: [
+    { from: [2, 0, 2], to: [14, 4, 14], faces: Object.fromEntries(
+      ['down', 'up', 'north', 'south', 'west', 'east'].map((side) => [side, { texture: '#stone' }])) },
+    { from: [6, 4, 6], to: [10, 12, 10], faces: Object.fromEntries(
+      ['up', 'north', 'south', 'west', 'east'].map((side) => [side, { texture: '#wood' }])) },
+    { from: [4, 12, 4], to: [12, 16, 12], rotation: { origin: [8, 14, 8], axis: 'y', angle: 22.5 },
+      faces: Object.fromEntries(
+        ['down', 'up', 'north', 'south', 'west', 'east'].map((side) => [side, { texture: '#wood' }])) },
+  ],
+};
+const GALLERY: { ref: ResourceRef; name: string; render: NonNullable<ResourceSummary['render']> }[] = [
+  {
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'crate_cube' },
+    name: 'Crate Cube',
+    render: { pack: PACK, model: { parent: 'block/cube_all', textures: { all: CRATE_TEXTURE } } },
+  },
+  {
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'crate_stairs' },
+    name: 'Crate Stairs',
+    render: { pack: PACK, model: { parent: 'block/stairs',
+      textures: { side: CRATE_TEXTURE, top: CRATE_TEXTURE, bottom: CRATE_TEXTURE } } },
+  },
+  {
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'crate_slab' },
+    name: 'Crate Slab',
+    render: { pack: PACK, model: { parent: 'block/slab',
+      textures: { side: CRATE_TEXTURE, top: CRATE_TEXTURE, bottom: CRATE_TEXTURE } } },
+  },
+  {
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'crate_sprout' },
+    name: 'Crate Sprout',
+    render: { pack: PACK, model: { parent: 'block/cross', textures: { cross: CRATE_TEXTURE } } },
+  },
+  {
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'stone_lamp' },
+    name: 'Stone Lamp',
+    render: { pack: PACK, path: 'assets/models/block/stone_lamp.json' },
+  },
+  {
+    // Geometry lives in a vanilla parent the editor cannot know: falls back.
+    ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'mystery_anvil' },
+    name: 'Mystery Anvil',
+    render: { pack: PACK, model: { parent: 'minecraft:block/anvil', textures: { body: CRATE_TEXTURE } } },
+  },
+];
+
 const DIAGNOSTICS = [
   {
     code: 'MTR-9001',
@@ -452,9 +507,28 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   #candidateSha256 = 'a'.repeat(64);
   #publishedSha256 = '0'.repeat(64);
   #summaryError: boolean;
+  readonly #resources: ResourceRef[];
+  readonly #renders = new Map<string, NonNullable<ResourceSummary['render']>>();
 
-  constructor(options: { summaryError?: boolean } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean } = {}) {
     this.#summaryError = options.summaryError ?? false;
+    this.#resources = [...RESOURCES];
+    if (options.modelGallery) {
+      const gallery: Record<string, Record<string, unknown>> = {};
+      for (const entry of GALLERY) {
+        this.#resources.push(entry.ref);
+        this.#renders.set(entry.ref.id, entry.render);
+        gallery[entry.ref.id] = { display_name: entry.name };
+      }
+      this.#documents.set(`${PACK}/blocks/gallery.yml`, makeDocument('blocks/gallery.yml', 1, gallery));
+      this.#assets.set(assetPath(PACK, 'assets/textures/block/crate.png'),
+        { path: 'assets/textures/block/crate.png', kind: 'png', data: CRATE_PNG, bytes: 214 });
+      const model = new TextEncoder().encode(JSON.stringify(LAMP_MODEL));
+      this.#assets.set(assetPath(PACK, 'assets/models/block/stone_lamp.json'), {
+        path: 'assets/models/block/stone_lamp.json', kind: 'json',
+        data: btoa(String.fromCharCode(...model)), bytes: model.length,
+      });
+    }
   }
 
   setPushHandler(handler: (frame: PushFrame) => void): void {
@@ -591,6 +665,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'session.info':
         return this.success(op, {
           serverVersion: '1.21.4',
+          minecraftVersion: '1.21.4',
           protocolVersion: 1,
           editorRunning: true,
           editorPort: 8089,
@@ -604,7 +679,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'browse.resources': {
         const pack = stringValue(payload.pack);
         return this.success(op, {
-          resources: RESOURCES.filter((resource) => resource.pack === pack).map((resource) =>
+          resources: this.#resources.filter((resource) => resource.pack === pack).map((resource) =>
             structuredClone(resource),
           ),
         });
@@ -663,7 +738,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const type = stringValue(payload.type);
     const query = stringValue(payload.query).replaceAll('_', ' ').trim().toLowerCase();
     const all: ResourceSummary[] = [];
-    for (const resource of RESOURCES) {
+    for (const resource of this.#resources) {
       if (resource.pack !== pack || (type && resource.type !== type)) continue;
       const document = this.#documents.get(`${resource.pack}/${resource.path}`);
       const fields = document?.parsed[resource.id];
@@ -681,6 +756,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
             : stringValue(fields.display_name, resource.id),
         ...(material ? { material } : {}),
         ...(visual ? { visual } : {}),
+        ...(this.#renders.has(resource.id) ? { render: this.#renders.get(resource.id) } : {}),
         health: resource.id === 'missing_icon' ? 'error' : 'unknown',
         ...(resource.id === 'missing_icon' ? { healthMessage: 'Texture not found: gui/missing' } : {}),
       };

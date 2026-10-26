@@ -9,6 +9,7 @@ import dev.materione.api.content.Allocations;
 import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.api.content.ResourcePresentation;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
@@ -124,6 +125,15 @@ public final class BlockType implements ContentType {
     }
 
     @Override
+    public Optional<ResourcePresentation> presentation(Object parsedDefinition) {
+        if (!(parsedDefinition instanceof BlockDefinition block)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResourcePresentation(
+                block.displayName(), null, block.texture(), block.model(), null, generatedModel(block)));
+    }
+
+    @Override
     public Optional<Object> parse(
             NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
         var merged = Templates.merge(definition, id.namespace(), templates);
@@ -202,10 +212,7 @@ public final class BlockType implements ContentType {
         }
         String modelRef;
         if (block.wantsGeneratedModel()) {
-            var model = new LinkedHashMap<String, Object>();
-            model.put("parent", block.modelParent());
-            model.put("textures", texturesFor(block.modelParent(), textureRef(block)));
-            emitter.model(allocatedModelId, model);
+            emitter.model(allocatedModelId, generatedModel(block));
             modelRef = allocatedModelId.toString();
         } else {
             modelRef = block.modelRef();
@@ -268,7 +275,7 @@ public final class BlockType implements ContentType {
      */
     private void compileStairs(
             BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter) {
-        String modelRef = shapedModel(block, allocatedModelId, emitter, "block/stairs");
+        String modelRef = shapedModel(block, allocatedModelId, emitter);
         var variants = new LinkedHashMap<String, Object>();
         for (String facing : List.of("east", "south", "west", "north")) {
             int y = switch (facing) {
@@ -303,10 +310,7 @@ public final class BlockType implements ContentType {
             BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter) {
         if (block.wantsGeneratedModel()) {
             String texture = textureRef(block);
-            var bottom = new LinkedHashMap<String, Object>();
-            bottom.put("parent", "block/slab");
-            bottom.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
-            emitter.model(allocatedModelId, bottom);
+            emitter.model(allocatedModelId, generatedModel(block));
             var top = new LinkedHashMap<String, Object>();
             top.put("parent", "block/slab_top");
             top.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
@@ -325,16 +329,41 @@ public final class BlockType implements ContentType {
 
     /** Generates (or resolves) the one shaped model; stairs need no orientation siblings. */
     private static String shapedModel(
-            BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter, String parent) {
+            BlockDefinition block, NamespacedId allocatedModelId, PackEmitter emitter) {
         if (!block.wantsGeneratedModel()) {
             return block.modelRef();
         }
+        emitter.model(allocatedModelId, generatedModel(block));
+        return allocatedModelId.toString();
+    }
+
+    /**
+     * The one model the auto-model path emits at the block's own model id
+     * (the slab's bottom half for slabs), or null for hand-authored models.
+     * Compile and the editor preview ({@link #presentation}) both read it,
+     * so the preview always shows what the pack ships.
+     */
+    static Map<String, Object> generatedModel(BlockDefinition block) {
+        if (!block.wantsGeneratedModel()) {
+            return null;
+        }
         String texture = textureRef(block);
         var model = new LinkedHashMap<String, Object>();
-        model.put("parent", parent);
-        model.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
-        emitter.model(allocatedModelId, model);
-        return allocatedModelId.toString();
+        switch (block.technique()) {
+            case STAIRS -> {
+                model.put("parent", "block/stairs");
+                model.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
+            }
+            case SLAB -> {
+                model.put("parent", "block/slab");
+                model.put("textures", Map.<String, Object>of("side", texture, "top", texture, "bottom", texture));
+            }
+            default -> {
+                model.put("parent", block.modelParent());
+                model.put("textures", texturesFor(block.modelParent(), texture));
+            }
+        }
+        return model;
     }
 
     private static NamespacedId sibling(NamespacedId id, String suffix) {
