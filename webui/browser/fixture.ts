@@ -9,8 +9,10 @@ async function startFixture(): Promise<void> {
   if (!target) throw new Error('Browser fixture root is missing.');
 
   resetWorkspace();
+  const params = new URLSearchParams(window.location.search);
   const adapter = new DeterministicRpcAdapter({
-    summaryError: new URLSearchParams(window.location.search).has('summaryError'),
+    summaryError: params.has('summaryError'),
+    modelGallery: params.has('modelGallery'),
   });
   adapter.setPushHandler(handlePush);
   adapter.setDisconnectHandler(() => markConnectionLost('Deterministic browser fixture disconnected.'));

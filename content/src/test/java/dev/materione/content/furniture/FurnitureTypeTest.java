@@ -153,6 +153,34 @@ class FurnitureTypeTest {
         assertThat(reference).containsEntry("model", "sample:block/chair_custom");
     }
 
+    @Test
+    void presentationCarriesExactlyTheModelCompileEmits() {
+        Object chair = type.parse(id, Map.of("texture", "block/marble"), Map.of()).orElseThrow();
+        var emitted = new java.util.LinkedHashMap<String, Map<String, Object>>();
+        type.compile(chair, NamespacedId.of("sample", "chair_model"), new dev.materione.api.content.PackEmitter() {
+            @Override
+            public void itemDefinition(NamespacedId itemId, Map<String, Object> itemModelJson) {}
+
+            @Override
+            public void model(NamespacedId modelId, Map<String, Object> modelJson) {
+                emitted.put(modelId.toString(), modelJson);
+            }
+
+            @Override
+            public void copyAsset(java.nio.file.Path sourceFile, String destination) {}
+
+            @Override
+            public void vanillaFile(String path, Map<String, Object> json) {}
+
+            @Override
+            public void description(String text) {}
+        }, noAllocations());
+
+        assertThat(type.presentation(chair).orElseThrow().generatedModel())
+                .isEqualTo(emitted.get("sample:chair_model"))
+                .containsEntry("parent", "block/cube_all");
+    }
+
     // --- helpers -------------------------------------------------------------
 
     private static dev.materione.api.content.PackEmitter capturingEmitter(

@@ -55,6 +55,12 @@ export interface ResourceSummary extends ResourceRef {
     path: string;
     kind: 'texture' | 'model-thumbnail';
   };
+  /** Live-render input: a readable model asset, or the model the type compiles inline. */
+  render?: {
+    pack: string;
+    path?: string;
+    model?: Record<string, unknown>;
+  };
   health: 'ok' | 'warning' | 'error' | 'unknown';
   healthMessage?: string;
 }

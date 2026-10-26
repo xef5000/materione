@@ -3,6 +3,7 @@ package dev.materione.core.authoring;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.authoring.AuthoringApi.ResourceHealth;
+import dev.materione.api.authoring.AuthoringApi.ResourceRender;
 import dev.materione.api.authoring.AuthoringApi.ResourceSummary;
 import dev.materione.api.authoring.AuthoringApi.ResourceSummaryPage;
 import dev.materione.api.authoring.AuthoringApi.ResourceVisual;
@@ -358,10 +359,36 @@ final class ResourceSummaryComputer {
             }
         }
         DocumentStore.ResourceRef ref = candidate.resource();
+        ResourceRender render = health == ResourceHealth.ERROR || candidate.presentation() == null
+                ? null : resolveRender(ref, candidate.presentation());
         return new ResourceSummary(
                 ref.pack(), ref.type(), ref.path(), ref.resourceId(),
                 nonBlank(candidate.name()) == null ? ref.resourceId() : candidate.name(),
-                candidate.material(), visual, health, healthMessage);
+                candidate.material(), visual, health, healthMessage, render);
+    }
+
+    /**
+     * The live-render input: the type's generated model when it compiles one
+     * (texture references stay logical — the editor reads them as assets),
+     * else a readable hand-authored model asset. Vanilla and unreadable
+     * models have no render; the static visual still applies.
+     */
+    private ResourceRender resolveRender(
+            DocumentStore.ResourceRef owner, ResourcePresentation presentation) {
+        if (presentation.generatedModel() != null) {
+            return new ResourceRender(owner.pack(), null, presentation.generatedModel());
+        }
+        if (nonBlank(presentation.model()) == null) {
+            return null;
+        }
+        AssetReference reference = assetReference(presentation.model(), owner.pack());
+        if (reference == null || reference.pack().equals("minecraft")
+                || !documents.hasSummaryPack(reference.pack())) {
+            return null;
+        }
+        String modelPath = "assets/models/" + reference.path() + ".json";
+        return inspect(reference.pack(), modelPath) == AssetStore.ReadableAssetState.PRESENT
+                ? new ResourceRender(reference.pack(), modelPath, null) : null;
     }
 
     private Map<String, Map<String, Object>> templates(ProjectionBudget budget) {
@@ -413,6 +440,9 @@ final class ResourceSummaryComputer {
                 + (presentation == null ? 0
                         : length(presentation.name()) + length(presentation.material())
                                 + length(presentation.texture()) + length(presentation.model())
+                                + (presentation.generatedModel() == null ? 0
+                                        : estimateValue(presentation.generatedModel(), new IdentityHashMap<>())
+                                                / Character.BYTES)
                                 + (presentation.reference() == null ? 0
                                         : length(presentation.reference().type())
                                                 + length(presentation.reference().id().toString())))

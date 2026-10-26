@@ -11,12 +11,13 @@
     lore: unknown;
     material: string;
     visual?: ResourceSummary['visual'];
+    render?: ResourceSummary['render'];
     version: number;
     canFocusName: boolean;
     canFocusLore: boolean;
     onFocus: (field: 'display_name' | 'lore') => void;
   }
-  let { name, lore, material, visual, version, canFocusName, canFocusLore, onFocus }: Props = $props();
+  let { name, lore, material, visual, render, version, canFocusName, canFocusLore, onFocus }: Props = $props();
   const title = $derived(typeof name === 'string' && name.trim() ? name : materialLabel(material) || 'Unnamed item');
   const plainTitle = $derived(plainLegacyText(title));
   const lines = $derived(Array.isArray(lore) ? lore.filter((line): line is string => typeof line === 'string') : []);
@@ -28,14 +29,15 @@
   <header><strong>Your item</strong><span>Browser approximation</span></header>
   <div class="inventory">
     <div class="slot" title="32 CSS-pixel inventory slot; actual game size depends on GUI scale.">
-      <ResourceThumbnail {visual} {material} label={plainTitle} size={32} version={version + workspace.visualVersion} />
+      <ResourceThumbnail {visual} {render} {material} label={plainTitle} size={32} version={version + workspace.visualVersion} />
     </div>
     <div><strong>Inventory scale</strong><small>32 px slot</small></div>
   </div>
   <div class="inspection">
-    <ResourceThumbnail {visual} {material} label={plainTitle} size={128} version={version + workspace.visualVersion} />
+    <ResourceThumbnail {visual} {render} {material} label={plainTitle} size={128} version={version + workspace.visualVersion} />
   </div>
-  <p class="visual-kind">{visual?.kind === 'model-thumbnail' ? 'Cached model thumbnail - not interactive 3D' :
+  <p class="visual-kind">{render ? 'Model preview drawn in the browser - not a client render' :
+    visual?.kind === 'model-thumbnail' ? 'Cached model thumbnail - not interactive 3D' :
     visual ? 'Enlarged texture inspection - not a model render' :
     material ? 'Vanilla item icon where available - no custom visual set' : 'No supported visual available'}</p>
 

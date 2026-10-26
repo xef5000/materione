@@ -1,7 +1,8 @@
 <script lang="ts">
   /**
-   * What the entry looks like, without booting a 3D application: the texture
-   * at 1:1 and the model's cached thumbnail when one exists.
+   * What the entry looks like, without booting a 3D application: a live
+   * browser render of the saved model when it can be drawn, else the texture
+   * at 1:1 or the model's cached thumbnail.
    */
   import type { ResourceSummary } from '../api';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
@@ -16,17 +17,19 @@
     /** Bumped when the bytes changed but the reference did not. */
     nonce?: number;
     visual?: ResourceSummary['visual'];
+    render?: ResourceSummary['render'];
   }
 
-  let { pack, texture, model, label, nonce = 0, visual }: Props = $props();
+  let { pack, texture, model, label, nonce = 0, visual, render }: Props = $props();
   const shown = $derived(visual ?? localStudioVisual(pack, texture, model, workspace.assets));
 </script>
 
 <div class="preview">
   <div class="canvas">
-    <ResourceThumbnail visual={shown} {label} size={180} version={nonce + workspace.visualVersion} />
+    <ResourceThumbnail visual={shown} {render} {label} size={180} version={nonce + workspace.visualVersion} />
   </div>
-  <small>{shown?.kind === 'model-thumbnail' ? 'Cached model thumbnail, not interactive 3D.' : 'Texture approximation, not a client render.'}</small>
+  <small>{render ? 'Model preview drawn in the browser; vanilla textures show as grey checkers.' :
+    shown?.kind === 'model-thumbnail' ? 'Cached model thumbnail, not interactive 3D.' : 'Texture approximation, not a client render.'}</small>
   <dl>
     <dt>texture</dt>
     <dd title={texture}>{texture || '—'}</dd>

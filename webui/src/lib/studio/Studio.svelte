@@ -88,9 +88,16 @@
   const advancedOnly = $derived(unrenderableKeys(loaded, schema));
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
   const name = $derived(plainLegacyText(String(draft.display_name ?? '')).trim() || resource.id);
-  const savedVisual = $derived(workspace.summaries.find((entry) =>
+  const savedSummary = $derived(workspace.summaries.find((entry) =>
     entry.pack === resource.pack && entry.path === resource.path && entry.id === resource.id,
-  )?.visual);
+  ));
+  const savedVisual = $derived(savedSummary?.visual);
+  /** The saved model render applies only while every field that shapes it is unedited. */
+  const render = $derived(
+    ['texture', 'model', 'technique', 'model_parent'].every((field) => draft[field] === loaded[field])
+      ? savedSummary?.render
+      : undefined,
+  );
   const visual = $derived(
     draft.texture === loaded.texture && draft.model === loaded.model && savedVisual
       ? savedVisual
@@ -404,7 +411,7 @@
         />
       {:else if typeDirectory === 'items'}
         <ItemPreview name={draft.display_name} lore={draft.lore} material={String(draft.material ?? '')}
-          {visual} version={textureVersion} {canFocusName} {canFocusLore} onFocus={focusField} />
+          {visual} {render} version={textureVersion} {canFocusName} {canFocusLore} onFocus={focusField} />
       {:else}
         <StudioPreview
           pack={resource.pack}
@@ -413,6 +420,7 @@
           label={name}
           nonce={textureVersion}
           {visual}
+          {render}
         />
       {/if}
     </aside>

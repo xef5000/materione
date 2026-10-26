@@ -6,6 +6,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.api.content.ResourcePresentation;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -207,13 +208,7 @@ public final class FurnitureType implements ContentType {
         }
         String modelRef;
         if (furniture.wantsGeneratedModel()) {
-            String texture = furniture.texture().contains(":")
-                    ? furniture.texture()
-                    : furniture.id().namespace() + ":" + furniture.texture();
-            var model = new LinkedHashMap<String, Object>();
-            model.put("parent", "block/cube_all");
-            model.put("textures", Map.<String, Object>of("all", texture));
-            emitter.model(allocatedModelId, model);
+            emitter.model(allocatedModelId, generatedModel(furniture));
             modelRef = allocatedModelId.toString();
         } else if (furniture.model() != null && !furniture.model().isBlank()) {
             modelRef = furniture.modelRef();
@@ -233,6 +228,33 @@ public final class FurnitureType implements ContentType {
             // the id (the implicit same-id link uses that item's definition)
             emitter.syntheticItemDefinition(furniture.id(), root);
         }
+    }
+
+    @Override
+    public Optional<ResourcePresentation> presentation(Object parsedDefinition) {
+        if (!(parsedDefinition instanceof FurnitureDefinition furniture)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResourcePresentation(
+                furniture.displayName(), null, furniture.texture(), furniture.model(), null,
+                generatedModel(furniture)));
+    }
+
+    /**
+     * The model the auto-model path emits, or null for hand-authored models;
+     * compile and the editor preview both read it.
+     */
+    static Map<String, Object> generatedModel(FurnitureDefinition furniture) {
+        if (!furniture.wantsGeneratedModel()) {
+            return null;
+        }
+        String texture = furniture.texture().contains(":")
+                ? furniture.texture()
+                : furniture.id().namespace() + ":" + furniture.texture();
+        var model = new LinkedHashMap<String, Object>();
+        model.put("parent", "block/cube_all");
+        model.put("textures", Map.<String, Object>of("all", texture));
+        return model;
     }
 
     // --- parse helpers ---------------------------------------------------------

@@ -355,7 +355,8 @@ catalog projection, optionally filtered by type/query and paged by offset. Each 
 is `{ resources, total, nextOffset? }`; the server defaults to 100 rows and caps a page at 200,
 and the browser client follows `nextOffset` to assemble the catalog list. Each `ResourceSummary`
 extends `ResourceRef` with `name`, optional `material`, optional `visual` (`{ pack, path,
-kind: 'texture' | 'model-thumbnail' }`), a `health` value (`ok`, `warning`, `error`, or
+kind: 'texture' | 'model-thumbnail' }`), optional `render` (`{ pack, path }` for a readable
+model asset, or `{ pack, model }` carrying the model the type compiles inline), a `health` value (`ok`, `warning`, `error`, or
 `unknown`), and an optional `healthMessage`. The current server reports `unknown` unless a direct
 read of the canonical document proves an error, in which case it reports `error`; it does not
 claim pipeline freshness or that a resource was applied. The catalog uses these pages rather than
@@ -384,6 +385,26 @@ the field is absent or the server is newer than the pinned package. Manifest ent
 accepted only as hash file names under the pinned package path. Offline, a CDN failure, or
 an item the manifest lacks keeps the honest placeholder; vanilla icons are labelled as
 such, never as the resource's own visual.
+
+*As built (live model previews):* blocks and furniture now expose a catalog presentation, and
+a summary's `render` lets the editor draw the resource's model in the browser, preferred over
+the static visual. Types that compile a generated model (blocks per technique — cube, slab,
+stairs, or the configured `model_parent` — and texture-only furniture) put that exact model
+JSON in `ResourcePresentation.generatedModel`, produced by the same helper as the compile
+output (parity is unit-tested), so the preview cannot drift from what the pack ships;
+hand-authored models are referenced by path after the summary confirms the file is readable.
+The editor (`model-render.ts`, `model-preview.ts`) resolves the parent chain (pack parents
+over `assets.get`; vanilla parents from Materione's own minimal shape set — `block/block`,
+`cube`, `cube_all`, `cube_column`, `cube_bottom_top`, `orientable`, `cross`, `slab`,
+`slab_top`, `stairs`, and the flat `item/generated` family — never copies of Mojang files),
+then projects element faces with the model's `display.gui` transform and inventory shading
+(top 1.0, left 0.8, right 0.6). The view is orthographic, so each face is one affine
+canvas draw — no 3D engine. Pack textures are read through the existing asset op; vanilla
+textures (we hold none) and unreadable ones draw as a neutral grey checker. A model whose
+geometry lives in an unknown vanilla parent cannot be drawn and falls back to the static
+visual. Known approximations: painter's-order depth sorting (intersecting elements may
+overlap wrongly), no tints, first animation frame only. The Studio uses the saved render only
+while `texture`, `model`, `technique` and `model_parent` are unedited.
 
 *Planned:* `authoring.describe` completes the capability handshake. Resource and asset listings
 gain pagination/filtering before relay mode makes eager full-pack traversal a scale boundary.
