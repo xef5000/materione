@@ -657,7 +657,13 @@ public final class PipelineService {
         String host = dev.materione.core.blocks.BlockStateSpaces.hostOf(
                 block.technique(), block.host()).toUpperCase(java.util.Locale.ROOT);
         org.bukkit.Material material = org.bukkit.Material.matchMaterial(host);
-        return material != null && material.isItem() ? material.name() : "PAPER";
+        try {
+            return material != null && material.isItem() ? material.name() : "PAPER";
+        } catch (RuntimeException | LinkageError e) {
+            // isItem reads the server's item registry; without one (headless
+            // recording of the editor demo snapshot) fall back like a non-item
+            return "PAPER";
+        }
     }
 
     /**

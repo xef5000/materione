@@ -1,5 +1,5 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte';
-import { defineConfig } from 'vite';
+import { defineConfig, searchForWorkspaceRoot } from 'vite';
 
 export default defineConfig({
   plugins: [svelte()],
@@ -7,4 +7,7 @@ export default defineConfig({
     entries: ['browser/fixture.html'],
   },
   publicDir: false,
+  server: {
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden'] },
+  },
 });

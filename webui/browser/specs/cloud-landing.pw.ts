@@ -26,7 +26,7 @@ test('the cloud host shows the landing card instead of the paste-a-link form', a
   await expect(page.getByRole('heading', { name: 'Open a session' })).toHaveCount(0);
 });
 
-test('View Demo opens the real workbench over the in-browser sample pack', async ({ page }) => {
+test('View Demo opens the real workbench over the recorded sample server', async ({ page }) => {
   await serveAs(page, 'cloud');
   const apiCalls: string[] = [];
   page.on('request', (request) => {
@@ -39,8 +39,12 @@ test('View Demo opens the real workbench over the in-browser sample pack', async
   await expect(page).toHaveURL(/\/\?demo$/);
   const banner = page.getByRole('status').filter({ hasText: 'Sample content in this tab only' });
   await expect(banner).toBeVisible();
-  await expect(page.getByRole('combobox').first()).toHaveValue('demo_pack');
-  await expect(page.getByText('Ruby Blade', { exact: true }).first()).toBeVisible();
+  // The recorded real server: the sample fixture pack, every content type tab.
+  await expect(page.getByRole('combobox').first()).toHaveValue('sample');
+  await expect(page.getByText('Ruby Sword', { exact: true }).first()).toBeVisible();
+  for (const tab of ['Blocks', 'Furniture', 'Recipes', 'Glyphs', 'Sounds', 'Paintings', 'Text effects']) {
+    await expect(page.getByRole('button', { name: tab, exact: true })).toBeVisible();
+  }
 
   // A reload of /?demo starts the demo over directly.
   await page.reload();

@@ -97,15 +97,15 @@
     }
   }
 
-  // The demo backend lives in this tab only (lib/demo.ts): nothing is sent anywhere.
+  // The demo is this same editor over an in-tab DemoServer (lib/demo/): nothing is sent anywhere.
   async function startDemo() {
     if (demoStarting) return;
     demoStarting = true;
     demoError = '';
     try {
-      const { createDemoChannel } = await import('./lib/demo');
+      const { createDemoChannel } = await import('./lib/demo/index');
       resetWorkspace();
-      session.channel = createDemoChannel();
+      session.channel = await createDemoChannel();
       connection.connected = true;
       connection.error = '';
       await loadWorkspace();

@@ -738,15 +738,33 @@ cannot read, forge, replay, or reorder anything.
   attaches. The plugin listener serves the same file without that header, and a failed probe
   counts as the plugin, so a locally hosted editor can never show the landing card or the demo,
   even under `?demo`. A capability URL (`?s=…#…`) connects without waiting for the probe.
-  Self-hosted relays (§8) deploy the same assets and get the landing card too. The probe is a static asset:
-  no Worker invocation, nothing billable (§3.3). **View Demo** (`/?demo`) mounts the real Workbench
-  over an in-tab backend, the deterministic RPC adapter the browser regression suite uses
-  (`webui/browser/rpc-adapter.ts`), seeded with a small `demo_pack` (items with vanilla icons, live
-  block models, glyphs, one quarantined resource for Problems). There is no game server, no
-  session and no endpoint: reads and writes are answered from memory, nothing is persisted, a
-  reload starts over, and Exit demo returns to the landing card. The demo code is a lazily loaded
-  chunk, fetched only when the demo starts. The demo is client-side only, so it adds no public
-  endpoint and nothing to the cost model.
+  Self-hosted relays (§8) deploy the same assets and get the landing card too. The probe is a
+  static asset: no Worker invocation, nothing billable (§3.3).
+
+  **View Demo** (`/?demo`) is the editor itself, not a mock-up. The App, Workbench, Studio, forms
+  and previews are the same components a session mounts; the demo swaps exactly one thing, the
+  channel (`webui/src/lib/demo/`):
+
+  | Layer | Live session | Demo |
+  |---|---|---|
+  | UI (App → Workbench → studios, forms, previews) | same code | same code |
+  | Channel (`RpcChannel`) | sealed session to the plugin (§4) | `DemoServer`, in the tab |
+  | Schemas, behaviour vocabulary, catalog, documents, assets, diagnostics | the server's registries and packs, live | a recording of those same ops |
+  | Writes | the server's document and asset stores | the recording, in memory: same revision checks and conflict codes, comment-keeping YAML edits, a staged candidate and a `push.reload` per save |
+  | Content pipeline (validation, compile, summaries) | runs on every save | not available in a browser: recorded results stay, and a saved resource's name and material are re-derived from its fields |
+
+  The recording is `fixtures/golden/editor-demo-snapshot.json`, produced by the JVM test
+  `EditorDemoSnapshotTest`. It boots the plugin's own wiring headless (real content types and
+  material palette, native mechanics, the behaviour engine's vocabulary), loads the `sample` and
+  `world` fixture packs and records `EditorTransportService#opsDispatcher`, the dispatcher a live
+  server serves. It is a golden file: an op, registry or fixture-pack change shows up as a diff and
+  is regenerated with `-Dmaterione.golden.regen=true`. So the demo cannot drift from the editor: new
+  fields, types and mechanics arrive with the next regeneration, and a vitest test fails if the
+  editor calls an op the `DemoServer` does not answer. There is no game server, no session and no
+  endpoint. Nothing is persisted, a reload starts over, and Exit demo returns to the landing card.
+  The demo code and the recording are a lazily loaded chunk (~170 kB gzipped), fetched only when
+  the demo starts. Being client-side only, the demo adds no public endpoint and nothing to the
+  cost model.
 
 ---
 
