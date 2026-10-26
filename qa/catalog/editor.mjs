@@ -97,6 +97,12 @@ async function openSampleItemFile(page) {
   await waitForDisplayName(page, 'Ruby Sword');
 }
 
+const VANILLA_ICON_COVERS = [
+  ...CATALOG_COVERS,
+  'webui/src/lib/vanilla-icons.ts',
+  'webui/src/lib/studio/ItemPreview.svelte',
+];
+
 async function openSampleItemCatalog(page) {
   await page.getByLabel('project').selectOption('sample');
   await page.getByRole('button', { name: 'Content', exact: true }).click();
@@ -325,6 +331,49 @@ export default [
       await loreField.fill(originalLore);
       await studio.getByRole('button', { name: 'Save & apply' }).click();
       await assertHeldRubySwordName(ctx, 'Ruby Sword');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-vanilla-item-icons',
+    title: 'sample:ruby_disc has no custom visual and shows the pinned vanilla MUSIC_DISC_CAT icon from jsDelivr',
+    covers: VANILLA_ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      // Needs outbound access to cdn.jsdelivr.net; the icon is a runtime CDN load, never bundled.
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.locator('input.search').fill('Ruby disc');
+      const row = page.getByRole('option', { name: /Ruby disc/i }).first();
+      const image = row.locator('.thumbnail.vanilla img');
+      await image.waitFor({ state: 'visible', timeout: 20_000 });
+      const icon = await image.evaluate((entry) => ({
+        src: entry.src, loaded: entry.complete && entry.naturalWidth === 32,
+      }));
+      ctx.expect(icon.src).toMatch(/^https:\/\/cdn\.jsdelivr\.net\/npm\/minecraft-textures@26\.3\.0\/dist\/textures\/assets\/[0-9a-f]+\.png$/);
+      ctx.expect(icon.loaded).toBeTruthy();
+      ctx.expect(await row.locator('.thumbnail').getAttribute('title')).toMatch(/Vanilla item icon/);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-vanilla-item-icons-visual',
+    title: 'sample item catalog shows recognizable vanilla icons for items without a custom visual',
+    mode: 'visual',
+    dependsOn: ['editor.browser-vanilla-item-icons'],
+    covers: VANILLA_ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('button', { name: 'Compact grid' }).click();
+      await page.locator('.thumbnail.vanilla img').first().waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('sample-vanilla-item-icons');
+      ctx.needsEyes(
+        'items without a custom texture or model (e.g. sample:ruby_disc) show the matching vanilla inventory icon, crisp at grid size; items with their own texture still show it, and unsupported models keep their honest fallback',
+      );
     },
   }),
 

@@ -28,15 +28,16 @@
   <header><strong>Your item</strong><span>Browser approximation</span></header>
   <div class="inventory">
     <div class="slot" title="32 CSS-pixel inventory slot; actual game size depends on GUI scale.">
-      <ResourceThumbnail {visual} label={plainTitle} size={32} version={version + workspace.visualVersion} />
+      <ResourceThumbnail {visual} {material} label={plainTitle} size={32} version={version + workspace.visualVersion} />
     </div>
     <div><strong>Inventory scale</strong><small>32 px slot</small></div>
   </div>
   <div class="inspection">
-    <ResourceThumbnail {visual} label={plainTitle} size={128} version={version + workspace.visualVersion} />
+    <ResourceThumbnail {visual} {material} label={plainTitle} size={128} version={version + workspace.visualVersion} />
   </div>
   <p class="visual-kind">{visual?.kind === 'model-thumbnail' ? 'Cached model thumbnail - not interactive 3D' :
-    visual ? 'Enlarged texture inspection - not a model render' : 'No supported visual available'}</p>
+    visual ? 'Enlarged texture inspection - not a model render' :
+    material ? 'Vanilla item icon where available - no custom visual set' : 'No supported visual available'}</p>
 
   <div class="tooltip" aria-label="Item tooltip preview">
     <button type="button" class="item-name" disabled={!canFocusName} onclick={() => onFocus('display_name')}

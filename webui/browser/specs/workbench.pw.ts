@@ -3,6 +3,12 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import '../contract';
 
+// Vanilla item icons load from jsDelivr at runtime; keep these specs offline
+// and deterministic (vanilla-icons.pw.ts serves a fake manifest instead).
+test.beforeEach(async ({ page }) => {
+  await page.route('https://cdn.jsdelivr.net/**', (route) => route.abort());
+});
+
 const blockbenchBridge = readFileSync(
   new URL('../../public/materione-bridge.js', import.meta.url),
   'utf8',

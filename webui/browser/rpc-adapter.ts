@@ -591,6 +591,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'session.info':
         return this.success(op, {
           serverVersion: '1.21.4',
+          minecraftVersion: '1.21.4',
           protocolVersion: 1,
           editorRunning: true,
           editorPort: 8089,

@@ -372,6 +372,19 @@ sprite sheets their source image, animations a static frame, and aliases the tar
 source preview. Thumbnails are labelled as source-texture previews rather than
 claiming final font metrics, selected-cell layout, or animation playback.
 
+*As built (vanilla item icons):* a resource with a `material` but no `visual` shows the
+vanilla inventory icon for that material instead of the placeholder. Icons come from the
+third-party `minecraft-textures` package (GPL-3.0 manifest; the images are Mojang's),
+pinned to one package version and loaded by the browser from jsDelivr at runtime — they
+are never bundled into the editor, committed, or served by the plugin or Materione's
+Cloudflare account, so neither the project license (§14) nor Mojang asset redistribution
+is decided by this feature. `session.info` carries `minecraftVersion` (the probed platform
+version); the editor picks the newest manifest not newer than it, and the newest one when
+the field is absent or the server is newer than the pinned package. Manifest entries are
+accepted only as hash file names under the pinned package path. Offline, a CDN failure, or
+an item the manifest lacks keeps the honest placeholder; vanilla icons are labelled as
+such, never as the resource's own visual.
+
 *Planned:* `authoring.describe` completes the capability handshake. Resource and asset listings
 gain pagination/filtering before relay mode makes eager full-pack traversal a scale boundary.
 
