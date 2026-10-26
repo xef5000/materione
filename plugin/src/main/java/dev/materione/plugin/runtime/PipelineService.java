@@ -102,10 +102,15 @@ public final class PipelineService {
         }
     }
 
-    /** Registers the built-in content types through the registry path (D5). */
+    /** Registers built-in content types without a platform material palette (D5). */
     public void registerBuiltins() {
+        registerBuiltins(List.of());
+    }
+
+    /** Registers built-in content types with platform-supplied material choices (D5). */
+    public void registerBuiltins(List<String> supportedItemMaterials) {
         var registry = registries.registry(CONTENT_TYPES, ContentType.class);
-        ItemType items = new ItemType();
+        ItemType items = new ItemType(supportedItemMaterials);
         registry.register(NamespacedId.of("materione", "item"), items, items.describe(), "materione");
         RecipeType recipes = new RecipeType();
         registry.register(NamespacedId.of("materione", "recipe"), recipes, recipes.describe(), "materione");

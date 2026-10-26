@@ -1,7 +1,7 @@
-import type { AssetRef, ResourceRef, RpcChannel, TypeInfo } from '../src/lib/api';
+import type { AssetRef, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from '../src/lib/api';
 import type { PushFrame } from '../src/lib/events';
 import type { Response } from '../src/lib/protocol/wire';
-import type { BrowserTestControls, RecordedWrite } from './contract';
+import type { BrowserTestControls, FixtureAuditEntry, RecordedRpcCall, RecordedWrite } from './contract';
 
 interface FixtureDocument {
   pack: string;
@@ -26,45 +26,81 @@ interface FieldEdit {
 const PACK = 'fixture_pack';
 const PIXEL_PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a1WYAAAAASUVORK5CYII=';
+// The existing 8x8 sample pack texture, not a Minecraft asset.
+const GLYPH_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEUlEQVR4nGM4oaGBFTEMLQkAgl1GAWqNFmsAAAAASUVORK5CYII=';
 
 const ITEM_TYPE: TypeInfo = {
   name: 'item',
   directory: 'items',
-  displayName: 'Items',
+  displayName: 'Item',
   description: 'Deterministic browser regression resources.',
   parameters: [
     {
       id: 'display_name',
       type: 'string',
-      required: true,
+      required: false,
       label: 'Display name',
       section: 'identity',
-      uiHint: 'text',
+      order: 0,
+      uiHint: 'formatted-text',
+      example: 'Ruby sword',
     },
     {
       id: 'material',
-      type: 'string',
+      type: 'enum',
       required: true,
-      label: 'Material',
+      label: 'Base material',
       section: 'identity',
-      uiHint: 'select',
+      order: 10,
+      uiHint: 'material',
       allowedValues: ['DIAMOND_SWORD', 'BLAZE_ROD', 'STICK'],
+      example: 'NETHERITE_SWORD',
+    },
+    {
+      id: 'template',
+      type: 'reference',
+      required: false,
+      label: 'Template',
+      section: 'identity',
+      order: 20,
+      advanced: true,
+      uiHint: 'reference',
+      referenceKind: 'template',
     },
     {
       id: 'texture',
-      type: 'string',
+      type: 'reference',
       required: false,
       label: 'Texture',
       section: 'appearance',
+      order: 10,
       uiHint: 'texture',
+      referenceKind: 'texture',
+      example: 'item/my_texture',
     },
     {
       id: 'model',
+      type: 'reference',
+      required: false,
+      label: '3D model',
+      section: 'appearance',
+      order: 20,
+      advanced: false,
+      uiHint: 'model',
+      referenceKind: 'model',
+    },
+    {
+      id: 'model_parent',
       type: 'string',
       required: false,
-      label: 'Model',
+      default: 'item/generated',
+      label: 'Model style',
       section: 'appearance',
-      uiHint: 'model',
+      order: 30,
+      advanced: true,
+      uiHint: 'text',
+      example: 'item/generated',
     },
     {
       id: 'lore',
@@ -72,7 +108,40 @@ const ITEM_TYPE: TypeInfo = {
       required: false,
       label: 'Lore',
       section: 'gameplay',
-      uiHint: 'list',
+      order: 10,
+      uiHint: 'formatted-lines',
+      example: 'A very special item',
+    },
+    {
+      id: 'components',
+      type: 'raw',
+      required: false,
+      label: 'Vanilla components',
+      section: 'gameplay',
+      order: 90,
+      advanced: true,
+      uiHint: 'advanced',
+    },
+    {
+      id: 'jukebox_song',
+      type: 'reference',
+      required: false,
+      label: 'Jukebox song',
+      section: 'gameplay',
+      order: 20,
+      advanced: true,
+      uiHint: 'reference',
+      referenceKind: 'sound',
+    },
+    {
+      id: 'mechanics',
+      type: 'list',
+      required: false,
+      label: 'Mechanics',
+      section: 'behavior',
+      order: 10,
+      uiHint: 'structured-list',
+      referenceKind: 'mechanic',
     },
     {
       id: 'power',
@@ -93,10 +162,49 @@ const ITEM_TYPE: TypeInfo = {
   ],
 };
 
+const BLOCK_TYPE: TypeInfo = {
+  name: 'block',
+  directory: 'blocks',
+  displayName: 'Blocks',
+  description: 'A second registered type for per-type catalog preferences.',
+  parameters: [
+    {
+      id: 'display_name',
+      type: 'string',
+      required: true,
+      label: 'Display name',
+      section: 'identity',
+      uiHint: 'formatted-text',
+    },
+  ],
+};
+
+const GLYPH_TYPE: TypeInfo = {
+  name: 'glyph',
+  directory: 'glyphs',
+  displayName: 'Glyph',
+  description: 'A glyph with a source texture and a glyph with a missing texture.',
+  parameters: [
+    {
+      id: 'texture',
+      type: 'reference',
+      required: true,
+      label: 'Texture',
+      section: 'appearance',
+      uiHint: 'texture',
+      referenceKind: 'texture',
+    },
+  ],
+};
+
 const RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'items', path: 'items/ruby_blade.yml', id: 'ruby_blade' },
   { pack: PACK, type: 'items', path: 'items/shared_gems.yml', id: 'ruby_a' },
   { pack: PACK, type: 'items', path: 'items/shared_gems.yml', id: 'ruby_b' },
+  { pack: PACK, type: 'items', path: 'items/shared_gems.yml', id: 'ruby_c' },
+  { pack: PACK, type: 'blocks', path: 'blocks/ruby_crate.yml', id: 'ruby_crate' },
+  { pack: PACK, type: 'glyphs', path: 'glyphs/icons.yml', id: 'heart_icon' },
+  { pack: PACK, type: 'glyphs', path: 'glyphs/icons.yml', id: 'missing_icon' },
 ];
 
 const DIAGNOSTICS = [
@@ -258,21 +366,39 @@ function initialDocuments(): Map<string, FixtureDocument> {
   blade.raw = blade.raw.replaceAll('\n', '\r\n');
   const shared = makeDocument('items/shared_gems.yml', 3, {
     ruby_a: {
-      display_name: 'Ruby A',
+      display_name: 'Crimson Jewel',
       material: 'BLAZE_ROD',
       lore: [],
       future_flag: 'left-root',
     },
     ruby_b: {
       display_name: 'Ruby B',
-      material: 'STICK',
-      lore: [],
+      material: 'CUSTOM_FUTURE_MATERIAL',
+      lore: ['One intact line', 'second\nembedded line'],
       future_flag: 'right-root',
     },
+    ruby_c: {
+      display_name: 'Malformed Lore',
+      material: 'STICK',
+      lore: ['One intact line', 42],
+      future_flag: 'malformed-lore-root',
+    },
+  });
+  const crate = makeDocument('blocks/ruby_crate.yml', 2, {
+    ruby_crate: {
+      display_name: 'Ruby Crate',
+      future_flag: 'block-root',
+    },
+  });
+  const glyphs = makeDocument('glyphs/icons.yml', 1, {
+    heart_icon: { texture: 'gui/heart', height: 8, ascent: 8 },
+    missing_icon: { texture: 'gui/missing', height: 8, ascent: 8 },
   });
   const documents = new Map<string, FixtureDocument>();
   documents.set(`${PACK}/${blade.path}`, blade);
   documents.set(`${PACK}/${shared.path}`, shared);
+  documents.set(`${PACK}/${crate.path}`, crate);
+  documents.set(`${PACK}/${glyphs.path}`, glyphs);
   return documents;
 }
 
@@ -283,7 +409,11 @@ function assetPath(pack: string, path: string): string {
 function isWriteOperation(op: string): boolean {
   return (
     op.startsWith('edit.') ||
-    op.startsWith('authoring.') ||
+    op === 'authoring.commit' ||
+    op === 'authoring.setFields' ||
+    op === 'authoring.saveModel' ||
+    op === 'authoring.createResource' ||
+    op === 'authoring.duplicateResource' ||
     op === 'assets.put' ||
     op === 'assets.delete' ||
     op === 'assets.move' ||
@@ -294,6 +424,7 @@ function isWriteOperation(op: string): boolean {
 
 export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls {
   readonly #documents = initialDocuments();
+  readonly #calls: RecordedRpcCall[] = [];
   readonly #assets = new Map<string, FixtureAsset>([
     [
       assetPath(PACK, 'assets/textures/items/ruby_blade.png'),
@@ -304,8 +435,13 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         bytes: 68,
       },
     ],
+    [
+      assetPath(PACK, 'assets/textures/gui/heart.png'),
+      { path: 'assets/textures/gui/heart.png', kind: 'png', data: GLYPH_PNG, bytes: 74 },
+    ],
   ]);
   readonly #writes: RecordedWrite[] = [];
+  #auditEntries: FixtureAuditEntry[] = [];
   #pushHandler: ((frame: PushFrame) => void) | null = null;
   #disconnectHandler: (() => void) | null = null;
   #nextResponseId = 0;
@@ -315,6 +451,11 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   #disconnected = false;
   #candidateSha256 = 'a'.repeat(64);
   #publishedSha256 = '0'.repeat(64);
+  #summaryError: boolean;
+
+  constructor(options: { summaryError?: boolean } = {}) {
+    this.#summaryError = options.summaryError ?? false;
+  }
 
   setPushHandler(handler: (frame: PushFrame) => void): void {
     this.#pushHandler = handler;
@@ -326,6 +467,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
 
   async call(op: string, payload: Record<string, unknown> = {}): Promise<Response> {
     if (this.#disconnected) throw new Error('fixture channel is disconnected');
+    this.#calls.push({ op, payload: structuredClone(payload) });
     const write: RecordedWrite | null = isWriteOperation(op)
       ? {
           op,
@@ -359,6 +501,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       }
     }
     return response;
+  }
+
+  calls(): readonly RecordedRpcCall[] {
+    return structuredClone(this.#calls);
   }
 
   writes(): readonly RecordedWrite[] {
@@ -418,6 +564,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     this.emitPush('push.reload', payload);
   }
 
+  setAuditEntries(entries: readonly FixtureAuditEntry[]): void {
+    this.#auditEntries = structuredClone([...entries]);
+  }
+
   private success(op: string, data: unknown): Response {
     return {
       op,
@@ -448,7 +598,9 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'browse.packs':
         return this.success(op, { packs: [PACK] });
       case 'browse.types':
-        return this.success(op, { types: [structuredClone(ITEM_TYPE)] });
+        return this.success(op, {
+          types: [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+        });
       case 'browse.resources': {
         const pack = stringValue(payload.pack);
         return this.success(op, {
@@ -457,6 +609,8 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
           ),
         });
       }
+      case 'authoring.summaries':
+        return this.summaries(op, payload);
       case 'browse.folders':
         return this.success(op, { folders: [] });
       case 'browse.get':
@@ -491,7 +645,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'validate.dryRun':
         return this.success(op, { valid: true, diagnostics: [] });
       case 'admin.audit.recent':
-        return this.success(op, { entries: [] });
+        return this.success(op, { entries: structuredClone(this.#auditEntries) });
       case 'admin.settings.get':
         return this.success(op, { raw: 'editor:\n  enabled: true\n', sha256: 'fixture-settings' });
       case 'admin.settings.put':
@@ -499,6 +653,57 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       default:
         return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
     }
+  }
+
+  private summaries(op: string, payload: Record<string, unknown>): Response {
+    if (this.#summaryError) {
+      return this.failure(op, 'MTR-0001', 'deterministic resource summary read failure');
+    }
+    const pack = stringValue(payload.pack);
+    const type = stringValue(payload.type);
+    const query = stringValue(payload.query).replaceAll('_', ' ').trim().toLowerCase();
+    const all: ResourceSummary[] = [];
+    for (const resource of RESOURCES) {
+      if (resource.pack !== pack || (type && resource.type !== type)) continue;
+      const document = this.#documents.get(`${resource.pack}/${resource.path}`);
+      const fields = document?.parsed[resource.id];
+      if (!fields) continue;
+      const material = stringValue(fields.material);
+      const visual: ResourceSummary['visual'] = resource.id === 'ruby_blade'
+        ? { pack: PACK, path: 'assets/textures/items/ruby_blade.png', kind: 'texture' }
+        : resource.id === 'heart_icon'
+          ? { pack: PACK, path: 'assets/textures/gui/heart.png', kind: 'texture' }
+          : undefined;
+      const summary: ResourceSummary = {
+        ...resource,
+        name: resource.id === 'heart_icon' ? 'Heart Icon'
+          : resource.id === 'missing_icon' ? 'Missing Icon'
+            : stringValue(fields.display_name, resource.id),
+        ...(material ? { material } : {}),
+        ...(visual ? { visual } : {}),
+        health: resource.id === 'missing_icon' ? 'error' : 'unknown',
+        ...(resource.id === 'missing_icon' ? { healthMessage: 'Texture not found: gui/missing' } : {}),
+      };
+      const searchable = [summary.id, summary.path, summary.name, summary.material ?? '']
+        .join(' ')
+        .replaceAll('_', ' ')
+        .toLowerCase();
+      if (query && !searchable.includes(query)) continue;
+      all.push(summary);
+    }
+    const offset = numberValue(payload.offset, 0);
+    const limit = numberValue(payload.limit, 100);
+    if (!Number.isInteger(offset) || offset < 0
+        || !Number.isInteger(limit) || limit < 1 || limit > 200) {
+      return this.failure(op, 'MTR-0012', 'summary page has invalid offset or limit');
+    }
+    const start = Math.min(offset, all.length);
+    const end = Math.min(start + limit, all.length);
+    return this.success(op, {
+      resources: all.slice(start, end),
+      total: all.length,
+      ...(end < all.length ? { nextOffset: end } : {}),
+    });
   }
 
   private getDocument(op: string, payload: Record<string, unknown>): Response {

@@ -1,5 +1,5 @@
 import { mount } from 'svelte';
-import { connection, handlePush, loadWorkspace, markConnectionLost, refreshDelivery, resetWorkspace, session } from '../src/lib/state.svelte';
+import { confirmDisconnect, connection, handlePush, loadWorkspace, markConnectionLost, refreshDelivery, resetWorkspace, session } from '../src/lib/state.svelte';
 import Workbench from '../src/lib/components/Workbench.svelte';
 import '../src/app.css';
 import { DeterministicRpcAdapter } from './rpc-adapter';
@@ -9,7 +9,9 @@ async function startFixture(): Promise<void> {
   if (!target) throw new Error('Browser fixture root is missing.');
 
   resetWorkspace();
-  const adapter = new DeterministicRpcAdapter();
+  const adapter = new DeterministicRpcAdapter({
+    summaryError: new URLSearchParams(window.location.search).has('summaryError'),
+  });
   adapter.setPushHandler(handlePush);
   adapter.setDisconnectHandler(() => markConnectionLost('Deterministic browser fixture disconnected.'));
   session.channel = adapter;
@@ -20,8 +22,8 @@ async function startFixture(): Promise<void> {
   mount(Workbench, {
     target,
     props: {
-      browserLabel: 'Chromium regression fixture',
       onDisconnect: () => {
+        if (!confirmDisconnect()) return;
         adapter.simulateDisconnect();
       },
     },

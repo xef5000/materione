@@ -125,6 +125,7 @@ Describes every operation that reads or mutates content packs, folders, document
 | `listPacks()` / `createPack(actor, packId)` | Enumerate or scaffold `content/packs/<id>/pack.yml`. | `DocumentStore`, `EditorContentOps` |
 | `listFolders(pack, type)` / `createFolder` / `moveFolder` / `deleteFolder` | Manage organizational subdirectories inside a content type. | `DocumentStore`, `EditorContentOps` |
 | `listResources(ResourceFilter)` | Query resources by pack, content type, folder, or substring search. | `DocumentStore.listResources` |
+| `listResourceSummaries(ResourceFilter, offset, limit)` | Read a bounded page of canonical catalog metadata without per-row document requests. | `AuthoringApiImpl` + registry `ContentType.presentation` |
 | `getDocument(pack, path)` | Read raw YAML, parsed tree, current revision, SHA-256, and server-computed metadata (e.g. allocated glyph codepoints). | `DocumentStore.read` + `EditorTransportService.computedMeta` |
 | `getHistory(pack, path, limit)` | Read per-document revision journal (`storage/revisions/`). | `DocumentStore.history` |
 | `createDocument(actor, CreateDocumentRequest)` | Create a YAML document from a type's curated scaffold. | `EditorContentOps` (`edit.create`), `Scaffolds` |
@@ -139,6 +140,34 @@ Describes every operation that reads or mutates content packs, folders, document
 | `validateDraft(ValidateDraftRequest)` | Dry-run syntax, schema, and reference validation on unsaved content without touching disk. | `EditorContentOps` (`validate.dryRun`) + `ValidateStage` |
 | `queryGraph(GraphQuery)` | Inspect content graph edges ("where is `mystuff:ruby` used?", dead content, broken refs). | `ContentGraph` (new exposure) |
 | `subscribeChanges(Consumer<DocumentChangeEvent>)` | Subscribe to external or internal document changes (file watcher + API saves). | `PackWatcher` |
+
+The web Content catalog consumes a read-only `authoring.summaries` RPC, filtered by pack and
+optionally by type/query. Each bounded page returns `{ resources, total, nextOffset? }`; the
+server defaults to 100 summaries per page and caps requests at 200. A summary extends the
+resource identity with its display name, optional material and static visual reference, and
+server health/message fields. Health is `unknown` unless a direct canonical-document read proves an
+error; then it is `error`. It is not evidence of pipeline freshness or successful application.
+The browser follows the page cursor rather than fetching each resource document to draw the catalog.
+This is a projection of canonical pack files—not another content store and not a substitute for
+`getDocument`: the editor fetches a document only when the author opens that resource. Visual bytes
+remain asset reads through `AssetApi`.
+
+Presentation is an optional projection of the owning registry type's parsed definition
+(`ContentType.presentation` / `ResourcePresentation`), not a second item schema.
+Registry-projected visual references may borrow another resource's presentation;
+resolution uses canonical resources with cycle and budget bounds rather than
+copying content-type parsing into the browser or consulting applied runtime state.
+Preview reference chains stop at 32 links; an unavailable or over-depth preview
+does not label otherwise unproven content health as an error.
+The projection streams canonical input under a 16 MiB accounted scan/projection
+budget, including template input, and an 8 MiB per-document read cap. It retains
+one bounded derived snapshot and rechecks asset references per request. Content
+changes invalidate the snapshot, including populated directories moved into a
+watched tree; their existing files also emit ordinary change notifications.
+Exceeding the aggregate budget returns `MTR-0051`, not a partial
+page; that refusal is cached with the current projection until invalidation or
+replacement rather than rebuilding on every page request. This is a summary-read
+limit, not a content-write quota.
 
 ### 3.4 `AssetApi` (`dev.materione.api.assets`)
 

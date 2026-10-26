@@ -26,7 +26,8 @@ import java.util.regex.Pattern;
  */
 public final class ModelTransactionService {
 
-    private static final int MAX_TRANSACTION_BYTES = 8 * 1024 * 1024;
+    // Also bounds a single canonical document read by the summary projection.
+    static final int MAX_TRANSACTION_BYTES = 8 * 1024 * 1024;
     private static final Object MODEL_SAVE_LOCK = new Object();
 
     /** Pack content: everything the compiler ships to clients. */

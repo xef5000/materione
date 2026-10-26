@@ -2,15 +2,22 @@ package dev.materione.core.document;
 
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
-import java.io.IOException;import java.nio.charset.StandardCharsets;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
@@ -51,6 +58,20 @@ public final class DocumentStore {
 
     /** One keyed resource inside a file: {@code path} is pack-relative. */
     public record ResourceRef(String pack, String type, String path, String resourceId) {}
+
+    /** One current canonical document root, read without synchronizing revisions. */
+    public record ResourceDocument(
+            ResourceRef resource, LosslessYamlDocument document, String readError) {}
+
+    /** Mutable read budget used only by bounded authoring projections. */
+    public interface SummaryReadBudget {
+        long remainingBytes();
+
+        void consume(long bytes);
+
+        /** Fails the projection when its remaining capacity is exhausted. */
+        void requireRemainingCapacity();
+    }
 
     public record Document(String pack, String path, String raw, int revision, String sha256) {}
 
@@ -110,6 +131,246 @@ public final class DocumentStore {
             }
         }
         return refs;
+    }
+
+    /**
+     * Reads current canonical document roots in one inventory pass without
+     * touching the revision journal. Symlinked pack, type, and document paths
+     * are excluded so a browse projection never follows an external path.
+     */
+    public List<ResourceDocument> listResourceDocuments(String packId, String typeFilter) {
+        List<ResourceDocument> resources = new ArrayList<>();
+        forEachResourceDocument(packId, typeFilter, resources::add);
+        return List.copyOf(resources);
+    }
+
+    /**
+     * Visits canonical resource documents one file at a time. The summary
+     * projection uses this to avoid retaining every parsed YAML tree while
+     * building its small derived index.
+     */
+    public void forEachResourceDocument(
+            String packId, String typeFilter, Consumer<ResourceDocument> visitor) {
+        forEachResourceDocument(packId, typeFilter, visitor, null);
+    }
+
+    public void forEachResourceDocument(
+            String packId,
+            String typeFilter,
+            Consumer<ResourceDocument> visitor,
+            SummaryReadBudget readBudget) {
+        Objects.requireNonNull(visitor, "visitor");
+        if (packId != null && !packId.matches("[a-z0-9_-]{2,64}")) {
+            throw new IllegalArgumentException("bad pack id: " + packId);
+        }
+        String safeType = typeFilter == null ? null : typeFilter.toLowerCase(Locale.ROOT);
+        if (safeType != null && !TYPES.contains(safeType)) {
+            return;
+        }
+        forEachSummaryPackDirectory(packId, readBudget, packDir -> {
+            String pack = packDir.getFileName().toString();
+            for (String type : TYPES) {
+                if (safeType != null && !safeType.equals(type)) {
+                    continue;
+                }
+                Path typeDir = packDir.resolve(type);
+                if (Files.isSymbolicLink(typeDir)
+                        || !Files.isDirectory(typeDir, LinkOption.NOFOLLOW_LINKS)) {
+                    continue;
+                }
+                consumeInventoryEntry(readBudget, type.length() + 1L);
+                collectResourceDocuments(pack, type, typeDir, visitor, readBudget);
+            }
+        });
+    }
+
+    /** Whether a pack has a safe canonical manifest root. */
+    public boolean hasSummaryPack(String packId) {
+        if (packId == null || !packId.matches("[a-z0-9_-]{2,64}")) {
+            return false;
+        }
+        Path root = packsRoot.toAbsolutePath().normalize();
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        Path packDir = root.resolve(packId);
+        if (Files.isSymbolicLink(packDir)
+                || !Files.isDirectory(packDir, LinkOption.NOFOLLOW_LINKS)) {
+            return false;
+        }
+        Path manifest = packDir.resolve("pack.yml");
+        return !Files.isSymbolicLink(manifest)
+                && Files.isRegularFile(manifest, LinkOption.NOFOLLOW_LINKS);
+    }
+
+    private void forEachSummaryPackDirectory(
+            String requestedPack, SummaryReadBudget readBudget, Consumer<Path> visitor) {
+        Path root = packsRoot.toAbsolutePath().normalize();
+        if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) {
+            return;
+        }
+        if (requestedPack != null) {
+            if (hasSummaryPack(requestedPack)) {
+                consumeInventoryEntry(readBudget, requestedPack.length());
+                visitor.accept(root.resolve(requestedPack));
+            }
+            return;
+        }
+        try (Stream<Path> children = Files.list(root)) {
+            children.forEach(child -> {
+                String id = child.getFileName().toString();
+                consumeInventoryEntry(readBudget, id.length());
+                if (!id.matches("[a-z0-9_-]{2,64}") || Files.isSymbolicLink(child)
+                        || !Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
+                    return;
+                }
+                Path manifest = child.resolve("pack.yml");
+                if (Files.isRegularFile(manifest, LinkOption.NOFOLLOW_LINKS)) {
+                    visitor.accept(child);
+                }
+            });
+        } catch (IOException e) {
+            // A missing/unreadable packs root contributes no visible packs.
+        }
+    }
+
+    private void collectResourceDocuments(
+            String pack, String type, Path root, Consumer<ResourceDocument> visitor,
+            SummaryReadBudget readBudget) {
+        Deque<DirectoryFrame> pending = new ArrayDeque<>();
+        pending.push(new DirectoryFrame(root, type + "/"));
+        while (!pending.isEmpty()) {
+            DirectoryFrame frame = pending.pop();
+            try (Stream<Path> children = Files.list(frame.path())) {
+                children.forEach(child -> {
+                    String segment = child.getFileName().toString();
+                    consumeInventoryEntry(readBudget, (long) frame.prefix().length() + segment.length());
+                    if (Files.isSymbolicLink(child)) {
+                        return;
+                    }
+                    String name = frame.prefix() + segment;
+                    if (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
+                        pending.push(new DirectoryFrame(child, name + "/"));
+                    } else if (Files.isRegularFile(child, LinkOption.NOFOLLOW_LINKS)
+                            && (name.endsWith(".yml") || name.endsWith(".yaml"))) {
+                        if (safeSummaryDocumentPath(name)) {
+                            addResourceDocument(pack, type, name, child, visitor, readBudget);
+                        }
+                    }
+                });
+            } catch (IOException e) {
+                // An unreadable subtree is omitted; no caller-supplied path is followed.
+            }
+        }
+    }
+
+    private static boolean safeSummaryDocumentPath(String path) {
+        return path != null && !path.contains("..") && !path.startsWith("/")
+                && path.matches("[A-Za-z0-9_./ -]+");
+    }
+
+    private static void addResourceDocument(
+            String pack,
+            String type,
+            String relative,
+            Path file,
+            Consumer<ResourceDocument> visitor,
+            SummaryReadBudget readBudget) {
+        byte[] bytes;
+        int readLimit = ModelTransactionService.MAX_TRANSACTION_BYTES + 1;
+        if (readBudget != null) {
+            long remaining = readBudget.remainingBytes();
+            if (remaining <= 0) {
+                readBudget.requireRemainingCapacity();
+            }
+            readLimit = (int) Math.min(readLimit, remaining);
+        }
+        CountingInputStream input;
+        try {
+            input = new CountingInputStream(Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS));
+        } catch (IOException e) {
+            visitor.accept(unreadableResource(pack, type, relative, "document could not be read"));
+            return;
+        }
+        try (input) {
+            bytes = input.readNBytes(readLimit);
+        } catch (IOException e) {
+            if (readBudget != null) {
+                readBudget.consume(input.bytesRead());
+            }
+            visitor.accept(unreadableResource(pack, type, relative, "document could not be read"));
+            return;
+        }
+        if (readBudget != null) {
+            readBudget.consume(bytes.length);
+            if (bytes.length == readLimit
+                    && readLimit < ModelTransactionService.MAX_TRANSACTION_BYTES + 1) {
+                readBudget.requireRemainingCapacity();
+            }
+        }
+        if (bytes.length > ModelTransactionService.MAX_TRANSACTION_BYTES) {
+            visitor.accept(unreadableResource(
+                    pack, type, relative, "document exceeds the bounded summary read limit"));
+            return;
+        }
+        LosslessYamlDocument document;
+        try {
+            document = LosslessYaml.parse(new String(bytes, StandardCharsets.UTF_8));
+        } catch (RuntimeException e) {
+            visitor.accept(unreadableResource(pack, type, relative, "document could not be parsed"));
+            return;
+        }
+        if (document.parseError().isPresent()) {
+            visitor.accept(new ResourceDocument(
+                    new ResourceRef(pack, type, relative, "<parse error>"), document, null));
+            return;
+        }
+        document.data().keySet().forEach(id -> visitor.accept(new ResourceDocument(
+                new ResourceRef(pack, type, relative, String.valueOf(id)), document, null)));
+    }
+
+    private static ResourceDocument unreadableResource(
+            String pack, String type, String relative, String reason) {
+        return new ResourceDocument(
+                new ResourceRef(pack, type, relative, "<unreadable>"), null, reason);
+    }
+
+    private static void consumeInventoryEntry(SummaryReadBudget readBudget, long pathChars) {
+        if (readBudget != null) {
+            readBudget.consume(64L + 2L * pathChars);
+        }
+    }
+
+    private record DirectoryFrame(Path path, String prefix) {}
+
+    private static final class CountingInputStream extends FilterInputStream {
+        private long bytesRead;
+
+        CountingInputStream(InputStream input) {
+            super(input);
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = super.read();
+            if (value >= 0) {
+                bytesRead++;
+            }
+            return value;
+        }
+
+        @Override
+        public int read(byte[] bytes, int offset, int length) throws IOException {
+            int count = super.read(bytes, offset, length);
+            if (count > 0) {
+                bytesRead += count;
+            }
+            return count;
+        }
+
+        long bytesRead() {
+            return bytesRead;
+        }
     }
 
     private void collectRefs(String pack, String type, Path dir, String prefix,

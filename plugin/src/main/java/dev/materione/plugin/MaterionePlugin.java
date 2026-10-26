@@ -24,6 +24,7 @@ import dev.materione.core.settings.SettingsService.SettingsState;
 import dev.materione.core.storage.StorageService;
 import dev.materione.core.storage.StorageService.StorageState;
 import dev.materione.core.scheduling.SchedulingGatewayImpl;
+import dev.materione.platform.items.ItemMaterialPalette;
 import dev.materione.platform.probe.PlatformProbe;
 import dev.materione.plugin.command.MaterioneCommand;
 import dev.materione.plugin.gui.GuiListener;
@@ -258,7 +259,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private void registerBuiltins() {
         pipeline = new PipelineService(
                 this, diagnostics, quarantine, registries, scheduling, descriptorOrNull());
-        pipeline.registerBuiltins();
+        pipeline.registerBuiltins(ItemMaterialPalette.supportedItemMaterials());
         // native mechanics through the identical registry path (D5), before
         // content load — item definitions reference them by name
         mechanics = new dev.materione.plugin.runtime.mechanics.MechanicsService(
@@ -386,7 +387,8 @@ public final class MaterionePlugin extends JavaPlugin {
         };
         authoringApi = new AuthoringApiImpl(
                 documents, audit, packsRoot, modelTransactions, glyphMeta,
-                () -> pipeline.runner().lastGraph(), previewReload);
+                () -> pipeline.runner().lastGraph(), previewReload, assetStore,
+                pipeline::contentTypes);
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         RuntimeApiImpl runtimeApi = new RuntimeApiImpl(

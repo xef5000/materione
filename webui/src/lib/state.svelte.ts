@@ -3,11 +3,12 @@
  * them. Stateless by design per web.md §6 — a refresh refetches everything
  * through loadWorkspace(); only unsaved editor content lives in tab state.
  */
-import type { AssetRef, DiagnosticEntry, ResourceRef, RpcChannel, TypeInfo } from './api';
+import type { AssetRef, DiagnosticEntry, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from './api';
 import { unwrap, ops, assetOps } from './api';
 import type { PushFrame } from './events';
 import { Signal } from './events';
 import { documentChangedEffect } from './external';
+import { invalidateThumbnails, resetThumbnailCache } from './thumbnails';
 import {
   discardDocumentDraft, draftDirty, draftStore, getDocumentDraft,
   markDraftsDisconnected, resetDrafts,
@@ -66,6 +67,9 @@ export const workspace = $state({
   packs: [] as string[],
   activePack: null as string | null,
   resources: [] as ResourceRef[],
+  summaries: [] as ResourceSummary[],
+  summariesError: '',
+  visualVersion: 0,
   types: [] as TypeInfo[],
   assets: [] as AssetRef[],
   /** Pack-relative organisational folders under the type roots. */
@@ -229,7 +233,6 @@ function prepareDraft(pack: string, path: string): boolean {
     return true;
   } catch (error) {
     logActivity('error', errorMessage(error));
-    ui.activityOpen = true;
     return false;
   }
 }
@@ -241,6 +244,8 @@ export function markConnectionLost(reason: string): void {
   delivery.loaded = false;
   markDraftsDisconnected();
   session.channel = null;
+  resetThumbnailCache();
+  workspace.visualVersion++;
   logActivity('error', 'Disconnected. Drafts were kept in this tab; runtime and pack status are unknown.');
 }
 
@@ -254,6 +259,9 @@ export function handlePush(frame: PushFrame): void {
     connection.lastReload = line;
     logActivity('reload', line);
     void refreshDelivery();
+    invalidateThumbnails();
+    workspace.visualVersion++;
+    void refreshPack();
   } else if (frame.op === 'push.diagnostic') {
     if (typeof payload.code === 'string' && typeof payload.severity === 'string' &&
         typeof payload.message === 'string') {
@@ -273,7 +281,10 @@ export function handlePush(frame: PushFrame): void {
     };
     const effect = documentChangedEffect(change, workspace.activePack,
       draftStore.documents.map((draft) => `${draft.pack}/${draft.path}`));
-    if (effect.refreshPack) void refreshPack();
+    invalidateThumbnails();
+    workspace.visualVersion++;
+    // A different pack's asset can be referenced by the active pack.
+    if (workspace.activePack) void refreshPack();
     for (const _key of effect.staleKeys) markDocStale(change.pack, change.path);
     logActivity('info', effect.log);
   }
@@ -321,6 +332,8 @@ export async function selectPack(pack: string): Promise<void> {
   if (!canLeaveEditor('studio')) return;
   workspace.activePack = pack;
   workspace.resources = [];
+  workspace.summaries = [];
+  workspace.summariesError = '';
   workspace.assets = [];
   workspace.folders = [];
   content.folder = '';
@@ -329,21 +342,36 @@ export async function selectPack(pack: string): Promise<void> {
   await refreshPack();
 }
 
-/** Re-fetches resources + assets + folders of the active pack after any mutation. */
+let packRefresh = 0;
+
+async function loadResourceSummaries(channel: RpcChannel, pack: string) {
+  try {
+    const data = unwrap(await ops.summaries(channel, pack));
+    if (!Array.isArray(data.resources)) throw new Error('The server returned an invalid resource summary response.');
+    return { resources: data.resources as ResourceSummary[], error: '' };
+  } catch (error) {
+    return { resources: [] as ResourceSummary[], error: `Resource summaries unavailable: ${errorMessage(error)}` };
+  }
+}
+
+/** Refresh read-only catalog metadata; an older response must not replace a newer snapshot. */
 export async function refreshPack(): Promise<void> {
   const channel = session.channel;
   const pack = workspace.activePack;
   if (!channel || !pack) return;
+  const generation = ++packRefresh;
   try {
-    const [resourceResult, assetResult, folderResult] = [
-      (unwrap(await ops.resources(channel, pack)).resources as ResourceRef[]) ?? [],
-      (unwrap(await assetOps.list(channel, pack)).assets as AssetRef[]) ?? [],
-      (unwrap(await ops.folders(channel, pack)).folders as string[]) ?? [],
-    ];
-    if (pack !== workspace.activePack || channel !== session.channel) return;
-    workspace.resources = resourceResult.sort((a, b) => a.path.localeCompare(b.path));
-    workspace.assets = assetResult.sort((a, b) => a.path.localeCompare(b.path));
-    workspace.folders = folderResult.sort((a, b) => a.localeCompare(b));
+    const [resources, assets, folders, summaries] = await Promise.all([
+      ops.resources(channel, pack), assetOps.list(channel, pack), ops.folders(channel, pack),
+      loadResourceSummaries(channel, pack),
+    ]);
+    if (generation !== packRefresh || pack !== workspace.activePack || channel !== session.channel) return;
+    workspace.resources = ((unwrap(resources).resources as ResourceRef[]) ?? []).sort((a, b) => a.path.localeCompare(b.path));
+    workspace.assets = ((unwrap(assets).assets as AssetRef[]) ?? []).sort((a, b) => a.path.localeCompare(b.path));
+    workspace.folders = ((unwrap(folders).folders as string[]) ?? []).sort((a, b) => a.localeCompare(b));
+    workspace.summaries = summaries.resources;
+    workspace.summariesError = summaries.error;
+    if (summaries.error) logActivity('error', summaries.error);
   } catch (e) {
     logActivity('error', `browse: ${errorMessage(e)}`);
   }
@@ -463,7 +491,6 @@ export function closeTab(key: string): void {
     : undefined;
   if (draft?.saving || draft?.uncertain) {
     logActivity('error', 'Keep this tab open until the pending or uncertain save is reconciled.');
-    ui.activityOpen = true;
     return;
   }
   const isDirty = draft ? draftDirty(draft) : tab.kind === 'settings' ? tab.dirty : false;
@@ -484,9 +511,14 @@ export function activeTab(): Tab | undefined {
 
 /** Clears every store — used when the channel closes or the user disconnects. */
 export function resetWorkspace(): void {
+  packRefresh++;
+  resetThumbnailCache();
   workspace.packs = [];
   workspace.activePack = null;
   workspace.resources = [];
+  workspace.summaries = [];
+  workspace.summariesError = '';
+  workspace.visualVersion = 0;
   workspace.types = [];
   workspace.assets = [];
   workspace.folders = [];

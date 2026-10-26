@@ -4,6 +4,8 @@ import dev.materione.api.ApiResult;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.Severity;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +42,37 @@ public interface AuthoringApi {
 
     /** Resources by pack, content type and/or substring query. */
     ApiResult<List<ResourceRef>> listResources(ResourceFilter filter);
+
+    /**
+     * A bounded page of server-computed catalog metadata. Implementations
+     * without a summary projection retain compatibility by returning identity
+     * rows with unknown health; they never fetch each document individually.
+     */
+    default ApiResult<ResourceSummaryPage> listResourceSummaries(
+            ResourceFilter filter, int offset, int limit) {
+        if (offset < 0 || limit < 1 || limit > MAX_SUMMARY_PAGE_SIZE) {
+            return ApiResult.fail(new Diagnostic(
+                    DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
+                    "summary page requires offset >= 0 and limit between 1 and "
+                            + MAX_SUMMARY_PAGE_SIZE,
+                    null, null, null));
+        }
+        ApiResult<List<ResourceRef>> listed = listResources(filter);
+        if (!listed.ok()) {
+            return ApiResult.fail(listed.diagnostics());
+        }
+        List<ResourceRef> refs = listed.value() == null ? List.of() : listed.value();
+        int start = Math.min(offset, refs.size());
+        int end = (int) Math.min((long) start + limit, refs.size());
+        List<ResourceSummary> summaries = refs.subList(start, end).stream()
+                .map(ref -> new ResourceSummary(
+                        ref.pack(), ref.type(), ref.path(), ref.resourceId(), ref.resourceId(),
+                        null, null, ResourceHealth.UNKNOWN,
+                        "summary metadata is unavailable from this implementation"))
+                .toList();
+        Integer nextOffset = end < refs.size() ? end : null;
+        return ApiResult.ok(new ResourceSummaryPage(summaries, refs.size(), nextOffset));
+    }
 
     /**
      * One document: raw YAML, parsed tree (null when it does not parse),
@@ -116,6 +149,53 @@ public interface AuthoringApi {
 
     /** One resource keyed inside a document ({@code pack:type/path:resourceId}). */
     record ResourceRef(String pack, String type, String path, String resourceId) {}
+
+    /** Safe preview identity; the path is a server-resolved readable asset path. */
+    record ResourceVisual(String pack, String path, VisualKind kind) {}
+
+    enum VisualKind {
+        TEXTURE,
+        MODEL_THUMBNAIL
+    }
+
+    enum ResourceHealth {
+        OK,
+        WARNING,
+        ERROR,
+        UNKNOWN
+    }
+
+    /** Read-only catalog projection over one canonical resource. */
+    record ResourceSummary(
+            String pack,
+            String type,
+            String path,
+            String resourceId,
+            String name,
+            String material,
+            ResourceVisual visual,
+            ResourceHealth health,
+            String healthMessage) {
+
+        public ResourceSummary {
+            name = name == null || name.isBlank() ? resourceId : name;
+            health = health == null ? ResourceHealth.UNKNOWN : health;
+        }
+    }
+
+    /** One bounded page; {@code nextOffset} is absent when all rows were returned. */
+    record ResourceSummaryPage(
+            List<ResourceSummary> resources,
+            int total,
+            Integer nextOffset) {
+
+        public ResourceSummaryPage {
+            resources = resources == null ? List.of() : List.copyOf(resources);
+        }
+    }
+
+    /** Maximum result size accepted by every {@link #listResourceSummaries} implementation. */
+    int MAX_SUMMARY_PAGE_SIZE = 200;
 
     /** {@link #listResources} filter — null pack/type means all; query is a case-insensitive substring. */
     record ResourceFilter(String pack, String type, String query) {

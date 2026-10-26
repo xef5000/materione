@@ -21,6 +21,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(50); // MTR-0049/0050: relay session ended, relay unreachable (M5).
+        assertThat(DiagnosticCodes.all()).hasSize(51); // MTR-0051: resource-summary read budget.
     }
 }

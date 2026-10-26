@@ -90,6 +90,46 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void summariesAreOneBoundedReadOnlyRpcPage() throws Exception {
+        Path pack = temp.resolve("packs/demo");
+        java.nio.file.Files.createDirectories(pack.resolve("items"));
+        java.nio.file.Files.writeString(pack.resolve("pack.yml"), "id: demo\n");
+        java.nio.file.Files.writeString(pack.resolve("items/catalog.yml"), """
+                one:
+                  material: PAPER
+                two:
+                  material: STICK
+                """);
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+
+        Wire.Response first = dispatcher.dispatch(request("authoring.summaries", "1",
+                object("pack", "demo", "type", "items", "limit", "1")));
+        assertThat(first.ok()).isTrue();
+        JsonObject firstRow = payload(first).getAsJsonArray("resources").get(0).getAsJsonObject();
+        assertThat(firstRow.get("id").getAsString()).isEqualTo("one");
+        assertThat(firstRow.get("name").getAsString()).isEqualTo("One");
+        assertThat(firstRow.get("health").getAsString()).isEqualTo("unknown");
+        assertThat(payload(first).get("total").getAsInt()).isEqualTo(2);
+        assertThat(payload(first).get("nextOffset").getAsInt()).isEqualTo(1);
+
+        Wire.Response second = dispatcher.dispatch(request("authoring.summaries", "2",
+                object("pack", "demo", "type", "items", "offset", "1", "limit", "1")));
+        assertThat(payload(second).getAsJsonArray("resources").get(0)
+                .getAsJsonObject().get("id").getAsString()).isEqualTo("two");
+
+        Wire.Response invalid = dispatcher.dispatch(request("authoring.summaries", "3",
+                object("pack", "demo", "limit", "201")));
+        assertThat(invalid.ok()).isFalse();
+        assertThat(invalid.error().code()).isEqualTo("MTR-0008");
+        assertThat(temp.resolve("revisions")).doesNotExist();
+        assertThat(temp.resolve("audit.log")).doesNotExist();
+        assertThat(trigger.files).isEmpty();
+    }
+
+    @Test
     void authoringCommitWritesOneRevisionAndQueuesOneReload() throws Exception {
         DocumentStore store = store();
         AuditLog audit = audit();

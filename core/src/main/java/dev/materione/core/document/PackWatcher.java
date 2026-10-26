@@ -10,6 +10,7 @@ import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -37,14 +38,22 @@ public final class PackWatcher implements AutoCloseable {
     private final Path packsRoot;
     private final DocumentStore documents;
     private final Consumer<Change> sink;
+    private final Runnable directoryCreated;
     private volatile boolean running = true;
     private WatchService watchService;
 
     public PackWatcher(Path packsRoot, DocumentStore documents, Consumer<Change> sink)
             throws IOException {
+        this(packsRoot, documents, sink, null);
+    }
+
+    public PackWatcher(
+            Path packsRoot, DocumentStore documents, Consumer<Change> sink, Runnable directoryCreated)
+            throws IOException {
         this.packsRoot = packsRoot;
         this.documents = documents;
-        this.sink = sink;
+        this.sink = Objects.requireNonNull(sink, "sink");
+        this.directoryCreated = directoryCreated == null ? () -> { } : directoryCreated;
         this.watchService = packsRoot.getFileSystem().newWatchService();
         registerAll(packsRoot);
     }
@@ -71,15 +80,13 @@ public final class PackWatcher implements AutoCloseable {
                         }
                         Path changed = dir.resolve((Path) event.context());
                         if (Files.isDirectory(changed, LinkOption.NOFOLLOW_LINKS)) {
-                            // a new pack/subdirectory joins the watch set
+                            // A moved-in subtree may already contain files and nested directories.
                             try {
-                                changed.register(watchService,
-                                        StandardWatchEventKinds.ENTRY_CREATE,
-                                        StandardWatchEventKinds.ENTRY_DELETE,
-                                        StandardWatchEventKinds.ENTRY_MODIFY);
+                                registerAll(changed, file -> pending.put(file, now));
                             } catch (IOException e) {
                                 // fail-soft: an unwatchable subdir loses only its own events
                             }
+                            directoryCreated.run();
                             continue;
                         }
                         pending.put(changed, now);
@@ -117,12 +124,21 @@ public final class PackWatcher implements AutoCloseable {
     }
 
     private void registerAll(Path root) throws IOException {
+        registerAll(root, file -> { });
+    }
+
+    private void registerAll(Path root, Consumer<Path> existingFile) throws IOException {
         try (var walk = Files.walk(root)) {
-            for (Path dir : (Iterable<Path>) walk.filter(Files::isDirectory)::iterator) {
-                dir.register(watchService,
-                        StandardWatchEventKinds.ENTRY_CREATE,
-                        StandardWatchEventKinds.ENTRY_DELETE,
-                        StandardWatchEventKinds.ENTRY_MODIFY);
+            for (Path path : (Iterable<Path>) walk::iterator) {
+                if (Files.isSymbolicLink(path)) continue;
+                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
+                    path.register(watchService,
+                            StandardWatchEventKinds.ENTRY_CREATE,
+                            StandardWatchEventKinds.ENTRY_DELETE,
+                            StandardWatchEventKinds.ENTRY_MODIFY);
+                } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                    existingFile.accept(path);
+                }
             }
         }
     }

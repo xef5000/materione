@@ -13,10 +13,11 @@
     pack: string;
     hint: 'texture' | 'model';
     value: string;
+    id?: string;
     onChange: (value: string) => void;
   }
 
-  let { pack, hint, value, onChange }: Props = $props();
+  let { pack, hint, value, id, onChange }: Props = $props();
 
   interface Option {
     stored: string; // the YAML value
@@ -121,6 +122,7 @@
     <img src={thumb} alt={selected?.label ?? value} width="22" height="22" />
   {/if}
   <select
+    {id}
     value={value}
     onchange={(event) => onChange(event.currentTarget.value)}
     title="pick from uploaded files"

@@ -295,7 +295,7 @@ A small, versioned RPC set over the established channel:
 | **session** | `hello`, `hello-reply`, `ping`/`pong`, `close`, `session.info` |
 | **browse** | list packs, list resources (type-filtered), get resource, "where used" graph query, search |
 | **edit** | put resource (with revision), delete, move/rename, create pack, import pack |
-| **authoring** | describe capabilities, create resource/project, commit a field batch, save a model transaction |
+| **authoring** | describe capabilities, bulk resource summaries, create resource/project, commit a field batch, save a model transaction |
 | **validate** | dry-run validation of an unsaved resource → diagnostics |
 | **pipeline** | trigger targeted/full reload, pre-apply report, apply confirm |
 | **assets** | upload (chunked via payload store), delete, list |
@@ -349,6 +349,28 @@ desyncs the strict receive sequence).
 when that hash is no longer current. Candidate availability is not a receipt that a player
 received or accepted the pack. `push.reload` reports a server-wide pipeline outcome and carries
 no per-save correlation id, so the UI does not present it as proof that a specific save applied.
+
+*As built (M5 editor-workbench follow-up):* `authoring.summaries` is a read-only, pack-scoped
+catalog projection, optionally filtered by type/query and paged by offset. Each response page
+is `{ resources, total, nextOffset? }`; the server defaults to 100 rows and caps a page at 200,
+and the browser client follows `nextOffset` to assemble the catalog list. Each `ResourceSummary`
+extends `ResourceRef` with `name`, optional `material`, optional `visual` (`{ pack, path,
+kind: 'texture' | 'model-thumbnail' }`), a `health` value (`ok`, `warning`, `error`, or
+`unknown`), and an optional `healthMessage`. The current server reports `unknown` unless a direct
+read of the canonical document proves an error, in which case it reports `error`; it does not
+claim pipeline freshness or that a resource was applied. The catalog uses these pages rather than
+issuing `browse.get` for every row; opening a resource is when the editor fetches its document.
+Summary failures keep the catalog usable with an ID-derived name and unknown health, while an
+absent visual uses an honest placeholder. Thumbnail bytes are read separately through the existing
+asset operation, never embedded in the summary response. The browser keeps a 64-entry thumbnail
+cache and limits asset reads to four concurrent requests. Visible previews beyond the pending-read
+budget wait for capacity and resume without polling; hidden previews do not enqueue new reads.
+Cached model thumbnails and textures
+are static previews, not a live Minecraft render or interactive model.
+Glyphs use this same summary and asset-read path: basic glyphs expose their bitmap,
+sprite sheets their source image, animations a static frame, and aliases the target's
+source preview. Thumbnails are labelled as source-texture previews rather than
+claiming final font metrics, selected-cell layout, or animation playback.
 
 *Planned:* `authoring.describe` completes the capability handshake. Resource and asset listings
 gain pagination/filtering before relay mode makes eager full-pack traversal a scale boundary.
@@ -479,7 +501,8 @@ cannot read, forge, replay, or reorder anything.
   information architecture is resource-first: onboarding → content catalog → type studio.
   Filesystem Explorer and YAML live under Advanced for T4 rather than defining the T2/T3 journey.
   *As built (M3):* the shell is an app header (pack switcher, new project, release state,
-  publish), a rail, one full-area view per rail entry, the activity dock and the status bar.
+  publish), a rail, one full-area view per rail entry, and an optional activity dock.
+  The redundant status footer is removed; Server owns the guarded Disconnect action.
   Tabs are **not** global — they belong to Advanced Files, which owns the pack tree, the generic
   schema form, YAML, assets, revisions and standalone Blockbench. Content is a file explorer per
   registered type: horizontal type tabs derived from `browse.types` (unimplemented types render
@@ -493,13 +516,24 @@ cannot read, forge, replay, or reorder anything.
   error line or toolbar that is absent must not shift every following child into the wrong track.
 - *As built (M5 editor-trust follow-up):* the initial Content surface is items-first. The authoring
   group is Content and Files; Problems, Activity and Server are support destinations. Rail labels
-  start expanded and may be collapsed; Activity starts collapsed. Visited workspaces stay mounted
+  start expanded and may be collapsed without shifting the navigation rows. Activity is absent
+  until its sidebar button opens it; that button or the panel's close control hides it completely.
+  New activity does not reopen a closed panel. Visited workspaces stay mounted
   and hidden so navigation does not destroy their editor state. There is no separate Start or
   Assets workspace in this slice; assets are opened from studio slots or Files. Files↔Studio
   navigation carries pack, path, and selected resource identity, including the selected root in a
   multi-resource document. The header keeps the actions distinct: **Save & apply** changes gameplay
   server-wide; **Publish pack** releases the resource pack. Candidate status reports hash
   availability only, not player delivery or acceptance.
+- *As built (M5 editor-workbench follow-up):* Content presents one row per resource root, with
+  server-projected name/material/health and an optional static visual; multiple roots in one YAML
+  file remain distinct and opening a row carries that exact root into Studio. Search includes
+  human names and materials. Grid/list preference is per content type and client-side; resource
+  IDs and paths are optional technical columns. These choices only affect presentation—files stay
+  canonical (D1). The per-pack summary RPC avoids one document read per row; missing summaries
+  degrade to humanised IDs and unknown health instead of hiding resources.
+  Problems and audit rows retain separate event occurrences even when their visible fields repeat;
+  diagnostic code/message pairs are not unique UI keys.
 - **Draft lifecycle (as built, M5):** one in-memory store holds at most 32 document drafts keyed by
   pack/path and shared between Content and Files. Studio and Files form edits use one
   revision-checked `authoring.setFields` batch; raw YAML uses a revision-checked full-document
@@ -522,6 +556,22 @@ cannot read, forge, replay, or reorder anything.
   reads and writes `shape` + `ingredients`. A save sends one `authoring.setFields` call carrying
   only the fields that actually changed, so an untouched resource is never rewritten and the
   round-trip stays lossless.
+- *As built (M5 item workbench follow-up):* the item registry marks display name and lore as
+  formatted legacy text and material as a server-provided material picker. The material picker
+  searches human labels and IDs over the registry's authoritative `allowedValues`, supports
+  keyboard selection, and preserves a current ID the server no longer advertises until the author
+  chooses a replacement. The name/lore controls edit only the bounded tab-local draft; `&` color
+  and decoration codes remain in the authored value, decoration formatting respects existing
+  color/reset codes, multiline lore formatting is applied line by line, blank lore lines and
+  whitespace survive, and no blur-triggered save is performed. Lore containing non-string
+  entries or embedded line breaks is refused by the plain-lines editor rather than flattened;
+  the original value remains available in Files. The browser tooltip preview parses supported
+  legacy codes as text (not authored HTML); unsupported tokens remain literal. A sticky item preview
+  shows a 32 px inventory slot, an enlarged static visual, and the draft name/lore; clicking
+  either text focuses its editor control. This is a browser approximation, not proof of the
+  Minecraft font, glyphs, effects, obfuscation, or gameplay result. The game-check link opens the
+  Server support view and keeps candidate/acceptance status explicit; it does not claim runtime
+  verification.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

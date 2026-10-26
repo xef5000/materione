@@ -139,7 +139,7 @@
         <Login phase={phase === 'active' ? 'closed' : phase} {error} {noncePrefix} onConnect={connect} />
       </div>
     {/if}
-    <Workbench {browserLabel} onDisconnect={disconnect} />
+    <Workbench onDisconnect={disconnect} />
   {:else}
     <Login
       phase={phase === 'active' ? 'login' : phase}

@@ -8,18 +8,22 @@
   import ContextMenu from '../components/ContextMenu.svelte';
   import type { MenuItem } from '../components/ContextMenu.svelte';
   import PromptDialog from '../components/PromptDialog.svelte';
+  import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef } from '../api';
   import {
     breadcrumbs,
     currentFolder,
-    humanise,
+    getCatalogPreferences,
     idFromName,
     listing,
+    materialDisplayName,
     parentFolder,
+    saveCatalogPreferences,
     typeTabs,
     type BrowserEntry,
+    type CatalogPreferences,
   } from '../browser';
   import {
     browseTo,
@@ -34,6 +38,7 @@
     revealInAdvanced,
     selectPack,
     session,
+    ui,
     workspace,
   } from '../state.svelte';
 
@@ -47,6 +52,7 @@
   let list = $state<HTMLDivElement>();
   let history = $state<string[]>([]);
   let typeahead = { text: '', at: 0 };
+  let presentation = $state(getCatalogPreferences(content.type));
 
   const tabs = $derived(typeTabs(workspace.types));
   const tab = $derived(
@@ -56,15 +62,26 @@
   const folder = $derived(currentFolder(content.type, content.folder));
   const crumbs = $derived(breadcrumbs(content.type, content.folder));
   const rows = $derived(
-    listing(content.type, content.folder, workspace.resources, workspace.folders, content.search),
+    listing(
+      content.type,
+      content.folder,
+      workspace.resources,
+      workspace.folders,
+      content.search,
+      workspace.summaries,
+    ),
   );
-  const selected = $derived(rows.find((row) => row.path === content.selected) ?? null);
+  const selected = $derived(rows.find((row) => row.key === content.selected) ?? null);
 
   // A tab the registry no longer offers must not strand the browser.
   $effect(() => {
     if (tabs.length && !tabs.some((candidate) => candidate.directory === content.type)) {
       content.type = tabs[0]!.directory;
     }
+  });
+
+  $effect(() => {
+    presentation = getCatalogPreferences(content.type);
   });
 
   // ---------------------------------------------------------------- navigation
@@ -92,12 +109,10 @@
   }
 
   function refOf(entry: BrowserEntry): ResourceRef {
-    return {
-      pack: workspace.activePack!,
-      type: content.type,
-      path: entry.path,
-      id: entry.id,
-    };
+    if (entry.kind !== 'doc' || !entry.resource) {
+      throw new Error('This catalog entry does not identify a resource.');
+    }
+    return entry.resource;
   }
 
   function open(entry: BrowserEntry): void {
@@ -179,10 +194,14 @@
   function rename(entry: BrowserEntry): void {
     const isFolder = entry.kind === 'folder';
     dialog = {
-      title: `Rename ${entry.name}`,
-      label: isFolder ? 'folder name' : 'id',
-      initial: entry.name,
-      hint: isFolder ? 'the entries inside move with it' : 'a-z, 0-9 and _',
+      title: isFolder ? `Rename folder ${entry.name}` : `Rename file for ${entry.name}`,
+      label: isFolder ? 'folder name' : 'file name',
+      initial: isFolder ? entry.name : entry.path.slice(entry.path.lastIndexOf('/') + 1).replace(/\.ya?ml$/i, ''),
+      hint: isFolder
+        ? 'the entries inside move with it'
+        : entry.ids.length > 1
+          ? `renames the document only; all ${entry.ids.length} resources stay in it with their current ids`
+          : 'renames the document path; the resource id stays the same',
       onOk: (value) => {
         dialog = null;
         void run('rename', async () => {
@@ -196,7 +215,8 @@
             if (!id) throw new Error('use at least one letter or number');
             const rev = await currentRev(entry.path);
             requireSavedDocument(pack, entry.path);
-            unwrap(await ops.move(session.channel!, pack, entry.path, `${folder}/${id}.yml`, rev));
+            const directory = entry.path.slice(0, entry.path.lastIndexOf('/'));
+            unwrap(await ops.move(session.channel!, pack, entry.path, `${directory}/${id}.yml`, rev));
             closeTab(`${pack}/${entry.path}`);
           }
           await refreshPack();
@@ -227,12 +247,19 @@
 
   function moveTo(entry: BrowserEntry): void {
     dialog = {
-      title: `Move ${entry.name}`,
+      title: entry.kind === 'folder'
+        ? `Move folder ${entry.name}`
+        : `Move document for ${entry.name}`,
       label: 'destination folder',
       initial: folder,
-      hint: `folders in this tab: ${
-        workspace.folders.filter((f) => f.startsWith(content.type)).join(', ') || content.type
-      }`,
+      hint: [
+        `folders in this tab: ${
+          workspace.folders.filter((f) => f.startsWith(content.type)).join(', ') || content.type
+        }`,
+        entry.kind === 'doc' && entry.ids.length > 1
+          ? `moves the whole file containing ${entry.ids.length} resources`
+          : '',
+      ].filter(Boolean).join('; '),
       onOk: (value) => {
         dialog = null;
         void run('move', async () => {
@@ -255,8 +282,12 @@
   }
 
   function remove(entry: BrowserEntry): void {
-    const what = entry.kind === 'folder' ? `folder ${entry.name}` : entry.name;
-    if (!confirm(`Delete ${what}? This cannot be undone.`)) return;
+    const fileName = entry.path.slice(entry.path.lastIndexOf('/') + 1);
+    const what = entry.kind === 'folder' ? `folder ${entry.name}` : `document ${fileName}`;
+    const consequences = entry.kind === 'doc' && entry.ids.length > 1
+      ? `This removes all ${entry.ids.length} resources in the file (${entry.ids.join(', ')}).`
+      : 'This cannot be undone.';
+    if (!confirm(`Delete ${what}? ${consequences}`)) return;
     void run('delete', async () => {
       const pack = workspace.activePack!;
       requireSavedDocument(pack, entry.path, entry.kind === 'folder');
@@ -268,7 +299,9 @@
         unwrap(await ops.remove(session.channel!, pack, entry.path, rev));
         closeTab(`${pack}/${entry.path}`);
       }
-      if (content.selected === entry.path) content.selected = null;
+      if (rows.some((row) => row.path === entry.path && row.key === content.selected)) {
+        content.selected = null;
+      }
       await refreshPack();
     });
   }
@@ -277,9 +310,14 @@
 
   function itemsFor(entry: BrowserEntry): MenuItem[] {
     const items: MenuItem[] = [{ label: 'Open', run: () => open(entry) }];
-    items.push({ label: 'Rename…', run: () => rename(entry) });
+    items.push({
+      label: entry.kind === 'folder' ? 'Rename…' : 'Rename file…',
+      run: () => rename(entry),
+    });
     if (entry.kind === 'doc') {
-      items.push({ label: 'Duplicate…', run: () => duplicate(entry) });
+      if (entry.ids.length === 1) {
+        items.push({ label: 'Duplicate…', run: () => duplicate(entry) });
+      }
     }
     items.push({ label: 'Move to…', run: () => moveTo(entry) });
     if (entry.kind === 'doc') {
@@ -291,18 +329,18 @@
 
   function showMenu(entry: BrowserEntry, event: MouseEvent): void {
     event.preventDefault();
-    content.selected = entry.path;
+    content.selected = entry.key;
     menu = { x: event.clientX, y: event.clientY, items: itemsFor(entry) };
   }
 
   function onKey(event: KeyboardEvent): void {
-    if (dialog) return;
-    const index = rows.findIndex((row) => row.path === content.selected);
+    if (dialog || !active || ui.view !== 'content') return;
+    const index = rows.findIndex((row) => row.key === content.selected);
     const move = (next: number) => {
       const row = rows[Math.max(0, Math.min(rows.length - 1, next))];
       if (row) {
-        content.selected = row.path;
-        list?.querySelector<HTMLElement>(`[data-path="${CSS.escape(row.path)}"]`)
+        content.selected = row.key;
+        list?.querySelector<HTMLElement>(`[data-key="${CSS.escape(row.key)}"]`)
           ?.scrollIntoView({ block: 'nearest' });
       }
     };
@@ -324,9 +362,37 @@
         text: (now - typeahead.at < 900 ? typeahead.text : '') + event.key.toLowerCase(),
         at: now,
       };
-      const hit = rows.find((row) => row.name.toLowerCase().startsWith(typeahead.text));
+      const hit = rows.find((row) =>
+        row.name.toLowerCase().startsWith(typeahead.text)
+        || row.id.toLowerCase().startsWith(typeahead.text));
       if (hit) move(rows.indexOf(hit));
     }
+  }
+
+  function setPresentation(patch: Partial<CatalogPreferences>): void {
+    presentation = saveCatalogPreferences(content.type, { ...presentation, ...patch });
+  }
+
+  function healthFor(entry: BrowserEntry): 'ok' | 'warning' | 'error' | 'unknown' {
+    const health = entry.summary?.health;
+    return health === 'ok' || health === 'warning' || health === 'error' ? health : 'unknown';
+  }
+
+  function healthTitle(entry: BrowserEntry): string {
+    if (entry.kind === 'folder') return `${entry.count} documents`;
+    return entry.summary?.healthMessage
+      || (healthFor(entry) === 'unknown' ? 'Health summary unavailable.' : `Health: ${healthFor(entry)}.`);
+  }
+
+  function summaryFor(entry: BrowserEntry): string {
+    if (entry.kind === 'folder') return `${entry.count} documents`;
+    if (entry.summary?.material) return materialDisplayName(entry.summary.material);
+    if (workspace.summariesError) return 'Summary unavailable';
+    return entry.summary ? 'No additional summary' : 'Summary unavailable';
+  }
+
+  function statusLabel(entry: BrowserEntry): string {
+    return entry.kind === 'folder' ? `${entry.count} files` : healthFor(entry);
   }
 </script>
 
@@ -374,16 +440,26 @@
       </ol>
       <div class="layout" role="group" aria-label="layout">
         <button
-          class:active={content.layout === 'details'}
-          title="details"
-          onclick={() => (content.layout = 'details')}
+          class:active={presentation.layout === 'list'}
+          aria-label="Dense visual list"
+          aria-pressed={presentation.layout === 'list'}
+          title="Dense visual list"
+          onclick={() => setPresentation({ layout: 'list' })}
         >▤</button>
         <button
-          class:active={content.layout === 'grid'}
-          title="icons"
-          onclick={() => (content.layout = 'grid')}
+          class:active={presentation.layout === 'grid'}
+          aria-label="Compact grid"
+          aria-pressed={presentation.layout === 'grid'}
+          title="Compact grid"
+          onclick={() => setPresentation({ layout: 'grid' })}
         >⊞</button>
       </div>
+      <button
+        class:active={presentation.showTechnicalColumns}
+        aria-pressed={presentation.showTechnicalColumns}
+        title="Show or hide resource IDs and file paths"
+        onclick={() => setPresentation({ showTechnicalColumns: !presentation.showTechnicalColumns })}
+      >ID / path</button>
       <button class="ghost" disabled={busy || !workspace.activePack} onclick={createFolder}>
         New folder
       </button>
@@ -393,38 +469,73 @@
     </div>
 
     {#if error}<p class="error">{error}</p>{/if}
+    {#if workspace.summariesError}
+      <p class="summary-error" role="status">
+        Some resource summaries are unavailable; missing entries use fallback names and unknown health.
+        {workspace.summariesError}
+        <button type="button" class="ghost" onclick={() => void refreshPack()}>Retry summaries</button>
+      </p>
+    {/if}
 
     <div
-      class="list {content.layout}"
+      class="list {presentation.layout}"
+      class:technical={presentation.showTechnicalColumns}
       bind:this={list}
       role="listbox"
       tabindex="0"
       aria-label="{tab?.label ?? 'content'} in {folder}"
       onkeydown={onKey}
     >
-      {#if content.layout === 'details' && rows.length}
-        <div class="head" aria-hidden="true">
-          <span>Name</span><span>Id</span><span>Where</span><span>Ids</span>
+      {#if presentation.layout === 'list' && rows.length}
+        <div class="list-head" class:technical={presentation.showTechnicalColumns} aria-hidden="true">
+          <span></span>
+          <span>Name / summary</span>
+          {#if presentation.showTechnicalColumns}<span>ID</span><span>Path</span>{/if}
+          <span>Status</span>
         </div>
       {/if}
-      {#each rows as row (row.path)}
+      {#each rows as row (row.key)}
         <div
-          class="row"
-          class:selected={row.path === content.selected}
-          data-path={row.path}
+          class="entry"
+          class:selected={row.key === content.selected}
+          class:folder={row.kind === 'folder'}
+          data-key={row.key}
           role="option"
-          aria-selected={row.path === content.selected}
+          aria-selected={row.key === content.selected}
           tabindex="-1"
-          onclick={() => (content.selected = row.path)}
+          onclick={() => (content.selected = row.key)}
           ondblclick={() => open(row)}
           oncontextmenu={(event) => showMenu(row, event)}
           onkeydown={() => {}}
         >
-          <span class="glyph" aria-hidden="true">{row.kind === 'folder' ? '📁' : '▪'}</span>
-          <span class="name">{row.kind === 'folder' ? row.name : humanise(row.id)}</span>
-          <span class="id">{row.kind === 'folder' ? `${row.count} inside` : row.id}</span>
-          <span class="where">{row.location || (row.kind === 'folder' ? '' : '·')}</span>
-          <span class="extra">{row.ids.length > 1 ? `+${row.ids.length - 1} more` : ''}</span>
+          {#if row.kind === 'folder'}
+            <span class="folder-visual" aria-hidden="true">▱</span>
+          {:else}
+            <ResourceThumbnail
+              visual={row.summary?.visual}
+              label={row.name}
+              size={presentation.layout === 'grid' ? 56 : 34}
+              version={workspace.visualVersion}
+            />
+          {/if}
+          <span class="copy">
+            <span class="name" title={row.name}>{row.name}</span>
+            <span class="summary" title={summaryFor(row)}>{summaryFor(row)}</span>
+            {#if content.search && row.kind === 'doc' && row.location}
+              <span class="location">In {row.location}</span>
+            {/if}
+            {#if row.kind === 'doc' && row.ids.length > 1}
+              <span class="shared-file">{row.ids.length} resources in this file</span>
+            {/if}
+          </span>
+          {#if presentation.showTechnicalColumns}
+            <code class="technical-id" title={row.id || 'No resource ID'}>{row.id || '—'}</code>
+            <code class="technical-path" title={row.path}>{row.path}</code>
+          {/if}
+          <span
+            class="health {row.kind === 'doc' ? healthFor(row) : 'folder-status'}"
+            title={healthTitle(row)}
+          >{statusLabel(row)}</span>
         </div>
       {/each}
 
@@ -608,6 +719,14 @@
     cursor: default;
   }
 
+  .toolbar button.active {
+    color: var(--fg);
+    border-color: var(--border-strong);
+  }
+  .toolbar .active:not(.primary):not(.ghost) {
+    color: var(--fg);
+  }
+
   /* listing */
   .list {
     flex: 1 1 0;
@@ -618,18 +737,22 @@
     padding: 4px 6px 10px;
     outline: none;
   }
-  .head,
-  .details .row {
+  .list-head,
+  .list .entry {
     display: grid;
-    grid-template-columns: 18px minmax(0, 2fr) minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, 90px);
+    grid-template-columns: 36px minmax(0, 1fr) minmax(76px, auto);
     align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
+    gap: 10px;
     min-width: 0;
   }
-  .head {
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, 90px);
-    padding-left: 34px;
+  .list-head.technical,
+  .list.technical .entry {
+    grid-template-columns:
+      36px minmax(140px, 1.2fr) minmax(84px, 0.8fr)
+      minmax(130px, 1.2fr) minmax(76px, auto);
+  }
+  .list-head {
+    padding: 4px 8px 7px;
     font-size: 10.5px;
     text-transform: uppercase;
     letter-spacing: 0.07em;
@@ -637,54 +760,133 @@
     border-bottom: 1px solid var(--border);
     margin-bottom: 3px;
   }
-  .row {
+  .entry {
     border-radius: var(--radius);
     cursor: default;
     font-size: 13px;
+    padding: 6px 8px;
   }
-  .row:hover {
+  .entry:hover {
     background: var(--bg-hover);
   }
-  .row.selected {
+  .entry.selected {
     background: var(--bg-raised);
     outline: 1px solid var(--border-strong);
   }
-  .row span {
+  .entry span,
+  .entry code,
+  .list-head span {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
   }
-  .id,
-  .where,
-  .extra {
-    color: var(--muted);
-    font-size: 11.5px;
-  }
-  .id {
-    font-family: var(--mono);
-  }
-
-  /* icon grid */
-  .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
-    gap: 6px;
-    align-content: start;
-  }
-  .grid .row {
-    display: grid;
-    justify-items: center;
-    text-align: center;
-    padding: 12px 6px;
+  .copy {
+    display: flex;
+    flex-direction: column;
     gap: 2px;
   }
-  .grid .glyph {
-    font-size: 26px;
+  .name {
+    color: var(--fg);
+    font-weight: 550;
   }
-  .grid .where,
-  .grid .extra {
-    display: none;
+  .summary,
+  .location,
+  .shared-file {
+    color: var(--muted);
+    font-size: 11px;
+  }
+  .location {
+    color: var(--faint);
+  }
+  .shared-file {
+    color: var(--faint);
+    font-size: 10px;
+  }
+  .technical-id,
+  .technical-path {
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 10.5px;
+  }
+  .health {
+    justify-self: end;
+    max-width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 2px 7px;
+    color: var(--muted);
+    font-size: 10px;
+    text-transform: capitalize;
+  }
+  .health.ok {
+    color: var(--success, var(--fg));
+  }
+  .health.warning {
+    color: var(--warning, var(--muted));
+  }
+  .health.error {
+    color: var(--error);
+  }
+  .folder-visual {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg-input);
+    color: var(--muted);
+    font-size: 23px;
+  }
+
+  /* compact grid */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
+    gap: 7px;
+    align-content: start;
+  }
+  .grid .entry {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    min-height: 138px;
+    padding: 10px;
+  }
+  .grid .copy {
+    width: 100%;
+  }
+  .grid .name {
+    max-width: 100%;
+  }
+  .grid .health {
+    align-self: flex-start;
+    margin-top: auto;
+  }
+  .grid .folder-visual {
+    width: 56px;
+    height: 56px;
+  }
+  .grid .technical-id,
+  .grid .technical-path {
+    max-width: 100%;
+  }
+
+  .summary-error {
+    margin: 8px 10px 0;
+    flex: none;
+    color: var(--warning, var(--muted));
+    background: var(--bg-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 7px 10px;
+    font-size: 12px;
+  }
+
+  .technical-id {
+    font-family: var(--mono);
   }
 
   .empty {

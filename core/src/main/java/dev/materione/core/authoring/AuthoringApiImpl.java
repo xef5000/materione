@@ -6,7 +6,9 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.content.ContentType;
 import dev.materione.core.document.AuditLog;
+import dev.materione.core.document.AssetStore;
 import dev.materione.core.document.DocumentConflictException;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.Documents;
@@ -49,6 +51,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private final DocumentMetadataComputer computedMeta;
     private final Supplier<ContentGraph> graph;
     private final ReloadHook reloadHook;
+    private final ResourceSummaryComputer summaryComputer;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
 
     public AuthoringApiImpl(
@@ -59,13 +62,48 @@ public final class AuthoringApiImpl implements AuthoringApi {
             DocumentMetadataComputer computedMeta,
             Supplier<ContentGraph> graph,
             ReloadHook reloadHook) {
+        this(documents, audit, packsRoot, modelTransactions, computedMeta, graph,
+                reloadHook, null, List::of);
+    }
+
+    public AuthoringApiImpl(
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ModelTransactionService modelTransactions,
+            DocumentMetadataComputer computedMeta,
+            Supplier<ContentGraph> graph,
+            ReloadHook reloadHook,
+            AssetStore assets,
+            Supplier<List<ContentType>> contentTypes) {
+        this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
+                assets, contentTypes, ResourceSummaryComputer.DEFAULT_PROJECTION_BUDGET_BYTES);
+    }
+
+    AuthoringApiImpl(
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ModelTransactionService modelTransactions,
+            DocumentMetadataComputer computedMeta,
+            Supplier<ContentGraph> graph,
+            ReloadHook reloadHook,
+            AssetStore assets,
+            Supplier<List<ContentType>> contentTypes,
+            long summaryProjectionBudgetBytes) {
         this.documents = Objects.requireNonNull(documents, "documents");
         this.audit = Objects.requireNonNull(audit, "audit");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.modelTransactions = Objects.requireNonNull(modelTransactions, "modelTransactions");
         this.computedMeta = computedMeta;
         this.graph = graph == null ? () -> null : graph;
-        this.reloadHook = reloadHook == null ? (actor, pack, file) -> { } : reloadHook;
+        this.summaryComputer = new ResourceSummaryComputer(
+                documents, assets, contentTypes, summaryProjectionBudgetBytes);
+        ReloadHook downstream = reloadHook == null ? (actor, pack, file) -> { } : reloadHook;
+        this.reloadHook = (actor, pack, file) -> {
+            summaryComputer.invalidate();
+            downstream.afterChange(actor, pack, file);
+        };
     }
 
     // ------------------------------------------------------------------
@@ -164,6 +202,23 @@ public final class AuthoringApiImpl implements AuthoringApi {
                 refs.add(new ResourceRef(ref.pack(), ref.type(), ref.path(), ref.resourceId()));
             }
             return ApiResult.ok(refs);
+        } catch (Exception e) {
+            return handlerFailure(e);
+        }
+    }
+
+    @Override
+    public ApiResult<ResourceSummaryPage> listResourceSummaries(
+            ResourceFilter filter, int offset, int limit) {
+        try {
+            return ApiResult.ok(summaryComputer.summarize(filter, offset, limit));
+        } catch (ResourceSummaryComputer.ProjectionBudgetExceededException e) {
+            return new ApiResult<>(false, null, List.of(new Diagnostic(
+                    DiagnosticCodes.AUTHORING_SUMMARY_BUDGET_EXCEEDED, Severity.WARN,
+                    e.getMessage(), null, null,
+                    "The canonical files are unchanged and remain available through the full resource listing.")));
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
         } catch (Exception e) {
             return handlerFailure(e);
         }
@@ -504,11 +559,17 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return () -> changeListeners.remove(listener);
     }
 
+    /** Invalidates the summary projection when a watched directory is created or moved in. */
+    public void invalidateResourceSummaries() {
+        summaryComputer.invalidate();
+    }
+
     /**
      * Fires the change feed — the file watcher and API saves alike (the
      * editor's {@code push.document.changed}). Fail-soft per listener.
      */
     public void publishChange(String pack, String path, boolean deleted) {
+        invalidateResourceSummaries();
         DocumentChangeEvent event = new DocumentChangeEvent(pack, path, deleted);
         for (Consumer<DocumentChangeEvent> listener : changeListeners) {
             try {

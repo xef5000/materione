@@ -16,6 +16,12 @@
     workspace,
   } from '../state.svelte';
 
+  interface Props {
+    onDisconnect: () => void;
+  }
+
+  let { onDisconnect }: Props = $props();
+
   interface AuditEntry {
     ts: string;
     actor: string;
@@ -23,9 +29,12 @@
     target?: string;
   }
 
-  let audit = $state<AuditEntry[]>([]);
+  type AuditRow = AuditEntry & { occurrence: number };
+
+  let audit = $state<AuditRow[]>([]);
   let auditFilter = $state('');
   let reloading = $state(false);
+  let nextAuditOccurrence = 0;
 
   const shownAudit = $derived(
     auditFilter.trim()
@@ -56,7 +65,10 @@
   async function loadAudit() {
     try {
       const payload = unwrap(await ops.audit(session.channel!, 100));
-      audit = (payload.entries as AuditEntry[]) ?? [];
+      audit = ((payload.entries as AuditEntry[]) ?? []).map((entry) => ({
+        ...entry,
+        occurrence: nextAuditOccurrence++,
+      }));
     } catch (e) {
       logActivity('error', `admin.audit.recent: ${errorMessage(e)}`);
     }
@@ -89,6 +101,7 @@
       {reloading ? 'reloading…' : 'full reload'}
     </button>
     <button onclick={openSettings}>edit settings.yml</button>
+    <button onclick={onDisconnect}>disconnect</button>
   </div>
 </div>
 
@@ -119,7 +132,7 @@
   <input class="filter" placeholder="filter op / target / actor…" bind:value={auditFilter} />
   <table>
     <tbody>
-      {#each shownAudit as entry (entry.ts + entry.op + entry.target)}
+      {#each shownAudit as entry (entry.occurrence)}
         <tr>
           <td class="ts">{new Date(entry.ts).toLocaleTimeString()}</td>
           <td>{entry.op}</td>
@@ -167,6 +180,7 @@
   }
   .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-bottom: 6px;
   }

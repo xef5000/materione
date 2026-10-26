@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import AssetPicker from './AssetPicker.svelte';
+  import LegacyTextEditor from './LegacyTextEditor.svelte';
+  import MaterialPicker from './MaterialPicker.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
   import {
@@ -146,7 +148,7 @@
     }
   }
 
-  function patch(fieldId: string, value: string | number | boolean | string[]) {
+  function patch(fieldId: string, value: unknown) {
     try {
       setDraftField(draft, [rootId, fieldId], value);
     } catch (e) {
@@ -323,14 +325,23 @@
           <h3>{section}</h3>
           {#each fields.filter((field) => !field.advanced && !advancedKeys.includes(field.id) && (field.section ?? 'general') === section).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)) as field (field.id)}
         {@const value = textValue(field)}
-        <label class="field">
-          <span class="fid">
+        {@const controlId = `file-${tabKey}-${rootId}-${field.id}`}
+        <div class="field">
+          <label class="fid" for={controlId}>
             {field.label || field.id}
             {#if field.required}<em title="required">*</em>{/if}
-          </span>
+          </label>
 
-          {#if field.uiHint === 'texture' || field.uiHint === 'model'}
+          {#if field.uiHint === 'material'}
+            <MaterialPicker id={controlId} label={field.label || field.id} {value}
+              choices={field.allowedValues} required={field.required} onChange={(next) => patch(field.id, next)} />
+          {:else if field.uiHint === 'formatted-text' || field.uiHint === 'formatted-lines'}
+            <LegacyTextEditor id={controlId} label={field.label || field.id}
+              value={(data[rootId] as Record<string, unknown> | undefined)?.[field.id]}
+              multiline={field.uiHint === 'formatted-lines'} onChange={(next) => patch(field.id, next)} />
+          {:else if field.uiHint === 'texture' || field.uiHint === 'model'}
             <AssetPicker
+              id={controlId}
               pack={resource.pack}
               hint={field.uiHint}
               value={value}
@@ -353,6 +364,7 @@
             {/if}
           {:else if field.allowedValues && field.allowedValues.length > 0}
             <select
+              id={controlId}
               value={value}
               onchange={(event) => void patch(field.id, event.currentTarget.value)}
             >
@@ -363,12 +375,14 @@
             </select>
           {:else if field.type === 'boolean'}
             <input
+              id={controlId}
               type="checkbox"
               checked={boolValue(field)}
               onchange={(event) => void patch(field.id, event.currentTarget.checked)}
             />
           {:else if field.type === 'integer' || field.type === 'decimal'}
             <input
+              id={controlId}
               type="text"
               inputmode={field.type === 'decimal' ? 'decimal' : 'numeric'}
               value={numericInputs[JSON.stringify([rootId, field.id])] ?? value}
@@ -385,6 +399,7 @@
             />
           {:else if field.type === 'list'}
             <textarea
+              id={controlId}
               class="list"
               rows="3"
               spellcheck="false"
@@ -394,6 +409,7 @@
             ></textarea>
           {:else}
             <input
+              id={controlId}
               value={value}
               placeholder={field.default ?? ''}
               title={field.description ?? field.example ?? ''}
@@ -408,7 +424,7 @@
           {#if field.description}
             <small>{field.description}</small>
           {/if}
-        </label>
+        </div>
           {/each}
         </section>
       {/each}

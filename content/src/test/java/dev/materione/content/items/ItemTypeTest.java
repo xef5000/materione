@@ -88,6 +88,62 @@ class ItemTypeTest {
     }
 
     @Test
+    void displayNameAndLoreDeclareFormattingWidgetsInTheRegistrySchema() {
+        var parameters = type.describe().parameters();
+        var displayName = parameters.stream()
+                .filter(parameter -> parameter.id().equals("display_name"))
+                .findFirst().orElseThrow();
+        var lore = parameters.stream()
+                .filter(parameter -> parameter.id().equals("lore"))
+                .findFirst().orElseThrow();
+
+        assertThat(displayName.uiHint()).isEqualTo("formatted-text");
+        assertThat(displayName.editor().label()).isEqualTo("Display name");
+        assertThat(displayName.editor().section()).isEqualTo("identity");
+        assertThat(displayName.editor().order()).isZero();
+        assertThat(displayName.editor().example()).isEqualTo("Ruby sword");
+        assertThat(lore.uiHint()).isEqualTo("formatted-lines");
+        assertThat(lore.editor().label()).isEqualTo("Lore");
+        assertThat(lore.editor().section()).isEqualTo("gameplay");
+        assertThat(lore.editor().order()).isEqualTo(10);
+        assertThat(lore.editor().example()).isEqualTo("A very special item");
+    }
+
+    @Test
+    void materialChoicesComeOnlyFromTheProvidedPlatformPalette() {
+        var field = new ItemType(List.of("STICK", "PAPER", "STICK")).describe().parameters().get(0);
+
+        assertThat(field.id()).isEqualTo("material");
+        assertThat(field.type()).isEqualTo(dev.materione.api.registry.ParameterType.ENUM);
+        assertThat(field.allowedValues()).containsExactly("PAPER", "STICK");
+        assertThat(field.uiHint()).isEqualTo("material");
+    }
+
+    @Test
+    void unavailableMaterialPaletteDoesNotInventAnEnum() {
+        var field = new ItemType(List.of()).describe().parameters().get(0);
+
+        assertThat(field.type()).isEqualTo(dev.materione.api.registry.ParameterType.STRING);
+        assertThat(field.allowedValues()).isEmpty();
+        assertThat(field.uiHint()).isEqualTo("material");
+    }
+
+    @Test
+    void presentationUsesTheSameTemplateResolvedItemParserAsCompilation() {
+        var templates = new LinkedHashMap<String, Map<String, Object>>();
+        templates.put("sample:base_item",
+                map("display_name", "Inherited name", "material", "PAPER", "texture", "item/base"));
+        var parsed = type.parse(NamespacedId.parse("sample:thing"),
+                map("template", "base_item"), templates).orElseThrow();
+
+        var presentation = type.presentation(parsed).orElseThrow();
+
+        assertThat(presentation.name()).isEqualTo("Inherited name");
+        assertThat(presentation.material()).isEqualTo("PAPER");
+        assertThat(presentation.texture()).isEqualTo("item/base");
+    }
+
+    @Test
     void parsesMechanicsDeclarations() {
         var definition = map(
                 "material", "NETHERITE_SWORD",

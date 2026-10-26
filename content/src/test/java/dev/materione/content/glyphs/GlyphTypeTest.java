@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.content.AllocatedRange;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.api.content.ResourcePresentation;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -35,6 +36,30 @@ class GlyphTypeTest {
         assertThat(glyph.codepointCount()).isEqualTo(1);
         assertThat(glyph.placeholders()).containsExactly(":heart:", "<3");
         assertThat(glyph.emoji()).isTrue();
+    }
+
+    @Test
+    void presentationExposesBitmapSourcesAndTypedAliasTargets() {
+        var basic = parseGlyph(map("texture", "gui/heart"));
+        assertThat(type.presentation(basic)).contains(
+                new ResourcePresentation(null, null, "sample:gui/heart.png", null));
+
+        var sheet = parseGlyph(map("texture", "gui/sheet", "rows", 2, "columns", 3));
+        assertThat(type.presentation(sheet).orElseThrow().texture())
+                .isEqualTo("sample:gui/sheet.png");
+
+        var animated = parseGlyph(map("frames", List.of("gui/frame_1", "gui/frame_2")));
+        assertThat(type.presentation(animated).orElseThrow().texture())
+                .isEqualTo("sample:gui/frame_1.png");
+
+        var alias = parseGlyph(map("reference", "sample:heart"));
+        assertThat(type.presentation(alias).orElseThrow().reference())
+                .isEqualTo(new ResourcePresentation.Reference(
+                        "glyphs", NamespacedId.parse("sample:heart")));
+
+        var explicitExtension = parseGlyph(map("texture", "gui/heart.png"));
+        assertThat(type.presentation(explicitExtension).orElseThrow().texture())
+                .isEqualTo("sample:gui/heart.png");
     }
 
     @Test

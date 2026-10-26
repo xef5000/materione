@@ -44,6 +44,9 @@ describe('isRenderable', () => {
     expect(isRenderable(param('a', { uiHint: 'text' }))).toBe(true);
     expect(isRenderable(param('a', { uiHint: 'texture' }))).toBe(true);
     expect(isRenderable(param('a', { uiHint: 'recipe-grid' }))).toBe(true);
+    expect(isRenderable(param('a', { uiHint: 'material' }))).toBe(true);
+    expect(isRenderable(param('a', { uiHint: 'formatted-text' }))).toBe(true);
+    expect(isRenderable(param('a', { uiHint: 'formatted-lines' }))).toBe(true);
   });
 
   it('refuses free-form widgets that YAML owns', () => {
