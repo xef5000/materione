@@ -8,6 +8,7 @@ import dev.materione.api.content.Allocations;
 import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.api.content.ResourcePresentation;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.text.GlyphCodepoints;
 import dev.materione.content.Templates;
@@ -97,6 +98,30 @@ public final class GlyphType implements ContentType {
                                 "Shadow color applied when rendered (#RRGGBB or #AARRGGBB)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Shadow color", "appearance", 90, true, "text", "", "#40000000"))),
                 "1.0.0");
+    }
+
+    /**
+     * Exposes a bitmap source for catalog previews. Sheets remain source-sheet
+     * approximations, animations use their first frame, and aliases delegate
+     * to the canonical glyph they reference.
+     */
+    @Override
+    public Optional<ResourcePresentation> presentation(Object parsedDefinition) {
+        if (!(parsedDefinition instanceof GlyphDefinition glyph)) {
+            return Optional.empty();
+        }
+        if (glyph.isReference()) {
+            return Optional.of(new ResourcePresentation(
+                    null, null, null, null,
+                    new ResourcePresentation.Reference("glyphs", NamespacedId.parse(glyph.reference()))));
+        }
+        String texture = glyph.texture();
+        if (texture == null && !glyph.frames().isEmpty()) {
+            texture = glyph.frames().get(0);
+        }
+        return texture == null
+                ? Optional.empty()
+                : Optional.of(new ResourcePresentation(null, null, bitmapFile(texture), null));
     }
 
     @Override
@@ -202,13 +227,16 @@ public final class GlyphType implements ContentType {
             String file, int ascent, int height, List<String> chars) {
         var out = new LinkedHashMap<String, Object>();
         out.put("type", "bitmap");
-        // 1.21.2+ font format: "file" is a real texture path and needs the
-        // extension (authoring YAML stays extension-less)
-        out.put("file", file.endsWith(".png") ? file : file + ".png");
+        out.put("file", bitmapFile(file));
         out.put("ascent", ascent);
         out.put("height", height);
         out.put("chars", chars);
         return out;
+    }
+
+    private static String bitmapFile(String texture) {
+        // Font providers name the physical PNG; authoring refs may omit it.
+        return texture.endsWith(".png") ? texture : texture + ".png";
     }
 
     private static String charString(int codepoint) {

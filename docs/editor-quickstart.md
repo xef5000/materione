@@ -54,10 +54,13 @@ disconnect asks before discarding tracked drafts or leaving an active editor.
 2. Name the project once, then name the item. Materione creates the pack,
    item document, and display name in one operation; no paths are shown.
 3. The Item Studio groups controls by Identity, Appearance, Gameplay, and
-   Behavior. Pick a **material** and choose a **texture** — the picker lists the pack's
-   textures with thumbnails, the upload button takes a PNG straight
-   from your disk, and **Edit pixels** opens Materione's own pixel editor
-   (pencil, fill, eyedropper, shapes, mirror, undo/redo) without leaving the item.
+   Behavior. Search **Base material** by its human label or technical ID; the
+   choices come from this server's registered material list. If an existing
+   item has an ID the server no longer advertises, it stays intact until you
+   choose a replacement. Choose a **texture** — the picker lists the pack's
+   textures with thumbnails, the upload button takes a PNG straight from your
+   disk, and **Edit pixels** opens Materione's own pixel editor (pencil, fill,
+   eyedropper, shapes, mirror, undo/redo) without leaving the item.
 4. Choose **Save & apply**. Only changed fields are sent in one revision-checked
    batch; comments and fields the studio does not show stay untouched, and a
    footer says when fields are only editable in Files. Save & apply updates the
@@ -65,6 +68,24 @@ disconnect asks before discarding tracked drafts or leaving an active editor.
    Activity/status area reports the latest server-wide reload signal; it cannot
    attribute that signal to this particular save. Check the item with
    `/materione dev stack <pack>:<item>`.
+
+The item preview keeps its 32 px inventory slot and enlarged static visual
+separate from the scrolling form. Its live name/lore tooltip is a browser
+approximation: existing `&` color/decorations are shown, unsupported tokens
+stay literal, and authored text is not interpreted as HTML. Fonts, glyphs,
+effects, obfuscation, and gameplay still need an in-game check. Click the
+preview name or lore to focus that editor field. Name and lore edits—including
+blank lore lines and spaces—remain local until **Save & apply**; moving focus
+away does not save. An unchanged document is not written. The preview's
+**View server and pack status** link opens the Server support view; candidate
+availability or a connected-server label is not proof that an item is live in
+game or that a client accepted the pack.
+
+The plain-lines lore editor refuses non-string entries and entries containing
+embedded line breaks rather than flattening them; the original value remains
+intact in Files. Decoration formatting respects existing color codes; choosing
+a color recolors the selected text. Formatting across multiple lore lines is
+handled one line at a time.
 
 The pixel editor has its own **Save & apply**: it commits the texture and, when
 needed, its owning texture reference. Other pending document fields remain
@@ -80,14 +101,29 @@ the item browser.
 
 The initial authoring surface is **Content**, with Items selected; the workbench
 also has **Files**. Its labels are expanded by default and can be collapsed.
-**Problems**, **Activity**, and **Server** are support destinations; Activity
-starts collapsed. There is no separate Start or Assets workspace in this slice:
+**Problems**, **Activity**, and **Server** are support destinations. Activity is
+hidden by default; click its sidebar button to open or close it, or use the panel's
+close button. New activity stays in the log without reopening a closed panel.
+Collapsing navigation labels keeps the buttons in place. There is no separate Start or Assets workspace in this slice:
 open assets from a studio slot or in Files. Make folders if you want them (they
 are organisational only — ids do not change), double-click an entry to open its
 studio, and use search, F2, or the right-click menu to duplicate, move, delete,
-or reveal it in Files. From a document in Files, choose **Open in Studio**; a
-multi-resource document keeps the selected resource root. Files retains the tree,
-generic form, raw YAML, revisions, and assets for everything a studio does not touch.
+or reveal it in Files. Content rows represent resources, not just documents:
+they show the server's resource name, material/summary, health, and a supported
+static thumbnail when available. Search includes human-readable names and
+materials. Choose the dense list or compact grid independently for each content
+type; resource IDs and file paths are optional technical columns. A shared YAML
+document can therefore have multiple resource rows; opening one keeps that exact
+root. If summaries or visuals are unavailable, the catalog keeps the resource
+visible with a fallback name, unknown health, and an honest preview placeholder.
+Health remains unknown unless a direct read proves an error; it never proves that a save was applied.
+`MTR-0051` means the summary read budget was exceeded, not that a save was rejected:
+Files and the running content remain available.
+Rename, move and delete operate on the entire file and show the impact on shared
+resources. Duplicating a shared file as one resource is not offered.
+From a document in Files, choose **Open in Studio**; a multi-resource document
+keeps the selected resource root. Files retains the tree, generic form, raw YAML,
+revisions, and assets for everything a studio does not touch.
 
 ## 4. Model with Blockbench
 
@@ -115,6 +151,9 @@ are never shipped to clients.
 ## 5. Glyphs, emoji, sounds and paintings
 
 **Glyphs** are custom pictures in text — emoji for chat, icons for names.
+The Glyphs catalog shows source-texture miniatures in both list and grid.
+Sheets show their source image, animations show a static frame, and references
+borrow the target's source preview; these are not font-layout or in-game rendering proofs.
 Create one under **Glyphs**, pick a texture (the preview shows exactly how
 it renders at its ascent/height) and save. You never pick a codepoint: the
 server allocates one durably and the preview shows it. Add
@@ -170,13 +209,14 @@ Server view).
 
 ## 8. When things go wrong
 
-- **Problems** — diagnostics stream in live; file-backed locations open the
+- **Problems** — diagnostics stream in live, including repeated occurrences; file-backed locations open the
   source document in Files. Line/column links focus a read-only saved-source
   excerpt without changing pending form or YAML edits. Runtime diagnostics
   without a file location have no file click-through.
 - **Server view** — manual full or per-pack reloads, the `settings.yml`
-  editor (validated before anything lands on disk), and the audit trail.
-- **Activity** (bottom dock) — recent saves/errors and the latest observed
+  editor (validated before anything lands on disk), the audit trail, and
+  **disconnect**, which still asks before discarding local drafts.
+- **Activity** (optional bottom panel) — recent saves/errors and the latest observed
   server-wide reload outcome, not a per-save delivery receipt.
 - A save that hits a file changed elsewhere fails with `MTR-0034` instead
   of clobbering: reload the document and re-apply your edit.

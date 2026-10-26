@@ -262,6 +262,16 @@ editor (inline squiggles + diagnostics center), and in `/materione doctor`.
 - Runtime errors (an ECA action throwing mid-execution) degrade to a per-invocation diagnostic
   with rate-limited logging — one broken action never spam-logs or takes down the event chain.
 
+The M5 catalog has a separate read-only guard ([`api.md`](api.md) section 3.3):
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0051` | warning | Resource-summary construction exceeded its 16 MiB accounted scan/projection budget, including templates. No partial page is returned. Content remains canonical and runtime is unchanged; the catalog falls back to IDs/unknown health and Files remains available. The cached refusal is cleared by content invalidation, so reduce the input/projection volume before retrying. |
+
+Canonical document reads for this projection also stop at the existing 8 MiB
+transaction limit per file. Oversized files remain visible with unavailable read
+metadata; the guard does not quarantine otherwise valid runtime content.
+
 ---
 
 ## 6. Platform isolation layer

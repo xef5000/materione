@@ -223,6 +223,10 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode EDITOR_RELAY_UNREACHABLE =
             new DiagnosticCode("MTR-0050", Severity.WARN, "Editor relay unreachable; fell back to local mode");
 
+    /** The read-only editor resource-summary projection exceeded its bounded in-memory budget. */
+    public static final DiagnosticCode AUTHORING_SUMMARY_BUDGET_EXCEEDED =
+            new DiagnosticCode("MTR-0051", Severity.WARN, "Resource summary exceeds its read budget");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -273,7 +277,8 @@ public final class DiagnosticCodes {
             EFFECT_SIGNAL_EXHAUSTED,
             ITEM_COMPONENTS_NOT_APPLIED,
             EDITOR_RELAY_SESSION_ENDED,
-            EDITOR_RELAY_UNREACHABLE);
+            EDITOR_RELAY_UNREACHABLE,
+            AUTHORING_SUMMARY_BUDGET_EXCEEDED);
 
     private DiagnosticCodes() {}
 

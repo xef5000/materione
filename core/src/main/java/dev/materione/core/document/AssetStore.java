@@ -40,6 +40,13 @@ public final class AssetStore {
     /** One listed asset: path relative to the pack root, size and kind (extension). */
     public record AssetEntry(String path, long sizeBytes, String kind) {}
 
+    /** Read-only outcome for a path admitted by the existing asset-read policy. */
+    public enum ReadableAssetState {
+        PRESENT,
+        MISSING,
+        UNAVAILABLE
+    }
+
     private final Path packsRoot;
     private final AuditLog audit;
 
@@ -106,6 +113,45 @@ public final class AssetStore {
             throw new java.nio.file.NoSuchFileException(path);
         }
         return Files.readAllBytes(file);
+    }
+
+    /**
+     * Checks a readable path without loading its bytes. This deliberately
+     * shares {@link #readableAssetPath(String)} with {@link #get(String, String)}
+     * so summaries cannot expose paths outside assets or cached thumbnails.
+     */
+    public ReadableAssetState inspectReadable(String pack, String path) {
+        final String safePath;
+        try {
+            safePath = readableAssetPath(path);
+        } catch (IllegalArgumentException e) {
+            return ReadableAssetState.UNAVAILABLE;
+        }
+        if (pack == null || !pack.matches("[a-z0-9_-]{2,64}")) {
+            return ReadableAssetState.UNAVAILABLE;
+        }
+        Path root = packsRoot.toAbsolutePath().normalize();
+        Path packRoot = root.resolve(pack).normalize();
+        if (!packRoot.startsWith(root) || Files.isSymbolicLink(packRoot)) {
+            return ReadableAssetState.UNAVAILABLE;
+        }
+        Path file = packRoot.resolve(safePath).normalize();
+        if (!file.startsWith(packRoot)) {
+            return ReadableAssetState.UNAVAILABLE;
+        }
+        Path current = packRoot;
+        for (Path segment : packRoot.relativize(file)) {
+            current = current.resolve(segment);
+            if (Files.isSymbolicLink(current)) {
+                return ReadableAssetState.UNAVAILABLE;
+            }
+        }
+        if (Files.isRegularFile(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+            return ReadableAssetState.PRESENT;
+        }
+        return Files.notExists(file, java.nio.file.LinkOption.NOFOLLOW_LINKS)
+                ? ReadableAssetState.MISSING
+                : ReadableAssetState.UNAVAILABLE;
     }
 
     /** Atomic rename; the target must not exist. Returns silently only on success. */

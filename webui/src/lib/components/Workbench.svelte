@@ -10,14 +10,13 @@
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
-  import { activityLog, connection, diagnostics, server, ui } from '../state.svelte';
+  import { activityLog, diagnostics, ui } from '../state.svelte';
 
   interface Props {
-    browserLabel: string;
     onDisconnect: () => void;
   }
 
-  let { browserLabel, onDisconnect }: Props = $props();
+  let { onDisconnect }: Props = $props();
 
   type RailView = 'content' | 'advanced' | 'diagnostics' | 'server';
   type RailTarget = RailView | 'activity';
@@ -64,17 +63,9 @@
   const activityErrors = $derived(
     activityLog.entries.filter((entry) => entry.kind === 'error').length,
   );
-  const connectionStatus = $derived(
-    connection.connected
-      ? { label: browserLabel, title: 'Editor session active' }
-      : connection.error
-        ? { label: 'Connection lost', title: connection.error }
-        : { label: 'Disconnected', title: 'No active editor session' },
-  );
-
   function activate(target: RailTarget): void {
     if (target === 'activity') {
-      ui.activityOpen = true;
+      ui.activityOpen = !ui.activityOpen;
       return;
     }
     ui.view = target;
@@ -98,7 +89,7 @@
   <div class="main" class:rail-collapsed={ui.railCollapsed}>
     <nav class="rail" class:collapsed={ui.railCollapsed} aria-label="Workspace navigation">
       <div class="nav-group" role="group" aria-label="Authoring">
-        <p class="group-label">Authoring</p>
+        <h2 class="group-label">Authoring</h2>
         {#each authoringViews as entry (entry.id)}
           <button
             type="button"
@@ -117,7 +108,7 @@
       </div>
 
       <div class="nav-group support-group" role="group" aria-label="Support">
-        <p class="group-label">Support</p>
+        <h2 class="group-label">Support</h2>
         {#each supportViews as entry (entry.id)}
           {@const count = errorCount(entry)}
           <button
@@ -126,8 +117,9 @@
             title={accessibleLabel(entry)}
             aria-label={accessibleLabel(entry)}
             aria-current={entry.id !== 'activity' && ui.view === entry.id ? 'page' : undefined}
-            aria-controls={entry.id === 'activity' ? 'activity-dock' : undefined}
+            aria-controls={entry.id === 'activity' && ui.activityOpen ? 'activity-dock' : undefined}
             aria-expanded={entry.id === 'activity' ? ui.activityOpen : undefined}
+            id={entry.id === 'activity' ? 'activity-toggle' : undefined}
             onclick={() => activate(entry.id)}
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
@@ -193,31 +185,15 @@
           aria-hidden={ui.view !== 'server'}
           aria-label="Server"
         >
-          <ServerView />
+          <ServerView {onDisconnect} />
         </section>
       {/if}
     </main>
   </div>
 
-  <ActivityDock bind:open={ui.activityOpen} />
-
-  <footer class="statusbar">
-    <span class="brand">materione <em>editor</em></span>
-    <span
-      class="conn"
-      class:ok={connection.connected}
-      class:error={!connection.connected}
-      title={connectionStatus.title}
-    >● {connectionStatus.label}</span>
-    {#if connection.lastReload}
-      <span class="reload" title="latest observed pipeline outcome">{connection.lastReload}</span>
-    {/if}
-    <span class="spacer"></span>
-    {#if server.version}
-      <span class="version">server {server.version}</span>
-    {/if}
-    <button class="ghost" type="button" onclick={onDisconnect}>disconnect</button>
-  </footer>
+  {#if ui.activityOpen}
+    <ActivityDock bind:open={ui.activityOpen} />
+  {/if}
 </div>
 
 <style>
@@ -309,7 +285,12 @@
   .rail.collapsed {
     padding-inline: 4px;
   }
-  .rail.collapsed .group-label,
+  .rail.collapsed .group-label {
+    height: 14px;
+    overflow: hidden;
+    color: transparent;
+    white-space: nowrap;
+  }
   .rail.collapsed .nav-label {
     display: none;
   }
@@ -361,70 +342,9 @@
     font-size: 16px;
     font-weight: 600;
   }
-  .statusbar {
-    display: flex;
-    flex: none;
-    min-width: 0;
-    align-items: center;
-    gap: 14px;
-    border-top: 1px solid var(--border);
-    background: var(--bg-panel);
-    padding: 4px 12px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  .brand {
-    flex: none;
-  }
-  .brand em {
-    color: var(--accent);
-    font-style: normal;
-  }
-  .conn.ok {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--ok);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .conn.error {
-    color: var(--error);
-  }
-  .reload {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 40vw;
-  }
-  .spacer {
-    flex: 1;
-  }
-  .ghost {
-    flex: none;
-    background: none;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 2px 10px;
-    cursor: pointer;
-    color: inherit;
-  }
-  .ghost:hover {
-    color: var(--fg);
-  }
   @media (max-width: 700px) {
     .main:not(.rail-collapsed) {
       grid-template-columns: minmax(138px, 38vw) minmax(0, 1fr);
-    }
-    .statusbar {
-      gap: 7px;
-      padding-inline: 8px;
-    }
-    .reload {
-      max-width: 24vw;
-    }
-    .version {
-      display: none;
     }
   }
 </style>

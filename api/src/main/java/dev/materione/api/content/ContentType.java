@@ -33,6 +33,15 @@ public interface ContentType {
     Optional<Object> parse(NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates);
 
     /**
+     * Optional display metadata from the type's parsed representation. A
+     * default keeps existing addons source-compatible and leaves generic
+     * summary fallback to the authoring layer.
+     */
+    default Optional<ResourcePresentation> presentation(Object parsedDefinition) {
+        return Optional.empty();
+    }
+
+    /**
      * Compiles one definition into pack output through {@link PackEmitter}.
      * The compiler calls this per definition, in graph order; hooks stay
      * deterministic (same definition + allocation → same output, D7).

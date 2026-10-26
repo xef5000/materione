@@ -29,6 +29,24 @@
   --error: #f7768e;
   --error-bg: #2a1620;
 
+  /* Minecraft legacy text colors, shared by safe text previews. */
+  --legacy-0: #000000;
+  --legacy-1: #0000aa;
+  --legacy-2: #00aa00;
+  --legacy-3: #00aaaa;
+  --legacy-4: #aa0000;
+  --legacy-5: #aa00aa;
+  --legacy-6: #ffaa00;
+  --legacy-7: #aaaaaa;
+  --legacy-8: #555555;
+  --legacy-9: #5555ff;
+  --legacy-a: #55ff55;
+  --legacy-b: #55ffff;
+  --legacy-c: #ff5555;
+  --legacy-d: #ff55ff;
+  --legacy-e: #ffff55;
+  --legacy-f: #ffffff;
+
   --radius: 6px;
   --radius-lg: 12px;
   --mono: ui-monospace, monospace;

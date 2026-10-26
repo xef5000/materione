@@ -6,7 +6,7 @@
     open?: boolean;
   }
 
-  let { open = $bindable(false) }: Props = $props();
+  let { open = $bindable(true) }: Props = $props();
 
   const errors = $derived(activityLog.entries.filter((entry) => entry.kind === 'error').length);
 
@@ -20,17 +20,16 @@
   function time(ts: number): string {
     return new Date(ts).toLocaleTimeString();
   }
+
+  function close(): void {
+    document.getElementById('activity-toggle')?.focus();
+    open = false;
+  }
 </script>
 
-<section id="activity-dock" class:expanded={open} aria-label="Activity log">
-  <button
-    class="head"
-    type="button"
-    onclick={() => (open = !open)}
-    aria-expanded={open}
-    aria-controls="activity-entries"
-  >
-    <span class="title">Activity</span>
+<section id="activity-dock" aria-labelledby="activity-title">
+  <div class="head">
+    <h2 id="activity-title" class="title">Activity</h2>
     <span class="count" aria-label={`${activityLog.entries.length} activity entries`}>
       {activityLog.entries.length}
     </span>
@@ -38,10 +37,16 @@
       <span class="error-count">{errors} {errors === 1 ? 'error' : 'errors'}</span>
     {/if}
     <span class="spacer"></span>
-    <span class="toggle" aria-hidden="true">{open ? '▼' : '▲'}</span>
-  </button>
+    <button
+      class="close"
+      type="button"
+      aria-label="Close Activity"
+      title="Close Activity"
+      onclick={close}
+    >×</button>
+  </div>
 
-  <div id="activity-entries" class="body" hidden={!open}>
+  <div id="activity-entries" class="body">
     {#if activityLog.entries.length > 0}
       <button
         class="clear"
@@ -88,11 +93,10 @@
     text-transform: uppercase;
     letter-spacing: 0.08em;
     padding: 5px 12px;
-    cursor: pointer;
-    text-align: left;
   }
-  .head:hover {
-    color: var(--fg);
+  .title {
+    margin: 0;
+    font: inherit;
   }
   .count {
     background: var(--bg-raised);
@@ -107,12 +111,22 @@
     text-transform: none;
     letter-spacing: 0;
   }
-  .spacer,
-  .toggle {
-    flex: 1;
+  .spacer {
+    margin-left: auto;
   }
-  .toggle {
+  .close {
     flex: none;
+    background: none;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: inherit;
+    padding: 0 6px;
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1.2;
+  }
+  .close:hover {
+    color: var(--fg);
   }
   .body {
     display: flex;
@@ -120,9 +134,6 @@
     flex-direction: column;
     min-height: 0;
     overflow: hidden;
-  }
-  .body[hidden] {
-    display: none;
   }
   .clear {
     align-self: flex-end;

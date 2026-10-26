@@ -10,6 +10,7 @@
   import StructuredList from './StructuredList.svelte';
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
+  import ItemPreview from './ItemPreview.svelte';
   import GlyphPreview from './GlyphPreview.svelte';
   import AudioPreview from './AudioPreview.svelte';
   import PaintingPreview from './PaintingPreview.svelte';
@@ -29,6 +30,9 @@
     setDraftField,
   } from '../drafts.svelte';
   import { rootIdForResource, sectionsOf, unrenderableKeys } from '../studio';
+  import { localStudioVisual } from '../studio-visual';
+  import { editableLegacyLines, editableLegacyText, plainLegacyText } from '../legacy-text';
+  import { invalidateThumbnails } from '../thumbnails';
   import {
     diagnostics,
     connection,
@@ -48,6 +52,7 @@
   }
 
   let { resource, onClose, active = true }: Props = $props();
+  let formElement: HTMLDivElement | undefined = $state();
 
   const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
   const rootId = $derived(rootIdForResource(resource.id));
@@ -82,7 +87,30 @@
   const sections = $derived(sectionsOf(schema));
   const advancedOnly = $derived(unrenderableKeys(loaded, schema));
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
-  const name = $derived(String(draft.display_name ?? '') || resource.id);
+  const name = $derived(plainLegacyText(String(draft.display_name ?? '')).trim() || resource.id);
+  const savedVisual = $derived(workspace.summaries.find((entry) =>
+    entry.pack === resource.pack && entry.path === resource.path && entry.id === resource.id,
+  )?.visual);
+  const visual = $derived(
+    draft.texture === loaded.texture && draft.model === loaded.model && savedVisual
+      ? savedVisual
+      : localStudioVisual(resource.pack, String(draft.texture ?? ''), String(draft.model ?? ''), workspace.assets),
+  );
+  const fieldsEditable = $derived(documentDraft.loaded && !loading && !saving &&
+    !rawDraftDirty(documentDraft) && !documentDraft.uncertain && !documentDraft.stale);
+  const canFocusName = $derived(fieldsEditable && editableLegacyText(draft.display_name) !== null &&
+    sections.some((section) => section.fields.some((field) => field.id === 'display_name')));
+  const canFocusLore = $derived(fieldsEditable && editableLegacyLines(draft.lore) !== null &&
+    sections.some((section) => section.fields.some((field) => field.id === 'lore')));
+
+  function focusField(fieldId: string) {
+    const field = [...(formElement?.querySelectorAll<HTMLElement>('[data-field]') ?? [])]
+      .find((element) => element.dataset.field === fieldId);
+    const control = field?.querySelector<HTMLElement>('[data-field-control]') ??
+      field?.querySelector<HTMLElement>('input, textarea, select');
+    control?.focus();
+    control?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
   const pendingRoots = $derived([
     ...new Set(
       documentDraft.edits
@@ -223,10 +251,12 @@
     const field = modelling ?? 'model';
     const committedField = [rootId, field];
     textureVersion += 1;
+    invalidateThumbnails();
     modelling = null;
     const channel = session.channel;
     if (channel) {
       await reconcileDocumentDraft(documentDraft, channel, [committedField]);
+      await refreshPack();
     } else {
       documentDraft.stale = true;
       documentDraft.error = 'Model assets were applied, but the document draft could not be reconciled while disconnected.';
@@ -249,6 +279,7 @@
   async function textureSaved() {
     if (!texturing) return;
     textureVersion += 1;
+    invalidateThumbnails(resource.pack);
     const { field, reference } = texturing;
     const channel = session.channel;
     if (!channel) {
@@ -305,7 +336,7 @@
   }
 
   function onKeydown(event: KeyboardEvent) {
-    if (!active || texturing || modelling) return; // the active overlay owns the keyboard
+    if (!active || event.defaultPrevented || event.isComposing || texturing || modelling) return;
     if (event.key === 'Escape' && !dirty) onClose();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
@@ -371,6 +402,9 @@
           height={Number(draft.height ?? 1)}
           nonce={textureVersion}
         />
+      {:else if typeDirectory === 'items'}
+        <ItemPreview name={draft.display_name} lore={draft.lore} material={String(draft.material ?? '')}
+          {visual} version={textureVersion} {canFocusName} {canFocusLore} onFocus={focusField} />
       {:else}
         <StudioPreview
           pack={resource.pack}
@@ -378,11 +412,12 @@
           model={String(draft.model ?? '')}
           label={name}
           nonce={textureVersion}
+          {visual}
         />
       {/if}
     </aside>
 
-    <div class="form">
+    <div class="form" bind:this={formElement}>
       {#if rawDraftDirty(documentDraft)}
         <p class="pending-yaml">
           Advanced Files YAML changes are pending. Apply or discard them there before editing structured fields.
@@ -390,7 +425,7 @@
       {/if}
       <fieldset
         class="field-controls"
-        disabled={documentDraft.loading || documentDraft.saving || rawDraftDirty(documentDraft) || documentDraft.uncertain || documentDraft.stale}
+        disabled={!fieldsEditable}
       >
       {#if !schema}
         <p class="error">No registered type owns {typeDirectory}/ — edit this file as YAML.</p>
@@ -573,15 +608,21 @@
     grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
     gap: 20px;
     padding: 16px;
-    overflow-y: auto;
+    overflow-y: hidden;
     overflow-x: hidden;
     min-width: 0;
   }
   .preview {
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 4px;
   }
   .form {
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 8px;
     max-width: 620px;
   }
   fieldset {
@@ -651,7 +692,15 @@
   }
   @media (max-width: 720px) {
     .body {
-      grid-template-columns: minmax(0, 1fr);
+      display: flex;
+      flex-direction: column;
+    }
+    .preview {
+      max-height: 42%;
+      flex: none;
+    }
+    .form {
+      flex: 1 1 0;
     }
   }
 </style>

@@ -4,6 +4,8 @@
    * decides what a field means — the type's self-description does (D5).
    */
   import AssetPicker from '../components/AssetPicker.svelte';
+  import LegacyTextEditor from '../components/LegacyTextEditor.svelte';
+  import MaterialPicker from '../components/MaterialPicker.svelte';
   import type { TypeParam } from '../api';
 
   interface Props {
@@ -16,6 +18,7 @@
   }
 
   let { field, value, pack, onChange, action }: Props = $props();
+  const controlId = $props.id();
 
   const widget = $derived(field.uiHint ?? 'text');
   const text = $derived(value === undefined || value === null ? '' : String(value));
@@ -31,21 +34,27 @@
   }
 </script>
 
-<label class="field">
-  <span class="label">
+<div class="field" data-field={field.id}>
+  <label class="label" for={controlId}>
     {field.label || field.id}
     {#if field.required}<em title="required">*</em>{/if}
-  </span>
+  </label>
 
-  {#if widget === 'texture' || widget === 'model'}
+  {#if widget === 'material'}
+    <MaterialPicker id={controlId} label={field.label || field.id} value={text}
+      choices={field.allowedValues} required={field.required} onChange={(next) => onChange(next)} />
+  {:else if widget === 'formatted-text' || widget === 'formatted-lines'}
+    <LegacyTextEditor id={controlId} label={field.label || field.id} {value}
+      multiline={widget === 'formatted-lines'} {onChange} />
+  {:else if widget === 'texture' || widget === 'model'}
     <span class="slot">
-      <AssetPicker {pack} hint={widget} value={text} onChange={(next) => onChange(next)} />
+      <AssetPicker id={controlId} {pack} hint={widget} value={text} onChange={(next) => onChange(next)} />
       {#if action}
         <button type="button" class="action" onclick={action.run}>{action.label}</button>
       {/if}
     </span>
   {:else if field.allowedValues && field.allowedValues.length > 0}
-    <select value={text} onchange={(event) => onChange(event.currentTarget.value)}>
+    <select id={controlId} value={text} onchange={(event) => onChange(event.currentTarget.value)}>
       {#if !field.required}<option value=""></option>{/if}
       {#each field.allowedValues as option (option)}
         <option value={option}>{option.replaceAll('_', ' ')}</option>
@@ -53,12 +62,14 @@
     </select>
   {:else if field.type === 'boolean'}
     <input
+      id={controlId}
       type="checkbox"
       checked={value === true || text === 'true'}
       onchange={(event) => onChange(event.currentTarget.checked)}
     />
   {:else if field.type === 'integer' || field.type === 'decimal'}
     <input
+      id={controlId}
       type="number"
       step={field.type === 'decimal' ? 'any' : '1'}
       value={text}
@@ -70,6 +81,7 @@
     />
   {:else if field.type === 'list'}
     <textarea
+      id={controlId}
       rows="3"
       spellcheck="false"
       value={lines}
@@ -78,6 +90,7 @@
     ></textarea>
   {:else}
     <input
+      id={controlId}
       type="text"
       value={text}
       placeholder={field.example ?? ''}
@@ -92,7 +105,7 @@
   {#if field.description}
     <small>{field.description}</small>
   {/if}
-</label>
+</div>
 
 <style>
   .field {
@@ -156,7 +169,7 @@
     background: var(--bg-hover);
   }
   small {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 11px;
     line-height: 1.4;
   }

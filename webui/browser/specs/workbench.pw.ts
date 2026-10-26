@@ -31,24 +31,31 @@ const blockbenchFrame = `<!doctype html>
   <body></body>
 </html>`;
 
-async function openFixture(page: Page): Promise<void> {
-  await page.goto('/browser/fixture.html');
+async function openFixture(page: Page, options: { summaryError?: boolean } = {}): Promise<void> {
+  const query = options.summaryError ? '?summaryError=1' : '';
+  await page.goto(`/browser/fixture.html${query}`);
   await expect(page.locator('html')).toHaveAttribute('data-fixture-ready', 'true');
 }
 
 async function openStudioFromContent(page: Page, resourceId = 'ruby_blade'): Promise<void> {
-  await page.getByRole('option', { name: new RegExp(resourceId, 'i') }).dblclick();
+  const names: Record<string, string> = {
+    ruby_blade: 'Ruby Blade',
+    ruby_a: 'Crimson Jewel',
+    ruby_b: 'Ruby B',
+  };
+  const name = names[resourceId] ?? resourceId;
+  await page.getByRole('option', { name: new RegExp(name, 'i') }).dblclick();
   await expect(page.getByRole('button', { name: /open in files/i })).toBeVisible();
 }
 
 async function openBladeInFiles(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Files', exact: true }).click();
   await page.getByRole('button', { name: /ruby_blade\.yml/i }).click();
-  await expect(page.getByLabel('Display name')).toBeEditable();
+  await expect(page.getByLabel('Display name', { exact: true })).toBeEditable();
 }
 
 async function editDisplayName(page: Page, value: string): Promise<void> {
-  const field = page.getByLabel('Display name');
+  const field = page.getByLabel('Display name', { exact: true });
   await field.fill(value);
   await field.press('Tab');
   await expect(field).toHaveValue(value);
@@ -60,6 +67,22 @@ async function readWrites(page: Page) {
     if (!controls) throw new Error('Browser fixture controls are missing.');
     return controls.writes();
   });
+}
+
+async function readCalls(page: Page) {
+  return page.evaluate(() => {
+    const controls = window.__materioneTestControls;
+    if (!controls) throw new Error('Browser fixture controls are missing.');
+    return controls.calls();
+  });
+}
+
+async function chooseMaterialByKeyboard(page: Page, label: string, query: string): Promise<void> {
+  const material = page.getByRole('combobox', { name: label });
+  await material.fill(query);
+  await expect(page.getByRole('listbox', { name: `${label} choices` })).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
 }
 
 async function stubBlockbenchBoundary(page: Page): Promise<void> {
@@ -94,6 +117,20 @@ test('mounts the real Workbench at desktop and narrow desktop widths', async ({ 
     fullPage: true,
     animations: 'disabled',
   });
+
+  await page.setViewportSize({ width: 1365, height: 900 });
+  await openStudioFromContent(page);
+  await page.screenshot({
+    path: testInfo.outputPath('item-workbench-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.screenshot({
+    path: testInfo.outputPath('item-workbench-narrow-desktop.png'),
+    fullPage: true,
+    animations: 'disabled',
+  });
 });
 
 test('navigates from the real Files document into its Studio', async ({ page }) => {
@@ -110,6 +147,126 @@ test('navigates from the real Files document into its Studio', async ({ page }) 
 
   const writes = await readWrites(page);
   expect(writes).toHaveLength(0);
+});
+
+test('uses pack-scoped summary pages and searches human names without reading each document', async ({
+  page,
+}) => {
+  await openFixture(page);
+
+  const calls = await readCalls(page);
+  const summaryCalls = calls.filter((call) => call.op === 'authoring.summaries');
+  expect(summaryCalls).toEqual([
+    { op: 'authoring.summaries', payload: { pack: 'fixture_pack' } },
+  ]);
+  expect(calls.filter((call) => call.op === 'browse.get')).toHaveLength(0);
+  expect(await readWrites(page)).toHaveLength(0);
+
+  const search = page.getByPlaceholder('search items…');
+  await search.fill('Crimson Jewel');
+  const result = page.getByRole('option', { name: /Crimson Jewel/ });
+  await expect(result).toBeVisible();
+  await expect(page.getByRole('option', { name: /Ruby Blade/ })).toHaveCount(0);
+  await expect(result.locator('.summary')).toHaveText('Blaze Rod');
+  await expect(result.locator('.health')).toHaveText('unknown');
+  await expect(
+    page.getByRole('img', { name: 'Crimson Jewel: no preview available' }),
+  ).toBeVisible();
+});
+
+test('keeps list and grid preferences per type and hides technical columns by default', async ({ page }) => {
+  await openFixture(page);
+
+  const listLayout = page.getByRole('button', { name: 'Dense visual list' });
+  const gridLayout = page.getByRole('button', { name: 'Compact grid' });
+  await expect(gridLayout).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'ID / path' }).click();
+  await expect(page.getByText('ruby_blade', { exact: true })).toBeVisible();
+  await expect(page.getByText('items/ruby_blade.yml', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'ID / path' }).click();
+  await expect(page.getByText('ruby_blade', { exact: true })).toHaveCount(0);
+
+  await listLayout.click();
+  await expect(listLayout).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Blocks', exact: true }).click();
+  await expect(page.getByRole('listbox', { name: 'Blocks in blocks' })).toBeVisible();
+  await expect(gridLayout).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: 'Items', exact: true }).click();
+  await expect(listLayout).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('opens the selected resource root when several items share one document', async ({ page }) => {
+  await openFixture(page);
+
+  await page.getByPlaceholder('search items…').fill('Ruby B');
+  const result = page.getByRole('option').filter({
+    has: page.getByText('Ruby B', { exact: true }),
+  });
+  await expect(result).toBeVisible();
+  await result.dblclick();
+  await expect(page.locator('.studio header .meta')).toContainText('ruby_b');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Ruby B');
+  const materialField = page.locator('[data-field="material"]');
+  await expect(materialField.locator('.current code')).toHaveText('CUSTOM_FUTURE_MATERIAL');
+  await expect(materialField).toContainText(/current ID is not in this server's material list/i);
+  const loreField = page.locator('[data-field="lore"]');
+  await expect(loreField.getByText(/cannot be edited as plain lines/i)).toBeVisible();
+  await expect(loreField.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Save & apply' })).toBeDisabled();
+  expect(await readWrites(page)).toHaveLength(0);
+});
+
+test('refuses to flatten non-string lore entries and leaves their editor unavailable', async ({ page }) => {
+  await openFixture(page);
+  await page.getByPlaceholder('search items…').fill('Malformed Lore');
+  await page.getByRole('option', { name: /Malformed Lore/ }).dblclick();
+
+  const loreField = page.locator('[data-field="lore"]');
+  await expect(loreField.getByText(/cannot be edited as plain lines/i)).toBeVisible();
+  await expect(loreField.getByRole('textbox')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Edit item lore' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Save & apply' })).toBeDisabled();
+  expect(await readWrites(page)).toHaveLength(0);
+});
+
+test('keeps the item preview in place while the long form scrolls independently', async ({ page }) => {
+  await openFixture(page);
+  await page.setViewportSize({ width: 1280, height: 540 });
+  await openStudioFromContent(page);
+
+  const preview = page.locator('.studio .preview');
+  const form = page.locator('.studio .form');
+  await expect(page.getByRole('region', { name: 'Item preview' })).toBeVisible();
+  await expect(preview).toBeVisible();
+  await expect.poll(() =>
+    form.evaluate((element) => element.scrollHeight > element.clientHeight),
+  ).toBe(true);
+  const before = await preview.boundingBox();
+  const previewScrollBefore = await preview.evaluate((element) => element.scrollTop);
+  expect(before).not.toBeNull();
+
+  await form.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(() => form.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  const after = await preview.boundingBox();
+  expect(after).not.toBeNull();
+  expect(after!.x).toBe(before!.x);
+  expect(after!.y).toBe(before!.y);
+  expect(await preview.evaluate((element) => element.scrollTop)).toBe(previewScrollBefore);
+  expect(await readWrites(page)).toHaveLength(0);
+});
+
+test('falls back to humanised resource IDs and unknown health when summary reads fail', async ({ page }) => {
+  await openFixture(page, { summaryError: true });
+
+  await expect(page.getByRole('status')).toContainText('Some resource summaries are unavailable');
+  const fallback = page.getByRole('option', { name: /Ruby blade/ });
+  await expect(fallback.locator('.summary')).toHaveText('Summary unavailable');
+  await expect(fallback.locator('.health')).toHaveText('unknown');
+  await expect(page.getByRole('img', { name: 'Ruby blade: no preview available' })).toBeVisible();
+  expect((await readCalls(page)).filter((call) => call.op === 'browse.get')).toHaveLength(0);
 });
 
 test('selects the second resource root in a shared Files document before opening Studio', async ({ page }) => {
@@ -133,8 +290,9 @@ test('stages multiple Files fields until one explicit Save & apply batch', async
 
   const save = page.getByRole('button', { name: 'Save & apply' });
   await expect(save).toBeDisabled();
-  await page.getByLabel('Display name').fill('Staged batch name');
-  await page.getByLabel('Material').selectOption('BLAZE_ROD');
+  await page.getByLabel('Display name', { exact: true }).fill('Staged batch name');
+  await chooseMaterialByKeyboard(page, 'Base material', 'blaze rod');
+  await expect(page.getByRole('combobox', { name: 'Base material' })).toHaveValue('Blaze Rod');
   await expect(save).toBeEnabled();
   expect(await readWrites(page)).toHaveLength(0);
 
@@ -285,6 +443,103 @@ test('does not run a hidden Studio save shortcut, but saves when the Studio is a
   ]);
 });
 
+test('searches authoritative material labels by keyboard and waits for explicit apply', async ({ page }) => {
+  await openFixture(page);
+  await openStudioFromContent(page);
+
+  const material = page.getByRole('combobox', { name: 'Base material' });
+  await material.fill('blaze rod');
+  await expect(
+    page.getByRole('option', { name: /Blaze Rod\s+BLAZE_ROD/ }),
+  ).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(material).toHaveValue('Diamond Sword');
+  expect(await readWrites(page)).toHaveLength(0);
+
+  await material.fill('blaze rod');
+  await expect(
+    page.getByRole('option', { name: /Blaze Rod\s+BLAZE_ROD/ }),
+  ).toBeVisible();
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await expect(material).toHaveValue('Blaze Rod');
+  expect(await readWrites(page)).toHaveLength(0);
+  await expect(page.getByRole('button', { name: 'Save & apply' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Save & apply' }).click();
+  await expect.poll(async () => (await readWrites(page)).length).toBe(1);
+  expect((await readWrites(page))[0]?.payload.edits).toEqual([
+    { field: ['ruby_blade', 'material'], value: 'BLAZE_ROD' },
+  ]);
+});
+
+test('keeps an untouched item Studio save disabled and mutation-free', async ({ page }) => {
+  await openFixture(page);
+  await openStudioFromContent(page);
+
+  await expect(page.getByRole('button', { name: 'Save & apply' })).toBeDisabled();
+  expect(await readWrites(page)).toHaveLength(0);
+});
+
+test('preview name and lore controls focus their corresponding editor fields', async ({ page }) => {
+  await openFixture(page);
+  await openStudioFromContent(page);
+
+  const name = page.getByLabel('Display name', { exact: true });
+  const lore = page.getByLabel('Lore', { exact: true });
+  await page.getByRole('button', { name: 'Edit item name' }).click();
+  await expect(name).toBeFocused();
+  await page.getByRole('button', { name: 'Edit item lore' }).click();
+  await expect(lore).toBeFocused();
+});
+
+test('previews formatted name and lore drafts as safe text and formats lore independently per line', async ({
+  page,
+}) => {
+  await openFixture(page);
+  await openStudioFromContent(page);
+
+  const name = page.getByLabel('Display name', { exact: true });
+  const lore = page.getByLabel('Lore', { exact: true });
+  const previewName = page.getByRole('button', { name: 'Edit item name' });
+  const previewLore = page.getByRole('button', { name: 'Edit item lore' });
+
+  await name.fill('Ruby Sword');
+  await name.press('Control+A');
+  await page.getByLabel('Display name color').selectOption('a');
+  await expect(name).toHaveValue('&aRuby Sword');
+  await page.getByRole('button', { name: 'Display name: Bold' }).click();
+  await expect(name).toHaveValue('&a&lRuby Sword');
+  await expect(previewName.locator('.bold')).toHaveText('Ruby Sword');
+
+  const unsafeLookingText = '&aRuby &lBlade <img src=x onerror=alert(1)> &z';
+  await name.fill(unsafeLookingText);
+  await expect(previewName).toContainText('Ruby Blade <img src=x onerror=alert(1)> &z');
+  await expect(previewName.locator('img')).toHaveCount(0);
+  await expect(previewName.locator('.bold')).toHaveText('Blade <img src=x onerror=alert(1)> &z');
+
+  const loreDraft = '&cBurns with fire\n\n&9  keeps spaces  \n';
+  await lore.fill(loreDraft);
+  await lore.evaluate((element) => {
+    const textarea = element as HTMLTextAreaElement;
+    textarea.setSelectionRange(0, textarea.value.length);
+  });
+  await page.getByRole('button', { name: 'Lore: Bold' }).click();
+  const formattedLore = '&l&c&lBurns with fire\n\n&l&9&l  keeps spaces  \n';
+  await expect(lore).toHaveValue(formattedLore);
+  await expect(previewLore.locator('.lore-line')).toHaveCount(4);
+  await expect(previewLore.locator('.lore-line').nth(0).locator('.bold')).toHaveText('Burns with fire');
+  await expect(previewLore.locator('.lore-line').nth(2).locator('.bold')).toHaveText('  keeps spaces  ');
+  expect(await readWrites(page)).toHaveLength(0);
+
+  await page.getByRole('button', { name: 'Save & apply' }).click();
+  await expect.poll(async () => (await readWrites(page)).length).toBe(1);
+  expect((await readWrites(page))[0]?.payload.edits).toEqual([
+    { field: ['ruby_blade', 'display_name'], value: unsafeLookingText },
+    { field: ['ruby_blade', 'lore'], value: ['&l&c&lBurns with fire', '', '&l&9&l  keeps spaces  ', ''] },
+  ]);
+});
+
 test('texture and model apply commit only their asset/attachment fields, preserving a staged name', async ({
   page,
 }) => {
@@ -309,7 +564,7 @@ test('texture and model apply commit only their asset/attachment fields, preserv
     { field: ['ruby_blade', 'texture'], value: 'items/ruby_blade' },
   ]);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByLabel('Display name')).toHaveValue('Name remains a draft');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Name remains a draft');
 
   await page.getByRole('button', { name: 'Edit in Blockbench' }).click();
   await expect(page.getByText('new model, texture attached', { exact: true })).toBeVisible();
@@ -326,7 +581,7 @@ test('texture and model apply commit only their asset/attachment fields, preserv
   ]);
   expect(writes[2]?.payload.field).toEqual(['ruby_blade', 'model']);
   expect(writes[2]?.payload.modelRef).toBe('fixture_pack:ruby_blade');
-  await expect(page.getByLabel('Display name')).toHaveValue('Name remains a draft');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Name remains a draft');
 });
 
 test('keeps a lost write outcome uncertain until reconnection/reconciliation', async ({ page }) => {
@@ -339,7 +594,12 @@ test('keeps a lost write outcome uncertain until reconnection/reconciliation', a
   await page.getByRole('button', { name: 'Save & apply' }).click();
   await expect(page.getByRole('button', { name: 'Reconcile server files' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Reconcile server files' })).toBeDisabled();
-  await expect(page.getByText('Connection lost')).toBeVisible();
+  await expect(page.getByText(
+    'The save outcome is unknown. Your draft was kept. Reconnect and reconcile before applying anything again.',
+    { exact: true },
+  )).toBeVisible();
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Submitted before disconnect');
+  await expect(page.getByLabel('Display name', { exact: true })).toBeDisabled();
 
   const writes = await readWrites(page);
   expect(writes).toHaveLength(1);
@@ -367,5 +627,5 @@ test('refuses a stale captured publication hash without applying a Studio draft'
     candidateSha256: 'b'.repeat(64),
     publishedSha256: '0'.repeat(64),
   });
-  await expect(page.getByLabel('Display name')).toHaveValue('Do not publish this unsaved name');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Do not publish this unsaved name');
 });

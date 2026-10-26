@@ -487,9 +487,9 @@ the admin. It talks only to the documented API, which is therefore also the auto
 for CI (pack repos can drive it).
 
 Screens (product-architecture level): **Dashboard** (server health, published/candidate state,
-pending diagnostics) · **Content browser** (a file explorer per content type: folders, details and
-icon views, search, create/rename/duplicate/move/delete) · **Type studios** (item, block,
-furniture, glyph, HUD, menu, dialog, recipe, sound, painting) · **Asset manager**
+pending diagnostics) · **Content browser** (a resource catalog per content type, within pack
+folders: named rows, list/grid layouts, search, create/rename/duplicate/move/delete) · **Type
+studios** (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting) · **Asset manager**
 (textures/models/sounds, including the built-in pixel editor) · **Advanced files**
 (filesystem/YAML surface for T4) · **Diagnostics center** · **Live preview**. Each screen owns the
 whole main area; the pack switcher and release state live in the app header, because they belong
@@ -601,6 +601,16 @@ the plugin signing identity and reconciles drafts against server files without r
 refreshing or closing the tab has no durable draft recovery. The header's candidate state means a
 candidate hash is available, not that a player received or accepted it. **Publish pack** promotes
 the exact current candidate hash; the global reload signal does not prove a per-save result.
+
+The item-workbench follow-up keeps that same model: registry-described material/name/lore controls
+edit only a local draft until explicit **Save & apply**, and the preview is an honest browser
+approximation rather than a Minecraft verification. Content uses one pack-scoped
+`authoring.summaries` projection, paged for large packs, instead of reading each document for
+resource rows; optional layout preferences are presentation-only, while files remain canonical
+(D1). Summary health stays unknown unless a direct canonical read proves an error; it is not proof
+of pipeline freshness or application. See
+[`architecture/web.md` §6](architecture/web.md) for the summary contract, fallback behavior,
+thumbnail bounds, and item controls.
 
 ### 9.5 In-game surface (for tiers without a browser open)
 

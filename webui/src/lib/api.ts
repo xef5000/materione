@@ -47,6 +47,18 @@ export interface ResourceRef {
   id: string;
 }
 
+export interface ResourceSummary extends ResourceRef {
+  name: string;
+  material?: string;
+  visual?: {
+    pack: string;
+    path: string;
+    kind: 'texture' | 'model-thumbnail';
+  };
+  health: 'ok' | 'warning' | 'error' | 'unknown';
+  healthMessage?: string;
+}
+
 export interface DiagnosticEntry {
   code: string;
   severity: string;
@@ -75,6 +87,60 @@ export const ops = {
   packs: (c: EditorChannel) => c.call('browse.packs'),
   resources: (c: EditorChannel, pack?: string) =>
     c.call('browse.resources', pack ? { pack } : {}),
+  summaries: async (
+    c: EditorChannel,
+    pack: string,
+  ): Promise<Response> => {
+    const resources: unknown[] = [];
+    let first: Extract<Response, { ok: true }> | undefined;
+    let offset = 0;
+    let total: number | undefined;
+    for (;;) {
+      const response = await c.call(
+        'authoring.summaries',
+        offset === 0 ? { pack } : { pack, offset },
+      );
+      if (!response.ok) return response;
+      first ??= response;
+      const data = response.data as Record<string, unknown>;
+      if (!Array.isArray(data.resources)) {
+        throw new Error('authoring.summaries returned no resource page');
+      }
+      if (typeof data.total !== 'number' || !Number.isSafeInteger(data.total) || data.total < 0) {
+        throw new Error('authoring.summaries returned an invalid total');
+      }
+      if (total !== undefined && data.total !== total) {
+        throw new Error('The resource catalog changed while loading summaries. Refresh the catalog.');
+      }
+      total = data.total;
+      resources.push(...data.resources);
+      if (data.nextOffset === undefined) {
+        if (total !== resources.length) {
+          throw new Error('authoring.summaries returned an incomplete catalog');
+        }
+        break;
+      }
+      if (data.resources.length === 0 || typeof data.nextOffset !== 'number'
+        || !Number.isSafeInteger(data.nextOffset) || data.nextOffset !== resources.length
+        || data.nextOffset <= offset || data.nextOffset >= total) {
+        throw new Error('authoring.summaries returned an invalid page cursor');
+      }
+      offset = data.nextOffset;
+    }
+    if (!first) throw new Error('authoring.summaries returned no response');
+    return {
+      ...first,
+      data: {
+        resources,
+        total,
+      },
+    };
+  },
+  summaryPage: (
+    c: EditorChannel,
+    pack: string,
+    options: { type?: string; query?: string; offset?: number; limit?: number } = {},
+  ) => c.call('authoring.summaries', { pack, ...options }),
   get: (c: EditorChannel, pack: string, path: string) => c.call('browse.get', { pack, path }),
   put: (c: EditorChannel, pack: string, path: string, rev: number, content: string) =>
     c.call('edit.put', { pack, path, rev, content }),

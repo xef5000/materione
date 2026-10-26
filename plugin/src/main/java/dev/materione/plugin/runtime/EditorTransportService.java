@@ -190,6 +190,12 @@ public final class EditorTransportService {
                         if (feed != null) {
                             feed.publishChange(change.pack(), change.path(), change.deleted());
                         }
+                    },
+                    () -> {
+                        AuthoringApiImpl feed = authoringFeed;
+                        if (feed != null) {
+                            feed.invalidateResourceSummaries();
+                        }
                     });
             packWatcher = watcher;
             // the watcher never spawns threads itself (R5): runLoop blocks

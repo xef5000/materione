@@ -31,7 +31,7 @@
   </button>
 </p>
 <ul>
-  {#each shown as entry (entry.code + '/' + entry.message)}
+  {#each shown as entry (entry)}
     {@const target = diagnosticSource(entry, workspace.packs, workspace.resources)}
     <li class={severityOf(entry)}>
       <code>{entry.code}</code>

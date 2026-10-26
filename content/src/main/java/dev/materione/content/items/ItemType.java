@@ -7,8 +7,10 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.api.content.Allocations;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.api.content.ResourcePresentation;
 import dev.materione.content.Templates;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +30,23 @@ import java.util.Optional;
  */
 public final class ItemType implements ContentType {
 
+    private final List<String> supportedMaterials;
+
+    /** No material palette is assumed by the pure-JVM content module. */
+    public ItemType() {
+        this(List.of());
+    }
+
+    /** Uses the platform's authoritative item-material palette when available. */
+    public ItemType(List<String> supportedMaterials) {
+        this.supportedMaterials = supportedMaterials == null ? List.of()
+                : supportedMaterials.stream()
+                        .filter(value -> value != null && !value.isBlank())
+                        .distinct()
+                        .sorted(Comparator.naturalOrder())
+                        .toList();
+    }
+
     @Override
     public String name() {
         return "item";
@@ -40,12 +59,16 @@ public final class ItemType implements ContentType {
 
     @Override
     public SelfDescription describe() {
+        ParameterType materialType = supportedMaterials.isEmpty()
+                ? ParameterType.STRING : ParameterType.ENUM;
         return new SelfDescription(
                 "Item",
                 "A custom item: identity, appearance (item model), data components, behavior",
                 List.of(
-                        new ParameterSchema("material", ParameterType.STRING, true, null,
-                                "Vanilla base material (e.g. NETHERITE_SWORD)", null, null).withEditor(new ParameterSchema.EditorMetadata("Base material", "identity", 10, false, "material", "", "NETHERITE_SWORD")),
+                        new ParameterSchema("material", materialType, true, null,
+                                "Vanilla base material (e.g. NETHERITE_SWORD)", supportedMaterials, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Base material", "identity", 10, false, "material", "", "NETHERITE_SWORD")),
                         new ParameterSchema("template", ParameterType.REFERENCE, false, null,
                                 "Template this item inherits from", null, null).withEditor(new ParameterSchema.EditorMetadata("Template", "identity", 20, true, "reference", "template", "")),
                         new ParameterSchema("model", ParameterType.REFERENCE, false, null,
@@ -55,9 +78,9 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("model_parent", ParameterType.STRING, false, "item/generated",
                                 "Parent for the generated model", null, null).withEditor(new ParameterSchema.EditorMetadata("Model style", "appearance", 30, true, "text", "", "item/generated")),
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
-                                "Item display name", null, null).withEditor(new ParameterSchema.EditorMetadata("Display name", "identity", 0, false, "text", "", "Ruby sword")),
+                                "Item display name", null, null).withEditor(new ParameterSchema.EditorMetadata("Display name", "identity", 0, false, "formatted-text", "", "Ruby sword")),
                         new ParameterSchema("lore", ParameterType.LIST, false, null,
-                                "Lore lines", null, null).withEditor(new ParameterSchema.EditorMetadata("Lore", "gameplay", 10, false, "list", "", "A very special item")),
+                                "Lore lines", null, null).withEditor(new ParameterSchema.EditorMetadata("Lore", "gameplay", 10, false, "formatted-lines", "", "A very special item")),
                         new ParameterSchema("components", ParameterType.RAW, false, null,
                                 "Vanilla data components (version-aware, platform-gated)", null, null).withEditor(new ParameterSchema.EditorMetadata("Vanilla components", "gameplay", 90, true, "advanced", "", "")),
                         new ParameterSchema("mechanics", ParameterType.LIST, false, null,
@@ -65,6 +88,15 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("jukebox_song", ParameterType.REFERENCE, false, null,
                                 "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata("Jukebox song", "gameplay", 20, true, "reference", "sound", ""))),
                 "1.0.0");
+    }
+
+    @Override
+    public Optional<ResourcePresentation> presentation(Object parsedDefinition) {
+        if (!(parsedDefinition instanceof ItemDefinition item)) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResourcePresentation(
+                item.displayName(), item.material(), item.texture(), item.model()));
     }
 
     @Override

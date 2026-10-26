@@ -12,6 +12,8 @@ const RENDERABLE = new Set([
   'model',
   'reference',
   'material',
+  'formatted-text',
+  'formatted-lines',
   'recipe-grid',
 ]);
 

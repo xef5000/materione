@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.junit.jupiter.api.Test;
 
@@ -29,6 +30,19 @@ class ItemTextTest {
         Component component = ItemText.legacy("&6Golden name");
         assertThat(component.children().get(0).color()).isEqualTo(NamedTextColor.GOLD);
         assertThat(component.decoration(TextDecoration.ITALIC)).isEqualTo(TextDecoration.State.FALSE);
+    }
+
+    @Test
+    void legacyAmpersandDefaultSupportsBothRgbSpellings() {
+        TextColor expected = TextColor.fromHexString("#12abef");
+
+        Component direct = ItemText.legacy("&#12ABEF direct");
+        Component expanded = ItemText.legacy("&x&1&2&A&B&E&F expanded");
+
+        assertThat(direct.children().get(0).color()).isEqualTo(expected);
+        assertThat(expanded.children().get(0).color()).isEqualTo(expected);
+        assertThat(direct.decoration(TextDecoration.ITALIC)).isEqualTo(TextDecoration.State.FALSE);
+        assertThat(expanded.decoration(TextDecoration.ITALIC)).isEqualTo(TextDecoration.State.FALSE);
     }
 
     @Test

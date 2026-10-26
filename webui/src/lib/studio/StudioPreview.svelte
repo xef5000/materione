@@ -3,9 +3,10 @@
    * What the entry looks like, without booting a 3D application: the texture
    * at 1:1 and the model's cached thumbnail when one exists.
    */
-  import { assetOps, unwrap } from '../api';
-  import { thumbnailPath } from '../blockbench/protocol';
-  import { session } from '../state.svelte';
+  import type { ResourceSummary } from '../api';
+  import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
+  import { localStudioVisual } from '../studio-visual';
+  import { workspace } from '../state.svelte';
 
   interface Props {
     pack: string;
@@ -14,65 +15,18 @@
     label: string;
     /** Bumped when the bytes changed but the reference did not. */
     nonce?: number;
+    visual?: ResourceSummary['visual'];
   }
 
-  let { pack, texture, model, label, nonce = 0 }: Props = $props();
-
-  let image = $state('');
-  let modelImage = $state('');
-
-  $effect(() => {
-    void resolve(texture, nonce);
-  });
-
-  // A model render, cached under .materione/ by the workbench, so the entry
-  // can be recognised without booting Blockbench.
-  $effect(() => {
-    void resolveModel(model, nonce);
-  });
-
-  async function resolveModel(reference: string, _nonce: number) {
-    modelImage = '';
-    if (!reference || !session.channel) return;
-    try {
-      const payload = unwrap(
-        await assetOps.get(session.channel, pack, thumbnailPath(reference)),
-      );
-      modelImage = `data:image/png;base64,${String(payload.data)}`;
-    } catch {
-      modelImage = '';
-    }
-  }
-
-  async function resolve(reference: string, _nonce: number) {
-    image = '';
-    if (!reference || !session.channel) return;
-    const path = `assets/textures/${reference}.png`;
-    try {
-      const payload = unwrap(await assetOps.get(session.channel, pack, path));
-      image = `data:image/png;base64,${String(payload.data)}`;
-    } catch {
-      image = '';
-    }
-  }
+  let { pack, texture, model, label, nonce = 0, visual }: Props = $props();
+  const shown = $derived(visual ?? localStudioVisual(pack, texture, model, workspace.assets));
 </script>
 
 <div class="preview">
   <div class="canvas">
-    {#if modelImage}
-      <img src={modelImage} alt="{label} model" class="render" />
-    {:else if image}
-      <img src={image} alt={label} />
-    {:else}
-      <span class="empty">no texture</span>
-    {/if}
+    <ResourceThumbnail visual={shown} {label} size={180} version={nonce + workspace.visualVersion} />
   </div>
-  {#if modelImage && image}
-    <div class="strip">
-      <img src={image} alt={label} />
-      <span>texture</span>
-    </div>
-  {/if}
+  <small>{shown?.kind === 'model-thumbnail' ? 'Cached model thumbnail, not interactive 3D.' : 'Texture approximation, not a client render.'}</small>
   <dl>
     <dt>texture</dt>
     <dd title={texture}>{texture || '—'}</dd>
@@ -98,31 +52,7 @@
       16px;
     overflow: hidden;
   }
-  img {
-    width: 70%;
-    height: 70%;
-    object-fit: contain;
-    image-rendering: pixelated;
-  }
-  img.render {
-    width: 100%;
-    height: 100%;
-    image-rendering: auto;
-  }
-  .strip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: var(--faint);
-  }
-  .strip img {
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    background: var(--bg-input);
-  }
-  .empty {
+  small {
     color: var(--faint);
     font-size: 12px;
   }

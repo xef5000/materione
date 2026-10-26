@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import {
   connection, content, handlePush, hasUnsavedChanges, loadWorkspace, markConnectionLost,
   openDoc, openStudio, registerEditorGuard, requireSavedDocument,
-  resetWorkspace, revealInAdvanced, session, ui, workspace,
+  refreshPack, resetWorkspace, revealInAdvanced, session, ui, workspace,
 } from '../src/lib/state.svelte';
 import { getDocumentDraft, setDraftField } from '../src/lib/drafts.svelte';
 
@@ -17,6 +17,7 @@ describe('workspace context and draft safety', () => {
     const responses: Record<string, Record<string, unknown>> = {
       'browse.packs': { packs: ['pack'] },
       'browse.resources': { resources: [resource] },
+      'authoring.summaries': { resources: [{ ...resource, name: 'Second gem', health: 'unknown' }], total: 1 },
       'assets.list': { assets: [{ path: 'assets/new.png', kind: 'png', bytes: 1 }] },
       'browse.folders': { folders: ['items', 'items/new'] },
       'browse.types': { types: [] },
@@ -31,9 +32,45 @@ describe('workspace context and draft safety', () => {
     await loadWorkspace();
     expect(calls).toContain('browse.resources');
     expect(workspace.resources).toEqual([resource]);
+    expect(workspace.summaries[0]?.name).toBe('Second gem');
+    expect(workspace.summariesError).toBe('');
     expect(workspace.folders).toContain('items/new');
     expect(workspace.assets[0]?.path).toBe('assets/new.png');
     expect(content.open).toEqual(resource);
+  });
+
+  it('keeps the resource browser available when summary metadata fails', async () => {
+    const resource = { pack: 'pack', path: 'items/item.yml', type: 'item', id: 'item' };
+    workspace.activePack = 'pack';
+    session.channel = { call: async (op) => {
+      if (op === 'authoring.summaries') throw new Error('Summary read failed');
+      const data = op === 'browse.resources' ? { resources: [resource] } :
+        op === 'assets.list' ? { assets: [] } : { folders: [] };
+      return { op, id: 'test', ok: true, data };
+    } };
+    await refreshPack();
+    expect(workspace.resources).toEqual([resource]);
+    expect(workspace.summaries).toEqual([]);
+    expect(workspace.summariesError).toContain('Summary read failed');
+  });
+
+  it('does not accept an older bulk snapshot after a newer refresh', async () => {
+    workspace.activePack = 'pack';
+    let finishFirst: ((value: { resources: []; total: number }) => void) | undefined;
+    const first = new Promise<{ resources: []; total: number }>((resolve) => { finishFirst = resolve; });
+    let summaryReads = 0;
+    session.channel = { call: async (op) => {
+      const data = op === 'authoring.summaries'
+        ? (++summaryReads === 1 ? await first : { resources: [{ pack: 'pack', path: 'items/new.yml', type: 'item', id: 'new', name: 'New', health: 'unknown' }], total: 1 })
+        : op === 'browse.resources' ? { resources: [] } :
+          op === 'assets.list' ? { assets: [] } : { folders: [] };
+      return { op, id: 'test', ok: true, data };
+    } };
+    const oldRefresh = refreshPack();
+    await refreshPack();
+    finishFirst!({ resources: [], total: 0 });
+    await oldRefresh;
+    expect(workspace.summaries[0]?.name).toBe('New');
   });
 
   it('retains the selected root and source location when reusing a shared file tab', async () => {

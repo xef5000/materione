@@ -68,6 +68,61 @@ public final class EditorContentOps {
             return Wire.Response.success(request, payload);
         });
 
+        dispatcher.register("authoring.summaries", request -> {
+            try {
+                JsonObject body = request.payload();
+                String pack = requiredString(body, "pack");
+                String type = optionalString(body, "type");
+                String query = optionalString(body, "query");
+                int offset = optionalInteger(body, "offset", 0);
+                int limit = optionalInteger(body, "limit", 100);
+                ApiResult<AuthoringApi.ResourceSummaryPage> result =
+                        authoring.listResourceSummaries(
+                                new AuthoringApi.ResourceFilter(pack, type, query), offset, limit);
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), pack, null);
+                }
+                AuthoringApi.ResourceSummaryPage page = result.value();
+                JsonObject payload = new JsonObject();
+                var resources = new com.google.gson.JsonArray();
+                for (AuthoringApi.ResourceSummary summary : page.resources()) {
+                    JsonObject resource = new JsonObject();
+                    resource.addProperty("pack", summary.pack());
+                    resource.addProperty("type", summary.type());
+                    resource.addProperty("path", summary.path());
+                    resource.addProperty("id", summary.resourceId());
+                    resource.addProperty("name", summary.name());
+                    if (summary.material() != null) {
+                        resource.addProperty("material", summary.material());
+                    }
+                    if (summary.visual() != null) {
+                        JsonObject visual = new JsonObject();
+                        visual.addProperty("pack", summary.visual().pack());
+                        visual.addProperty("path", summary.visual().path());
+                        visual.addProperty("kind", summary.visual().kind() == AuthoringApi.VisualKind.TEXTURE
+                                ? "texture" : "model-thumbnail");
+                        resource.add("visual", visual);
+                    }
+                    resource.addProperty("health",
+                            summary.health().name().toLowerCase(java.util.Locale.ROOT));
+                    if (summary.healthMessage() != null) {
+                        resource.addProperty("healthMessage", summary.healthMessage());
+                    }
+                    resources.add(resource);
+                }
+                payload.add("resources", resources);
+                payload.addProperty("total", page.total());
+                if (page.nextOffset() != null) {
+                    payload.addProperty("nextOffset", page.nextOffset());
+                }
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
         dispatcher.register("browse.get", request -> {
             try {
                 ApiResult<AuthoringApi.DocumentView> result = authoring.getDocument(
@@ -735,5 +790,20 @@ public final class EditorContentOps {
     private static String optionalString(JsonObject object, String field) {
         var value = object.get(field);
         return value == null || value.isJsonNull() ? null : value.getAsString();
+    }
+
+    private static int optionalInteger(JsonObject object, String field, int fallback) {
+        var value = object.get(field);
+        if (value == null || value.isJsonNull()) {
+            return fallback;
+        }
+        if (!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) {
+            throw new IllegalArgumentException("'" + field + "' must be an integer");
+        }
+        try {
+            return value.getAsBigDecimal().intValueExact();
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException("'" + field + "' must be an integer");
+        }
     }
 }
