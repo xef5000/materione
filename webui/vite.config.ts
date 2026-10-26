@@ -1,6 +1,7 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { searchForWorkspaceRoot } from 'vite';
 
 // Dev-server proxy: the SPA runs on Vite's port while the plugin listener
 // keeps serving /s/* (session blobs) and /editor/ws (the channel) on its own
@@ -11,6 +12,8 @@ const origin = process.env.EDITOR_ORIGIN ?? 'http://127.0.0.1:8089';
 export default defineConfig({
   plugins: [svelte()],
   server: {
+    // The demo imports its recorded server snapshot from the shared fixture corpus.
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden'] },
     proxy: {
       '/s': origin,
       '/editor/ws': { target: origin, ws: true },

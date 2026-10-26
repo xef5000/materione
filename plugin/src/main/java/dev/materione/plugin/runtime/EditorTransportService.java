@@ -114,16 +114,7 @@ public final class EditorTransportService {
         workstations = new dev.materione.web.EditorWorkstations(
                 storage.storageDir().resolve("editor-workstations.json"));
         sessions = new EditorSessions(identity, this::prompt, workstations, diagnostics);
-        RpcDispatcher dispatcher = new RpcDispatcher();
-        BaseOps.register(dispatcher, dev.materione.plugin.MaterioneVersion.VERSION,
-                () -> java.util.Map.of(
-                        "editorRunning", editorRunning(),
-                        "editorPort", boundPort(),
-                        "editorMode", editorMode,
-                        "relayBaseUrl", relayBaseUrl,
-                        // picks the editor's vanilla icon manifest (web.md §4.2)
-                        "minecraftVersion", minecraftVersion()));
-        registerContentOps(dispatcher, storage);
+        RpcDispatcher dispatcher = opsDispatcher(storage);
         relaySessions = new dev.materione.web.relay.RelaySessions(sessions, dispatcher, diagnostics);
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, dispatcher, diagnostics), dispatcher, diagnostics);
@@ -206,6 +197,25 @@ public final class EditorTransportService {
         } catch (IOException e) {
             plugin.getLogger().warning("editor file watcher unavailable: " + e.getMessage());
         }
+    }
+
+    /**
+     * The complete editor op set over this host's api, without any transport:
+     * {@link #start} serves it to sessions, and the cloud editor's demo
+     * snapshot (web.md §6) is recorded from the very same dispatcher.
+     */
+    public RpcDispatcher opsDispatcher(dev.materione.core.storage.StorageService.StorageState storage) {
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        BaseOps.register(dispatcher, dev.materione.plugin.MaterioneVersion.VERSION,
+                () -> java.util.Map.of(
+                        "editorRunning", editorRunning(),
+                        "editorPort", boundPort(),
+                        "editorMode", editorMode,
+                        "relayBaseUrl", relayBaseUrl,
+                        // picks the editor's vanilla icon manifest (web.md §4.2)
+                        "minecraftVersion", minecraftVersion()));
+        registerContentOps(dispatcher, storage);
+        return dispatcher;
     }
 
     /**

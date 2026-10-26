@@ -54,10 +54,11 @@ const BROWSER_COVERS = [
 const LANDING_COVERS = [
   'webui/src/App.svelte',
   'webui/src/lib/host.ts',
-  'webui/src/lib/demo.ts',
+  'webui/src/lib/demo/**',
+  'fixtures/golden/editor-demo-snapshot.json',
+  'plugin/src/test/java/dev/materione/plugin/runtime/EditorDemoSnapshotTest.java',
   'webui/src/lib/components/Landing.svelte',
   'webui/src/lib/components/Login.svelte',
-  'webui/browser/rpc-adapter.ts',
   'webui/public/_headers',
   'webui/public/host.json',
   'webui/test-support/qa-browser.mjs',
@@ -882,7 +883,7 @@ export default [
 
   test({
     id: 'editor.browser-cloud-landing-demo',
-    title: 'with the cloud host marker the same build shows the Materione landing card, and View Demo opens demo_pack client-side',
+    title: 'with the cloud host marker the same build shows the Materione landing card, and View Demo opens the recorded sample server client-side',
     covers: LANDING_COVERS,
     timeoutMs: 180_000,
     steps: async (ctx) => {
@@ -900,7 +901,7 @@ export default [
       await page.getByRole('button', { name: 'View Demo' }).click();
       await page.getByText('Sample content in this tab only').waitFor({ state: 'visible', timeout: 15_000 });
       await page.getByRole('navigation', { name: 'Workspace navigation' }).waitFor({ state: 'visible' });
-      ctx.expect(await page.getByRole('combobox').first().inputValue()).toBe('demo_pack');
+      ctx.expect(await page.getByRole('combobox').first().inputValue()).toBe('sample');
       ctx.expect(new URL(page.url()).search).toBe('?demo');
       ctx.expect(backendCalls.length).toBe(0);
     },
@@ -908,7 +909,7 @@ export default [
 
   test({
     id: 'editor.browser-cloud-landing-visual',
-    title: 'the cloud landing card and the demo_pack workbench read as the Materione editor',
+    title: 'the cloud landing card and the demo workbench (recorded sample server) read as the Materione editor',
     mode: 'visual',
     dependsOn: ['editor.browser-cloud-landing-demo'],
     covers: LANDING_COVERS,
@@ -923,7 +924,7 @@ export default [
       await page.getByText('Sample content in this tab only').waitFor({ state: 'visible', timeout: 15_000 });
       await ctx.browser.browserShot('cloud-demo-workbench', 'main');
       ctx.needsEyes(
-        'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with demo_pack selected and sample items (Ruby Blade, Storm Axe, ...) in Content',
+        'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with the sample pack selected, every content type tab (Items to Text effects) and the sample items (Ruby Sword, Obsidian Axe, ...) with their textures in Content',
       );
     },
   }),

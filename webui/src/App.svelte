@@ -97,25 +97,29 @@
     }
   }
 
-  // The demo backend lives in this tab only (lib/demo.ts): nothing is sent anywhere.
+  // The demo is this same editor over an in-tab DemoServer (lib/demo/): nothing is sent anywhere.
   async function startDemo() {
     if (demoStarting) return;
     demoStarting = true;
     demoError = '';
+    // Reflect the demo in the address at once: the snapshot import and workspace
+    // load below can take seconds on a slow runner, and a reload mid-load must
+    // still restart the demo.
+    history.replaceState(null, '', `${location.pathname}?demo`);
     try {
-      const { createDemoChannel } = await import('./lib/demo');
+      const { createDemoChannel } = await import('./lib/demo/index');
       resetWorkspace();
-      session.channel = createDemoChannel();
+      session.channel = await createDemoChannel();
       connection.connected = true;
       connection.error = '';
       await loadWorkspace();
       await refreshDelivery();
-      history.replaceState(null, '', `${location.pathname}?demo`);
       demo = true;
       hasWorkspace = true;
       phase = 'active';
     } catch (e) {
       resetWorkspace();
+      history.replaceState(null, '', location.pathname);
       demoError = e instanceof Error ? e.message : String(e);
     } finally {
       demoStarting = false;
