@@ -784,6 +784,27 @@ export default [
   }),
 
   test({
+    id: 'editor.browser-bare-on-rule',
+    title: 'a block rule written with a bare `on: interact` shows its event in the Studio, not "no event"',
+    // SnakeYAML loads a bare `on:` key as boolean true; the editor's parsed
+    // view must hand the rule editor the key the author wrote.
+    covers: [
+      ...GUIDED_COVERS,
+      'core/src/main/java/dev/materione/core/document/LosslessYaml.java',
+      'fixtures/packs/sample/blocks/amethyst_lamp.yml',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleStudio(page, 'Amethyst Lamp');
+      const rules = studio.getByRole('region', { name: 'Behaviour rules' });
+      const sentence = (await rules.locator('[data-rule="0"] .sentence').innerText()).toLowerCase();
+      ctx.expect(sentence).toContain('on interact');
+      ctx.expect(sentence.includes('no event')).toBe(false);
+    },
+  }),
+
+  test({
     id: 'editor.browser-missing-texture-repair',
     title: 'a quarantined item with a missing texture is repaired from Problems by drawing the file, without Files or YAML',
     covers: GUIDED_COVERS,

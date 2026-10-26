@@ -72,4 +72,28 @@ public final class LosslessYaml {
         }
         return out;
     }
+
+    /**
+     * {@link #stringKeyed} applied at every depth: mappings nested in
+     * mappings and sequences come back string-keyed too; scalars pass
+     * through. The editor's parsed view uses this — ECA rules sit two levels
+     * below the entry ({@code entry.behavior[i].on}), so a shallow rescue
+     * leaves the selector serialized as {@code "true"} and the rule editor
+     * shows "no event".
+     */
+    public static Object stringKeyedDeep(Object value) {
+        if (value instanceof java.util.Map<?, ?> map) {
+            var out = stringKeyed(map);
+            out.replaceAll((key, child) -> stringKeyedDeep(child));
+            return out;
+        }
+        if (value instanceof java.util.List<?> list) {
+            var out = new java.util.ArrayList<Object>(list.size());
+            for (Object child : list) {
+                out.add(stringKeyedDeep(child));
+            }
+            return out;
+        }
+        return value;
+    }
 }

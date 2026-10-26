@@ -679,11 +679,17 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return pack;
     }
 
-    /** The parsed tree as plain maps, or null when the YAML does not parse. */
+    /**
+     * The parsed tree as plain string-keyed maps, or null when the YAML does
+     * not parse. YAML-1.1 boolean keys (a bare ECA {@code on:}) are
+     * normalized at every depth so the editor sees the key the author wrote.
+     */
+    @SuppressWarnings("unchecked")
     private static Map<String, Object> parsed(String raw) {
         try {
             var document = LosslessYaml.parse(raw);
-            return document.parseError().isPresent() ? null : document.data();
+            return document.parseError().isPresent()
+                    ? null : (Map<String, Object>) LosslessYaml.stringKeyedDeep(document.data());
         } catch (RuntimeException e) {
             return null;
         }
