@@ -146,12 +146,12 @@ export function createQaBrowserAdapter({ testDir, openSession, approveNonce, onS
       }
     },
 
-    async browserShot(name) {
+    async browserShot(name, selector = '.workbench') {
       if (!page) throw new Error('open the editor browser before capturing a browser screenshot');
       const safe = String(name).replace(/[^a-z0-9_-]+/gi, '-') || 'editor';
       const out = path.join(testDir, `${safe}.browser.png`);
       try {
-        const app = page.locator('.workbench');
+        const app = page.locator(selector);
         await app.waitFor({ state: 'visible', timeout: 10_000 });
         await app.screenshot({ path: out, animations: 'disabled' });
       } catch {

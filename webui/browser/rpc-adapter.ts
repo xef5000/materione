@@ -3,7 +3,7 @@ import type { PushFrame } from '../src/lib/events';
 import type { Response } from '../src/lib/protocol/wire';
 import type { BrowserTestControls, FixtureAuditEntry, RecordedRpcCall, RecordedWrite } from './contract';
 
-interface FixtureDocument {
+export interface FixtureDocument {
   pack: string;
   path: string;
   rev: number;
@@ -11,7 +11,7 @@ interface FixtureDocument {
   parsed: Record<string, Record<string, unknown>>;
 }
 
-interface FixtureAsset {
+export interface FixtureAsset {
   path: string;
   kind: string;
   data: string;
@@ -213,10 +213,10 @@ const RESOURCES: ResourceRef[] = [
  * default fixture so existing specs see the same catalog and RPC calls.
  */
 const CRATE_PNG = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAAnklEQVR4nGOIMZH5TwlmABHTYgz+H+kJAuNNVQ5wNj4M0gM3ACaATSE2A2Fq4QbAFOEyBBm3eMnB2XADNlQ4wTHIkHlpBihiyHLIfBQvYHMisjewuQ7FAHS/ImvAZiCGAdgCD6QRX7hgDQN0P8P8jS1cMFyA7A18XoCpJRiIuAzEGoj4FGJLA1jDAF8awJYWqJeU0Z2GDyMne7gBlGAAtARNyxEyZukAAAAASUVORK5CYII=';
-const CRATE_TEXTURE = `${PACK}:block/crate`;
-const LAMP_MODEL = {
+function lampModel(crateTexture: string) {
+  return {
   parent: 'minecraft:block/block',
-  textures: { wood: CRATE_TEXTURE, stone: 'minecraft:block/stone', particle: CRATE_TEXTURE },
+  textures: { wood: crateTexture, stone: 'minecraft:block/stone', particle: crateTexture },
   elements: [
     { from: [2, 0, 2], to: [14, 4, 14], faces: Object.fromEntries(
       ['down', 'up', 'north', 'south', 'west', 'east'].map((side) => [side, { texture: '#stone' }])) },
@@ -226,8 +226,16 @@ const LAMP_MODEL = {
       faces: Object.fromEntries(
         ['down', 'up', 'north', 'south', 'west', 'east'].map((side) => [side, { texture: '#wood' }])) },
   ],
-};
-const GALLERY: { ref: ResourceRef; name: string; render: NonNullable<ResourceSummary['render']> }[] = [
+  };
+}
+
+interface GalleryEntry { ref: ResourceRef; name: string; render: NonNullable<ResourceSummary['render']> }
+
+/** The live-render blocks for `pack`; `includeFallback` adds the unknown-parent block. */
+function galleryEntries(pack: string, includeFallback = true): GalleryEntry[] {
+  const PACK = pack;
+  const CRATE_TEXTURE = `${pack}:block/crate`;
+  const entries: GalleryEntry[] = [
   {
     ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'crate_cube' },
     name: 'Crate Cube',
@@ -255,13 +263,16 @@ const GALLERY: { ref: ResourceRef; name: string; render: NonNullable<ResourceSum
     name: 'Stone Lamp',
     render: { pack: PACK, path: 'assets/models/block/stone_lamp.json' },
   },
+  ];
+  if (includeFallback) entries.push(
   {
     // Geometry lives in a vanilla parent the editor cannot know: falls back.
     ref: { pack: PACK, type: 'blocks', path: 'blocks/gallery.yml', id: 'mystery_anvil' },
     name: 'Mystery Anvil',
     render: { pack: PACK, model: { parent: 'minecraft:block/anvil', textures: { body: CRATE_TEXTURE } } },
-  },
-];
+  });
+  return entries;
+}
 
 /**
  * Opt-in (`?guided`) guided-authoring fixture: a server that answers
@@ -325,7 +336,7 @@ const GUIDED_VOCABULARY = {
   ],
 };
 
-const DIAGNOSTICS = [
+const DIAGNOSTICS: Record<string, unknown>[] = [
   {
     code: 'MTR-9001',
     severity: 'ERROR',
@@ -470,8 +481,9 @@ function makeDocument(
   path: string,
   rev: number,
   parsed: Record<string, Record<string, unknown>>,
+  pack = PACK,
 ): FixtureDocument {
-  return { pack: PACK, path, rev, parsed, raw: serializeFixtureYaml(parsed) };
+  return { pack, path, rev, parsed, raw: serializeFixtureYaml(parsed) };
 }
 
 function initialDocuments(): Map<string, FixtureDocument> {
@@ -545,24 +557,143 @@ function isWriteOperation(op: string): boolean {
   );
 }
 
+/**
+ * Everything the adapter serves. The regression seed below is what every
+ * browser spec asserts against; the cloud editor's demo (`src/lib/demo.ts`)
+ * builds its own sample pack on the same in-browser backend (web.md §6, cloud landing).
+ */
+export interface FixtureSeed {
+  pack: string;
+  types: TypeInfo[];
+  resources: ResourceRef[];
+  documents: Map<string, FixtureDocument>;
+  assets: Map<string, FixtureAsset>;
+  renders: Map<string, NonNullable<ResourceSummary['render']>>;
+  /** Static visual asset path per resource id. */
+  visuals: Map<string, string>;
+  /** Server-projected names for roots without a display_name. */
+  names: Map<string, string>;
+  /** Resources whose health is `error`, with their message. */
+  failures: Map<string, string>;
+  diagnostics: Record<string, unknown>[];
+  /** The ECA vocabulary `authoring.describe` reports; absent = an older server without it. */
+  behavior?: Record<string, unknown>;
+}
+
+export function regressionSeed(): FixtureSeed {
+  return {
+    pack: PACK,
+    types: [ITEM_TYPE, BLOCK_TYPE, GLYPH_TYPE],
+    resources: [...RESOURCES],
+    documents: initialDocuments(),
+    assets: new Map([
+      [
+        assetPath(PACK, 'assets/textures/items/ruby_blade.png'),
+        {
+          path: 'assets/textures/items/ruby_blade.png',
+          kind: 'png',
+          data: PIXEL_PNG,
+          bytes: 68,
+        },
+      ],
+      [
+        assetPath(PACK, 'assets/textures/gui/heart.png'),
+        { path: 'assets/textures/gui/heart.png', kind: 'png', data: GLYPH_PNG, bytes: 74 },
+      ],
+    ]),
+    renders: new Map(),
+    visuals: new Map([
+      ['ruby_blade', 'assets/textures/items/ruby_blade.png'],
+      ['heart_icon', 'assets/textures/gui/heart.png'],
+    ]),
+    names: new Map([['heart_icon', 'Heart Icon'], ['missing_icon', 'Missing Icon']]),
+    failures: new Map([['missing_icon', 'Texture not found: gui/missing']]),
+    diagnostics: DIAGNOSTICS,
+  };
+}
+
+/** The registry item type a describing server reports: abilities and rules get their editors. */
+function describedItemType(item: TypeInfo): TypeInfo {
+  const type = structuredClone(item);
+  type.parameters = type.parameters.map((param) =>
+    param.id === 'mechanics' ? { ...param, label: 'Abilities', uiHint: 'mechanics' } : param);
+  type.parameters.push({
+    id: 'behavior', type: 'list', required: false, label: 'Behaviour rules', section: 'behavior',
+    order: 20, uiHint: 'behavior-rules', description: 'ECA rules fired by this item',
+  });
+  return type;
+}
+
+/** The fixture's ECA vocabulary (events, actions, mechanics), for describing seeds. */
+export function guidedVocabulary(): Record<string, unknown> {
+  return structuredClone(GUIDED_VOCABULARY);
+}
+
+/** Adds the opt-in (`?guided`) guided-authoring resources, template and diagnostic to `seed`. */
+export function addGuidedAuthoring(seed: FixtureSeed): void {
+  seed.resources.push(...GUIDED_RESOURCES);
+  for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
+    seed.documents.set(`${seed.pack}/${path}`, makeDocument(path, 1, structuredClone(parsed), seed.pack));
+  }
+  seed.diagnostics = [...seed.diagnostics, ...GUIDED_DIAGNOSTICS];
+  seed.behavior = guidedVocabulary();
+}
+
+/** Adds the live-render block gallery (its crate texture and lamp model included) to `seed`. */
+export function addModelGallery(seed: FixtureSeed, includeFallback = true): void {
+  const pack = seed.pack;
+  const gallery: Record<string, Record<string, unknown>> = {};
+  for (const entry of galleryEntries(pack, includeFallback)) {
+    seed.resources.push(entry.ref);
+    seed.renders.set(entry.ref.id, entry.render);
+    gallery[entry.ref.id] = { display_name: entry.name };
+  }
+  seed.documents.set(`${pack}/blocks/gallery.yml`, makeDocument('blocks/gallery.yml', 1, gallery, pack));
+  seed.assets.set(assetPath(pack, 'assets/textures/block/crate.png'),
+    { path: 'assets/textures/block/crate.png', kind: 'png', data: CRATE_PNG, bytes: 214 });
+  const model = new TextEncoder().encode(JSON.stringify(lampModel(`${pack}:block/crate`)));
+  seed.assets.set(assetPath(pack, 'assets/models/block/stone_lamp.json'), {
+    path: 'assets/models/block/stone_lamp.json', kind: 'json',
+    data: btoa(String.fromCharCode(...model)), bytes: model.length,
+  });
+}
+
+/** A seed document for alternative seeds such as the demo pack. */
+export function seedDocument(
+  pack: string,
+  path: string,
+  rev: number,
+  parsed: Record<string, Record<string, unknown>>,
+): FixtureDocument {
+  return makeDocument(path, rev, parsed, pack);
+}
+
+/** A seed asset entry (base64 data) for alternative seeds. */
+export function seedAsset(pack: string, path: string, data: string): [string, FixtureAsset] {
+  return [assetPath(pack, path), {
+    path, kind: path.split('.').pop() ?? 'bin', data, bytes: Math.floor((data.length * 3) / 4),
+  }];
+}
+
+/** The regression fixture's item type, for seeds that extend it. */
+export function fixtureItemType(): TypeInfo {
+  return structuredClone(ITEM_TYPE);
+}
+
+/** The regression fixture's block and glyph types, for seeds that reuse them. */
+export function fixtureSupportTypes(): TypeInfo[] {
+  return [structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)];
+}
+
+/** The regression fixture's sample glyph texture (8x8), for seeds. */
+export const SAMPLE_GLYPH_PNG = GLYPH_PNG;
+
 export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls {
-  readonly #documents = initialDocuments();
+  readonly #pack: string;
+  readonly #types: TypeInfo[];
+  readonly #documents: Map<string, FixtureDocument>;
   readonly #calls: RecordedRpcCall[] = [];
-  readonly #assets = new Map<string, FixtureAsset>([
-    [
-      assetPath(PACK, 'assets/textures/items/ruby_blade.png'),
-      {
-        path: 'assets/textures/items/ruby_blade.png',
-        kind: 'png',
-        data: PIXEL_PNG,
-        bytes: 68,
-      },
-    ],
-    [
-      assetPath(PACK, 'assets/textures/gui/heart.png'),
-      { path: 'assets/textures/gui/heart.png', kind: 'png', data: GLYPH_PNG, bytes: 74 },
-    ],
-  ]);
+  readonly #assets: Map<string, FixtureAsset>;
   readonly #writes: RecordedWrite[] = [];
   #auditEntries: FixtureAuditEntry[] = [];
   #pushHandler: ((frame: PushFrame) => void) | null = null;
@@ -576,36 +707,32 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   #publishedSha256 = '0'.repeat(64);
   #summaryError: boolean;
   readonly #resources: ResourceRef[];
-  readonly #renders = new Map<string, NonNullable<ResourceSummary['render']>>();
+  readonly #renders: Map<string, NonNullable<ResourceSummary['render']>>;
+  readonly #visuals: Map<string, string>;
+  readonly #names: Map<string, string>;
+  readonly #failures: Map<string, string>;
+  readonly #diagnostics: Record<string, unknown>[];
 
-  readonly #guided: boolean;
+  #behavior: Record<string, unknown> | undefined;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean } = {}) {
+  constructor(options: {
+    summaryError?: boolean; modelGallery?: boolean; guided?: boolean; seed?: FixtureSeed;
+  } = {}) {
     this.#summaryError = options.summaryError ?? false;
-    this.#guided = options.guided ?? false;
-    this.#resources = [...RESOURCES];
-    if (this.#guided) {
-      this.#resources.push(...GUIDED_RESOURCES);
-      for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
-        this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
-      }
-    }
-    if (options.modelGallery) {
-      const gallery: Record<string, Record<string, unknown>> = {};
-      for (const entry of GALLERY) {
-        this.#resources.push(entry.ref);
-        this.#renders.set(entry.ref.id, entry.render);
-        gallery[entry.ref.id] = { display_name: entry.name };
-      }
-      this.#documents.set(`${PACK}/blocks/gallery.yml`, makeDocument('blocks/gallery.yml', 1, gallery));
-      this.#assets.set(assetPath(PACK, 'assets/textures/block/crate.png'),
-        { path: 'assets/textures/block/crate.png', kind: 'png', data: CRATE_PNG, bytes: 214 });
-      const model = new TextEncoder().encode(JSON.stringify(LAMP_MODEL));
-      this.#assets.set(assetPath(PACK, 'assets/models/block/stone_lamp.json'), {
-        path: 'assets/models/block/stone_lamp.json', kind: 'json',
-        data: btoa(String.fromCharCode(...model)), bytes: model.length,
-      });
-    }
+    const seed = options.seed ?? regressionSeed();
+    if (options.guided) addGuidedAuthoring(seed);
+    if (options.modelGallery) addModelGallery(seed);
+    this.#pack = seed.pack;
+    this.#types = seed.types;
+    this.#resources = seed.resources;
+    this.#documents = seed.documents;
+    this.#assets = seed.assets;
+    this.#renders = seed.renders;
+    this.#visuals = seed.visuals;
+    this.#names = seed.names;
+    this.#failures = seed.failures;
+    this.#diagnostics = seed.diagnostics;
+    this.#behavior = seed.behavior;
   }
 
   setPushHandler(handler: (frame: PushFrame) => void): void {
@@ -748,16 +875,16 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
           editorPort: 8089,
         });
       case 'browse.packs':
-        return this.success(op, { packs: [PACK] });
+        return this.success(op, { packs: [this.#pack] });
       case 'authoring.describe':
-        if (!this.#guided) return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
+        if (!this.#behavior) return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
         return this.success(op, {
-          types: [this.guidedItemType(), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
-          behavior: structuredClone(GUIDED_VOCABULARY),
+          types: this.#types.map((type) => type.name === 'item' ? describedItemType(type) : structuredClone(type)),
+          behavior: structuredClone(this.#behavior),
         });
       case 'browse.types':
         return this.success(op, {
-          types: [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+          types: structuredClone(this.#types),
         });
       case 'browse.resources': {
         const pack = stringValue(payload.pack);
@@ -790,9 +917,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'assets.move':
         return this.moveAsset(op, payload);
       case 'admin.diagnostics.recent':
-        return this.success(op, {
-          diagnostics: structuredClone(this.#guided ? [...DIAGNOSTICS, ...GUIDED_DIAGNOSTICS] : DIAGNOSTICS),
-        });
+        return this.success(op, { diagnostics: structuredClone(this.#diagnostics) });
       case 'delivery.status':
         return this.success(op, {
           candidateSha256: this.#candidateSha256,
@@ -829,21 +954,19 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       const fields = document?.parsed[resource.id];
       if (!fields) continue;
       const material = stringValue(fields.material);
-      const visual: ResourceSummary['visual'] = resource.id === 'ruby_blade'
-        ? { pack: PACK, path: 'assets/textures/items/ruby_blade.png', kind: 'texture' }
-        : resource.id === 'heart_icon'
-          ? { pack: PACK, path: 'assets/textures/gui/heart.png', kind: 'texture' }
-          : undefined;
+      const visualPath = this.#visuals.get(resource.id);
+      const visual: ResourceSummary['visual'] = visualPath
+        ? { pack: this.#pack, path: visualPath, kind: 'texture' }
+        : undefined;
+      const failure = this.#failures.get(resource.id);
       const summary: ResourceSummary = {
         ...resource,
-        name: resource.id === 'heart_icon' ? 'Heart Icon'
-          : resource.id === 'missing_icon' ? 'Missing Icon'
-            : stringValue(fields.display_name, resource.id),
+        name: this.#names.get(resource.id) ?? stringValue(fields.display_name, resource.id),
         ...(material ? { material } : {}),
         ...(visual ? { visual } : {}),
         ...(this.#renders.has(resource.id) ? { render: this.#renders.get(resource.id) } : {}),
-        health: resource.id === 'missing_icon' ? 'error' : 'unknown',
-        ...(resource.id === 'missing_icon' ? { healthMessage: 'Texture not found: gui/missing' } : {}),
+        health: failure ? 'error' : 'unknown',
+        ...(failure ? { healthMessage: failure } : {}),
       };
       const searchable = [summary.id, summary.path, summary.name, summary.material ?? '']
         .join(' ')
@@ -880,27 +1003,15 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     });
   }
 
-  /** The registry item type a describing server reports: abilities and rules get their editors. */
-  private guidedItemType(): TypeInfo {
-    const type = structuredClone(ITEM_TYPE);
-    type.parameters = type.parameters.map((param) =>
-      param.id === 'mechanics' ? { ...param, label: 'Abilities', uiHint: 'mechanics' } : param);
-    type.parameters.push({
-      id: 'behavior', type: 'list', required: false, label: 'Behaviour rules', section: 'behavior',
-      order: 20, uiHint: 'behavior-rules', description: 'ECA rules fired by this item',
-    });
-    return type;
-  }
-
   /** Mirrors the server's `computed.inheritance` for roots naming a fixture template. */
   private inheritance(document: FixtureDocument): Record<string, unknown> {
     const out: Record<string, unknown> = {};
     for (const [root, fields] of Object.entries(document.parsed)) {
       const authored = stringValue(fields.template);
       if (!authored) continue;
-      const id = authored.includes(':') ? authored : `${PACK}:${authored}`;
+      const id = authored.includes(':') ? authored : `${this.#pack}:${authored}`;
       const path = `templates/${id.slice(id.indexOf(':') + 1)}.yml`;
-      const template = this.#documents.get(`${PACK}/${path}`)?.parsed[id.slice(id.indexOf(':') + 1)];
+      const template = this.#documents.get(`${this.#pack}/${path}`)?.parsed[id.slice(id.indexOf(':') + 1)];
       if (!template) {
         out[root] = { template: authored, chain: [id], inherited: {}, sources: {}, templates: {}, failure: `unknown template ${id}` };
         continue;
@@ -912,7 +1023,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         inherited[key] = structuredClone(value);
         sources[key] = id;
       }
-      out[root] = { template: authored, chain: [id], inherited, sources, templates: { [id]: { pack: PACK, path } } };
+      out[root] = { template: authored, chain: [id], inherited, sources, templates: { [id]: { pack: this.#pack, path } } };
     }
     return Object.keys(out).length ? { inheritance: out } : {};
   }
@@ -975,12 +1086,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       const path = stringValue(asset.path);
       const data = stringValue(asset.data);
       if (!path) return this.failure(op, 'MTR-0012', 'fixture model asset path is missing');
-      stagedAssets.push({ pack: stringValue(payload.pack, PACK), path, data });
+      stagedAssets.push({ pack: stringValue(payload.pack, this.#pack), path, data });
     }
 
     const ownerPath = stringValue(payload.ownerPath);
     const document = ownerPath
-      ? this.#documents.get(`${stringValue(payload.pack, PACK)}/${ownerPath}`)
+      ? this.#documents.get(`${stringValue(payload.pack, this.#pack)}/${ownerPath}`)
       : undefined;
     if (ownerPath && !document) return this.failure(op, 'MTR-0009', 'fixture model owner not found');
     if (document && numberValue(payload.rev, document.rev) !== document.rev) {

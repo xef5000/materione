@@ -1,9 +1,11 @@
 <script lang="ts">
+  import Landing from './lib/components/Landing.svelte';
   import Login from './lib/components/Login.svelte';
   import Workbench from './lib/components/Workbench.svelte';
   import { openChannel } from './lib/protocol/connect';
   import type { ChannelState, EditorChannel } from './lib/protocol/session';
   import { encodeBase64Url } from './lib/protocol/wire';
+  import { detectHost, startIntent, type EditorHost } from './lib/host';
   import { draftStore, ensureDocumentDraft, reconcileDocumentDraft } from './lib/drafts.svelte';
   import {
     confirmDisconnect,
@@ -25,6 +27,11 @@
   let channel = $state<EditorChannel | null>(null);
   let hasWorkspace = $state(false);
   let reconnecting = $state(false);
+  // null until /host.json answers; only a cloud host shows the landing card and the demo.
+  let host = $state<EditorHost | null>(null);
+  let demo = $state(false);
+  let demoStarting = $state(false);
+  let demoError = $state('');
   let serverIdentity = '';
   let browserLabel = navigator.userAgent.replace(/^.*\)\s*/, '').slice(0, 40) || 'browser';
 
@@ -90,6 +97,31 @@
     }
   }
 
+  // The demo backend lives in this tab only (lib/demo.ts): nothing is sent anywhere.
+  async function startDemo() {
+    if (demoStarting) return;
+    demoStarting = true;
+    demoError = '';
+    try {
+      const { createDemoChannel } = await import('./lib/demo');
+      resetWorkspace();
+      session.channel = createDemoChannel();
+      connection.connected = true;
+      connection.error = '';
+      await loadWorkspace();
+      await refreshDelivery();
+      history.replaceState(null, '', `${location.pathname}?demo`);
+      demo = true;
+      hasWorkspace = true;
+      phase = 'active';
+    } catch (e) {
+      resetWorkspace();
+      demoError = e instanceof Error ? e.message : String(e);
+    } finally {
+      demoStarting = false;
+    }
+  }
+
   function disconnect() {
     if (!confirmDisconnect()) return;
     const closing = channel;
@@ -99,6 +131,10 @@
     serverIdentity = '';
     hasWorkspace = false;
     reconnecting = false;
+    if (demo) {
+      demo = false;
+      history.replaceState(null, '', location.pathname);
+    }
     phase = 'login';
   }
 
@@ -108,17 +144,23 @@
     event.returnValue = '';
   }
 
+  // A capability URL connects at once, whatever the host; otherwise ask which
+  // host served the page before choosing between the landing card and Login.
+  const initialIntent = startIntent(location.search, location.hash);
+  void detectHost().then((detected) => {
+    host = detected;
+    if (detected === 'cloud' && initialIntent.kind === 'demo') void startDemo();
+  });
+
   // Auto-connect when opened straight from the capability URL: /?s=<code>#<key>.
   $effect(() => {
     if (phase !== 'login') {
       return;
     }
-    const params = new URLSearchParams(location.search);
-    const code = params.get('s');
-    const key = location.hash.length > 1 ? location.hash.slice(1) : '';
-    if (code && key) {
+    const intent = startIntent(location.search, location.hash);
+    if (intent.kind === 'session') {
       history.replaceState(null, '', location.pathname); // scrub code+key from the address bar
-      void connect(code, key);
+      void connect(intent.code, intent.key);
     }
   });
 
@@ -127,6 +169,13 @@
 <svelte:window onbeforeunload={warnBeforeUnload} />
 
 <main>
+  {#if demo}
+    <div class="demo-banner" role="status">
+      <strong>Demo</strong> Sample content in this tab only: no server, nothing is saved anywhere.
+      Reloading starts over.
+      <button onclick={disconnect}>Exit demo</button>
+    </div>
+  {/if}
   {#if hasWorkspace}
     {#if !connection.connected}
       <div class="offline" role="status">
@@ -140,7 +189,9 @@
       </div>
     {/if}
     <Workbench onDisconnect={disconnect} />
-  {:else}
+  {:else if host === 'cloud' && phase === 'login'}
+    <Landing busy={demoStarting} error={demoError} onDemo={startDemo} />
+  {:else if host !== null || phase !== 'login'}
     <Login
       phase={phase === 'active' ? 'login' : phase}
       {error}
@@ -163,5 +214,17 @@
     font-size: 13px;
   }
   .offline button { margin-left: 12px; }
+  .demo-banner {
+    background: var(--bg-raised);
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+  .demo-banner strong {
+    color: var(--accent);
+    margin-right: 6px;
+  }
+  .demo-banner button { margin-left: 12px; }
   .reconnect { max-height: 55vh; overflow: auto; flex: none; }
 </style>

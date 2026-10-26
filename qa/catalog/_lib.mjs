@@ -24,7 +24,8 @@
 //   ctx.browser.openEditor()      -> optional real local plugin App using the
 //                                   normal capability handshake and approval
 //   ctx.browser.page              -> current Playwright page after openEditor()
-//   ctx.browser.browserShot(name) -> scoped App screenshot, recorded separately
+//   ctx.browser.browserShot(name, selector?) -> App screenshot scoped to
+//                                   selector (default .workbench), recorded separately
 //   ctx.browser.close()           -> close this test's isolated browser
 //   ctx.serverLogLine(regex)      → last server-log line matching since this
 //                                   test started (boot markers are stable)
