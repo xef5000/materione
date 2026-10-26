@@ -64,7 +64,8 @@ public final class FoodMechanic implements Mechanic {
                                 "Edible even at full hunger", null, null),
                         new ParameterSchema("effects", ParameterType.LIST, false, null,
                                 "Potion effects on consume: {type, amplifier?, duration_ticks?}", null, null)),
-                "2.0.0");
+                "2.0.0",
+                "When the player eats the item, its nutrition, saturation and effects apply");
     }
 
     @Override

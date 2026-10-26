@@ -3,8 +3,16 @@ package dev.materione.web.rpc.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.google.gson.JsonObject;
+import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.authoring.AuthoringApi;
+import dev.materione.api.content.Allocations;
+import dev.materione.api.content.ContentType;
+import dev.materione.api.content.PackEmitter;
+import dev.materione.api.registry.BehaviorVocabulary;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.SelfDescription;
 import dev.materione.core.authoring.ReloadHook;
 import dev.materione.core.document.AuditLog;
 import dev.materione.core.document.DocumentStore;
@@ -12,6 +20,8 @@ import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
@@ -375,6 +385,228 @@ class EditorContentOpsTest {
         JsonObject entry = payload(response).get("diagnostics")
                 .getAsJsonArray().get(0).getAsJsonObject();
         assertThat(entry.get("location").getAsString()).isEqualTo("items/bad.yml:4:7");
+    }
+
+    @Test
+    void browseTypesSerialisesNestedParameterSchemas() {
+        var hitboxes = new ParameterSchema("hitboxes", ParameterType.LIST, false, null, null, null, List.of(
+                ParameterSchema.of("type", ParameterType.STRING, true),
+                ParameterSchema.of("width", ParameterType.INTEGER, false)));
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                () -> List.of(typeWith(hitboxes)), List::of, EditorContentOpsTest::actor);
+
+        Wire.Response response = dispatcher.dispatch(request("browse.types", "1"));
+
+        assertThat(response.ok()).isTrue();
+        JsonObject parameter = payload(response).getAsJsonArray("types").get(0).getAsJsonObject()
+                .getAsJsonArray("parameters").get(0).getAsJsonObject();
+        assertThat(parameter.get("id").getAsString()).isEqualTo("hitboxes");
+        var nested = parameter.getAsJsonArray("nested");
+        assertThat(nested).hasSize(2);
+        assertThat(nested.get(0).getAsJsonObject().get("id").getAsString()).isEqualTo("type");
+        assertThat(nested.get(0).getAsJsonObject().get("type").getAsString()).isEqualTo("string");
+        assertThat(nested.get(1).getAsJsonObject().get("id").getAsString()).isEqualTo("width");
+        assertThat(nested.get(1).getAsJsonObject().get("type").getAsString()).isEqualTo("integer");
+    }
+
+    @Test
+    void authoringDescribeExposesTypesAndTheBehaviorVocabularyFromTheirRegistries() {
+        var vocabulary = new BehaviorVocabulary(
+                List.of(new BehaviorVocabulary.Event("click", "Click", "A player clicks.",
+                        List.of("right", "left"), List.of("item"))),
+                List.of(
+                        new BehaviorVocabulary.Action("message", new SelfDescription("Message",
+                                "Sends a chat line.", List.of(), "0.1.0", "When the rule fires."),
+                                "text", false),
+                        new BehaviorVocabulary.Action("delay", SelfDescription.of("Delay", "Waits."), null, true),
+                        new BehaviorVocabulary.Action("raw", null, null, false)),
+                List.of(ParameterSchema.of("if", ParameterType.RAW, false)),
+                List.of(ParameterSchema.of("delay_ticks", ParameterType.INTEGER, false)),
+                List.of(new BehaviorVocabulary.Mechanic("materione:food", new SelfDescription("Food",
+                        "Edible.", List.of(), "0.1.0", "When eaten."), true, "Materione")));
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                () -> List.of(typeWith()), List::of, EditorContentOpsTest::actor, () -> vocabulary);
+
+        Wire.Response response = dispatcher.dispatch(request("authoring.describe", "1"));
+
+        assertThat(response.ok()).isTrue();
+        JsonObject data = payload(response);
+        assertThat(data.getAsJsonArray("types").get(0).getAsJsonObject().get("name").getAsString())
+                .isEqualTo("thing");
+        JsonObject behavior = data.getAsJsonObject("behavior");
+
+        JsonObject click = behavior.getAsJsonArray("events").get(0).getAsJsonObject();
+        assertThat(click.get("displayName").getAsString()).isEqualTo("Click");
+        assertThat(values(click.getAsJsonArray("details"))).containsExactly("right", "left");
+        assertThat(values(click.getAsJsonArray("firedBy"))).containsExactly("item");
+
+        JsonObject message = behavior.getAsJsonArray("actions").get(0).getAsJsonObject();
+        assertThat(message.get("displayName").getAsString()).isEqualTo("Message");
+        assertThat(message.get("activation").getAsString()).isEqualTo("When the rule fires.");
+        assertThat(message.get("shorthand").getAsString()).isEqualTo("text");
+        assertThat(message.get("deferred").getAsBoolean()).isFalse();
+
+        JsonObject delay = behavior.getAsJsonArray("actions").get(1).getAsJsonObject();
+        assertThat(delay.get("deferred").getAsBoolean()).isTrue();
+        assertThat(delay.has("activation")).isFalse();
+        assertThat(delay.has("shorthand")).isFalse();
+
+        // an undescribed executor still appears, identified only by its key
+        JsonObject raw = behavior.getAsJsonArray("actions").get(2).getAsJsonObject();
+        assertThat(raw.get("id").getAsString()).isEqualTo("raw");
+        assertThat(raw.has("displayName")).isFalse();
+
+        JsonObject food = behavior.getAsJsonArray("mechanics").get(0).getAsJsonObject();
+        assertThat(food.get("id").getAsString()).isEqualTo("materione:food");
+        assertThat(food.get("displayName").getAsString()).isEqualTo("Food");
+        assertThat(food.get("activation").getAsString()).isEqualTo("When eaten.");
+        assertThat(food.get("repeatable").getAsBoolean()).isTrue();
+        assertThat(food.get("registeredBy").getAsString()).isEqualTo("Materione");
+
+        assertThat(behavior.getAsJsonArray("ruleOptions").get(0).getAsJsonObject().get("id").getAsString())
+                .isEqualTo("if");
+        assertThat(behavior.getAsJsonArray("actionOptions").get(0).getAsJsonObject().get("id").getAsString())
+                .isEqualTo("delay_ticks");
+    }
+
+    @Test
+    void authoringDescribeWithoutAVocabularySuppliesEmptyBehaviorArrays() {
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+
+        Wire.Response response = dispatcher.dispatch(request("authoring.describe", "1"));
+
+        assertThat(response.ok()).isTrue();
+        assertThat(payload(response).getAsJsonArray("types")).isEmpty();
+        JsonObject behavior = payload(response).getAsJsonObject("behavior");
+        for (String key : List.of("events", "actions", "ruleOptions", "actionOptions", "mechanics")) {
+            assertThat(behavior.getAsJsonArray(key)).as(key).isEmpty();
+        }
+    }
+
+    @Test
+    void setFieldsRemovalEditReachesTheApiAsARemovalAndDropsTheKey() throws Exception {
+        DocumentStore store = store();
+        List<AuthoringApi.SetFieldsRequest> seen = new java.util.ArrayList<>();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher,
+                recording(api(store, audit(), new CapturingTrigger()), seen),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+        dispatcher.dispatch(request("edit.put", "2", object("pack", "demo",
+                "path", "items/wand.yml", "rev", "0",
+                "content", "wand:\n  material: STICK\n  display_name: Old Name\n")));
+
+        Wire.Response removed = dispatcher.dispatch(request("authoring.setFields", "3",
+                setFieldsBody(1, removal("wand", "display_name"))));
+
+        assertThat(removed.ok()).isTrue();
+        assertThat(payload(removed).get("rev").getAsInt()).isEqualTo(2);
+        assertThat(payload(removed).get("raw").getAsString()).isEqualTo("wand:\n  material: STICK\n");
+        assertThat(seen).hasSize(1);
+        AuthoringApi.FieldEdit sent = seen.get(0).edits().get(0);
+        assertThat(sent.remove()).isTrue();
+        assertThat(sent.value()).isNull();
+        assertThat(sent.field()).containsExactly("wand", "display_name");
+    }
+
+    @Test
+    void setFieldsRemovalRefusesACarriedValueBeforeReachingTheApi() {
+        List<AuthoringApi.SetFieldsRequest> seen = new java.util.ArrayList<>();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher,
+                recording(api(store(), audit(), new CapturingTrigger()), seen),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+        JsonObject withValue = removal("wand", "display_name");
+        withValue.addProperty("value", "x");
+
+        Wire.Response rejected = dispatcher.dispatch(request("authoring.setFields", "1",
+                setFieldsBody(0, withValue)));
+
+        assertThat(rejected.ok()).isFalse();
+        assertThat(rejected.error().code()).isEqualTo("MTR-0008");
+        assertThat(rejected.error().message()).contains("no 'value'");
+        assertThat(seen).isEmpty();
+    }
+
+    /** A content type whose only interesting part is the parameters it declares. */
+    private static ContentType typeWith(ParameterSchema... parameters) {
+        return new ContentType() {
+            @Override
+            public String name() {
+                return "thing";
+            }
+
+            @Override
+            public String directory() {
+                return "things";
+            }
+
+            @Override
+            public SelfDescription describe() {
+                return new SelfDescription("Thing", "A test type.", List.of(parameters), "test");
+            }
+
+            @Override
+            public Optional<Object> parse(
+                    NamespacedId id, Map<String, Object> definition,
+                    Map<String, Map<String, Object>> templates) {
+                return Optional.empty();
+            }
+
+            @Override
+            public void compile(
+                    Object definition, NamespacedId allocatedModelId,
+                    PackEmitter emitter, Allocations allocations) {}
+        };
+    }
+
+    /** Forwards every call to the real api and records the setFields requests it receives. */
+    private static AuthoringApi recording(AuthoringApi real, List<AuthoringApi.SetFieldsRequest> seen) {
+        return (AuthoringApi) java.lang.reflect.Proxy.newProxyInstance(
+                AuthoringApi.class.getClassLoader(), new Class<?>[] {AuthoringApi.class},
+                (proxy, method, args) -> {
+                    if (method.getName().equals("setFields")) {
+                        seen.add((AuthoringApi.SetFieldsRequest) args[1]);
+                    }
+                    try {
+                        return method.invoke(real, args);
+                    } catch (java.lang.reflect.InvocationTargetException e) {
+                        throw e.getCause();
+                    }
+                });
+    }
+
+    /** A {@code setFields} edit that removes the field at {@code path}. */
+    private static JsonObject removal(String... path) {
+        JsonObject edit = new JsonObject();
+        var field = new com.google.gson.JsonArray();
+        for (String segment : path) {
+            field.add(segment);
+        }
+        edit.add("field", field);
+        edit.addProperty("remove", true);
+        return edit;
+    }
+
+    /** A {@code setFields} body for the demo document at the given revision. */
+    private static JsonObject setFieldsBody(int revision, JsonObject... edits) {
+        JsonObject body = object("pack", "demo", "path", "items/wand.yml", "rev", String.valueOf(revision));
+        var array = new com.google.gson.JsonArray();
+        for (JsonObject edit : edits) {
+            array.add(edit);
+        }
+        body.add("edits", array);
+        return body;
+    }
+
+    private static List<String> values(com.google.gson.JsonArray array) {
+        List<String> out = new java.util.ArrayList<>();
+        array.forEach(element -> out.add(element.getAsString()));
+        return out;
     }
 
     // ------------------------------------------------------------------

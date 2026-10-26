@@ -26,6 +26,13 @@ public final class SessionPush {
         if (diagnostic.hint() != null) {
             entry.addProperty("hint", diagnostic.hint());
         }
+        if (diagnostic.target() != null) {
+            com.google.gson.JsonObject target = new com.google.gson.JsonObject();
+            com.google.gson.JsonArray field = new com.google.gson.JsonArray();
+            diagnostic.target().field().forEach(field::add);
+            target.add("field", field);
+            entry.add("target", target);
+        }
         return entry;
     }
 

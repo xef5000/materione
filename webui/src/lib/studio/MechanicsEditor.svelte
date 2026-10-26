@@ -1,0 +1,210 @@
+<script lang="ts">
+  /**
+   * An item's `mechanics:` list as ability cards. Every card is generated
+   * from the mechanic's registered self-description (plugin.md §3 — no
+   * hand-written per-mechanic forms); entries the server does not register
+   * are still shown, with their parameters preserved untouched.
+   */
+  import Field from './Field.svelte';
+  import type { TypeParam } from '../api';
+  import {
+    addMechanic,
+    canAddMechanic,
+    fullMechanicId,
+    mechanicEntries,
+    mechanicInfo,
+    removeAt,
+    setMechanicParam,
+    type BehaviorVocabulary,
+    type MechanicInfo,
+  } from '../behavior';
+
+  interface Props {
+    field: TypeParam;
+    value: unknown;
+    pack: string;
+    vocabulary: BehaviorVocabulary | null;
+    onChange: (value: unknown) => void;
+    onError: (message: string) => void;
+  }
+
+  let { field, value, pack, vocabulary, onChange, onError }: Props = $props();
+  let choice = $state('');
+
+  const entries = $derived(mechanicEntries(value));
+  const registered = $derived(vocabulary?.mechanics ?? []);
+  const chosen = $derived(registered.find((mechanic) => mechanic.id === choice));
+
+  function origin(mechanic: MechanicInfo): string {
+    return mechanic.id.startsWith('materione:') ? 'Built in' : `Added by ${mechanic.registeredBy}`;
+  }
+
+  function run(change: () => unknown) {
+    try {
+      onChange(change());
+    } catch (e) {
+      onError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
+  function add() {
+    if (!chosen) return;
+    run(() => addMechanic(value, chosen));
+    choice = '';
+  }
+
+  function paramValue(params: Record<string, unknown>, param: TypeParam): unknown {
+    return Object.hasOwn(params, param.id) ? params[param.id] : undefined;
+  }
+</script>
+
+<section class="abilities" data-field={field.id} aria-label={field.label || field.id}>
+  <h3>{field.label || 'Abilities'}</h3>
+  {#if !vocabulary}
+    <p class="note">This server does not describe its abilities, so they can only be edited in Files.</p>
+  {/if}
+  {#each entries as entry (entry.index)}
+    {@const info = mechanicInfo(vocabulary, entry.name)}
+    <article class="card" data-mechanic={entry.name || `#${entry.index}`}>
+      <header>
+        <strong>{info?.displayName ?? (entry.name || 'Unreadable entry')}</strong>
+        <span class="origin">{info ? origin(info) : entry.name ? `${fullMechanicId(entry.name)} · not registered on this server` : 'not a single ability mapping'}</span>
+        <button type="button" class="remove" aria-label={`Remove ${info?.displayName ?? entry.name}`}
+          onclick={() => run(() => removeAt(value, entry.index))}>Remove</button>
+      </header>
+      {#if info}
+        <p class="description">{info.description}</p>
+        <p class="activation" class:unknown={!info.activation}>
+          <span>Activates:</span>
+          {info.activation ?? 'this ability does not say when it activates; check its documentation.'}
+        </p>
+        {#each info.parameters ?? [] as param (param.id)}
+          <Field field={param} value={paramValue(entry.params, param)} {pack}
+            onChange={(next) => run(() => setMechanicParam(value, entry.index, param.id, next))} />
+        {/each}
+        {#if Object.keys(entry.params).some((key) => !(info.parameters ?? []).some((param) => param.id === key))}
+          <p class="note">Other settings on this ability are kept as written; edit them in Files.</p>
+        {/if}
+      {:else}
+        <p class="note">
+          {entry.name
+            ? 'Install or enable the plugin that provides it; its settings are kept as written and can be edited in Files.'
+            : 'Each entry must be one ability name with its settings; edit this one in Files.'}
+        </p>
+      {/if}
+    </article>
+  {/each}
+  {#if entries.length === 0}
+    <p class="note">No abilities yet.</p>
+  {/if}
+  {#if registered.length > 0}
+    <div class="add">
+      <label>
+        <span>Add an ability</span>
+        <select bind:value={choice}>
+          <option value="">Choose…</option>
+          {#each registered as mechanic (mechanic.id)}
+            <option value={mechanic.id} disabled={!canAddMechanic(value, mechanic)}>
+              {mechanic.displayName}{mechanic.id.startsWith('materione:') ? '' : ` (${mechanic.registeredBy})`}
+            </option>
+          {/each}
+        </select>
+      </label>
+      <button type="button" disabled={!chosen} onclick={add}>Add</button>
+    </div>
+    {#if chosen}
+      <p class="preview">
+        <strong>{chosen.displayName}</strong> — {chosen.description}.
+        <span class="activation-inline">Activates: {chosen.activation ?? 'not described by its plugin.'}</span>
+      </p>
+    {/if}
+  {/if}
+</section>
+
+<style>
+  .abilities {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 14px;
+    min-width: 0;
+  }
+  h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: normal;
+    color: var(--muted);
+  }
+  .card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    min-width: 0;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-width: 0;
+  }
+  header strong {
+    font-size: 13px;
+  }
+  .origin {
+    flex: 1;
+    min-width: 0;
+    color: var(--faint);
+    font-size: 11px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .remove,
+  .add button {
+    border: 1px solid var(--border-strong);
+    background: none;
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 2px 8px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+  .description,
+  .activation,
+  .note,
+  .preview {
+    margin: 4px 0 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .activation span {
+    color: var(--fg);
+  }
+  .activation.unknown {
+    color: var(--warn);
+  }
+  .add {
+    display: flex;
+    align-items: end;
+    gap: 6px;
+  }
+  .add label {
+    display: grid;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  select {
+    background: var(--bg-input);
+    color: inherit;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 5px 8px;
+    font-size: 13px;
+    min-width: 0;
+  }
+  .activation-inline {
+    display: block;
+  }
+</style>

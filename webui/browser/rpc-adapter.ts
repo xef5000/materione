@@ -21,6 +21,7 @@ export interface FixtureAsset {
 interface FieldEdit {
   field: string[];
   value: unknown;
+  remove?: boolean;
 }
 
 const PACK = 'fixture_pack';
@@ -273,6 +274,68 @@ function galleryEntries(pack: string, includeFallback = true): GalleryEntry[] {
   return entries;
 }
 
+/**
+ * Opt-in (`?guided`) guided-authoring fixture: a server that answers
+ * `authoring.describe`, a templated item, an item whose texture file is
+ * missing (with the targeted quarantine diagnostic the server publishes) and
+ * an item to add abilities and rules to.
+ */
+const GUIDED_RESOURCES: ResourceRef[] = [
+  { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'templated_blade' },
+  { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'cracked_gem' },
+  { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'storm_wand' },
+];
+
+const GUIDED_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
+  'items/guided.yml': {
+    templated_blade: { template: 'blade_base', display_name: 'Templated Blade', material: 'STICK' },
+    cracked_gem: { display_name: 'Cracked Gem', material: 'STICK', texture: 'item/cracked_gem' },
+    storm_wand: { display_name: 'Storm Wand', material: 'BLAZE_ROD' },
+  },
+  'templates/blade_base.yml': {
+    blade_base: { material: 'DIAMOND_SWORD', lore: ['Forged from a template'] },
+  },
+};
+
+const GUIDED_DIAGNOSTICS = [
+  {
+    code: 'MTR-0010',
+    severity: 'WARN',
+    message: "resource fixture_pack:cracked_gem quarantined: unresolved texture 'item/cracked_gem'",
+    resource: 'fixture_pack:cracked_gem',
+    hint: 'fix the reported problems, then /materione reload',
+    target: { field: ['texture'] },
+  },
+];
+
+const PARAM = (id: string, type: string, required: boolean, description: string,
+  extra: Record<string, unknown> = {}) => ({ id, type, required, description, uiHint: 'text', label: '', ...extra });
+
+const GUIDED_VOCABULARY = {
+  events: [
+    { id: 'click', displayName: 'Click', description: 'The player left- or right-clicks with the item, or right-clicks the furniture', details: ['right', 'left'], firedBy: ['item', 'furniture'] },
+    { id: 'break', displayName: 'Break', description: 'The player breaks a block while holding the item, or breaks this block', details: [], firedBy: ['item', 'block'] },
+    { id: 'place', displayName: 'Place', description: 'The block or furniture is placed', details: [], firedBy: ['block', 'furniture'] },
+    { id: 'consume', displayName: 'Consume', description: 'The player eats or drinks the item', details: [], firedBy: ['item'] },
+    { id: 'tick', displayName: 'Tick', description: 'Reserved; not fired yet', details: [], firedBy: [] },
+  ],
+  actions: [
+    { id: 'message', displayName: 'Send message', description: 'Shows text to the player, on the action bar, or to everyone', shorthand: 'text', deferred: false,
+      parameters: [PARAM('text', 'string', true, 'Message text; & colour codes allowed'),
+        PARAM('target', 'enum', false, 'Where the text appears', { uiHint: 'select', allowedValues: ['player', 'actionbar', 'broadcast'] })] },
+    { id: 'run_command', displayName: 'Run command', description: 'Runs a server command', shorthand: 'command', deferred: true,
+      parameters: [PARAM('command', 'string', true, 'Command without the leading slash')] },
+  ],
+  ruleOptions: [PARAM('cooldown', 'integer', false, 'Milliseconds before this rule can fire again', { uiHint: 'number' })],
+  actionOptions: [PARAM('chance', 'decimal', false, 'Probability from 0 to 1 that the action runs', { uiHint: 'number' })],
+  mechanics: [
+    { id: 'example:charge', displayName: 'Charge', description: 'Stores charge on use', repeatable: false, registeredBy: 'ExampleAddon',
+      parameters: [PARAM('capacity', 'integer', true, 'Maximum charge', { uiHint: 'number' })] },
+    { id: 'materione:soulbound', displayName: 'Soulbound', description: 'The item stays with its owner through death', repeatable: false, registeredBy: 'Materione',
+      activation: 'When the owner dies the item is kept back and returned on respawn or next join', parameters: [] },
+  ],
+};
+
 const DIAGNOSTICS: Record<string, unknown>[] = [
   {
     code: 'MTR-9001',
@@ -305,6 +368,11 @@ function parseEdits(value: unknown): FieldEdit[] | null {
   const edits: FieldEdit[] = [];
   for (const entry of value) {
     if (!isRecord(entry) || !stringArray(entry.field) || entry.field.length < 2) return null;
+    if (entry.remove === true) {
+      if ('value' in entry) return null;
+      edits.push({ field: entry.field, value: undefined, remove: true });
+      continue;
+    }
     edits.push({ field: entry.field, value: entry.value });
   }
   return edits;
@@ -508,6 +576,8 @@ export interface FixtureSeed {
   /** Resources whose health is `error`, with their message. */
   failures: Map<string, string>;
   diagnostics: Record<string, unknown>[];
+  /** The ECA vocabulary `authoring.describe` reports; absent = an older server without it. */
+  behavior?: Record<string, unknown>;
 }
 
 export function regressionSeed(): FixtureSeed {
@@ -540,6 +610,33 @@ export function regressionSeed(): FixtureSeed {
     failures: new Map([['missing_icon', 'Texture not found: gui/missing']]),
     diagnostics: DIAGNOSTICS,
   };
+}
+
+/** The registry item type a describing server reports: abilities and rules get their editors. */
+function describedItemType(item: TypeInfo): TypeInfo {
+  const type = structuredClone(item);
+  type.parameters = type.parameters.map((param) =>
+    param.id === 'mechanics' ? { ...param, label: 'Abilities', uiHint: 'mechanics' } : param);
+  type.parameters.push({
+    id: 'behavior', type: 'list', required: false, label: 'Behaviour rules', section: 'behavior',
+    order: 20, uiHint: 'behavior-rules', description: 'ECA rules fired by this item',
+  });
+  return type;
+}
+
+/** The fixture's ECA vocabulary (events, actions, mechanics), for describing seeds. */
+export function guidedVocabulary(): Record<string, unknown> {
+  return structuredClone(GUIDED_VOCABULARY);
+}
+
+/** Adds the opt-in (`?guided`) guided-authoring resources, template and diagnostic to `seed`. */
+export function addGuidedAuthoring(seed: FixtureSeed): void {
+  seed.resources.push(...GUIDED_RESOURCES);
+  for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
+    seed.documents.set(`${seed.pack}/${path}`, makeDocument(path, 1, structuredClone(parsed), seed.pack));
+  }
+  seed.diagnostics = [...seed.diagnostics, ...GUIDED_DIAGNOSTICS];
+  seed.behavior = guidedVocabulary();
 }
 
 /** Adds the live-render block gallery (its crate texture and lamp model included) to `seed`. */
@@ -616,9 +713,14 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #failures: Map<string, string>;
   readonly #diagnostics: Record<string, unknown>[];
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; seed?: FixtureSeed } = {}) {
+  #behavior: Record<string, unknown> | undefined;
+
+  constructor(options: {
+    summaryError?: boolean; modelGallery?: boolean; guided?: boolean; seed?: FixtureSeed;
+  } = {}) {
     this.#summaryError = options.summaryError ?? false;
     const seed = options.seed ?? regressionSeed();
+    if (options.guided) addGuidedAuthoring(seed);
     if (options.modelGallery) addModelGallery(seed);
     this.#pack = seed.pack;
     this.#types = seed.types;
@@ -630,6 +732,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     this.#names = seed.names;
     this.#failures = seed.failures;
     this.#diagnostics = seed.diagnostics;
+    this.#behavior = seed.behavior;
   }
 
   setPushHandler(handler: (frame: PushFrame) => void): void {
@@ -773,6 +876,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         });
       case 'browse.packs':
         return this.success(op, { packs: [this.#pack] });
+      case 'authoring.describe':
+        if (!this.#behavior) return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
+        return this.success(op, {
+          types: this.#types.map((type) => type.name === 'item' ? describedItemType(type) : structuredClone(type)),
+          behavior: structuredClone(this.#behavior),
+        });
       case 'browse.types':
         return this.success(op, {
           types: structuredClone(this.#types),
@@ -890,8 +999,33 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       rev: document.rev,
       raw: document.raw,
       parsed: structuredClone(document.parsed),
-      computed: {},
+      computed: this.inheritance(document),
     });
+  }
+
+  /** Mirrors the server's `computed.inheritance` for roots naming a fixture template. */
+  private inheritance(document: FixtureDocument): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+    for (const [root, fields] of Object.entries(document.parsed)) {
+      const authored = stringValue(fields.template);
+      if (!authored) continue;
+      const id = authored.includes(':') ? authored : `${this.#pack}:${authored}`;
+      const path = `templates/${id.slice(id.indexOf(':') + 1)}.yml`;
+      const template = this.#documents.get(`${this.#pack}/${path}`)?.parsed[id.slice(id.indexOf(':') + 1)];
+      if (!template) {
+        out[root] = { template: authored, chain: [id], inherited: {}, sources: {}, templates: {}, failure: `unknown template ${id}` };
+        continue;
+      }
+      const inherited: Record<string, unknown> = {};
+      const sources: Record<string, string> = {};
+      for (const [key, value] of Object.entries(template)) {
+        if (key === 'template') continue;
+        inherited[key] = structuredClone(value);
+        sources[key] = id;
+      }
+      out[root] = { template: authored, chain: [id], inherited, sources, templates: { [id]: { pack: this.#pack, path } } };
+    }
+    return Object.keys(out).length ? { inheritance: out } : {};
   }
 
   private putDocument(op: string, payload: Record<string, unknown>): Response {
@@ -928,6 +1062,11 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       const root = edit.field[0];
       if (!root || !parsed[root]) {
         return this.failure(op, 'MTR-0009', 'fixture resource root not found');
+      }
+      if (edit.remove) {
+        if (edit.field.length !== 2) return this.failure(op, 'MTR-0012', 'fixture removal path is malformed');
+        delete parsed[root][edit.field[1]!];
+        continue;
       }
       if (!assignPath(parsed[root], edit.field.slice(1), edit.value)) {
         return this.failure(op, 'MTR-0012', 'fixture field path is malformed');

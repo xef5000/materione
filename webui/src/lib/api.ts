@@ -73,6 +73,26 @@ export interface DiagnosticEntry {
   /** Source coordinates ("file:line[:column]") when the failure came from a file. */
   location?: string;
   hint?: string;
+  /** The field inside `resource` the problem is about (`["texture"]`). */
+  target?: { field: string[] };
+}
+
+/** One field edit in a studio save: a value, or an explicit lossless key removal. */
+export type FieldEditPayload =
+  | { field: string[]; value: unknown }
+  | { field: string[]; remove: true };
+
+/** Read-only inheritance view per resource root (`computed.inheritance`). */
+export interface InheritanceView {
+  template: string;
+  /** Full template ids, nearest first. */
+  chain: string[];
+  /** Effective values the root does not set itself. */
+  inherited: Record<string, unknown>;
+  /** Which template supplies each key (inherited or overridden). */
+  sources: Record<string, string>;
+  templates: Record<string, { pack: string; path: string }>;
+  failure?: string;
 }
 
 export interface AssetRef {
@@ -197,6 +217,8 @@ export const ops = {
   moveFolder: (c: EditorChannel, pack: string, from: string, to: string) =>
     c.call('edit.moveFolder', { pack, from, to }),
   types: (c: EditorChannel) => c.call('browse.types'),
+  /** Content types plus the behaviour vocabulary; older jars answer with an unknown-op error. */
+  describe: (c: EditorChannel) => c.call('authoring.describe'),
   diagnostics: (c: EditorChannel) => c.call('admin.diagnostics.recent'),
   dryRun: (c: EditorChannel, content: string) => c.call('validate.dryRun', { content }),
   reloadScope: (c: EditorChannel, scope: 'everything' | 'one-pack', pack?: string) =>
@@ -230,7 +252,7 @@ export const ops = {
     pack: string,
     path: string,
     rev: number,
-    edits: { field: string[]; value: unknown }[],
+    edits: FieldEditPayload[],
   ) => c.call('authoring.setFields', { pack, path, rev, edits }),
 };
 

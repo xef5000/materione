@@ -53,6 +53,11 @@ public final class BehaviorService {
         BukkitActionExecutors.registerAll(engine);
     }
 
+    /** The registered events, actions and rule options (editor self-description). */
+    public dev.materione.api.registry.BehaviorVocabulary vocabulary() {
+        return engine.vocabulary();
+    }
+
     /** Number of registered action types (doctor surface). */
     public int executorCount() {
         return engine.registeredExecutorCount();

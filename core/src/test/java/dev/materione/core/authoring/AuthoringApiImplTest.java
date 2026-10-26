@@ -176,6 +176,132 @@ class AuthoringApiImplTest {
     }
 
     @Test
+    void setFieldsRemovalDropsTheKeyLosslesslyAndBumpsTheRevision() throws Exception {
+        AuthoringApi api = api();
+        api.createPack(editor(), "demo").value();
+        String fixture = """
+                # a comment worth keeping
+                wand:
+                  material: STICK # inline comment
+                  display_name: "Old Name"
+                  # trailing note
+                """;
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "items/wand.yml", 0, fixture));
+
+        ApiResult<AuthoringApi.DocumentView> reset = api.setFields(editor(),
+                new AuthoringApi.SetFieldsRequest("demo", "items/wand.yml", 1, List.of(
+                        AuthoringApi.FieldEdit.removal(List.of("wand", "display_name")))));
+
+        assertThat(reset.ok()).isTrue();
+        assertThat(reset.value().revision()).isEqualTo(2);
+        assertThat(Files.readString(temp.resolve("packs/demo/items/wand.yml"))).isEqualTo("""
+                # a comment worth keeping
+                wand:
+                  material: STICK # inline comment
+                  # trailing note
+                """);
+        assertThat(reset.value().parsed()).containsOnlyKeys("wand");
+        assertThat(Files.readString(temp.resolve("audit.log"))).contains("authoring.setFields");
+    }
+
+    @Test
+    void staleRemovalConflictsAndLeavesTheFileUnchanged() throws Exception {
+        AuthoringApi api = api();
+        api.createPack(editor(), "demo").value();
+        String fixture = "wand:\n  material: STICK\n  display_name: Old Name\n";
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "items/wand.yml", 0, fixture));
+
+        ApiResult<AuthoringApi.DocumentView> stale = api.setFields(editor(),
+                new AuthoringApi.SetFieldsRequest("demo", "items/wand.yml", 0, List.of(
+                        AuthoringApi.FieldEdit.removal(List.of("wand", "display_name")))));
+
+        assertThat(stale.ok()).isFalse();
+        assertThat(stale.diagnostics()).hasSize(1);
+        assertThat(stale.diagnostics().get(0).code().code()).isEqualTo("MTR-0034");
+        assertThat(Files.readString(temp.resolve("packs/demo/items/wand.yml"))).isEqualTo(fixture);
+        assertThat(api.getDocument("demo", "items/wand.yml").value().revision()).isEqualTo(1);
+    }
+
+    @Test
+    void inheritingDocumentsReportEffectiveValuesAndProvenance() throws Exception {
+        AuthoringApi api = api();
+        api.createPack(editor(), "demo").value();
+        Files.createDirectories(temp.resolve("packs/demo/templates"));
+        Files.writeString(temp.resolve("packs/demo/templates/base.yml"), """
+                base:
+                  material: DIAMOND_SWORD
+                  lore:
+                    - Forged
+                    - Hard
+                """);
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "items/sword.yml", 0, """
+                        sword:
+                          template: base
+                          display_name: Blade
+                          lore:
+                            - Mine
+                        """));
+
+        AuthoringApi.DocumentView view = api.getDocument("demo", "items/sword.yml").value();
+        Map<String, Object> sword = inheritanceOf(view, "sword");
+
+        assertThat(sword)
+                .containsEntry("template", "base")
+                .containsEntry("chain", List.of("demo:base"))
+                // the template's values, including the key the item overrides;
+                // the item's own display_name is not inherited at all
+                .containsEntry("inherited", Map.of(
+                        "material", "DIAMOND_SWORD",
+                        "lore", List.of("Forged", "Hard")))
+                .containsEntry("sources", Map.of("material", "demo:base", "lore", "demo:base"))
+                .containsEntry("templates", Map.of(
+                        "demo:base", Map.of("pack", "demo", "path", "templates/base.yml")))
+                .doesNotContainKey("failure");
+    }
+
+    @Test
+    void unresolvedTemplateReportsAFailureAndInheritsNothing() {
+        AuthoringApi api = api();
+        api.createPack(editor(), "demo").value();
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "items/ghost.yml", 0, "ghost:\n  template: missing\n  material: PAPER\n"));
+
+        Map<String, Object> ghost = inheritanceOf(api.getDocument("demo", "items/ghost.yml").value(), "ghost");
+
+        assertThat(ghost)
+                .containsEntry("template", "missing")
+                .containsEntry("chain", List.of("demo:missing"))
+                .containsEntry("inherited", Map.of())
+                .containsEntry("sources", Map.of())
+                .containsEntry("templates", Map.of());
+        assertThat(ghost.get("failure")).isInstanceOf(String.class);
+        assertThat((String) ghost.get("failure")).contains("unknown template").contains("demo:missing");
+    }
+
+    @Test
+    void documentsWithoutATemplateCarryNoInheritanceEntry() {
+        AuthoringApi api = api();
+        api.createPack(editor(), "demo").value();
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "items/plain.yml", 0, "plain:\n  material: PAPER\n"));
+
+        AuthoringApi.DocumentView view = api.getDocument("demo", "items/plain.yml").value();
+
+        assertThat(view.computed()).doesNotContainKey("inheritance");
+    }
+
+    /** The per-root inheritance view that rides {@code computed} for a templated document. */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> inheritanceOf(AuthoringApi.DocumentView view, String root) {
+        Map<String, Object> inheritance = (Map<String, Object>) view.computed().get("inheritance");
+        assertThat(inheritance).containsKey(root);
+        return (Map<String, Object>) inheritance.get(root);
+    }
+
+    @Test
     void historyRecordsTheActingEditor() {
         AuthoringApi api = api();
         api.createPack(editor(), "demo").value();

@@ -16,10 +16,13 @@ import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.ModelTransaction;
 import dev.materione.core.document.ModelTransactionService;
 import dev.materione.core.document.Scaffolds;
+import dev.materione.core.pipeline.TemplateResolver;
 import dev.materione.core.pipeline.graph.ContentGraph;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -320,7 +323,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
         try {
             List<DocumentStore.FieldEdit> edits = new ArrayList<>();
             for (FieldEdit edit : request.edits()) {
-                edits.add(new DocumentStore.FieldEdit(edit.field(), edit.value()));
+                edits.add(new DocumentStore.FieldEdit(edit.field(), edit.value(), edit.remove()));
             }
             if (edits.isEmpty()) {
                 throw new IllegalArgumentException("'edits' must be a non-empty array");
@@ -592,9 +595,88 @@ public final class AuthoringApiImpl implements AuthoringApi {
                 computed = metadata;
             }
         }
+        Map<String, Object> inheritance = tree == null ? Map.of() : inheritance(document.pack(), tree);
+        if (!inheritance.isEmpty()) {
+            Map<String, Object> merged = new LinkedHashMap<>(computed);
+            merged.put("inheritance", inheritance);
+            computed = Collections.unmodifiableMap(merged);
+        }
         return new DocumentView(
                 document.pack(), document.path(), document.raw(), tree,
                 document.revision(), document.sha256(), computed);
+    }
+
+    /**
+     * Effective values and provenance for every root that names a
+     * {@code template:} (web.md §6), from the same resolver the pipeline
+     * compiles with ({@link TemplateResolver#resolve}). Read-only: the canonical
+     * file never contains any of it. Per root: {@code template} (as
+     * authored), {@code chain} (full ids, nearest first), {@code inherited}
+     * (the value the chain supplies for each key — what the key resolves to
+     * whenever the root does not set it), {@code sources} (which template
+     * supplies each of those keys),
+     * {@code templates} ({@code {pack, path}} per chain id) and {@code failure}
+     * when the chain does not resolve. Template documents are only read for
+     * documents that use inheritance.
+     */
+    private Map<String, Object> inheritance(String pack, Map<String, Object> tree) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        ResourceSummaryComputer.TemplatePool pool = null;
+        for (Map.Entry<String, Object> root : tree.entrySet()) {
+            if (!(root.getValue() instanceof Map<?, ?> rawDefinition)) {
+                continue;
+            }
+            Map<String, Object> definition = new LinkedHashMap<>();
+            rawDefinition.forEach((key, value) -> definition.put(String.valueOf(key), value));
+            String authored = TemplateResolver.text(definition, "template");
+            if (authored == null) {
+                continue;
+            }
+            if (pool == null) {
+                try {
+                    pool = summaryComputer.templatePool();
+                } catch (RuntimeException e) {
+                    return Map.of(); // over budget or unreadable: report nothing rather than a guess
+                }
+            }
+            String namespace = namespaceOf(pack);
+            TemplateResolver.Resolution resolution = TemplateResolver.resolve(definition, namespace, pool.definitions());
+            TemplateResolver.Resolution chainOnly = resolution.merged() == null
+                    ? resolution : TemplateResolver.resolve(Map.of("template", authored), namespace, pool.definitions());
+            Map<String, Object> view = new LinkedHashMap<>();
+            view.put("template", authored);
+            view.put("chain", resolution.chain());
+            Map<String, Object> inherited = new LinkedHashMap<>();
+            Map<String, Object> sources = new LinkedHashMap<>();
+            if (chainOnly.merged() != null) {
+                chainOnly.sources().forEach((key, source) -> {
+                    if (!key.equals("template")) {
+                        inherited.put(key, chainOnly.merged().get(key));
+                        sources.put(key, source);
+                    }
+                });
+            }
+            view.put("inherited", inherited);
+            view.put("sources", sources);
+            Map<String, Object> locations = new LinkedHashMap<>();
+            for (String id : resolution.chain()) {
+                List<String> source = pool.sources().get(id);
+                if (source != null) {
+                    locations.put(id, Map.of("pack", source.get(0), "path", source.get(1)));
+                }
+            }
+            view.put("templates", locations);
+            if (resolution.failure() != null) {
+                view.put("failure", resolution.failure());
+            }
+            out.put(root.getKey(), view);
+        }
+        return out;
+    }
+
+    /** The namespace short template references resolve against: the pack's own id. */
+    private static String namespaceOf(String pack) {
+        return pack;
     }
 
     /** The parsed tree as plain maps, or null when the YAML does not parse. */

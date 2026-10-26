@@ -4,7 +4,8 @@ import type { Response } from '../src/lib/protocol/wire';
 import {
   discardDocumentDraft, draftDirty, ensureDocumentDraft, getDocumentDraft,
   MAX_DOCUMENT_DRAFTS, rawDraftDirty, reconcileDocumentDraft, resetDrafts,
-  retainDocumentDraft, saveDocumentDraft, setDraftField,
+  pendingRemoval, removeDraftField, retainDocumentDraft, revertDraftField, saveDocumentDraft,
+  setDraftField,
 } from '../src/lib/drafts.svelte';
 
 function fixture() {
@@ -29,9 +30,10 @@ function fixture() {
       }
       if (failWrite === 'transport') throw new Error('closed');
       if (op === 'authoring.setFields') {
-        for (const edit of payload.edits as { field: string[]; value: unknown }[]) {
+        for (const edit of payload.edits as { field: string[]; value?: unknown; remove?: boolean }[]) {
           parsed = structuredClone(parsed);
-          parsed[edit.field[0]!]![edit.field[1]!] = edit.value;
+          if (edit.remove) delete parsed[edit.field[0]!]![edit.field[1]!];
+          else parsed[edit.field[0]!]![edit.field[1]!] = edit.value;
         }
       } else if (op === 'edit.put') {
         raw = String(payload.content);
@@ -99,6 +101,49 @@ describe('session document drafts', () => {
     setDraftField(draft, ['first', 'material'], 'PAPER');
     expect(draftDirty(draft)).toBe(false);
     expect(await saveDocumentDraft(draft, server.channel)).toBe(false);
+  });
+
+  it('stages a reset-to-inherited removal and sends it as one revision-checked removal edit', async () => {
+    const server = fixture();
+    const draft = getDocumentDraft('pack', 'items/shared.yml');
+    await ensureDocumentDraft(draft, server.channel);
+    removeDraftField(draft, ['first', 'display_name']);
+    expect(Object.hasOwn(draft.values.first as object, 'display_name')).toBe(false);
+    expect(pendingRemoval(draft, ['first', 'display_name'])).toBe(true);
+    expect(draftDirty(draft)).toBe(true);
+    expect(await saveDocumentDraft(draft, server.channel)).toBe(true);
+    const write = server.calls.find((call) => call.op === 'authoring.setFields')!;
+    expect(write.payload).toEqual({
+      pack: 'pack', path: 'items/shared.yml', rev: 2,
+      edits: [{ field: ['first', 'display_name'], remove: true }],
+    });
+    expect(draft.values.first).toEqual({ material: 'PAPER', unknown: { keep: true } });
+  });
+
+  it('undoes a staged removal and ignores removal of an absent key', async () => {
+    const server = fixture();
+    const draft = getDocumentDraft('pack', 'items/shared.yml');
+    await ensureDocumentDraft(draft, server.channel);
+    removeDraftField(draft, ['first', 'display_name']);
+    revertDraftField(draft, ['first', 'display_name']);
+    expect(draftDirty(draft)).toBe(false);
+    expect((draft.values.first as Record<string, unknown>).display_name).toBe('First');
+    removeDraftField(draft, ['first', 'never_set']);
+    expect(draftDirty(draft)).toBe(false);
+  });
+
+  it('keeps a pending removal across reconciliation when the key is untouched remotely', async () => {
+    const server = fixture();
+    const draft = getDocumentDraft('pack', 'items/shared.yml');
+    await ensureDocumentDraft(draft, server.channel);
+    removeDraftField(draft, ['first', 'display_name']);
+    server.remote('second', 'display_name', 'Elsewhere');
+    await reconcileDocumentDraft(draft, server.channel);
+    expect(draft.stale).toBe(false);
+    expect(pendingRemoval(draft, ['first', 'display_name'])).toBe(true);
+    server.remote('first', 'display_name', 'Changed remotely');
+    await reconcileDocumentDraft(draft, server.channel);
+    expect(draft.stale).toBe(true);
   });
 
   it('treats prototype-like authored keys as ordinary document data', () => {

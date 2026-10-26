@@ -1,6 +1,7 @@
 package dev.materione.core.document;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.testing.golden.GoldenFiles;
 import java.io.IOException;
@@ -220,6 +221,133 @@ class LosslessYamlTest {
                 .isEqualTo("item:\n  material: STICK\n");
         assertThat(LosslessYaml.parse(raw).withNode(List.of("a", "b"), "item", "lore").save())
                 .isEqualTo("item:\n  material: PAPER\n  lore:\n    - a\n    - b\n");
+    }
+
+    @Test
+    void removingAScalarKeyDeletesOnlyThatLine() {
+        String raw = """
+                # pack header
+                item:
+                  material: PAPER # keep this inline comment
+                  display_name: Old Name
+
+                  # the model is authored by hand
+                  custom_model_data: 7
+                """;
+
+        var removed = LosslessYaml.parse(raw).withoutNode("item", "display_name");
+
+        assertThat(removed.save()).isEqualTo("""
+                # pack header
+                item:
+                  material: PAPER # keep this inline comment
+
+                  # the model is authored by hand
+                  custom_model_data: 7
+                """);
+        assertThat(removed.parseError()).isEmpty();
+        assertThat(removed.scalar("item", "display_name")).isEmpty();
+        assertThat(removed.scalar("item", "custom_model_data")).contains(7);
+    }
+
+    @Test
+    void removingAListValueDropsItsItemsButKeepsTheTrailingComment() {
+        String raw = """
+                item:
+                  material: PAPER
+                  lore:
+                    - first line
+                    - second line
+                  # keep this trailing comment
+                  custom_model_data: 7
+                """;
+
+        String removed = LosslessYaml.parse(raw).withoutNode("item", "lore").save();
+
+        assertThat(removed).isEqualTo("""
+                item:
+                  material: PAPER
+                  # keep this trailing comment
+                  custom_model_data: 7
+                """);
+    }
+
+    @Test
+    void removingANestedMappingDropsItsWholeBlockAndKeepsTheTrailingComment() {
+        String raw = """
+                item:
+                  name: Blade
+                  display:
+                    color: red
+                  # display note
+                  storage: 27
+                """;
+
+        var removed = LosslessYaml.parse(raw).withoutNode("item", "display");
+
+        assertThat(removed.save()).isEqualTo("""
+                item:
+                  name: Blade
+                  # display note
+                  storage: 27
+                """);
+        assertThat(removed.scalar("item", "display")).isEmpty();
+        assertThat(removed.scalar("item", "storage")).contains(27);
+    }
+
+    @Test
+    void removingAnAbsentKeyReturnsTheDocumentByteForByte() {
+        String raw = "# header\nitem:\r\n  material: PAPER\r\n";
+
+        assertThat(LosslessYaml.parse(raw).withoutNode("item", "missing").save()).isEqualTo(raw);
+        assertThat(LosslessYaml.parse(raw).withoutNode("nothing_here").save()).isEqualTo(raw);
+    }
+
+    @Test
+    void removingTheOnlyChildLeavesAnEmptyMappingNotNull() {
+        String raw = """
+                wand:
+                  material: STICK
+                  display:
+                    color: red
+                # tail comment
+                """;
+
+        var removed = LosslessYaml.parse(raw).withoutNode("wand", "display", "color");
+
+        assertThat(removed.save()).isEqualTo("""
+                wand:
+                  material: STICK
+                  display: {}
+                # tail comment
+                """);
+        assertThat(removed.scalar("wand", "material")).contains("STICK");
+        Map<?, ?> wand = (Map<?, ?>) removed.data().get("wand");
+        Object display = wand.get("display");
+        assertThat(display).isInstanceOf(Map.class);
+        assertThat((Map<?, ?>) display).isEmpty();
+    }
+
+    @Test
+    void flowStyleKeysAreRefusedInsteadOfGuessed() {
+        var document = LosslessYaml.parse("root: {a: 1, b: 2}\n");
+
+        assertThatThrownBy(() -> document.withoutNode("root", "a"))
+                .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    @Test
+    void removalKeepsCrlfDocumentsCrlf() {
+        String raw = "item:\r\n  material: PAPER\r\n  display_name: Old\r\n  # keep\r\n"
+                + "  lore:\r\n    - one\r\n    - two\r\n";
+
+        String scalarRemoved = LosslessYaml.parse(raw).withoutNode("item", "display_name").save();
+        assertThat(scalarRemoved)
+                .isEqualTo("item:\r\n  material: PAPER\r\n  # keep\r\n  lore:\r\n    - one\r\n    - two\r\n");
+
+        String listRemoved = LosslessYaml.parse(raw).withoutNode("item", "lore").save();
+        assertThat(listRemoved).isEqualTo("item:\r\n  material: PAPER\r\n  display_name: Old\r\n  # keep\r\n");
+        assertThat(listRemoved.replace("\r\n", "")).doesNotContain("\n");
     }
 
     /** Ordered map literal — key order is part of what gets written out. */

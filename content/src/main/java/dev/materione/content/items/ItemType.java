@@ -84,7 +84,11 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("components", ParameterType.RAW, false, null,
                                 "Vanilla data components (version-aware, platform-gated)", null, null).withEditor(new ParameterSchema.EditorMetadata("Vanilla components", "gameplay", 90, true, "advanced", "", "")),
                         new ParameterSchema("mechanics", ParameterType.LIST, false, null,
-                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata("Mechanics", "behavior", 10, false, "structured-list", "mechanic", "")),
+                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata("Abilities", "behavior", 10, false, "mechanics", "mechanic", "")),
+                        new ParameterSchema("behavior", ParameterType.LIST, false, null,
+                                "ECA rules fired by this item (click, break, equip, drop, consume, ...)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Behaviour rules", "behavior", 20, false, "behavior-rules", "", "")),
                         new ParameterSchema("jukebox_song", ParameterType.REFERENCE, false, null,
                                 "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata("Jukebox song", "gameplay", 20, true, "reference", "sound", ""))),
                 "1.0.0");

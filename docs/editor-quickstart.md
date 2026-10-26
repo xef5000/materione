@@ -104,8 +104,11 @@ also has **Files**. Its labels are expanded by default and can be collapsed.
 **Problems**, **Activity**, and **Server** are support destinations. Activity is
 hidden by default; click its sidebar button to open or close it, or use the panel's
 close button. New activity stays in the log without reopening a closed panel.
-Collapsing navigation labels keeps the buttons in place. There is no separate Start or Assets workspace in this slice:
-open assets from a studio slot or in Files. Make folders if you want them (they
+Collapsing navigation labels keeps the buttons in place. **Start** (top of the rail)
+offers one **New …** starter per content type this server registers, lists problems
+that point at a resource with a **Fix** button, shows unsaved changes, and
+summarises the abilities and rule events this server offers. There is no separate
+Assets workspace in this slice: open assets from a studio slot or in Files. Make folders if you want them (they
 are organisational only — ids do not change), double-click an entry to open its
 studio, and use search, F2, or the right-click menu to duplicate, move, delete,
 or reveal it in Files. Content rows represent resources, not just documents:
@@ -207,10 +210,30 @@ with unsaved edits keep them. The feed can be disabled with
 `editor_file_watcher: false` in `settings.yml` (editable in the editor's
 Server view).
 
+## 7b. Abilities, rules and templates
+
+- **Abilities** — in an item's studio, **Add an ability** lists every mechanic the
+  server registers (built-in, or "added by" an add-on plugin). Each card says what
+  the ability does and **Activates:** when it acts; fill in its settings and
+  **Save & apply**. An ability the server does not know (its plugin is missing)
+  stays on the item with its settings untouched.
+- **Behaviour rules** — **Add rule** starts from a blank rule or a starting point
+  such as "Right-click sends a message". Each rule reads as a sentence; click it to
+  choose **When** (only events this kind of content actually fires), **Only if**
+  expressions, the **Then** actions and their settings, and **Limits** such as a
+  cooldown. A rule that can never run on this content type says so.
+- **Templates** — an item or block with `template:` shows "Inherits from …" in the
+  studio header. Fields show **Inherited from** (with the value) or **Overrides**;
+  **Reset to inherited** removes your override on the next **Save & apply**
+  (**Undo** before then). Nothing else in the file changes.
+
 ## 8. When things go wrong
 
 - **Problems** — diagnostics stream in live, including repeated occurrences; file-backed locations open the
-  source document in Files. Line/column links focus a read-only saved-source
+  source document in Files. A problem that names a resource has **Fix <field>** (or
+  **Open**), which opens its studio at that field. A missing texture shows a repair
+  panel there: **Draw it now** paints the missing file at the path the item already
+  names, or **Choose another texture** / **Upload asset** — no YAML needed. Line/column links focus a read-only saved-source
   excerpt without changing pending form or YAML edits. Runtime diagnostics
   without a file location have no file click-through.
 - **Server view** — manual full or per-pack reloads, the `settings.yml`

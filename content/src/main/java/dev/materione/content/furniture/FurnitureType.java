@@ -130,7 +130,7 @@ public final class FurnitureType implements ContentType {
                                 "ECA rules fired on place/click", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Behaviour rules", "behavior", 10, false,
-                                        "structured-list", "", ""))),
+                                        "behavior-rules", "", ""))),
                 "1.0.0");
     }
 

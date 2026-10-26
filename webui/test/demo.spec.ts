@@ -35,4 +35,13 @@ describe('cloud editor demo backend', () => {
     const fresh = await createDemoChannel().call('browse.get', { pack: DEMO_PACK, path: 'items/weapons.yml' });
     expect(fresh.ok && (fresh.data as { rev: number }).rev).toBe(1);
   });
+
+  it('describes its ECA vocabulary and resolves template inheritance like a current server', async () => {
+    const demo = createDemoChannel();
+    const described = await demo.call('authoring.describe', {});
+    expect(described.ok).toBe(true);
+    const doc = await demo.call('browse.get', { pack: DEMO_PACK, path: 'items/weapons.yml' });
+    const computed = doc.ok ? (doc.data as { computed: { inheritance: Record<string, { inherited: Record<string, unknown> }> } }).computed : null;
+    expect(computed?.inheritance.ember_wand?.inherited.lore).toEqual(['&7Warm to the touch']);
+  });
 });

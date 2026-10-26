@@ -120,7 +120,7 @@ public final class BlockType implements ContentType {
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Behaviour rules", "behavior", 10, false,
-                                        "structured-list", "", ""))),
+                                        "behavior-rules", "", ""))),
                 "1.0.0");
     }
 

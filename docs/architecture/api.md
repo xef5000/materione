@@ -133,7 +133,7 @@ Describes every operation that reads or mutates content packs, folders, document
 | `duplicateResource(actor, DuplicateResourceRequest)` | Clone an existing resource under a new ID/path. | `EditorContentOps` (`authoring.duplicateResource`) |
 | `putDocument(actor, PutDocumentRequest)` | Revision-guarded raw YAML write + targeted reload. | `DocumentStore.write` (`edit.put`) |
 | `setScalar(actor, SetScalarRequest)` | Lossless single-field or scalar-list patch preserving comments and formatting (§5.6). | `DocumentStore.setScalar` (`edit.setScalar`) |
-| `setFields(actor, SetFieldsRequest)` | Atomic batch of scalar/structured field patches (e.g. item studio save, furniture hitboxes, recipe maps) → 1 revision, 1 audit, 1 reload. | `DocumentStore.setFields` (`authoring.setFields`) |
+| `setFields(actor, SetFieldsRequest)` | Atomic batch of scalar/structured field patches (e.g. item studio save, furniture hitboxes, recipe maps) → 1 revision, 1 audit, 1 reload. `FieldEdit.removal(field)` deletes a key losslessly in the same batch (reset to inherited value). `getDocument` views carry `computed.inheritance` for roots that name a template. | `DocumentStore.setFields` (`authoring.setFields`) |
 | `moveDocument(actor, MoveDocumentRequest)` | Rename/move a document across folders with truthful `move-from` journal lineage. | `DocumentStore.move` (`edit.move`) |
 | `deleteDocument(actor, DeleteDocumentRequest)` | Revision-guarded deletion + targeted reload. | `DocumentStore.delete` (`edit.delete`) |
 | `saveModelTransaction(actor, SaveModelRequest)` | Atomic Blockbench save-back: stages model JSON, textures, `.bbmodel`, `.materione/thumbnails/`, `.materione/model-links.json`, and patches owner field. | `AuthoringModelOps` (`authoring.saveModel`) |

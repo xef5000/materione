@@ -23,4 +23,17 @@ public interface ActionExecutor {
      * rate-limited diagnostic and continues the chain (runtime-systems §2.1).
      */
     void execute(ActionSpec action, BehaviorEvent event);
+
+    /**
+     * Self-description the editor renders this action's form from (D5); one
+     * source per action. {@code null} keeps the action listed but undescribed.
+     */
+    default dev.materione.api.registry.SelfDescription describe() {
+        return null;
+    }
+
+    /** The parameter a scalar value stands for ({@code message: "hi"} is {@code text}), or null. */
+    default String shorthand() {
+        return null;
+    }
 }

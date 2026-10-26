@@ -57,11 +57,18 @@ public final class ValidateStage {
                     for (Diagnostic problem : problems) {
                         context.quarantine().add(resource.id(), problem);
                     }
+                    // The bus sees one quarantine notice per resource; it names the
+                    // first fatal reason and carries its field target so the
+                    // editor can open the field to repair (web.md §6).
+                    Diagnostic reason = problems.stream()
+                            .filter(d -> d.severity() == Severity.ERROR)
+                            .findFirst().orElseThrow();
                     context.diagnostics().publish(new Diagnostic(
                             DiagnosticCodes.CONTENT_QUARANTINED, Severity.WARN,
-                            "resource " + resource.id() + " quarantined",
+                            "resource " + resource.id() + " quarantined: " + reason.message(),
                             resource.id(), null,
-                            "fix the reported problems, then /materione reload"));
+                            "fix the reported problems, then /materione reload",
+                            reason.target()));
                 } else {
                     problems.forEach(context.diagnostics()::publish);
                 }

@@ -167,7 +167,7 @@ final class ResourceSummaryComputer {
 
     private SummarySnapshot buildSnapshot(String pack) {
         ProjectionBudget budget = new ProjectionBudget(projectionBudgetBytes);
-        Map<String, Map<String, Object>> templates = templates(budget);
+        Map<String, Map<String, Object>> templates = templates(budget).definitions();
         Map<String, ContentType> typesByDirectory = typesByDirectory();
         List<SummaryCandidate> resources = new ArrayList<>();
         Map<ReferenceKey, SummaryCandidate> referenceCandidates = new LinkedHashMap<>();
@@ -391,9 +391,22 @@ final class ResourceSummaryComputer {
                 ? new ResourceRender(reference.pack(), modelPath, null) : null;
     }
 
-    private Map<String, Map<String, Object>> templates(ProjectionBudget budget) {
+    /**
+     * Every readable template by full id, with the pack-relative document that
+     * defines it — the same pool, and the same winner on duplicate ids, the
+     * summaries resolve against. Bounded by the projection budget.
+     */
+    TemplatePool templatePool() {
+        return templates(new ProjectionBudget(projectionBudgetBytes));
+    }
+
+    /** Template definitions by id, plus {@code [pack, path]} of each defining document. */
+    record TemplatePool(Map<String, Map<String, Object>> definitions, Map<String, List<String>> sources) {}
+
+    private TemplatePool templates(ProjectionBudget budget) {
         Map<String, Map<String, Object>> templates = new LinkedHashMap<>();
         Map<String, String> sourcePaths = new HashMap<>();
+        Map<String, String> sourcePacks = new HashMap<>();
         documents.forEachResourceDocument(null, "templates", row -> {
             if (row.document() == null || row.document().parseError().isPresent()) {
                 return;
@@ -411,12 +424,15 @@ final class ResourceSummaryComputer {
                     budget.consume(estimateTemplateSize(id, row.resource().path(), definition) - 128);
                     templates.put(id, LosslessYaml.stringKeyed(definition));
                     sourcePaths.put(id, row.resource().path());
+                    sourcePacks.put(id, row.resource().pack());
                 }
             } catch (IllegalArgumentException ignored) {
                 // An invalid template id cannot be a valid parser target.
             }
         }, budget);
-        return Map.copyOf(templates);
+        Map<String, List<String>> sources = new HashMap<>();
+        sourcePaths.forEach((id, path) -> sources.put(id, List.of(sourcePacks.get(id), path)));
+        return new TemplatePool(Map.copyOf(templates), Map.copyOf(sources));
     }
 
     private Map<String, ContentType> typesByDirectory() {

@@ -642,8 +642,10 @@ public final class DocumentStore {
             String updated;
             try {
                 for (FieldEdit edit : edits) {
-                    document = document.withNode(
-                            edit.value(), edit.field().toArray(String[]::new));
+                    String[] field = edit.field().toArray(String[]::new);
+                    document = edit.remove()
+                            ? document.withoutNode(field)
+                            : document.withNode(edit.value(), field);
                 }
                 updated = document.save();
             } catch (UnsupportedOperationException e) {
@@ -660,8 +662,13 @@ public final class DocumentStore {
         }
     }
 
-    /** One field patch inside a batched studio save. */
-    public record FieldEdit(List<String> field, Object value) { }
+    /** One field patch inside a batched studio save; {@code remove} deletes the key instead. */
+    public record FieldEdit(List<String> field, Object value, boolean remove) {
+
+        public FieldEdit(List<String> field, Object value) {
+            this(field, value, false);
+        }
+    }
 
     /** Creates a minimal pack scaffold ({@code pack.yml} + type dirs). */
     public void createPack(String packId, String actor) throws IOException {

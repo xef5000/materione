@@ -11,6 +11,7 @@ import {
   addModelGallery,
   fixtureItemType,
   fixtureSupportTypes,
+  guidedVocabulary,
   seedAsset,
   seedDocument,
   type FixtureSeed,
@@ -54,9 +55,9 @@ export function demoSeed(): FixtureSeed {
         power: 2,
       },
       ember_wand: {
+        template: 'wand_base',
         display_name: '&6Ember Wand',
         material: 'BLAZE_ROD',
-        lore: ['&7Warm to the touch'],
       },
     }),
     seedDocument(pack, 'items/treasures.yml', 1, {
@@ -67,6 +68,9 @@ export function demoSeed(): FixtureSeed {
         lore: ['&7Hums faintly'],
       },
       feast_apple: { display_name: '&eFeast Apple', material: 'GOLDEN_APPLE', lore: ['&7Feeds the whole party'] },
+    }),
+    seedDocument(pack, 'templates/wand_base.yml', 1, {
+      wand_base: { lore: ['&7Warm to the touch'], power: 1 },
     }),
     seedDocument(pack, 'glyphs/icons.yml', 1, {
       heart: { texture: 'gui/heart', height: 8, ascent: 8 },
@@ -104,6 +108,8 @@ export function demoSeed(): FixtureSeed {
         hint: 'add assets/textures/gui/coin.png, then save',
       },
     ],
+    // Abilities and behaviour rules get their guided editors, as on a current server.
+    behavior: guidedVocabulary(),
   };
   addModelGallery(seed, false);
   return seed;

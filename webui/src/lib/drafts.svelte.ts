@@ -4,6 +4,8 @@ export const MAX_DOCUMENT_DRAFTS = 32;
 export interface FieldEdit {
   field: string[];
   value: unknown;
+  /** Delete the key (reset to inherited) instead of writing `value`. */
+  remove?: true;
 }
 
 export interface DocumentDraft {
@@ -180,6 +182,46 @@ export function setDraftField(draft: DocumentDraft, field: string[], value: unkn
   draft.notice = '';
 }
 
+/**
+ * Stages removal of a key — "reset to inherited value". The key disappears
+ * from the draft values; Save & apply sends one revision-checked removal
+ * edit, which deletes exactly the key's lines on disk.
+ */
+export function removeDraftField(draft: DocumentDraft, field: string[]): void {
+  if (draft.saving || draft.uncertain || rawDraftDirty(draft)) {
+    throw new Error('Apply or discard the pending YAML/uncertain write before editing fields.');
+  }
+  if (!field.length) throw new Error('A field path is required.');
+  draft.values = { ...draft.values };
+  unassign(draft.values, field);
+  draft.edits = draft.edits.filter((edit) => !samePath(edit.field, field));
+  if (fieldValue(draft.base, field) !== undefined) {
+    draft.edits.push({ field: [...field], value: undefined, remove: true });
+  }
+  draft.notice = '';
+}
+
+/** Restores one field to its saved value, dropping any pending edit for it. */
+export function revertDraftField(draft: DocumentDraft, field: string[]): void {
+  const saved = fieldValue(draft.base, field);
+  if (saved === undefined) removeDraftField(draft, field);
+  else setDraftField(draft, field, saved);
+}
+
+export function pendingRemoval(draft: DocumentDraft, field: string[]): boolean {
+  return draft.edits.some((edit) => edit.remove && samePath(edit.field, field));
+}
+
+function unassign(values: Record<string, unknown>, path: string[]): void {
+  let parent = values;
+  for (const key of path.slice(0, -1)) {
+    if (!Object.hasOwn(parent, key) || record(parent[key]) !== parent[key]) return;
+    assignOwn(parent, key, { ...record(parent[key]) });
+    parent = record(parent[key]);
+  }
+  delete parent[path[path.length - 1]!];
+}
+
 export async function saveDocumentDraft(draft: DocumentDraft, channel: RpcChannel): Promise<boolean> {
   if (!draftDirty(draft)) return false;
   if (draft.saving || draft.loading || draft.uncertain || draft.stale) {
@@ -200,7 +242,9 @@ export async function saveDocumentDraft(draft: DocumentDraft, channel: RpcChanne
   try {
     const result = unwrap(await (raw
       ? ops.put(channel, draft.pack, draft.path, draft.rev, submittedRaw)
-      : ops.setFields(channel, draft.pack, draft.path, draft.rev, edits)));
+      : ops.setFields(channel, draft.pack, draft.path, draft.rev, edits.map((edit) => edit.remove
+        ? { field: edit.field, remove: true as const }
+        : { field: edit.field, value: edit.value }))));
     acknowledged = true;
     draft.rev = Number(result.rev ?? draft.rev);
     draft.edits = [];
@@ -271,7 +315,10 @@ export async function reconcileDocumentDraft(
       return;
     }
     snapshot(draft, fresh);
-    for (const edit of pending) setDraftField(draft, edit.field, edit.value);
+    for (const edit of pending) {
+      if (edit.remove) removeDraftField(draft, edit.field);
+      else setDraftField(draft, edit.field, edit.value);
+    }
     draft.notice = pending.length
       ? 'Saved files refreshed; unrelated pending fields were kept and have not been applied.'
       : 'Server files refreshed. Runtime status is reported separately.';

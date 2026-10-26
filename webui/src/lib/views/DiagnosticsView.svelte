@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { diagnostics, revealInAdvanced, workspace } from '../state.svelte';
+  import { diagnostics, revealInAdvanced, revealInStudio, workspace } from '../state.svelte';
   import type { DiagnosticEntry } from '../api';
-  import { diagnosticSource } from '../diagnostics';
+  import { diagnosticRepairTarget, diagnosticSource } from '../diagnostics';
 
   let filter = $state<'all' | 'error' | 'warn'>('all');
 
@@ -33,6 +33,7 @@
 <ul>
   {#each shown as entry (entry)}
     {@const target = diagnosticSource(entry, workspace.packs, workspace.resources)}
+    {@const repair = diagnosticRepairTarget(entry, workspace.resources)}
     <li class={severityOf(entry)}>
       <code>{entry.code}</code>
       <span class="msg">{entry.message}</span>
@@ -50,6 +51,14 @@
         {/if}
       {/if}
       {#if entry.hint}<span class="hint">{entry.hint}</span>{/if}
+      {#if repair}
+        <button
+          class="fix"
+          type="button"
+          title={repair.field ? `Open ${repair.resource.id} at its ${repair.field} field` : `Open ${repair.resource.id}`}
+          onclick={() => void revealInStudio(repair.resource, repair.field)}
+        >{repair.field ? `Fix ${repair.field}` : 'Open'}</button>
+      {/if}
     </li>
   {/each}
   {#if shown.length === 0}
@@ -133,6 +142,19 @@
   .loc:disabled {
     cursor: default;
     text-decoration: none;
+  }
+  .fix {
+    margin-left: 6px;
+    border: 1px solid var(--border-strong);
+    background: none;
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 1px 8px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+  .fix:hover {
+    background: var(--bg-hover);
   }
   .hint {
     display: block;

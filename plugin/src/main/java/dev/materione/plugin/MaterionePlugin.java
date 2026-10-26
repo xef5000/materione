@@ -424,6 +424,8 @@ public final class MaterionePlugin extends JavaPlugin {
         editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
                 this, diagnostics, scheduling, pipeline, api, documents, audit,
                 authoringApi);
+        editorTransport.behaviorVocabulary(() -> behavior == null
+                ? dev.materione.api.registry.BehaviorVocabulary.empty() : behavior.vocabulary());
         editorTransport.start(settings, storage);
     }
 

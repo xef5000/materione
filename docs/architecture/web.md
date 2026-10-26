@@ -406,8 +406,34 @@ visual. Known approximations: painter's-order depth sorting (intersecting elemen
 overlap wrongly), no tints, first animation frame only. The Studio uses the saved render only
 while `texture`, `model`, `technique` and `model_parent` are unedited.
 
-*Planned:* `authoring.describe` completes the capability handshake. Resource and asset listings
-gain pagination/filtering before relay mode makes eager full-pack traversal a scale boundary.
+*As built (M5 guided authoring):* `authoring.describe` is registry-driven capability discovery:
+`{ types, behavior }`, where `types` is the `browse.types` shape and `behavior` carries `events`
+(id, displayName, description, the `details` the runtime fires such as `right`/`left`, and
+`firedBy` — the content types whose runtime fires the event; reserved events have an empty list),
+`actions` (every registered executor with its self-description, the `shorthand` parameter a scalar
+value stands for, and whether it is `deferred` through the scheduling gateway; an executor without a
+description is still listed), `ruleOptions`/`actionOptions` (the rule and action keys the parser
+reads), and `mechanics` (every registered mechanic, built-in or add-on, with `repeatable` and
+`registeredBy`). Each piece is read from where it is registered — the event taxonomy, the executors,
+the mechanics registry — never from an editor copy. Self-descriptions may carry an `activation`
+sentence (when the entry acts in game); absent means the entry never declared it and the editor says
+so. A jar that predates the op answers with an unknown-op error and the editor falls back to
+`browse.types`, leaving behaviour authoring to Files. `browse.types` now serialises declared
+`nested` parameter shapes (they were previously dropped, which hid every structured-list field).
+`authoring.setFields` accepts `{ field, remove: true }` (no `value`): the lossless layer deletes the
+key and the lines its value owns, keeps surrounding comments, turns an emptied parent into `{}`,
+treats an absent key as a no-op, and refuses keys in flow style or behind a sequence — all inside the
+same revision-checked batch. `browse.get` adds a read-only `computed.inheritance` per root that names
+a `template:`: `template` as authored, `chain` (full ids, nearest first), `inherited` (the value the
+chain supplies for each key), `sources` (which template supplies it), `templates` (`{pack, path}` per
+chain id) and `failure` when the chain does not resolve. It comes from the pipeline's own resolver,
+reflects the saved file, and is computed only for documents that use inheritance. Diagnostics may
+carry `target: { field: [...] }` — the definition field the problem is about (unresolved
+`texture`/`model`/`template` references today). The bus publishes one quarantine notice per resource
+(`MTR-0010`); it now names the first fatal reason and carries that reason's target.
+
+*Planned:* resource and asset listings gain pagination/filtering before relay mode makes eager
+full-pack traversal a scale boundary.
 
 ### 4.3 Large payloads — manifest + content-addressed chunks
 
@@ -553,8 +579,8 @@ cannot read, forge, replay, or reorder anything.
   start expanded and may be collapsed without shifting the navigation rows. Activity is absent
   until its sidebar button opens it; that button or the panel's close control hides it completely.
   New activity does not reopen a closed panel. Visited workspaces stay mounted
-  and hidden so navigation does not destroy their editor state. There is no separate Start or
-  Assets workspace in this slice; assets are opened from studio slots or Files. Files↔Studio
+  and hidden so navigation does not destroy their editor state. There is no separate Assets
+  workspace in this slice; assets are opened from studio slots or Files (Start is described below). Files↔Studio
   navigation carries pack, path, and selected resource identity, including the selected root in a
   multi-resource document. The header keeps the actions distinct: **Save & apply** changes gameplay
   server-wide; **Publish pack** releases the resource pack. Candidate status reports hash
@@ -606,6 +632,40 @@ cannot read, forge, replay, or reorder anything.
   Minecraft font, glyphs, effects, obfuscation, or gameplay result. The game-check link opens the
   Server support view and keeps candidate/acceptance status explicit; it does not claim runtime
   verification.
+- *As built (M5 guided authoring):* **Start** heads the authoring group; Content remains the landing
+  view. Its creation starters are the registered content types (`authoring.describe`) and open
+  Content's existing create dialog for that type. It lists warning/error diagnostics that name a
+  resource in the open pack with a **Fix**/**Open** action, the tab's unsaved drafts, and the
+  behaviour this server registers (built-in vs add-on mechanics with their activation sentences, the
+  events rules can react to). Problems rows that name a resource gain the same action. A diagnostic's
+  `target` field opens the studio with that field scrolled into view and focused; resource matching
+  is exact (`<pack>:<id>`), not a substring.
+  Studios render two behaviour widgets from the type registry: `mechanics` (an item's abilities) and
+  `behavior-rules` (`behavior:` on items, blocks and furniture). Ability cards are generated from each
+  mechanic's self-description: name, built-in or "added by <plugin>", description, **Activates:**
+  (the declared sentence, or an explicit "does not say"), and its parameters through the shared field
+  control. Non-repeatable abilities cannot be added twice; unqualified names are written for
+  `materione:` mechanics and qualified names for add-ons. Entries the server does not register stay
+  visible as "not registered on this server" with their settings untouched, and parameters the
+  description does not declare are kept as written. Rules read as a sentence ("On right click, if …:
+  send message “…” (at most every 3 s)") and expand into **When** (only events the host's runtime
+  fires, plus the current one marked if it never fires), side, **Only if** expressions, **Then**
+  actions with their described parameters and timing, and **Limits** (rule options). Each rule
+  states when it activates from the event table — or that it never runs on this content type.
+  Starting points are a small client list of on/action pairs written in the existing format and
+  offered only when this server fires the event for the host and registers the action; they are
+  starting values, not a rule language. A scalar shorthand (`message: "Hi"`) round-trips as a scalar
+  while only its shorthand parameter is set; unknown rule keys and action keys are preserved.
+  When a root inherits, the studio header shows the template chain (each link opens the template in
+  Files) or the resolution failure. Each field the chain supplies shows **Inherited from …** with the
+  effective value, or **Overrides …** with the template's value and **Reset to inherited**, which
+  stages a removal edit (undoable) applied by the next revision-checked **Save & apply**. The view
+  reflects the saved `template:`; an edited template field is labelled as such until applied.
+  A texture slot whose reference names a file missing from this pack shows a repair panel —
+  **Draw it now** opens the pixel editor at exactly that path (a new canvas; saving writes the PNG
+  and no YAML), **Choose another texture** focuses the picker, whose upload control remains — and
+  any targeted diagnostic for the field is shown inline. None of this verifies runtime behaviour:
+  activation text and sentences are explanations from self-description, not a simulation.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

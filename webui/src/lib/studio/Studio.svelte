@@ -16,16 +16,23 @@
   import PaintingPreview from './PaintingPreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
   import ModelWorkbench from './ModelWorkbench.svelte';
+  import MechanicsEditor from './MechanicsEditor.svelte';
+  import BehaviorRulesEditor from './BehaviorRulesEditor.svelte';
   import { ops, unwrap } from '../api';
-  import type { ResourceRef, TypeInfo, TypeParam } from '../api';
+  import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
+  import { diagnosticNames } from '../diagnostics';
+  import { tick } from 'svelte';
   import {
     draftDirty,
     ensureDocumentDraft,
     fieldValue,
     getDocumentDraft,
+    pendingRemoval,
     rawDraftDirty,
     reconcileDocumentDraft,
+    removeDraftField,
     retainDocumentDraft,
+    revertDraftField,
     saveDocumentDraft,
     setDraftField,
   } from '../drafts.svelte';
@@ -34,6 +41,7 @@
   import { editableLegacyLines, editableLegacyText, plainLegacyText } from '../legacy-text';
   import { invalidateThumbnails } from '../thumbnails';
   import {
+    content,
     diagnostics,
     connection,
     errorMessage,
@@ -131,8 +139,69 @@
       : '',
   );
   const issues = $derived(
-    diagnostics.entries.filter((entry) => (entry.resource ?? '').includes(resource.id)),
+    diagnostics.entries.filter((entry) => diagnosticNames(entry, resource)),
   );
+  /** Read-only template view from the canonical resolver; reflects the saved `template:`. */
+  const inheritance = $derived(
+    (documentDraft.computed.inheritance as Record<string, InheritanceView> | undefined)?.[rootId],
+  );
+  const templateEdited = $derived(draft.template !== loaded.template);
+
+  function templateLabel(id: string): string {
+    return id.slice(id.lastIndexOf(':') + 1);
+  }
+
+  function shortValue(value: unknown): string {
+    const text = typeof value === 'string' ? value : JSON.stringify(value);
+    return text === undefined ? '' : text.length > 48 ? `${text.slice(0, 47)}…` : text;
+  }
+
+  function openTemplate(id: string) {
+    const location = inheritance?.templates[id];
+    if (!location) return;
+    void revealInAdvanced({ pack: location.pack, path: location.path, type: 'templates', id: templateLabel(id) });
+  }
+
+  function resetToInherited(fieldId: string) {
+    try {
+      removeDraftField(documentDraft, [rootId, fieldId]);
+    } catch (e) {
+      documentDraft.error = errorMessage(e);
+    }
+  }
+
+  function undoReset(fieldId: string) {
+    try {
+      revertDraftField(documentDraft, [rootId, fieldId]);
+    } catch (e) {
+      documentDraft.error = errorMessage(e);
+    }
+  }
+
+  /** The texture a slot names but the pack does not contain (only for this pack's own textures). */
+  function missingTexture(field: TypeParam): string | null {
+    if (field.uiHint !== 'texture' || !workspace.assets.length) return null;
+    const raw = String(draft[field.id] ?? '').trim();
+    if (!raw) return null;
+    const colon = raw.indexOf(':');
+    if (colon >= 0 && raw.slice(0, colon) !== resource.pack) return null;
+    const reference = colon >= 0 ? raw.slice(colon + 1) : raw;
+    const path = `assets/textures/${reference}.png`;
+    return workspace.assets.some((asset) => asset.path === path) ? null : path;
+  }
+
+  function fieldIssue(fieldId: string) {
+    return issues.find((entry) => entry.target?.field?.[0] === fieldId);
+  }
+
+  /** Problems → Fix: once this entry's form is on screen, bring the named field into view. */
+  $effect(() => {
+    const request = content.focus;
+    if (!active || !request || !documentDraft.loaded || !formElement) return;
+    if (request.pack !== resource.pack || request.path !== resource.path || request.id !== resource.id) return;
+    content.focus = null;
+    void tick().then(() => focusField(request.field));
+  });
 
   /** Ingredient choices for the crafting grid: this pack's items, then materials. */
   const choices = $derived([
@@ -382,6 +451,21 @@
   {#if pendingSummary}
     <p class="notice pending-summary">{pendingSummary}</p>
   {/if}
+  {#if inheritance}
+    <p class="inherits" class:broken={Boolean(inheritance.failure)}>
+      {#if inheritance.failure}
+        Template {inheritance.template} does not resolve ({inheritance.failure}); the server skips this
+        resource until it does.
+      {:else}
+        Inherits from
+        {#each inheritance.chain as id, index (id)}
+          {#if index > 0}<span aria-hidden="true">→</span>{/if}
+          <button type="button" class="link" title={`Open ${id} in Files`} onclick={() => openTemplate(id)}>{templateLabel(id)}</button>
+        {/each}
+        {#if templateEdited}· shown for the saved template until you apply{/if}
+      {/if}
+    </p>
+  {/if}
 
   <div class="body">
     <aside class="preview">
@@ -444,7 +528,14 @@
           <fieldset>
             <legend>{section.label}</legend>
             {#each section.fields as field (field.id)}
-              {#if field.uiHint === 'structured-list'}
+              {#if field.uiHint === 'mechanics'}
+                <MechanicsEditor {field} value={valueOf(field)} pack={resource.pack}
+                  vocabulary={workspace.behavior} onChange={(v) => set(field.id, v)}
+                  onError={(message) => (documentDraft.error = message)} />
+              {:else if field.uiHint === 'behavior-rules'}
+                <BehaviorRulesEditor {field} value={valueOf(field)} pack={resource.pack}
+                  host={schema.name} vocabulary={workspace.behavior} onChange={(v) => set(field.id, v)} />
+              {:else if field.uiHint === 'structured-list'}
                 <StructuredList {field} value={valueOf(field)} onChange={(v) => set(field.id, v)} />
               {:else if field.uiHint === 'recipe-grid' && field.id === 'shape'}
                 <RecipeGrid
@@ -466,6 +557,40 @@
                   onChange={(v) => set(field.id, v)}
                   action={actionFor(field)}
                 />
+              {/if}
+              {@const missing = missingTexture(field)}
+              {#if missing}
+                {@const issue = fieldIssue(field.id)}
+                <div class="repair" role="group" aria-label={`Repair ${field.label || field.id}`}>
+                  <p>
+                    <strong>Missing texture.</strong> {missing} does not exist in this pack{issue ? ` (${issue.code})` : ''}, so
+                    the game shows a missing-texture pattern.
+                  </p>
+                  <button type="button" onclick={() => editTexture(field)}>Draw it now</button>
+                  <button type="button" onclick={() => focusField(field.id)}>Choose another texture</button>
+                </div>
+              {:else if fieldIssue(field.id)}
+                {@const issue = fieldIssue(field.id)!}
+                <p class="field-issue" role="note">{issue.code}: {issue.message}{issue.hint ? ` — ${issue.hint}` : ''}</p>
+              {/if}
+              {#if inheritance && field.id !== 'template'}
+                {@const source = inheritance.sources[field.id]}
+                {@const removing = pendingRemoval(documentDraft, [rootId, field.id])}
+                {#if removing && source}
+                  <p class="provenance" data-provenance={field.id}>
+                    Resets to the value from {templateLabel(source)} on Save & apply ({shortValue(inheritance.inherited[field.id])}).
+                    <button type="button" class="link" onclick={() => undoReset(field.id)}>Undo</button>
+                  </p>
+                {:else if source && Object.hasOwn(draft, field.id)}
+                  <p class="provenance" data-provenance={field.id}>
+                    Overrides {templateLabel(source)} ({shortValue(inheritance.inherited[field.id])}).
+                    <button type="button" class="link" onclick={() => resetToInherited(field.id)}>Reset to inherited</button>
+                  </p>
+                {:else if source}
+                  <p class="provenance inherited" data-provenance={field.id}>
+                    Inherited from {templateLabel(source)}: {shortValue(inheritance.inherited[field.id])}
+                  </p>
+                {/if}
               {/if}
             {/each}
           </fieldset>
@@ -693,6 +818,50 @@
     border-radius: var(--radius);
     color: var(--warn);
     font-size: 12px;
+  }
+  .inherits {
+    margin: 0;
+    flex: none;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .inherits.broken {
+    color: var(--warn);
+  }
+  .provenance,
+  .field-issue {
+    margin: -6px 0 12px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .provenance.inherited {
+    color: var(--faint);
+  }
+  .field-issue {
+    color: var(--warn);
+  }
+  .repair {
+    margin: -4px 0 14px;
+    padding: 8px 10px;
+    border: 1px solid var(--warn);
+    border-radius: var(--radius);
+    font-size: 12px;
+  }
+  .repair p {
+    margin: 0 0 6px;
+    overflow-wrap: anywhere;
+  }
+  .repair button {
+    border: 1px solid var(--border-strong);
+    background: none;
+    color: inherit;
+    border-radius: var(--radius);
+    padding: 3px 9px;
+    font-size: 12px;
+    cursor: pointer;
+    margin-right: 6px;
   }
   .pending-summary {
     border-bottom: 1px solid var(--border);

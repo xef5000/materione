@@ -52,6 +52,24 @@ public final class RuleEngine {
     }
 
     /**
+     * The behavior vocabulary as registered right now: the event taxonomy,
+     * every executor (described or not, sorted by key) and the rule/action
+     * option keys the parser accepts. Mechanics are added by the host, which
+     * owns their registry.
+     */
+    public dev.materione.api.registry.BehaviorVocabulary vocabulary() {
+        var actions = new java.util.ArrayList<dev.materione.api.registry.BehaviorVocabulary.Action>();
+        executors.values().stream()
+                .sorted(java.util.Comparator.comparing(ActionExecutor::type))
+                .forEach(executor -> actions.add(new dev.materione.api.registry.BehaviorVocabulary.Action(
+                        executor.type(), executor.describe(), executor.shorthand(), !executor.syncSafe())));
+        return new dev.materione.api.registry.BehaviorVocabulary(
+                dev.materione.behavior.rule.EventTypes.describe(), actions,
+                dev.materione.behavior.rule.RuleParser.RULE_OPTIONS,
+                dev.materione.behavior.rule.RuleParser.ACTION_OPTIONS, java.util.List.of());
+    }
+
+    /**
      * Fires one event against a rule list. Rules run in definition order;
      * each is gated independently — a skipped or failed rule never blocks its
      * siblings.

@@ -132,8 +132,12 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   child-first addon loader design above. See [`mechanics.md`](mechanics.md).
 - **Self-description.** Every registry entry carries metadata the web editor renders forms
   from: display name, description, parameter schema (id/type/range/default/required),
-  since-version. One source of truth for editor forms, docs, and tab completion. Hand-written
-  per-mechanic editor forms are forbidden — they drift.
+  since-version, and an optional one-sentence `activation` (when the entry acts in game; built-in
+  mechanics declare it). One source of truth for editor forms, docs, and tab completion.
+  Hand-written per-mechanic editor forms are forbidden — they drift. *As built (M5):* actions are
+  not yet a registry; each `ActionExecutor` carries its own `describe()`/`shorthand()` and the
+  event taxonomy (`EventTypes.describe()`) records which content types fire each event. The editor
+  reads both, with the mechanics registry, through `authoring.describe` (web.md §4.2).
 
 ---
 
@@ -261,6 +265,11 @@ editor (inline squiggles + diagnostics center), and in `/materione doctor`.
   dropped.
 - Runtime errors (an ECA action throwing mid-execution) degrade to a per-invocation diagnostic
   with rate-limited logging — one broken action never spam-logs or takes down the event chain.
+- *As built (M5):* a diagnostic may carry a **target** — the field inside its resource the problem
+  is about (`DiagnosticTarget`, e.g. `["texture"]` on an unresolved reference), so the editor opens
+  that field instead of a file. Quarantine publishes one `MTR-0010` per resource whose message names
+  the first fatal reason (`resource ns:id quarantined: unresolved texture '…'`) and carries that
+  reason's target; the full reason list stays in the quarantine tracker.
 
 The M5 catalog has a separate read-only guard ([`api.md`](api.md) section 3.3):
 
