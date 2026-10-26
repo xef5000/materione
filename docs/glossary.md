@@ -6,6 +6,7 @@ here.
 
 | Term | Definition | Spec |
 |---|---|---|
+| **Ability** | Editor name for one entry of an item's `mechanics:` list — a registered mechanic with its parameters, shown as a card from the mechanic's self-description. | web.md §6, mechanics.md |
 | **Addon** | Third-party JAR in `plugins/Materione/addons/`, loaded in a child-first classloader, extending the plugin through the same registries built-ins use. | plugin.md §3 |
 | **Allocation table** | Append-only, **durable** record (`storage/allocation.bin`) mapping content to finite pack namespaces (model ids, glyph codepoints, hijacked blockstates). The one derived artifact that is *not* disposable. | master §6.3, plugin.md §4.4 |
 | **Apply (stage)** | Pipeline stage that swaps new runtime state in via shadow-swap; the only stage that schedules world mutation. | plugin.md §4.5 |

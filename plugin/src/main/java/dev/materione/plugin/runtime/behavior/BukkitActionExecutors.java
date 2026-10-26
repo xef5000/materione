@@ -7,6 +7,10 @@ import dev.materione.behavior.interp.Template;
 import dev.materione.behavior.rule.ActionSpec;
 import dev.materione.behavior.runtime.ActionExecutor;
 import dev.materione.behavior.runtime.BehaviorEvent;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.SelfDescription;
+import java.util.List;
 import java.util.Map;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
@@ -55,6 +59,20 @@ public final class BukkitActionExecutors {
         }
 
         @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Run command", "Runs a server command; %player% and ${...} are filled in",
+                    List.of(
+                            new ParameterSchema("command", ParameterType.STRING, true, null, "Command without the leading slash", null, null),
+                            new ParameterSchema("as", ParameterType.ENUM, false, "console", "Who runs it", List.of("console", "player"), null)),
+                    "2.0.0");
+        }
+
+        @Override
+        public String shorthand() {
+            return "command";
+        }
+
+        @Override
         public boolean syncSafe() {
             return false; // commands may touch any region — defer through the gateway
         }
@@ -100,6 +118,20 @@ public final class BukkitActionExecutors {
         }
 
         @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Send message", "Shows text to the player, on the action bar, or to everyone",
+                    List.of(
+                            new ParameterSchema("text", ParameterType.STRING, true, null, "Message text; & colour codes allowed", null, null),
+                            new ParameterSchema("target", ParameterType.ENUM, false, "player", "Where the text appears", List.of("player", "actionbar", "broadcast"), null)),
+                    "2.0.0");
+        }
+
+        @Override
+        public String shorthand() {
+            return "text";
+        }
+
+        @Override
         public boolean syncSafe() {
             return true;
         }
@@ -128,6 +160,21 @@ public final class BukkitActionExecutors {
         }
 
         @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Play sound", "Plays a sound at the player",
+                    List.of(
+                            new ParameterSchema("sound", ParameterType.STRING, true, null, "Sound key, e.g. minecraft:block.note_block.pling", null, null),
+                            new ParameterSchema("volume", ParameterType.DECIMAL, false, "1", "Volume", null, null),
+                            new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1", "Pitch", null, null)),
+                    "2.0.0");
+        }
+
+        @Override
+        public String shorthand() {
+            return "sound";
+        }
+
+        @Override
         public boolean syncSafe() {
             return true;
         }
@@ -150,6 +197,16 @@ public final class BukkitActionExecutors {
         @Override
         public String type() {
             return "potion";
+        }
+
+        @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Give potion effect", "Applies a potion effect to the player",
+                    List.of(
+                            new ParameterSchema("type", ParameterType.STRING, true, null, "Effect type, e.g. speed", null, null),
+                            new ParameterSchema("duration", ParameterType.INTEGER, false, "200", "Duration in ticks", null, null),
+                            new ParameterSchema("amplifier", ParameterType.INTEGER, false, "0", "Amplifier; 0 is level I", null, null)),
+                    "2.0.0");
         }
 
         @Override
@@ -185,6 +242,19 @@ public final class BukkitActionExecutors {
         }
 
         @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Cancel the event", "Cancels the underlying game event after the actions run",
+                    List.of(
+                            new ParameterSchema("value", ParameterType.BOOLEAN, false, "true", "Cancel when true", null, null)),
+                    "2.0.0");
+        }
+
+        @Override
+        public String shorthand() {
+            return "value";
+        }
+
+        @Override
         public boolean syncSafe() {
             return true;
         }
@@ -204,6 +274,15 @@ public final class BukkitActionExecutors {
         @Override
         public String type() {
             return "set_var";
+        }
+
+        @Override
+        public SelfDescription describe() {
+            return new SelfDescription("Set variable", "Stores a value for the rest of this event chain",
+                    List.of(
+                            new ParameterSchema("name", ParameterType.STRING, true, null, "Variable name", null, null),
+                            new ParameterSchema("value", ParameterType.STRING, false, null, "Value or ${expression}", null, null)),
+                    "2.0.0");
         }
 
         @Override

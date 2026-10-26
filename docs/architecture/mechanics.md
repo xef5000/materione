@@ -160,6 +160,14 @@ running; an addon that persists its own metadata must define its own migration
 or cleanup policy rather than deleting arbitrary player metadata. Version-sensitive
 component operations stay in the platform layer.
 
+## Editor self-description
+
+`describe()` is also the editor's only source for an ability card (web.md §6): display name,
+description, parameters, and the optional `activation` sentence — the answer to "when does this
+run?". Declare it with the five-argument `SelfDescription` constructor; an addon that omits it is
+still listed and editable, and the editor says that its activation is not described rather than
+guessing from listeners. `repeatable()` decides whether the editor offers a second copy.
+
 ## Built-ins and compatibility
 
 `NativeMechanics` is only composition. Each built-in owns its schema, parser,

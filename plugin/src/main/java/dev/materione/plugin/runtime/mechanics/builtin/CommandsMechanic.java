@@ -69,7 +69,8 @@ public final class CommandsMechanic implements Mechanic {
                                 "Commands on left-click", null, null),
                         new ParameterSchema("as_player", ParameterType.BOOLEAN, false, "false",
                                 "Run as the clicking player instead of the console", null, null)),
-                "2.0.0");
+                "2.0.0",
+                "When the holder right- or left-clicks with the item, its commands for that click run");
     }
 
     @Override

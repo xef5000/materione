@@ -20,6 +20,9 @@ const SURFACES = [
   'src/lib/studio/ModelWorkbench.svelte',
   'src/lib/components/AppHeader.svelte',
   'src/lib/components/Workbench.svelte',
+  'src/lib/views/StartView.svelte',
+  'src/lib/studio/MechanicsEditor.svelte',
+  'src/lib/studio/BehaviorRulesEditor.svelte',
 ];
 
 function source(relative: string): string {

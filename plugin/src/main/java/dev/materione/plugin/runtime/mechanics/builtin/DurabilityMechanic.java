@@ -38,7 +38,8 @@ public final class DurabilityMechanic implements Mechanic {
                 "Durability",
                 "Custom durability independent of the base material",
                 List.of(new ParameterSchema("max", ParameterType.INTEGER, true, null,
-                        "Uses before the item breaks", null, null)), "2.0.0");
+                        "Uses before the item breaks", null, null)), "2.0.0",
+                "Each time the item takes durability damage, one use is counted against max; it breaks at zero");
     }
 
     @Override

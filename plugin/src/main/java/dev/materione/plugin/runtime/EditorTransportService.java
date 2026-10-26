@@ -226,7 +226,7 @@ public final class EditorTransportService {
                         ownerUuidOfCurrentSession(), node -> true);
         dev.materione.web.rpc.ops.EditorContentOps.register(
                 dispatcher, api.authoring(), this::contentTypes,
-                () -> diagnostics.recent(100), actorFor);
+                () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
                 dispatcher, api.authoring(), actorFor);
         dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
@@ -252,6 +252,31 @@ public final class EditorTransportService {
         } catch (IllegalArgumentException e) {
             return java.util.Optional.empty(); // console-origin session
         }
+    }
+
+    private java.util.function.Supplier<dev.materione.api.registry.BehaviorVocabulary> behaviorVocabulary =
+            dev.materione.api.registry.BehaviorVocabulary::empty;
+
+    /** Wires the behavior engine's vocabulary; mechanics are read from their registry per call. */
+    public void behaviorVocabulary(
+            java.util.function.Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary) {
+        this.behaviorVocabulary = java.util.Objects.requireNonNull(vocabulary, "vocabulary");
+    }
+
+    /** The behavior vocabulary plus every registered mechanic, built-in or addon (D5). */
+    private dev.materione.api.registry.BehaviorVocabulary behaviorVocabulary() {
+        var mechanics = new ArrayList<dev.materione.api.registry.BehaviorVocabulary.Mechanic>();
+        api.registries().byKey(RegistryKeys.MECHANICS).ifPresent(view -> {
+            for (var entry : ((Registry<?>) view).entries()) {
+                boolean repeatable = entry.entry() instanceof dev.materione.api.mechanics.Mechanic mechanic
+                        && mechanic.repeatable();
+                mechanics.add(new dev.materione.api.registry.BehaviorVocabulary.Mechanic(
+                        entry.id().toString(), entry.description(), repeatable, entry.registeredBy()));
+            }
+        });
+        mechanics.sort(java.util.Comparator.comparing(
+                dev.materione.api.registry.BehaviorVocabulary.Mechanic::id));
+        return behaviorVocabulary.get().withMechanics(mechanics);
     }
 
     /** Registered content types through the api's registry view (D5). */

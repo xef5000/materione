@@ -499,9 +499,16 @@ normal T2/T3 authoring does not expose content directories or require file opera
 **As built (M5 editor-trust follow-up):** the authoring shell is items-first: Content opens on Items,
 with Files as the full-fidelity authoring surface. Problems, Activity, and Server are support
 destinations; rail labels are expanded by default, and the Activity dock starts collapsed. The
-separate Start/Dashboard and Assets screens in the product inventory are not present in this slice;
-assets are reached through studio slots and Files. This keeps the flagship resource flow first
-without creating a parallel content model.
+separate Assets screen in the product inventory is not present in this slice; assets are reached
+through studio slots and Files. This keeps the flagship resource flow first without creating a
+parallel content model.
+
+**As built (M5 guided authoring):** a **Start** workspace heads the rail (Content stays the landing
+view). It derives creation starters from the registered content types, lists diagnostics that name a
+resource with a direct **Fix** into the studio field they target, shows unsaved drafts, and
+summarises the behaviour this server registers (built-in and add-on mechanics, the events rules can
+react to). It owns no content state: every starter hands off to Content and the studio, which write
+through the one pipeline (D6).
 
 ### 9.2 Auth & trust — the relay is untrusted
 
@@ -611,6 +618,13 @@ resource rows; optional layout preferences are presentation-only, while files re
 of pipeline freshness or application. See
 [`architecture/web.md` §6](architecture/web.md) for the summary contract, fallback behavior,
 thumbnail bounds, and item controls.
+
+The guided-authoring follow-up adds no second schema or behaviour language. Abilities (an item's
+`mechanics:` list) and behaviour rules (`behavior:` `on`/`if`/`do`) are edited in their existing
+formats from the registries' self-description (D4, D5), served by `authoring.describe`. Template
+inheritance is explained from the same resolver the pipeline compiles with, and **Reset to
+inherited value** is a revision-checked, lossless removal of the key (§5.6) staged like any other
+field edit until **Save & apply**.
 
 ### 9.5 In-game surface (for tiers without a browser open)
 

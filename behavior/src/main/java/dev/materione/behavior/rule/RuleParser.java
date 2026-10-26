@@ -25,6 +25,32 @@ public final class RuleParser {
     /** Rule-level option keys. */
     private static final Set<String> RULE_OPTION_KEYS = Set.of("cooldown", "charges", "per", "id");
 
+    /** Self-description of the rule option keys {@link #parseOptions} reads. */
+    public static final List<dev.materione.api.registry.ParameterSchema> RULE_OPTIONS = List.of(
+            option("id", dev.materione.api.registry.ParameterType.STRING, null,
+                    "Stable rule name used in diagnostics and cooldown keys", List.of()),
+            option("cooldown", dev.materione.api.registry.ParameterType.INTEGER, "0",
+                    "Milliseconds before this rule can fire again", List.of()),
+            option("charges", dev.materione.api.registry.ParameterType.INTEGER, null,
+                    "How many times the rule can fire in total", List.of()),
+            option("per", dev.materione.api.registry.ParameterType.ENUM, RuleOptions.PER_PLAYER,
+                    "Whether cooldown and charges count per player or for the whole server",
+                    List.of(RuleOptions.PER_PLAYER, RuleOptions.PER_GLOBAL)));
+
+    /** Self-description of the universal action keys {@link #parseAction} reads. */
+    public static final List<dev.materione.api.registry.ParameterSchema> ACTION_OPTIONS = List.of(
+            option(ActionSpec.CHANCE_KEY, dev.materione.api.registry.ParameterType.DECIMAL, "1",
+                    "Probability from 0 to 1 that the action runs", List.of()),
+            option(ActionSpec.DELAY_KEY, dev.materione.api.registry.ParameterType.INTEGER, "0",
+                    "Ticks to wait before the action runs", List.of()));
+
+    private static dev.materione.api.registry.ParameterSchema option(
+            String id, dev.materione.api.registry.ParameterType type, String defaultValue,
+            String description, List<String> allowed) {
+        return new dev.materione.api.registry.ParameterSchema(
+                id, type, false, defaultValue, description, allowed, List.of());
+    }
+
     private RuleParser() {}
 
     /**

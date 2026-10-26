@@ -12,6 +12,7 @@ import java.util.Objects;
  * @param resource the content resource involved, if any
  * @param location source coordinates, if the failure came from a file
  * @param hint a suggested fix, if one is known
+ * @param target the field inside {@code resource} the problem is about, if known
  */
 public record Diagnostic(
         DiagnosticCode code,
@@ -19,12 +20,19 @@ public record Diagnostic(
         String message,
         NamespacedId resource,
         SourceLocation location,
-        String hint) {
+        String hint,
+        DiagnosticTarget target) {
 
     public Diagnostic {
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(severity, "severity");
         Objects.requireNonNull(message, "message");
+    }
+
+    /** A diagnostic without a field target. */
+    public Diagnostic(DiagnosticCode code, Severity severity, String message, NamespacedId resource,
+            SourceLocation location, String hint) {
+        this(code, severity, message, resource, location, hint, null);
     }
 
     public static Diagnostic error(DiagnosticCode code, String message) {

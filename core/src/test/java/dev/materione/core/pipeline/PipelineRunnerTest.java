@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticTarget;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.testing.golden.GoldenFiles;
@@ -73,6 +74,46 @@ class PipelineRunnerTest {
     }
 
     @Test
+    void unresolvedReferenceTargetsItsFieldAndTheQuarantineNoticeCarriesIt(@TempDir Path packsRoot)
+            throws IOException {
+        installFaultPack(packsRoot, "faulty", "unresolved-ref.yml", "items/unresolved-ref.yml");
+        Files.createDirectories(packsRoot.resolve("faulty/templates"));
+        Files.writeString(packsRoot.resolve("faulty/templates/base_item.yml"), "base_item:\n  material: PAPER\n");
+        var result = runner.request(new ReloadScope.Everything(), packsRoot);
+        assertThat(result.completed()).isTrue();
+
+        assertThat(quarantine.all().get(0).reason().target()).isEqualTo(DiagnosticTarget.field("template"));
+        Diagnostic notice = quarantineNotice();
+        assertThat(notice.message())
+                .isEqualTo("resource faulty:broken_item quarantined: unresolved template 'base_ittm'");
+        assertThat(notice.resource()).isEqualTo(NamespacedId.parse("faulty:broken_item"));
+        assertThat(notice.target()).isEqualTo(DiagnosticTarget.field("template"));
+    }
+
+    @Test
+    void quarantineNoticeNamesOnlyTheFirstFatalReason(@TempDir Path packsRoot) throws IOException {
+        // two unresolved references in one resource: the reason the notice names
+        // is the first in validator order (template before model), never both
+        Path pack = packsRoot.resolve("twofaults");
+        Files.createDirectories(pack.resolve("items"));
+        Files.writeString(pack.resolve("pack.yml"), "id: twofaults\nversion: 1.0.0\nschema_version: 1\n");
+        Files.writeString(pack.resolve("items/double.yml"), """
+                double_fault:
+                  template: ghost_base
+                  model: ghost_model
+                  material: PAPER
+                """);
+        var result = runner.request(new ReloadScope.Everything(), packsRoot);
+        assertThat(result.completed()).isTrue();
+
+        Diagnostic notice = quarantineNotice();
+        assertThat(notice.message())
+                .isEqualTo("resource twofaults:double_fault quarantined: unresolved template 'ghost_base'");
+        assertThat(notice.target()).isEqualTo(DiagnosticTarget.field("template"));
+        assertThat(published(DiagnosticCodes.CONTENT_QUARANTINED)).isOne();
+    }
+
+    @Test
     void danglingGlyphAliasQuarantines(@TempDir Path packsRoot) throws IOException {
         installFaultPack(packsRoot, "faulty", "dangling-glyph.yml", "glyphs/dangling-glyph.yml");
         var result = runner.request(new ReloadScope.Everything(), packsRoot);
@@ -115,6 +156,14 @@ class PipelineRunnerTest {
 
     private long published(dev.materione.api.diagnostics.DiagnosticCode code) {
         return diagnostics.recent(256).stream().filter(d -> d.code() == code).count();
+    }
+
+    /** The one MTR-0010 notice the validate stage published for a quarantined resource. */
+    private Diagnostic quarantineNotice() {
+        return diagnostics.recent(256).stream()
+                .filter(d -> d.code() == DiagnosticCodes.CONTENT_QUARANTINED)
+                .findFirst()
+                .orElseThrow();
     }
 
     private static void installFaultPack(

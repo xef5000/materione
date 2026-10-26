@@ -49,7 +49,8 @@ public final class ReferenceValidator implements ValidateStage.Validator {
                         DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
                         "unresolved " + field + " '" + target + "'",
                         resource.id(), null,
-                        "did you mean '" + closest(environment, target, field) + "'?"));
+                        "did you mean '" + closest(environment, target, field) + "'?",
+                        dev.materione.api.diagnostics.DiagnosticTarget.field(field)));
             }
         }
         if ("block".equals(resource.contentType())) {

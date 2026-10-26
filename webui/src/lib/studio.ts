@@ -15,6 +15,8 @@ const RENDERABLE = new Set([
   'formatted-text',
   'formatted-lines',
   'recipe-grid',
+  'mechanics',
+  'behavior-rules',
 ]);
 
 export interface StudioSection {

@@ -41,6 +41,30 @@ public final class EditorContentOps {
             Supplier<List<ContentType>> types,
             Supplier<List<Diagnostic>> diagnostics,
             Function<String, ActorContext> actorFor) {
+        register(dispatcher, authoring, types, diagnostics, actorFor,
+                dev.materione.api.registry.BehaviorVocabulary::empty);
+    }
+
+    public static void register(
+            RpcDispatcher dispatcher,
+            AuthoringApi authoring,
+            Supplier<List<ContentType>> types,
+            Supplier<List<Diagnostic>> diagnostics,
+            Function<String, ActorContext> actorFor,
+            Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary) {
+        // Capability discovery (web.md §4.2): content types and the behavior
+        // vocabulary, each read from where it is registered — never a copy.
+        dispatcher.register("authoring.describe", request -> {
+            JsonObject payload = new JsonObject();
+            var array = new com.google.gson.JsonArray();
+            for (ContentType type : types.get()) {
+                array.add(typeJson(type));
+            }
+            payload.add("types", array);
+            payload.add("behavior", vocabularyJson(vocabulary.get()));
+            return Wire.Response.success(request, payload);
+        });
+
         dispatcher.register("browse.packs", request -> {
             var payload = new JsonObject();
             var packs = new com.google.gson.JsonArray();
@@ -301,6 +325,15 @@ public final class EditorContentOps {
                         throw new IllegalArgumentException("'edits' entries must be objects");
                     }
                     JsonObject edit = entry.getAsJsonObject();
+                    var remove = edit.get("remove");
+                    if (remove != null && remove.isJsonPrimitive() && remove.getAsJsonPrimitive().isBoolean()
+                            && remove.getAsBoolean()) {
+                        if (edit.has("value")) {
+                            throw new IllegalArgumentException("a removal edit carries no 'value'");
+                        }
+                        edits.add(AuthoringApi.FieldEdit.removal(stringList(edit.get("field"))));
+                        continue;
+                    }
                     edits.add(new AuthoringApi.FieldEdit(
                             stringList(edit.get("field")), nodeValue(edit.get("value"))));
                 }
@@ -594,6 +627,73 @@ public final class EditorContentOps {
         return object;
     }
 
+    private static JsonObject vocabularyJson(dev.materione.api.registry.BehaviorVocabulary vocabulary) {
+        var safe = vocabulary == null ? dev.materione.api.registry.BehaviorVocabulary.empty() : vocabulary;
+        JsonObject object = new JsonObject();
+        var events = new com.google.gson.JsonArray();
+        for (var event : safe.events()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", event.id());
+            json.addProperty("displayName", event.displayName());
+            json.addProperty("description", event.description());
+            json.add("details", strings(event.details()));
+            json.add("firedBy", strings(event.firedBy()));
+            events.add(json);
+        }
+        object.add("events", events);
+        var actions = new com.google.gson.JsonArray();
+        for (var action : safe.actions()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", action.id());
+            if (action.description() != null) {
+                describeInto(json, action.description());
+            }
+            if (action.shorthand() != null) {
+                json.addProperty("shorthand", action.shorthand());
+            }
+            json.addProperty("deferred", action.deferred());
+            actions.add(json);
+        }
+        object.add("actions", actions);
+        object.add("ruleOptions", params(safe.ruleOptions()));
+        object.add("actionOptions", params(safe.actionOptions()));
+        var mechanics = new com.google.gson.JsonArray();
+        for (var mechanic : safe.mechanics()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", mechanic.id());
+            describeInto(json, mechanic.description());
+            json.addProperty("repeatable", mechanic.repeatable());
+            json.addProperty("registeredBy", mechanic.registeredBy());
+            mechanics.add(json);
+        }
+        object.add("mechanics", mechanics);
+        return object;
+    }
+
+    private static void describeInto(JsonObject json, SelfDescription description) {
+        json.addProperty("displayName", description.displayName());
+        json.addProperty("description", description.description());
+        if (description.activation() != null) {
+            json.addProperty("activation", description.activation());
+        }
+        if (description.sinceVersion() != null) {
+            json.addProperty("sinceVersion", description.sinceVersion());
+        }
+        json.add("parameters", params(description.parameters()));
+    }
+
+    private static com.google.gson.JsonArray params(List<ParameterSchema> parameters) {
+        var array = new com.google.gson.JsonArray();
+        parameters.forEach(param -> array.add(paramJson(param)));
+        return array;
+    }
+
+    private static com.google.gson.JsonArray strings(List<String> values) {
+        var array = new com.google.gson.JsonArray();
+        values.forEach(array::add);
+        return array;
+    }
+
     private static JsonObject paramJson(ParameterSchema param) {
         JsonObject object = new JsonObject();
         object.addProperty("id", param.id());
@@ -612,7 +712,7 @@ public final class EditorContentOps {
         }
         if (!param.nested().isEmpty()) {
             var nested = new com.google.gson.JsonArray();
-            param.nested().forEach(EditorContentOps::paramJson);
+            param.nested().forEach(child -> nested.add(paramJson(child)));
             object.add("nested", nested);
         }
         if (param.uiHint() != null) {

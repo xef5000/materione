@@ -13,17 +13,28 @@ import java.util.Objects;
  * @param description one-paragraph explanation shown as editor help text
  * @param parameters declared parameters; may be empty
  * @param sinceVersion plugin version this entry first appeared in
+ * @param activation one sentence saying when the entry acts in game (the
+ *        editor's "how does this activate?" answer), or {@code null} when the
+ *        entry has not declared it — the editor then says so instead of guessing
  */
 public record SelfDescription(
         String displayName,
         String description,
         List<ParameterSchema> parameters,
-        String sinceVersion) {
+        String sinceVersion,
+        String activation) {
 
     public SelfDescription {
         Objects.requireNonNull(displayName, "displayName");
         Objects.requireNonNull(description, "description");
         parameters = parameters == null ? List.of() : List.copyOf(parameters);
+        activation = activation == null || activation.isBlank() ? null : activation;
+    }
+
+    /** Compatibility constructor for entries that do not declare their activation. */
+    public SelfDescription(String displayName, String description, List<ParameterSchema> parameters,
+            String sinceVersion) {
+        this(displayName, description, parameters, sinceVersion, null);
     }
 
     /** Minimal description with no parameters. */

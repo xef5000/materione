@@ -269,7 +269,21 @@ public interface AuthoringApi {
             String pack, String path, int expectedRevision, List<String> field, Object value) {}
 
     /** One field patch inside a {@link SetFieldsRequest} batch. */
-    record FieldEdit(List<String> field, Object value) {}
+    record FieldEdit(List<String> field, Object value, boolean remove) {
+
+        /** Sets {@code field} to {@code value}. */
+        public FieldEdit(List<String> field, Object value) {
+            this(field, value, false);
+        }
+
+        /**
+         * Removes {@code field} from the document (lossless; an absent key is a
+         * no-op) — how the editor resets a field to its inherited value.
+         */
+        public static FieldEdit removal(List<String> field) {
+            return new FieldEdit(field, null, true);
+        }
+    }
 
     /** {@link #setFields}: atomic batch of scalar/structured patches — one revision, one audit, one reload. */
     record SetFieldsRequest(

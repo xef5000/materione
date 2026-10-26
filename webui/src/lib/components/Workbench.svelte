@@ -9,6 +9,7 @@
   import ContentView from '../views/ContentView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
+  import StartView from '../views/StartView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
   import { activityLog, diagnostics, ui } from '../state.svelte';
 
@@ -18,11 +19,12 @@
 
   let { onDisconnect }: Props = $props();
 
-  type RailView = 'content' | 'advanced' | 'diagnostics' | 'server';
+  type RailView = 'start' | 'content' | 'advanced' | 'diagnostics' | 'server';
   type RailTarget = RailView | 'activity';
   type RailEntry = { id: RailTarget; label: string; icon: string };
 
   const authoringViews: RailEntry[] = [
+    { id: 'start', label: 'Start', icon: 'M12 3 3 10v11h6v-6h6v6h6V10z' },
     { id: 'content', label: 'Content', icon: 'M4 5.5h16v14H4zM7 2h10v3H7z' },
     {
       id: 'advanced',
@@ -46,6 +48,7 @@
   ];
 
   let initialized = $state<Record<RailView, boolean>>({
+    start: false,
     content: true,
     advanced: false,
     diagnostics: false,
@@ -149,6 +152,16 @@
     </nav>
 
     <main class="viewhost">
+      {#if initialized.start}
+        <section
+          class="workspace"
+          hidden={ui.view !== 'start'}
+          aria-hidden={ui.view !== 'start'}
+          aria-label="Start"
+        >
+          <StartView />
+        </section>
+      {/if}
       {#if initialized.content}
         <div
           class="workspace"
