@@ -141,6 +141,13 @@
     }
   }
 
+  /** Start's "New …" starters land here: open the same create dialog. */
+  $effect(() => {
+    if (!active || !content.createRequest || content.createRequest !== content.type || !tab) return;
+    content.createRequest = null;
+    createEntry();
+  });
+
   function createEntry(): void {
     const singular = tab?.singular ?? 'entry';
     dialog = {

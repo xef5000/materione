@@ -142,7 +142,10 @@ resolve (hot path): ItemStack → cached PDC tag read → RuntimeItem   (~1 µs 
   state (durability, in-game enchantments, custom counters). Same updater heals items after
   pack migration.
 - **Templates/inheritance**: `template` refs resolve at graph build; a template is a partial
-  definition with overridable fields; diamond inheritance → validation error.
+  definition with overridable fields; diamond inheritance → validation error. *As built:* one
+  resolver, `core.pipeline.TemplateResolver` (single parent, shallow top-level merge, child wins;
+  `content.Templates` is its facade), serves both parsing and the editor's provenance view, which
+  reports per key which template supplies it (web.md §4.2).
 
 ### 3.3 Failure modes
 

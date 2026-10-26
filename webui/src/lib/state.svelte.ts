@@ -4,7 +4,8 @@
  * through loadWorkspace(); only unsaved editor content lives in tab state.
  */
 import type { AssetRef, DiagnosticEntry, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from './api';
-import { unwrap, ops, assetOps } from './api';
+import { RpcError, unwrap, ops, assetOps } from './api';
+import type { BehaviorVocabulary } from './behavior';
 import type { PushFrame } from './events';
 import { Signal } from './events';
 import { documentChangedEffect } from './external';
@@ -71,6 +72,8 @@ export const workspace = $state({
   summariesError: '',
   visualVersion: 0,
   types: [] as TypeInfo[],
+  /** Registered events, actions and mechanics (`authoring.describe`); null on jars that predate it. */
+  behavior: null as BehaviorVocabulary | null,
   assets: [] as AssetRef[],
   /** Pack-relative organisational folders under the type roots. */
   folders: [] as string[],
@@ -87,7 +90,7 @@ export const workspace = $state({
  * the author somewhere else ("reveal in Advanced Files") without prop drilling.
  */
 export const ui = $state({
-  view: 'content' as 'content' | 'advanced' | 'diagnostics' | 'server',
+  view: 'content' as 'start' | 'content' | 'advanced' | 'diagnostics' | 'server',
   railCollapsed: false,
   activityOpen: false,
 });
@@ -104,6 +107,10 @@ export const content = $state({
   layout: 'details' as 'details' | 'grid',
   search: '',
   open: null as ResourceRef | null,
+  /** A field the studio should bring into view once the entry is open (Problems → Fix). */
+  focus: null as { pack: string; path: string; id: string; field: string } | null,
+  /** A type whose "New …" dialog Content should open (Start's starters). */
+  createRequest: null as string | null,
 });
 
 /** Moves the browser to a folder inside the current type tab. */
@@ -114,7 +121,10 @@ export function browseTo(type: string, folder = ''): void {
 }
 
 /** Opens an entry in its studio; the browser stays where it was. */
-export function openStudio(resource: ResourceRef | null): void {
+export function openStudio(resource: ResourceRef | null, field?: string): void {
+  content.focus = resource && field
+    ? { pack: resource.pack, path: resource.path, id: resource.id, field }
+    : null;
   if (resource?.pack === content.open?.pack && resource?.path === content.open?.path &&
       resource?.id === content.open?.id) {
     ui.view = 'content';
@@ -146,12 +156,21 @@ export async function revealInAdvanced(
   ui.view = 'advanced';
 }
 
-export async function revealInStudio(resource: ResourceRef): Promise<void> {
+export async function revealInStudio(resource: ResourceRef, field?: string): Promise<void> {
   if (workspace.activePack !== resource.pack) {
     await selectPack(resource.pack);
     if (workspace.activePack !== resource.pack) return;
   }
-  openStudio(resource);
+  openStudio(resource, field);
+}
+
+/** Opens Content on a type tab with its "New …" dialog (Start's create starters). */
+export function startCreate(type: string): void {
+  if (!canLeaveEditor('studio')) return;
+  content.open = null;
+  browseTo(type);
+  content.createRequest = type;
+  ui.view = 'content';
 }
 
 export const diagnostics = $state({
@@ -316,7 +335,7 @@ export async function loadWorkspace(): Promise<void> {
     } else if (workspace.activePack) {
       await refreshPack();
     }
-    workspace.types = ((unwrap(await ops.types(channel)).types as TypeInfo[]) ?? []);
+    await loadCapabilities(channel);
     diagnostics.entries =
       ((unwrap(await ops.diagnostics(channel)).diagnostics as DiagnosticEntry[]) ?? []);
     const info = unwrap(await ops.sessionInfo(channel));
@@ -328,6 +347,25 @@ export async function loadWorkspace(): Promise<void> {
   } catch (e) {
     logActivity('error', `metadata: ${errorMessage(e)}`);
   }
+}
+
+/**
+ * Registry-driven capability discovery: `authoring.describe` returns content
+ * types and the behaviour vocabulary together. A jar that predates it answers
+ * with an error; then types come from `browse.types` and behaviour authoring
+ * says it is unavailable rather than guessing.
+ */
+async function loadCapabilities(channel: RpcChannel): Promise<void> {
+  try {
+    const described = unwrap(await ops.describe(channel));
+    workspace.types = (described.types as TypeInfo[]) ?? [];
+    workspace.behavior = (described.behavior as BehaviorVocabulary | undefined) ?? null;
+    return;
+  } catch (e) {
+    if (!(e instanceof RpcError)) throw e;
+    workspace.behavior = null;
+  }
+  workspace.types = ((unwrap(await ops.types(channel)).types as TypeInfo[]) ?? []);
 }
 
 export async function selectPack(pack: string): Promise<void> {
@@ -523,6 +561,7 @@ export function resetWorkspace(): void {
   workspace.summariesError = '';
   workspace.visualVersion = 0;
   workspace.types = [];
+  workspace.behavior = null;
   workspace.assets = [];
   workspace.folders = [];
   workspace.tabs = [];

@@ -4,6 +4,9 @@
 // integration tests, including the relay gate over the fake mailbox.
 
 import { test } from './_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const TRANSPORT = 'plugin/src/main/java/dev/materione/plugin/runtime/EditorTransportService.java';
 const COMMANDS = 'plugin/src/main/java/dev/materione/plugin/command/EditorCommands.java';
@@ -63,6 +66,76 @@ const GLYPH_CATALOG_COVERS = [
   'fixtures/packs/sample/glyphs/**',
   'fixtures/packs/sample/assets/textures/gui/**',
 ];
+// The probe server's own content copy (the repo fixtures are never touched).
+const SERVER_SAMPLE = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)), '..', '..',
+  'harness', 'build', 'probe', 'server', 'plugins', 'Materione', 'content', 'packs', 'sample');
+
+const GUIDED_COVERS = [
+  ...BROWSER_COVERS,
+  'webui/src/lib/api.ts',
+  'webui/src/lib/behavior.ts',
+  'webui/src/lib/studio.ts',
+  'webui/src/lib/views/StartView.svelte',
+  'webui/src/lib/studio/MechanicsEditor.svelte',
+  'webui/src/lib/studio/BehaviorRulesEditor.svelte',
+  'webui/src/lib/studio/Field.svelte',
+  'webui/src/lib/components/AssetPicker.svelte',
+  'webui/src/lib/studio/TextureEditor.svelte',
+  'api/src/main/java/dev/materione/api/registry/BehaviorVocabulary.java',
+  'api/src/main/java/dev/materione/api/registry/SelfDescription.java',
+  'api/src/main/java/dev/materione/api/diagnostics/Diagnostic.java',
+  'api/src/main/java/dev/materione/api/diagnostics/DiagnosticTarget.java',
+  'behavior/src/main/java/dev/materione/behavior/rule/EventTypes.java',
+  'behavior/src/main/java/dev/materione/behavior/rule/RuleParser.java',
+  'behavior/src/main/java/dev/materione/behavior/runtime/RuleEngine.java',
+  'plugin/src/main/java/dev/materione/plugin/runtime/behavior/BukkitActionExecutors.java',
+  'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/builtin/**',
+  'core/src/main/java/dev/materione/core/pipeline/TemplateResolver.java',
+  'core/src/main/java/dev/materione/core/document/LosslessYamlDocument.java',
+  'core/src/main/java/dev/materione/core/pipeline/validate/ReferenceValidator.java',
+  'core/src/main/java/dev/materione/core/pipeline/validate/ValidateStage.java',
+  'web/src/main/java/dev/materione/web/SessionPush.java',
+  'fixtures/packs/sample/items/templated_ruby.yml',
+  'fixtures/packs/sample/templates/base_item.yml',
+];
+
+async function openSampleStudio(page, name) {
+  await page.getByLabel('project').selectOption('sample');
+  await page.getByRole('button', { name: 'Content', exact: true }).click();
+  await page.locator('input.search').fill(name);
+  const row = page.getByRole('option', { name: new RegExp(name) });
+  await row.waitFor({ state: 'visible', timeout: 20_000 });
+  await row.dblclick();
+  const studio = page.locator('.studio');
+  await studio.waitFor({ state: 'visible' });
+  return studio;
+}
+
+async function heldMaterial(ctx, id) {
+  await ctx.rcon('clear Probe');
+  await ctx.rcon(`materione give ${id} Probe`);
+  await ctx.waitForChat(new RegExp(`Given ${id}`));
+  await ctx.exec('player.getInventory().selected = 0');
+  return String(await ctx.exec('return player.getInventory().items.get(0).getItem().getDescriptionId()'));
+}
+
+/** Polls the given item's in-game material until it matches (the apply lands after the reload marker). */
+async function expectHeldMaterial(ctx, id, expected) {
+  const deadline = Date.now() + 30_000;
+  let actual = '';
+  while (Date.now() < deadline) {
+    try {
+      actual = await heldMaterial(ctx, id);
+      if (actual === expected) break;
+    } catch (e) {
+      actual = String(e?.message ?? e);
+    }
+    await ctx.sleep(750);
+  }
+  ctx.expect(actual).toBe(expected);
+}
+
 const SUPPORT_COVERS = [
   ...BROWSER_COVERS,
   'webui/src/lib/views/ServerView.svelte',
@@ -583,6 +656,158 @@ export default [
       await ctx.browser.browserShot('sample-ruby-sword-files-draft');
       ctx.needsEyes(
         'the real local Materione App shows sample:ruby_sword in Files with the staged Ruby Sword Visual Draft clearly unsaved; navigation reads Content, Files, Problems, the file header offers Open in Studio, Save & apply is distinct from Publish pack, and the screenshot contains no capability URL or session material',
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-guided-start',
+    title: 'Start offers registry-driven starters and explains the abilities this server registers',
+    covers: GUIDED_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      let pageErrors = 0;
+      page.on('pageerror', () => { pageErrors += 1; });
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      const start = page.getByRole('region', { name: 'Start', exact: true });
+      await start.getByRole('button', { name: /^New item/i }).waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await start.getByRole('button', { name: /^New block/i }).count()).toBe(1);
+      // The real registry's built-ins, with their declared activation sentences.
+      const behaviour = await start.locator('ul.abilities').innerText();
+      ctx.expect(behaviour).toContain('Soulbound');
+      ctx.expect(behaviour).toContain('When the owner dies');
+      ctx.expect(behaviour).toContain('Commands');
+      await start.getByRole('button', { name: /^New item/i }).click();
+      ctx.expect(await page.getByRole('dialog').innerText()).toContain('New item');
+      await page.keyboard.press('Escape');
+      ctx.expect(pageErrors).toBe(0);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-template-reset',
+    title: 'sample:templated_ruby shows its inherited material; an override and Reset to inherited apply in game and restore the file byte-for-byte',
+    covers: GUIDED_COVERS,
+    dependsOn: ['items.template-inheritance'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const file = path.join(SERVER_SAMPLE, 'items', 'templated_ruby.yml');
+      const original = fs.readFileSync(file);
+      try {
+        const page = await ctx.browser.openEditor();
+        const studio = await openSampleStudio(page, 'Templated Ruby');
+        ctx.expect(await studio.locator('.inherits').innerText()).toContain('base_item');
+        const material = studio.locator('[data-provenance="material"]');
+        ctx.expect((await material.innerText()).trim()).toBe('Inherited from base_item: PAPER');
+
+        await studio.getByRole('combobox', { name: 'Base material' }).fill('stick');
+        await page.keyboard.press('ArrowDown');
+        await page.keyboard.press('Enter');
+        await studio.getByRole('button', { name: 'Save & apply' }).click();
+        await expectHeldMaterial(ctx, 'sample:templated_ruby', 'item.minecraft.stick');
+        ctx.expect((await material.innerText())).toContain('Overrides base_item (PAPER)');
+
+        await material.getByRole('button', { name: 'Reset to inherited' }).click();
+        ctx.expect(await material.innerText()).toContain('Resets to the value from base_item');
+        await studio.getByRole('button', { name: 'Save & apply' }).click();
+        await expectHeldMaterial(ctx, 'sample:templated_ruby', 'item.minecraft.paper');
+        // Lossless (master §5.6): the removal deletes exactly the inserted line.
+        ctx.expect(fs.readFileSync(file).equals(original)).toBeTruthy();
+      } finally {
+        if (!fs.readFileSync(file).equals(original)) {
+          fs.writeFileSync(file, original);
+          try { await ctx.rcon('materione reload'); } catch (e) { ctx.log(`restore reload failed: ${e?.message ?? e}`); }
+        }
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-ability-activation',
+    title: 'an item studio adds a registered ability with its activation explained, and rules only offer events items fire',
+    covers: GUIDED_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleStudio(page, 'Ruby Sword');
+      const abilities = studio.getByRole('region', { name: 'Abilities' });
+      await abilities.getByLabel('Add an ability').selectOption({ label: 'Soulbound' });
+      ctx.expect(await abilities.locator('.preview').innerText()).toContain('When the owner dies');
+      await abilities.getByRole('button', { name: 'Add', exact: true }).click();
+      const card = abilities.locator('[data-mechanic="soulbound"]');
+      ctx.expect(await card.innerText()).toContain('Built in');
+      ctx.expect(await card.innerText()).toContain('Activates: When the owner dies');
+
+      const rules = studio.getByRole('region', { name: 'Behaviour rules' });
+      await rules.getByRole('button', { name: 'Add rule' }).click();
+      const events = await rules.getByLabel('When').locator('option').allInnerTexts();
+      ctx.expect(events.includes('Click')).toBeTruthy();
+      ctx.expect(events.includes('Place')).toBe(false);
+      ctx.expect(events.includes('Tick')).toBe(false);
+      // Staged only: nothing reaches the server until Save & apply.
+      ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isEnabled()).toBeTruthy();
+    },
+  }),
+
+  test({
+    id: 'editor.browser-missing-texture-repair',
+    title: 'a quarantined item with a missing texture is repaired from Problems by drawing the file, without Files or YAML',
+    covers: GUIDED_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const item = path.join(SERVER_SAMPLE, 'items', 'qa_cracked_gem.yml');
+      const texture = path.join(SERVER_SAMPLE, 'assets', 'textures', 'item', 'qa_cracked_gem.png');
+      fs.writeFileSync(item, 'qa_cracked_gem:\n  material: STICK\n  display_name: "QA Cracked Gem"\n  texture: item/qa_cracked_gem\n');
+      try {
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        const page = await ctx.browser.openEditor();
+        await page.getByLabel('project').selectOption('sample');
+        await page.getByRole('button', { name: /^Problems(?:, .+)?$/ }).click();
+        const problems = page.getByRole('region', { name: 'Problems', exact: true });
+        const row = problems.locator('li', { hasText: 'qa_cracked_gem quarantined' }).first();
+        await row.getByRole('button', { name: 'Fix texture' }).click();
+        const repair = page.getByRole('group', { name: 'Repair Texture' });
+        await repair.waitFor({ state: 'visible', timeout: 20_000 });
+        ctx.expect(await repair.innerText()).toContain('assets/textures/item/qa_cracked_gem.png');
+        await repair.getByRole('button', { name: 'Draw it now' }).click();
+        const canvas = page.locator('canvas');
+        await canvas.waitFor({ state: 'visible' });
+        await canvas.click();
+        await page.getByRole('button', { name: 'Save & apply' }).last().click();
+        const deadline = Date.now() + 20_000;
+        while (!fs.existsSync(texture) && Date.now() < deadline) await ctx.sleep(200);
+        ctx.expect(fs.existsSync(texture)).toBeTruthy();
+        await expectHeldMaterial(ctx, 'sample:qa_cracked_gem', 'item.minecraft.stick');
+      } finally {
+        fs.rmSync(item, { force: true });
+        fs.rmSync(texture, { force: true });
+        try { await ctx.rcon('materione reload'); } catch (e) { ctx.log(`cleanup reload failed: ${e?.message ?? e}`); }
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-guided-authoring-visual',
+    title: 'Item Studio reads abilities and rules as sentences, with inheritance provenance and an honest activation note',
+    mode: 'visual',
+    dependsOn: ['editor.browser-ability-activation'],
+    covers: GUIDED_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleStudio(page, 'Templated Ruby');
+      const abilities = studio.getByRole('region', { name: 'Abilities' });
+      await abilities.getByLabel('Add an ability').selectOption({ label: 'Soulbound' });
+      await abilities.getByRole('button', { name: 'Add', exact: true }).click();
+      const rules = studio.getByRole('region', { name: 'Behaviour rules' });
+      await rules.getByLabel('Rule starting point').selectOption({ label: 'Right-click sends a message' });
+      await rules.getByRole('button', { name: 'Add rule' }).click();
+      await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
+      ctx.needsEyes(
+        'the studio header names the base_item template; material reads "Inherited from base_item: PAPER"; a Soulbound ability card says Built in and when it activates; a rule reads "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write',
       );
     },
   }),

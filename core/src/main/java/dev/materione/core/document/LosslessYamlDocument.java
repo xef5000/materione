@@ -200,6 +200,64 @@ public final class LosslessYamlDocument {
         return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
     }
 
+    /**
+     * Returns a copy without the key at {@code path} — the explicit "reset to
+     * inherited value" edit. The key line and the lines its value owns are
+     * removed; comments and blank lines after the value belong to the
+     * document and stay, as in {@link #withNode}. An absent key returns this
+     * document unchanged. When the key was its parent's only child, the
+     * parent line gains {@code {}} so it stays a mapping instead of becoming
+     * null. Keys in flow style or that open a sequence item are refused with
+     * {@link UnsupportedOperationException} rather than guessed at.
+     */
+    public LosslessYamlDocument withoutNode(String... path) {
+        if (path.length == 0) {
+            throw new IllegalArgumentException("empty path");
+        }
+        List<String> lines = splitLines(raw);
+        Node root = buildTree(lines);
+        Node target = find(root, List.of(path));
+        if (target == null) {
+            if (present(path)) {
+                throw new UnsupportedOperationException(
+                        "cannot remove '" + String.join(".", path) + "': it is not a block mapping key");
+            }
+            return this;
+        }
+        Matcher keyLine = KEY_LINE.matcher(lines.get(target.lineIndex).replaceFirst("\\r?\\n$", ""));
+        if (keyLine.matches() && keyLine.group(2) != null) {
+            throw new UnsupportedOperationException(
+                    "cannot remove '" + String.join(".", path) + "': it opens a sequence item");
+        }
+        int last = lastContentLine(lines, target);
+        Node parent = path.length > 1
+                ? find(root, List.of(java.util.Arrays.copyOf(path, path.length - 1))) : null;
+        lines.subList(target.lineIndex, last + 1).clear();
+        if (parent != null && parent.children.size() == 1) {
+            lines.set(parent.lineIndex, rewriteLine(lines.get(parent.lineIndex), "{}"));
+        }
+        return new LosslessYamlDocument(String.join("", lines), data, parseError).reparsed();
+    }
+
+    /**
+     * True when {@code path} may exist where the line tree cannot reach it:
+     * present in the data view, or behind a sequence the data view cannot
+     * address by key — removal there is refused rather than reported done.
+     */
+    private boolean present(String... path) {
+        Object level = data;
+        for (String key : path) {
+            if (level instanceof List<?>) {
+                return true;
+            }
+            if (!(level instanceof Map<?, ?> map) || !map.containsKey(key)) {
+                return false;
+            }
+            level = map.get(key);
+        }
+        return true;
+    }
+
     /** Scalars and sequences of scalars stay on the one-line-diff path. */
     private static boolean isFlat(Object value) {
         if (value instanceof Map<?, ?>) {

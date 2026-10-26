@@ -52,7 +52,8 @@ public final class BackpackMechanic implements Mechanic {
                                 "Inventory rows (1..6)", null, null),
                         new ParameterSchema("title", ParameterType.STRING, false, "Backpack",
                                 "Inventory title", null, null)),
-                "2.0.0");
+                "2.0.0",
+                "Right-clicking with the item opens its storage; contents save when the inventory closes");
     }
 
     @Override

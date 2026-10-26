@@ -13,6 +13,7 @@ async function startFixture(): Promise<void> {
   const adapter = new DeterministicRpcAdapter({
     summaryError: params.has('summaryError'),
     modelGallery: params.has('modelGallery'),
+    guided: params.has('guided'),
   });
   adapter.setPushHandler(handlePush);
   adapter.setDisconnectHandler(() => markConnectionLost('Deterministic browser fixture disconnected.'));
