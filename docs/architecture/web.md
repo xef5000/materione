@@ -69,7 +69,7 @@ One Worker, one D1 database, one cron trigger, one zone — each product has one
 
 | Product | URL / binding | Job |
 |---|---|---|
-| Workers (static assets) | `editor.materione.com` | Serve the editor SPA build (the *same* artifact embedded in the jar) — free, unlimited requests |
+| Workers (static assets) | `editor.materione.com` | Serve the editor SPA build (the *same* artifact embedded in the jar; `_headers` adds the cloud host marker, §6) — free, unlimited requests |
 | Workers (fetch handler) | `editor.materione.com/v1/*` | Relay API: frame mailbox (§3.2) + payload store (§3.1) + quotas (§3.3) |
 | D1 | `editor-relay` | `channels`, `frames`, `blobs` rows — the relay's entire state |
 | Cron Triggers | hourly | TTL sweep of expired channels/frames/blobs (§3.4) |
@@ -669,6 +669,24 @@ cannot read, forge, replay, or reorder anything.
   releases land independently; capabilities (§4.1) let a newer panel hide features the
   connected jar predates instead of surfacing per-call errors. Not yet built: the plugin
   serving "a newer editor is available — refresh" hints when the cached SPA is stale.
+- **Cloud landing & demo (as built, M5):** with no session in the address, the cloud editor shows a
+  landing card (Materione · Web content editor · **View Demo** · "To start a new session, run
+  `/materione editor` in-game") instead of the paste-a-link card; the plugin-served editor keeps
+  the paste-a-link card. Both hosts serve the *same* build (§2, §9), so the switch is a runtime
+  host marker, not a build flag: the SPA fetches the static `/host.json` and reads the
+  `X-Materione-Host: cloud` response header, which only the Workers static-asset `_headers` file
+  attaches. The plugin listener serves the same file without that header, and a failed probe
+  counts as the plugin, so a locally hosted editor can never show the landing card or the demo,
+  even under `?demo`. A capability URL (`?s=…#…`) connects without waiting for the probe.
+  Self-hosted relays (§8) deploy the same assets and get the landing card too. The probe is a static asset:
+  no Worker invocation, nothing billable (§3.3). **View Demo** (`/?demo`) mounts the real Workbench
+  over an in-tab backend, the deterministic RPC adapter the browser regression suite uses
+  (`webui/browser/rpc-adapter.ts`), seeded with a small `demo_pack` (items with vanilla icons, live
+  block models, glyphs, one quarantined resource for Problems). There is no game server, no
+  session and no endpoint: reads and writes are answered from memory, nothing is persisted, a
+  reload starts over, and Exit demo returns to the landing card. The demo code is a lazily loaded
+  chunk, fetched only when the demo starts. The demo is client-side only, so it adds no public
+  endpoint and nothing to the cost model.
 
 ---
 

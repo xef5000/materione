@@ -45,6 +45,37 @@ const BROWSER_COVERS = [
   'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
   'plugin/src/main/java/dev/materione/plugin/runtime/ItemAutoUpdater.java',
 ];
+// The cloud landing card and demo (web.md §6, cloud landing) ride the same SPA build the
+// plugin serves; these entries open that build from the local listener and
+// simulate the Cloudflare `_headers` host marker where the cloud is meant.
+const LANDING_COVERS = [
+  'webui/src/App.svelte',
+  'webui/src/lib/host.ts',
+  'webui/src/lib/demo.ts',
+  'webui/src/lib/components/Landing.svelte',
+  'webui/src/lib/components/Login.svelte',
+  'webui/browser/rpc-adapter.ts',
+  'webui/public/_headers',
+  'webui/public/host.json',
+  'webui/test-support/qa-browser.mjs',
+  'web/src/main/java/dev/materione/web/EditorListener.java',
+];
+
+async function serveLikeCloud(page) {
+  await page.route('**/host.json', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    headers: { 'X-Materione-Host': 'cloud' },
+    body: '{}',
+  }));
+}
+
+async function openListenerRoot(ctx, search = '') {
+  const page = await ctx.browser.openEditor();
+  const origin = new URL(page.url()).origin;
+  return { page, root: `${origin}/${search}` };
+}
+
 const CATALOG_COVERS = [
   ...BROWSER_COVERS,
   'webui/src/lib/api.ts',
@@ -605,6 +636,70 @@ export default [
       await ctx.waitForServerLog(/all trusted workstations revoked/);
       await ctx.rcon('materione editor revoke zz');
       await ctx.waitForServerLog(/no trusted workstation starts with zz/);
+    },
+  }),
+  test({
+    id: 'editor.browser-plugin-keeps-login',
+    title: 'the plugin-served editor root (and ?demo) keeps the paste-a-link card: no landing, no demo, no host marker',
+    covers: LANDING_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const { page, root } = await openListenerRoot(ctx, '?demo');
+      await page.goto(root, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { name: 'Open a session' }).waitFor({ state: 'visible', timeout: 15_000 });
+      ctx.expect(await page.getByRole('button', { name: 'View Demo' }).count()).toBe(0);
+      ctx.expect(await page.getByText('Sample content in this tab only').count()).toBe(0);
+      const marker = await page.evaluate(async () =>
+        (await fetch('/host.json', { cache: 'no-store' })).headers.get('X-Materione-Host'));
+      ctx.expect(marker).toBe(null);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-cloud-landing-demo',
+    title: 'with the cloud host marker the same build shows the Materione landing card, and View Demo opens demo_pack client-side',
+    covers: LANDING_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const { page, root } = await openListenerRoot(ctx);
+      await serveLikeCloud(page);
+      const backendCalls = [];
+      page.on('request', (request) => {
+        const path = new URL(request.url()).pathname;
+        if (path.startsWith('/s/') || path.startsWith('/v1/') || path === '/editor/ws') backendCalls.push(path);
+      });
+      await page.goto(root, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('heading', { level: 1, name: 'Materione' }).waitFor({ state: 'visible', timeout: 15_000 });
+      ctx.expect(await page.getByText('Web content editor', { exact: true }).count()).toBe(1);
+      ctx.expect(await page.getByText('To start a new session, run /materione editor in-game').count()).toBe(1);
+      await page.getByRole('button', { name: 'View Demo' }).click();
+      await page.getByText('Sample content in this tab only').waitFor({ state: 'visible', timeout: 15_000 });
+      await page.getByRole('navigation', { name: 'Workspace navigation' }).waitFor({ state: 'visible' });
+      ctx.expect(await page.getByRole('combobox').first().inputValue()).toBe('demo_pack');
+      ctx.expect(new URL(page.url()).search).toBe('?demo');
+      ctx.expect(backendCalls.length).toBe(0);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-cloud-landing-visual',
+    title: 'the cloud landing card and the demo_pack workbench read as the Materione editor',
+    mode: 'visual',
+    dependsOn: ['editor.browser-cloud-landing-demo'],
+    covers: LANDING_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const { page, root } = await openListenerRoot(ctx);
+      await serveLikeCloud(page);
+      await page.goto(root, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'View Demo' }).waitFor({ state: 'visible', timeout: 15_000 });
+      await ctx.browser.browserShot('cloud-landing', 'main');
+      await page.getByRole('button', { name: 'View Demo' }).click();
+      await page.getByText('Sample content in this tab only').waitFor({ state: 'visible', timeout: 15_000 });
+      await ctx.browser.browserShot('cloud-demo-workbench', 'main');
+      ctx.needsEyes(
+        'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with demo_pack selected and sample items (Ruby Blade, Storm Axe, ...) in Content',
+      );
     },
   }),
 ];

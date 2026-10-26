@@ -7,3 +7,9 @@
 
 /blockbench/*
   Cache-Control: public, max-age=604800
+
+# Host marker (web.md §6, cloud landing): the SPA reads this header to show the cloud
+# landing card and demo. The plugin listener serves the same file without it.
+/host.json
+  X-Materione-Host: cloud
+  Cache-Control: no-cache
