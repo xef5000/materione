@@ -389,6 +389,35 @@ class AuthoringApiImplTest {
     }
 
     @Test
+    void parsedViewKeepsTheBareEcaOnKey() {
+        // SnakeYAML loads a bare `on:` as boolean true; the editor must still
+        // see "on" (it rendered "On no event" when the key arrived as "true")
+        Path packsRoot = temp.resolve("packs");
+        DocumentStore documents = new DocumentStore(packsRoot, temp.resolve("revisions"));
+        AuthoringApiImpl api = new AuthoringApiImpl(
+                documents, new AuditLog(temp.resolve("audit.log")), packsRoot,
+                new ModelTransactionService(documents, packsRoot, new AuditLog(temp.resolve("audit.log"))),
+                (pack, path, parsed) -> null, () -> null, reloads);
+        api.createPack(editor(), "demo").value();
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "blocks/lamp.yml", 0,
+                """
+                lamp:
+                  behavior:
+                    - on: interact
+                      do:
+                        - message: hi
+                """));
+
+        AuthoringApi.DocumentView view = api.getDocument("demo", "blocks/lamp.yml").value();
+
+        var lamp = (java.util.Map<?, ?>) view.parsed().get("lamp");
+        var rule = (java.util.Map<?, ?>) ((java.util.List<?>) lamp.get("behavior")).get(0);
+        assertThat(List.<Object>copyOf(rule.keySet())).containsExactly("on", "do");
+        assertThat(rule.get("on")).isEqualTo("interact");
+    }
+
+    @Test
     void summariesReadEveryCanonicalRootResolveCrossPackAssetsAndRemainReadOnly() throws Exception {
         Path packsRoot = temp.resolve("packs");
         Path demo = packsRoot.resolve("demo");

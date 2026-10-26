@@ -334,7 +334,10 @@ pushes to every editor; editor saves echo back unchanged because their write
 already journaled). *M4 media addition:* `browse.get` responses for glyph
 documents carry a read-only `computed` block — the server-allocated codepoint
 (the durable allocation table is the truth; the file on disk never contains it,
-and the studio preview renders it). Asset uploads are capped per extension:
+and the studio preview renders it). The `parsed` tree in `browse.get` (and in
+every write's returned view) is string-keyed at every depth: YAML-1.1 boolean
+keys come back as the text the runtime reads (`on`/`off`), so a bare ECA `on:`
+reaches the rule editor as `on`, not `"true"`. Asset uploads are capped per extension:
 2 MiB for textures/models, 8 MiB for audio (`ogg`/`oga`) — bigger sources wait
 for M5's chunk flow. Still illustrative-only:
 where-used graph, import pack, pre-apply report / apply confirm, preview renders,

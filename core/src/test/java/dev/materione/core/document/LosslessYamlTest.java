@@ -125,6 +125,22 @@ class LosslessYamlTest {
     }
 
     @Test
+    void booleanKeysNormalizeAtEveryDepth() {
+        // ECA rules sit below the entry: entry.behavior[i].on — the editor's
+        // parsed view needs the rescue at depth, not just one level down
+        Object tree = LosslessYaml.stringKeyedDeep(LosslessYaml.parse(
+                """
+                lamp:
+                  behavior:
+                    - on: interact
+                      do:
+                        - message: hi
+                """).data());
+        assertThat(tree).isEqualTo(Map.of("lamp", Map.of("behavior", List.of(
+                Map.of("on", "interact", "do", List.of(Map.of("message", "hi")))))));
+    }
+
+    @Test
     void listValuesRenderAsBlockSequencesAndReplaceTheirOwnRange() {
         // Insert where the key does not exist yet.
         String inserted = LosslessYaml.parse("item:\n  material: PAPER\n")
