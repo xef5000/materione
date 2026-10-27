@@ -124,56 +124,56 @@
 <style>
   .abilities {
     display: grid;
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
     min-width: 0;
   }
   h3 {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: normal;
     color: var(--muted);
   }
   .card {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
     min-width: 0;
   }
   header {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: var(--space-2);
     min-width: 0;
   }
   header strong {
-    font-size: 13px;
+    font-size: var(--text-base);
   }
   .origin {
     flex: 1;
     min-width: 0;
     color: var(--faint);
-    font-size: 11px;
+    font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   .remove,
-  .add button {
+  .add button:not(.btn) {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 2px 8px;
-    font-size: 12px;
+    padding: var(--space-half) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
   }
   .description,
   .activation,
   .note,
   .preview {
-    margin: 4px 0 8px;
-    font-size: 12px;
+    margin: var(--space-1) 0 var(--space-2);
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .activation span {
@@ -185,14 +185,14 @@
   .add {
     display: flex;
     align-items: end;
-    gap: 6px;
+    gap: var(--space-2);
   }
   .add label {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     flex: 1;
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   select {
@@ -200,8 +200,8 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 5px 8px;
-    font-size: 13px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-base);
     min-width: 0;
   }
   .activation-inline {

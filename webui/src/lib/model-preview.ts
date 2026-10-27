@@ -1,4 +1,5 @@
 import { assetOps, unwrap } from './api';
+import { token } from './tokens';
 import type { RpcChannel } from './api';
 import {
   flatLayers,
@@ -130,8 +131,10 @@ async function textureFrame(
   context.drawImage(image, 0, 0, width, height, 0, 0, width, height);
   if (shade < 1) {
     context.globalCompositeOperation = 'source-atop';
-    context.fillStyle = `rgba(0, 0, 0, ${(1 - shade).toFixed(3)})`;
+    context.globalAlpha = 1 - shade;
+    context.fillStyle = token('--preview-shade');
     context.fillRect(0, 0, width, height);
+    context.globalAlpha = 1;
   }
   return frame;
 }
@@ -145,9 +148,9 @@ function placeholder(): HTMLCanvasElement {
   placeholderCanvas.width = 2;
   placeholderCanvas.height = 2;
   const context = placeholderCanvas.getContext('2d')!;
-  context.fillStyle = '#8b8b8b';
+  context.fillStyle = token('--preview-missing-a');
   context.fillRect(0, 0, 2, 2);
-  context.fillStyle = '#6f6f6f';
+  context.fillStyle = token('--preview-missing-b');
   context.fillRect(0, 0, 1, 1);
   context.fillRect(1, 1, 1, 1);
   return placeholderCanvas;

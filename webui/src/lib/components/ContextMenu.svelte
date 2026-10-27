@@ -26,9 +26,10 @@
   });
 </script>
 
-<div class="menu" style:left="{x}px" style:top="{y}px" role="menu">
+<div class="menu context-menu" style:left="{x}px" style:top="{y}px" role="menu">
   {#each items as item (item.label)}
     <button
+      class="menu-item"
       class:danger={item.danger}
       role="menuitem"
       onclick={(event) => {
@@ -43,32 +44,11 @@
 </div>
 
 <style>
-  .menu {
+  .context-menu {
     position: fixed;
     z-index: 70;
-    min-width: 160px;
-    background: var(--bg-panel);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 4px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   }
-  .menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: none;
-    border: none;
-    color: inherit;
-    font-size: 12.5px;
-    padding: 5px 10px;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  .menu button:hover {
-    background: var(--bg-raised);
-  }
-  .menu button.danger {
+  .menu-item.danger {
     color: var(--error);
   }
 </style>

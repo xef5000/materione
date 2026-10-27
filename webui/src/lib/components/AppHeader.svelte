@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Chip from '../ui/Chip.svelte';
   import PromptDialog from './PromptDialog.svelte';
   import { ops, unwrap } from '../api';
   import {
@@ -21,17 +22,18 @@
       delivery.candidateSha256 !== delivery.publishedSha256,
   );
 
-  const release = $derived(
+  type ReleaseTone = 'neutral' | 'warn' | 'ok';
+  const release = $derived<{ label: string; tone: ReleaseTone }>(
     !delivery.loaded
       ? {
           label: delivery.error ? 'Status unavailable' : 'Checking status',
-          tone: 'idle',
+          tone: 'neutral',
         }
       : hasUnpublishedCandidate
-        ? { label: 'Candidate available', tone: 'ready' }
+        ? { label: 'Candidate available', tone: 'warn' }
         : delivery.publishedSha256
-          ? { label: 'Published', tone: 'live' }
-          : { label: 'Not published', tone: 'idle' },
+          ? { label: 'Published', tone: 'ok' }
+          : { label: 'Not published', tone: 'neutral' },
   );
 
   function releaseDetails(): string {
@@ -97,21 +99,21 @@
         {/each}
       </select>
     {/if}
-    <button class="ghost" disabled={busy} onclick={() => (newProject = true)}>
+    <button class="btn" disabled={busy} onclick={() => (newProject = true)}>
       New project
     </button>
   </div>
 
   <div class="guidance">
-    <span class="brand">materione</span>
+    <span class="brand"><img src="/materione-logo.svg" alt="" width="16" height="16" />materione</span>
     <p>Save &amp; apply changes gameplay server-wide. Publish pack releases the resource pack to other players.</p>
   </div>
 
   <div class="release">
     <div class="release-status">
-      <span class="chip {release.tone}" title={releaseDetails()} aria-live="polite">
+      <Chip tone={release.tone} title={releaseDetails()} aria-live="polite">
         {release.label}
-      </span>
+      </Chip>
       {#if delivery.loaded && delivery.candidateSha256}
         <code title={`Candidate SHA-256 ${delivery.candidateSha256}`}>
           candidate {shortHash(delivery.candidateSha256)}
@@ -124,7 +126,7 @@
       {/if}
     </div>
     <button
-      class="primary"
+      class="btn btn-primary"
       disabled={busy || !hasUnpublishedCandidate || !session.channel}
       title={!delivery.loaded
         ? 'Pack status is not verified; publishing is unavailable.'
@@ -154,14 +156,14 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(220px, 1.5fr) minmax(0, 1fr);
     align-items: stretch;
-    gap: 14px;
-    padding: 6px 12px;
+    gap: var(--space-4);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     background: var(--bg-panel);
   }
   .packs {
     display: flex;
-    gap: 6px;
+    gap: var(--space-2);
     align-items: center;
     min-width: 0;
   }
@@ -170,8 +172,8 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 3px 6px;
-    font-size: 12.5px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     max-width: 220px;
   }
   .guidance {
@@ -180,25 +182,33 @@
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 1px;
+    gap: var(--space-half);
     text-align: center;
   }
   .brand {
+    display: inline-flex;
     flex: none;
-    font-size: 12px;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    font-weight: 600;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted);
+  }
+  .brand img {
+    display: block;
+    border-radius: var(--radius-sm);
   }
   .guidance p {
     margin: 0;
     color: var(--muted);
-    font-size: 10.5px;
+    font-size: var(--text-xs);
     line-height: 1.3;
   }
   .release {
     display: flex;
-    gap: 10px;
+    gap: var(--space-3);
     align-items: center;
     justify-content: flex-end;
     min-width: 0;
@@ -208,61 +218,22 @@
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    gap: 2px;
-  }
-  .chip {
-    max-width: 100%;
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: 999px;
-    border: 1px solid var(--border-strong);
-    color: var(--muted);
-    white-space: nowrap;
-  }
-  .chip.ready {
-    color: var(--warn, var(--accent));
-    border-color: currentColor;
-  }
-  .chip.live {
-    color: var(--ok);
-    border-color: currentColor;
+    gap: var(--space-half);
   }
   .release-status code {
     max-width: 100%;
     overflow: hidden;
     color: var(--faint);
     font-family: var(--mono);
-    font-size: 9px;
+    font-size: var(--text-xs);
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-  button {
-    border: 1px solid var(--border-strong);
-    background: none;
-    color: inherit;
-    border-radius: var(--radius);
-    padding: 3px 10px;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  button:hover:not(:disabled) {
-    background: var(--bg-hover);
-  }
-  .primary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-  }
-  button:disabled {
-    opacity: 0.45;
-    cursor: default;
   }
   @media (max-width: 900px) {
     .appheader {
       display: flex;
       flex-wrap: wrap;
-      gap: 8px 12px;
+      gap: var(--space-2) var(--space-3);
     }
     .packs {
       flex: 1 1 40%;
@@ -282,7 +253,7 @@
   }
   @media (max-width: 560px) {
     .appheader {
-      padding-inline: 8px;
+      padding-inline: var(--space-2);
     }
     .packs {
       flex-basis: 100%;
@@ -292,7 +263,7 @@
       max-width: none;
     }
     .guidance p {
-      font-size: 10px;
+      font-size: var(--text-xs);
     }
     .release {
       flex: 1 1 100%;

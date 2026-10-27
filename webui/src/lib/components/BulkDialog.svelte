@@ -23,6 +23,7 @@
   } from '../bulk';
   import { readRevisions } from '../bulk-io';
   import { errorMessage, logActivity, refreshPack, session, workspace } from '../state.svelte';
+  import Dialog from '../ui/Dialog.svelte';
 
   type Mode =
     | { kind: 'field'; type: string; targets: (BulkTarget & { name: string })[] }
@@ -142,12 +143,6 @@
     }
   }
 
-  function onKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      event.stopPropagation();
-      onClose();
-    }
-  }
 
   const labelOf = (path: string): string => {
     if (mode.kind === 'field') {
@@ -160,23 +155,18 @@
     mode.kind === 'field' ? Boolean(field) && (remove || value !== '' || field?.type === 'string') : names.trim() !== '',
   );
   const changedCount = $derived(preview?.documents.filter((doc) => !doc.unchanged).length ?? 0);
+  const headline = $derived(
+    mode.kind === 'field'
+      ? `Change a field on ${mode.targets.length} ${mode.targets.length === 1 ? 'resource' : 'resources'}`
+      : `Variants of ${mode.source.name}`,
+  );
 </script>
 
-<svelte:window onkeydown={onKey} />
-
-<div class="scrim" role="presentation">
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="bulk-title">
-    <h3 id="bulk-title">
-      {#if mode.kind === 'field'}
-        Change a field on {mode.targets.length} {mode.targets.length === 1 ? 'resource' : 'resources'}
-      {:else}
-        Variants of {mode.source.name}
-      {/if}
-    </h3>
+<Dialog title={headline} onClose={onClose} width="560px" dismissOnScrim={false}>
 
     {#if mode.kind === 'field'}
-      <label>
-        <span>Field</span>
+      <label class="field">
+        <span class="field-label">Field</span>
         <select bind:value={fieldId} bind:this={firstInput} onchange={invalidate}>
           <option value="" disabled>choose a field…</option>
           {#each fields as param (param.id)}
@@ -190,8 +180,8 @@
           <span>Remove the field instead (resources fall back to what they inherit, or the default)</span>
         </label>
         {#if !remove}
-          <label>
-            <span>New value</span>
+          <label class="field">
+            <span class="field-label">New value</span>
             {#if field.allowedValues?.length}
               <select bind:value={value} onchange={invalidate}>
                 <option value="" disabled>choose…</option>
@@ -210,8 +200,8 @@
         {/if}
       {/if}
     {:else}
-      <label>
-        <span>One variant per line — “Name” or “Name = value”</span>
+      <label class="field">
+        <span class="field-label">One variant per line — “Name” or “Name = value”</span>
         <textarea
           rows="5"
           bind:value={names}
@@ -221,8 +211,8 @@
           placeholder={'Ruby Blade\nSapphire Blade = item/sapphire_blade'}
         ></textarea>
       </label>
-      <label>
-        <span>Field set by “= value” (optional)</span>
+      <label class="field">
+        <span class="field-label">Field set by “= value” (optional)</span>
         <select bind:value={fieldId} onchange={invalidate}>
           <option value="">none — copies keep the source's values</option>
           {#each fields as param (param.id)}
@@ -267,73 +257,91 @@
       </section>
     {/if}
 
-    <div class="actions">
-      <button type="button" class="ghost" onclick={onClose}>Cancel</button>
-      <button type="button" class="ghost" disabled={busy || !canPreview} onclick={() => void run(false)}>
+    <div class="dialog-actions">
+      <button type="button" class="btn" onclick={onClose}>Cancel</button>
+      <button type="button" class="btn" disabled={busy || !canPreview} onclick={() => void run(false)}>
         Preview changes
       </button>
       <button
         type="button"
-        class="primary"
+        class="btn btn-primary"
         disabled={busy || !preview || changedCount === 0}
         onclick={() => void run(true)}
       >
         Apply to {changedCount} {changedCount === 1 ? 'document' : 'documents'}
       </button>
     </div>
-  </div>
-</div>
+</Dialog>
 
 <style>
-  .scrim {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    display: grid;
-    place-items: center;
-    z-index: 60;
+  label.field {
+    margin-bottom: var(--space-3);
   }
-  .dialog {
-    width: min(560px, calc(100vw - 48px));
-    max-height: calc(100vh - 64px);
-    overflow-y: auto;
-    background: var(--bg-panel);
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius-lg);
-    padding: 16px 18px;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  }
-  h3 { margin: 0 0 10px; font-size: 14px; }
-  label { display: block; margin-bottom: 10px; }
-  label > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-  label.check { display: flex; gap: 8px; align-items: flex-start; }
-  label.check span { margin: 0; }
-  input:not([type='checkbox']), select, textarea {
+  .field > input:not([type='checkbox']),
+  .field > select,
+  .field > textarea {
     width: 100%;
-    box-sizing: border-box;
-    background: var(--bg-input);
-    color: inherit;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    padding: 7px 9px;
-    font: 13px var(--mono);
   }
-  textarea { resize: vertical; }
-  .error, .problems { color: var(--danger, #e5484d); font-size: 12px; margin: 6px 0; }
-  .problems { padding-left: 18px; }
-  .impact { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; }
-  .headline { margin: 0 0 6px; font-size: 12.5px; }
-  .impact ul { list-style: none; margin: 0; padding: 0; max-height: 220px; overflow-y: auto; }
-  .impact li { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 3px 0; font-size: 12px; min-width: 0; }
-  .impact li.same { opacity: 0.6; }
-  .doc { font-weight: 600; }
-  .diff { font-family: var(--mono); overflow-wrap: anywhere; }
-  .muted { color: var(--faint); }
-  del { color: var(--muted); }
-  ins { text-decoration: none; color: var(--accent); }
-  .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-  button { border-radius: var(--radius); padding: 5px 14px; cursor: pointer; font-size: 12.5px; }
-  .primary { background: var(--primary); border: none; color: white; }
-  .ghost { background: none; border: 1px solid var(--border-strong); color: inherit; }
-  button:disabled { opacity: 0.5; cursor: default; }
+  textarea {
+    resize: vertical;
+  }
+  label.check {
+    display: flex;
+    gap: var(--space-2);
+    align-items: flex-start;
+    margin-bottom: var(--space-3);
+  }
+  .error,
+  .problems {
+    margin: var(--space-2) 0;
+    color: var(--error);
+    font-size: var(--text-sm);
+  }
+  .problems {
+    padding-left: var(--space-5);
+  }
+  .impact {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--border);
+  }
+  .headline {
+    margin: 0 0 var(--space-2);
+    font-size: var(--text-sm);
+  }
+  .impact ul {
+    max-height: 220px;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    list-style: none;
+  }
+  .impact li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1) var(--space-3);
+    min-width: 0;
+    padding: var(--space-1) 0;
+    font-size: var(--text-sm);
+  }
+  .impact li.same {
+    opacity: 0.6;
+  }
+  .doc {
+    font-weight: 600;
+  }
+  .diff {
+    font-family: var(--mono);
+    overflow-wrap: anywhere;
+  }
+  .muted {
+    color: var(--faint);
+  }
+  del {
+    color: var(--muted);
+  }
+  ins {
+    color: var(--accent);
+    text-decoration: none;
+  }
 </style>

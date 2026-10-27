@@ -214,21 +214,21 @@
   .offline {
     background: var(--warn-bg);
     color: var(--warn);
-    padding: 8px 14px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-base);
   }
-  .offline button { margin-left: 12px; }
+  .offline button:not(.btn) { margin-left: var(--space-3); }
   .demo-banner {
     background: var(--bg-raised);
     border-bottom: 1px solid var(--border);
     color: var(--muted);
-    padding: 6px 14px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-base);
   }
   .demo-banner strong {
     color: var(--accent);
-    margin-right: 6px;
+    margin-right: var(--space-2);
   }
-  .demo-banner button { margin-left: 12px; }
+  .demo-banner button:not(.btn) { margin-left: var(--space-3); }
   .reconnect { max-height: 55vh; overflow: auto; flex: none; }
 </style>

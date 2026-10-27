@@ -12,6 +12,7 @@
   import { assetOps, RpcError, unwrap } from '../api';
   import { connection, errorMessage, logActivity, session } from '../state.svelte';
   import { sameAssetSnapshot, type AssetSnapshot } from '../studio';
+  import { token } from '../tokens';
   import {
     History,
     applyRatio,
@@ -85,7 +86,7 @@
 
   let bitmap = $state<Bitmap>(createBitmap(16, 16));
   let tool = $state<Tool>('pencil');
-  let hex = $state('#c94f4f');
+  let hex = $state(token('--paint-default'));
   let alpha = $state(255);
   let size = $state(1);
   let mirror = $state(false);
@@ -276,9 +277,11 @@
 
     // Checkerboard, so transparency reads as transparency and not as white.
     const square = Math.max(4, scale);
+    const checkerA = token('--checker-a');
+    const checkerB = token('--checker-b');
     for (let y = 0; y < source.height * scale; y += square) {
       for (let x = 0; x < source.width * scale; x += square) {
-        context.fillStyle = ((x / square + y / square) | 0) % 2 === 0 ? '#1a1e26' : '#151920';
+        context.fillStyle = ((x / square + y / square) | 0) % 2 === 0 ? checkerA : checkerB;
         context.fillRect(offset.x + x, offset.y + y, square, square);
       }
     }
@@ -298,7 +301,7 @@
     );
 
     if (scale >= 8) {
-      context.strokeStyle = 'rgba(255,255,255,0.06)';
+      context.strokeStyle = token('--canvas-grid');
       context.lineWidth = 1;
       context.beginPath();
       for (let x = 0; x <= source.width; x++) {
@@ -313,7 +316,7 @@
     }
 
     if (hover) {
-      context.strokeStyle = 'rgba(255,255,255,0.75)';
+      context.strokeStyle = token('--canvas-hover');
       context.strokeRect(
         offset.x + hover.x * scale + 0.5,
         offset.y + hover.y * scale + 0.5,
@@ -328,12 +331,12 @@
       const markY = offset.y + mark.y * scale;
       const markW = mark.width * scale;
       const markH = mark.height * scale;
-      context.fillStyle = 'rgba(0,0,0,0.5)';
+      context.fillStyle = token('--canvas-dim');
       context.beginPath();
       context.rect(0, 0, element.width, element.height);
       context.rect(markX, markY, markW, markH);
       context.fill('evenodd');
-      context.strokeStyle = '#fff';
+      context.strokeStyle = token('--canvas-mark');
       context.lineWidth = 1;
       context.setLineDash([4, 3]);
       context.strokeRect(markX + 0.5, markY + 0.5, markW - 1, markH - 1);
@@ -690,9 +693,9 @@
       Import
       <input type="file" accept="image/png" onchange={importPng} disabled={!active || !canEdit} hidden />
     </label>
-    <button type="button" class="ghost" onclick={exportPng} disabled={!canEdit}>Export</button>
-    <button type="button" class="ghost" onclick={close}>Close</button>
-    <button type="button" class="primary" onclick={save} disabled={!active || !canEdit || !dirty || saving}>
+    <button type="button" class="btn" onclick={exportPng} disabled={!canEdit}>Export</button>
+    <button type="button" class="btn" onclick={close}>Close</button>
+    <button type="button" class="btn btn-primary" onclick={save} disabled={!active || !canEdit || !dirty || saving}>
       {saving ? 'Saving…' : 'Save & apply'}
     </button>
   </header>
@@ -795,7 +798,7 @@
             <button type="button" class="apply" onclick={applyCrop} title="apply (Enter)">
               Crop
             </button>
-            <button type="button" class="ghost" onclick={cancelCrop} title="cancel (Esc)">
+            <button type="button" class="btn" onclick={cancelCrop} title="cancel (Esc)">
               Cancel
             </button>
           </div>
@@ -907,13 +910,13 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 6px;
-    padding: 6px 10px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     min-width: 0;
   }
   .title {
-    font-size: 13px;
+    font-size: var(--text-base);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -922,7 +925,7 @@
   }
   .dims,
   .new {
-    font: 11px var(--mono);
+    font: var(--text-xs) var(--mono);
     color: var(--faint);
     white-space: nowrap;
   }
@@ -933,29 +936,21 @@
     flex: 1;
     min-width: 0;
   }
-  header button,
+  header button:not(.btn),
   header .ghost {
     background: none;
     border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: var(--radius);
-    padding: 3px 9px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
     white-space: nowrap;
   }
-  header button:disabled {
+  header button:not(.btn):disabled {
     color: var(--faint);
     border-color: var(--border);
     cursor: default;
-  }
-  header .primary {
-    background: var(--primary);
-    border-color: transparent;
-    color: #fff;
-  }
-  header .primary:disabled {
-    background: none;
   }
   .work {
     display: grid;
@@ -968,20 +963,20 @@
   .tools {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 6px 4px;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-1);
     border-right: 1px solid var(--border);
   }
-  .tools button {
+  .tools button:not(.btn) {
     height: 28px;
     background: none;
     border: 1px solid transparent;
     border-radius: var(--radius);
     color: var(--muted);
-    font-size: 14px;
+    font-size: var(--text-md);
     cursor: pointer;
   }
-  .tools button.active {
+  .tools button:not(.btn).active {
     background: var(--bg-raised);
     border-color: var(--border-strong);
     color: var(--fg);
@@ -999,8 +994,8 @@
   .settings {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 8px;
+    gap: var(--space-2);
+    padding: var(--space-2);
     border-left: 1px solid var(--border);
     overflow-y: auto;
     overflow-x: hidden;
@@ -1019,8 +1014,8 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: inherit;
-    font: 12px var(--mono);
-    padding: 4px 6px;
+    font: var(--text-sm) var(--mono);
+    padding: var(--space-1) var(--space-2);
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -1028,8 +1023,8 @@
   .range {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
     color: var(--faint);
     min-width: 0;
   }
@@ -1038,35 +1033,35 @@
     min-width: 0;
   }
   .group {
-    font-size: 10px;
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--faint);
-    margin-top: 4px;
+    margin-top: var(--space-1);
   }
   .swatches {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(20px, 1fr));
-    gap: 4px;
+    gap: var(--space-1);
   }
-  .swatches button {
+  .swatches button:not(.btn) {
     aspect-ratio: 1;
     border: 1px solid var(--border-strong);
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     padding: 0;
   }
   .nums {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: 4px 6px;
+    gap: var(--space-1) var(--space-2);
   }
   .nums label,
   .dims-input {
     display: flex;
     align-items: center;
-    gap: 4px;
-    font: 11px var(--mono);
+    gap: var(--space-1);
+    font: var(--text-xs) var(--mono);
     color: var(--faint);
     min-width: 0;
   }
@@ -1077,8 +1072,8 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: inherit;
-    font: 11px var(--mono);
-    padding: 3px 4px;
+    font: var(--text-xs) var(--mono);
+    padding: var(--space-1) var(--space-1);
     box-sizing: border-box;
   }
   .dims-input {
@@ -1090,38 +1085,38 @@
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-1);
   }
-  .chips button {
+  .chips button:not(.btn) {
     flex: 1;
     min-width: 0;
     background: none;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: var(--muted);
-    font-size: 11px;
-    padding: 3px 4px;
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-1);
     cursor: pointer;
     white-space: nowrap;
   }
-  .chips button.active {
+  .chips button:not(.btn).active {
     color: var(--fg);
     background: var(--bg-raised);
     border-color: var(--accent);
   }
   .actions {
     display: flex;
-    gap: 4px;
+    gap: var(--space-1);
   }
   .actions .apply,
   .apply {
     flex: 1;
-    background: var(--primary);
+    background: var(--accent);
     border: 1px solid transparent;
     border-radius: var(--radius);
-    color: #fff;
-    font-size: 12px;
-    padding: 4px 0;
+    color: var(--accent-ink);
+    font-size: var(--text-sm);
+    padding: var(--space-1) 0;
     cursor: pointer;
   }
   .apply:disabled {
@@ -1130,28 +1125,17 @@
     color: var(--faint);
     cursor: default;
   }
-  .actions .ghost,
-  .settings .ghost {
-    background: none;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    color: var(--muted);
-    font-size: 12px;
-    padding: 4px 8px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
   .picked {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 11px;
+    gap: var(--space-2);
+    font-size: var(--text-xs);
     min-width: 0;
   }
   .picked .swatch {
     width: 18px;
     height: 18px;
-    border-radius: 3px;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
     flex: none;
   }
@@ -1163,25 +1147,25 @@
   }
   .hint {
     margin: 0;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--faint);
   }
   .error {
     margin: 0;
     flex: none;
-    padding: 6px 10px;
+    padding: var(--space-2) var(--space-3);
     background: var(--error-bg);
     color: var(--error);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .loading {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .source-note {
     margin: 0;
-    padding: 4px 10px;
+    padding: var(--space-1) var(--space-3);
     color: var(--faint);
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
 </style>

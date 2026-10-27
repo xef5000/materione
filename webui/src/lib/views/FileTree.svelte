@@ -299,33 +299,33 @@
   .filter {
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 8px;
+    margin-bottom: var(--space-2);
     background: var(--bg-input);
     color: inherit;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
   }
-  .row button.label {
+  .row button:not(.btn).label {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     width: 100%;
     background: none;
     border: none;
     color: inherit;
-    font-size: 12.5px;
-    padding: 3px 6px;
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-2);
     border-radius: var(--radius);
     cursor: pointer;
     text-align: left;
   }
-  .row button.label:hover {
+  .row button:not(.btn).label:hover {
     background: var(--bg-hover);
   }
   .sub .label {
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   /* The icons are Lucide's svgs (see Icon.svelte), so they are targeted globally. */
   :global(svg.file-icon) {
@@ -348,7 +348,7 @@
   .empty {
     color: var(--faint);
     font-style: italic;
-    font-size: 12px;
-    padding: 4px 8px;
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-2);
   }
 </style>

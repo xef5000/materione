@@ -379,11 +379,11 @@
     </span>
     <span class="status">{error ? '' : status}</span>
     <span class="spacer"></span>
-    <button type="button" class="ghost" onclick={() => (advanced = !advanced)}>
+    <button type="button" class="btn" onclick={() => (advanced = !advanced)}>
       Targets <Icon name={advanced ? 'chevron-up' : 'chevron-down'} size={14} />
     </button>
-    <button type="button" class="ghost" onclick={close}>Close</button>
-    <button type="button" class="primary" disabled={!active || !ready || !modelReady || saving} onclick={save}>
+    <button type="button" class="btn" onclick={close}>Close</button>
+    <button type="button" class="btn btn-primary" disabled={!active || !ready || !modelReady || saving} onclick={save}>
       {saving ? 'Saving…' : 'Save & apply'}
     </button>
   </header>
@@ -426,19 +426,19 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
-    padding: 6px 10px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     min-width: 0;
   }
   .what {
-    font-size: 11px;
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--faint);
   }
   .owner {
-    font-size: 13px;
+    font-size: var(--text-base);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -446,7 +446,7 @@
     min-width: 0;
   }
   .status {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -457,43 +457,24 @@
     flex: 1;
     min-width: 0;
   }
-  button {
-    border: 1px solid var(--border-strong);
-    background: none;
-    color: inherit;
-    border-radius: var(--radius);
-    padding: 4px 11px;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  button.primary {
-    background: var(--primary);
-    border-color: transparent;
-    color: #fff;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
   .targets {
     display: grid;
     flex: none;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, auto);
-    gap: 8px 14px;
+    gap: var(--space-2) var(--space-4);
     align-items: end;
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
   }
   .targets label {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--muted);
     min-width: 0;
   }
   .targets label.check {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
     white-space: nowrap;
   }
   .targets input:not([type='checkbox']) {
@@ -504,9 +485,9 @@
     color: var(--fg);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 4px 6px;
-    font: 12px var(--mono);
-    margin-top: 3px;
+    padding: var(--space-1) var(--space-2);
+    font: var(--text-sm) var(--mono);
+    margin-top: var(--space-1);
     min-width: 0;
   }
   iframe {
@@ -514,14 +495,14 @@
     min-height: 0;
     width: 100%;
     border: none;
-    background: #1e1e26;
+    background: var(--bg-raised);
   }
   .error {
     margin: 0;
     flex: none;
-    padding: 6px 10px;
+    padding: var(--space-2) var(--space-3);
     background: var(--error-bg);
     color: var(--error);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
 </style>

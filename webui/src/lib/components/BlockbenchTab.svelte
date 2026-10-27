@@ -503,7 +503,7 @@
       />
     </label>
     <button
-      class="primary"
+      class="btn btn-primary"
       disabled={!active || !bridgeReady || !projectReady || !connection.connected || !session.channel || busy}
       onclick={() => void collect()}
     >
@@ -616,7 +616,7 @@
 
         <footer>
           <button disabled={saving} onclick={() => (dialog = false)}>cancel</button>
-          <button class="primary" disabled={!active || saving} onclick={() => void doSave()}>
+          <button class="btn btn-primary" disabled={!active || saving} onclick={() => void doSave()}>
             {saving ? 'Saving…' : 'Save & apply'}
           </button>
         </footer>
@@ -630,7 +630,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
     height: 100%;
     box-sizing: border-box;
     display: flex;
@@ -640,15 +640,15 @@
   header {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--space-3);
   }
   h2 {
     margin: 0 auto 0 0;
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
   .meta {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .spacer {
     flex: 1;
@@ -656,10 +656,10 @@
   iframe {
     flex: 1;
     min-height: 480px;
-    margin-top: 10px;
+    margin-top: var(--space-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    background: #1e1e26;
+    background: var(--bg-raised);
     width: 100%;
   }
   .connection-cover {
@@ -668,27 +668,22 @@
     z-index: 4;
     display: grid;
     place-items: center;
-    padding: 24px;
+    padding: var(--space-6);
     background: var(--bg-app);
     color: var(--muted);
     text-align: center;
   }
-  button,
+  button:not(.btn),
   .ghost {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 4px 12px;
+    padding: var(--space-1) var(--space-3);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
-  button.primary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-  }
-  button:disabled {
+  button:not(.btn):disabled {
     opacity: 0.5;
     cursor: default;
   }
@@ -706,14 +701,14 @@
   .error {
     background: var(--error-bg);
     color: var(--error);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
     white-space: pre-wrap;
   }
   .overlay {
     position: absolute;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--scrim);
     display: grid;
     place-items: center;
     z-index: 5;
@@ -722,17 +717,17 @@
     background: var(--bg-panel);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
-    padding: 18px 22px;
+    padding: var(--space-5) var(--space-6);
     width: min(620px, 92%);
     max-height: 90%;
     overflow-y: auto;
   }
   .sheet h3 {
-    margin: 0 0 12px;
+    margin: 0 0 var(--space-3);
   }
   .sheet h4 {
-    margin: 14px 0 6px;
-    font-size: 12px;
+    margin: var(--space-4) 0 var(--space-2);
+    font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: var(--muted);
@@ -740,16 +735,16 @@
   .grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 8px 16px;
+    gap: var(--space-2) var(--space-4);
   }
   label {
     display: block;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
   }
   label.check {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
   }
   input:not([type='checkbox']):not([type='radio']),
   select {
@@ -759,19 +754,19 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 6px 8px;
-    font: 13px var(--mono);
-    margin-top: 3px;
+    padding: var(--space-2) var(--space-2);
+    font: var(--text-base) var(--mono);
+    margin-top: var(--space-1);
   }
   .attach {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: var(--space-2);
   }
   footer {
-    margin-top: 16px;
+    margin-top: var(--space-4);
     display: flex;
     justify-content: flex-end;
-    gap: 10px;
+    gap: var(--space-3);
   }
 </style>

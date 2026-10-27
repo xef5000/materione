@@ -119,7 +119,7 @@
           </li>
         {/each}
       </ul>
-      <button type="button" class="secondary" onclick={addAbility}>Add an ability to an item</button>
+      <button type="button" class="btn" onclick={addAbility}>Add an ability to an item</button>
     {/if}
   </section>
 </div>
@@ -128,20 +128,20 @@
   .start {
     height: 100%;
     overflow-y: auto;
-    padding: 20px 24px;
+    padding: var(--space-5) var(--space-6);
     box-sizing: border-box;
     min-width: 0;
     display: grid;
     align-content: start;
-    gap: 22px;
+    gap: var(--space-6);
   }
   section {
     min-width: 0;
     max-width: 900px;
   }
   h2 {
-    margin: 0 0 10px;
-    font-size: 11px;
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--faint);
@@ -150,19 +150,23 @@
   .starters {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
+    gap: var(--space-3);
   }
+  /* A creation card: the shared card surface, with the accent on hover. */
   .starter {
     display: grid;
-    gap: 4px;
-    text-align: left;
-    border: 1px solid var(--border-strong);
-    border-radius: var(--radius);
-    background: none;
-    color: inherit;
-    padding: 10px 12px;
-    cursor: pointer;
+    gap: var(--space-1);
     min-width: 0;
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    background: var(--bg-raised);
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .starter:hover {
+    border-color: var(--accent);
   }
   .starter:hover {
     background: var(--bg-hover);
@@ -170,24 +174,24 @@
   .starter span,
   .starter small {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
   ul {
     list-style: none;
-    margin: 0 0 10px;
+    margin: 0 0 var(--space-3);
     padding: 0;
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
   li {
     display: flex;
     align-items: baseline;
-    gap: 8px;
+    gap: var(--space-2);
     min-width: 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .message {
     flex: 1;
@@ -200,20 +204,19 @@
   li small {
     color: var(--faint);
   }
-  li button,
-  .secondary {
+  li button:not(.btn) {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 2px 9px;
-    font-size: 12px;
+    padding: var(--space-half) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
     white-space: nowrap;
   }
   .note {
-    margin: 0 0 10px;
-    font-size: 12px;
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-sm);
     color: var(--muted);
   }
 </style>

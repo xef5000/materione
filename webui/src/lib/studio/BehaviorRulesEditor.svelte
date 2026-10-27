@@ -178,7 +178,7 @@
                         <option value={choice.id}>{choice.displayName ?? choice.id}</option>
                       {/each}
                     </select>
-                    <button type="button" class="small" onclick={() => removeAction(index, actionIndex)}>Remove</button>
+                    <button type="button" class="btn btn-sm" onclick={() => removeAction(index, actionIndex)}>Remove</button>
                   </div>
                   {#if info?.description}<small>{info.description}</small>{/if}
                   {#if !view.valid}
@@ -202,7 +202,7 @@
                   {/if}
                 </div>
               {/each}
-              <button type="button" class="small" onclick={() => addAction(index)}>Add action</button>
+              <button type="button" class="btn btn-sm" onclick={() => addAction(index)}>Add action</button>
             </div>
             <details>
               <summary>Limits</summary>
@@ -211,7 +211,7 @@
                   onChange={(next) => update(index, setRuleKey(current, option.id, next))} />
               {/each}
             </details>
-            <button type="button" class="small danger" onclick={() => { onChange(removeAt(value, index)); expanded = null; }}>
+            <button type="button" class="btn btn-sm btn-danger" onclick={() => { onChange(removeAt(value, index)); expanded = null; }}>
               Remove rule
             </button>
           </div>
@@ -226,7 +226,7 @@
         <option value="">Blank rule</option>
         {#each presets as entry (entry.id)}<option value={entry.id}>{entry.label}</option>{/each}
       </select>
-      <button type="button" class="small" disabled={fired.length === 0} onclick={addRule}>Add rule</button>
+      <button type="button" class="btn btn-sm" disabled={fired.length === 0} onclick={addRule}>Add rule</button>
     </div>
     {#if fired.length === 0}
       <p class="note">Nothing on this server fires events for {host} content yet.</p>
@@ -237,20 +237,20 @@
 <style>
   .rules {
     display: grid;
-    gap: 8px;
-    margin-bottom: 14px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
     min-width: 0;
   }
   h3 {
     margin: 0;
-    font-size: 12px;
+    font-size: var(--text-sm);
     font-weight: normal;
     color: var(--muted);
   }
   .rule {
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 8px 10px;
+    padding: var(--space-2) var(--space-3);
     min-width: 0;
   }
   .rule.never {
@@ -263,15 +263,15 @@
     background: none;
     border: none;
     color: inherit;
-    font-size: 13px;
+    font-size: var(--text-base);
     padding: 0;
     cursor: pointer;
     overflow-wrap: anywhere;
   }
   .activation,
   .note {
-    margin: 4px 0;
-    font-size: 12px;
+    margin: var(--space-1) 0;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .activation.never {
@@ -279,35 +279,35 @@
   }
   .editor {
     display: grid;
-    gap: 8px;
-    margin-top: 8px;
+    gap: var(--space-2);
+    margin-top: var(--space-2);
     min-width: 0;
   }
   .row {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: end;
     min-width: 0;
   }
   label {
     display: grid;
-    gap: 4px;
-    font-size: 12px;
+    gap: var(--space-1);
+    font-size: var(--text-sm);
     color: var(--muted);
     min-width: 0;
     flex: 1;
   }
   .label {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .actions {
     display: grid;
-    gap: 6px;
+    gap: var(--space-2);
   }
   .action {
     border-left: 2px solid var(--border-strong);
-    padding-left: 8px;
+    padding-left: var(--space-2);
     min-width: 0;
   }
   select,
@@ -316,8 +316,8 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 5px 8px;
-    font-size: 13px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-base);
     font-family: inherit;
     min-width: 0;
     width: 100%;
@@ -333,32 +333,18 @@
   small {
     display: block;
     color: var(--muted);
-    font-size: 11px;
-    margin: 4px 0;
-  }
-  .small {
-    justify-self: start;
-    border: 1px solid var(--border-strong);
-    background: none;
-    color: inherit;
-    border-radius: var(--radius);
-    padding: 2px 8px;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .danger {
-    color: var(--error);
+    font-size: var(--text-xs);
+    margin: var(--space-1) 0;
   }
   details summary {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
     cursor: pointer;
-    margin-bottom: 6px;
+    margin-bottom: var(--space-2);
   }
   .add {
     display: flex;
-    gap: 6px;
+    gap: var(--space-2);
   }
   .add select {
     flex: 1;

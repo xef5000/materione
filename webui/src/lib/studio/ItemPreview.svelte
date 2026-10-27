@@ -63,25 +63,25 @@
 </section>
 
 <style>
-  .item-preview { display: grid; gap: 12px; min-width: 0; }
-  header, .inventory { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  header { justify-content: space-between; font-size: 13px; }
-  header span, small, .visual-kind { font-size: 11px; color: var(--muted); }
-  .inventory { font-size: 12px; }
+  .item-preview { display: grid; gap: var(--space-3); min-width: 0; }
+  header, .inventory { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+  header { justify-content: space-between; font-size: var(--text-base); }
+  header span, small, .visual-kind { font-size: var(--text-xs); color: var(--muted); }
+  .inventory { font-size: var(--text-sm); }
   .inventory small { display: block; }
-  .slot { padding: 4px; border: 2px solid var(--border-strong); background: var(--bg-input); }
+  .slot { padding: var(--space-1); border: 2px solid var(--border-strong); background: var(--bg-input); }
   .inspection { display: grid; place-items: center; min-height: 150px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .visual-kind { margin: -6px 0 0; }
-  .tooltip { background: var(--bg-input); border: 2px solid var(--border-strong); border-radius: var(--radius); padding: 10px; min-width: 0; }
-  .item-name, .lore { display: block; width: 100%; min-width: 0; background: none; border: 0; text-align: left; padding: 0; cursor: pointer; font-size: 13px; }
+  .tooltip { background: var(--bg-input); border: 2px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-3); min-width: 0; }
+  .item-name, .lore { display: block; width: 100%; min-width: 0; background: none; border: 0; text-align: left; padding: 0; cursor: pointer; font-size: var(--text-base); }
   .item-name { color: var(--legacy-f); }
-  .lore { color: var(--legacy-5); margin-top: 5px; }
+  .lore { color: var(--legacy-5); margin-top: var(--space-1); }
   .lore-line { display: block; min-height: 1.5em; }
-  .add-lore { color: var(--muted); font-size: 12px; }
+  .add-lore { color: var(--muted); font-size: var(--text-sm); }
   .item-name:disabled, .lore:disabled { cursor: default; }
   .item-name:not(:disabled):hover, .lore:not(:disabled):hover { outline: 1px solid var(--border-strong); outline-offset: 3px; }
   .disclaimer { line-height: 1.5; }
-  .game-check { display: grid; gap: 5px; font-size: 11px; border-top: 1px solid var(--border); padding-top: 10px; color: var(--muted); }
+  .game-check { display: grid; gap: var(--space-1); font-size: var(--text-xs); border-top: 1px solid var(--border); padding-top: var(--space-3); color: var(--muted); }
   .game-check strong { color: var(--fg); }
-  .game-check button { justify-self: start; background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: 11px; text-align: left; }
+  .game-check button:not(.btn) { justify-self: start; background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-size: var(--text-xs); text-align: left; }
 </style>

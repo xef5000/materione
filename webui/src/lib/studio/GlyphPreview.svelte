@@ -74,7 +74,7 @@
 <style>
   .preview {
     display: grid;
-    gap: 10px;
+    gap: var(--space-3);
     min-width: 0;
   }
   .canvas {
@@ -84,7 +84,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background:
-      conic-gradient(from 90deg, #1a1e26 25%, #151920 0 50%, #1a1e26 0 75%, #151920 0) 0 0 / 16px
+      conic-gradient(from 90deg, var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0 / 16px
         16px;
     overflow: hidden;
   }
@@ -94,19 +94,19 @@
   }
   .empty {
     color: var(--faint);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .note {
     margin: 0;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--faint);
   }
   dl {
     display: grid;
     grid-template-columns: auto minmax(0, 1fr);
-    gap: 2px 8px;
+    gap: var(--space-half) var(--space-2);
     margin: 0;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   dt {
     color: var(--faint);

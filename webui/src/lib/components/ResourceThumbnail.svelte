@@ -224,7 +224,7 @@
     border-radius: var(--radius);
     background: var(--bg-input);
     color: var(--faint);
-    font-size: 17px;
+    font-size: var(--text-lg);
     line-height: 1;
   }
 

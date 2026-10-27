@@ -589,19 +589,19 @@
       >ID / path</button>
       {#if markedRows.length}
         <button
-          class="ghost"
+          class="btn"
           disabled={busy}
           title="Change one field on every marked resource, all together or not at all"
           onclick={() => (bulk = { kind: 'field', targets: markedRows })}
         >Edit {markedRows.length} marked…</button>
-        <button class="ghost" title="Clear marks" aria-label="Clear marks" onclick={() => (marked = [])}>
+        <button class="btn" title="Clear marks" aria-label="Clear marks" onclick={() => (marked = [])}>
           <Icon name="x" size={14} />
         </button>
       {/if}
-      <button class="ghost" disabled={busy || !workspace.activePack} onclick={createFolder}>
+      <button class="btn" disabled={busy || !workspace.activePack} onclick={createFolder}>
         New folder
       </button>
-      <button class="primary" disabled={busy} onclick={createEntry}>
+      <button class="btn btn-primary" disabled={busy} onclick={createEntry}>
         <Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}
       </button>
     </div>
@@ -611,7 +611,7 @@
       <p class="summary-error" role="status">
         Some resource summaries are unavailable; missing entries use fallback names and unknown health.
         {workspace.summariesError}
-        <button type="button" class="ghost" onclick={() => void refreshPack()}>Retry summaries</button>
+        <button type="button" class="btn" onclick={() => void refreshPack()}>Retry summaries</button>
       </p>
     {/if}
 
@@ -689,13 +689,13 @@
         <div class="empty">
           {#if !workspace.activePack}
             <p>No project yet.</p>
-            <button class="primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
+            <button class="btn btn-primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
           {:else if content.search}
             <p>No match for “{content.search}”.</p>
-            <button class="ghost" onclick={() => (content.search = '')}>Clear search</button>
+            <button class="btn" onclick={() => (content.search = '')}>Clear search</button>
           {:else}
             <p>Nothing in {folder}/ yet.</p>
-            <button class="primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
+            <button class="btn btn-primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
           {/if}
         </div>
       {/if}
@@ -766,38 +766,38 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 2px;
-    padding: 0 10px;
+    gap: var(--space-half);
+    padding: 0 var(--space-3);
     border-bottom: 1px solid var(--border);
     overflow: hidden;
   }
-  .types button {
+  .types button:not(.btn) {
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     color: var(--muted);
-    font-size: 13px;
-    padding: 9px 12px;
+    font-size: var(--text-base);
+    padding: var(--space-2) var(--space-3);
     cursor: pointer;
     white-space: nowrap;
   }
-  .types button:hover:not(:disabled) {
+  .types button:not(.btn):hover:not(:disabled) {
     color: var(--fg);
   }
-  .types button.active {
+  .types button:not(.btn).active {
     color: var(--fg);
     border-bottom-color: var(--accent);
   }
-  .types button:disabled {
+  .types button:not(.btn):disabled {
     color: var(--faint);
     cursor: default;
   }
   .types em {
     font-style: normal;
-    font-size: 9px;
-    margin-left: 5px;
-    padding: 1px 4px;
-    border-radius: 4px;
+    font-size: var(--text-xs);
+    margin-left: var(--space-1);
+    padding: var(--space-half) var(--space-1);
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border-strong);
   }
   .search {
@@ -808,8 +808,8 @@
     color: inherit;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
   }
 
   /* toolbar */
@@ -817,8 +817,8 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 6px;
-    padding: 7px 10px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     min-width: 0;
     overflow: hidden;
@@ -826,7 +826,7 @@
   .crumbs {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: var(--space-half);
     list-style: none;
     margin: 0;
     padding: 0;
@@ -837,27 +837,27 @@
   .crumbs li {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: var(--space-half);
     min-width: 0;
   }
-  .crumbs button {
+  .crumbs button:not(.btn) {
     background: none;
     border: none;
     color: var(--muted);
     cursor: pointer;
-    font-size: 12.5px;
-    padding: 2px 4px;
+    font-size: var(--text-sm);
+    padding: var(--space-half) var(--space-1);
     border-radius: var(--radius);
     max-width: 180px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .crumbs button:hover {
+  .crumbs button:not(.btn):hover {
     background: var(--bg-hover);
     color: var(--fg);
   }
-  .crumbs li:last-child button {
+  .crumbs li:last-child button:not(.btn) {
     color: var(--fg);
   }
   .crumbs span {
@@ -865,20 +865,20 @@
   }
   .layout {
     display: flex;
-    gap: 2px;
+    gap: var(--space-half);
   }
-  .toolbar button,
-  .layout button {
+  .toolbar button:not(.btn),
+  .layout button:not(.btn) {
     background: none;
     border: 1px solid transparent;
     color: var(--muted);
     border-radius: var(--radius);
-    padding: 3px 8px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
     white-space: nowrap;
   }
-  .layout button.active {
+  .layout button:not(.btn).active {
     color: var(--fg);
     border-color: var(--border-strong);
   }
@@ -887,16 +887,16 @@
     color: inherit;
   }
   .toolbar .primary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
   }
-  .toolbar button:disabled {
+  .toolbar button:not(.btn):disabled {
     opacity: 0.4;
     cursor: default;
   }
 
-  .toolbar button.active {
+  .toolbar button:not(.btn).active {
     color: var(--fg);
     border-color: var(--border-strong);
   }
@@ -911,7 +911,7 @@
     min-height: 0;
     overflow-x: hidden;
     overflow-y: auto;
-    padding: 4px 6px 10px;
+    padding: var(--space-1) var(--space-2) var(--space-3);
     outline: none;
   }
   .list-head,
@@ -919,7 +919,7 @@
     display: grid;
     grid-template-columns: 36px minmax(0, 1fr) minmax(76px, auto);
     align-items: center;
-    gap: 10px;
+    gap: var(--space-3);
     min-width: 0;
   }
   .list-head.technical,
@@ -929,19 +929,19 @@
       minmax(130px, 1.2fr) minmax(76px, auto);
   }
   .list-head {
-    padding: 4px 8px 7px;
-    font-size: 10.5px;
+    padding: var(--space-1) var(--space-2) var(--space-2);
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.07em;
     color: var(--faint);
     border-bottom: 1px solid var(--border);
-    margin-bottom: 3px;
+    margin-bottom: var(--space-1);
   }
   .entry {
     border-radius: var(--radius);
     cursor: default;
-    font-size: 13px;
-    padding: 6px 8px;
+    font-size: var(--text-base);
+    padding: var(--space-2) var(--space-2);
   }
   .entry:hover {
     background: var(--bg-hover);
@@ -974,7 +974,7 @@
   .copy {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-half);
   }
   .name {
     color: var(--fg);
@@ -984,36 +984,36 @@
   .location,
   .shared-file {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .location {
     color: var(--faint);
   }
   .shared-file {
     color: var(--faint);
-    font-size: 10px;
+    font-size: var(--text-xs);
   }
   .technical-id,
   .technical-path {
     color: var(--muted);
     font-family: var(--mono);
-    font-size: 10.5px;
+    font-size: var(--text-xs);
   }
   .health {
     justify-self: end;
     max-width: 100%;
     border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 2px 7px;
+    border-radius: var(--radius-lg);
+    padding: var(--space-half) var(--space-2);
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--text-xs);
     text-transform: capitalize;
   }
   .health.ok {
-    color: var(--success, var(--fg));
+    color: var(--ok);
   }
   .health.warning {
-    color: var(--warning, var(--muted));
+    color: var(--warn);
   }
   .health.error {
     color: var(--error);
@@ -1033,16 +1033,16 @@
   .grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(154px, 1fr));
-    gap: 7px;
+    gap: var(--space-2);
     align-content: start;
   }
   .grid .entry {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: var(--space-2);
     min-height: 138px;
-    padding: 10px;
+    padding: var(--space-3);
   }
   .grid .copy {
     width: 100%;
@@ -1064,14 +1064,14 @@
   }
 
   .summary-error {
-    margin: 8px 10px 0;
+    margin: var(--space-2) var(--space-3) 0;
     flex: none;
-    color: var(--warning, var(--muted));
+    color: var(--warn);
     background: var(--bg-raised);
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 7px 10px;
-    font-size: 12px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
   }
 
   .technical-id {
@@ -1082,7 +1082,7 @@
     grid-column: 1 / -1;
     display: grid;
     justify-items: center;
-    gap: 10px;
+    gap: var(--space-3);
     color: var(--muted);
     padding: 14vh 0;
   }
@@ -1090,11 +1090,11 @@
     margin: 0;
   }
   .empty .primary {
-    background: var(--primary);
-    border: 1px solid var(--primary);
-    color: white;
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    color: var(--accent-ink);
     border-radius: var(--radius);
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     cursor: pointer;
   }
   .empty .ghost {
@@ -1102,16 +1102,16 @@
     border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: var(--radius);
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     cursor: pointer;
   }
   .error {
-    margin: 8px 10px 0;
+    margin: var(--space-2) var(--space-3) 0;
     flex: none;
     color: var(--error);
     background: var(--error-bg);
     border-radius: var(--radius);
-    padding: 7px 10px;
-    font-size: 12.5px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
   }
 </style>

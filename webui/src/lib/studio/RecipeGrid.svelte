@@ -90,15 +90,15 @@
 <style>
   .grid-editor {
     display: flex;
-    gap: 16px;
+    gap: var(--space-4);
     align-items: flex-start;
     min-width: 0;
-    margin-bottom: 16px;
+    margin-bottom: var(--space-4);
   }
   .grid {
     display: grid;
     grid-template-columns: repeat(3, 56px);
-    gap: 4px;
+    gap: var(--space-1);
     flex: none;
   }
   .slot {
@@ -107,9 +107,9 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: var(--muted);
-    font-size: 10px;
+    font-size: var(--text-xs);
     line-height: 1.2;
-    padding: 2px;
+    padding: var(--space-half);
     cursor: pointer;
     overflow: hidden;
   }
@@ -143,8 +143,8 @@
     color: inherit;
     border: none;
     border-bottom: 1px solid var(--border);
-    padding: 6px 8px;
-    font-size: 12px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-sm);
     min-width: 0;
   }
   ul {
@@ -154,21 +154,21 @@
     overflow-y: auto;
     overflow-x: hidden;
   }
-  li button {
+  li button:not(.btn) {
     display: flex;
     justify-content: space-between;
-    gap: 8px;
+    gap: var(--space-2);
     width: 100%;
     background: none;
     border: none;
     color: inherit;
     text-align: left;
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
     min-width: 0;
   }
-  li button:hover {
+  li button:not(.btn):hover {
     background: var(--bg-hover);
   }
   .name {
@@ -179,11 +179,11 @@
   .group,
   .none {
     color: var(--faint);
-    font-size: 11px;
+    font-size: var(--text-xs);
     flex: none;
   }
   .none {
-    padding: 6px 8px;
+    padding: var(--space-2) var(--space-2);
   }
   .clear {
     color: var(--muted);

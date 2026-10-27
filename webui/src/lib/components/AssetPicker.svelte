@@ -153,11 +153,11 @@
   .picker {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--space-2);
   }
   img {
     image-rendering: pixelated;
-    border-radius: 4px;
+    border-radius: var(--radius-sm);
     background: var(--bg-input);
   }
   select {
@@ -167,15 +167,15 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 6px 8px;
-    font: 13px var(--mono);
+    padding: var(--space-2) var(--space-2);
+    font: var(--text-base) var(--mono);
   }
   .upload {
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 3px 8px;
+    padding: var(--space-1) var(--space-2);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
     color: inherit;
     background: var(--bg-input);
   }

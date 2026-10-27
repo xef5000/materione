@@ -63,7 +63,7 @@
     <h2>plugin settings</h2>
     <span class="meta">settings/settings.yml{dirty ? ' · unsaved' : ''}</span>
     <button disabled={saving || !connection.connected} onclick={() => void load()}>reload</button>
-    <button class="primary" disabled={saving || !dirty || uncertain || !connection.connected} onclick={() => void save()}>
+    <button class="btn btn-primary" disabled={saving || !dirty || uncertain || !connection.connected} onclick={() => void save()}>
       {saving ? 'saving…' : 'save'}
     </button>
   </header>
@@ -89,7 +89,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
     height: 100%;
     box-sizing: border-box;
     display: flex;
@@ -98,45 +98,40 @@
   header {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: var(--space-3);
   }
   h2 {
     margin: 0 auto 0 0;
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
   .meta {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
     margin-right: auto;
   }
-  button {
+  button:not(.btn) {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 4px 12px;
+    padding: var(--space-1) var(--space-3);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
-  button.primary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-  }
-  button:disabled {
+  button:not(.btn):disabled {
     opacity: 0.5;
     cursor: default;
   }
   .note {
     color: var(--faint);
-    font-size: 12px;
-    margin: 8px 0;
+    font-size: var(--text-sm);
+    margin: var(--space-2) 0;
   }
   .error {
     background: var(--error-bg);
     color: var(--error);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
     white-space: pre-wrap;
   }
   textarea {
@@ -147,9 +142,9 @@
     background: var(--bg-input);
     color: var(--fg-code);
     border: 1px solid var(--border);
-    border-radius: 8px;
-    font: 13px/1.55 var(--mono);
-    padding: 10px;
+    border-radius: var(--radius);
+    font: var(--text-base)/1.55 var(--mono);
+    padding: var(--space-3);
     resize: vertical;
   }
 </style>
