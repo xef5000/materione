@@ -25,6 +25,7 @@ exit remains separate; anything else marked *M-later* is reserved, not built.
 | Gson | 2.11.0 | `compileOnly` like SnakeYAML (server-provided); used for the server jar's `version.json` (pack-format detection) and by `pack/` via creative. |
 | creative | 1.14.4 | MIT. The **Nexo-maintained fork** of `team.unnamed/creative` — same coordinates, resolved from `repo.nexomc.com/releases/` (filtered to `team.unnamed`). The pack **output emitter** inside `pack/` + the self-host HTTP backend in `delivery/`. Shaded + relocated (§4). Determinism, allocation, validation, and the D7 hash guarantees remain ours — creative is the serializer of record. The fork (not upstream 1.7.3) because it tracks new Minecraft versions in Nexo production: 1.14.x writes `pack.mcmeta` `min_format`/`max_format`, the only range schema 25w31a+ (1.21.9/26.x) clients honor. |
 | undertow | 2.3.26.Final | Apache-2.0. **M3**: the embedded editor listener's HTTP+WS server (`web/` only — ban rule R8). Chosen over Jetty after Jetty 12's reworked websocket API proved unstable ground for a shaded long-term dependency; Undertow's embedded API has been stable across its whole 2.x line. Shaded + relocated with its XNIO/JBoss runtime (§4). |
+| bStats | 3.2.1 | MIT. `org.bstats:bstats-bukkit` (+ its `bstats-base` runtime): anonymous usage metrics, plugin id 34981. Shaded + relocated under `materione.libs.org.bstats` (§4). Referenced only by `MaterionePlugin`, behind a fail-soft wrapper; the data and the opt-out are described in [plugin.md](plugin.md) §7.2. |
 | Node / npm | node 22.17.0 | **M3**: provisions hermetically via `com.github.node-gradle.node` 7.1.0 for `:webui` (the SPA build). No local Node required; CI included. The Node distribution resolves through an Ivy repo declared in settings (`org.nodejs:node`). SPA deps pin via committed `package-lock.json`. |
 | Playwright | `@playwright/test` 1.64.1 | Dev-only browser regression tier for `webui/`; Chromium is installed separately and is not shipped in the SPA or plugin jar. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
@@ -71,7 +72,7 @@ assembled by `plugin/` via Shadow; **nothing depends on `plugin`** (the leaf, ru
 | `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, `fixtures/` declared as a test **input** (a corpus change invalidates test tasks — path references are invisible to Gradle otherwise), `materione.golden.regen` passthrough, integration-tag exclusion on unit `Test` tasks. |
 | `materione.library-conventions` | library modules | Test bundle (JUnit, AssertJ, ArchUnit) + `testing` testFixtures. |
 | `materione.paper-conventions` | api, core, platform, plugin | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. |
-| `materione.plugin-conventions` | plugin only | Shadow wiring (M1: relocations for creative + Gson), `paper-plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
+| `materione.plugin-conventions` | plugin only | Shadow wiring (relocations for creative, Gson, Undertow + its runtime, bStats), `paper-plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
 
 Custom tasks in `build-logic/src/main/kotlin`: `GenerateVersionSourceTask` (version class
 from the Gradle version — one source of truth), `DownloadPaperServerTask` (pinned-jar
@@ -95,6 +96,8 @@ stays `compileOnly` (the server provides it; the lossless YAML layer loads it re
 from the server at runtime).
 
 **M3 amendment:** the second shaded dependency set is **Undertow 2.3.26.Final** (+ XNIO/JBoss transitive runtime) for the editor listener — relocated under `materione.libs.io.undertow` / `.org.xnio` / `.org.jboss` / `.org.wildfly` by `materione.plugin-conventions`. Referenced only from `dev.materione.web` (ban rule R8), so relocation is invisible to every other module. Gson stays server-provided for our own code; the SPA build toolchain (Node/npm) never ships — only its static output rides in the jar under `webui/`. The settings repository list gains one Ivy entry (nodejs.org dist) so the strict repositories policy survives the node plugin.
+
+**bStats amendment:** the third shaded set is **bStats 3.2.1** (`bstats-bukkit` + `bstats-base`, MIT), relocated under `materione.libs.org.bstats` by `materione.plugin-conventions`. Only `MaterionePlugin` references it, and it starts after the bootstrap phases in `onEnable`, behind a fail-soft wrapper: a failure is a warning and enable continues. The bStats jars carry no license file, so the shaded jar carries no MIT notice for it; creative and Undertow are in the same position. Bundling third-party notices is an open item, not decided here. No ban rule (§5) names bStats: the rules govern `dev.materione` code, and its only call site is `MaterionePlugin`.
 
 
 Deviation from the original M0 plan, recorded here: **FoliaLib was dropped.** The scheduling
@@ -166,7 +169,8 @@ reducers, editor rules, and protocol fixtures.
 `./gradlew :harness:integrationTest` downloads the pinned Paper jar once
 (content-addressed cache at `~/.gradle/caches/materione-paper/<sha256>/paper.jar`),
 builds the shaded jar, prepares a fresh workspace under `harness/build/work/` (eula,
-offline flat world, plugin dropped into `plugins/`, fixture packs copied into
+offline flat world, plugin dropped into `plugins/`, bStats opted out with
+`plugins/bStats/config.yml` `enabled: false`, fixture packs copied into
 `plugins/Materione/content/packs/`), boots the server, drives the console,
 and asserts the stable log markers:
 

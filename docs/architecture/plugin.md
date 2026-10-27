@@ -461,6 +461,26 @@ schemas (master §5.5):
 World-attachment rule: if data must survive a world copy/restore and die with the world, it
 belongs in chunk PDC — not in a database, not in `generated/`.
 
+### 7.2 Usage metrics (bStats) and the opt-out
+
+The plugin reports anonymous usage statistics to [bStats](https://bstats.org) under plugin id
+`34981`. The payload is bStats' standard set: server software name and version, Java version,
+OS name, architecture and version, CPU core count, online player count and online mode, plugin
+version, a random server UUID, and the custom chart below. Materione adds no other data; bStats
+owns the full field list and its data policy.
+
+- **Custom chart:** `editor_transport` (a Simple Pie on bstats.org with the same id) reports the
+  transport this boot was configured with: `cloud` (the relay, the default), `local` (the direct
+  listener), `disabled` (`editor_enabled: false`), or `unknown` (settings did not load). It is
+  read once at boot, not live.
+- **Opt-out:** set `enabled: false` in `plugins/bStats/config.yml`. That file is bStats' global
+  switch, shared by every bStats-using plugin on the server, and bStats creates it on first start.
+  With it disabled, bStats starts no scheduler and sends nothing.
+- **Fail-soft:** `MaterionePlugin` starts metrics after the bootstrap phases, through a wrapper
+  that turns any failure into a `bStats metrics unavailable` warning; enable always continues.
+- **Automated servers never report:** the harness and the agent probe write `enabled: false`
+  into their server workspaces before boot (build.md §7; `docs/probe.md`).
+
 ---
 
 ## 8. Failure semantics summary (per subsystem)
