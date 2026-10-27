@@ -48,17 +48,29 @@ public final class EffectType implements ContentType {
                 List.of(
                         new ParameterSchema("kind", ParameterType.ENUM, true, null,
                                 "Effect kind: rainbow, wave, shake or pulse", EffectDefinition.KINDS, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Kind", "identity", 10, false, "select", "", "rainbow")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Kind", "identity", 10, false, "select", "", "rainbow")
+                                        .withOptions(List.of(
+                                                option("rainbow", "Rainbow", "Colours flow along the text"),
+                                                option("wave", "Wave", "Letters bob up and down"),
+                                                option("shake", "Shake", "Letters jitter"),
+                                                option("pulse", "Pulse", "The text brightens and dims")))
+                                        .onDisplayCard()),
                         new ParameterSchema("speed", ParameterType.DECIMAL, false, "3.0",
                                 "Animation speed (cycles per second scale)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Speed", "appearance", 10, false, "number", "", "3.0")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Speed", "appearance", 10, false, "number", "", "3.0").withRange(0.0, 20.0, "×").onDisplayCard()),
                         new ParameterSchema("amplitude", ParameterType.DECIMAL, false, "1.0",
                                 "Effect strength (wave height, shake distance, pulse depth)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Amplitude", "appearance", 20, false, "number", "", "1.0")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Strength", "appearance", 20, false, "number", "", "1.0").withRange(0.0, 10.0, "×").onDisplayCard()),
                         new ParameterSchema("colors", ParameterType.LIST, false, null,
                                 "Rainbow gradient stops as #RRGGBB (rainbow kind)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Colors", "appearance", 30, true, "list", "", "#FF0000"))),
+                                .withEditor(new ParameterSchema.EditorMetadata("Palette", "appearance", 30, false, "palette", "", "#FF0000",
+                                        true, "appearance", "palette",
+                                        "The colours a rainbow flows through; without any it cycles the full spectrum"))),
                 "1.0.0");
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     @Override

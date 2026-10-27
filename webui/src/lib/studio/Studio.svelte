@@ -13,7 +13,8 @@
   import StudioPreview from './StudioPreview.svelte';
   import ItemPreview from './ItemPreview.svelte';
   import GlyphPreview from './GlyphPreview.svelte';
-  import AudioPreview from './AudioPreview.svelte';
+  import EffectPreview from './EffectPreview.svelte';
+  import SoundSummary from './SoundSummary.svelte';
   import PaintingPreview from './PaintingPreview.svelte';
   import RecipePreview from './RecipePreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
@@ -491,11 +492,14 @@
           nonce={textureVersion}
         />
       {:else if typeDirectory === 'sounds'}
-        <AudioPreview
+        <SoundSummary
           pack={resource.pack}
-          sounds={draft.sounds}
-          onChange={(value) => set('sounds', value)}
+          id={rootId}
+          category={String(draft.category ?? '')}
+          sources={Array.isArray(draft.sounds) ? draft.sounds.length : 0}
         />
+      {:else if typeDirectory === 'effects'}
+        <EffectPreview values={draft} />
       {:else if typeDirectory === 'paintings'}
         <PaintingPreview
           pack={resource.pack}

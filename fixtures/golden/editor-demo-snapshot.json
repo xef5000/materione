@@ -3111,6 +3111,7 @@
           {
             "advanced": false,
             "description": "Source files under assets/sounds/ (one or more, randomized)",
+            "display": true,
             "example": "ui/level_up",
             "id": "sounds",
             "label": "Sources",
@@ -3118,48 +3119,78 @@
             "required": true,
             "section": "audio",
             "type": "list",
-            "uiHint": "list"
+            "uiHint": "sound-sources"
           },
           {
             "advanced": false,
             "description": "Subtitle shown when subtitles are on",
+            "display": true,
             "example": "Level up!",
             "id": "subtitle",
             "label": "Subtitle",
+            "options": [
+              {
+                "label": "Chime",
+                "value": "Something chimes"
+              },
+              {
+                "label": "Click",
+                "value": "Something clicks"
+              },
+              {
+                "label": "Music",
+                "value": "Music plays"
+              },
+              {
+                "label": "Hum",
+                "value": "Machine hums"
+              },
+              {
+                "label": "Crash",
+                "value": "Something crashes"
+              }
+            ],
             "order": 20,
             "required": false,
             "section": "audio",
             "type": "string",
-            "uiHint": "text"
+            "uiHint": "presets"
           },
           {
             "advanced": false,
             "default": "1.0",
             "description": "Base volume",
+            "display": true,
             "example": "1.0",
             "id": "volume",
             "label": "Volume",
+            "min": 0.0,
             "order": 30,
             "required": false,
             "section": "audio",
             "type": "decimal",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "×"
           },
           {
             "advanced": false,
             "default": "1.0",
             "description": "Base pitch",
+            "display": true,
             "example": "1.0",
             "id": "pitch",
             "label": "Pitch",
+            "max": 2.0,
+            "min": 0.5,
             "order": 40,
             "required": false,
             "section": "audio",
             "type": "decimal",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "×"
           },
           {
-            "advanced": true,
+            "advanced": false,
             "allowedValues": [
               "master",
               "music",
@@ -3172,27 +3203,87 @@
               "ambient",
               "voice"
             ],
+            "category": "audio",
             "default": "master",
             "description": "Sound category the client groups under its music & sounds options",
             "example": "master",
+            "icon": "list",
             "id": "category",
             "label": "Category",
+            "module": true,
+            "options": [
+              {
+                "description": "Only the master slider",
+                "label": "Master",
+                "value": "master"
+              },
+              {
+                "description": "The music slider",
+                "label": "Music",
+                "value": "music"
+              },
+              {
+                "description": "The jukebox and note blocks slider",
+                "label": "Jukebox / note blocks",
+                "value": "record"
+              },
+              {
+                "description": "The weather slider",
+                "label": "Weather",
+                "value": "weather"
+              },
+              {
+                "description": "The blocks slider",
+                "label": "Blocks",
+                "value": "block"
+              },
+              {
+                "description": "The hostile creatures slider",
+                "label": "Hostile creatures",
+                "value": "hostile"
+              },
+              {
+                "description": "The friendly creatures slider",
+                "label": "Friendly creatures",
+                "value": "neutral"
+              },
+              {
+                "description": "The players slider",
+                "label": "Players",
+                "value": "player"
+              },
+              {
+                "description": "The ambient slider",
+                "label": "Ambient / environment",
+                "value": "ambient"
+              },
+              {
+                "description": "The voice slider",
+                "label": "Voice / speech",
+                "value": "voice"
+              }
+            ],
             "order": 50,
             "required": false,
             "section": "audio",
+            "summary": "Which volume slider in the player's options controls this sound",
             "type": "string",
             "uiHint": "select"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "audio",
             "default": "false",
             "description": "Stream from disk instead of loading into memory (long files)",
             "example": "false",
+            "icon": "play",
             "id": "stream",
-            "label": "Stream",
+            "label": "Stream from disk",
+            "module": true,
             "order": 60,
             "required": false,
             "section": "audio",
+            "summary": "For long files: read from disk while playing instead of loading it all",
             "type": "boolean",
             "uiHint": "toggle"
           },
@@ -3223,16 +3314,23 @@
             "uiHint": "toggle"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "audio",
             "description": "Distance the sound carries (vanilla default 16)",
             "example": "16",
+            "icon": "ruler",
             "id": "attenuation_distance",
-            "label": "Attenuation",
+            "label": "Carry distance",
+            "max": 1024.0,
+            "min": 1.0,
+            "module": true,
             "order": 90,
             "required": false,
             "section": "audio",
+            "summary": "How far the sound can be heard (vanilla default 16)",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "blocks"
           },
           {
             "advanced": true,
@@ -3259,15 +3357,77 @@
             "uiHint": "text"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "gameplay",
             "description": "Music-disc song section: description, duration, comparator_output, range",
+            "icon": "disc-3",
             "id": "jukebox",
-            "label": "Jukebox song",
+            "label": "Music disc",
+            "module": true,
+            "nested": [
+              {
+                "advanced": false,
+                "description": "Song title shown in the disc's tooltip and the jukebox",
+                "example": "Ruby Anthem",
+                "id": "description",
+                "label": "Song title",
+                "order": 10,
+                "required": false,
+                "section": "audio",
+                "type": "string",
+                "uiHint": "text"
+              },
+              {
+                "advanced": false,
+                "default": "60",
+                "description": "Length in seconds (at least 1)",
+                "example": "90",
+                "id": "duration",
+                "label": "Length",
+                "min": 1.0,
+                "order": 20,
+                "required": false,
+                "section": "audio",
+                "type": "decimal",
+                "uiHint": "number",
+                "unit": "seconds"
+              },
+              {
+                "advanced": false,
+                "default": "0",
+                "description": "Redstone comparator signal while playing (0..15)",
+                "example": "7",
+                "id": "comparator_output",
+                "label": "Comparator signal",
+                "max": 15.0,
+                "min": 0.0,
+                "order": 30,
+                "required": false,
+                "section": "audio",
+                "type": "integer",
+                "uiHint": "number"
+              },
+              {
+                "advanced": false,
+                "description": "Fixed hearing range of the song, in blocks",
+                "example": "16",
+                "id": "range",
+                "label": "Hearing range",
+                "min": 0.0,
+                "order": 40,
+                "required": false,
+                "section": "audio",
+                "type": "decimal",
+                "uiHint": "number",
+                "unit": "blocks"
+              }
+            ],
             "order": 120,
             "required": false,
             "section": "audio",
+            "summary": "Make this sound a song a music disc can play in a jukebox",
             "type": "raw",
-            "uiHint": "advanced"
+            "uiHint": "object-fields"
           }
         ]
       },
@@ -3384,9 +3544,32 @@
               "pulse"
             ],
             "description": "Effect kind: rainbow, wave, shake or pulse",
+            "display": true,
             "example": "rainbow",
             "id": "kind",
             "label": "Kind",
+            "options": [
+              {
+                "description": "Colours flow along the text",
+                "label": "Rainbow",
+                "value": "rainbow"
+              },
+              {
+                "description": "Letters bob up and down",
+                "label": "Wave",
+                "value": "wave"
+              },
+              {
+                "description": "Letters jitter",
+                "label": "Shake",
+                "value": "shake"
+              },
+              {
+                "description": "The text brightens and dims",
+                "label": "Pulse",
+                "value": "pulse"
+              }
+            ],
             "order": 10,
             "required": true,
             "section": "identity",
@@ -3397,39 +3580,51 @@
             "advanced": false,
             "default": "3.0",
             "description": "Animation speed (cycles per second scale)",
+            "display": true,
             "example": "3.0",
             "id": "speed",
             "label": "Speed",
+            "max": 20.0,
+            "min": 0.0,
             "order": 10,
             "required": false,
             "section": "appearance",
             "type": "decimal",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "×"
           },
           {
             "advanced": false,
             "default": "1.0",
             "description": "Effect strength (wave height, shake distance, pulse depth)",
+            "display": true,
             "example": "1.0",
             "id": "amplitude",
-            "label": "Amplitude",
+            "label": "Strength",
+            "max": 10.0,
+            "min": 0.0,
             "order": 20,
             "required": false,
             "section": "appearance",
             "type": "decimal",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "×"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "appearance",
             "description": "Rainbow gradient stops as #RRGGBB (rainbow kind)",
             "example": "#FF0000",
+            "icon": "palette",
             "id": "colors",
-            "label": "Colors",
+            "label": "Palette",
+            "module": true,
             "order": 30,
             "required": false,
             "section": "appearance",
+            "summary": "The colours a rainbow flows through; without any it cycles the full spectrum",
             "type": "list",
-            "uiHint": "list"
+            "uiHint": "palette"
           }
         ]
       }
@@ -8780,6 +8975,7 @@
         {
           "advanced": false,
           "description": "Source files under assets/sounds/ (one or more, randomized)",
+          "display": true,
           "example": "ui/level_up",
           "id": "sounds",
           "label": "Sources",
@@ -8787,48 +8983,78 @@
           "required": true,
           "section": "audio",
           "type": "list",
-          "uiHint": "list"
+          "uiHint": "sound-sources"
         },
         {
           "advanced": false,
           "description": "Subtitle shown when subtitles are on",
+          "display": true,
           "example": "Level up!",
           "id": "subtitle",
           "label": "Subtitle",
+          "options": [
+            {
+              "label": "Chime",
+              "value": "Something chimes"
+            },
+            {
+              "label": "Click",
+              "value": "Something clicks"
+            },
+            {
+              "label": "Music",
+              "value": "Music plays"
+            },
+            {
+              "label": "Hum",
+              "value": "Machine hums"
+            },
+            {
+              "label": "Crash",
+              "value": "Something crashes"
+            }
+          ],
           "order": 20,
           "required": false,
           "section": "audio",
           "type": "string",
-          "uiHint": "text"
+          "uiHint": "presets"
         },
         {
           "advanced": false,
           "default": "1.0",
           "description": "Base volume",
+          "display": true,
           "example": "1.0",
           "id": "volume",
           "label": "Volume",
+          "min": 0.0,
           "order": 30,
           "required": false,
           "section": "audio",
           "type": "decimal",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "×"
         },
         {
           "advanced": false,
           "default": "1.0",
           "description": "Base pitch",
+          "display": true,
           "example": "1.0",
           "id": "pitch",
           "label": "Pitch",
+          "max": 2.0,
+          "min": 0.5,
           "order": 40,
           "required": false,
           "section": "audio",
           "type": "decimal",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "×"
         },
         {
-          "advanced": true,
+          "advanced": false,
           "allowedValues": [
             "master",
             "music",
@@ -8841,27 +9067,87 @@
             "ambient",
             "voice"
           ],
+          "category": "audio",
           "default": "master",
           "description": "Sound category the client groups under its music & sounds options",
           "example": "master",
+          "icon": "list",
           "id": "category",
           "label": "Category",
+          "module": true,
+          "options": [
+            {
+              "description": "Only the master slider",
+              "label": "Master",
+              "value": "master"
+            },
+            {
+              "description": "The music slider",
+              "label": "Music",
+              "value": "music"
+            },
+            {
+              "description": "The jukebox and note blocks slider",
+              "label": "Jukebox / note blocks",
+              "value": "record"
+            },
+            {
+              "description": "The weather slider",
+              "label": "Weather",
+              "value": "weather"
+            },
+            {
+              "description": "The blocks slider",
+              "label": "Blocks",
+              "value": "block"
+            },
+            {
+              "description": "The hostile creatures slider",
+              "label": "Hostile creatures",
+              "value": "hostile"
+            },
+            {
+              "description": "The friendly creatures slider",
+              "label": "Friendly creatures",
+              "value": "neutral"
+            },
+            {
+              "description": "The players slider",
+              "label": "Players",
+              "value": "player"
+            },
+            {
+              "description": "The ambient slider",
+              "label": "Ambient / environment",
+              "value": "ambient"
+            },
+            {
+              "description": "The voice slider",
+              "label": "Voice / speech",
+              "value": "voice"
+            }
+          ],
           "order": 50,
           "required": false,
           "section": "audio",
+          "summary": "Which volume slider in the player's options controls this sound",
           "type": "string",
           "uiHint": "select"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "audio",
           "default": "false",
           "description": "Stream from disk instead of loading into memory (long files)",
           "example": "false",
+          "icon": "play",
           "id": "stream",
-          "label": "Stream",
+          "label": "Stream from disk",
+          "module": true,
           "order": 60,
           "required": false,
           "section": "audio",
+          "summary": "For long files: read from disk while playing instead of loading it all",
           "type": "boolean",
           "uiHint": "toggle"
         },
@@ -8892,16 +9178,23 @@
           "uiHint": "toggle"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "audio",
           "description": "Distance the sound carries (vanilla default 16)",
           "example": "16",
+          "icon": "ruler",
           "id": "attenuation_distance",
-          "label": "Attenuation",
+          "label": "Carry distance",
+          "max": 1024.0,
+          "min": 1.0,
+          "module": true,
           "order": 90,
           "required": false,
           "section": "audio",
+          "summary": "How far the sound can be heard (vanilla default 16)",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "blocks"
         },
         {
           "advanced": true,
@@ -8928,15 +9221,77 @@
           "uiHint": "text"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "gameplay",
           "description": "Music-disc song section: description, duration, comparator_output, range",
+          "icon": "disc-3",
           "id": "jukebox",
-          "label": "Jukebox song",
+          "label": "Music disc",
+          "module": true,
+          "nested": [
+            {
+              "advanced": false,
+              "description": "Song title shown in the disc's tooltip and the jukebox",
+              "example": "Ruby Anthem",
+              "id": "description",
+              "label": "Song title",
+              "order": 10,
+              "required": false,
+              "section": "audio",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "60",
+              "description": "Length in seconds (at least 1)",
+              "example": "90",
+              "id": "duration",
+              "label": "Length",
+              "min": 1.0,
+              "order": 20,
+              "required": false,
+              "section": "audio",
+              "type": "decimal",
+              "uiHint": "number",
+              "unit": "seconds"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "Redstone comparator signal while playing (0..15)",
+              "example": "7",
+              "id": "comparator_output",
+              "label": "Comparator signal",
+              "max": 15.0,
+              "min": 0.0,
+              "order": 30,
+              "required": false,
+              "section": "audio",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Fixed hearing range of the song, in blocks",
+              "example": "16",
+              "id": "range",
+              "label": "Hearing range",
+              "min": 0.0,
+              "order": 40,
+              "required": false,
+              "section": "audio",
+              "type": "decimal",
+              "uiHint": "number",
+              "unit": "blocks"
+            }
+          ],
           "order": 120,
           "required": false,
           "section": "audio",
+          "summary": "Make this sound a song a music disc can play in a jukebox",
           "type": "raw",
-          "uiHint": "advanced"
+          "uiHint": "object-fields"
         }
       ]
     },
@@ -9053,9 +9408,32 @@
             "pulse"
           ],
           "description": "Effect kind: rainbow, wave, shake or pulse",
+          "display": true,
           "example": "rainbow",
           "id": "kind",
           "label": "Kind",
+          "options": [
+            {
+              "description": "Colours flow along the text",
+              "label": "Rainbow",
+              "value": "rainbow"
+            },
+            {
+              "description": "Letters bob up and down",
+              "label": "Wave",
+              "value": "wave"
+            },
+            {
+              "description": "Letters jitter",
+              "label": "Shake",
+              "value": "shake"
+            },
+            {
+              "description": "The text brightens and dims",
+              "label": "Pulse",
+              "value": "pulse"
+            }
+          ],
           "order": 10,
           "required": true,
           "section": "identity",
@@ -9066,39 +9444,51 @@
           "advanced": false,
           "default": "3.0",
           "description": "Animation speed (cycles per second scale)",
+          "display": true,
           "example": "3.0",
           "id": "speed",
           "label": "Speed",
+          "max": 20.0,
+          "min": 0.0,
           "order": 10,
           "required": false,
           "section": "appearance",
           "type": "decimal",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "×"
         },
         {
           "advanced": false,
           "default": "1.0",
           "description": "Effect strength (wave height, shake distance, pulse depth)",
+          "display": true,
           "example": "1.0",
           "id": "amplitude",
-          "label": "Amplitude",
+          "label": "Strength",
+          "max": 10.0,
+          "min": 0.0,
           "order": 20,
           "required": false,
           "section": "appearance",
           "type": "decimal",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "×"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "appearance",
           "description": "Rainbow gradient stops as #RRGGBB (rainbow kind)",
           "example": "#FF0000",
+          "icon": "palette",
           "id": "colors",
-          "label": "Colors",
+          "label": "Palette",
+          "module": true,
           "order": 30,
           "required": false,
           "section": "appearance",
+          "summary": "The colours a rainbow flows through; without any it cycles the full spectrum",
           "type": "list",
-          "uiHint": "list"
+          "uiHint": "palette"
         }
       ]
     }

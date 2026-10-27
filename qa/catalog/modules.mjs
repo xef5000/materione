@@ -61,6 +61,23 @@ const PAINTING_COVERS = [
   'content/src/main/java/dev/materione/content/paintings/PaintingType.java',
   'fixtures/packs/sample/paintings/**',
 ];
+const SOUND_COVERS = [
+  ...MODULE_COVERS,
+  'webui/src/lib/audio.ts',
+  'webui/src/lib/studio/SoundSources.svelte',
+  'webui/src/lib/studio/SoundSummary.svelte',
+  'webui/src/lib/studio/ObjectFields.svelte',
+  'content/src/main/java/dev/materione/content/sounds/SoundType.java',
+  'fixtures/packs/sample/sounds/**',
+];
+const EFFECT_COVERS = [
+  ...MODULE_COVERS,
+  'webui/src/lib/effects.ts',
+  'webui/src/lib/studio/EffectPreview.svelte',
+  'webui/src/lib/studio/PaletteEditor.svelte',
+  'content/src/main/java/dev/materione/content/effects/EffectType.java',
+  'fixtures/packs/sample/effects/**',
+];
 const FURNITURE_COVERS = [
   ...MODULE_COVERS,
   'webui/src/lib/studio/SpatialEditor.svelte',
@@ -344,6 +361,98 @@ export default [
       await ctx.browser.browserShot('painting-studio', '.studio');
       ctx.needsEyes(
         'painting-studio shows, left, a grid wall (one square per block) with the Sunrise texture filling exactly a 2x1 block rectangle outlined in the accent color and a small accent handle on its bottom-right corner; right, the display card with Title and Author as rich text, the texture slot, and Width / Height number boxes with a blocks unit and a 1-16 range, then a Random placement card' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  test({
+    id: 'modules.browser-sound-studio',
+    title: 'sample:anthem lists its sources with play, waveform and duration; the music-disc module wraps the jukebox fields',
+    covers: SOUND_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleResource(page, 'Sounds', 'anthem');
+      const row = studio.locator('[data-source="ui/anthem"]');
+      await row.getByRole('img', { name: 'Waveform of ui/anthem' }).waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect((await row.locator('[data-duration]').innerText()).trim()).toMatch(/^\d+(\.\d)? s$|^\d+:\d\d$/);
+      const play = row.getByRole('button', { name: 'Play ui/anthem' });
+      ctx.expect(await play.isEnabled()).toBe(true);
+
+      const disc = studio.locator('[data-module="jukebox"]');
+      await disc.waitFor({ state: 'visible' });
+      ctx.expect(await disc.innerText()).toContain('Music disc');
+      ctx.expect(await disc.getByRole('textbox', { name: 'Song title' }).inputValue()).toBe('Ruby Anthem');
+      ctx.expect(await disc.getByRole('spinbutton', { name: 'Length' }).inputValue()).toBe('90');
+      ctx.expect(await disc.getByRole('spinbutton', { name: 'Comparator signal' }).inputValue()).toBe('7');
+
+      // Subtitle presets fill the box (draft only; nothing is saved).
+      await studio.getByRole('group', { name: 'Subtitle suggestions' }).getByRole('button', { name: 'Click' }).click();
+      ctx.expect(await studio.getByRole('textbox', { name: 'Subtitle' }).inputValue()).toBe('Something clicks');
+    },
+  }),
+
+  test({
+    id: 'modules.browser-sound-studio-visual',
+    title: 'the sound studio shows source rows with a waveform and a Music disc card',
+    mode: 'visual',
+    dependsOn: ['modules.browser-sound-studio'],
+    covers: SOUND_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleResource(page, 'Sounds', 'anthem');
+      await studio.getByRole('img', { name: 'Waveform of ui/anthem' }).waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('sound-studio', '.studio');
+      ctx.needsEyes(
+        'sound-studio shows the Sources card with one row per source (a round play button, the file name, an accent-colored waveform, its duration, Replace and an x), an Upload .ogg button, the Subtitle box with suggestion chips below it, Volume and Pitch number boxes with a multiplication unit and ranges, and below a Music disc card with Song title, Length (seconds), Comparator signal (0-15) and Hearing range (blocks) boxes' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  test({
+    id: 'modules.browser-effect-studio',
+    title: 'sample:rainbow previews live on sample text; kind, speed and palette chips drive it',
+    covers: EFFECT_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleResource(page, 'Text effects', 'rainbow');
+      const preview = studio.getByRole('region', { name: 'Effect preview' });
+      await preview.waitFor({ state: 'visible', timeout: 20_000 });
+      ctx.expect(await preview.getAttribute('data-effect-kind')).toBe('rainbow');
+      const first = preview.locator('[data-ch="0"]');
+      const before = await first.evaluate((element) => getComputedStyle(element).color);
+      let changed = false;
+      for (let attempt = 0; attempt < 20 && !changed; attempt++) {
+        await page.waitForTimeout(100);
+        changed = (await first.evaluate((element) => getComputedStyle(element).color)) !== before;
+      }
+      ctx.expect(changed).toBe(true);
+
+      const kind = studio.getByRole('radiogroup', { name: 'Kind' });
+      await kind.getByRole('radio', { name: 'Wave' }).click();
+      ctx.expect(await preview.getAttribute('data-effect-kind')).toBe('wave');
+      await kind.getByRole('radio', { name: 'Rainbow' }).click();
+      ctx.expect(await studio.locator('[data-module="colors"] [data-color]').count()).toBeGreaterThan(0);
+    },
+  }),
+
+  test({
+    id: 'modules.browser-effect-studio-visual',
+    title: 'the effect studio shows animated sample text beside the kind choice and palette chips',
+    mode: 'visual',
+    dependsOn: ['modules.browser-effect-studio'],
+    covers: EFFECT_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const studio = await openSampleResource(page, 'Text effects', 'rainbow');
+      await studio.getByRole('region', { name: 'Effect preview' }).waitFor({ state: 'visible', timeout: 20_000 });
+      await page.waitForTimeout(600);
+      await ctx.browser.browserShot('effect-studio', '.studio');
+      ctx.needsEyes(
+        'effect-studio shows, left, a dark stage with the sample text in the Minecraft font whose letters carry flowing rainbow colors, a sample-text box and a pause button; right, the display card with the Rainbow / Wave / Shake / Pulse segmented choice (Rainbow selected) and Speed and Strength number boxes with ranges, and a Palette card of round color swatch chips with hex codes, an x each, and an Add color button' + IDENTITY_EYES,
       );
     },
   }),

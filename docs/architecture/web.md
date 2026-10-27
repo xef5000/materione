@@ -791,6 +791,28 @@ cannot read, forge, replay, or reorder anything.
   separate content types. A painting variant is a data entry of a vanilla registry, not an item,
   so paintings stay their own type here; an item module "places this painting" needs plugin
   support and is recorded as a follow-up, not decided silently.*
+- *As built (M5 per-type modules, issue #153 — sounds and effects):* **Sounds**: the sources are a
+  list you can hear — every row has a play button, an SVG **waveform** and the **duration**, all
+  decoded in the browser from the pack's own asset bytes (`AudioContext.decodeAudioData`; an
+  unreadable or missing file is flagged on its row, never hidden), plus Replace, Remove, "Upload
+  .ogg" (the existing 8 MiB-capped upload) and "add a file already in this pack". The subtitle has
+  suggestion chips that fill the box (any text still works); volume and pitch are number fields
+  with their unit. Modules: **Category** (labelled client volume sliders — "Jukebox / note
+  blocks", "Friendly creatures", …), Stream from disk, Carry distance, and **Music disc**, which
+  wraps the `jukebox` mapping as labelled fields (song title, length in seconds ≥ 1, comparator
+  signal clamped to 0–15, hearing range) and keeps any key it does not name. A number field only
+  clamps what the author actually edited — merely focusing and leaving a field never rewrites it
+  (an authored volume of 1.5 stays 1.5). **Effects**: the studio previews the effect **live on
+  sample text** (type your own, pause it; reduced-motion starts paused) using the same formulas
+  the generated text shader bakes (`effects.ts`, pinned by vitest against `TextEffectShaders`:
+  wave `sin(t·speed·2π + 0.8x)·amplitude`, shake in 1/(20·speed)-second steps, pulse brightness
+  `1 + 0.35·amplitude·sin(t·speed·2π)`, rainbow over the authored stops or the cosine palette),
+  at 2× text size — an approximation of the motion, not a client render. Kind is a segmented
+  choice (Rainbow / Wave / Shake / Pulse), speed and strength carry their ranges, and the
+  **Palette** module is a row of colour-swatch chips (the system picker edits a colour; entries
+  that are not exactly `#RRGGBB` stay as opaque chips, untouched). *Honest gaps:* the effect
+  preview shows base white text (the real shader recolors from the span's signal color), and the
+  waveform shows channel 0.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from
