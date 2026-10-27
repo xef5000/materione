@@ -3318,7 +3318,7 @@
               "item": "ruby",
               "behavior": [
                 {
-                  "true": "interact",
+                  "on": "interact",
                   "do": [
                     {
                       "message": "&dThe lamp hums softly."
@@ -5323,7 +5323,7 @@
               "display_name": "Crucible Blade",
               "behavior": [
                 {
-                  "true": "click:right",
+                  "on": "click:right",
                   "do": [
                     {
                       "message": "blade-wear ${item.durability_used}/${item.durability_max}"
@@ -5351,7 +5351,7 @@
               "display_name": "Feast Bread",
               "behavior": [
                 {
-                  "true": "consume",
+                  "on": "consume",
                   "do": [
                     {
                       "message": "feast-devoured"
@@ -5388,7 +5388,7 @@
               "display_name": "Light Snack",
               "behavior": [
                 {
-                  "true": "consume",
+                  "on": "consume",
                   "do": [
                     {
                       "message": "snack-devoured"
@@ -5471,7 +5471,7 @@
               "display_name": "Storm Wand",
               "behavior": [
                 {
-                  "true": "click:left",
+                  "on": "click:left",
                   "if": [
                     "player.health > 0"
                   ],

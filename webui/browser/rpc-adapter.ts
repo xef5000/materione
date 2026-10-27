@@ -1,3 +1,4 @@
+import { scanReferences } from '../src/lib/demo/references';
 import type { AssetRef, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from '../src/lib/api';
 import type { PushFrame } from '../src/lib/events';
 import type { Response } from '../src/lib/protocol/wire';
@@ -286,6 +287,23 @@ const GUIDED_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> 
   },
 };
 
+/** Opt-in (`?catalog`): six items sharing one texture, one file each, for the Assets and bulk-authoring specs. */
+const AMULET_COLORS = ['red', 'blue', 'green', 'gold', 'pink', 'black'];
+const CATALOG_RESOURCES: ResourceRef[] = AMULET_COLORS.map((color) => (
+  { pack: PACK, type: 'items', path: `items/amulet_${color}.yml`, id: `amulet_${color}` }
+));
+
+const CATALOG_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = Object.fromEntries(
+  AMULET_COLORS.map((color, index) => [`items/amulet_${color}.yml`, {
+    [`amulet_${color}`]: {
+      display_name: `${color[0]!.toUpperCase()}${color.slice(1)} Amulet`,
+      material: 'STICK',
+      // two spellings of the same asset, one unrelated texture
+      texture: index === 3 ? `${PACK}:amulets/shared` : index === 5 ? 'amulets/other' : 'amulets/shared',
+    },
+  }]),
+);
+
 const GUIDED_DIAGNOSTICS = [
   {
     code: 'MTR-0010',
@@ -534,6 +552,7 @@ function isWriteOperation(op: string): boolean {
     op.startsWith('edit.') ||
     op === 'authoring.commit' ||
     op === 'authoring.setFields' ||
+    op === 'authoring.bulk' ||
     op === 'authoring.saveModel' ||
     op === 'authoring.createResource' ||
     op === 'authoring.duplicateResource' ||
@@ -580,7 +599,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
 
   readonly #guided: boolean;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#resources = [...RESOURCES];
@@ -588,6 +607,16 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       this.#resources.push(...GUIDED_RESOURCES);
       for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
         this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
+      }
+    }
+    if (options.catalog) {
+      this.#resources.push(...CATALOG_RESOURCES);
+      for (const [path, parsed] of Object.entries(CATALOG_DOCUMENTS)) {
+        this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
+      }
+      for (const name of ['shared', 'other']) {
+        this.#assets.set(assetPath(PACK, `assets/textures/amulets/${name}.png`),
+          { path: `assets/textures/amulets/${name}.png`, kind: 'png', data: PIXEL_PNG, bytes: 68 });
       }
     }
     if (options.modelGallery) {
@@ -777,6 +806,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.putDocument(op, payload);
       case 'authoring.setFields':
         return this.setFields(op, payload);
+      case 'authoring.references':
+        return this.references(op, payload);
+      case 'authoring.bulk':
+        return this.bulk(op, payload);
       case 'authoring.saveModel':
         return this.saveModel(op, payload);
       case 'assets.list':
@@ -965,6 +998,123 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     document.rev += edits.length > 0 ? 1 : 0;
     document.raw = serializeFixtureYaml(document.parsed);
     return this.success(op, { rev: document.rev });
+  }
+
+  private references(op: string, payload: Record<string, unknown>): Response {
+    const kind = stringValue(payload.kind);
+    if (kind !== 'asset' && kind !== 'resource') return this.failure(op, 'MTR-0008', 'bad reference kind');
+    const documents = [...this.#documents.values()].map((document) => (
+      { pack: document.pack, path: document.path, parsed: document.parsed }));
+    return this.success(op, scanReferences(documents, {
+      kind, pack: stringValue(payload.pack), target: stringValue(payload.target),
+    }));
+  }
+
+  /** All-or-none: plan every operation on copies, then commit. */
+  private bulk(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const operations = Array.isArray(payload.operations) ? payload.operations : [];
+    if (operations.length === 0 || operations.length > 50) {
+      return this.failure(op, 'MTR-0008', 'a bulk change needs 1 to 50 documents');
+    }
+    const planned: {
+      path: string; kind: string; rev: number; created: boolean;
+      before?: Record<string, Record<string, unknown>>; parsed: Record<string, Record<string, unknown>>;
+      edits: FieldEdit[]; ref?: ResourceRef;
+    }[] = [];
+    for (const entry of operations) {
+      if (!isRecord(entry)) return this.failure(op, 'MTR-0008', 'operations must be objects');
+      const kind = stringValue(entry.kind);
+      const edits = entry.edits === undefined ? [] : parseEdits(entry.edits);
+      if (!edits) return this.failure(op, 'MTR-0012', 'fixture field edits are malformed');
+      let path = '';
+      let parsed: Record<string, Record<string, unknown>>;
+      let before: Record<string, Record<string, unknown>> | undefined;
+      let rev = 1;
+      let ref: ResourceRef | undefined;
+      if (kind === 'set') {
+        path = stringValue(entry.path);
+        const document = this.#documents.get(`${pack}/${path}`);
+        if (!document) return this.failure(op, 'MTR-0009', `fixture document not found: ${path}`);
+        if (numberValue(entry.rev) !== document.rev) {
+          return this.failure(op, 'MTR-0034', `${path}: document revision no longer matches`);
+        }
+        before = document.parsed;
+        parsed = structuredClone(document.parsed);
+        rev = document.rev + 1;
+      } else if (kind === 'duplicate' || kind === 'create') {
+        const id = stringValue(entry.id);
+        if (!/^[a-z0-9_-]{2,64}$/.test(id)) return this.failure(op, 'MTR-0008', 'bad resource id');
+        const type = kind === 'create'
+          ? stringValue(entry.type, 'items')
+          : stringValue(entry.fromPath).split('/')[0] ?? 'items';
+        path = `${type}/${id}.yml`;
+        if (this.#documents.has(`${pack}/${path}`)) {
+          return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
+        }
+        if (kind === 'duplicate') {
+          const source = this.#documents.get(`${pack}/${stringValue(entry.fromPath)}`);
+          const sourceId = source ? Object.keys(source.parsed)[0] : undefined;
+          if (!source || !sourceId) return this.failure(op, 'MTR-0009', 'fixture duplicate source not found');
+          parsed = { [id]: structuredClone(source.parsed[sourceId]!) };
+        } else {
+          parsed = { [id]: type === 'recipes' ? { type: 'shaped', result: id } : { display_name: id } };
+        }
+        ref = { pack, type, path, id };
+      } else {
+        return this.failure(op, 'MTR-0008', 'operation kind must be set, create or duplicate');
+      }
+      if (planned.some((other) => other.path === path)) {
+        return this.failure(op, 'MTR-0008', `the same document appears twice: ${path}`);
+      }
+      for (const edit of edits) {
+        const root = edit.field[0];
+        if (!root || !parsed[root]) return this.failure(op, 'MTR-0009', `fixture resource root not found in ${path}`);
+        if (edit.remove) delete parsed[root][edit.field[1]!];
+        else if (!assignPath(parsed[root], edit.field.slice(1), edit.value)) {
+          return this.failure(op, 'MTR-0012', 'fixture field path is malformed');
+        }
+      }
+      planned.push({
+        path, kind, rev, created: kind !== 'set', parsed, edits, ...(before ? { before } : {}),
+        ...(ref ? { ref } : {}),
+      });
+    }
+    const unchanged = (entry: (typeof planned)[number]) =>
+      !entry.created && JSON.stringify(entry.parsed) === JSON.stringify(entry.before);
+    const apply = payload.dryRun !== true && planned.some((entry) => !unchanged(entry));
+    const valueAtPath = (tree: Record<string, Record<string, unknown>> | undefined, field: string[]): unknown => {
+      let node: unknown = tree;
+      for (const part of field) {
+        if (!isRecord(node)) return null;
+        node = node[part];
+      }
+      return node ?? null;
+    };
+    const documents = planned.map((entry) => {
+      const same = unchanged(entry);
+      const changes = same ? [] : entry.edits
+        .map((edit) => ({
+          field: edit.field,
+          before: valueAtPath(entry.before, edit.field),
+          after: valueAtPath(entry.parsed, edit.field),
+        }))
+        .filter((change) => JSON.stringify(change.before) !== JSON.stringify(change.after));
+      if (apply && !same) {
+        const key = `${pack}/${entry.path}`;
+        const current = this.#documents.get(key);
+        if (current) {
+          current.parsed = entry.parsed;
+          current.rev = entry.rev;
+          current.raw = serializeFixtureYaml(entry.parsed);
+        } else {
+          this.#documents.set(key, makeDocument(entry.path, 1, entry.parsed));
+          if (entry.ref) this.#resources.push(entry.ref);
+        }
+      }
+      return { path: entry.path, kind: entry.kind, rev: same ? entry.rev - 1 : entry.rev, unchanged: same, changes };
+    });
+    return this.success(op, { applied: apply, documents });
   }
 
   private saveModel(op: string, payload: Record<string, unknown>): Response {

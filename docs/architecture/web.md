@@ -340,12 +340,22 @@ keys come back as the text the runtime reads (`on`/`off`), so a bare ECA `on:`
 reaches the rule editor as `on`, not `"true"`. Asset uploads are capped per extension:
 2 MiB for textures/models, 8 MiB for audio (`ogg`/`oga`) — bigger sources wait
 for M5's chunk flow. Still illustrative-only:
-where-used graph, import pack, pre-apply report / apply confirm, preview renders,
+import pack, pre-apply report / apply confirm, preview renders,
 `close`. Concurrency notes learned the hard way: pushes and RPC replies seal from
 different threads — `EditorSession.sendFrame` synchronizes seal+write so sequence
 assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
+
+*As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
+`{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
+(`{pack, operations, dryRun}`, operations `set` / `create` / `duplicate`, ≤ 50) answer from
+`AuthoringApi.findReferences` / `bulk`. The editor never loops independent writes to
+look atomic: a multi-document change is one request that the server validates as a whole,
+writes under one store lock and rolls back on failure. Coverage is part of every reference
+answer; an empty list is "not found", and only a `complete` scan with no unreadable
+documents supports "no known users" — and even then asset files (a model's texture list) are
+not read.
 
 *As built:* `delivery.status` returns the current candidate and published hashes;
 `delivery.publish` promotes only the expected candidate hash and returns a visible stale error
@@ -582,8 +592,8 @@ cannot read, forge, replay, or reorder anything.
   start expanded and may be collapsed without shifting the navigation rows. Activity is absent
   until its sidebar button opens it; that button or the panel's close control hides it completely.
   New activity does not reopen a closed panel. Visited workspaces stay mounted
-  and hidden so navigation does not destroy their editor state. There is no separate Assets
-  workspace in this slice; assets are opened from studio slots or Files (Start is described below). Files↔Studio
+  and hidden so navigation does not destroy their editor state. Assets are opened from studio slots, the Assets
+  workspace (below) or Files (Start is described below). Files↔Studio
   navigation carries pack, path, and selected resource identity, including the selected root in a
   multi-resource document. The header keeps the actions distinct: **Save & apply** changes gameplay
   server-wide; **Publish pack** releases the resource pack. Candidate status reports hash
@@ -669,6 +679,30 @@ cannot read, forge, replay, or reorder anything.
   and no YAML), **Choose another texture** focuses the picker, whose upload control remains — and
   any targeted diagnostic for the field is shown inline. None of this verifies runtime behaviour:
   activation text and sentences are explanations from self-description, not a simulation.
+- *As built (M5 scalable authoring):* **Assets** joins the authoring group. It lists the active pack's
+  textures, models and sounds (search, kind filter, arrow-key navigation); selecting one asks
+  `authoring.references` and shows every user with its field and authored value, the coverage
+  sentence (documents read; partial/unknown scans are worded as such) and what it cannot see. A user
+  opens in its studio with the field focused and a **Back to <asset>** bar returns. Two ways to change
+  a shared asset are explicit and both go through one previewed `authoring.bulk` call:
+  **Replace everywhere…** points every user at another asset of the same kind (the old file is left
+  alone), and **Give some users a copy…** checks users, uploads a copy under a new name, then
+  retargets only those. The copy is an ordinary `assets.put` before the bulk call — a separate write,
+  not part of the atomic change — and is removed again if the bulk call is refused (and named in the
+  error if even that fails). **Edit pixels** states how many uses the change will reach. A texture or model slot's **Used by**
+  button opens this view on its asset.
+  In Content, **dragging a rectangle** over rows marks them (Ctrl/Cmd/Shift adds to the marks; a click on empty space clears them),
+  **Space** marks rows (**Ctrl/Cmd+A** marks everything shown, so a search narrows the
+  set), and **Edit N marked…** opens the bulk dialog: pick a registry field, give a value (or remove the
+  field), **Preview changes**, then **Apply** — one revision per document, written together or not at
+  all, with the revisions read when the dialog was previewed (a document that changed in between
+  refuses the whole change). **Make variants…** (context menu, single-root files) turns a list of
+  names (`Name` or `Name = value`) into lossless duplicates with their own ids and display names, and
+  optionally one new recipe per item in the same change; **Create recipe** makes a recipe whose `result`
+  is the item. Marked rows with pending drafts are refused rather than written under. **Ctrl/Cmd+K**
+  opens a command palette over views, create starters, every resource, every asset, and — with a
+  resource open — that type's fields (the property search). It runs actions the UI already has.
+  Menu integration stays M6.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

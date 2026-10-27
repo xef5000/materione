@@ -16,6 +16,7 @@ import type { ResourceRef, ResourceSummary, RpcChannel } from '../api';
 import type { PushFrame } from '../events';
 import type { Response } from '../protocol/wire';
 import type { DemoSnapshot, SnapshotDocument, SnapshotPack } from './snapshot';
+import { scanReferences } from './references';
 
 const ACTOR = 'demo';
 const UNKNOWN_HEALTH = 'pipeline validation and apply freshness are unknown';
@@ -74,6 +75,8 @@ export class DemoServer implements RpcChannel {
       case 'edit.put':
       case 'authoring.commit': return this.#put(op, p);
       case 'authoring.setFields': return this.#setFields(p);
+      case 'authoring.references': return this.#references(p);
+      case 'authoring.bulk': return this.#bulk(p);
       case 'edit.setScalar': return this.#setFields({ ...p, edits: [{ field: p.field, value: p.value }] });
       case 'edit.create': return this.#create(op, text(p.pack), text(p.path), optional(p.id));
       case 'authoring.createResource': return this.#createResource(p);
@@ -223,6 +226,84 @@ export class DemoServer implements RpcChannel {
     }
     const document = await this.#store(pack, path, yaml.toString(), 'authoring.setFields');
     return { rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) };
+  }
+
+  #references(p: Record<string, unknown>): unknown {
+    const kind = text(p.kind);
+    if (kind !== 'asset' && kind !== 'resource') throw new DemoError('MTR-0008', "kind must be 'asset' or 'resource'");
+    const documents = this.#snapshot.packs.flatMap((pack) => Object.entries(pack.documents)
+      .map(([path, document]) => ({ pack: pack.name, path, parsed: document.parsed })));
+    return scanReferences(documents, { kind, pack: text(p.pack), target: text(p.target) });
+  }
+
+  /** All-or-none: every operation is planned (and may throw) before the first document is written. */
+  async #bulk(p: Record<string, unknown>): Promise<unknown> {
+    const pack = text(p.pack);
+    const packState = this.#pack(pack);
+    const operations = p.operations;
+    if (!Array.isArray(operations) || operations.length === 0) throw new DemoError('MTR-0008', "'operations' must be a non-empty array");
+    if (operations.length > 50) throw new DemoError('MTR-0008', 'at most 50 documents per bulk change');
+    const types = Object.keys(this.#snapshot.scaffolds);
+    const planned: { path: string; kind: string; before?: string; raw: string; creates: boolean; edits: Record<string, unknown>[] }[] = [];
+    for (const entry of operations as Record<string, unknown>[]) {
+      const kind = text(entry.kind);
+      const edits = Array.isArray(entry.edits) ? (entry.edits as Record<string, unknown>[]) : [];
+      let path: string;
+      let raw: string;
+      let before: string | undefined;
+      if (kind === 'set') {
+        path = text(entry.path);
+        const current = this.#document(pack, path);
+        this.#checkRev(current, entry.rev);
+        raw = current.raw;
+        before = current.raw;
+      } else if (kind === 'create') {
+        const id = text(entry.id);
+        path = documentPath(optional(entry.type) ?? 'items', optional(entry.folder), id, types);
+        const template = this.#snapshot.scaffolds[path.split('/')[0] ?? ''];
+        if (template === undefined) throw new DemoError('MTR-0008', `no scaffold for '${path}'`);
+        raw = template.replaceAll(this.#snapshot.scaffoldId, id).replaceAll(display(this.#snapshot.scaffoldId), display(id));
+      } else if (kind === 'duplicate') {
+        const from = text(entry.fromPath);
+        const id = text(entry.id);
+        const source = this.#document(pack, from);
+        path = documentPath(from.slice(0, from.indexOf('/')), optional(entry.folder), id, types);
+        const sourceId = Object.keys(source.parsed)[0];
+        if (sourceId === undefined) throw new DemoError('MTR-0008', 'cannot copy a file without a resource');
+        raw = source.raw.replace(new RegExp(`^${escapeRegExp(sourceId)}:`, 'm'), `${id}:`);
+      } else {
+        throw new DemoError('MTR-0008', 'operation kind must be set, create or duplicate');
+      }
+      if (planned.some((other) => other.path === path)) throw new DemoError('MTR-0008', `the same document appears twice: ${path}`);
+      if (kind !== 'set' && packState.documents[path]) throw new DemoError('MTR-0008', `document already exists: ${path}`, 'choose a different id');
+      const yaml = parseDocument(raw);
+      for (const edit of edits) {
+        const field = edit.field;
+        if (!Array.isArray(field) || field.length < 2 || !field.every((part) => typeof part === 'string')) {
+          throw new DemoError('MTR-0008', 'field path must name a resource root and a field');
+        }
+        if (!yaml.hasIn([field[0]])) throw new DemoError('MTR-0009', `no resource root '${String(field[0])}' in ${path}`);
+        if (edit.remove === true) yaml.deleteIn(field);
+        else yaml.setIn(field, yaml.createNode(edit.value));
+      }
+      planned.push({ path, kind, ...(before === undefined ? {} : { before }), raw: yaml.toString(), creates: kind !== 'set', edits });
+    }
+    const apply = p.dryRun !== true && planned.some((entry) => entry.creates || entry.raw !== entry.before);
+    const documents: unknown[] = [];
+    for (const entry of planned) {
+      const unchanged = !entry.creates && entry.raw === entry.before;
+      const before = entry.before === undefined ? undefined : parseContent(entry.before);
+      const after = parseContent(entry.raw);
+      const changes = unchanged ? [] : entry.edits.map((edit) => {
+        const field = edit.field as string[];
+        return { field, before: valueAt(before, field) ?? null, after: valueAt(after, field) ?? null };
+      }).filter((change) => JSON.stringify(change.before) !== JSON.stringify(change.after));
+      let rev = entry.creates ? 1 : this.#document(pack, entry.path).rev + 1;
+      if (apply && !unchanged) rev = (await this.#store(pack, entry.path, entry.raw, 'authoring.bulk')).rev;
+      else if (unchanged) rev = this.#document(pack, entry.path).rev;
+      documents.push({ path: entry.path, kind: entry.kind, rev, unchanged, changes });
+    }
+    return { applied: apply, documents };
   }
 
   async #create(op: string, pack: string, path: string, id: string | undefined, name?: string): Promise<SnapshotDocument> {
@@ -521,6 +602,15 @@ function base64Length(data: string): number {
 
 function byPathThenId(a: ResourceRef, b: ResourceRef): number {
   return a.path === b.path ? a.id.localeCompare(b.id) : a.path.localeCompare(b.path);
+}
+
+function valueAt(tree: Record<string, unknown> | undefined, field: string[]): unknown {
+  let node: unknown = tree;
+  for (const part of field) {
+    if (!isRecord(node)) return undefined;
+    node = node[part];
+  }
+  return node;
 }
 
 function escapeRegExp(value: string): string {

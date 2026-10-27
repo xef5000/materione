@@ -409,18 +409,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
             String type = request.fromPath().contains("/")
                     ? request.fromPath().substring(0, request.fromPath().indexOf('/')) : "";
             String path = documentPath(type, request.folder(), request.resourceId());
-            DocumentStore.Document source = documents.read(request.pack(), request.fromPath());
-            var parsedSource = LosslessYaml.parse(source.raw());
-            if (parsedSource.parseError().isPresent()) {
-                throw new IllegalArgumentException(
-                        "cannot copy a file that does not parse: " + parsedSource.parseError().get());
-            }
-            String sourceId = String.valueOf(parsedSource.data().keySet().iterator().next());
-            // The scaffold is the source file's bytes with its root key
-            // re-keyed, so comments and unknown fields survive the copy (§5.6).
-            String content = source.raw().replaceFirst(
-                    "(?m)^" + Pattern.quote(sourceId) + ":",
-                    java.util.regex.Matcher.quoteReplacement(request.resourceId() + ":"));
+            String content = rekeyedCopy(request.pack(), request.fromPath(), request.resourceId());
             int revision = documents.createDocument(request.pack(), path, content, actorId(actor));
             audit.record(actorId(actor), "authoring.duplicateResource",
                     request.pack() + "/" + path);
@@ -553,6 +542,170 @@ public final class AuthoringApiImpl implements AuthoringApi {
         // data is available (content.unresolved()) the moment the record is
         // made public; until then the list reports empty.
         return ApiResult.ok(new GraphQueryResult(referencing, List.of()));
+    }
+
+    /**
+     * The source file's bytes with its root key re-keyed, so comments and
+     * unknown fields survive the copy (§5.6).
+     */
+    private String rekeyedCopy(String pack, String fromPath, String newId) throws java.io.IOException {
+        DocumentStore.Document source = documents.read(pack, fromPath);
+        var parsedSource = LosslessYaml.parse(source.raw());
+        if (parsedSource.parseError().isPresent()) {
+            throw new IllegalArgumentException(
+                    "cannot copy a file that does not parse: " + parsedSource.parseError().get());
+        }
+        String sourceId = String.valueOf(parsedSource.data().keySet().iterator().next());
+        return source.raw().replaceFirst(
+                "(?m)^" + Pattern.quote(sourceId) + ":",
+                java.util.regex.Matcher.quoteReplacement(newId + ":"));
+    }
+
+    @Override
+    public ApiResult<ReferenceResult> findReferences(ReferenceQuery query) {
+        try {
+            if (query == null || query.kind() == null || query.target() == null || query.target().isBlank()
+                    || query.target().length() > 256 || query.target().contains("..")
+                    || query.pack() == null || !query.pack().matches("[a-z0-9_-]{2,64}")) {
+                throw new IllegalArgumentException("a reference query needs a kind, a pack and a target");
+            }
+            return ApiResult.ok(new ReferenceScanner(documents).scan(query));
+        } catch (IllegalArgumentException e) {
+            return badRequest(e.getMessage());
+        } catch (Exception e) {
+            return handlerFailure(e);
+        }
+    }
+
+    @Override
+    public ApiResult<BulkResult> bulk(ActorContext actor, BulkRequest request) {
+        try {
+            List<BulkOperation> operations = request.operations();
+            if (operations == null || operations.isEmpty()) {
+                throw new IllegalArgumentException("'operations' must be a non-empty array");
+            }
+            if (operations.size() > MAX_BULK_OPERATIONS) {
+                throw new IllegalArgumentException(
+                        "at most " + MAX_BULK_OPERATIONS + " documents per bulk change");
+            }
+            List<DocumentStore.BatchStep> steps = new ArrayList<>();
+            for (BulkOperation op : operations) {
+                if (op.kind() == null) {
+                    throw new IllegalArgumentException("every operation needs a kind");
+                }
+                if (op.edits().size() > 256) {
+                    throw new IllegalArgumentException("too many edits for one document");
+                }
+                List<DocumentStore.FieldEdit> edits = new ArrayList<>();
+                for (FieldEdit edit : op.edits()) {
+                    edits.add(new DocumentStore.FieldEdit(edit.field(), edit.value(), edit.remove()));
+                }
+                switch (op.kind()) {
+                    case SET -> {
+                        if (op.path() == null || edits.isEmpty()) {
+                            throw new IllegalArgumentException("a patch needs a path and edits");
+                        }
+                        steps.add(new DocumentStore.BatchStep(
+                                op.path(), DocumentStore.BatchKind.SET, op.expectedRevision(), null, edits));
+                    }
+                    case CREATE -> {
+                        String type = op.type() == null ? "items" : op.type();
+                        String path = documentPath(type, op.folder(), op.resourceId());
+                        String scaffold = Scaffolds.forPath(path, op.resourceId());
+                        String name = op.displayName() == null || op.displayName().isBlank()
+                                ? null : displayName(op.displayName());
+                        String content = name != null && scaffold.contains("display_name:")
+                                ? LosslessYaml.parse(scaffold)
+                                        .withScalar(name, op.resourceId(), "display_name").save()
+                                : scaffold;
+                        steps.add(new DocumentStore.BatchStep(
+                                path, DocumentStore.BatchKind.CREATE, 0, content, edits));
+                    }
+                    case DUPLICATE -> {
+                        if (op.fromPath() == null) {
+                            throw new IllegalArgumentException("a duplicate needs the path to copy");
+                        }
+                        String type = op.fromPath().contains("/")
+                                ? op.fromPath().substring(0, op.fromPath().indexOf('/')) : "";
+                        String path = documentPath(type, op.folder(), op.resourceId());
+                        steps.add(new DocumentStore.BatchStep(
+                                path, DocumentStore.BatchKind.CREATE, 0,
+                                rekeyedCopy(request.pack(), op.fromPath(), op.resourceId()), edits));
+                    }
+                }
+            }
+            String actorId = actorId(actor);
+            // Plan first: nothing is written until every document validated.
+            List<DocumentStore.BatchOutcome> plan =
+                    documents.applyBatch(request.pack(), steps, true, actorId);
+            List<DocumentStore.BatchStep> effective = new ArrayList<>();
+            for (int i = 0; i < steps.size(); i++) {
+                DocumentStore.BatchOutcome outcome = plan.get(i);
+                if (outcome.kind() == DocumentStore.BatchKind.CREATE
+                        || !outcome.after().raw().equals(outcome.before())) {
+                    effective.add(steps.get(i));
+                }
+            }
+            Map<String, DocumentStore.BatchOutcome> written = new LinkedHashMap<>();
+            boolean applied = false;
+            if (!request.dryRun() && !effective.isEmpty()) {
+                for (DocumentStore.BatchOutcome outcome
+                        : documents.applyBatch(request.pack(), effective, false, actorId)) {
+                    written.put(outcome.path(), outcome);
+                }
+                applied = true;
+                audit.record(actorId, "authoring.bulk",
+                        request.pack() + " (" + written.size() + " documents)");
+                for (String path : written.keySet()) {
+                    reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
+                }
+            }
+            List<BulkDocumentResult> results = new ArrayList<>();
+            for (int i = 0; i < steps.size(); i++) {
+                DocumentStore.BatchStep step = steps.get(i);
+                DocumentStore.BatchOutcome planned = plan.get(i);
+                boolean unchanged = !effective.contains(step);
+                DocumentStore.BatchOutcome shown = written.getOrDefault(step.path(), planned);
+                results.add(new BulkDocumentResult(
+                        step.path(), operations.get(i).kind(), shown.after().revision(), unchanged,
+                        unchanged ? List.of() : changes(planned, operations.get(i).edits())));
+            }
+            return ApiResult.ok(new BulkResult(applied, results));
+        } catch (DocumentConflictException e) {
+            return conflict(e, "reload the affected documents and review the change again");
+        } catch (NoSuchFileException e) {
+            return missing("no such document: " + e.getFile());
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return badRequest(e.getMessage());
+        } catch (Exception e) {
+            return handlerFailure(e);
+        }
+    }
+
+    private static List<BulkFieldChange> changes(DocumentStore.BatchOutcome outcome, List<FieldEdit> edits) {
+        Map<String, Object> before = outcome.before() == null ? null : parsed(outcome.before());
+        Map<String, Object> after = parsed(outcome.after().raw());
+        List<BulkFieldChange> out = new ArrayList<>();
+        for (FieldEdit edit : edits) {
+            Object was = valueAt(before, edit.field());
+            Object now = valueAt(after, edit.field());
+            if (!Objects.equals(was, now)) {
+                out.add(new BulkFieldChange(edit.field(), was, now));
+            }
+        }
+        return out;
+    }
+
+    private static Object valueAt(Map<String, Object> tree, List<String> field) {
+        Object node = tree;
+        for (String key : field) {
+            if (node instanceof Map<?, ?> map) {
+                node = map.get(key);
+            } else {
+                return null;
+            }
+        }
+        return node;
     }
 
     @Override

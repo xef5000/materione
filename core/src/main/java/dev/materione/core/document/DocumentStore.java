@@ -662,6 +662,130 @@ public final class DocumentStore {
         }
     }
 
+    /** What one {@link BatchStep} does: patch an existing document or create a new one. */
+    public enum BatchKind {
+        SET,
+        CREATE
+    }
+
+    /**
+     * One document inside {@link #applyBatch}. {@code SET} patches the current
+     * document at {@code expectedRevision}; {@code CREATE} starts from
+     * {@code base} (a document that must not exist yet) and then applies the
+     * edits, so a new resource is born with its initial fields in one write.
+     */
+    public record BatchStep(
+            String path, BatchKind kind, int expectedRevision, String base, List<FieldEdit> edits) {}
+
+    /** One document's state around a batch: {@code before} is null for a creation. */
+    public record BatchOutcome(String path, BatchKind kind, String before, Document after) {}
+
+    /**
+     * All-or-none multi-document write. Every step is validated and computed
+     * in memory under the store lock first (revision checks, existence checks,
+     * lossless patching, syntax); only when all of them succeed are any bytes
+     * written, and an I/O failure part-way restores every touched file and
+     * journal from checkpoints. With {@code dryRun} the planned result is
+     * returned and nothing is written.
+     */
+    public List<BatchOutcome> applyBatch(
+            String pack, List<BatchStep> steps, boolean dryRun, String actor) throws IOException {
+        if (steps.isEmpty()) {
+            throw new IllegalArgumentException("no documents to write");
+        }
+        synchronized (lock) {
+            List<String> paths = new ArrayList<>();
+            List<String> before = new ArrayList<>();
+            List<String> after = new ArrayList<>();
+            for (BatchStep step : steps) {
+                if (paths.contains(step.path())) {
+                    throw new IllegalArgumentException("the same document appears twice: " + step.path());
+                }
+                paths.add(step.path());
+                Path file = resolve(pack, step.path());
+                String current = null;
+                if (step.kind() == BatchKind.SET) {
+                    if (!Files.isRegularFile(file)) {
+                        throw new java.nio.file.NoSuchFileException(step.path());
+                    }
+                    try {
+                        assertExpectedRevision(pack, step.path(), step.expectedRevision());
+                    } catch (DocumentConflictException conflict) {
+                        throw new DocumentConflictException(
+                                step.path() + ": " + conflict.getMessage(),
+                                conflict.expectedRevision(), conflict.currentRevision());
+                    }
+                    current = Files.readString(file, StandardCharsets.UTF_8);
+                } else if (Files.exists(file)) {
+                    throw new IllegalStateException("document already exists: " + step.path());
+                }
+                String start = current != null ? current : Objects.requireNonNull(step.base(), "base");
+                LosslessYamlDocument document = LosslessYaml.parse(start);
+                if (document.parseError().isPresent()) {
+                    throw new IllegalStateException(step.path() + " does not parse: "
+                            + document.parseError().get());
+                }
+                try {
+                    for (FieldEdit edit : step.edits()) {
+                        String[] field = edit.field().toArray(String[]::new);
+                        document = edit.remove()
+                                ? document.withoutNode(field)
+                                : document.withNode(edit.value(), field);
+                    }
+                } catch (UnsupportedOperationException e) {
+                    throw new IllegalArgumentException(step.path() + ": " + e.getMessage());
+                }
+                String updated = document.save();
+                Optional<String> parseError = LosslessYaml.parse(updated).parseError();
+                if (parseError.isPresent()) {
+                    throw new IllegalArgumentException(step.path() + ": invalid YAML: " + parseError.get());
+                }
+                before.add(current);
+                after.add(updated);
+            }
+            List<BatchOutcome> outcomes = new ArrayList<>();
+            List<Checkpoint> checkpoints = new ArrayList<>();
+            if (!dryRun) {
+                for (BatchStep step : steps) {
+                    checkpoints.add(checkpoint(pack, step.path()));
+                }
+            }
+            try {
+                for (int i = 0; i < steps.size(); i++) {
+                    BatchStep step = steps.get(i);
+                    byte[] bytes = after.get(i).getBytes(StandardCharsets.UTF_8);
+                    String hash = Documents.sha256(bytes);
+                    int revision;
+                    if (dryRun) {
+                        revision = step.kind() == BatchKind.CREATE ? 1 : step.expectedRevision() + 1;
+                    } else {
+                        Path file = resolve(pack, step.path());
+                        Files.createDirectories(file.getParent());
+                        Files.write(file, bytes);
+                        revision = step.kind() == BatchKind.CREATE
+                                ? 1 : currentRevision(pack, step.path()) + 1;
+                        appendRevision(pack, step.path(), new Revision(
+                                revision, System.currentTimeMillis(), actor,
+                                step.kind() == BatchKind.CREATE ? "create" : "set-scalar", hash));
+                        trimJournal(pack, step.path());
+                    }
+                    outcomes.add(new BatchOutcome(step.path(), step.kind(), before.get(i),
+                            new Document(pack, step.path(), after.get(i), revision, hash)));
+                }
+            } catch (IOException | RuntimeException failure) {
+                for (Checkpoint checkpoint : checkpoints) {
+                    try {
+                        restore(checkpoint);
+                    } catch (IOException | RuntimeException ignored) {
+                        // best effort: keep restoring the remaining files
+                    }
+                }
+                throw failure;
+            }
+            return outcomes;
+        }
+    }
+
     /** One field patch inside a batched studio save; {@code remove} deletes the key instead. */
     public record FieldEdit(List<String> field, Object value, boolean remove) {
 

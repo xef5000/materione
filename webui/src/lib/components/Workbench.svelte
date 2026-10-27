@@ -6,6 +6,8 @@
    */
   import AppHeader from './AppHeader.svelte';
   import AdvancedView from '../views/AdvancedView.svelte';
+  import AssetsView from '../views/AssetsView.svelte';
+  import CommandPalette from './CommandPalette.svelte';
   import ContentView from '../views/ContentView.svelte';
   import DiagnosticsView from '../views/DiagnosticsView.svelte';
   import ServerView from '../views/ServerView.svelte';
@@ -19,13 +21,14 @@
 
   let { onDisconnect }: Props = $props();
 
-  type RailView = 'start' | 'content' | 'advanced' | 'diagnostics' | 'server';
+  type RailView = 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server';
   type RailTarget = RailView | 'activity';
   type RailEntry = { id: RailTarget; label: string; icon: string };
 
   const authoringViews: RailEntry[] = [
     { id: 'start', label: 'Start', icon: 'M12 3 3 10v11h6v-6h6v6h6V10z' },
     { id: 'content', label: 'Content', icon: 'M4 5.5h16v14H4zM7 2h10v3H7z' },
+    { id: 'assets', label: 'Assets', icon: 'M4 4h16v16H4zM4 15l5-5 4 4 3-3 4 4M15 8.5h.01' },
     {
       id: 'advanced',
       label: 'Files',
@@ -50,6 +53,7 @@
   let initialized = $state<Record<RailView, boolean>>({
     start: false,
     content: true,
+    assets: false,
     advanced: false,
     diagnostics: false,
     server: false,
@@ -71,7 +75,16 @@
       ui.activityOpen = !ui.activityOpen;
       return;
     }
+    ui.returnTo = null;
     ui.view = target;
+  }
+
+  // Ctrl/Cmd+K opens the palette from anywhere; the palette owns the keys while it is open.
+  function onWindowKey(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+      event.preventDefault();
+      ui.paletteOpen = !ui.paletteOpen;
+    }
   }
 
   function errorCount(entry: RailEntry): number {
@@ -85,6 +98,8 @@
     return count > 0 ? `${entry.label}, ${count} ${count === 1 ? 'error' : 'errors'}` : entry.label;
   }
 </script>
+
+<svelte:window onkeydown={onWindowKey} />
 
 <div class="workbench">
   <AppHeader />
@@ -162,6 +177,14 @@
           <StartView />
         </section>
       {/if}
+      {#if ui.returnTo && ui.view === 'content'}
+        <div class="return-bar">
+          <button
+            type="button"
+            onclick={() => { ui.view = 'assets'; ui.returnTo = null; }}
+          >← Back to {ui.returnTo.label}</button>
+        </div>
+      {/if}
       {#if initialized.content}
         <div
           class="workspace"
@@ -170,6 +193,16 @@
         >
           <ContentView active={ui.view === 'content'} />
         </div>
+      {/if}
+      {#if initialized.assets}
+        <section
+          class="workspace"
+          hidden={ui.view !== 'assets'}
+          aria-hidden={ui.view !== 'assets'}
+          aria-label="Assets"
+        >
+          <AssetsView active={ui.view === 'assets'} />
+        </section>
       {/if}
       {#if initialized.advanced}
         <div
@@ -206,6 +239,10 @@
 
   {#if ui.activityOpen}
     <ActivityDock bind:open={ui.activityOpen} />
+  {/if}
+
+  {#if ui.paletteOpen}
+    <CommandPalette onClose={() => (ui.paletteOpen = false)} />
   {/if}
 </div>
 
@@ -344,6 +381,28 @@
   }
   .workspace[hidden] {
     display: none;
+  }
+  .viewhost {
+    display: flex;
+    flex-direction: column;
+  }
+  .viewhost > .workspace {
+    flex: 1 1 0;
+    height: auto;
+  }
+  .return-bar {
+    flex: none;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .return-bar button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12.5px;
+    padding: 0;
   }
   .panel {
     overflow-y: auto;

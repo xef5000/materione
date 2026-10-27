@@ -21,6 +21,9 @@ const SURFACES = [
   'src/lib/components/AppHeader.svelte',
   'src/lib/components/Workbench.svelte',
   'src/lib/views/StartView.svelte',
+  'src/lib/views/AssetsView.svelte',
+  'src/lib/components/BulkDialog.svelte',
+  'src/lib/components/CommandPalette.svelte',
   'src/lib/studio/MechanicsEditor.svelte',
   'src/lib/studio/BehaviorRulesEditor.svelte',
 ];

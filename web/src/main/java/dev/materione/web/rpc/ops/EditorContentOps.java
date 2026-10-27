@@ -319,24 +319,7 @@ public final class EditorContentOps {
                 if (element.getAsJsonArray().size() > 256) {
                     throw new IllegalArgumentException("too many edits in one save");
                 }
-                List<AuthoringApi.FieldEdit> edits = new java.util.ArrayList<>();
-                for (var entry : element.getAsJsonArray()) {
-                    if (!entry.isJsonObject()) {
-                        throw new IllegalArgumentException("'edits' entries must be objects");
-                    }
-                    JsonObject edit = entry.getAsJsonObject();
-                    var remove = edit.get("remove");
-                    if (remove != null && remove.isJsonPrimitive() && remove.getAsJsonPrimitive().isBoolean()
-                            && remove.getAsBoolean()) {
-                        if (edit.has("value")) {
-                            throw new IllegalArgumentException("a removal edit carries no 'value'");
-                        }
-                        edits.add(AuthoringApi.FieldEdit.removal(stringList(edit.get("field"))));
-                        continue;
-                    }
-                    edits.add(new AuthoringApi.FieldEdit(
-                            stringList(edit.get("field")), nodeValue(edit.get("value"))));
-                }
+                List<AuthoringApi.FieldEdit> edits = parseEdits(element);
                 ApiResult<AuthoringApi.DocumentView> result = authoring.setFields(
                         actorFor.apply(actorOf(request)),
                         new AuthoringApi.SetFieldsRequest(
@@ -352,6 +335,131 @@ public final class EditorContentOps {
                 payload.addProperty("rev", result.value().revision());
                 payload.addProperty("raw", result.value().raw());
                 payload.add("parsed", jsonOf(result.value().parsed()));
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        // Where is this used? Typed (asset | resource), bounded, and honest
+        // about what it did not read (coverage), so the editor never shows an
+        // empty list as proof of "unused".
+        dispatcher.register("authoring.references", request -> {
+            JsonObject body = request.payload();
+            try {
+                String kind = requiredString(body, "kind");
+                AuthoringApi.ReferenceKind parsedKind = switch (kind) {
+                    case "asset" -> AuthoringApi.ReferenceKind.ASSET;
+                    case "resource" -> AuthoringApi.ReferenceKind.RESOURCE;
+                    default -> throw new IllegalArgumentException("kind must be 'asset' or 'resource'");
+                };
+                ApiResult<AuthoringApi.ReferenceResult> result = authoring.findReferences(
+                        new AuthoringApi.ReferenceQuery(
+                                parsedKind, requiredString(body, "pack"), requiredString(body, "target")));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
+                AuthoringApi.ReferenceResult found = result.value();
+                JsonObject payload = new JsonObject();
+                com.google.gson.JsonArray hits = new com.google.gson.JsonArray();
+                for (AuthoringApi.ReferenceHit hit : found.hits()) {
+                    JsonObject row = new JsonObject();
+                    row.addProperty("pack", hit.resource().pack());
+                    row.addProperty("type", hit.resource().type());
+                    row.addProperty("path", hit.resource().path());
+                    row.addProperty("id", hit.resource().resourceId());
+                    row.add("field", jsonOf(hit.field()));
+                    row.addProperty("value", hit.value());
+                    hits.add(row);
+                }
+                payload.add("hits", hits);
+                JsonObject coverage = new JsonObject();
+                coverage.addProperty("documentsScanned", found.coverage().documentsScanned());
+                coverage.addProperty("unreadable", found.coverage().unreadable());
+                coverage.addProperty("truncated", found.coverage().truncated());
+                coverage.addProperty("complete", found.coverage().complete());
+                coverage.add("notScanned", strings(found.coverage().notScanned()));
+                payload.add("coverage", coverage);
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        // Revision-checked all-or-none authoring over several documents. The
+        // server validates every operation together; dryRun returns the impact
+        // summary and touches nothing.
+        dispatcher.register("authoring.bulk", request -> {
+            JsonObject body = request.payload();
+            try {
+                var element = body.get("operations");
+                if (element == null || !element.isJsonArray() || element.getAsJsonArray().isEmpty()) {
+                    throw new IllegalArgumentException("'operations' must be a non-empty array");
+                }
+                if (element.getAsJsonArray().size() > AuthoringApi.MAX_BULK_OPERATIONS) {
+                    throw new IllegalArgumentException(
+                            "at most " + AuthoringApi.MAX_BULK_OPERATIONS + " documents per bulk change");
+                }
+                List<AuthoringApi.BulkOperation> operations = new java.util.ArrayList<>();
+                for (var entry : element.getAsJsonArray()) {
+                    if (!entry.isJsonObject()) {
+                        throw new IllegalArgumentException("'operations' entries must be objects");
+                    }
+                    JsonObject op = entry.getAsJsonObject();
+                    AuthoringApi.BulkKind kind = switch (requiredString(op, "kind")) {
+                        case "set" -> AuthoringApi.BulkKind.SET;
+                        case "create" -> AuthoringApi.BulkKind.CREATE;
+                        case "duplicate" -> AuthoringApi.BulkKind.DUPLICATE;
+                        default -> throw new IllegalArgumentException(
+                                "operation kind must be set, create or duplicate");
+                    };
+                    var rawEdits = op.get("edits");
+                    operations.add(new AuthoringApi.BulkOperation(
+                            kind,
+                            optionalString(op, "path"),
+                            op.has("rev") ? op.get("rev").getAsInt() : -1,
+                            optionalString(op, "type"),
+                            optionalString(op, "folder"),
+                            optionalString(op, "id"),
+                            optionalString(op, "name"),
+                            optionalString(op, "fromPath"),
+                            rawEdits == null || rawEdits.isJsonNull()
+                                    ? List.of() : parseEdits(rawEdits)));
+                }
+                ApiResult<AuthoringApi.BulkResult> result = authoring.bulk(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.BulkRequest(
+                                requiredString(body, "pack"), operations,
+                                body.has("dryRun") && body.get("dryRun").getAsBoolean()));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null,
+                            hintFor(result.diagnostics(), "reload the affected documents and review the change again"));
+                }
+                JsonObject payload = new JsonObject();
+                payload.addProperty("applied", result.value().applied());
+                com.google.gson.JsonArray documents = new com.google.gson.JsonArray();
+                for (AuthoringApi.BulkDocumentResult doc : result.value().documents()) {
+                    JsonObject row = new JsonObject();
+                    row.addProperty("path", doc.path());
+                    row.addProperty("kind", doc.kind().name().toLowerCase(java.util.Locale.ROOT));
+                    row.addProperty("rev", doc.revision());
+                    row.addProperty("unchanged", doc.unchanged());
+                    com.google.gson.JsonArray changes = new com.google.gson.JsonArray();
+                    for (AuthoringApi.BulkFieldChange change : doc.changes()) {
+                        JsonObject item = new JsonObject();
+                        item.add("field", jsonOf(change.field()));
+                        item.add("before", jsonOf(change.before()));
+                        item.add("after", jsonOf(change.after()));
+                        changes.add(item);
+                    }
+                    row.add("changes", changes);
+                    documents.add(row);
+                }
+                payload.add("documents", documents);
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 return badRequest(request, e.getMessage());
@@ -729,6 +837,35 @@ public final class EditorContentOps {
             object.addProperty("example", param.editor().example());
         }
         return object;
+    }
+
+    /** Parses a wire {@code edits} array: set edits carry a value, removals {@code remove: true}. */
+    private static List<AuthoringApi.FieldEdit> parseEdits(com.google.gson.JsonElement element) {
+        if (element == null || !element.isJsonArray()) {
+            throw new IllegalArgumentException("'edits' must be an array");
+        }
+        if (element.getAsJsonArray().size() > 256) {
+            throw new IllegalArgumentException("too many edits in one save");
+        }
+        List<AuthoringApi.FieldEdit> edits = new java.util.ArrayList<>();
+        for (var entry : element.getAsJsonArray()) {
+            if (!entry.isJsonObject()) {
+                throw new IllegalArgumentException("'edits' entries must be objects");
+            }
+            JsonObject edit = entry.getAsJsonObject();
+            var remove = edit.get("remove");
+            if (remove != null && remove.isJsonPrimitive() && remove.getAsJsonPrimitive().isBoolean()
+                    && remove.getAsBoolean()) {
+                if (edit.has("value")) {
+                    throw new IllegalArgumentException("a removal edit carries no 'value'");
+                }
+                edits.add(AuthoringApi.FieldEdit.removal(stringList(edit.get("field"))));
+                continue;
+            }
+            edits.add(new AuthoringApi.FieldEdit(
+                    stringList(edit.get("field")), nodeValue(edit.get("value"))));
+        }
+        return edits;
     }
 
     private static List<String> stringList(com.google.gson.JsonElement element) {

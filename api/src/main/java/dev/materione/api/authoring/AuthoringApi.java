@@ -137,6 +137,21 @@ public interface AuthoringApi {
     ApiResult<GraphQueryResult> queryGraph(GraphQuery query);
 
     /**
+     * Typed, bounded "where is this used?" over the authored documents of every
+     * pack. Never throws for content problems; what it could not read is
+     * reported in {@link ReferenceCoverage}, not hidden.
+     */
+    ApiResult<ReferenceResult> findReferences(ReferenceQuery query);
+
+    /**
+     * Revision-checked, all-or-none authoring across several documents
+     * ({@code authoring.bulk}): patches, new resources and duplicates are
+     * validated together and written together, or nothing is written. With
+     * {@code dryRun} the impact summary is returned and disk is untouched.
+     */
+    ApiResult<BulkResult> bulk(ActorContext actor, BulkRequest request);
+
+    /**
      * Document change feed — external edits (file watcher) and API saves
      * alike. Returns an {@link AutoCloseable} subscription handle.
      */
@@ -348,4 +363,91 @@ public interface AuthoringApi {
 
     /** A document changed on disk or through the API (watcher feed; {@code push.document.changed}). */
     record DocumentChangeEvent(String pack, String path, boolean deleted) {}
+
+    /** What a {@link ReferenceQuery} names. */
+    enum ReferenceKind {
+        /** An asset file: {@code target} is its pack-relative path (e.g. {@code assets/textures/gem.png}). */
+        ASSET,
+        /** A content resource: {@code target} is its id. */
+        RESOURCE
+    }
+
+    /** {@link #findReferences}: {@code pack} is the pack that owns the target. */
+    record ReferenceQuery(ReferenceKind kind, String pack, String target) {}
+
+    /** One authored scalar that names the target. */
+    record ReferenceHit(ResourceRef resource, List<String> field, String value) {}
+
+    /**
+     * How much of the project the answer covers. {@code complete} is true only
+     * when every document was read and none was unparsable or skipped; the
+     * {@code notScanned} sentences name what this query never looks at.
+     */
+    record ReferenceCoverage(
+            int documentsScanned,
+            int unreadable,
+            boolean truncated,
+            boolean complete,
+            List<String> notScanned) {
+        public ReferenceCoverage {
+            notScanned = notScanned == null ? List.of() : List.copyOf(notScanned);
+        }
+    }
+
+    /** {@link #findReferences} result. */
+    record ReferenceResult(List<ReferenceHit> hits, ReferenceCoverage coverage) {
+        public ReferenceResult {
+            hits = hits == null ? List.of() : List.copyOf(hits);
+        }
+    }
+
+    /** What one {@link BulkOperation} does. */
+    enum BulkKind {
+        /** Patch the existing document at {@code path}, guarded by {@code expectedRevision}. */
+        SET,
+        /** Create a new resource of {@code type} with {@code resourceId}, then apply {@code edits}. */
+        CREATE,
+        /** Copy the document at {@code fromPath} under {@code resourceId}, then apply {@code edits}. */
+        DUPLICATE
+    }
+
+    /** One operation of a {@link BulkRequest}; fields irrelevant to the kind are null. */
+    record BulkOperation(
+            BulkKind kind,
+            String path,
+            int expectedRevision,
+            String type,
+            String folder,
+            String resourceId,
+            String displayName,
+            String fromPath,
+            List<FieldEdit> edits) {
+        public BulkOperation {
+            edits = edits == null ? List.of() : List.copyOf(edits);
+        }
+    }
+
+    /** {@link #bulk}: operations on one pack. */
+    record BulkRequest(String pack, List<BulkOperation> operations, boolean dryRun) {}
+
+    /** One field's change inside a {@link BulkDocumentResult}. */
+    record BulkFieldChange(List<String> field, Object before, Object after) {}
+
+    /** One document's part of a {@link BulkResult}; {@code revision} is the one it has (dry run: would get). */
+    record BulkDocumentResult(
+            String path, BulkKind kind, int revision, boolean unchanged, List<BulkFieldChange> changes) {
+        public BulkDocumentResult {
+            changes = changes == null ? List.of() : List.copyOf(changes);
+        }
+    }
+
+    /** {@link #bulk} outcome; {@code applied} is false for a dry run. */
+    record BulkResult(boolean applied, List<BulkDocumentResult> documents) {
+        public BulkResult {
+            documents = documents == null ? List.of() : List.copyOf(documents);
+        }
+    }
+
+    /** The most operations one {@link #bulk} call accepts. */
+    int MAX_BULK_OPERATIONS = 50;
 }
