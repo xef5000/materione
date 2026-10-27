@@ -95,6 +95,33 @@ class EditorMetadataTest {
     }
 
     @Test
+    void displayFieldsAreNotModulesAndConditionsNameARealSibling() {
+        for (ContentType type : types()) {
+            var parameters = type.describe().parameters();
+            for (ParameterSchema parameter : parameters) {
+                var editor = parameter.editor();
+                String where = type.name() + "." + parameter.id();
+                if (editor.display()) {
+                    assertThat(editor.module()).as(where + " is on the display card, not a module")
+                            .isFalse();
+                }
+                if (editor.shownWhen().isBlank()) {
+                    continue;
+                }
+                int eq = editor.shownWhen().indexOf('=');
+                assertThat(eq).as(where + " shownWhen is field=value").isPositive();
+                String siblingId = editor.shownWhen().substring(0, eq);
+                var sibling = parameters.stream()
+                        .filter(candidate -> candidate.id().equals(siblingId)).findFirst();
+                assertThat(sibling).as(where + " names a sibling").isPresent();
+                for (String value : editor.shownWhen().substring(eq + 1).split("[|]")) {
+                    assertThat(sibling.get().allowedValues()).as(where).contains(value);
+                }
+            }
+        }
+    }
+
+    @Test
     void widgetsTheEditorRendersAreNeverTypedByAnUnrenderableName() {
         // `integer` / `boolean` were once declared as widgets: the editor has
         // `number` / `toggle`, so those fields silently fell back to Advanced.

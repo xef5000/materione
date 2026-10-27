@@ -20,10 +20,10 @@ export async function openModules(page: Page): Promise<string[]> {
 }
 
 /** Open a resource of a type from the Content view: the type tab, then the entry. */
-export async function openResource(page: Page, tab: string, name: string): Promise<void> {
+export async function openResource(page: Page, tab: string, name: string | RegExp): Promise<void> {
   await page.getByRole('button', { name: 'Content', exact: true }).click();
   await page.getByRole('navigation', { name: 'content types' }).getByRole('button', { name: tab }).click();
-  await page.getByRole('option', { name: new RegExp(name, 'i') }).dblclick();
+  await page.getByRole('option', { name: typeof name === 'string' ? new RegExp(name, 'i') : name }).dblclick();
   await expect(page.getByRole('button', { name: /open in files/i })).toBeVisible();
 }
 

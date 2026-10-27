@@ -58,7 +58,7 @@
   }: Props = $props();
 
   const catalog = $derived(moduleCatalog(schema, vocabulary));
-  const display = $derived(displayFieldsOf(schema));
+  const display = $derived(displayFieldsOf(schema, values));
   const extraFields = $derived(extraFieldsOf(schema));
   const advancedFields = $derived(advancedFieldsOf(schema));
 
@@ -208,6 +208,15 @@
         </div>
       {/if}
     {/each}
+    {#each display.others as field (field.id)}
+      <Field {field} value={values[field.id]} pack={resource.pack} siblings={{ values, set }}
+        onChange={(next) => set(field.id, next)} />
+      {@render provenance(field.id)}
+      {@const issue = fieldIssue(field.id)}
+      {#if issue}
+        <p class="field-issue" role="note">{issue.code}: {issue.message}{issue.hint ? ` — ${issue.hint}` : ''}</p>
+      {/if}
+    {/each}
   </article>
 
   {#each cards as card (card.key)}
@@ -281,10 +290,12 @@
     </article>
   {/each}
 
-  <button type="button" class="add" onclick={() => (pickerOpen = true)}>
-    <Icon name="plus" size={16} />
-    Add module
-  </button>
+  {#if catalog.length > 0}
+    <button type="button" class="add" onclick={() => (pickerOpen = true)}>
+      <Icon name="plus" size={16} />
+      Add module
+    </button>
+  {/if}
 
   {#if extraFields.length > 0}
     <section class="extras" aria-label="More fields">

@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import golden from '../../fixtures/golden/editor-demo-snapshot.json';
 import type { ResourceRef, TypeInfo } from '../src/lib/api';
 import {
+  appliesTo,
   categoriesOf,
   defaultFor,
   displayFieldsOf,
@@ -130,6 +131,99 @@ describe('furniture modules derive from the registry self-description', () => {
   });
 });
 
+describe('recipe display card: a mode switch whose body follows the mode', () => {
+  const recipe = typeNamed('recipe');
+
+  it('puts the mode, the result and the body of the mode on the display card, with no modules', () => {
+    expect(usesModules(recipe)).toBe(true);
+    expect(moduleCatalog(recipe, null)).toEqual([]);
+    const shaped = displayFieldsOf(recipe, { type: 'shaped' }).others.map((field) => field.id);
+    expect(shaped).toEqual(['type', 'result', 'shape']);
+    expect(displayFieldsOf(recipe, { type: 'shapeless' }).others.map((field) => field.id))
+      .toEqual(['type', 'result', 'ingredients']);
+    expect(displayFieldsOf(recipe, { type: 'furnace' }).others.map((field) => field.id))
+      .toEqual(['type', 'result', 'input', 'experience', 'cookingtime']);
+  });
+
+  it('treats an unset mode as the schema default', () => {
+    const grid = recipe.parameters.find((param) => param.id === 'shape')!;
+    expect(appliesTo(grid, recipe, {})).toBe(true);
+    expect(appliesTo(grid, recipe, { type: 'furnace' })).toBe(false);
+  });
+
+  it('never hides a field on a condition it cannot read', () => {
+    const odd = { id: 'x', type: 'string', required: false, shownWhen: 'garbled' };
+    expect(appliesTo(odd, recipe, {})).toBe(true);
+    expect(appliesTo({ ...odd, shownWhen: undefined }, recipe, {})).toBe(true);
+  });
+
+  it('labels the three modes without renaming them', () => {
+    const type = recipe.parameters.find((param) => param.id === 'type')!;
+    expect(type.options?.map((option) => [option.value, option.label])).toEqual([
+      ['shaped', 'Shaped'], ['shapeless', 'Shapeless'], ['furnace', 'Smelting'],
+    ]);
+  });
+
+  it('every recipe field is renderable', () => {
+    for (const param of recipe.parameters) {
+      expect(isRenderable(param), `${param.id} (${param.uiHint})`).toBe(true);
+    }
+  });
+});
+
+describe('glyph modules', () => {
+  const glyph = typeNamed('glyph');
+  const catalog = moduleCatalog(glyph, null);
+
+  it('declares size, baseline, animation, placeholders and the chat modules', () => {
+    expect(catalog.map((module) => module.id)).toEqual([
+      'ascent', 'height', 'frames', 'placeholders', 'permission', 'emoji', 'tab_complete',
+    ]);
+    expect(categoriesOf(catalog)).toEqual(['appearance', 'chat']);
+    expect(displayFieldsOf(glyph).slots.map((slot) => slot.id)).toEqual(['texture']);
+  });
+
+  it('offers size presets that are labelled heights, plus a pixel range', () => {
+    const size = catalog.find((module) => module.id === 'height')!.field!;
+    expect(size.uiHint).toBe('presets');
+    expect(size.options?.map((option) => [option.value, option.label])).toEqual([
+      ['8', 'Emoji'], ['12', 'Inline icon'], ['24', 'Big title'],
+    ]);
+    expect([size.min, size.unit]).toEqual([1, 'px']);
+  });
+
+  it('every glyph field is renderable (integer/boolean were never widgets)', () => {
+    for (const param of glyph.parameters) {
+      expect(isRenderable(param), `${param.id} (${param.uiHint})`).toBe(true);
+    }
+  });
+});
+
+describe('painting display card', () => {
+  const painting = typeNamed('painting');
+
+  it('titles first, then author and the size; random placement is the one module', () => {
+    const display = displayFieldsOf(painting);
+    expect(display.name?.id).toBe('title');
+    expect(display.slots.map((slot) => slot.id)).toEqual(['texture']);
+    expect(display.others.map((field) => field.id)).toEqual(['author', 'width', 'height']);
+    expect(moduleCatalog(painting, null).map((module) => module.id)).toEqual(['placeable']);
+  });
+
+  it('sizes are whole blocks from 1 to 16', () => {
+    for (const id of ['width', 'height']) {
+      const field = painting.parameters.find((param) => param.id === id)!;
+      expect([field.min, field.max, field.unit]).toEqual([1, 16, 'blocks']);
+    }
+  });
+
+  it('every painting field is renderable', () => {
+    for (const param of painting.parameters) {
+      expect(isRenderable(param), `${param.id} (${param.uiHint})`).toBe(true);
+    }
+  });
+});
+
 describe('item references', () => {
   const resources: ResourceRef[] = [
     { pack: 'mine', type: 'items', path: 'items/ruby.yml', id: 'ruby' },
@@ -170,6 +264,18 @@ describe('item references', () => {
     expect(matchItemChoices(all, 'diam').map((choice) => choice.value)).toEqual(['minecraft:diamond']);
     expect(matchItemChoices(all, 'minecraft stick').map((choice) => choice.value)).toEqual(['minecraft:stick']);
     expect(matchItemChoices(all, 'nothing')).toEqual([]);
+  });
+
+  it('ranks an exact label, then a label prefix, before other matches', () => {
+    const choices = itemChoices({
+      pack: 'mine',
+      resources: [],
+      types: [{ ...itemType, parameters: [{ id: 'material', type: 'enum', required: true,
+        allowedValues: ['DIAMOND_SWORD', 'DIAMOND', 'DIAMOND_BLOCK', 'RAW_DIAMOND'] }] }],
+    });
+    expect(matchItemChoices(choices, 'diamond').map((choice) => choice.value)).toEqual([
+      'minecraft:diamond', 'minecraft:diamond_sword', 'minecraft:diamond_block', 'minecraft:raw_diamond',
+    ]);
   });
 
   it('finds the summary that carries a pack item\'s visual', () => {

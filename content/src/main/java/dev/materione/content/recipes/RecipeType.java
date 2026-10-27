@@ -55,36 +55,52 @@ public final class RecipeType implements ContentType {
                                 List.of("shaped", "shapeless", "furnace"), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Recipe kind", "identity", 0, false, "select", "",
-                                        "shaped")),
+                                        "shaped")
+                                        .withOptions(List.of(
+                                                option("shaped", "Shaped",
+                                                        "The layout in the crafting grid matters"),
+                                                option("shapeless", "Shapeless",
+                                                        "Any arrangement of the ingredients works"),
+                                                option("furnace", "Smelting",
+                                                        "One input cooked in a furnace")))
+                                        .onDisplayCard()),
                         new ParameterSchema("result", ParameterType.REFERENCE, true, null,
                                 "Resulting item id", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Result", "identity", 10, false, "reference", "item",
-                                        "myserver:ruby_sword")),
+                                        "Result", "identity", 10, false, "item", "item",
+                                        "myserver:ruby_sword").onDisplayCard()),
                         new ParameterSchema("shape", ParameterType.LIST, false, null,
                                 "Shaped rows, one string per row (shaped only)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Grid", "crafting", 10, false, "recipe-grid", "", "")),
+                                        "Crafting grid", "crafting", 10, false, "recipe-grid", "", "")
+                                        .onDisplayCard().shownWhen("type=shaped")),
                         new ParameterSchema("ingredients", ParameterType.RAW, false, null,
                                 "Char→item map (shaped) or item list (shapeless)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Ingredients", "crafting", 20, false, "recipe-grid", "",
-                                        "")),
+                                        "Ingredients", "crafting", 20, false, "recipe-ingredients", "item",
+                                        "").onDisplayCard().shownWhen("type=shapeless")),
                         new ParameterSchema("input", ParameterType.REFERENCE, false, null,
                                 "Furnace input item id", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Smelts", "crafting", 30, false, "reference", "item",
-                                        "myserver:ruby_ore")),
+                                        "Smelts", "crafting", 30, false, "item", "item",
+                                        "myserver:ruby_ore").onDisplayCard().shownWhen("type=furnace")),
                         new ParameterSchema("experience", ParameterType.DECIMAL, false, "0",
                                 "Furnace experience", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Experience", "crafting", 40, false, "number", "", "0.7")),
+                                        "Experience", "crafting", 40, false, "number", "", "0.7")
+                                        .withRange(0.0, null, "xp").onDisplayCard()
+                                        .shownWhen("type=furnace")),
                         new ParameterSchema("cookingtime", ParameterType.INTEGER, false, "200",
                                 "Furnace cooking time in ticks", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Cooking time (ticks)", "crafting", 50, false, "number",
-                                        "", "200"))),
+                                        "Cooking time", "crafting", 50, false, "number",
+                                        "", "200").withRange(1.0, null, "ticks (20 = 1 s)")
+                                        .onDisplayCard().shownWhen("type=furnace"))),
                 "1.0.0");
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     @Override

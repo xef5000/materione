@@ -766,6 +766,31 @@ cannot read, forge, replay, or reorder anything.
   numeric rows beneath as the fallback. It is an approximation of where things sit, not a client
   render; the preview model is not drawn behind it. Honest gaps: block drops have no count key in
   the format (the repeat is documented above); furniture has no model overlay yet.
+- *As built (M5 per-type modules, issue #153 — recipes, glyphs, paintings):* some types are a
+  display card with a few modules, not a stack of cards. A schema field marked `display` renders on
+  the display card, and `shownWhen` hides fields that do not apply to the current values (their
+  keys stay in the file, untouched). **Recipes** are the mode switch (Shaped / Shapeless /
+  Smelting, stored `shaped` / `shapeless` / `furnace`), the **Result** as an item chip, and the
+  body of the mode: a 3×3 grid of **item slots** (each opens the item picker with icons; the grid
+  writes `shape` and `ingredients` exactly as before), shapeless **ingredients as item chips** (a
+  repeat is a count, which is literally what the format says) or the smelting input with
+  experience (`xp`) and cooking time (`ticks`, clamped to a minimum of 1). The preview card beside
+  it shows the layout, an arrow and the result with its icon and name, following the draft.
+  *Smithing recipes and tags are not offered: the plugin applies neither today.* **Glyphs**
+  preview the glyph **inline in a chat line and an item name** in the Minecraft face at 2× (the
+  game's 8 px text), baseline-aligned by `ascent`/`height`; the modules are Size (the
+  `presets` widget: Emoji / Inline icon / Big title plus a custom pixel height), Baseline,
+  Animation frames (the **frame strip**: thumbnails with move, remove and add; opaque entries
+  are shown and kept), Chat placeholders (**chips**), Permission, Emoji mode and Chat completion.
+  **Paintings** show the painting on a **wall at true block scale** (16 px per block) with a
+  corner handle: drag it, or use the arrow keys, to resize in whole blocks (1–16); the Width and
+  Height fields follow and stay the exact fallback. Title and author are rich text. Glyph
+  `ascent`/`height` and painting `width`/`height`/`placeable` used to declare unrenderable widgets
+  and so were Advanced-only; they are ordinary number and switch fields now. *Open decision
+  (issue comment on #153): items with a capability should be modules of an item rather than
+  separate content types. A painting variant is a data entry of a vanilla registry, not an item,
+  so paintings stay their own type here; an item module "places this painting" needs plugin
+  support and is recorded as a follow-up, not decided silently.*
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

@@ -322,6 +322,12 @@ const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'blocks', path: 'blocks/plain_stone.yml', id: 'plain_stone' },
   { pack: PACK, type: 'furnitures', path: 'furnitures/chair.yml', id: 'chair' },
   { pack: PACK, type: 'furnitures', path: 'furnitures/stool.yml', id: 'stool' },
+  { pack: PACK, type: 'recipes', path: 'recipes/ruby_sword.yml', id: 'ruby_sword' },
+  { pack: PACK, type: 'recipes', path: 'recipes/ruby_fuse.yml', id: 'ruby_fuse' },
+  { pack: PACK, type: 'recipes', path: 'recipes/ruby_smelt.yml', id: 'ruby_smelt' },
+  { pack: PACK, type: 'glyphs', path: 'glyphs/heart.yml', id: 'heart' },
+  { pack: PACK, type: 'glyphs', path: 'glyphs/spark.yml', id: 'spark' },
+  { pack: PACK, type: 'paintings', path: 'paintings/sunrise.yml', id: 'sunrise' },
 ];
 
 function goldenType(name: string): TypeInfo {
@@ -333,7 +339,7 @@ function goldenType(name: string): TypeInfo {
 /** The ?modules fixture's types: the module-declaring item stand-in plus the real schemas. */
 function moduleTypes(): TypeInfo[] {
   return [structuredClone(MODULE_ITEM_TYPE), goldenType('block'), goldenType('furniture'),
-    structuredClone(GLYPH_TYPE)];
+    goldenType('recipe'), goldenType('glyph'), goldenType('painting')];
 }
 
 const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
@@ -387,6 +393,37 @@ const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
   },
   'furnitures/stool.yml': {
     stool: { texture: 'block/marble', display_name: 'Stool' },
+  },
+  'recipes/ruby_sword.yml': {
+    ruby_sword: {
+      type: 'shaped',
+      result: 'ruby_sword',
+      shape: [' R ', ' R ', ' S '],
+      ingredients: { R: 'ruby', S: 'minecraft:stick' },
+    },
+  },
+  'recipes/ruby_fuse.yml': {
+    ruby_fuse: { type: 'shapeless', result: 'ember_charm', ingredients: ['ruby', 'ruby'] },
+  },
+  'recipes/ruby_smelt.yml': {
+    ruby_smelt: {
+      type: 'furnace', input: 'ruby', result: 'minecraft:diamond', experience: 7, cookingtime: 100,
+      future_flag: { keep: 'me' },
+    },
+  },
+  'glyphs/heart.yml': {
+    heart: {
+      texture: 'gui/heart', ascent: 8, height: 8, placeholders: [':heart:', '<3'], emoji: true,
+    },
+  },
+  'glyphs/spark.yml': {
+    spark: { ascent: 8, height: 8, frames: ['gui/heart', 'gui/heart'] },
+  },
+  'paintings/sunrise.yml': {
+    sunrise: {
+      texture: 'painting/sunrise', width: 2, height: 1, author: 'Materione', title: 'Sunrise',
+      placeable: true,
+    },
   },
   'templates/base_item.yml': {
     base_item: { display_name: 'A base item' },

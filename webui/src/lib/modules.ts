@@ -42,11 +42,40 @@ export interface DisplayFields {
   lore?: TypeParam;
   /** Texture/model slots (the display card's visual slot). */
   slots: TypeParam[];
+  /**
+   * Fields the schema puts on the display card (`display`): a recipe's mode and
+   * result, a painting's size. Those whose `shownWhen` does not hold for the
+   * current values are left out — their keys stay in the file untouched.
+   */
+  others: TypeParam[];
 }
 
-/** A type uses the display + modules layout as soon as it declares one module. */
+/** A type uses the display + modules layout as soon as it declares a module or a display field. */
 export function usesModules(schema: TypeInfo | undefined): boolean {
-  return (schema?.parameters ?? []).some((field) => field.module === true && isRenderable(field));
+  return (schema?.parameters ?? []).some((field) =>
+    (field.module === true || field.display === true) && isRenderable(field));
+}
+
+/**
+ * Whether a field applies to the resource as it is now. `shownWhen` reads
+ * `sibling=a|b`: the field applies while that sibling holds one of the values,
+ * an unset sibling counting as its declared default. Unparsable conditions
+ * apply (never hide a field on a guess).
+ */
+export function appliesTo(
+  field: TypeParam,
+  schema: TypeInfo | undefined,
+  values: Record<string, unknown>,
+): boolean {
+  const condition = field.shownWhen?.trim();
+  if (!condition) return true;
+  const eq = condition.indexOf('=');
+  if (eq <= 0) return true;
+  const sibling = condition.slice(0, eq).trim();
+  const allowed = condition.slice(eq + 1).split('|').map((value) => value.trim());
+  const declared = schema?.parameters.find((param) => param.id === sibling)?.default;
+  const current = values[sibling] ?? declared;
+  return allowed.includes(current === undefined ? '' : String(current));
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -55,6 +84,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   gameplay: 'Gameplay',
   behaviour: 'Behaviour',
   behavior: 'Behaviour',
+  chat: 'Chat',
   placement: 'Placement',
   audio: 'Audio',
   crafting: 'Crafting',
@@ -66,6 +96,7 @@ const CATEGORY_ICONS: Record<string, IconName> = {
   gameplay: 'sparkles',
   behaviour: 'zap',
   behavior: 'zap',
+  chat: 'sticker',
   placement: 'armchair',
   audio: 'volume-2',
   crafting: 'chef-hat',
@@ -142,12 +173,20 @@ export function moduleCatalog(
  * name/lore controls and the texture/model slots. Fields already shown on the
  * display card are never also modules.
  */
-export function displayFieldsOf(schema: TypeInfo | undefined): DisplayFields {
-  const display: DisplayFields = { slots: [] };
-  for (const field of schema?.parameters ?? []) {
+export function displayFieldsOf(
+  schema: TypeInfo | undefined,
+  values: Record<string, unknown> = {},
+): DisplayFields {
+  const display: DisplayFields = { slots: [], others: [] };
+  // By declared order, so the first rich-text field is the name, not whichever
+  // happens to be listed first (a painting lists its author before its title).
+  const ordered = [...(schema?.parameters ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  for (const field of ordered) {
     if (field.module === true || !isRenderable(field) || field.advanced) continue;
     const widget = field.uiHint ?? 'text';
-    if (widget === 'formatted-text' && !display.name) display.name = field;
+    if (field.display === true) {
+      if (appliesTo(field, schema, values)) display.others.push(field);
+    } else if (widget === 'formatted-text' && !display.name) display.name = field;
     else if (widget === 'formatted-lines' && !display.lore) display.lore = field;
     else if (widget === 'texture' || widget === 'model') display.slots.push(field);
   }
@@ -168,6 +207,7 @@ export function extraFieldsOf(schema: TypeInfo | undefined): TypeParam[] {
   );
   return (schema?.parameters ?? []).filter((field) =>
     field.module !== true &&
+    field.display !== true &&
     !field.advanced &&
     isRenderable(field) &&
     !displayIds.has(field.id) &&
@@ -240,7 +280,7 @@ function defaultValue(field: TypeParam): unknown {
 
 /** Picker categories in reading order; only categories that have modules. */
 export function categoriesOf(catalog: ModuleDescriptor[]): string[] {
-  const order = ['identity', 'appearance', 'placement', 'crafting', 'audio', 'gameplay', 'behaviour'];
+  const order = ['identity', 'appearance', 'placement', 'crafting', 'audio', 'chat', 'gameplay', 'behaviour'];
   const present = new Set(catalog.map((module) => module.category));
   return [...order.filter((category) => present.has(category)),
     ...[...present].filter((category) => !order.includes(category)).sort()];

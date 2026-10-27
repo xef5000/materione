@@ -166,6 +166,20 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   Grows into… (evolution), Placed by item, When… do…. `EditorMetadataTest` pins the invariants
   (options only name accepted values, ranges are ordered and numeric, modules are never
   advanced and always carry a category and icon, no field names a widget the editor lacks).
+  Two more declarations cover types whose studio is not a list of add-on cards (*issue #153,
+  recipes/paintings*): `display` puts a parameter on the **display card** — the resource's own
+  identity (a recipe's mode and result, a painting's size) — instead of making it a module, and
+  `shownWhen: "field=a|b"` makes a parameter apply only while a sibling holds one of those values
+  (an unset sibling counts as its default). A condition never deletes anything: keys that do not
+  apply stay in the file untouched, and the editor shows exactly the fields that do. Further
+  widgets: `presets` (labelled numbers plus a custom value), `chips` (a list of short strings),
+  `frames` (a strip of texture references), `recipe-grid` (a composite writing `shape` and
+  `ingredients`) and `recipe-ingredients` (item chips). **Recipes** declare the mode switch
+  (`type`: Shaped / Shapeless / Smelting), the result item, and each mode's body (crafting grid,
+  ingredients, input / experience / cooking time) with `shownWhen`; **glyphs** declare Size
+  (presets Emoji 8 / Inline icon 12 / Big title 24 px), Baseline, Animation frames, Chat
+  placeholders, Permission, Emoji mode and Chat completion; **paintings** put title, author and
+  size (1–16 blocks) on the display card and declare Random placement as the one module.
 
 ---
 

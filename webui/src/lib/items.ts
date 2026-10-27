@@ -98,13 +98,27 @@ export function itemChoices(options: {
   return out;
 }
 
-/** Search words match the label and the raw reference, all of them required. */
+/**
+ * Search words match the label and the raw reference, all of them required.
+ * Better matches come first (an exact label, then a label that starts with the
+ * query), the catalog's own order otherwise — typing "diamond" offers Diamond
+ * before Diamond Sword.
+ */
 export function matchItemChoices(choices: readonly ItemChoice[], query: string): ItemChoice[] {
-  const words = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
-  return choices.filter((choice) => {
-    const haystack = `${choice.label} ${choice.value}`.toLowerCase();
-    return words.every((word) => haystack.includes(word));
-  });
+  const text = query.toLowerCase().trim();
+  const words = text.split(/\s+/).filter(Boolean);
+  const rank = (choice: ItemChoice): number => {
+    const label = choice.label.toLowerCase();
+    return label === text ? 0 : label.startsWith(text) ? 1 : 2;
+  };
+  return choices
+    .filter((choice) => {
+      const haystack = `${choice.label} ${choice.value}`.toLowerCase();
+      return words.every((word) => haystack.includes(word));
+    })
+    .map((choice, index) => ({ choice, index, rank: rank(choice) }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map((entry) => entry.choice);
 }
 
 /** The summary that carries a pack item's visual, for the chip's icon. */
