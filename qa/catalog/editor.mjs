@@ -335,6 +335,17 @@ async function openSampleItemCatalog(page) {
   return row;
 }
 
+/** Waits for the studio's Save & apply to settle (disabled again = clean draft). */
+async function waitForSaved(page) {
+  const save = page.getByRole('button', { name: 'Save & apply' });
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    if (!(await save.isEnabled())) return;
+    await page.waitForTimeout(250);
+  }
+  throw new Error('Save & apply never settled back to a clean state');
+}
+
 async function waitForDisplayName(page, expected) {
   const field = page.locator('article').getByLabel('Display name', { exact: true });
   const deadline = Date.now() + 20_000;
@@ -999,21 +1010,28 @@ export default [
 
   test({
     id: 'editor.browser-ability-activation',
-    title: 'an item studio adds a registered ability with its activation explained, and rules only offer events items fire',
+    title: 'an item studio adds a registered ability module with its activation explained, and rules only offer events items fire',
     covers: GUIDED_COVERS,
     timeoutMs: 180_000,
     steps: async (ctx) => {
       const page = await ctx.browser.openEditor();
       const studio = await openSampleStudio(page, 'Ruby Sword');
-      const abilities = studio.getByRole('region', { name: 'Abilities' });
-      await abilities.getByLabel('Add an ability').selectOption({ label: 'Soulbound' });
-      ctx.expect(await abilities.locator('.preview').innerText()).toContain('When the owner dies');
-      await abilities.getByRole('button', { name: 'Add', exact: true }).click();
-      const card = abilities.locator('[data-mechanic="soulbound"]');
+      // Abilities are module cards; adding one goes through the picker.
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      const picker = page.getByRole('dialog', { name: 'Add a module' });
+      await picker.getByLabel('Search modules').fill('food');
+      await picker.getByRole('option', { name: /Food/ }).waitFor({ state: 'visible' });
+      await picker.getByLabel('Search modules').press('Enter');
+      const card = studio.locator('[data-module="mechanic:materione:food"]');
+      await card.waitFor({ state: 'visible' });
       ctx.expect(await card.innerText()).toContain('Built in');
-      ctx.expect(await card.innerText()).toContain('Activates: When the owner dies');
+      ctx.expect(await card.innerText()).toContain('Activates: When the player eats');
 
-      const rules = studio.getByRole('region', { name: 'Behaviour rules' });
+      // Rules are their own When… do… module; events come from the server's table.
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      await page.getByLabel('Search modules').fill('when');
+      await page.getByLabel('Search modules').press('Enter');
+      const rules = studio.locator('[data-module="behavior"]');
       await rules.getByRole('button', { name: 'Add rule' }).click();
       const events = await rules.getByLabel('When').locator('option').allInnerTexts();
       ctx.expect(events.includes('Click')).toBeTruthy();
@@ -1093,15 +1111,23 @@ export default [
     steps: async (ctx) => {
       const page = await ctx.browser.openEditor();
       const studio = await openSampleStudio(page, 'Templated Ruby');
-      const abilities = studio.getByRole('region', { name: 'Abilities' });
-      await abilities.getByLabel('Add an ability').selectOption({ label: 'Soulbound' });
-      await abilities.getByRole('button', { name: 'Add', exact: true }).click();
-      const rules = studio.getByRole('region', { name: 'Behaviour rules' });
+      const material = studio.locator('[data-provenance="material"]');
+      ctx.expect((await material.innerText()).trim()).toBe('Inherited from base_item: PAPER');
+
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      await page.getByLabel('Search modules').fill('soulbound');
+      await page.getByLabel('Search modules').press('Enter');
+      await studio.locator('[data-module="mechanic:materione:soulbound"]').waitFor({ state: 'visible' });
+
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      await page.getByLabel('Search modules').fill('when');
+      await page.getByLabel('Search modules').press('Enter');
+      const rules = studio.locator('[data-module="behavior"]');
       await rules.getByLabel('Rule starting point').selectOption({ label: 'Right-click sends a message' });
       await rules.getByRole('button', { name: 'Add rule' }).click();
       await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
       ctx.needsEyes(
-        'the studio header names the base_item template; material reads "Inherited from base_item: PAPER"; a Soulbound ability card says Built in and when it activates; a rule reads "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
+        'the studio reads as a display card plus module cards: the header names the base_item template; the Base material module card reads "Inherited from base_item: PAPER"; a Soulbound module card says Built in and when it activates; a When… do… module holds a rule reading "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
       );
     },
   }),
@@ -1276,6 +1302,105 @@ export default [
       await ctx.browser.browserShot('cloud-demo-workbench', 'main');
       ctx.needsEyes(
         'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with the sample pack selected, every content type tab (Items to Text effects) and the sample items (Ruby Sword, Obsidian Axe, ...) with their textures in Content' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  // The item studio as display + modules (issue 152): the schema's module
+  // metadata and the server's mechanic registry drive the cards; a save is
+  // still one lossless authoring.setFields batch (D1/D6).
+  test({
+    id: 'editor.browser-item-modules',
+    title: 'sample:ruby_sword edits through a display card plus module cards, and modules add/remove losslessly',
+    covers: [
+      ...WORKBENCH_COVERS,
+      'api/src/main/java/dev/materione/api/registry/ParameterSchema.java',
+      'webui/src/lib/modules.ts',
+      'webui/src/lib/studio/ModulePicker.svelte',
+      'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/lib/components/icons.ts',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.waitFor({ state: 'visible' });
+
+      const display = studio.getByRole('article', { name: 'Display' });
+      await display.getByRole('textbox', { name: 'Display name' }).waitFor({ state: 'visible' });
+      await display.getByRole('textbox', { name: 'Lore' }).waitFor({ state: 'visible' });
+
+      // Required module: the base material is the floor, not an add/remove card.
+      const material = studio.locator('[data-module="material"]');
+      await material.waitFor({ state: 'visible' });
+      ctx.expect(await material.getByRole('button', { name: 'Remove' }).count()).toBe(0);
+
+      // Authored abilities are one card each, with the registry's own words.
+      const durability = studio.locator('[data-module="mechanic:materione:durability"]');
+      await durability.waitFor({ state: 'visible' });
+      ctx.expect(await durability.getByRole('spinbutton').inputValue()).toBe('500');
+      ctx.expect(await studio.locator('[data-module="mechanic:materione:soulbound"]').innerText())
+        .toContain('When the owner dies');
+
+      // Unknown keys keep the honest Advanced-only report.
+      ctx.expect(await studio.getByText('only editable in Advanced Files').innerText())
+        .toContain('future_component');
+
+      // Add a module through the picker, configure it, save, then remove it
+      // again — the sample pack must end the test exactly as it started.
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      const picker = page.getByRole('dialog', { name: 'Add a module' });
+      await picker.getByLabel('Search modules').fill('food');
+      await picker.getByRole('option', { name: /Food/ }).waitFor({ state: 'visible' });
+      await picker.getByLabel('Search modules').press('Enter');
+      const food = studio.locator('[data-module="mechanic:materione:food"]');
+      await food.getByLabel('Nutrition').fill('4');
+      await food.getByLabel('Nutrition').press('Tab');
+      await food.getByLabel('Saturation').fill('0.3');
+      await food.getByLabel('Saturation').press('Tab');
+      await food.getByLabel('Can always eat').check();
+
+      const save = studio.getByRole('button', { name: 'Save & apply' });
+      await save.click();
+      await waitForSaved(page);
+      // The other abilities are untouched by the food save.
+      ctx.expect(await studio.locator('[data-module="mechanic:materione:durability"]').count()).toBe(1);
+
+      await food.getByRole('button', { name: 'Remove Food' }).click();
+      await save.click();
+      await waitForSaved(page);
+      ctx.expect(await studio.locator('[data-module="mechanic:materione:food"]').count()).toBe(0);
+      ctx.expect(await durability.getByRole('spinbutton').inputValue()).toBe('500');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-item-modules-visual',
+    title: 'the item studio reads as a display card plus module cards with a searchable, categorised picker',
+    mode: 'visual',
+    dependsOn: ['editor.browser-item-modules'],
+    covers: [
+      ...WORKBENCH_COVERS,
+      'webui/src/lib/modules.ts',
+      'webui/src/lib/studio/ModulePicker.svelte',
+      'webui/src/lib/studio/ModulesArea.svelte',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.locator('[data-module="material"]').waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-modules-studio', '.studio');
+      await studio.getByRole('button', { name: 'Add module' }).click();
+      await page.getByRole('dialog', { name: 'Add a module' }).getByRole('option').first()
+        .waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-modules-picker', '.scrim');
+      ctx.needsEyes(
+        'item-modules-studio shows the display card (name, lore, texture/model slots and the preview) at the top, then one compact card per module (Base material, Durability, Soulbound, Console Commands) each with its Lucide icon, origin line and Remove; the dashed Add module button sits after the cards; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
       );
     },
   }),

@@ -58,26 +58,56 @@ public record ParameterSchema(
         return editor.widget();
     }
 
-    /**
-     * Declarative, additive rendering metadata. Validation remains in the
-     * content type; this object only controls progressive disclosure.
-     */
-    public record EditorMetadata(
-            String label,
-            String section,
-            int order,
-            boolean advanced,
-            String widget,
-            String referenceKind,
-            String example) {
+        /**
+         * Declarative, additive rendering metadata. Validation remains in the
+         * content type; this object only controls progressive disclosure.
+         *
+         * <p>Module metadata (issue #152): a parameter marked {@code module} is
+         * one thing a user wants — an add/remove card in a module-based studio,
+         * not an always-present form row. Modules come from this
+         * self-description, never from a hand-written editor list. A
+         * {@code mechanics} widget marked as a module is a <em>source</em>: the
+         * editor expands it into one module per registered mechanic.
+         *
+         * @param module this parameter renders as an add/remove module card
+         * @param category picker category id ("appearance", "behaviour", …);
+         *        blank falls back to {@code section}
+         * @param icon icon registry name in the editor's one icon set; blank
+         *        falls back to the category's icon
+         * @param summary one line the module picker shows; blank falls back to
+         *        the parameter description
+         */
+        public record EditorMetadata(
+                String label,
+                String section,
+                int order,
+                boolean advanced,
+                String widget,
+                String referenceKind,
+                String example,
+                boolean module,
+                String category,
+                String icon,
+                String summary) {
 
-        public EditorMetadata {
-            label = label == null || label.isBlank() ? "" : label;
-            section = section == null || section.isBlank() ? "general" : section;
-            widget = widget == null || widget.isBlank() ? "text" : widget;
-            referenceKind = referenceKind == null ? "" : referenceKind;
-            example = example == null ? "" : example;
-        }
+            public EditorMetadata {
+                label = label == null || label.isBlank() ? "" : label;
+                section = section == null || section.isBlank() ? "general" : section;
+                widget = widget == null || widget.isBlank() ? "text" : widget;
+                referenceKind = referenceKind == null ? "" : referenceKind;
+                example = example == null ? "" : example;
+                category = category == null || category.isBlank() ? "" : category;
+                icon = icon == null || icon.isBlank() ? "" : icon;
+                summary = summary == null || summary.isBlank() ? "" : summary;
+            }
+
+            /** Compatibility constructor for callers predating module metadata. */
+            public EditorMetadata(
+                    String label, String section, int order, boolean advanced,
+                    String widget, String referenceKind, String example) {
+                this(label, section, order, advanced, widget, referenceKind, example,
+                        false, "", "", "");
+            }
 
         public static EditorMetadata defaults(String id, ParameterType type) {
             String widget = switch (type) {

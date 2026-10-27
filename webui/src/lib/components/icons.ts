@@ -48,6 +48,7 @@ import Type from '@lucide/svelte/icons/type';
 import Undo2 from '@lucide/svelte/icons/undo-2';
 import Volume2 from '@lucide/svelte/icons/volume-2';
 import X from '@lucide/svelte/icons/x';
+import Zap from '@lucide/svelte/icons/zap';
 import Activity from '@lucide/svelte/icons/activity';
 import House from '@lucide/svelte/icons/house';
 import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -110,6 +111,7 @@ export const icons = {
   'undo-2': Undo2,
   'volume-2': Volume2,
   x: X,
+  zap: Zap,
   blend: Blend,
   bold: Bold,
   italic: Italic,

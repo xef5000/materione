@@ -53,6 +53,30 @@
         <button type="button" class="action" onclick={action.run}>{action.label}</button>
       {/if}
     </span>
+  {:else if field.allowedValues && field.allowedValues.length > 1 && field.allowedValues.length <= 4}
+    <!-- Few enum values read as one choice, not a dropdown (module cards' smart input). -->
+    <div class="segments" role="radiogroup" aria-label={field.label || field.id}>
+      {#if !field.required}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={text === ''}
+          aria-label="Not set"
+          title="Not set"
+          class:off={text !== ''}
+          onclick={() => onChange('')}
+        >—</button>
+      {/if}
+      {#each field.allowedValues as option (option)}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={text === option}
+          class:off={text !== option}
+          onclick={() => onChange(option)}
+        >{option.replaceAll('_', ' ')}</button>
+      {/each}
+    </div>
   {:else if field.allowedValues && field.allowedValues.length > 0}
     <select id={controlId} value={text} onchange={(event) => onChange(event.currentTarget.value)}>
       {#if !field.required}<option value=""></option>{/if}
@@ -151,6 +175,35 @@
     justify-self: start;
     width: 16px;
     height: 16px;
+  }
+  .segments {
+    display: inline-flex;
+    gap: var(--space-1);
+    justify-self: start;
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+  .segments button {
+    border: 1px solid var(--control-line);
+    background: none;
+    color: var(--muted);
+    border-radius: var(--radius);
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .segments button:hover {
+    background: var(--bg-hover);
+    color: inherit;
+  }
+  .segments button[aria-checked='true'] {
+    background: var(--accent-low);
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+  .segments button.off {
+    border-color: var(--border-strong);
   }
   textarea {
     resize: vertical;

@@ -16,6 +16,14 @@ export interface FixtureAuditEntry {
   target?: string;
 }
 
+export interface FixtureDocumentSnapshot {
+  pack: string;
+  path: string;
+  rev: number;
+  raw: string;
+  parsed: Record<string, Record<string, unknown>>;
+}
+
 export interface BrowserTestControls {
   calls(): readonly RecordedRpcCall[];
   writes(): readonly RecordedWrite[];
@@ -30,6 +38,8 @@ export interface BrowserTestControls {
   emitPush(op: string, payload: Record<string, unknown>): void;
   emitReload(payload: Record<string, unknown>): void;
   setAuditEntries(entries: readonly FixtureAuditEntry[]): void;
+  /** Every document as the fixture holds it (saved YAML assertions). */
+  documents(): readonly FixtureDocumentSnapshot[];
 }
 
 declare global {

@@ -304,6 +304,152 @@ const CATALOG_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
   }]),
 );
 
+/**
+ * Opt-in (`?modules`) display + modules fixture (issue #152): the item type as
+ * a schema-declaring module server reports it, a ruby-sword-like item whose
+ * abilities are already authored, and a plain item to add modules to. The
+ * vocabulary mirrors the built-in mechanics plus one add-on.
+ */
+const MODULES_RESOURCES: ResourceRef[] = [
+  { pack: PACK, type: 'items', path: 'items/ruby_sword.yml', id: 'ruby_sword' },
+  { pack: PACK, type: 'items', path: 'items/ember_charm.yml', id: 'ember_charm' },
+];
+
+const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
+  'items/ruby_sword.yml': {
+    ruby_sword: {
+      template: 'base_item',
+      material: 'NETHERITE_SWORD',
+      model: `${PACK}:ruby_sword_model`,
+      display_name: 'Ruby Sword',
+      lore: ['Burns with inner fire'],
+      future_component: { keep: 'me' },
+      mechanics: [
+        { durability: { max: 500 } },
+        { soulbound: {} },
+        { commands: { on_left_click: ['tellraw %player% {"text":"The ruby hums."}'] } },
+      ],
+    },
+  },
+  'items/ember_charm.yml': {
+    ember_charm: {
+      display_name: 'Ember Charm',
+      material: 'BLAZE_ROD',
+    },
+  },
+  'templates/base_item.yml': {
+    base_item: { display_name: 'A base item' },
+  },
+};
+
+const MODULE_ITEM_TYPE: TypeInfo = {
+  name: 'item',
+  directory: 'items',
+  displayName: 'Item',
+  description: 'Deterministic module-studio regression resources.',
+  parameters: [
+    {
+      id: 'material', type: 'enum', required: true, label: 'Base material',
+      section: 'identity', order: 10, uiHint: 'material',
+      allowedValues: ['NETHERITE_SWORD', 'DIAMOND_SWORD', 'BLAZE_ROD', 'STICK'],
+      example: 'NETHERITE_SWORD',
+      module: true, category: 'identity', icon: 'box',
+      summary: 'The vanilla item this builds on - its looks and stats until a model or behaviour takes over',
+    },
+    {
+      id: 'template', type: 'reference', required: false, label: 'Template',
+      section: 'identity', order: 20, advanced: true, uiHint: 'reference', referenceKind: 'template',
+    },
+    {
+      id: 'model', type: 'reference', required: false, label: '3D model',
+      section: 'appearance', order: 20, uiHint: 'model', referenceKind: 'model',
+    },
+    {
+      id: 'texture', type: 'reference', required: false, label: 'Texture',
+      section: 'appearance', order: 10, uiHint: 'texture', referenceKind: 'texture',
+      example: 'item/my_texture',
+    },
+    {
+      id: 'model_parent', type: 'string', required: false, default: 'item/generated',
+      label: 'Model style', section: 'appearance', order: 30, uiHint: 'text',
+      example: 'item/generated',
+      module: true, category: 'appearance', icon: 'layers',
+      summary: 'The shape family the generated model renders with (flat sprite or handheld)',
+    },
+    {
+      id: 'display_name', type: 'string', required: false, label: 'Display name',
+      section: 'identity', order: 0, uiHint: 'formatted-text', example: 'Ruby sword',
+    },
+    {
+      id: 'lore', type: 'list', required: false, label: 'Lore',
+      section: 'gameplay', order: 10, uiHint: 'formatted-lines', example: 'A very special item',
+    },
+    {
+      id: 'components', type: 'raw', required: false, label: 'Vanilla components',
+      section: 'gameplay', order: 90, advanced: true, uiHint: 'advanced',
+    },
+    {
+      id: 'mechanics', type: 'list', required: false, label: 'Abilities',
+      section: 'behavior', order: 10, uiHint: 'mechanics', referenceKind: 'mechanic',
+      module: true, category: 'behaviour', icon: 'zap',
+    },
+    {
+      id: 'behavior', type: 'list', required: false, label: 'When… do…',
+      section: 'behavior', order: 20, uiHint: 'behavior-rules',
+      description: 'React to game events with conditions and actions',
+      module: true, category: 'behaviour', icon: 'activity',
+      summary: 'React to game events with conditions and actions',
+    },
+    {
+      id: 'jukebox_song', type: 'reference', required: false, label: 'Jukebox song',
+      section: 'gameplay', order: 20, uiHint: 'reference', referenceKind: 'sound',
+      module: true, category: 'gameplay', icon: 'volume-2',
+      summary: 'Play a custom song when this disc goes into a jukebox',
+    },
+    {
+      id: 'power', type: 'decimal', required: false, label: 'Power',
+      section: 'gameplay', example: '1.5',
+    },
+    {
+      id: 'custom_model_data', type: 'integer', required: false, label: 'Custom model data',
+      section: 'advanced', advanced: true,
+    },
+  ],
+};
+
+const MODULES_VOCABULARY = {
+  events: [
+    { id: 'click', displayName: 'Click', description: 'The player left- or right-clicks with the item, or right-clicks the furniture', details: ['right', 'left'], firedBy: ['item', 'furniture'] },
+    { id: 'break', displayName: 'Break', description: 'The player breaks a block while holding the item, or breaks this block', details: [], firedBy: ['item', 'block'] },
+    { id: 'consume', displayName: 'Consume', description: 'The player eats or drinks the item', details: [], firedBy: ['item'] },
+  ],
+  actions: [
+    { id: 'message', displayName: 'Send message', description: 'Shows text to the player, on the action bar, or to everyone', shorthand: 'text', deferred: false,
+      parameters: [PARAM('text', 'string', true, 'Message text; & colour codes allowed', { label: 'Text' }),
+        PARAM('target', 'enum', false, 'Where the text appears', { uiHint: 'select', label: 'Where the text appears', allowedValues: ['player', 'actionbar', 'broadcast'] })] },
+    { id: 'run_command', displayName: 'Run command', description: 'Runs a server command', shorthand: 'command', deferred: true,
+      parameters: [PARAM('command', 'string', true, 'Command without the leading slash', { label: 'Command' })] },
+  ],
+  ruleOptions: [PARAM('cooldown', 'integer', false, 'Milliseconds before this rule can fire again', { uiHint: 'number' })],
+  actionOptions: [PARAM('chance', 'decimal', false, 'Probability from 0 to 1 that the action runs', { uiHint: 'number' })],
+  mechanics: [
+    { id: 'materione:soulbound', displayName: 'Soulbound', description: 'The item stays with its owner through death', repeatable: false, registeredBy: 'Materione',
+      activation: 'When the owner dies the item is kept back and returned on respawn or next join', parameters: [] },
+    { id: 'materione:durability', displayName: 'Durability', description: 'Custom durability that repairs and re damage', repeatable: false, registeredBy: 'Materione',
+      parameters: [PARAM('max', 'integer', true, 'Maximum durability', { uiHint: 'number', label: 'Max durability' })] },
+    { id: 'materione:commands', displayName: 'Console Commands', description: 'Runs commands from the server console', repeatable: false, registeredBy: 'Materione',
+      parameters: [PARAM('on_left_click', 'list', false, 'Commands on left click (one per line)', { label: 'Left-click commands' }), PARAM('on_right_click', 'list', false, 'Commands on right click (one per line)', { label: 'Right-click commands' })] },
+    { id: 'materione:food', displayName: 'Food', description: 'Custom nutrition, saturation and consume effects', repeatable: false, registeredBy: 'Materione',
+      activation: 'When the player eats the item, its nutrition, saturation and effects apply',
+      parameters: [PARAM('nutrition', 'integer', true, 'Hunger points restored (0..20)', { uiHint: 'number', label: 'Nutrition' }), PARAM('saturation', 'decimal', true, 'Saturation restored (0..40)', { uiHint: 'number', label: 'Saturation' }), PARAM('can_always_eat', 'boolean', false, 'Edible even at full hunger', { label: 'Can always eat' })] },
+    { id: 'materione:backpack', displayName: 'Backpack', description: 'A container that travels inside the item', repeatable: false, registeredBy: 'Materione',
+      activation: 'Right-clicking with the item opens its storage; contents save when the inventory closes',
+      parameters: [PARAM('rows', 'integer', true, 'Inventory rows (1..6)', { uiHint: 'number', label: 'Inventory rows' }), PARAM('title', 'string', false, 'Inventory title', { label: 'Backpack title' })] },
+    { id: 'example:charge', displayName: 'Charge', description: 'Stores charge on use', repeatable: true, registeredBy: 'ExampleAddon',
+      parameters: [PARAM('capacity', 'integer', true, 'Maximum charge', { uiHint: 'number', label: 'Capacity' })] },
+  ],
+};
+
 const GUIDED_DIAGNOSTICS = [
   {
     code: 'MTR-0010',
@@ -315,8 +461,12 @@ const GUIDED_DIAGNOSTICS = [
   },
 ];
 
-const PARAM = (id: string, type: string, required: boolean, description: string,
-  extra: Record<string, unknown> = {}) => ({ id, type, required, description, uiHint: 'text', label: '', ...extra });
+// A hoisted declaration: fixture vocabularies above this line read it at
+// module-init time.
+function PARAM(id: string, type: string, required: boolean, description: string,
+  extra: Record<string, unknown> = {}) {
+  return { id, type, required, description, uiHint: 'text', label: '', ...extra };
+}
 
 const GUIDED_VOCABULARY = {
   events: [
@@ -600,14 +750,22 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #renders = new Map<string, NonNullable<ResourceSummary['render']>>();
 
   readonly #guided: boolean;
+  readonly #modules: boolean;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
+    this.#modules = options.modules ?? false;
     this.#resources = [...RESOURCES];
     if (this.#guided) {
       this.#resources.push(...GUIDED_RESOURCES);
       for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
+        this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
+      }
+    }
+    if (this.#modules) {
+      this.#resources.push(...MODULES_RESOURCES);
+      for (const [path, parsed] of Object.entries(MODULES_DOCUMENTS)) {
         this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
       }
     }
@@ -687,6 +845,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
 
   calls(): readonly RecordedRpcCall[] {
     return structuredClone(this.#calls);
+  }
+
+  documents(): readonly import('./contract').FixtureDocumentSnapshot[] {
+    return structuredClone([...this.#documents.values()]);
   }
 
   writes(): readonly RecordedWrite[] {
@@ -781,6 +943,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'browse.packs':
         return this.success(op, { packs: [PACK] });
       case 'authoring.describe':
+        if (this.#modules) {
+          return this.success(op, {
+            types: [structuredClone(MODULE_ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+            behavior: structuredClone(MODULES_VOCABULARY),
+          });
+        }
         if (!this.#guided) return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
         return this.success(op, {
           types: [this.guidedItemType(), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
@@ -788,7 +956,9 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         });
       case 'browse.types':
         return this.success(op, {
-          types: [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+          types: this.#modules
+            ? [structuredClone(MODULE_ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)]
+            : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
         });
       case 'browse.resources': {
         const pack = stringValue(payload.pack);

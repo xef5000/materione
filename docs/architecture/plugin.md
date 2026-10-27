@@ -138,6 +138,17 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   not yet a registry; each `ActionExecutor` carries its own `describe()`/`shorthand()` and the
   event taxonomy (`EventTypes.describe()`) records which content types fire each event. The editor
   reads both, with the mechanics registry, through `authoring.describe` (web.md §4.2).
+- **Module metadata** (*M5, editor item-studio rework*). `ParameterSchema.EditorMetadata` carries
+  additive presentation fields a content type uses to declare that a parameter is a **module** —
+  one thing a user wants, an add/remove card in the editor's module studios (issue #152):
+  `module` (boolean), `category` (picker category id, defaults to `section`), `icon` (a name in
+  the editor's one icon set), `summary` (one picker line, defaults to the parameter description).
+  The editor derives its whole module catalog from these fields plus the mechanics
+  self-descriptions (`authoring.describe`) — never from a hand-written editor list, so the
+  one-schema-source rule holds. A `mechanics`-widget parameter marked as a module is a *source*:
+  the editor expands it into one module per registered mechanic. Required field modules (the
+  item's `material`) render as cards that cannot be removed. Validation is unaffected: module
+  metadata only controls progressive disclosure.
 
 ---
 
