@@ -116,6 +116,23 @@ export interface InheritanceView {
   failure?: string;
 }
 
+/**
+ * One template as `authoring.templates` lists it. Derived by the server from
+ * the authored documents: `serves` are the template-capable type directories
+ * it fits, `usedBy` the resources that name it in `template:`.
+ */
+export interface TemplateEntry {
+  pack: string;
+  path: string;
+  id: string;
+  /** The template this one itself inherits from, as a full id. */
+  parent?: string;
+  /** Top-level fields the template sets (authored values). */
+  definition: Record<string, unknown>;
+  serves: string[];
+  usedBy: ResourceRef[];
+}
+
 export interface AssetRef {
   path: string;
   bytes: number;
@@ -216,11 +233,29 @@ export const ops = {
     createPack: boolean,
     type?: string,
     folder?: string,
+    template?: string,
+    serves?: string,
   ) => c.call('authoring.createResource', {
     pack, id, name, createPack,
     ...(type ? { type } : {}),
     ...(folder ? { folder } : {}),
+    ...(template ? { template } : {}),
+    ...(serves ? { serves } : {}),
   }),
+  /** Every template of every pack, with what it sets, who it serves and who uses it. */
+  templates: (c: EditorChannel) => c.call('authoring.templates'),
+  /** Materialises the inherited values into the resource and drops its `template:` link. */
+  detachTemplate: (c: EditorChannel, pack: string, path: string, rev: number, resource: string) =>
+    c.call('authoring.detachTemplate', { pack, path, rev, resource }),
+  /** Writes `templates/<id>.yml` holding the chosen authored fields of a resource. */
+  saveAsTemplate: (
+    c: EditorChannel,
+    pack: string,
+    path: string,
+    resource: string,
+    id: string,
+    fields: string[],
+  ) => c.call('authoring.saveAsTemplate', { pack, path, resource, id, fields }),
   duplicateResource: (
     c: EditorChannel,
     pack: string,

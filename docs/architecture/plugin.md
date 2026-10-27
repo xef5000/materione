@@ -175,6 +175,39 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   (options only name accepted values, ranges are ordered and numeric, modules are never
   advanced and always carry a category and icon, no field names a widget the editor lacks).
 
+### 3.1 Templates are a pack-layout concept, not a registered type (issue #154)
+
+**Decision (M5): `templates/` stays a pack-layout directory. No `template` content type is
+registered.** `PackLayout.CONTENT_DIRS` lists the directory, `ParseStage` turns each keyed
+document into a content-graph node of kind `template` (master §5 — `item ──inherits──► template`),
+and `core.pipeline.TemplateResolver` is the one resolver (single parent, shallow top-level merge,
+child wins; runtime-systems §3.2). A definition opts in by declaring a parameter whose editor
+metadata has `referenceKind: template` (items and blocks today); the editor derives "this type can
+be based on a template" from that declaration, never from a field name.
+
+| Trace | Why a registered type would be wrong |
+|---|---|
+| **D5** (registries; a type is a schema plus a compile hook) | A template has neither. It is a *partial definition of whichever registered type consumes it*; it compiles to nothing by itself. A `template` type would need a schema, and the only honest schema is the union of every consuming type's — a second hand-maintained copy of each type's fields, which master §5.6 ("one schema source per content type") forbids. An empty schema would carry no self-description for the editor to render. |
+| **D2** (one content graph, first-class edges) | Satisfied without a type: templates are graph nodes and `template:` is an `inherits` edge, validated like any reference (`MTR-0010` quarantines an unresolved chain). |
+| **D1** (files are the truth) | What a template *serves* is **derived, never stored**: no `serves:` key (it would leak into every merged definition and need a reserved word in the resolver) and no sidecar. `AuthoringApi.listTemplates` derives it in this order: (1) the template-capable types of the resources that name the template; else (2) the type(s) whose declared fields best match the template's keys; else (3) every template-capable type. The studio opens a template as the first type it serves, pinned for the editing session. |
+| **D6** (one pipeline) | Every template operation is an ordinary lossless write that journals a revision, audits and triggers the same targeted reload — there is no "apply template" side channel. |
+
+Operations (api.md §3.3; web.md §4.2 and §6): `createResource` with a `template` writes the
+`template:` link plus the display name **and nothing else** — the template supplies the rest, so
+nothing is copied that could drift from it. `detachTemplate` resolves the chain with the
+pipeline's own resolver *at write time* (so a stale editor view cannot detach the wrong values),
+lays the inherited keys the resource does not set parent-first, keeps every own value, removes
+`template:`, and is one revision-guarded `setScalars` write. `saveAsTemplate` copies the chosen
+authored top-level fields into a new `templates/<id>.yml` as one batch create and leaves the
+source untouched. A short parent reference *inside a template chain* resolves in the namespace of
+the template that names it (it previously failed with "unknown template"; the editor makes chains
+common).
+
+*Revisit if:* the derivation proves too fuzzy for packs with many unused templates. The
+alternatives considered and rejected for now are a reserved `serves:` key stripped by the resolver
+and `templates/<type>/` subfolders (the pipeline's template parse is deliberately non-recursive);
+either would be a format change and needs its own decision here first.
+
 ---
 
 ## 4. The content pipeline — inside the stages

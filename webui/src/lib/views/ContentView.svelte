@@ -9,12 +9,23 @@
   import type { MenuItem } from '../components/ContextMenu.svelte';
   import BulkDialog from '../components/BulkDialog.svelte';
   import PromptDialog from '../components/PromptDialog.svelte';
+  import NewResourceDialog from '../components/NewResourceDialog.svelte';
+  import SaveAsTemplateDialog from '../components/SaveAsTemplateDialog.svelte';
   import Icon from '../components/Icon.svelte';
   import { contentTypeIcon } from '../components/icons';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
   import { ops, unwrap } from '../api';
   import { parseBulkResult, recipeOperation } from '../bulk';
+  import {
+    acceptsTemplates,
+    servedSchema,
+    templateMaterial,
+    templateRef,
+    templateSets,
+    usersLabel,
+    type NewChoice,
+  } from '../templates';
   import type { ResourceRef } from '../api';
   import {
     breadcrumbs,
@@ -54,6 +65,10 @@
     null | { title: string; label: string; initial: string; hint: string; onOk: (value: string) => void }
   >(null);
   let list = $state<HTMLDivElement>();
+  /** The New dialog is open (name + start-from choice, issue 154). */
+  let creating = $state(false);
+  /** A resource being saved as a template (issue 154). */
+  let sharing = $state<ResourceRef | null>(null);
   let history = $state<string[]>([]);
   let typeahead = { text: '', at: 0 };
   let presentation = $state(getCatalogPreferences(content.type));
@@ -249,37 +264,48 @@
   });
 
   function createEntry(): void {
-    const singular = tab?.singular ?? 'entry';
-    dialog = {
-      title: `New ${singular}`,
-      label: `${singular} name`,
-      initial: '',
-      hint: 'players see this name; the id is derived from it',
-      onOk: (name) => {
-        dialog = null;
-        void run('create', async () => {
-          const id = idFromName(name);
-          if (!id) throw new Error('use at least one letter or number');
-          let pack = workspace.activePack;
-          let createPack = false;
-          if (!pack) {
-            pack = 'default';
-            createPack = true;
-          }
-          const created = unwrap(await ops.createResource(
-            session.channel!, pack, id, name.trim(), createPack, content.type,
-            content.folder || content.type,
-          ));
-          if (createPack) {
-            await loadWorkspace();
-            await selectPack(pack);
-          }
-          await refreshPack();
-          logActivity('save', `created ${pack}:${id}; preview is building`);
-          openStudio({ pack, type: content.type, path: String(created.path), id });
-        });
-      },
-    };
+    creating = true;
+  }
+
+  /** The New dialog's answer: blank scaffold, template link, or a copy; always one write. */
+  function create(choice: NewChoice): void {
+    creating = false;
+    void run('create', async () => {
+      const { id, name, start } = choice;
+      let pack = workspace.activePack;
+      let createPack = false;
+      if (!pack) {
+        pack = 'default';
+        createPack = true;
+      }
+      const channel = session.channel!;
+      const destination = content.folder || content.type;
+      let created: Record<string, unknown>;
+      if (start.kind === 'duplicate') {
+        created = unwrap(await ops.duplicateResource(channel, pack, start.source.path, id, destination));
+        // The copy answers to the new name, not the original's.
+        const root = (created.parsed as Record<string, Record<string, unknown>> | undefined)?.[id];
+        if (root && Object.hasOwn(root, 'display_name')) {
+          unwrap(await ops.setFields(channel, pack, String(created.path), Number(created.rev ?? 1),
+            [{ field: [id, 'display_name'], value: name }]));
+        }
+      } else {
+        created = unwrap(await ops.createResource(
+          channel, pack, id, name, createPack, content.type, destination,
+          start.kind === 'template' ? templateRef(start.template, pack) : undefined,
+          choice.serves,
+        ));
+      }
+      if (createPack) {
+        await loadWorkspace();
+        await selectPack(pack);
+      }
+      await refreshPack();
+      logActivity('save', start.kind === 'template'
+        ? `created ${pack}:${id} from template ${start.template.id}`
+        : `created ${pack}:${id}; preview is building`);
+      openStudio({ pack, type: content.type, path: String(created.path), id });
+    });
   }
 
   function createFolder(): void {
@@ -429,6 +455,10 @@
       if (entry.resource?.type === 'items') {
         items.push({ label: 'Create recipe', run: () => createRecipe(entry) });
       }
+      const schema = workspace.types.find((type) => type.directory === entry.resource?.type);
+      if (entry.ids.length === 1 && acceptsTemplates(schema)) {
+        items.push({ label: 'Save as template…', run: () => (sharing = refOf(entry)) });
+      }
       items.push({ label: marked.includes(entry.key) ? 'Unmark' : 'Mark for bulk change', run: () => toggleMark(entry) });
     }
     items.push({ label: 'Move to…', run: () => moveTo(entry) });
@@ -446,7 +476,7 @@
   }
 
   function onKey(event: KeyboardEvent): void {
-    if (dialog || !active || ui.view !== 'content') return;
+    if (dialog || creating || !active || ui.view !== 'content') return;
     const index = rows.findIndex((row) => row.key === content.selected);
     const move = (next: number) => {
       const row = rows[Math.max(0, Math.min(rows.length - 1, next))];
@@ -502,11 +532,33 @@
       || (healthFor(entry) === 'unknown' ? 'Health summary unavailable.' : `Health: ${healthFor(entry)}.`);
   }
 
+  /** A template's picture is its base material; resources use their computed summary. */
+  function materialFor(entry: BrowserEntry): string | undefined {
+    if (entry.resource?.type !== 'templates') return entry.summary?.material;
+    const template = workspace.templates.find((candidate) =>
+      candidate.pack === entry.resource?.pack && candidate.id === entry.id);
+    return (template && templateMaterial(template)) ?? entry.summary?.material;
+  }
+
   function summaryFor(entry: BrowserEntry): string {
     if (entry.kind === 'folder') return `${entry.count} documents`;
+    if (entry.resource?.type === 'templates') return templateSummary(entry);
     if (entry.summary?.material) return materialDisplayName(entry.summary.material);
     if (workspace.summariesError) return 'Summary unavailable';
     return entry.summary ? 'No additional summary' : 'Summary unavailable';
+  }
+
+  /** "Items · sets 3 fields · used by 2": what a template is for and how much it matters. */
+  function templateSummary(entry: BrowserEntry): string {
+    const template = workspace.templates.find((candidate) =>
+      candidate.pack === entry.resource?.pack && candidate.id === entry.id);
+    if (!template) return 'Template';
+    const served = template.serves
+      .map((directory) => workspace.types.find((type) => type.directory === directory)?.displayName ?? directory)
+      .join(' / ');
+    const fields = templateSets(template, servedSchema(template, workspace.types)).length;
+    return [served, `sets ${fields} field${fields === 1 ? '' : 's'}`, usersLabel(template.usedBy).toLowerCase()]
+      .filter(Boolean).join(' · ');
   }
 
   function statusLabel(entry: BrowserEntry): string {
@@ -658,7 +710,7 @@
             <ResourceThumbnail
               visual={row.summary?.visual}
               render={row.summary?.render}
-              material={row.summary?.material}
+              material={materialFor(row)}
               label={row.name}
               size={presentation.layout === 'grid' ? 56 : 34}
               version={workspace.visualVersion}
@@ -733,6 +785,28 @@
       onClose={() => (bulk = null)}
     />
   {/if}
+{/if}
+
+{#if creating}
+  <NewResourceDialog
+    type={content.type}
+    singular={tab?.singular ?? 'entry'}
+    onCreate={create}
+    onCancel={() => (creating = false)}
+  />
+{/if}
+
+{#if sharing}
+  <SaveAsTemplateDialog
+    resource={sharing}
+    onCancel={() => (sharing = null)}
+    onDone={async (created) => {
+      sharing = null;
+      await refreshPack();
+      logActivity('save', `saved ${created.id} as a template`);
+      openStudio({ pack: created.pack, type: 'templates', path: created.path, id: created.id });
+    }}
+  />
 {/if}
 
 {#if dialog}

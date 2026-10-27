@@ -42,6 +42,24 @@ public final class Scaffolds {
         };
     }
 
+    /**
+     * The starter body of a new template that serves one type directory — a
+     * single field that type declares, so the template is a valid partial
+     * definition of it from the first save (a template needs at least one
+     * field to be a mapping the editor can extend).
+     */
+    public static String templateFor(String serves, String id) {
+        String name = sanitize(id);
+        String body = switch (serves == null || serves.isBlank() ? "items" : serves) {
+            case "items" -> "  material: PAPER\n";
+            case "blocks" -> "  technique: note_block # note_block | string | chorus | technical | stairs | slab\n";
+            default -> "  display_name: \"" + display(name) + "\"\n";
+        };
+        return "# Shared inheritance base: definitions pull this in via `template:`\n"
+                + "# and override individual fields.\n"
+                + name + ":\n" + body;
+    }
+
     // ------------------------------------------------------------------
 
     private static String item(String id) {

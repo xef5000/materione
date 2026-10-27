@@ -19,8 +19,12 @@
       workspace.resources.filter((resource) => resource.path.startsWith(`${tab.directory}/`)).length,
     ])),
   );
-  const descriptions = $derived(
-    Object.fromEntries(workspace.types.map((type) => [type.directory ?? type.name, type.description])),
+  const descriptions = $derived<Record<string, string | undefined>>(
+    {
+      // templates are a pack-layout concept, not a registered type, so no schema describes them
+      templates: 'A shared starting point: items and blocks can be based on it and override what differs',
+      ...Object.fromEntries(workspace.types.map((type) => [type.directory ?? type.name, type.description])),
+    },
   );
   const fixes = $derived(
     diagnostics.entries

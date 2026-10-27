@@ -26,6 +26,7 @@
     defaultFor,
     displayFieldsOf,
     extraFieldsOf,
+    inheritedModules,
     moduleCatalog,
     presenceOf,
     type ModuleDescriptor,
@@ -50,17 +51,30 @@
     missingTexture: (field: TypeParam) => string | null;
     fieldIssue: (fieldId: string) => DiagnosticEntry | undefined;
     showInFile: () => void;
+    /** What the template chain supplies per key, and which template supplies it (read-only). */
+    inherited?: Record<string, unknown>;
+    inheritedSources?: Record<string, string>;
   }
 
   let {
     resource, schema, vocabulary, values, host, provenance,
     set, removeField, onError, focusField, actionFor, missingTexture, fieldIssue, showInFile,
+    inherited = {}, inheritedSources = {},
   }: Props = $props();
 
   const catalog = $derived(moduleCatalog(schema, vocabulary));
   const display = $derived(displayFieldsOf(schema));
   const extraFields = $derived(extraFieldsOf(schema));
   const advancedFields = $derived(advancedFieldsOf(schema));
+  const fromTemplate = $derived(inheritedModules(catalog, values, inherited, inheritedSources));
+
+  function overrideHere(field: string, value: unknown): void {
+    run(() => set(field, structuredClone($state.snapshot(value))));
+  }
+
+  function shortId(id: string): string {
+    return id.slice(id.lastIndexOf(':') + 1);
+  }
 
   let pickerOpen = $state(false);
   /** Modules opened without a value yet (no key written until one is). */
@@ -281,6 +295,22 @@
     </article>
   {/each}
 
+  {#each fromTemplate as module (module.key)}
+    <article class="card module inherited" data-inherited-module={module.key} aria-label={`${module.label} (inherited)`}>
+      <header>
+        <Icon name={module.icon} size={16} />
+        <strong>{module.label}</strong>
+        <span class="origin">Inherited from {shortId(module.source)}</span>
+        <span class="spacer"></span>
+        <button type="button" class="ghost" onclick={() => overrideHere(module.field, module.value)}
+          title="Copy the template's value into this resource so you can change it">
+          Override here
+        </button>
+      </header>
+      <p class="note" data-inherited-summary>{module.summary}</p>
+    </article>
+  {/each}
+
   <button type="button" class="add" onclick={() => (pickerOpen = true)}>
     <Icon name="plus" size={16} />
     Add module
@@ -375,6 +405,9 @@
   .ghost:hover {
     background: var(--bg-hover);
     color: inherit;
+  }
+  .inherited {
+    border-style: dashed;
   }
   .description,
   .activation,

@@ -78,6 +78,15 @@ const PLANNED: TypeTab[] = [
   { directory: 'guis', label: 'GUIs', singular: 'GUI', enabled: false, note: 'coming in M5' },
 ];
 
+function byOrder(a: string, b: string): number {
+  const left = ORDER.indexOf(a);
+  const right = ORDER.indexOf(b);
+  if (left < 0 && right < 0) return a.localeCompare(b);
+  if (left < 0) return 1;
+  if (right < 0) return -1;
+  return left - right;
+}
+
 /**
  * The horizontal type tabs, derived from the registry rather than hardcoded:
  * a type that registers itself shows up here without a UI change (D5).
@@ -90,14 +99,15 @@ export function typeTabs(types: TypeInfo[]): TypeTab[] {
       directories.push(directory);
     }
   }
-  directories.sort((a, b) => {
-    const left = ORDER.indexOf(a);
-    const right = ORDER.indexOf(b);
-    if (left < 0 && right < 0) return a.localeCompare(b);
-    if (left < 0) return 1;
-    if (right < 0) return -1;
-    return left - right;
-  });
+  directories.sort(byOrder);
+  // Templates are a pack-layout concept, not a registered type (plugin.md §3.1):
+  // their tab appears whenever a registered type can be based on one.
+  const takesTemplates = types.some((type) =>
+    type.parameters.some((field) => field.referenceKind === 'template'));
+  if (takesTemplates && !directories.includes('templates')) {
+    directories.push('templates');
+    directories.sort(byOrder);
+  }
   return [
     ...directories.map((directory) => ({
       directory,

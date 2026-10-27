@@ -17,6 +17,8 @@ import type { PushFrame } from '../events';
 import type { Response } from '../protocol/wire';
 import type { DemoSnapshot, SnapshotDocument, SnapshotPack } from './snapshot';
 import { scanReferences } from './references';
+import { detached, fullRef, startingFields, templateCatalog, templateDefinition } from './templates';
+import type { TemplateDocument } from './templates';
 
 const ACTOR = 'demo';
 const UNKNOWN_HEALTH = 'pipeline validation and apply freshness are unknown';
@@ -81,6 +83,9 @@ export class DemoServer implements RpcChannel {
       case 'edit.create': return this.#create(op, text(p.pack), text(p.path), optional(p.id));
       case 'authoring.createResource': return this.#createResource(p);
       case 'authoring.duplicateResource': return this.#duplicate(p);
+      case 'authoring.templates': return { templates: templateCatalog(this.#documentMap(), this.#snapshot.types) };
+      case 'authoring.detachTemplate': return this.#detach(p);
+      case 'authoring.saveAsTemplate': return this.#saveAsTemplate(p);
       case 'edit.delete': return this.#delete(p);
       case 'edit.move': return this.#move(p);
       case 'edit.createFolder': return this.#folder(p, 'create');
@@ -332,8 +337,73 @@ export class DemoServer implements RpcChannel {
     const pack = text(p.pack);
     if (p.createPack === true && !this.#snapshot.packs.some((entry) => entry.name === pack)) this.#createPack(pack);
     const path = documentPath(optional(p.type) ?? 'items', optional(p.folder), id, Object.keys(this.#snapshot.scaffolds));
+    const template = optional(p.template);
+    if (template) {
+      // A template-born resource is the link plus its name; the template supplies the rest.
+      if (this.#pack(pack).documents[path]) throw new DemoError('MTR-0008', `document already exists: ${path}`, 'choose a different id');
+      const start = startingFields(this.#documentMap(), pack, optional(p.type) ?? 'items', id, name, template, '');
+      if ('error' in start) throw new DemoError('MTR-0008', start.error);
+      const yaml = parseDocument(`# ${id} — created by the Materione editor
+${id}: {}
+`);
+      for (const [field, value] of Object.entries(start.fields)) yaml.setIn([id, field], yaml.createNode(value));
+      const created = await this.#store(pack, path, yaml.toString(), 'authoring.createResource');
+      return { pack, path, id, rev: created.rev, raw: created.raw, parsed: structuredClone(created.parsed) };
+    }
     const document = await this.#create('authoring.createResource', pack, path, id, name);
     return { pack, path, id, rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) };
+  }
+
+  /** Every document of every pack, as the template helpers read them. */
+  #documentMap(): Map<string, TemplateDocument> {
+    return new Map(this.#snapshot.packs.flatMap((pack) => Object.entries(pack.documents).map(([path, document]) =>
+      [`${pack.name}/${path}`, { pack: pack.name, path, rev: document.rev, raw: document.raw, parsed: document.parsed }] as const)));
+  }
+
+  /** Copies the inherited values into the resource and drops its `template:` link. */
+  async #detach(p: Record<string, unknown>): Promise<unknown> {
+    const pack = text(p.pack);
+    const path = text(p.path);
+    const current = this.#document(pack, path);
+    this.#checkRev(current, p.rev);
+    const root = optional(p.resource) ?? Object.keys(current.parsed)[0] ?? '';
+    const fields = current.parsed[root] as Record<string, unknown> | undefined;
+    if (!fields) throw new DemoError('MTR-0008', `no resource '${root}' in ${path}`);
+    const result = detached(this.#documentMap(), pack, fields);
+    if ('error' in result) throw new DemoError('MTR-0008', `${root}: ${result.error}`);
+    const yaml = parseDocument(current.raw);
+    for (const [field, value] of Object.entries(result.fields)) {
+      if (!(field in fields)) yaml.setIn([root, field], yaml.createNode(value));
+    }
+    yaml.deleteIn([root, 'template']);
+    const document = await this.#store(pack, path, yaml.toString(), 'authoring.detachTemplate');
+    return { rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) };
+  }
+
+  /** A new `templates/<id>.yml` holding the chosen authored fields of a resource. */
+  async #saveAsTemplate(p: Record<string, unknown>): Promise<unknown> {
+    const pack = text(p.pack);
+    const id = text(p.id);
+    const source = this.#document(pack, text(p.path));
+    const root = optional(p.resource) ?? Object.keys(source.parsed)[0] ?? '';
+    const fields = source.parsed[root] as Record<string, unknown> | undefined;
+    if (!fields) throw new DemoError('MTR-0008', `no resource '${root}' in ${text(p.path)}`);
+    if (!ID_PATTERN.test(id)) throw new DemoError('MTR-0008', 'id must be 2..64 chars of a-z 0-9 _ -');
+    const chosen = Array.isArray(p.fields) ? p.fields.filter((field): field is string => typeof field === 'string') : [];
+    if (chosen.length === 0) throw new DemoError('MTR-0008', 'choose at least one field to put in the template');
+    const path = `templates/${id}.yml`;
+    if (this.#pack(pack).documents[path] || templateDefinition(this.#documentMap(), `${pack}:${id}`)) {
+      throw new DemoError('MTR-0008', `template already exists: ${id}`, 'choose a different template id');
+    }
+    const yaml = parseDocument(`# ${id} — saved from ${text(p.path)} by the Materione editor
+${id}: {}
+`);
+    for (const field of chosen) {
+      if (!(field in fields)) throw new DemoError('MTR-0008', `${root} does not set '${field}'`);
+      yaml.setIn([id, field], yaml.createNode(fields[field]));
+    }
+    const created = await this.#store(pack, path, yaml.toString(), 'authoring.saveAsTemplate');
+    return { pack, path, id, rev: created.rev, raw: created.raw, parsed: structuredClone(created.parsed) };
   }
 
   async #duplicate(p: Record<string, unknown>): Promise<unknown> {

@@ -254,6 +254,76 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void templatesAreACreationChoiceDetachableAndSavableOverTheWire() throws Exception {
+        DocumentStore store = store();
+        CapturingTrigger trigger = new CapturingTrigger();
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store, audit(), trigger),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+        dispatcher.dispatch(request("edit.put", "2", object(
+                "pack", "demo", "path", "templates/base_item.yml", "rev", "0",
+                "content", "base_item:\n  material: PAPER\n  lore:\n    - Forged\n")));
+
+        // create from the template: the file is the link plus the name
+        Wire.Response created = dispatcher.dispatch(request("authoring.createResource", "3",
+                object("pack", "demo", "id", "ruby_dagger", "name", "Ruby Dagger",
+                        "type", "items", "template", "base_item")));
+        assertThat(created.ok()).isTrue();
+        assertThat(store.read("demo", "items/ruby_dagger.yml").raw())
+                .contains("template: base_item").contains("display_name: Ruby Dagger")
+                .doesNotContain("material");
+        assertThat(dispatcher.dispatch(request("authoring.createResource", "4",
+                object("pack", "demo", "id", "ghost", "name", "Ghost", "template", "nope"))).ok())
+                .isFalse();
+
+        // the catalog lists the template and who uses it
+        JsonObject listed = payload(dispatcher.dispatch(request("authoring.templates", "5")));
+        JsonObject row = listed.getAsJsonArray("templates").get(0).getAsJsonObject();
+        assertThat(row.get("id").getAsString()).isEqualTo("base_item");
+        assertThat(row.getAsJsonObject("definition").get("material").getAsString()).isEqualTo("PAPER");
+        assertThat(row.getAsJsonArray("usedBy")).hasSize(1);
+
+        // save a template from the dagger's own fields, then detach it
+        dispatcher.dispatch(request("authoring.setFields", "6", editsOf("demo", "items/ruby_dagger.yml", 1,
+                "[{\"field\":[\"ruby_dagger\",\"power\"],\"value\":\"7\"}]")));
+        Wire.Response saved = dispatcher.dispatch(request("authoring.saveAsTemplate", "7",
+                saveBody("demo", "items/ruby_dagger.yml", "ruby_dagger", "dagger_base", "power")));
+        assertThat(saved.ok()).isTrue();
+        assertThat(payload(saved).get("path").getAsString()).isEqualTo("templates/dagger_base.yml");
+
+        Wire.Response detached = dispatcher.dispatch(request("authoring.detachTemplate", "8",
+                object("pack", "demo", "path", "items/ruby_dagger.yml", "resource", "ruby_dagger",
+                        "rev", "2")));
+        assertThat(detached.ok()).isTrue();
+        assertThat(store.read("demo", "items/ruby_dagger.yml").raw())
+                .doesNotContain("template:").contains("material: PAPER").contains("- Forged")
+                .contains("display_name: Ruby Dagger");
+        assertThat(java.nio.file.Files.readString(temp.resolve("audit.log")))
+                .contains("authoring.saveAsTemplate").contains("authoring.detachTemplate");
+        // a second detach has nothing to detach
+        assertThat(dispatcher.dispatch(request("authoring.detachTemplate", "9",
+                object("pack", "demo", "path", "items/ruby_dagger.yml", "rev", "3"))).ok()).isFalse();
+    }
+
+    private static JsonObject editsOf(String pack, String path, int rev, String editsJson) {
+        JsonObject body = object("pack", pack, "path", path, "rev", String.valueOf(rev));
+        body.add("edits", com.google.gson.JsonParser.parseString(editsJson));
+        return body;
+    }
+
+    private static JsonObject saveBody(
+            String pack, String path, String resource, String id, String... fields) {
+        JsonObject body = object("pack", pack, "path", path, "resource", resource, "id", id);
+        var array = new com.google.gson.JsonArray();
+        for (String field : fields) {
+            array.add(field);
+        }
+        body.add("fields", array);
+        return body;
+    }
+
+    @Test
     void foldersAreListedCreatedMovedAndOnlyDeletedWhenEmpty() throws Exception {
         DocumentStore store = store();
         RpcDispatcher dispatcher = new RpcDispatcher();

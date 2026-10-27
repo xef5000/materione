@@ -97,6 +97,26 @@ public interface AuthoringApi {
     /** Clones an existing resource under a new id ({@code authoring.duplicateResource}). */
     ApiResult<DocumentView> duplicateResource(ActorContext actor, DuplicateResourceRequest request);
 
+    /**
+     * Every template of every pack, with what it sets, which content types it
+     * serves and which resources inherit it ({@code authoring.templates}).
+     * Read-only; derived from the authored documents, never stored.
+     */
+    ApiResult<List<TemplateInfo>> listTemplates();
+
+    /**
+     * Materialises a resource's inherited values into the resource and drops
+     * its {@code template:} link ({@code authoring.detachTemplate}) — one
+     * revision, resolved by the pipeline's own resolver at write time.
+     */
+    ApiResult<DocumentView> detachTemplate(ActorContext actor, DetachTemplateRequest request);
+
+    /**
+     * Writes a new {@code templates/} document holding the chosen authored
+     * fields of an existing resource ({@code authoring.saveAsTemplate}).
+     */
+    ApiResult<DocumentView> saveAsTemplate(ActorContext actor, SaveAsTemplateRequest request);
+
     /** Revision-guarded raw YAML write ({@code edit.put}). */
     ApiResult<DocumentView> putDocument(ActorContext actor, PutDocumentRequest request);
 
@@ -264,14 +284,64 @@ public interface AuthoringApi {
     record CreateDocumentRequest(
             String pack, String path, String resourceId, String displayName, String content) {}
 
-    /** {@link #createResource}: type defaults to {@code items}; folder is a subdirectory inside the type. */
+    /**
+     * {@link #createResource}: type defaults to {@code items}; folder is a
+     * subdirectory inside the type. With a {@code template} the new document
+     * is just {@code template:} plus the display name — the template supplies
+     * everything else, so nothing is copied that could drift from it. For
+     * {@code type=templates}, {@code serves} names the type directory the new
+     * template is for (it picks the starter field).
+     */
     record CreateResourceRequest(
             String pack,
             String resourceId,
             String displayName,
             String type,
             String folder,
-            boolean createPack) {}
+            boolean createPack,
+            String template,
+            String serves) {
+
+        /** A resource from the type's curated scaffold. */
+        public CreateResourceRequest(
+                String pack, String resourceId, String displayName, String type,
+                String folder, boolean createPack) {
+            this(pack, resourceId, displayName, type, folder, createPack, null, null);
+        }
+
+        /** A resource that inherits from {@code template}. */
+        public CreateResourceRequest(
+                String pack, String resourceId, String displayName, String type,
+                String folder, boolean createPack, String template) {
+            this(pack, resourceId, displayName, type, folder, createPack, template, null);
+        }
+    }
+
+    /** One template as the editor lists it ({@link #listTemplates}). */
+    record TemplateInfo(
+            String pack,
+            String path,
+            String id,
+            String parent,
+            Map<String, Object> definition,
+            List<String> serves,
+            List<ResourceRef> usedBy) {
+        public TemplateInfo {
+            definition = definition == null ? Map.of() : Map.copyOf(definition);
+            serves = serves == null ? List.of() : List.copyOf(serves);
+            usedBy = usedBy == null ? List.of() : List.copyOf(usedBy);
+        }
+    }
+
+    /** {@link #detachTemplate}: {@code resourceId} is the root inside the document. */
+    record DetachTemplateRequest(String pack, String path, String resourceId, int expectedRevision) {}
+
+    /**
+     * {@link #saveAsTemplate}: copies {@code fields} (top-level authored keys)
+     * of {@code resourceId} in {@code fromPath} into {@code templates/<templateId>.yml}.
+     */
+    record SaveAsTemplateRequest(
+            String pack, String fromPath, String resourceId, String templateId, List<String> fields) {}
 
     /** {@link #duplicateResource}: copies {@code fromPath}'s bytes re-keyed to {@code resourceId}. */
     record DuplicateResourceRequest(String pack, String fromPath, String resourceId, String folder) {}

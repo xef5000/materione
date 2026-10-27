@@ -245,3 +245,75 @@ export function categoriesOf(catalog: ModuleDescriptor[]): string[] {
   return [...order.filter((category) => present.has(category)),
     ...[...present].filter((category) => !order.includes(category)).sort()];
 }
+
+/** A module the resource has through its template and does not set itself. */
+export interface InheritedModule {
+  key: string;
+  label: string;
+  icon: IconName;
+  /** Full id of the template that supplies it. */
+  source: string;
+  /** One line of what it holds. */
+  summary: string;
+  /** The field "Override here" writes, and the value it copies into the resource. */
+  field: string;
+  value: unknown;
+}
+
+function brief(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return `${value.length} entr${value.length === 1 ? 'y' : 'ies'}`;
+  if (value && typeof value === 'object') return Object.keys(value).join(', ') || 'set';
+  return String(value);
+}
+
+/**
+ * The modules a resource gets from its template (issue 154): every module whose
+ * field the resource itself does not set but the template chain supplies. They
+ * are shown, so inheritance is visible as modules rather than only as a line
+ * under a field; "Override here" copies the inherited value into the resource.
+ * Mechanics are inherited as the whole `mechanics` list (the merge is shallow),
+ * one entry per ability so each reads as its own module.
+ */
+export function inheritedModules(
+  catalog: ModuleDescriptor[],
+  values: Record<string, unknown>,
+  inherited: Record<string, unknown>,
+  sources: Record<string, string>,
+): InheritedModule[] {
+  const out: InheritedModule[] = [];
+  for (const descriptor of catalog) {
+    if (descriptor.kind === 'mechanic') {
+      const source = descriptor.sourceField ?? 'mechanics';
+      if (Object.hasOwn(values, source) || !Array.isArray(inherited[source])) continue;
+      for (const entry of mechanicEntries(inherited[source])) {
+        if (!entry.name || fullMechanicId(entry.name) !== descriptor.mechanic?.id) continue;
+        const params = Object.entries(entry.params).map(([key, value]) => `${key} ${brief(value)}`).join(', ');
+        out.push({
+          key: `${descriptor.id}#${entry.index}`,
+          label: descriptor.label,
+          icon: descriptor.icon,
+          source: sources[source] ?? '',
+          summary: params || 'no settings',
+          field: source,
+          value: inherited[source],
+        });
+      }
+      continue;
+    }
+    const field = descriptor.field?.id;
+    if (!field || Object.hasOwn(values, field) || !Object.hasOwn(inherited, field)) continue;
+    const value = inherited[field];
+    if (descriptor.kind === 'rules' && !(Array.isArray(value) && value.length > 0)) continue;
+    out.push({
+      key: descriptor.id,
+      label: descriptor.label,
+      icon: descriptor.icon,
+      source: sources[field] ?? '',
+      summary: brief(value),
+      field,
+      value,
+    });
+  }
+  return out;
+}

@@ -1,4 +1,5 @@
 import { scanReferences } from '../src/lib/demo/references';
+import { detached, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
 // The real server's type self-descriptions, recorded by the plugin's golden
 // test: the ?modules fixture serves the block/furniture/... schemas exactly as
 // Java declares them, so a spec cannot pass against a schema the server lacks.
@@ -278,6 +279,7 @@ const GUIDED_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'templated_blade' },
   { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'cracked_gem' },
   { pack: PACK, type: 'items', path: 'items/guided.yml', id: 'storm_wand' },
+  { pack: PACK, type: 'templates', path: 'templates/blade_base.yml', id: 'blade_base' },
 ];
 
 const GUIDED_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
@@ -322,6 +324,7 @@ const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'blocks', path: 'blocks/plain_stone.yml', id: 'plain_stone' },
   { pack: PACK, type: 'furnitures', path: 'furnitures/chair.yml', id: 'chair' },
   { pack: PACK, type: 'furnitures', path: 'furnitures/stool.yml', id: 'stool' },
+  { pack: PACK, type: 'templates', path: 'templates/base_item.yml', id: 'base_item' },
 ];
 
 function goldenType(name: string): TypeInfo {
@@ -388,8 +391,15 @@ const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
   'furnitures/stool.yml': {
     stool: { texture: 'block/marble', display_name: 'Stool' },
   },
+  // Mirrors the sample pack's base_item: a shared base that sets a handful of modules.
   'templates/base_item.yml': {
-    base_item: { display_name: 'A base item' },
+    base_item: {
+      display_name: 'A base item',
+      material: 'PAPER',
+      lore: ['Forged', 'Hard'],
+      model_parent: 'item/handheld',
+      mechanics: [{ durability: { max: 250 } }],
+    },
   },
 };
 
@@ -759,6 +769,8 @@ function isWriteOperation(op: string): boolean {
     op === 'authoring.saveModel' ||
     op === 'authoring.createResource' ||
     op === 'authoring.duplicateResource' ||
+    op === 'authoring.detachTemplate' ||
+    op === 'authoring.saveAsTemplate' ||
     op === 'assets.put' ||
     op === 'assets.delete' ||
     op === 'assets.move' ||
@@ -1033,6 +1045,16 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.references(op, payload);
       case 'authoring.bulk':
         return this.bulk(op, payload);
+      case 'authoring.createResource':
+        return this.createResource(op, payload);
+      case 'authoring.duplicateResource':
+        return this.duplicateResource(op, payload);
+      case 'authoring.templates':
+        return this.success(op, { templates: templateCatalog(this.#documents, this.typeList()) });
+      case 'authoring.detachTemplate':
+        return this.detachTemplate(op, payload);
+      case 'authoring.saveAsTemplate':
+        return this.saveAsTemplate(op, payload);
       case 'authoring.saveModel':
         return this.saveModel(op, payload);
       case 'assets.list':
@@ -1069,6 +1091,100 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       default:
         return this.failure(op, 'MTR-0001', `unsupported fixture operation: ${op}`);
     }
+  }
+
+  /** The registry types this fixture serves, as `browse.types` reports them. */
+  private typeList(): TypeInfo[] {
+    return this.#modules
+      ? moduleTypes()
+      : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)];
+  }
+
+  private createResource(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const id = stringValue(payload.id);
+    const name = stringValue(payload.name).trim();
+    const type = stringValue(payload.type, 'items');
+    if (!/^[a-z0-9_-]{2,64}$/.test(id)) return this.failure(op, 'MTR-0008', 'id must be 2..64 chars of a-z 0-9 _ -');
+    if (!name) return this.failure(op, 'MTR-0008', 'display name must be 1..128 characters');
+    const path = `${type}/${id}.yml`;
+    if (this.#documents.has(`${pack}/${path}`)) {
+      return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
+    }
+    const start = startingFields(
+      this.#documents, pack, type, id, name, stringValue(payload.template), stringValue(payload.serves, 'items'));
+    if ('error' in start) return this.failure(op, 'MTR-0008', start.error);
+    const document = makeDocument(path, 1, { [id]: start.fields });
+    this.#documents.set(`${pack}/${path}`, document);
+    this.#resources.push({ pack, type, path, id });
+    return this.success(op, {
+      pack, path, id, rev: 1, raw: document.raw, parsed: structuredClone(document.parsed),
+    });
+  }
+
+  private duplicateResource(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const id = stringValue(payload.id);
+    const source = this.#documents.get(`${pack}/${stringValue(payload.path)}`);
+    const sourceId = source ? Object.keys(source.parsed)[0] : undefined;
+    if (!source || !sourceId) return this.failure(op, 'MTR-0009', 'no such document');
+    if (!/^[a-z0-9_-]{2,64}$/.test(id)) return this.failure(op, 'MTR-0008', 'id must be 2..64 chars of a-z 0-9 _ -');
+    const type = source.path.split('/')[0] ?? 'items';
+    const path = `${type}/${id}.yml`;
+    if (this.#documents.has(`${pack}/${path}`)) {
+      return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
+    }
+    const document = makeDocument(path, 1, { [id]: structuredClone(source.parsed[sourceId]!) });
+    this.#documents.set(`${pack}/${path}`, document);
+    this.#resources.push({ pack, type, path, id });
+    return this.success(op, {
+      pack, path, id, rev: 1, raw: document.raw, parsed: structuredClone(document.parsed),
+    });
+  }
+
+  private detachTemplate(op: string, payload: Record<string, unknown>): Response {
+    const document = this.findDocument(payload);
+    if (!document) return this.failure(op, 'MTR-0009', 'fixture document not found');
+    if (numberValue(payload.rev) !== document.rev) {
+      return this.failure(op, 'MTR-0034', 'document revision no longer matches');
+    }
+    const root = stringValue(payload.resource) || Object.keys(document.parsed)[0] || '';
+    const fields = document.parsed[root];
+    if (!fields) return this.failure(op, 'MTR-0008', `no resource '${root}' in ${document.path}`);
+    const result = detached(this.#documents, document.pack, fields);
+    if ('error' in result) return this.failure(op, 'MTR-0008', `${root}: ${result.error}`);
+    document.parsed = { ...document.parsed, [root]: result.fields };
+    document.rev += 1;
+    document.raw = serializeFixtureYaml(document.parsed);
+    return this.success(op, { rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) });
+  }
+
+  private saveAsTemplate(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const id = stringValue(payload.id);
+    const document = this.#documents.get(`${pack}/${stringValue(payload.path)}`);
+    const root = stringValue(payload.resource) || (document ? Object.keys(document.parsed)[0] ?? '' : '');
+    const fields = document?.parsed[root];
+    if (!document || !fields) return this.failure(op, 'MTR-0009', 'no such document');
+    if (!/^[a-z0-9_-]{2,64}$/.test(id)) return this.failure(op, 'MTR-0008', 'id must be 2..64 chars of a-z 0-9 _ -');
+    const chosen = Array.isArray(payload.fields)
+      ? payload.fields.filter((entry): entry is string => typeof entry === 'string') : [];
+    if (chosen.length === 0) return this.failure(op, 'MTR-0008', 'choose at least one field to put in the template');
+    const path = `templates/${id}.yml`;
+    if (this.#documents.has(`${pack}/${path}`) || templateDefinition(this.#documents, `${pack}:${id}`)) {
+      return this.failure(op, 'MTR-0008', `template already exists: ${id}`);
+    }
+    const body: Record<string, unknown> = {};
+    for (const field of chosen) {
+      if (!(field in fields)) return this.failure(op, 'MTR-0008', `${root} does not set '${field}'`);
+      body[field] = structuredClone(fields[field]);
+    }
+    const created = makeDocument(path, 1, { [id]: body });
+    this.#documents.set(`${pack}/${path}`, created);
+    this.#resources.push({ pack, type: 'templates', path, id });
+    return this.success(op, {
+      pack, path, id, rev: 1, raw: created.raw, parsed: structuredClone(created.parsed),
+    });
   }
 
   private summaries(op: string, payload: Record<string, unknown>): Response {

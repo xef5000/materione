@@ -15,6 +15,7 @@ import dev.materione.core.document.AssetStore;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
+import dev.materione.core.pipeline.TemplateResolver;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -47,6 +48,8 @@ final class ResourceSummaryComputer {
     private FilteredResources cachedFilteredResources;
     private String cachedFailurePack;
     private ProjectionBudgetExceededException cachedFailure;
+    /** The template catalog of the current content; any change invalidates it with the summaries. */
+    private TemplateCatalog cachedCatalog;
 
     ResourceSummaryComputer(
             DocumentStore documents, AssetStore assets, Supplier<List<ContentType>> contentTypes) {
@@ -118,6 +121,7 @@ final class ResourceSummaryComputer {
             cachedFilteredResources = null;
             cachedFailurePack = null;
             cachedFailure = null;
+            cachedCatalog = null;
         }
     }
 
@@ -399,6 +403,48 @@ final class ResourceSummaryComputer {
     TemplatePool templatePool() {
         return templates(new ProjectionBudget(projectionBudgetBytes));
     }
+
+    /**
+     * The templates plus their direct users across every pack (resources whose
+     * authored {@code template:} resolves to the template's full id), and the
+     * registered types. One bounded pass over the authored documents.
+     */
+    TemplateCatalog templateCatalog() {
+        synchronized (cacheLock) {
+            if (cachedCatalog == null) {
+                cachedCatalog = buildTemplateCatalog();
+            }
+            return cachedCatalog;
+        }
+    }
+
+    private TemplateCatalog buildTemplateCatalog() {
+        ProjectionBudget budget = new ProjectionBudget(projectionBudgetBytes);
+        TemplatePool pool = templates(budget);
+        Map<String, List<DocumentStore.ResourceRef>> users = new LinkedHashMap<>();
+        documents.forEachResourceDocument(null, null, row -> {
+            if (row.document() == null || row.document().parseError().isPresent()) {
+                return;
+            }
+            Map<String, Object> definition = mapping(row.document(), row.resource().resourceId());
+            String authored = definition == null ? null : TemplateResolver.text(definition, "template");
+            if (authored == null) {
+                return;
+            }
+            budget.consume(REFERENCE_INDEX_ENTRY_BYTES);
+            users.computeIfAbsent(
+                    TemplateResolver.shortRef(row.resource().pack(), authored), key -> new ArrayList<>())
+                    .add(row.resource());
+        }, budget);
+        List<ContentType> registered = contentTypes.get();
+        return new TemplateCatalog(pool, users, registered == null ? List.of() : List.copyOf(registered));
+    }
+
+    /** {@link #templateCatalog}: definitions, direct users by full template id, registered types. */
+    record TemplateCatalog(
+            TemplatePool pool,
+            Map<String, List<DocumentStore.ResourceRef>> users,
+            List<ContentType> types) {}
 
     /** Template definitions by id, plus {@code [pack, path]} of each defining document. */
     record TemplatePool(Map<String, Map<String, Object>> definitions, Map<String, List<String>> sources) {}

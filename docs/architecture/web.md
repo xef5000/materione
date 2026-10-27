@@ -318,7 +318,8 @@ edit put / delete / setScalar (scalars **and scalar lists** through the lossless
 layer) / create (curated per-type scaffolds, duplicate-refusing) / createPack /
 move (journal-truthful renames) / **createFolder, deleteFolder, moveFolder** (the
 organisational folders the content browser exposes); authoring **createResource**
-(any registered type, into any folder) / **duplicateResource** / **setFields** (a
+(any registered type, into any folder; optionally from a `template`) / **duplicateResource** /
+**templates** (the derived template catalog) / **detachTemplate** / **saveAsTemplate** / **setFields** (a
 batch of field edits — including structured values such as furniture hitboxes or a
 recipe's ingredient map — as one revision, one journal entry and one reload) /
 commit / saveModel; validate dryRun (syntax gate); assets
@@ -442,7 +443,14 @@ treats an absent key as a no-op, and refuses keys in flow style or behind a sequ
 same revision-checked batch. `browse.get` adds a read-only `computed.inheritance` per root that names
 a `template:`: `template` as authored, `chain` (full ids, nearest first), `inherited` (the value the
 chain supplies for each key), `sources` (which template supplies it), `templates` (`{pack, path}` per
-chain id) and `failure` when the chain does not resolve. It comes from the pipeline's own resolver,
+chain id) and `failure` when the chain does not resolve. `authoring.templates` (no payload) returns
+`{templates: [{pack, path, id, parent?, definition, serves, usedBy}]}`: `definition` is what the
+template sets, `serves` the template-capable type directories it fits (derived — plugin.md §3.1),
+`usedBy` the `{pack, type, path, id}` of every resource that names it. `authoring.detachTemplate`
+(`{pack, path, rev, resource?}`) and `authoring.saveAsTemplate` (`{pack, path, resource?, id, fields}`)
+answer `{rev, raw, parsed}` (the latter also `{pack, path, id}`); `authoring.createResource` takes an
+optional `template` (bare id inside the pack, `pack:id` across packs) and, for `type: templates`, an
+optional `serves`. It comes from the pipeline's own resolver,
 reflects the saved file, and is computed only for documents that use inheritance. Diagnostics may
 carry `target: { field: [...] }` — the definition field the problem is about (unresolved
 `texture`/`model`/`template` references today). The bus publishes one quarantine notice per resource
@@ -690,11 +698,34 @@ cannot read, forge, replay, or reorder anything.
   offered only when this server fires the event for the host and registers the action; they are
   starting values, not a rule language. A scalar shorthand (`message: "Hi"`) round-trips as a scalar
   while only its shorthand parameter is set; unknown rule keys and action keys are preserved.
-  When a root inherits, the studio header shows the template chain (each link opens the template in
-  Files) or the resolution failure. Each field the chain supplies shows **Inherited from …** with the
+  **Templates are a creation choice, not a field (issue #154).** No studio renders the raw
+  `template` field: the editor finds the field by its declared `referenceKind: template` and
+  replaces it with an inheritance bar, **Based on: A base item ▾**, under the header. The menu
+  searches the templates that serve this type (never itself or anything inheriting from it) and
+  **stages** the new `template:` value like any field edit (applied by **Save & apply**, labelled
+  as pending until then); **Open template** opens it in its own studio; **Detach — keep the
+  values here** calls `authoring.detachTemplate` (disabled while the draft has unsaved edits,
+  because it rewrites the saved file) and reconciles the draft from the result. When a root
+  inherits, the bar shows the template chain (each link opens that template) or the resolution
+  failure. The modules a resource only has through its template appear as dashed **Inherited from
+  …** cards with the value and **Override here** (copies the template's value into the resource);
+  display-card fields and extras keep their per-field lines — **Inherited from …** with the
   effective value, or **Overrides …** with the template's value and **Reset to inherited**, which
-  stages a removal edit (undoable) applied by the next revision-checked **Save & apply**. The view
-  reflects the saved `template:`; an edited template field is labelled as such until applied.
+  stages a removal edit (undoable) applied by the next revision-checked **Save & apply**. The
+  preview draws the draft over the inherited values. The view reflects the saved `template:`.
+  **Save as template…** (studio header and the catalog's context menu) lists the fields the
+  resource sets (everything but its own name preselected), names the template and calls
+  `authoring.saveAsTemplate`; the new template opens in its own studio.
+- **New dialog.** "+ New {type}" asks for a name, then **Start from**: *Blank* (the curated
+  scaffold), *A template* (cards filtered to the type, each with a preview icon, its name and id,
+  chips for the fields or modules it sets and "Used by N"; searchable by name, id and field labels;
+  Up/Down move, Enter picks and creates) or *An existing one* (a lossless copy that takes the new
+  name). A template-born resource is the link plus the name and nothing copied. The
+  **Templates** tab appears whenever a registered type can use one (it is a pack-layout tab, not a
+  type tab — plugin.md §3.1); its rows say what each template is for and who uses it, **+ New
+  template** asks which type it is for, and a template opens in the *same display + modules
+  studio as the type it serves* (partial: nothing is required of it) with a "Used by N" strip that
+  opens each user.
   A texture slot whose reference names a file missing from this pack shows a repair panel —
   **Draw it now** opens the pixel editor at exactly that path (a new canvas; saving writes the PNG
   and no YAML), **Choose another texture** focuses the picker, whose upload control remains — and
@@ -740,7 +771,7 @@ cannot read, forge, replay, or reorder anything.
   `authoring.setFields` batch on **Save & apply**; removing the last ability removes the
   `mechanics:` key rather than writing an empty list; a module with no honest default (a
   reference the author has not chosen) opens an empty card and writes its key only when a value
-  is set. Advanced fields (the item `template`, `components`) stay reachable through an Advanced
+  is set. Advanced fields (`components`) stay reachable through an Advanced
   disclosure and the footer's Advanced-only report; every card carries **Show in file**.
   Coverage is honest: only what the plugin applies today is a module (display name/lore, the
   mechanics, jukebox song) — the `components:` block still warns instead of applying (#103), so

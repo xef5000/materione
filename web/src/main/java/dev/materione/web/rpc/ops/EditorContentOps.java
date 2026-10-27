@@ -484,7 +484,9 @@ public final class EditorContentOps {
                                 name,
                                 optionalString(body, "type"),
                                 optionalString(body, "folder"),
-                                body.has("createPack") && body.get("createPack").getAsBoolean()));
+                                body.has("createPack") && body.get("createPack").getAsBoolean(),
+                                optionalString(body, "template"),
+                                optionalString(body, "serves")));
                 if (!result.ok()) {
                     return error(request, result.diagnostics(), null, null);
                 }
@@ -520,6 +522,112 @@ public final class EditorContentOps {
                 if (!result.ok()) {
                     return error(request, result.diagnostics(), safePath(body),
                             hintFor(result.diagnostics(), "choose a different id"));
+                }
+                AuthoringApi.DocumentView created = result.value();
+                JsonObject payload = new JsonObject();
+                payload.addProperty("pack", created.pack());
+                payload.addProperty("path", created.path());
+                payload.addProperty("id", id);
+                payload.addProperty("rev", created.revision());
+                payload.addProperty("raw", created.raw());
+                payload.add("parsed", jsonOf(created.parsed()));
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        // Templates are a pack-layout concept, not a registered type (plugin.md
+        // §3.1): the editor reads them as one derived catalog — what each sets,
+        // which types it serves, who inherits it.
+        dispatcher.register("authoring.templates", request -> {
+            try {
+                ApiResult<List<AuthoringApi.TemplateInfo>> result = authoring.listTemplates();
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), null, null);
+                }
+                var templates = new com.google.gson.JsonArray();
+                for (AuthoringApi.TemplateInfo template : result.value()) {
+                    JsonObject row = new JsonObject();
+                    row.addProperty("pack", template.pack());
+                    row.addProperty("path", template.path());
+                    row.addProperty("id", template.id());
+                    if (template.parent() != null) {
+                        row.addProperty("parent", template.parent());
+                    }
+                    row.add("definition", jsonOf(template.definition()));
+                    row.add("serves", strings(template.serves()));
+                    var users = new com.google.gson.JsonArray();
+                    for (AuthoringApi.ResourceRef user : template.usedBy()) {
+                        JsonObject ref = new JsonObject();
+                        ref.addProperty("pack", user.pack());
+                        ref.addProperty("type", user.type());
+                        ref.addProperty("path", user.path());
+                        ref.addProperty("id", user.resourceId());
+                        users.add(ref);
+                    }
+                    row.add("usedBy", users);
+                    templates.add(row);
+                }
+                JsonObject payload = new JsonObject();
+                payload.add("templates", templates);
+                return Wire.Response.success(request, payload);
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        // Detach: the inherited values land in the resource and the link goes,
+        // as one revision-guarded write the studio can reconcile from.
+        dispatcher.register("authoring.detachTemplate", request -> {
+            JsonObject body = request.payload();
+            try {
+                ApiResult<AuthoringApi.DocumentView> result = authoring.detachTemplate(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.DetachTemplateRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                optionalString(body, "resource"),
+                                body.get("rev").getAsInt()));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body), null);
+                }
+                AuthoringApi.DocumentView detached = result.value();
+                JsonObject payload = new JsonObject();
+                payload.addProperty("rev", detached.revision());
+                payload.addProperty("raw", detached.raw());
+                payload.add("parsed", jsonOf(detached.parsed()));
+                return Wire.Response.success(request, payload);
+            } catch (IllegalArgumentException e) {
+                return badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return failure(request, e);
+            }
+        });
+
+        dispatcher.register("authoring.saveAsTemplate", request -> {
+            JsonObject body = request.payload();
+            try {
+                var fieldsElement = body.get("fields");
+                if (fieldsElement == null || !fieldsElement.isJsonArray()) {
+                    throw new IllegalArgumentException("'fields' must be an array of field names");
+                }
+                List<String> fields = new java.util.ArrayList<>();
+                fieldsElement.getAsJsonArray().forEach(field -> fields.add(field.getAsString()));
+                String id = requiredString(body, "id");
+                ApiResult<AuthoringApi.DocumentView> result = authoring.saveAsTemplate(
+                        actorFor.apply(actorOf(request)),
+                        new AuthoringApi.SaveAsTemplateRequest(
+                                requiredString(body, "pack"),
+                                requiredString(body, "path"),
+                                optionalString(body, "resource"),
+                                id,
+                                fields));
+                if (!result.ok()) {
+                    return error(request, result.diagnostics(), safePath(body),
+                            hintFor(result.diagnostics(), "choose a different template id"));
                 }
                 AuthoringApi.DocumentView created = result.value();
                 JsonObject payload = new JsonObject();
