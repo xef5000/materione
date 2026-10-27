@@ -85,6 +85,11 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.
+- `PaperEditorHandshakeIT` — drives the real local handshake and editor mutations,
+  including rapid glyph texture/create/save requests. Before comparing allocated glyph
+  metadata with the compiled font, a queued console reload acts as a completion barrier:
+  older `push.reload` events and allocation visibility alone do not prove that save's
+  archive is ready. Failures include the server log tail in the assertion summary.
 
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 

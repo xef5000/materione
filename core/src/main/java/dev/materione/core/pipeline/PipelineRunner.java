@@ -9,7 +9,6 @@ import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.graph.ContentGraph;
 import dev.materione.core.pipeline.validate.ValidateStage;
 import java.util.Objects;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -17,8 +16,8 @@ import java.util.concurrent.locks.ReentrantLock;
  * Runs the pipeline stages in order (plugin architecture §4): parse →
  * validate → graph (allocate/compile/apply/deliver stages register with
  * later slices). Pipelines serialize — never two concurrent runs — and
- * triggers that arrive mid-run coalesce per scope (§1.2): the next run
- * picks up the union of pending scopes.
+ * the composed pipeline API owns scope coalescing across the complete
+ * parse → compile → apply → deliver lifecycle (§1.2).
  *
  * <p>Fail-soft (D6, §8): a stage that throws aborts the run cleanly with
  * MTR-0011 — live state is untouched, because nothing half-built is ever
@@ -34,7 +33,6 @@ public final class PipelineRunner {
     private volatile FingerprintCache fingerprints = FingerprintCache.empty();
 
     private final ReentrantLock runLock = new ReentrantLock();
-    private final ConcurrentLinkedQueue<ReloadScope> pendingScopes = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean running = new AtomicBoolean();
 
     public PipelineRunner(DiagnosticsBus diagnostics, QuarantineTracker quarantine) {
@@ -71,16 +69,11 @@ public final class PipelineRunner {
     private volatile java.util.List<ContentPack> lastPacks = java.util.List.of();
 
     /**
-     * Requests a run. If one is in flight the scope coalesces into the next
-     * run instead of queueing a second concurrent pipeline (§1.2). The
-     * returned result is this call's run, or null when coalesced.
+     * Requests a run, serializing the core stages without dropping requests.
+     * Full-lifecycle coalescing belongs to the composed pipeline API.
      */
     public PipelineResult request(ReloadScope scope, java.nio.file.Path packsRoot) {
         Objects.requireNonNull(scope, "scope");
-        if (running.get()) {
-            pendingScopes.add(scope);
-            return null;
-        }
         runLock.lock();
         try {
             running.set(true);
@@ -89,7 +82,6 @@ public final class PipelineRunner {
             } finally {
                 running.set(false);
             }
-            // coalesced scopes: the next request() picks them up
         } finally {
             runLock.unlock();
         }
@@ -104,6 +96,7 @@ public final class PipelineRunner {
                 "pipeline run started (scope " + scope + ")",
                 null, null, null));
         try {
+            quarantine.clear();
             parseStage.run(context);
             lastPacks = java.util.List.copyOf(context.packs());
             validateStage.run(context);

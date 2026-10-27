@@ -895,14 +895,36 @@ public final class PackCompiler {
 
         Path staging = generatedDir.resolve("pack");
         Path zip = staging.resolve("pack.zip");
+        Path temporary = null;
         try {
             Files.createDirectories(staging);
-            MinecraftResourcePackWriter.minecraft().writeToZipFile(zip, pack);
+            temporary = Files.createTempFile(staging, "pack-", ".zip");
+            MinecraftResourcePackWriter.minecraft().writeToZipFile(temporary, pack);
             if (!overlayEntries.isEmpty()) {
-                patchMcmeta(zip);
+                patchMcmeta(temporary);
             }
-        } catch (IOException e) {
+            try {
+                Files.move(temporary, zip, java.nio.file.StandardCopyOption.REPLACE_EXISTING,
+                        java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+            } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                Files.move(temporary, zip, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+        } catch (IOException | java.io.UncheckedIOException e) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "pack staging failed; previous archive retained: " + e));
             return null;
+        } finally {
+            if (temporary != null) {
+                try {
+                    Files.deleteIfExists(temporary);
+                    Files.deleteIfExists(temporary.resolveSibling(temporary.getFileName() + ".patched"));
+                } catch (IOException e) {
+                    diagnostics.publish(Diagnostic.warn(
+                            DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                            "could not remove temporary pack archive: " + e));
+                }
+            }
         }
         String sha256 = sha256Of(zip);
         DatapackWriter.Artifact datapack =
@@ -946,7 +968,7 @@ public final class PackCompiler {
         // pass two: rewrite the zip entry-for-entry, faithful metadata except
         // the patched mcmeta — ZipOutputStream output is deterministic for a
         // given input, unlike an in-place fs rewrite (the golden pins bytes)
-        Path patched = zip.resolveSibling("pack.patched.zip");
+        Path patched = zip.resolveSibling(zip.getFileName() + ".patched");
         try (var in = new java.util.zip.ZipInputStream(Files.newInputStream(zip));
              var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(patched))) {
             for (java.util.zip.ZipEntry entry; (entry = in.getNextEntry()) != null; ) {

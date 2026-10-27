@@ -94,13 +94,13 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                             var summary = result.value();
                             if (summary == null) {
                                 sender.sendMessage(Component.text(
-                                        "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                                        "reload failed (see diagnostics)",
                                         NamedTextColor.RED));
                                 return;
                             }
                             if (summary.skipped()) {
                                 sender.sendMessage(Component.text(
-                                        "reload skipped — a run was already in flight or aborted (see diagnostics)",
+                                        "reload failed (see diagnostics)",
                                         NamedTextColor.RED));
                             } else if (summary.noop()) {
                                 sender.sendMessage(Component.text(

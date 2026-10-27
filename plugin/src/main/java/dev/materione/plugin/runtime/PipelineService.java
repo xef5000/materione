@@ -39,6 +39,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -72,6 +73,7 @@ public final class PipelineService {
     private volatile ApplyReport lastReport;
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
+    private CompletableFuture<Void> applyCompletion = CompletableFuture.completedFuture(null);
 
     public PipelineService(
             Plugin plugin,
@@ -167,9 +169,10 @@ public final class PipelineService {
     }
 
     /** Targeted variant: {@code OnePack}/{@code FileSet} scopes splice onto the last full run. */
-    public ReloadSummary reload(dev.materione.api.pipeline.ReloadScope scope,
+    public synchronized ReloadSummary reload(dev.materione.api.pipeline.ReloadScope scope,
             java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
             java.nio.file.Path storageDir) {
+        applyCompletion = CompletableFuture.completedFuture(null);
         if (allocation == null) {
             allocation = AllocationTable.load(storageDir.resolve("allocation.bin"));
         }
@@ -204,24 +207,27 @@ public final class PipelineService {
         if (result == null || !result.completed()) {
             diagnostics.publish(Diagnostic.warn(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                    "reload skipped: another run is in flight or the run aborted"));
-            return new ReloadSummary(result == null, false, 0, 0, 0, 0, null, null, null, null);
+                    "reload aborted; live content unchanged"));
+            return new ReloadSummary(true, false, 0, 0, 0, 0, null, null, null, null);
         }
 
+        List<ContentPack> packs = runner.lastPacks();
         PackCompiler.Outcome outcome = compiler.compile(
-                runner.lastPacks(), contentTypes(), allocation, generatedDir, diagnostics, quarantine,
+                packs, contentTypes(), allocation, generatedDir, diagnostics, quarantine,
                 detectedPackFormat, detectedDataFormat);
-        if (outcome != null) {
-            // fingerprints persist after a successful stage: the next targeted
-            // scope can trust out-of-scope state (and expands when it can't)
-            runner.saveFingerprints(generatedDir.resolve("fingerprints.bin"));
+        if (outcome == null) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "pack compilation failed; live content unchanged"));
+            return new ReloadSummary(true, false, 0, 0, 0, 0, null, null, null, null);
         }
-        String sha = outcome == null ? "" : outcome.sha256();
+        runner.saveFingerprints(generatedDir.resolve("fingerprints.bin"));
+        String sha = outcome.sha256();
         // The shadow is always built: identical pack bytes do NOT imply an
         // unchanged runtime — material-only items carry behavior/mechanics
         // that never touch pack output, and their rules compile here
         // (MTR-0021/0022). Only delivery and the swap itself are skippable.
-        RuntimeRegistries shadow = buildShadow(runner.lastPacks());
+        RuntimeRegistries shadow = buildShadow(packs);
         var preApply = runtime.diffAgainst(shadow, sha);
         boolean packUnchanged = sha.equals(runtime.livePackSha256());
         boolean noop = packUnchanged && changesNothing(preApply);
@@ -229,7 +235,16 @@ public final class PipelineService {
             applyShadow(shadow, sha, preApply);
         } else {
             // Replaced registrations may produce the same data but new typed bindings.
-            scheduling.executeGlobal(plugin, () -> runtime.apply(shadow, sha));
+            CompletableFuture<Void> applied = new CompletableFuture<>();
+            applyCompletion = applied;
+            scheduling.executeGlobal(plugin, () -> {
+                try {
+                    runtime.apply(shadow, sha);
+                    applied.complete(null);
+                } catch (RuntimeException e) {
+                    applied.completeExceptionally(e);
+                }
+            });
         }
         return new ReloadSummary(
                 false,
@@ -237,14 +252,22 @@ public final class PipelineService {
                 result.resourcesValid(),
                 result.resourcesQuarantined(),
                 shadow.itemCount(),
-                outcome == null ? 0 : outcome.itemDefinitions(),
+                outcome.itemDefinitions(),
                 packUnchanged ? null : sha,
                 packUnchanged ? null : outcome.stagedZip(),
                 // the datapack path rides along even on a noop: the applier
                 // verifies the world folder actually holds these bytes, so a
                 // lost/regenerated world gets repaired at the next reload
-                outcome == null ? null : outcome.stagedDatapackZip(),
-                outcome == null ? null : outcome.datapackSha256());
+                outcome.stagedDatapackZip(),
+                outcome.datapackSha256());
+    }
+
+    /** Called off-thread; completion includes the global-thread swap and rollback. */
+    public synchronized CompletableFuture<ReloadSummary> reloadAndAwaitApply(
+            ReloadScope scope, java.nio.file.Path packsRoot, java.nio.file.Path generatedDir,
+            java.nio.file.Path storageDir) {
+        ReloadSummary summary = reload(scope, packsRoot, generatedDir, storageDir);
+        return applyCompletion.thenApply(ignored -> summary);
     }
 
     /** True when the pre-apply report shows nothing observable changing. */
@@ -258,8 +281,6 @@ public final class PipelineService {
     private void applyShadow(
             RuntimeRegistries shadow, String sha,
             ApplyReport report) {
-        RuntimeRegistries previous = runtime.registries();
-        String previousSha = runtime.livePackSha256();
         // the report was computed by the caller BEFORE the swap (§4.5): what
         // this apply will do, including removals by policy and
         // restart-required changes listed separately (none can be produced
@@ -276,7 +297,11 @@ public final class PipelineService {
                 DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO, summary.toString(), null, null, null));
         // the swap itself is atomic and cheap; the gateway hop is the
         // plugin.md §4.5 rule: apply runs on the global thread
+        CompletableFuture<Void> applied = new CompletableFuture<>();
+        applyCompletion = applied;
         scheduling.executeGlobal(plugin, () -> {
+            RuntimeRegistries previous = runtime.registries();
+            String previousSha = runtime.livePackSha256();
             try {
                 runtime.apply(shadow, sha);
                 var recipes = recipeApplier.apply(shadow);
@@ -286,12 +311,14 @@ public final class PipelineService {
                                 + " ~" + report.changed() + " items, "
                                 + recipes.registered() + " recipe(s)",
                         null, null, null));
+                applied.complete(null);
             } catch (RuntimeException e) {
                 runtime.rollback(previous, previousSha);
                 diagnostics.publish(new Diagnostic(
                         DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
                         "apply failed, rolled back: " + e,
                         null, null, "live content unchanged; fix the reported problem and reload"));
+                applied.completeExceptionally(e);
             }
         });
     }
