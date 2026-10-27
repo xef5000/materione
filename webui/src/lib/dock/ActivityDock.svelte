@@ -1,4 +1,6 @@
 <script lang="ts">
+  import Icon from '../components/Icon.svelte';
+  import type { IconName } from '../components/icons';
   import { activityLog } from '../state.svelte';
   import type { ActivityKind } from '../state.svelte';
 
@@ -10,11 +12,11 @@
 
   const errors = $derived(activityLog.entries.filter((entry) => entry.kind === 'error').length);
 
-  const glyph: Record<ActivityKind, string> = {
-    save: '✎',
-    reload: '↻',
-    error: '⚠',
-    info: '·',
+  const glyph: Record<ActivityKind, IconName> = {
+    save: 'pencil',
+    reload: 'refresh-cw',
+    error: 'triangle-alert',
+    info: 'info',
   };
 
   function time(ts: number): string {
@@ -43,7 +45,7 @@
       aria-label="Close Activity"
       title="Close Activity"
       onclick={close}
-    >×</button>
+    ><Icon name="x" size={14} /></button>
   </div>
 
   <div id="activity-entries" class="body">
@@ -58,7 +60,7 @@
     <ul>
       {#each activityLog.entries as entry, index (entry.ts + '-' + index)}
         <li class={entry.kind}>
-          <span class="glyph">{glyph[entry.kind]}</span>
+          <span class="glyph"><Icon name={glyph[entry.kind]} size={13} /></span>
           <span class="ts">{time(entry.ts)}</span>
           <span class="text">{entry.text}</span>
         </li>

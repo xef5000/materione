@@ -6,6 +6,8 @@
    * starter hands off to Content/Studio, which write through the one pipeline.
    */
   import { typeTabs } from '../browser';
+  import Icon from '../components/Icon.svelte';
+  import { contentTypeIcon } from '../components/icons';
   import { diagnosticRepairTarget } from '../diagnostics';
   import { draftDirty, draftStore } from '../drafts.svelte';
   import { browseTo, diagnostics, openStudio, revealInStudio, startCreate, ui, workspace } from '../state.svelte';
@@ -58,7 +60,7 @@
     <div class="starters">
       {#each creatable as tab (tab.directory)}
         <button type="button" class="starter" onclick={() => startCreate(tab.directory)}>
-          <strong>New {tab.singular}</strong>
+          <strong><Icon name={contentTypeIcon(tab.directory)} size={16} /> New {tab.singular}</strong>
           <span>{descriptions[tab.directory] ?? ''}</span>
           <small>{counts[tab.directory] ?? 0} in this project</small>
         </button>

@@ -4,6 +4,7 @@
    * shape. Without a shape the studio refuses to render — the field is
    * reported as Advanced-Files-only instead of being mangled.
    */
+  import Icon from '../components/Icon.svelte';
   import { blankRow } from '../studio';
   import type { TypeParam } from '../api';
 
@@ -91,8 +92,8 @@
               />
             {/if}
           {/each}
-          <button type="button" class="remove" title="remove" onclick={() => removeRow(index)}>
-            ×
+          <button type="button" class="remove" title="remove" aria-label="Remove row" onclick={() => removeRow(index)}>
+            <Icon name="x" size={14} />
           </button>
         </div>
       {/each}
@@ -100,7 +101,7 @@
   {/if}
 
   <button type="button" class="add" onclick={addRow}>
-    + {(field.label || field.id).replace(/e?s$/i, '')}
+    <Icon name="plus" size={14} /> {(field.label || field.id).replace(/e?s$/i, '')}
   </button>
 
   {#if field.description}<small>{field.description}</small>{/if}

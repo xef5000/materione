@@ -2,6 +2,7 @@
   import ContextMenu from '../components/ContextMenu.svelte';
   import type { MenuItem } from '../components/ContextMenu.svelte';
   import PromptDialog from '../components/PromptDialog.svelte';
+  import Icon from '../components/Icon.svelte';
   import { assetOps, ops, unwrap } from '../api';
   import type { ResourceRef } from '../api';
   import { buildTree, filterTree } from '../tree';
@@ -230,25 +231,13 @@
         : node.path}
     >
       {#if node.kind === 'dir'}
-        <svg class="icon" viewBox="0 0 16 16">
-          <path
-            d={workspace.collapsed[node.path] ? 'M4 6l4 4 4-4' : 'M4 10l4-4 4 4'}
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-          />
-        </svg>
+        <Icon name={workspace.collapsed[node.path] ? 'chevron-right' : 'chevron-down'} size={14} class="file-icon" />
       {:else if node.kind === 'doc' || node.kind === 'packfile'}
-        <svg class="icon" viewBox="0 0 16 16">
-          <path d="M5 2h4l3 3v9H5z" fill="none" stroke="currentColor" stroke-width="1.2" />
-        </svg>
+        <Icon name="file" size={14} class="file-icon" />
       {:else if ['png', 'jpg', 'jpeg'].includes(node.assetKind ?? '')}
-        <svg class="icon accent" viewBox="0 0 16 16">
-          <rect x="2.5" y="3.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" />
-          <path d="M4 11.5l3-3 2 2 2-2.5 1.5 3.5" fill="none" stroke="currentColor" stroke-width="1.1" />
-        </svg>
+        <Icon name="image" size={14} class="file-icon accent" />
       {:else}
-        <span class="glyph">{(node.assetKind ?? '?') === 'json' ? '{}' : '▪'}</span>
+        <Icon name={node.assetKind === 'json' ? 'file-braces' : 'file-code'} size={14} class="file-icon" />
       {/if}
       <span class="name">{node.name}</span>
     </button>
@@ -338,21 +327,15 @@
   .sub .label {
     font-size: 11px;
   }
-  .icon {
+  /* The icons are Lucide's svgs (see Icon.svelte), so they are targeted globally. */
+  :global(svg.file-icon) {
     width: 14px;
     height: 14px;
     flex: none;
     color: var(--muted);
   }
-  .icon.accent {
+  :global(svg.file-icon.accent) {
     color: var(--accent);
-  }
-  .glyph {
-    width: 14px;
-    text-align: center;
-    color: var(--muted);
-    font-size: 10px;
-    flex: none;
   }
   .name {
     overflow: hidden;

@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { ResourceSummary } from '../api';
+  import Icon from './Icon.svelte';
+  import type { IconName } from './icons';
   import { renderModelPreview } from '../model-preview';
   import { connection, server, session, workspace } from '../state.svelte';
   import { loadThumbnail, onThumbnailCapacity, ThumbnailCapacityError } from '../thumbnails';
@@ -37,6 +39,11 @@
             ? `${label}: preview unavailable without an active editor connection`
             : `${label}: no preview available`,
   );
+  /** The no-image placeholder: one icon per state, scaled to the tile. */
+  const placeholderIcon = $derived<IconName>(
+    thumbnailState === 'loading' ? 'loader-circle' : thumbnailState === 'error' ? 'image-off' : 'image',
+  );
+  const placeholderSize = $derived(Math.min(48, Math.max(14, Math.round(size * 0.4))));
   const previewKind = $derived(
     live
       ? 'Live model preview (browser approximation)'
@@ -202,7 +209,7 @@
     <img src={image} alt="" draggable="false" loading="lazy" referrerpolicy="no-referrer"
       onerror={imageFailed} />
   {:else}
-    <span aria-hidden="true">{thumbnailState === 'loading' ? '…' : thumbnailState === 'error' ? '!' : '◇'}</span>
+    <span aria-hidden="true"><Icon name={placeholderIcon} size={placeholderSize} /></span>
   {/if}
 </div>
 

@@ -9,6 +9,8 @@
   import type { MenuItem } from '../components/ContextMenu.svelte';
   import BulkDialog from '../components/BulkDialog.svelte';
   import PromptDialog from '../components/PromptDialog.svelte';
+  import Icon from '../components/Icon.svelte';
+  import { contentTypeIcon } from '../components/icons';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
   import { ops, unwrap } from '../api';
@@ -526,7 +528,7 @@
           title={entry.note ?? entry.label}
           onclick={() => switchType(entry.directory)}
         >
-          {entry.label}{#if !entry.enabled}<em>soon</em>{/if}
+          <Icon name={contentTypeIcon(entry.directory)} size={14} />{entry.label}{#if !entry.enabled}<em>soon</em>{/if}
         </button>
       {/each}
       <input
@@ -539,13 +541,18 @@
     </nav>
 
     <div class="toolbar">
-      <button class="icon" title="back" disabled={!history.length} onclick={back}>←</button>
+      <button class="icon" title="back" aria-label="Back" disabled={!history.length} onclick={back}>
+        <Icon name="arrow-left" size={16} />
+      </button>
       <button
         class="icon"
         title="up one folder"
+        aria-label="Up one folder"
         disabled={folder === content.type}
         onclick={up}
-      >↑</button>
+      >
+        <Icon name="arrow-up" size={16} />
+      </button>
       <ol class="crumbs">
         {#each crumbs as crumb, index (crumb.folder)}
           <li>
@@ -561,14 +568,18 @@
           aria-pressed={presentation.layout === 'list'}
           title="Dense visual list"
           onclick={() => setPresentation({ layout: 'list' })}
-        >▤</button>
+        >
+          <Icon name="list" size={16} />
+        </button>
         <button
           class:active={presentation.layout === 'grid'}
           aria-label="Compact grid"
           aria-pressed={presentation.layout === 'grid'}
           title="Compact grid"
           onclick={() => setPresentation({ layout: 'grid' })}
-        >⊞</button>
+        >
+          <Icon name="layout-grid" size={16} />
+        </button>
       </div>
       <button
         class:active={presentation.showTechnicalColumns}
@@ -583,13 +594,15 @@
           title="Change one field on every marked resource, all together or not at all"
           onclick={() => (bulk = { kind: 'field', targets: markedRows })}
         >Edit {markedRows.length} marked…</button>
-        <button class="ghost" title="Clear marks" aria-label="Clear marks" onclick={() => (marked = [])}>✕</button>
+        <button class="ghost" title="Clear marks" aria-label="Clear marks" onclick={() => (marked = [])}>
+          <Icon name="x" size={14} />
+        </button>
       {/if}
       <button class="ghost" disabled={busy || !workspace.activePack} onclick={createFolder}>
         New folder
       </button>
       <button class="primary" disabled={busy} onclick={createEntry}>
-        + New {tab?.singular ?? 'entry'}
+        <Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}
       </button>
     </div>
 
@@ -640,7 +653,7 @@
           onkeydown={() => {}}
         >
           {#if row.kind === 'folder'}
-            <span class="folder-visual" aria-hidden="true">▱</span>
+            <span class="folder-visual" aria-hidden="true"><Icon name="folder" size={20} /></span>
           {:else}
             <ResourceThumbnail
               visual={row.summary?.visual}
@@ -676,13 +689,13 @@
         <div class="empty">
           {#if !workspace.activePack}
             <p>No project yet.</p>
-            <button class="primary" onclick={createEntry}>+ New {tab?.singular ?? 'entry'}</button>
+            <button class="primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
           {:else if content.search}
             <p>No match for “{content.search}”.</p>
             <button class="ghost" onclick={() => (content.search = '')}>Clear search</button>
           {:else}
             <p>Nothing in {folder}/ yet.</p>
-            <button class="primary" onclick={createEntry}>+ New {tab?.singular ?? 'entry'}</button>
+            <button class="primary" onclick={createEntry}><Icon name="plus" size={14} /> New {tab?.singular ?? 'entry'}</button>
           {/if}
         </div>
       {/if}
@@ -746,6 +759,9 @@
   }
 
   /* type tabs */
+  .types button :global(svg.lucide-icon) {
+    margin-right: 5px;
+  }
   .types {
     display: flex;
     flex: none;
@@ -1011,7 +1027,6 @@
     border-radius: var(--radius);
     background: var(--bg-input);
     color: var(--muted);
-    font-size: 23px;
   }
 
   /* compact grid */

@@ -25,6 +25,7 @@
     type SaveData,
     type TextureTarget,
   } from '../blockbench/protocol';
+  import Icon from '../components/Icon.svelte';
   import { sameModelOwnerContext } from '../studio';
   import { connection, errorMessage, logActivity, refreshPack, session } from '../state.svelte';
 
@@ -379,7 +380,7 @@
     <span class="status">{error ? '' : status}</span>
     <span class="spacer"></span>
     <button type="button" class="ghost" onclick={() => (advanced = !advanced)}>
-      Targets {advanced ? '▴' : '▾'}
+      Targets <Icon name={advanced ? 'chevron-up' : 'chevron-down'} size={14} />
     </button>
     <button type="button" class="ghost" onclick={close}>Close</button>
     <button type="button" class="primary" disabled={!active || !ready || !modelReady || saving} onclick={save}>

@@ -7,6 +7,7 @@
    * lossless: fields the studio cannot render are reported, never rewritten.
    */
   import Field from './Field.svelte';
+  import Icon from '../components/Icon.svelte';
   import StructuredList from './StructuredList.svelte';
   import RecipeGrid from './RecipeGrid.svelte';
   import StudioPreview from './StudioPreview.svelte';
@@ -425,7 +426,9 @@
 
 <section class="studio">
   <header>
-    <button type="button" class="back" onclick={onClose} title="back to {typeDirectory}">←</button>
+    <button type="button" class="back" onclick={onClose} title="back to {typeDirectory}" aria-label="back to {typeDirectory}">
+      <Icon name="arrow-left" size={16} />
+    </button>
     <span class="name">{name}</span>
     <span class="meta">{resource.id} · rev {rev}</span>
     <span class="spacer"></span>
@@ -459,7 +462,7 @@
       {:else}
         Inherits from
         {#each inheritance.chain as id, index (id)}
-          {#if index > 0}<span aria-hidden="true">→</span>{/if}
+          {#if index > 0}<Icon name="chevron-right" size={12} />{/if}
           <button type="button" class="link" title={`Open ${id} in Files`} onclick={() => openTemplate(id)}>{templateLabel(id)}</button>
         {/each}
         {#if templateEdited}· shown for the saved template until you apply{/if}

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Icon from './Icon.svelte';
   import { closeTab, workspace } from '../state.svelte';
 </script>
 
@@ -32,7 +33,7 @@
           <span class="label">{label}</span>
         </button>
         <button class="close" aria-label="close {label}" onclick={() => closeTab(tab.key)}>
-          ✕
+          <Icon name="x" size={14} />
         </button>
       </div>
     {/each}

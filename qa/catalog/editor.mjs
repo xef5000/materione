@@ -196,6 +196,23 @@ const SUPPORT_COVERS = [
   ...BROWSER_COVERS,
   'webui/src/lib/views/ServerView.svelte',
 ];
+// Every icon the editor draws (issue #149): the shared Icon component, its
+// icon registry, and each surface that places one.
+const ICON_COVERS = [
+  ...BROWSER_COVERS,
+  'webui/src/lib/components/Icon.svelte',
+  'webui/src/lib/components/icons.ts',
+  'webui/src/lib/components/TabBar.svelte',
+  'webui/src/lib/components/ResourceThumbnail.svelte',
+  'webui/src/lib/views/FileTree.svelte',
+  'webui/src/lib/views/StartView.svelte',
+  'webui/src/lib/studio/Studio.svelte',
+  'webui/src/lib/studio/TextureEditor.svelte',
+  'webui/src/lib/studio/StructuredList.svelte',
+  'webui/src/lib/studio/ModelWorkbench.svelte',
+  'webui/src/lib/dock/ActivityDock.svelte',
+  'webui/test/icons.spec.ts',
+];
 const WORKBENCH_COVERS = [
   ...BROWSER_COVERS,
   'webui/src/lib/api.ts',
@@ -432,6 +449,62 @@ export default [
       await ctx.browser.browserShot('sample-glyphs-collapsed-navigation');
       ctx.needsEyes(
         'the real local App shows recognizable glyph source-texture miniatures, uncluttered footer-free space, no Activity bar until requested, and unchanged vertical navigation alignment after labels collapse; source sheets are texture previews, not proof of final font metrics or client pack acceptance',
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-icon-set',
+    title: 'sample editor draws its rail, type tabs, toolbars and Start tiles from one icon set, and icon-only controls keep their names',
+    covers: ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      const rail = page.getByRole('navigation', { name: 'Workspace navigation' });
+      // Four authoring views, three support views and the labels toggle.
+      ctx.expect(await rail.locator('svg.lucide-icon').count()).toBe(8);
+      ctx.expect(await rail.getByRole('button', { name: 'Content', exact: true }).locator('svg.lucide-icon').count()).toBe(1);
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      const types = page.getByRole('navigation', { name: 'content types' });
+      const typeButtons = await types.locator('button').count();
+      ctx.expect(typeButtons).toBeGreaterThan(1);
+      ctx.expect(await types.locator('button svg.lucide-icon').count()).toBe(typeButtons);
+      ctx.expect(await page.getByRole('button', { name: 'Back', exact: true }).locator('svg.lucide-icon').count()).toBe(1);
+      ctx.expect(await page.getByRole('button', { name: 'Up one folder', exact: true }).count()).toBe(1);
+      ctx.expect(await page.getByRole('button', { name: 'Dense visual list' }).locator('svg.lucide-icon').count()).toBe(1);
+      ctx.expect(await page.getByRole('button', { name: 'Compact grid' }).locator('svg.lucide-icon').count()).toBe(1);
+      await page.getByRole('button', { name: 'New item', exact: true }).first().waitFor({ state: 'visible' });
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      const starters = await page.locator('.starter').count();
+      ctx.expect(starters).toBeGreaterThan(1);
+      ctx.expect(await page.locator('.starter svg.lucide-icon').count()).toBe(starters);
+      // Decorative icons stay out of the accessibility tree.
+      ctx.expect(await page.locator('.starter svg.lucide-icon[aria-hidden="true"]').count()).toBe(starters);
+    },
+  }),
+
+  test({
+    id: 'editor.browser-icon-set-visual',
+    title: 'the Lucide icon set reads as one consistent stroke family across the rail, type tabs, Start tiles and Problems',
+    mode: 'visual',
+    dependsOn: ['editor.browser-icon-set'],
+    covers: ICON_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('navigation', { name: 'content types' }).locator('button svg.lucide-icon').first().waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('icon-set-content-toolbar');
+      await page.getByRole('button', { name: 'Start', exact: true }).click();
+      await page.locator('.starter svg.lucide-icon').first().waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('icon-set-start-tiles');
+      await page.getByRole('button', { name: /^Problems(?:, .+)?$/ }).click();
+      await page.getByRole('heading', { name: 'Problems', exact: true }).waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('icon-set-rail-collapsed');
+      ctx.needsEyes(
+        'every icon is one Lucide stroke family (ISC, bundled, no runtime CDN) at the same visual weight: the rail (Start house, Content layers, Assets image, Files folder, Problems triangle, Activity pulse, Server, labels chevron) and its collapsed 48px form; the Content toolbar (back, up, list, grid, New item plus) and the type tabs, where each content type has its own icon (Items package, Blocks box, Furniture armchair, Recipes chef hat, Templates layout, Glyphs type, Sounds speaker, Paintings frame, Text effects sparkles); the Start tiles repeat the per-type icon; no unicode glyph such as an arrow, cross or diamond appears as an icon. Colours and spacing are unchanged from before the icon set (issue #149; the visual identity work is tracked in #150).',
       );
     },
   }),
