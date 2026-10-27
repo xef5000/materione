@@ -358,9 +358,18 @@ plus modules — every module derived from the content type's self-description (
 `EditorMetadata` module/category/icon/summary fields) and the mechanics registry, never a
 hand-written editor list; a searchable, categorised picker adds them and lossless
 `authoring.setFields` edits stage their add/remove. Types without module-marked fields keep the
-section layout; the same philosophy is intended for other content types (#153). Vanilla
-data-component modules wait for the component pass-through (#103's M7 item) — modules never
-offer what the plugin does not apply.
+section layout. Vanilla data-component modules wait for the component pass-through (#103's M7
+item) — modules never offer what the plugin does not apply.
+
+**Per-type modules (M5 as built, issue #153):** every other content type got the same philosophy,
+each declared in its Java self-description (`EditorMetadata` gained labelled options, number
+range/unit, `display` and `shownWhen`; plugin.md §3): blocks and furniture (item chips, a spatial
+editor for seats/hitboxes/lights, labelled shapes and rotation), recipes (mode switch, item-picker
+grid, result card), glyphs (inline text preview, size presets, frame strip, placeholder chips),
+paintings (a block-scale wall with a drag handle), sounds (a source list you can hear, a music-disc
+module) and text effects (a live preview and palette chips). Smithing recipes and tags wait for
+the plugin to apply them; the open "capabilities as item modules, not types" question from the
+decision comment is recorded as a follow-up.
 
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 

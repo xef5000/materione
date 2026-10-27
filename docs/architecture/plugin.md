@@ -179,7 +179,15 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   ingredients, input / experience / cooking time) with `shownWhen`; **glyphs** declare Size
   (presets Emoji 8 / Inline icon 12 / Big title 24 px), Baseline, Animation frames, Chat
   placeholders, Permission, Emoji mode and Chat completion; **paintings** put title, author and
-  size (1–16 blocks) on the display card and declare Random placement as the one module.
+  size (1–16 blocks) on the display card and declare Random placement as the one module;
+  **sounds** put the sources (`sound-sources`), subtitle (`presets` — suggestions for free text),
+  volume and pitch on the display card, declare Category (labelled choices over the ten client
+  categories), Stream from disk, Carry distance and **Music disc** — the `jukebox` mapping as an
+  `object-fields` widget whose nested parameters (song title, length in seconds, comparator
+  signal 0–15, hearing range) carry their own labels and ranges, so the editor renders a mapping
+  from its declared shape and keeps any key the shape does not name; **effects** put the kind,
+  speed and strength on the display card and declare Palette (`palette`: `#RRGGBB` chips) as the
+  one module.
 
 ---
 

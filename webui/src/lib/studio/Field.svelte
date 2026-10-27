@@ -6,6 +6,9 @@
   import AssetPicker from '../components/AssetPicker.svelte';
   import RichTextEditor from '../components/RichTextEditor.svelte';
   import MaterialPicker from '../components/MaterialPicker.svelte';
+  import ObjectFields from './ObjectFields.svelte';
+  import PaletteEditor from './PaletteEditor.svelte';
+  import SoundSources from './SoundSources.svelte';
   import ChipsEditor from './ChipsEditor.svelte';
   import FrameStrip from './FrameStrip.svelte';
   import ItemChips from './ItemChips.svelte';
@@ -39,7 +42,9 @@
   const lines = $derived(Array.isArray(value) ? value.map((item) => String(item)).join('\n') : '');
 
   /** Composite widgets carry their own heading (the module card names them). */
-  const composite = $derived(widget === 'structured-list' || widget === 'spatial-list');
+  const composite = $derived(
+    widget === 'structured-list' || widget === 'spatial-list' || widget === 'object-fields',
+  );
   /** Labelled choices: the schema's options, else the raw allowed values. */
   const choices = $derived(
     field.options?.length
@@ -55,6 +60,8 @@
   }
 
   function commitNumber(raw: string) {
+    // Leaving a field untouched never rewrites it (a clamp must not edit what the author did not).
+    if (raw.trim() === text.trim()) return;
     let next = Number(raw);
     if (field.min !== undefined) next = Math.max(field.min, next);
     if (field.max !== undefined) next = Math.min(field.max, next);
@@ -100,11 +107,30 @@
           siblings.set('ingredients', next.ingredients);
         }} />
     {/if}
+  {:else if widget === 'sound-sources'}
+    <SoundSources {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'object-fields'}
+    <ObjectFields {field} {value} {pack} {onChange} />
+  {:else if widget === 'palette'}
+    <PaletteEditor {value} label={field.label || field.id} seed={field.example} {onChange} />
   {:else if widget === 'chips'}
     <ChipsEditor {value} label={field.label || field.id} placeholder={field.example ? `e.g. ${field.example}` : undefined}
       {onChange} />
   {:else if widget === 'frames'}
     <FrameStrip {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'presets' && !numeric}
+    <!-- Suggestions for free text (a subtitle): a click fills the box, any text still works. -->
+    <div class="presets text">
+      <input id={controlId} type="text" value={text} placeholder={field.example ?? ''} spellcheck="false"
+        onblur={(event) => onChange(event.currentTarget.value)}
+        onkeydown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} />
+      <div class="segments" role="group" aria-label={`${field.label || field.id} suggestions`}>
+        {#each choices as option (option.value)}
+          <button type="button" class:off={text !== option.value}
+            onclick={() => onChange(option.value)}>{option.label}</button>
+        {/each}
+      </div>
+    </div>
   {:else if widget === 'presets'}
     <div class="presets">
       <div class="segments" role="radiogroup" aria-label={field.label || field.id}>
@@ -219,7 +245,7 @@
     />
   {/if}
 
-  {#if field.description && !chosen?.description}
+  {#if field.description && !chosen?.description && widget !== 'object-fields'}
     <small>{field.description}</small>
   {/if}
 </div>
@@ -252,6 +278,10 @@
     gap: var(--space-2);
     align-items: center;
     min-width: 0;
+  }
+  .presets.text {
+    display: grid;
+    gap: var(--space-2);
   }
   .presets {
     display: flex;

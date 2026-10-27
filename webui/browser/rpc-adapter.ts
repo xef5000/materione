@@ -328,7 +328,42 @@ const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'glyphs', path: 'glyphs/heart.yml', id: 'heart' },
   { pack: PACK, type: 'glyphs', path: 'glyphs/spark.yml', id: 'spark' },
   { pack: PACK, type: 'paintings', path: 'paintings/sunrise.yml', id: 'sunrise' },
+  { pack: PACK, type: 'sounds', path: 'sounds/anthem.yml', id: 'anthem' },
+  { pack: PACK, type: 'sounds', path: 'sounds/chime.yml', id: 'chime' },
+  { pack: PACK, type: 'effects', path: 'effects/rainbow.yml', id: 'rainbow' },
+  { pack: PACK, type: 'effects', path: 'effects/wave.yml', id: 'wave' },
 ];
+
+/**
+ * A short, real 440 Hz tone as 8-bit mono WAV bytes. The studio's sources are
+ * always named `.ogg`, but the browser decodes by sniffing the bytes, so a WAV
+ * is a faithful stand-in for the decode/waveform/duration path (0.5 s).
+ */
+function toneWavBase64(): { data: string; bytes: number } {
+  const rate = 8000;
+  const samples = rate / 2;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const text = (offset: number, value: string) =>
+    [...value].forEach((character, index) => bytes.set([character.charCodeAt(0)], offset + index));
+  text(0, 'RIFF');
+  view.setUint32(4, 36 + samples, true);
+  text(8, 'WAVEfmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, 'data');
+  view.setUint32(40, samples, true);
+  for (let index = 0; index < samples; index++) {
+    const envelope = Math.min(1, index / 400, (samples - index) / 400);
+    bytes[44 + index] = 128 + Math.round(Math.sin((index / rate) * 440 * Math.PI * 2) * 100 * envelope);
+  }
+  return { data: btoa(String.fromCharCode(...bytes)), bytes: bytes.length };
+}
 
 function goldenType(name: string): TypeInfo {
   const found = (goldenSnapshot.types as unknown as TypeInfo[]).find((type) => type.name === name);
@@ -339,7 +374,8 @@ function goldenType(name: string): TypeInfo {
 /** The ?modules fixture's types: the module-declaring item stand-in plus the real schemas. */
 function moduleTypes(): TypeInfo[] {
   return [structuredClone(MODULE_ITEM_TYPE), goldenType('block'), goldenType('furniture'),
-    goldenType('recipe'), goldenType('glyph'), goldenType('painting')];
+    goldenType('recipe'), goldenType('glyph'), goldenType('painting'), goldenType('sound'),
+    goldenType('effect')];
 }
 
 const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
@@ -418,6 +454,23 @@ const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
   },
   'glyphs/spark.yml': {
     spark: { ascent: 8, height: 8, frames: ['gui/heart', 'gui/heart'] },
+  },
+  'sounds/anthem.yml': {
+    anthem: {
+      sounds: ['ui/anthem', 'ui/missing_take'],
+      subtitle: 'Ruby Anthem',
+      volume: 1.5,
+      jukebox: { description: 'Ruby Anthem', duration: 90, comparator_output: 7, range: 1.0, future_song_key: 1 },
+    },
+  },
+  'sounds/chime.yml': {
+    chime: { sounds: ['ui/anthem'], stream: true },
+  },
+  'effects/rainbow.yml': {
+    rainbow: { kind: 'rainbow', speed: 2.0, amplitude: 1.5, colors: ['#FF0000', '#FFAA00', '#FF00FF'] },
+  },
+  'effects/wave.yml': {
+    wave: { kind: 'wave', speed: 2.0, amplitude: 1.5 },
   },
   'paintings/sunrise.yml': {
     sunrise: {
@@ -852,6 +905,9 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       }
     }
     if (this.#modules) {
+      const tone = toneWavBase64();
+      this.#assets.set(assetPath(PACK, 'assets/sounds/ui/anthem.ogg'),
+        { path: 'assets/sounds/ui/anthem.ogg', kind: 'ogg', data: tone.data, bytes: tone.bytes });
       this.#resources.push(...MODULES_RESOURCES);
       for (const [path, parsed] of Object.entries(MODULES_DOCUMENTS)) {
         this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));

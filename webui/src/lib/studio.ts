@@ -24,6 +24,9 @@ const RENDERABLE = new Set([
   'presets',
   'frames',
   'recipe-ingredients',
+  'sound-sources',
+  'object-fields',
+  'palette',
 ]);
 
 export interface StudioSection {

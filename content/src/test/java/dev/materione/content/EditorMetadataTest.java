@@ -51,6 +51,10 @@ class EditorMetadataTest {
                     assertThat(options.stream().map(ParameterSchema.EditorOption::value))
                             .as(type.name() + "." + parameter.id())
                             .containsExactlyInAnyOrderElementsOf(parameter.allowedValues());
+                } else if ("presets".equals(parameter.editor().widget())
+                        && parameter.type() == ParameterType.STRING) {
+                    // suggestions for free text (a subtitle): any string is a fine option
+                    assertThat(options).as(type.name() + "." + parameter.id()).isNotEmpty();
                 } else {
                     assertThat(parameter.type())
                             .as(type.name() + "." + parameter.id() + " options without allowed values are numbers")

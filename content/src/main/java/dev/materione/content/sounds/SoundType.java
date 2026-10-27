@@ -55,22 +55,44 @@ public final class SoundType implements ContentType {
                 List.of(
                         new ParameterSchema("sounds", ParameterType.LIST, true, null,
                                 "Source files under assets/sounds/ (one or more, randomized)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Sources", "audio", 10, false, "list", "", "ui/level_up")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Sources", "audio", 10, false, "sound-sources", "", "ui/level_up").onDisplayCard()),
                         new ParameterSchema("subtitle", ParameterType.STRING, false, null,
                                 "Subtitle shown when subtitles are on", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Subtitle", "audio", 20, false, "text", "", "Level up!")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Subtitle", "audio", 20, false, "presets", "", "Level up!")
+                                        .withOptions(List.of(
+                                                option("Something chimes", "Chime", ""),
+                                                option("Something clicks", "Click", ""),
+                                                option("Music plays", "Music", ""),
+                                                option("Machine hums", "Hum", ""),
+                                                option("Something crashes", "Crash", "")))
+                                        .onDisplayCard()),
                         new ParameterSchema("volume", ParameterType.DECIMAL, false, "1.0",
                                 "Base volume", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Volume", "audio", 30, false, "number", "", "1.0")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Volume", "audio", 30, false, "number", "", "1.0").withRange(0.0, null, "×").onDisplayCard()),
                         new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1.0",
                                 "Base pitch", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Pitch", "audio", 40, false, "number", "", "1.0")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Pitch", "audio", 40, false, "number", "", "1.0").withRange(0.5, 2.0, "×").onDisplayCard()),
                         new ParameterSchema("category", ParameterType.STRING, false, "master",
                                 "Sound category the client groups under its music & sounds options", CATEGORY_OPTIONS, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Category", "audio", 50, true, "select", "", "master")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Category", "audio", 50, false, "select", "", "master",
+                                        true, "audio", "list",
+                                        "Which volume slider in the player's options controls this sound")
+                                        .withOptions(List.of(
+                                                option("master", "Master", "Only the master slider"),
+                                                option("music", "Music", "The music slider"),
+                                                option("record", "Jukebox / note blocks", "The jukebox and note blocks slider"),
+                                                option("weather", "Weather", "The weather slider"),
+                                                option("block", "Blocks", "The blocks slider"),
+                                                option("hostile", "Hostile creatures", "The hostile creatures slider"),
+                                                option("neutral", "Friendly creatures", "The friendly creatures slider"),
+                                                option("player", "Players", "The players slider"),
+                                                option("ambient", "Ambient / environment", "The ambient slider"),
+                                                option("voice", "Voice / speech", "The voice slider")))),
                         new ParameterSchema("stream", ParameterType.BOOLEAN, false, "false",
                                 "Stream from disk instead of loading into memory (long files)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Stream", "audio", 60, true, "toggle", "", "false")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Stream from disk", "audio", 60, false, "toggle", "", "false",
+                                        true, "audio", "play",
+                                        "For long files: read from disk while playing instead of loading it all")),
                         new ParameterSchema("weight", ParameterType.INTEGER, false, "1",
                                 "Pick weight when several sources are set", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Weight", "audio", 70, true, "number", "", "1")),
@@ -79,7 +101,10 @@ public final class SoundType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Preload", "audio", 80, true, "toggle", "", "false")),
                         new ParameterSchema("attenuation_distance", ParameterType.INTEGER, false, null,
                                 "Distance the sound carries (vanilla default 16)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Attenuation", "audio", 90, true, "number", "", "16")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Carry distance", "audio", 90, false, "number", "", "16",
+                                        true, "audio", "ruler",
+                                        "How far the sound can be heard (vanilla default 16)")
+                                        .withRange(1.0, 1024.0, "blocks")),
                         new ParameterSchema("replace", ParameterType.BOOLEAN, false, "false",
                                 "Replace same-named entries from lower packs instead of adding", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Replace", "audio", 100, true, "toggle", "", "false")),
@@ -87,9 +112,31 @@ public final class SoundType implements ContentType {
                                 "Vanilla sound event this definition overrides outright (e.g. block.wood.step) — event-level replace is forced, a bare merge would only add to vanilla's pool", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Override vanilla", "audio", 110, true, "text", "", "")),
                         new ParameterSchema("jukebox", ParameterType.RAW, false, null,
-                                "Music-disc song section: description, duration, comparator_output, range", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Jukebox song", "audio", 120, true, "advanced", "", ""))),
+                                "Music-disc song section: description, duration, comparator_output, range", null,
+                                List.of(
+                                        new ParameterSchema("description", ParameterType.STRING, false, null,
+                                                "Song title shown in the disc's tooltip and the jukebox", null, null)
+                                                .withEditor(new ParameterSchema.EditorMetadata("Song title", "audio", 10, false, "text", "", "Ruby Anthem")),
+                                        new ParameterSchema("duration", ParameterType.DECIMAL, false, "60",
+                                                "Length in seconds (at least 1)", null, null)
+                                                .withEditor(new ParameterSchema.EditorMetadata("Length", "audio", 20, false, "number", "", "90")
+                                                        .withRange(1.0, null, "seconds")),
+                                        new ParameterSchema("comparator_output", ParameterType.INTEGER, false, "0",
+                                                "Redstone comparator signal while playing (0..15)", null, null)
+                                                .withEditor(new ParameterSchema.EditorMetadata("Comparator signal", "audio", 30, false, "number", "", "7")
+                                                        .withRange(0.0, 15.0, "")),
+                                        new ParameterSchema("range", ParameterType.DECIMAL, false, null,
+                                                "Fixed hearing range of the song, in blocks", null, null)
+                                                .withEditor(new ParameterSchema.EditorMetadata("Hearing range", "audio", 40, false, "number", "", "16")
+                                                        .withRange(0.0, null, "blocks"))))
+                                .withEditor(new ParameterSchema.EditorMetadata("Music disc", "audio", 120, false, "object-fields", "", "",
+                                        true, "gameplay", "disc-3",
+                                        "Make this sound a song a music disc can play in a jukebox"))),
                 "1.0.0");
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     @Override
