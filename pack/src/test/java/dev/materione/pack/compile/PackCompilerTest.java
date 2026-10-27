@@ -655,17 +655,32 @@ class PackCompilerTest {
         // the plugin passes MaterioneText::componentJson (plugin §6.1); content
         // types only see PackEmitter#textComponent
         var compiler = new PackCompiler(stored -> stored.contains("<") || stored.contains("&")
-                ? Map.of("text", "compiled:" + stored) : stored);
+                ? "{\"text\":\"compiled\",\"color\":\"gold\"}"
+                : "{\"text\":" + new com.google.gson.JsonPrimitive(stored) + "}");
         var outcome = compileFixtures(
                 tempDir, AllocationTable.load(tempDir.resolve("storage/allocation.bin")), compiler);
         try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
             assertThat(entryText(datapack, "data/sample/painting_variant/panorama.json"))
-                    .contains("\"title\":{\"text\":\"compiled:<gradient:#f9731e:#ffd27a>Panorama</gradient>\"}")
-                    .contains("\"author\":{\"text\":\"compiled:&6Materione\"}");
-            // plain titles stay plain strings
+                    .contains("\"title\":{\"color\":\"gold\",\"text\":\"compiled\"}")
+                    .contains("\"author\":{\"color\":\"gold\",\"text\":\"compiled\"}");
+            // plain titles stay plain strings, even when the converter wraps them
             assertThat(entryText(datapack, "data/sample/painting_variant/sunrise.json"))
                     .contains("\"title\":\"Sunrise\"")
                     .contains("\"author\":\"Materione\"");
+        }
+    }
+
+    @Test
+    void aFailingTextCompilerShipsTheStoredText(@TempDir Path tempDir) throws IOException {
+        // fail-soft (D6): a converter failure must never take the pipeline down
+        var compiler = new PackCompiler(stored -> {
+            throw new NoSuchMethodError("relocated library mismatch");
+        });
+        var outcome = compileFixtures(
+                tempDir, AllocationTable.load(tempDir.resolve("storage/allocation.bin")), compiler);
+        try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
+            assertThat(entryText(datapack, "data/sample/painting_variant/sunrise.json"))
+                    .contains("\"title\":\"Sunrise\"");
         }
     }
 

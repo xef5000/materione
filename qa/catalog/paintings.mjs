@@ -123,6 +123,9 @@ export default [
     timeoutMs: 240_000,
     steps: async (ctx) => {
       await ctx.reset();
+      // the dev driver needs materione.dev (default op): grant it here rather than
+      // inherit it from whichever suite ran first, so the test runs on its own
+      await ctx.rcon('op Probe');
 
       // --- registry mode is the live seam: composed at bootstrap, nothing
       // deployed, doctor honest about it
@@ -314,8 +317,9 @@ return 'clicked'`;
 def reg = mc.level.registryAccess().@target.lookupOrThrow(rk)
 def idc = Class.forName('net.minecraft.resources.Identifier').getMethod('fromNamespaceAndPath', String, String).invoke(null, 'sample', 'panorama')
 def v = reg.get(idc).get().value()
-mc.gui.getChat().addMessage(v.title().get())
-mc.gui.getChat().addMessage(v.author().get())
+// 26.x: LocalPlayer#sendSystemMessage adds a client-side chat line (wrapped: @target)
+mc.player.@target.sendSystemMessage(v.title().get())
+mc.player.@target.sendSystemMessage(v.author().get())
 return 'shown'`, 20_000);
       await ctx.sleep(500);
       await ctx.shot('panorama-title-author');

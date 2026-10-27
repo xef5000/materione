@@ -301,23 +301,18 @@ class MaterioneTextTest {
     @Test
     void componentJsonKeepsPlainTextAPlainString() {
         // plain painting titles compile byte-identically to before (a string)
-        assertThat(MaterioneText.componentJson("Sunrise")).isEqualTo("Sunrise");
-        assertThat(MaterioneText.componentJson("")).isEqualTo("");
-        assertThat(MaterioneText.componentJson("Less \\<b> more")).isEqualTo("Less <b> more");
+        assertThat(MaterioneText.componentJson("Sunrise")).isEqualTo("\"Sunrise\"");
+        assertThat(MaterioneText.componentJson("")).isEqualTo("\"\"");
+        assertThat(MaterioneText.componentJson("Less \\<b> more")).isEqualTo("\"Less <b> more\"");
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void componentJsonCarriesFormattingAsATextComponent() {
-        Object gradient = MaterioneText.componentJson("<gradient:#f9731e:#ffd27a>Panorama</gradient>");
-        assertThat(gradient).isInstanceOf(java.util.Map.class);
-        String json = new com.google.gson.Gson().toJson(gradient);
-        assertThat(json).contains("\"color\":\"#F9731E\"").contains("\"color\":\"#FFD27A\"");
-        assertThat(new com.google.gson.Gson().toJson(MaterioneText.componentJson("&6Materione")))
-                .contains("\"color\":\"gold\"").contains("Materione");
+        String json = MaterioneText.componentJson("<gradient:#f9731e:#ffd27a>Panorama</gradient>");
+        assertThat(json).startsWith("{").contains("\"color\":\"#F9731E\"").contains("\"color\":\"#FFD27A\"");
+        assertThat(MaterioneText.componentJson("&6Materione")).contains("\"color\":\"gold\"").contains("Materione");
         // deterministic (D7): the same text compiles to the same JSON
-        assertThat(new com.google.gson.Gson().toJson(MaterioneText.componentJson("<b>x</b> <red>y")))
-                .isEqualTo(new com.google.gson.Gson().toJson(MaterioneText.componentJson("<b>x</b> <red>y")));
+        assertThat(MaterioneText.componentJson("<b>x</b> <red>y")).isEqualTo(MaterioneText.componentJson("<b>x</b> <red>y"));
     }
 
     @Test
@@ -328,7 +323,7 @@ class MaterioneTextTest {
         try {
             assertThat(plain(MaterioneText.parseData("<glyph:heart> :heart: <effect:rainbow>x</effect>")))
                     .isEqualTo("<glyph:heart> :heart: <effect:rainbow>x</effect>");
-            assertThat(MaterioneText.componentJson("<glyph:heart>")).isEqualTo("<glyph:heart>");
+            assertThat(MaterioneText.componentJson("<glyph:heart>")).isEqualTo("\"<glyph:heart>\"");
         } finally {
             GlyphText.register(() -> null);
             GlyphText.registerEffects(() -> null);

@@ -90,49 +90,15 @@ public final class MaterioneText {
     }
 
     /**
-     * {@link #parseData} as JSON for a data file: a {@code String} when the
-     * text has no formatting (so plain titles compile byte-identically to
-     * before), else the text component as {@code Map/List/String/Number/Boolean}.
+     * {@link #parseData} as JSON text for a data file (Adventure's JSON text
+     * component format). Text without formatting serializes as a JSON string,
+     * so plain titles compile byte-identically to before. Returns text, not a
+     * Gson tree: the plugin jar relocates Gson, and Adventure's Gson types are
+     * Paper's own, so no Gson type may cross this boundary.
      */
-    public static Object componentJson(String text) {
-        com.google.gson.JsonElement tree = net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
-                .serializeToTree(parseData(text == null ? "" : text));
-        if (tree.isJsonPrimitive()) {
-            return tree.getAsString();
-        }
-        if (tree.isJsonObject() && tree.getAsJsonObject().size() == 1 && tree.getAsJsonObject().has("text")
-                && tree.getAsJsonObject().get("text").isJsonPrimitive()) {
-            return tree.getAsJsonObject().get("text").getAsString();
-        }
-        return jsonValue(tree);
-    }
-
-    private static Object jsonValue(com.google.gson.JsonElement element) {
-        if (element.isJsonObject()) {
-            var map = new java.util.LinkedHashMap<String, Object>();
-            for (var entry : element.getAsJsonObject().entrySet()) {
-                map.put(entry.getKey(), jsonValue(entry.getValue()));
-            }
-            return map;
-        }
-        if (element.isJsonArray()) {
-            var list = new ArrayList<Object>();
-            for (var entry : element.getAsJsonArray()) {
-                list.add(jsonValue(entry));
-            }
-            return list;
-        }
-        if (element.isJsonNull()) {
-            return null;
-        }
-        var primitive = element.getAsJsonPrimitive();
-        if (primitive.isBoolean()) {
-            return primitive.getAsBoolean();
-        }
-        if (primitive.isNumber()) {
-            return primitive.getAsNumber();
-        }
-        return primitive.getAsString();
+    public static String componentJson(String text) {
+        return net.kyori.adventure.text.serializer.json.JSONComponentSerializer.json()
+                .serialize(parseData(text == null ? "" : text));
     }
 
     /**

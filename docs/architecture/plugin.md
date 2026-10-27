@@ -344,7 +344,10 @@ parse with `MaterioneText.parseData` (no glyph or effect registries):
   takes the converter in its constructor, and the plugin passes `MaterioneText::componentJson`.
   Text without formatting stays a plain JSON string, so existing packs compile byte-identically.
   Formatted text becomes the component tree (Adventure's JSON). The default, for compiles without
-  the plugin (tests, tools), keeps the stored string.
+  the plugin (tests, tools), keeps the stored string. The converter hands over JSON *text*, and
+  `pack/` parses it with its own Gson. The plugin jar relocates Gson, while Adventure's serializers
+  use Paper's own, so no Gson type may cross between the two. A converter failure ships the stored
+  string instead of failing the run (D6).
 - *Registry path (26.x).* `:modern`'s `PaintingRegistrar` calls `MaterioneText.parseData`
   directly, which is why `:modern` depends on `:platform` (§11).
 

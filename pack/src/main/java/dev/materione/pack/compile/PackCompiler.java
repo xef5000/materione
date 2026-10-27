@@ -85,19 +85,19 @@ public final class PackCompiler {
             Path stagedDatapackZip, String datapackSha256) {}
 
     /**
-     * Authored text → JSON text component ({@link PackEmitter#textComponent}).
+     * Authored text → JSON text of a text component ({@link PackEmitter#textComponent}).
      * The plugin passes its text pipeline; the default keeps the stored string,
      * for compiles without one (tests, tools).
      */
-    private final java.util.function.Function<String, Object> textComponents;
+    private final java.util.function.Function<String, String> textComponents;
 
     /** A compiler whose text components are the stored strings unchanged. */
     public PackCompiler() {
-        this(stored -> stored);
+        this(stored -> new com.google.gson.JsonPrimitive(stored).toString());
     }
 
-    /** A compiler that turns authored text into components with {@code textComponents}. */
-    public PackCompiler(java.util.function.Function<String, Object> textComponents) {
+    /** A compiler that turns authored text into component JSON text with {@code textComponents}. */
+    public PackCompiler(java.util.function.Function<String, String> textComponents) {
         this.textComponents = textComponents;
     }
 
@@ -106,7 +106,7 @@ public final class PackCompiler {
 
     /** Collects emitter output deterministically, then hands it to creative. */
     private static final class Emitter implements PackEmitter {
-        private final java.util.function.Function<String, Object> textComponents;
+        private final java.util.function.Function<String, String> textComponents;
         final Map<String, Map<String, Object>> itemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> syntheticItemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> models = new TreeMap<>();
@@ -127,13 +127,26 @@ public final class PackCompiler {
         String itemsAtlasJson;
         Map<String, Map<String, Object>> vanillaJson;
 
-        Emitter(java.util.function.Function<String, Object> textComponents) {
+        Emitter(java.util.function.Function<String, String> textComponents) {
             this.textComponents = textComponents;
         }
 
         @Override
         public Object textComponent(String stored) {
-            return stored == null ? null : textComponents.apply(stored);
+            if (stored == null) {
+                return null;
+            }
+            try {
+                Object json = fromGson(JsonParser.parseString(textComponents.apply(stored)));
+                // {"text": "x"} is the same component as "x": keep plain text a string
+                if (json instanceof Map<?, ?> map && map.size() == 1 && map.get("text") instanceof String text) {
+                    return text;
+                }
+                return json;
+            } catch (RuntimeException | LinkageError e) {
+                // fail-soft (D6): a text the pipeline cannot compile ships as written
+                return stored;
+            }
         }
 
         @Override
