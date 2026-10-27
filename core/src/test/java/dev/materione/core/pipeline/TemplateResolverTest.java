@@ -100,6 +100,24 @@ class TemplateResolverTest {
     }
 
     @Test
+    void aShortParentReferenceResolvesInTheNamespaceOfTheTemplateThatNamesIt() {
+        Map<String, Map<String, Object>> chain = Map.of(
+                "demo:root", map("material", "PAPER"),
+                "other:mid", map("template", "other:far", "x", 1),
+                "other:far", map("template", "far_root", "y", 2),
+                "demo:mid", map("template", "root", "z", 3));
+
+        Resolution local = TemplateResolver.resolve(map("template", "mid"), NAMESPACE, chain);
+        Resolution foreign = TemplateResolver.resolve(map("template", "other:mid"), NAMESPACE, chain);
+
+        assertThat(local.failure()).isNull();
+        assertThat(local.chain()).containsExactly("demo:mid", "demo:root");
+        assertThat(local.merged()).containsEntry("material", "PAPER").containsEntry("z", 3);
+        // other:far names far_root, which is looked up in other: (and is absent), never in demo:
+        assertThat(foreign.failure()).contains("unknown template other:far_root");
+    }
+
+    @Test
     void cyclicChainFailsWithNoMergeAndReportsTheRevisit() {
         Map<String, Map<String, Object>> cyclic = Map.of(
                 "demo:a", map("template", "demo:b", "x", 1),

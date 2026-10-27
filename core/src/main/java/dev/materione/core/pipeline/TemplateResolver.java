@@ -104,7 +104,10 @@ public final class TemplateResolver {
         }
         String parentRef = text(template, "template");
         if (parentRef != null) {
-            String failure = resolveTemplate(parentRef, templates, visited, merged, sources, chain);
+            // a short parent reference resolves in the namespace of the template that names it
+            String failure = resolveTemplate(
+                    shortRef(ref.substring(0, ref.indexOf(':')), parentRef),
+                    templates, visited, merged, sources, chain);
             if (failure != null) {
                 return failure;
             }

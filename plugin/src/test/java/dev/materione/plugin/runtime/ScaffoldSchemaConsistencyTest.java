@@ -33,6 +33,22 @@ class ScaffoldSchemaConsistencyTest {
         check("effects", "ruby_wave", new dev.materione.content.effects.EffectType());
         // Templates have no registry type — parse-cleanliness only.
         assertParses(Scaffolds.forPath("templates/base_pack.yml", null), "base_pack");
+        // ... but a template that serves a type may only start with fields that type declares.
+        checkTemplateStarter("items", "base_blade", new ItemType());
+        checkTemplateStarter("blocks", "base_lamp", new BlockType());
+    }
+
+    private static void checkTemplateStarter(String serves, String id,
+            dev.materione.api.content.ContentType type) {
+        String starter = Scaffolds.templateFor(serves, id);
+        assertParses(starter, id);
+        var declared = type.describe().parameters().stream()
+                .map(dev.materione.api.registry.ParameterSchema::id).toList();
+        Map<?, ?> fields = (Map<?, ?>) singleRoot(starter, id).get(id);
+        assertThat(fields).as("%s template starter is not empty", serves).isNotEmpty();
+        assertThat(fields.keySet().stream().map(String::valueOf).toList())
+                .as("template starter for %s only sets fields %s declares", serves, type.name())
+                .isSubsetOf(declared);
     }
 
     // ------------------------------------------------------------------

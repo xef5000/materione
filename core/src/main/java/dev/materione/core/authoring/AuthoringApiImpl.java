@@ -384,7 +384,12 @@ public final class AuthoringApiImpl implements AuthoringApi {
             // the author is looking at; items stay the default.
             String type = request.type() == null ? "items" : request.type();
             String path = documentPath(type, request.folder(), request.resourceId());
-            String scaffold = Scaffolds.forPath(path, request.resourceId());
+            String scaffold = "templates".equals(type) && request.serves() != null
+                    ? Scaffolds.templateFor(request.serves(), request.resourceId())
+                    : Scaffolds.forPath(path, request.resourceId());
+            if (request.template() != null && !request.template().isBlank()) {
+                scaffold = templated(request.pack(), request.resourceId(), request.template(), scaffold);
+            }
             // Recipes and templates have no display name; forcing one would
             // invent a field the type's schema does not declare.
             String content = scaffold.contains("display_name:")
@@ -425,6 +430,208 @@ public final class AuthoringApiImpl implements AuthoringApi {
             return new ApiResult<DocumentView>(false, null, List.of(new Diagnostic(
                     DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
                     e.getMessage(), null, null, "choose a different id")));
+        } catch (Exception e) {
+            return handlerFailure(e);
+        }
+    }
+
+    /**
+     * A new resource that is only a link: {@code template:} (plus the display
+     * name when the type has one). The template supplies everything else, so
+     * the new file carries nothing that could drift from it.
+     */
+    private String templated(String pack, String resourceId, String template, String scaffold) {
+        if (!template.matches("[a-z0-9_-]{2,64}(:[a-z0-9_-]{2,64})?")) {
+            throw new IllegalArgumentException("template must be an id like 'base_item' or 'pack:base_item'");
+        }
+        String id = sanitizedId(resourceId);
+        String full = TemplateResolver.shortRef(namespaceOf(pack), template);
+        if (!summaryComputer.templatePool().definitions().containsKey(full)) {
+            throw new IllegalArgumentException("unknown template " + full);
+        }
+        String named = scaffold.contains("display_name:") ? "  display_name: \"" + id + "\"\n" : "";
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  template: " + template + "\n"
+                + named;
+    }
+
+    /** Placeholder child of a freshly seeded template document, removed in the same write. */
+    private static final String SEED = "__seed";
+
+    private static String sanitizedId(String resourceId) {
+        if (resourceId == null || !resourceId.matches("[a-z0-9_-]{2,64}")) {
+            throw new IllegalArgumentException("id must be 2..64 chars of a-z 0-9 _ -");
+        }
+        return resourceId;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public ApiResult<List<TemplateInfo>> listTemplates() {
+        try {
+            ResourceSummaryComputer.TemplateCatalog catalog = summaryComputer.templateCatalog();
+            List<ContentType> capable = catalog.types().stream()
+                    .filter(AuthoringApiImpl::acceptsTemplates).toList();
+            List<TemplateInfo> out = new ArrayList<>();
+            catalog.pool().definitions().forEach((full, definition) -> {
+                List<String> source = catalog.pool().sources().get(full);
+                String pack = source.get(0);
+                String parentRef = TemplateResolver.text(definition, "template");
+                List<ResourceRef> users = catalog.users().getOrDefault(full, List.of()).stream()
+                        .map(ref -> new ResourceRef(ref.pack(), ref.type(), ref.path(), ref.resourceId()))
+                        .toList();
+                out.add(new TemplateInfo(
+                        pack, source.get(1), full.substring(full.indexOf(':') + 1),
+                        parentRef == null ? null : TemplateResolver.shortRef(namespaceOf(pack), parentRef),
+                        (Map<String, Object>) LosslessYaml.stringKeyedDeep(definition),
+                        serves(definition, users, capable), users));
+            });
+            out.sort(java.util.Comparator.comparing(TemplateInfo::pack).thenComparing(TemplateInfo::id));
+            return ApiResult.ok(out);
+        } catch (RuntimeException e) {
+            return handlerFailure(e);
+        }
+    }
+
+    /** A type takes part in inheritance when one of its fields is a template reference. */
+    private static boolean acceptsTemplates(ContentType type) {
+        return type.describe().parameters().stream().anyMatch(parameter ->
+                parameter.editor() != null && "template".equals(parameter.editor().referenceKind()));
+    }
+
+    /**
+     * The type directories a template serves, derived and never stored: the
+     * template-capable types of the resources that use it, else the type(s)
+     * whose fields the template's keys match best, else every capable type.
+     */
+    private static List<String> serves(
+            Map<String, Object> definition, List<ResourceRef> users, List<ContentType> capable) {
+        List<String> used = capable.stream().map(ContentType::directory)
+                .filter(directory -> users.stream().anyMatch(user -> user.type().equals(directory)))
+                .toList();
+        if (!used.isEmpty()) {
+            return used;
+        }
+        int best = 0;
+        Map<String, Integer> scores = new LinkedHashMap<>();
+        for (ContentType type : capable) {
+            java.util.Set<String> known = new java.util.HashSet<>();
+            type.describe().parameters().forEach(parameter -> known.add(parameter.id()));
+            int score = (int) definition.keySet().stream()
+                    .filter(key -> !key.equals("template") && known.contains(key)).count();
+            scores.put(type.directory(), score);
+            best = Math.max(best, score);
+        }
+        if (best == 0) {
+            return capable.stream().map(ContentType::directory).toList();
+        }
+        final int top = best;
+        return scores.entrySet().stream().filter(entry -> entry.getValue() == top)
+                .map(Map.Entry::getKey).toList();
+    }
+
+    @Override
+    public ApiResult<DocumentView> detachTemplate(ActorContext actor, DetachTemplateRequest request) {
+        try {
+            DocumentStore.Document source = documents.read(request.pack(), request.path());
+            var parsedSource = LosslessYaml.parse(source.raw());
+            if (parsedSource.parseError().isPresent()) {
+                throw new IllegalArgumentException(
+                        "cannot detach in a file that does not parse: " + parsedSource.parseError().get());
+            }
+            String root = request.resourceId() != null && !request.resourceId().isBlank()
+                    ? request.resourceId()
+                    : String.valueOf(parsedSource.data().keySet().iterator().next());
+            if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
+                throw new IllegalArgumentException("no resource '" + root + "' in " + request.path());
+            }
+            Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
+            String authored = TemplateResolver.text(definition, "template");
+            if (authored == null) {
+                throw new IllegalArgumentException(root + " is not based on a template");
+            }
+            // Only the chain is resolved: what the resource would inherit if it set nothing.
+            TemplateResolver.Resolution chain = TemplateResolver.resolve(
+                    Map.of("template", authored), namespaceOf(request.pack()),
+                    summaryComputer.templatePool().definitions());
+            if (chain.merged() == null) {
+                throw new IllegalArgumentException("template does not resolve: " + chain.failure());
+            }
+            List<DocumentStore.FieldEdit> edits = new ArrayList<>();
+            for (String key : chain.sources().keySet()) {
+                if (!key.equals("template") && !definition.containsKey(key)) {
+                    edits.add(new DocumentStore.FieldEdit(
+                            List.of(root, key), LosslessYaml.stringKeyedDeep(chain.merged().get(key))));
+                }
+            }
+            edits.add(new DocumentStore.FieldEdit(List.of(root, "template"), null, true));
+            DocumentStore.Document updated = documents.setScalars(
+                    request.pack(), request.path(), request.expectedRevision(), edits, actorId(actor));
+            audit.record(actorId(actor), "authoring.detachTemplate",
+                    request.pack() + "/" + request.path() + " (" + (edits.size() - 1) + " values)");
+            reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), request.path()));
+            return ApiResult.ok(view(updated));
+        } catch (DocumentConflictException e) {
+            return conflict(e, "reopen the resource and detach again");
+        } catch (NoSuchFileException e) {
+            return missing("no such document");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return badRequest(e.getMessage());
+        } catch (Exception e) {
+            return handlerFailure(e);
+        }
+    }
+
+    @Override
+    public ApiResult<DocumentView> saveAsTemplate(ActorContext actor, SaveAsTemplateRequest request) {
+        try {
+            String templateId = sanitizedId(request.templateId());
+            List<String> fields = request.fields() == null ? List.of() : request.fields();
+            if (fields.isEmpty() || fields.size() > 256) {
+                throw new IllegalArgumentException("choose at least one field to put in the template");
+            }
+            DocumentStore.Document source = documents.read(request.pack(), request.fromPath());
+            var parsedSource = LosslessYaml.parse(source.raw());
+            if (parsedSource.parseError().isPresent()) {
+                throw new IllegalArgumentException(
+                        "cannot read a file that does not parse: " + parsedSource.parseError().get());
+            }
+            String root = request.resourceId() != null && !request.resourceId().isBlank()
+                    ? request.resourceId()
+                    : String.valueOf(parsedSource.data().keySet().iterator().next());
+            if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
+                throw new IllegalArgumentException("no resource '" + root + "' in " + request.fromPath());
+            }
+            Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
+            if (summaryComputer.templatePool().definitions()
+                    .containsKey(namespaceOf(request.pack()) + ":" + templateId)) {
+                throw new IllegalStateException("template already exists: " + templateId);
+            }
+            List<DocumentStore.FieldEdit> edits = new ArrayList<>();
+            for (String field : fields) {
+                if (!definition.containsKey(field)) {
+                    throw new IllegalArgumentException(root + " does not set '" + field + "'");
+                }
+                edits.add(new DocumentStore.FieldEdit(
+                        List.of(templateId, field), LosslessYaml.stringKeyedDeep(definition.get(field))));
+            }
+            // the base needs one child so the lossless layer has a block mapping to append to
+            edits.add(new DocumentStore.FieldEdit(List.of(templateId, SEED), null, true));
+            String path = "templates/" + templateId + ".yml";
+            String base = "# " + templateId + " — saved from " + request.fromPath()
+                    + " by the Materione editor\n" + templateId + ":\n  " + SEED + ": 0\n";
+            DocumentStore.Document created = documents.applyBatch(
+                    request.pack(),
+                    List.of(new DocumentStore.BatchStep(path, DocumentStore.BatchKind.CREATE, 0, base, edits)),
+                    false, actorId(actor)).get(0).after();
+            audit.record(actorId(actor), "authoring.saveAsTemplate", request.pack() + "/" + path);
+            reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
+            return ApiResult.ok(view(created));
+        } catch (NoSuchFileException e) {
+            return missing("no such document");
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return badRequest(e.getMessage());
         } catch (Exception e) {
             return handlerFailure(e);
         }
@@ -949,6 +1156,6 @@ public final class AuthoringApiImpl implements AuthoringApi {
 
     private static <T> ApiResult<T> handlerFailure(Exception e) {
         return new ApiResult<T>(false, null, List.of(Diagnostic.error(
-                DiagnosticCodes.PIPELINE_STAGE_FAILED, String.valueOf(e.getMessage()))));
+                DiagnosticCodes.PIPELINE_STAGE_FAILED, e.getMessage() != null ? e.getMessage() : e.toString())));
     }
 }
