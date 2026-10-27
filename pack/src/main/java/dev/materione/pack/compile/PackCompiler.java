@@ -84,11 +84,29 @@ public final class PackCompiler {
             Path stagedZip, String sha256, int itemDefinitions, int generatedModels,
             Path stagedDatapackZip, String datapackSha256) {}
 
+    /**
+     * Authored text → JSON text component ({@link PackEmitter#textComponent}).
+     * The plugin passes its text pipeline; the default keeps the stored string,
+     * for compiles without one (tests, tools).
+     */
+    private final java.util.function.Function<String, Object> textComponents;
+
+    /** A compiler whose text components are the stored strings unchanged. */
+    public PackCompiler() {
+        this(stored -> stored);
+    }
+
+    /** A compiler that turns authored text into components with {@code textComponents}. */
+    public PackCompiler(java.util.function.Function<String, Object> textComponents) {
+        this.textComponents = textComponents;
+    }
+
     /** A {@link PackEmitter#vanillaFile} fragment awaiting the deterministic merge. */
     private record VanillaFragment(String path, Map<String, Object> json) {}
 
     /** Collects emitter output deterministically, then hands it to creative. */
     private static final class Emitter implements PackEmitter {
+        private final java.util.function.Function<String, Object> textComponents;
         final Map<String, Map<String, Object>> itemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> syntheticItemDefinitions = new TreeMap<>();
         final Map<String, Map<String, Object>> models = new TreeMap<>();
@@ -108,6 +126,15 @@ public final class PackCompiler {
         String atlasJson;
         String itemsAtlasJson;
         Map<String, Map<String, Object>> vanillaJson;
+
+        Emitter(java.util.function.Function<String, Object> textComponents) {
+            this.textComponents = textComponents;
+        }
+
+        @Override
+        public Object textComponent(String stored) {
+            return stored == null ? null : textComponents.apply(stored);
+        }
 
         @Override
         public void itemDefinition(NamespacedId id, Map<String, Object> itemModelJson) {
@@ -227,7 +254,7 @@ public final class PackCompiler {
         for (ContentType type : contentTypes) {
             byDirectory.put(type.directory(), type);
         }
-        var emitter = new Emitter();
+        var emitter = new Emitter(textComponents);
         dev.materione.api.content.Allocations allocations = new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {

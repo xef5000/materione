@@ -7,6 +7,7 @@
   import { onMount, tick } from 'svelte';
   import { rankCommands, type PaletteCommand } from '../bulk';
   import { typeTabs } from '../browser';
+  import { plainText } from '../rich-text/model';
   import {
     content,
     openStudio,
@@ -62,7 +63,8 @@
     for (const summary of workspace.summaries) {
       out.push({
         id: `resource:${summary.path}#${summary.id}`,
-        title: summary.name,
+        // stored names are rich text (master §5.7): the palette lists what a player reads
+        title: plainText(summary.name).trim() || summary.id,
         group: summary.type,
         keywords: `${summary.id} ${summary.material ?? ''}`,
         run: () => openStudio({ pack: summary.pack, type: summary.type, path: summary.path, id: summary.id }),

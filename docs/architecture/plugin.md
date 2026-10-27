@@ -302,7 +302,8 @@ descriptor delta. `content/`, `behavior/`, `pack/` consume capabilities, never v
 
 Authored player-visible text reaches Adventure components through one entry point,
 `platform/text/MaterioneText`. Item names and lore, block and furniture item names, furniture
-labels and storage titles, backpack titles and the `message` action all call it. Adventure lives
+labels and storage titles, painting titles and authors, backpack titles and the `message`
+action all call it. Adventure lives
 only in `platform/` and above, so the pipeline does too.
 
 ```
@@ -335,9 +336,21 @@ with a gradient degrading to one color per character. Text that players type the
 signs, books, anvil renames) is not authored content: `GlyphText.resolveComponent` still
 resolves only glyph markers in it and never parses MiniMessage.
 
-Painting titles and authors are not on this pipeline yet. On floor servers they compile into
-the datapack from `content/`, which has no Adventure. They stay plain-text fields until that
-path can emit text components.
+**Painting titles and authors** reach the client as text components by two paths, and both
+parse with `MaterioneText.parseData` (no glyph or effect registries):
+
+- *Datapack path (floor).* `content/` has no Adventure, so `PaintingType` asks the emitter:
+  `PackEmitter#textComponent(String)` returns the JSON form of an authored value. `PackCompiler`
+  takes the converter in its constructor, and the plugin passes `MaterioneText::componentJson`.
+  Text without formatting stays a plain JSON string, so existing packs compile byte-identically.
+  Formatted text becomes the component tree (Adventure's JSON). The default, for compiles without
+  the plugin (tests, tools), keeps the stored string.
+- *Registry path (26.x).* `:modern`'s `PaintingRegistrar` calls `MaterioneText.parseData`
+  directly, which is why `:modern` depends on `:platform` (§11).
+
+Compiled output must not depend on live runtime state (D7), and the glyph registry of the
+previous apply is exactly that. So glyph, effect and emoji markers stay literal in painting text.
+A shader effect could not animate a painting tooltip anyway.
 
 ---
 
@@ -450,6 +463,7 @@ api      → (nothing internal)         core → api
 content  → api, core                  behavior → api, core
 pack     → api, core, platform-caps   delivery → api, core
 platform → api (only version-aware module)
+modern   → api, core, content, platform (the 26.x registry seam; platform for MaterioneText only)
 web      → api only (R9)              (nothing depends on web)
 webui    → API contract only          importers/integrations → api, core
 ```

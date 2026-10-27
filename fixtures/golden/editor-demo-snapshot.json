@@ -3093,7 +3093,7 @@
             "required": false,
             "section": "identity",
             "type": "string",
-            "uiHint": "text"
+            "uiHint": "formatted-text"
           },
           {
             "advanced": false,
@@ -3105,7 +3105,7 @@
             "required": false,
             "section": "identity",
             "type": "string",
-            "uiHint": "text"
+            "uiHint": "formatted-text"
           },
           {
             "advanced": false,
@@ -3886,14 +3886,14 @@
               "texture": "painting/panorama",
               "width": 3,
               "height": 2,
-              "author": "Materione",
-              "title": "Panorama",
+              "author": "&6Materione",
+              "title": "<gradient:#f9731e:#ffd27a>Panorama</gradient>",
               "placeable": true
             }
           },
-          "raw": "panorama:\n  texture: painting/panorama\n  width: 3\n  height: 2\n  author: \"Materione\"\n  title: \"Panorama\"\n  placeable: true\n",
+          "raw": "panorama:\n  texture: painting/panorama\n  width: 3\n  height: 2\n  # rich text (master §5.7): the title and author compile to text components\n  author: \"&6Materione\"\n  title: \"<gradient:#f9731e:#ffd27a>Panorama</gradient>\"\n  placeable: true\n",
           "rev": 0,
-          "sha256": "e19308c657dda76d78d07998ed2cfbe483560d4bd3d6f6dcd41efb5231774c03"
+          "sha256": "175af14ace6d4a20dd50dc688aa129b2198ccfadeb92253824228deec493cb22"
         },
         "paintings/sunrise.yml": {
           "parsed": {
@@ -4772,7 +4772,7 @@
           "health": "unknown",
           "healthMessage": "pipeline validation and apply freshness are unknown",
           "id": "panorama",
-          "name": "Panorama",
+          "name": "<gradient:#f9731e:#ffd27a>Panorama</gradient>",
           "pack": "sample",
           "path": "paintings/panorama.yml",
           "type": "paintings"
@@ -8515,7 +8515,7 @@
           "required": false,
           "section": "identity",
           "type": "string",
-          "uiHint": "text"
+          "uiHint": "formatted-text"
         },
         {
           "advanced": false,
@@ -8527,7 +8527,7 @@
           "required": false,
           "section": "identity",
           "type": "string",
-          "uiHint": "text"
+          "uiHint": "formatted-text"
         },
         {
           "advanced": false,

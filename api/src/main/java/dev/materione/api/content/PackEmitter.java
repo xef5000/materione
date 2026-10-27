@@ -79,6 +79,18 @@ public interface PackEmitter {
         // default no-op so addon content types compiled against older cores link
     }
 
+    /**
+     * The JSON form of an authored text value (master §5.7: MiniMessage, legacy
+     * codes accepted) for a data file the client reads as a text component,
+     * such as a painting variant's title. Returns a {@code String} for text
+     * without formatting, else a JSON-shaped text component. Compiling it
+     * needs the plugin's text pipeline (plugin §6.1), which content types
+     * cannot see; the default returns the stored string unchanged.
+     */
+    default Object textComponent(String stored) {
+        return stored;
+    }
+
     /** Sets pack.mcmeta description text (pack format is the platform's). */
     void description(String text);
 }

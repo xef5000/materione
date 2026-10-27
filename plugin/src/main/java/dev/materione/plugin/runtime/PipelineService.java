@@ -60,7 +60,9 @@ public final class PipelineService {
     private final SchedulingGateway scheduling;
     private final PlatformDescriptor descriptor;
     private final PipelineRunner runner;
-    private final PackCompiler compiler = new PackCompiler();
+    // authored text in data files (painting titles) goes through the one pipeline
+    private final PackCompiler compiler =
+            new PackCompiler(dev.materione.platform.text.MaterioneText::componentJson);
     private final ContentRuntime runtime = new ContentRuntime();
     private final RecipeApplier recipeApplier = new RecipeApplier();
     /** Server-reported resource-pack format; -1 when detection failed. */

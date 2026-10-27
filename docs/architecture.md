@@ -243,8 +243,9 @@ byte-identical** (comments, ordering, blank lines, unknown fields included). Con
 
 ### 5.7 Player-visible text: the stored form (decided M5, 2026-10, issue #151)
 
-Item names and lore, block and furniture names, and every later surface that shows authored
-text to a player store that text in **one string form: a MiniMessage subset**, with Materione's
+Item names and lore, block and furniture names, painting titles and authors, and every later
+surface that shows authored text to a player store that text in **one string form: a MiniMessage
+subset**, with Materione's
 own tags in the same syntax.
 
 | Construct | Stored as |

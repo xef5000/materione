@@ -58,10 +58,10 @@ public final class PaintingType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Height (blocks)", "appearance", 30, false, "integer", "", "1")),
                         new ParameterSchema("author", ParameterType.STRING, false, "Unknown",
                                 "Shown in the variant tooltip", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Author", "identity", 10, false, "text", "", "Unknown")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Author", "identity", 10, false, "formatted-text", "", "Unknown")),
                         new ParameterSchema("title", ParameterType.STRING, false, null,
                                 "Shown in the variant tooltip (defaults to the id)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Title", "identity", 20, false, "text", "", "Sunrise")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Title", "identity", 20, false, "formatted-text", "", "Sunrise")),
                         new ParameterSchema("placeable", ParameterType.BOOLEAN, false, "false",
                                 "Join the vanilla random-placement pool", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Placeable", "behavior", 10, false, "boolean", "", "false"))),
@@ -105,8 +105,9 @@ public final class PaintingType implements ContentType {
         variant.put("asset_id", painting.assetId());
         variant.put("width", painting.width());
         variant.put("height", painting.height());
-        variant.put("author", painting.author());
-        variant.put("title", painting.title());
+        // rich text (master §5.7): plain strings stay strings, formatting becomes a component
+        variant.put("author", emitter.textComponent(painting.author()));
+        variant.put("title", emitter.textComponent(painting.title()));
         emitter.datapackFile(
                 "data/" + painting.id().namespace() + "/painting_variant/" + painting.id().value() + ".json",
                 variant);

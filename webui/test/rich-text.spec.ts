@@ -78,7 +78,7 @@ describe('lossless round-trip of untouched values (golden)', () => {
           for (const resource of Object.values(doc as Record<string, unknown>)) {
             if (!resource || typeof resource !== 'object') continue;
             const fields = resource as Record<string, unknown>;
-            for (const key of ['display_name', 'label']) if (typeof fields[key] === 'string') single.push(fields[key] as string);
+            for (const key of ['display_name', 'label', 'title', 'author']) if (typeof fields[key] === 'string') single.push(fields[key] as string);
             if (Array.isArray(fields.lore) && fields.lore.every((line) => typeof line === 'string')) lines.push(fields.lore as string[]);
           }
         }
@@ -89,6 +89,7 @@ describe('lossless round-trip of untouched values (golden)', () => {
   }
 
   it('gives back the exact original string for every untouched single-line value', () => {
+    // names, furniture labels, painting titles and authors: every formatted-text field in the corpus
     const { single } = corpusStrings();
     expect(single.length).toBeGreaterThan(40);
     expect(single.some((value) => value.includes('&'))).toBe(true);

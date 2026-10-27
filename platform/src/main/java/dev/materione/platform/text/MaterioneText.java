@@ -80,6 +80,62 @@ public final class MaterioneText {
     }
 
     /**
+     * Text compiled once per boot or into files (painting variants): parsed
+     * without glyph or effect registries, so the result never depends on live
+     * runtime state (D7) and is the same on the datapack and registry paths.
+     * Glyph, effect and emoji markers stay literal here.
+     */
+    public static Component parseData(String text) {
+        return parse(text, null, null, GlyphText.Permissions.ALLOW_ALL);
+    }
+
+    /**
+     * {@link #parseData} as JSON for a data file: a {@code String} when the
+     * text has no formatting (so plain titles compile byte-identically to
+     * before), else the text component as {@code Map/List/String/Number/Boolean}.
+     */
+    public static Object componentJson(String text) {
+        com.google.gson.JsonElement tree = net.kyori.adventure.text.serializer.gson.GsonComponentSerializer.gson()
+                .serializeToTree(parseData(text == null ? "" : text));
+        if (tree.isJsonPrimitive()) {
+            return tree.getAsString();
+        }
+        if (tree.isJsonObject() && tree.getAsJsonObject().size() == 1 && tree.getAsJsonObject().has("text")
+                && tree.getAsJsonObject().get("text").isJsonPrimitive()) {
+            return tree.getAsJsonObject().get("text").getAsString();
+        }
+        return jsonValue(tree);
+    }
+
+    private static Object jsonValue(com.google.gson.JsonElement element) {
+        if (element.isJsonObject()) {
+            var map = new java.util.LinkedHashMap<String, Object>();
+            for (var entry : element.getAsJsonObject().entrySet()) {
+                map.put(entry.getKey(), jsonValue(entry.getValue()));
+            }
+            return map;
+        }
+        if (element.isJsonArray()) {
+            var list = new ArrayList<Object>();
+            for (var entry : element.getAsJsonArray()) {
+                list.add(jsonValue(entry));
+            }
+            return list;
+        }
+        if (element.isJsonNull()) {
+            return null;
+        }
+        var primitive = element.getAsJsonPrimitive();
+        if (primitive.isBoolean()) {
+            return primitive.getAsBoolean();
+        }
+        if (primitive.isNumber()) {
+            return primitive.getAsNumber();
+        }
+        return primitive.getAsString();
+    }
+
+    /**
      * The legacy {@code §} form of a component, for the surfaces that only
      * take a string. Hex colors use the {@code §x} repeated form; a gradient
      * degrades to one color per character.
