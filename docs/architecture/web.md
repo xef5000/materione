@@ -362,6 +362,9 @@ not read.
 when that hash is no longer current. Candidate availability is not a receipt that a player
 received or accepted the pack. `push.reload` reports a server-wide pipeline outcome and carries
 no per-save correlation id, so the UI does not present it as proof that a specific save applied.
+The event is emitted after the global-thread apply and delivery staging complete, not merely
+after scheduling the swap. Glyph `computed` metadata is allocation information, not a reload
+receipt: allocation is persisted before the corresponding archive is staged.
 
 *As built (M5 editor-workbench follow-up):* `authoring.summaries` is a read-only, pack-scoped
 catalog projection, optionally filtered by type/query and paged by offset. Each response page

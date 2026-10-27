@@ -382,6 +382,42 @@ async function waitForFileApply(page) {
 
 export default [
   test({
+    id: 'editor.browser-rapid-saves',
+    title: 'rapid sample:ruby_sword Files saves keep the final name live after the queued reload completes',
+    covers: [
+      ...BROWSER_COVERS,
+      'plugin/src/main/java/dev/materione/plugin/runtime/api/PipelineApiImpl.java',
+      'core/src/main/java/dev/materione/core/pipeline/PipelineRunner.java',
+      'core/src/main/java/dev/materione/core/pipeline/ParseStage.java',
+      'pack/src/main/java/dev/materione/pack/compile/PackCompiler.java',
+    ],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const file = path.join(SERVER_SAMPLE, 'items', 'ruby_sword.yml');
+      const original = fs.readFileSync(file);
+      try {
+        await openSampleItemFile(page);
+        const editor = page.locator('article');
+        const field = editor.getByLabel('Display name', { exact: true });
+        for (const name of ['Ruby QA First', 'Ruby QA Second', 'Ruby QA Final']) {
+          await field.fill(name);
+          await field.press('Tab');
+          await editor.getByRole('button', { name: 'Save & apply' }).click();
+          await waitForFileApply(page);
+        }
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await assertHeldRubySwordName(ctx, 'Ruby QA Final');
+      } finally {
+        fs.writeFileSync(file, original);
+        await ctx.rcon('materione reload');
+        await assertHeldRubySwordName(ctx, 'Ruby Sword');
+      }
+    },
+  }),
+
+  test({
     id: 'editor.local-url',
     title: '/materione editor local hands out a loopback capability URL (always-available direct mode)',
     covers: [TRANSPORT, COMMANDS, ADMIN_API],

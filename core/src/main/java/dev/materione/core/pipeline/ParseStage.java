@@ -41,6 +41,14 @@ public final class ParseStage {
      * Parses per the context's scope. Never throws.
      */
     public void run(PipelineContext context) {
+        try {
+            parse(context);
+        } finally {
+            publishParseFailures(context);
+        }
+    }
+
+    private void parse(PipelineContext context) {
         Path root = context.packsRoot();
         ReloadScope scope = context.scope();
         if (!Files.isDirectory(root)) {
@@ -67,6 +75,31 @@ public final class ParseStage {
         parseTargeted(context, root, scope instanceof ReloadScope.OnePack p ? p : null,
                 scope instanceof ReloadScope.FileSet f ? f : null, packDirs);
         pruneFingerprints(context, root);
+    }
+
+    /** Untouched packs retain their cached parse failures across targeted runs. */
+    private void publishParseFailures(PipelineContext context) {
+        Path root = context.packsRoot().toAbsolutePath().normalize();
+        var failures = documentCache.entrySet().stream()
+                .filter(entry -> entry.getValue().document().parseError().isPresent())
+                .sorted(java.util.Map.Entry.comparingByKey())
+                .toList();
+        for (var entry : failures) {
+            Path file = entry.getKey();
+            var error = entry.getValue().document().parseError();
+            if (!file.toAbsolutePath().normalize().startsWith(root) || !Files.isRegularFile(file)) {
+                continue;
+            }
+            Diagnostic failure = new Diagnostic(
+                    DiagnosticCodes.CONTENT_PARSE_FAILED, Severity.ERROR,
+                    "YAML parse error: " + error.orElseThrow(),
+                    null, new SourceLocation(file.toString(), 1, 1),
+                    "fix the syntax error, then /materione reload");
+            context.diagnostics().publish(failure);
+            context.quarantine().add(
+                    NamespacedId.of(firstSegment(root, file), stripExtension(file.getFileName().toString())),
+                    failure);
+        }
     }
 
     /** Drops fingerprints of files that left the tree, so deletions can't wedge targeted scopes. */
@@ -323,15 +356,6 @@ public final class ParseStage {
                 }
                 var document = documentOf(context, file);
                 if (document.parseError().isPresent()) {
-                    Diagnostic parseFailure = new Diagnostic(
-                            DiagnosticCodes.CONTENT_PARSE_FAILED, Severity.ERROR,
-                            "YAML parse error: " + document.parseError().orElseThrow(),
-                            null, new SourceLocation(file.toString(), 1, 1),
-                            "fix the syntax error, then /materione reload");
-                    context.diagnostics().publish(parseFailure);
-                    context.quarantine().add(
-                            NamespacedId.of(packId, stripExtension(file.getFileName().toString())),
-                            parseFailure);
                     continue;
                 }
                 // one file, one content type, many keyed resources (§7.2)
