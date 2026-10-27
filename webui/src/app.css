@@ -7,6 +7,16 @@
   font-display: swap;
 }
 
+/* Minecraftia (CC BY-SA 3.0, see assets/fonts/LICENSE-Minecraftia.txt), unmodified: the
+   game-style face for player-visible text. Not Mojang's font. */
+@font-face {
+  font-family: 'Minecraftia';
+  src: url('./assets/fonts/Minecraftia.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 /*
  * Design tokens — the ONLY place raw colors, type, spacing and radius values
  * live. Components reference the custom properties; `test/design-tokens.spec.ts`
@@ -123,6 +133,15 @@
   --legacy-d: #ff55ff;
   --legacy-e: #ffff55;
   --legacy-f: #ffffff;
+
+  /* game surface: player-visible text drawn the way the client draws it (web.md, "Rich text") */
+  --font-minecraft: 'Minecraftia', var(--mono);
+  /* Minecraftia's pixel grid is 1/8 em: 16px is the 2x GUI scale, every pixel crisp */
+  --text-minecraft: 16px;
+  --mc-shadow-offset: 2px;
+  --mc-tooltip-bg: #100010f0;
+  --mc-tooltip-border: #5000ff50;
+  --mc-tooltip-border-low: #28007f50;
 }
 
 html {
@@ -341,4 +360,78 @@ textarea:disabled {
 .menu-item:disabled {
   color: var(--faint);
   cursor: default;
+}
+
+/*
+ * The game surface (web.md, "Rich text"): player-visible text in the Minecraft-style face,
+ * with the client's drop shadow (the text color at 25% brightness, one pixel down-right).
+ * Rich text is drawn as DOM by src/lib/rich-text/dom.ts, so these rules are global.
+ * `.mc-text` defaults to an item name's white; `.mc-lore` to lore's dark purple.
+ */
+.mc-text {
+  font-family: var(--font-minecraft);
+  font-size: var(--text-minecraft);
+  line-height: 1.25;
+  color: var(--legacy-f);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-synthesis: weight style;
+}
+.mc-text.mc-lore {
+  color: var(--legacy-5);
+}
+.mc-text .mc-line {
+  min-height: 1.25em;
+}
+.mc-text .mc-run {
+  text-shadow: var(--mc-shadow-offset) var(--mc-shadow-offset) 0 color-mix(in srgb, currentColor 25%, var(--legacy-0));
+}
+.mc-text .mc-b { font-weight: 700; }
+.mc-text .mc-i { font-style: italic; }
+.mc-text .mc-u { text-decoration-line: underline; }
+.mc-text .mc-s { text-decoration-line: line-through; }
+.mc-text .mc-u.mc-s { text-decoration-line: underline line-through; }
+.mc-text .mc-effect {
+  border-bottom: 1px dotted var(--accent);
+}
+.mc-text .mc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-half);
+  height: 1.1em;
+  margin: 0 1px;
+  padding: 0 var(--space-half);
+  vertical-align: -0.2em;
+  border: 1px dashed var(--control-line);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-style: normal;
+  font-weight: 400;
+  color: var(--muted);
+  text-shadow: none;
+  user-select: none;
+}
+.mc-text .mc-glyph img {
+  height: 1em;
+  image-rendering: pixelated;
+}
+/* Editing surface: obfuscated text flickers instead of scrambling, so it stays editable. */
+.mc-text[contenteditable] .mc-obf {
+  animation: mc-obfuscated 0.4s steps(2, jump-none) infinite;
+}
+@keyframes mc-obfuscated {
+  from { opacity: 1; filter: none; }
+  to { opacity: 0.55; filter: blur(1px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mc-text[contenteditable] .mc-obf { animation: none; text-decoration: underline wavy var(--muted); }
+}
+/* A Minecraft tooltip: the near-black purple panel with its two-tone border. */
+.mc-tooltip {
+  background: var(--mc-tooltip-bg);
+  border: 2px solid var(--mc-tooltip-border);
+  border-bottom-color: var(--mc-tooltip-border-low);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
 }

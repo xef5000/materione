@@ -70,7 +70,7 @@ test('Server disconnect keeps dirty document drafts when its confirmation is can
   const displayName = page.getByLabel('Display name', { exact: true });
   await displayName.fill('Unsaved draft remains');
   await displayName.press('Tab');
-  await expect(displayName).toHaveValue('Unsaved draft remains');
+  await expect(displayName).toHaveText('Unsaved draft remains');
 
   await page.locator('.rail').getByRole('button', { name: 'Server', exact: true }).click();
   let confirmation = '';
@@ -83,7 +83,7 @@ test('Server disconnect keeps dirty document drafts when its confirmation is can
 
   expect(confirmation).toContain('Disconnect and discard local drafts?');
   await page.locator('.rail').getByRole('button', { name: 'Files', exact: true }).click();
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Unsaved draft remains');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Unsaved draft remains');
 });
 
 test('audit trail keeps separate events with identical timestamp, operation, and target', async ({ page }) => {

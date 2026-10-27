@@ -4,7 +4,7 @@
    * decides what a field means — the type's self-description does (D5).
    */
   import AssetPicker from '../components/AssetPicker.svelte';
-  import LegacyTextEditor from '../components/LegacyTextEditor.svelte';
+  import RichTextEditor from '../components/RichTextEditor.svelte';
   import MaterialPicker from '../components/MaterialPicker.svelte';
   import type { TypeParam } from '../api';
 
@@ -44,7 +44,7 @@
     <MaterialPicker id={controlId} label={field.label || field.id} value={text}
       choices={field.allowedValues} required={field.required} onChange={(next) => onChange(next)} />
   {:else if widget === 'formatted-text' || widget === 'formatted-lines'}
-    <LegacyTextEditor id={controlId} label={field.label || field.id} {value}
+    <RichTextEditor id={controlId} label={field.label || field.id} {value} placeholder={field.example ?? ''}
       multiline={widget === 'formatted-lines'} {onChange} />
   {:else if widget === 'texture' || widget === 'model'}
     <span class="slot">

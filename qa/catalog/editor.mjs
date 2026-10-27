@@ -219,10 +219,10 @@ const ICON_COVERS = [
 const WORKBENCH_COVERS = [
   ...BROWSER_COVERS,
   'webui/src/lib/api.ts',
-  'webui/src/lib/components/LegacyText.svelte',
-  'webui/src/lib/components/LegacyTextEditor.svelte',
+  'webui/src/lib/components/RichText.svelte',
+  'webui/src/lib/components/RichTextEditor.svelte',
   'webui/src/lib/components/MaterialPicker.svelte',
-  'webui/src/lib/legacy-text.ts',
+  'webui/src/lib/rich-text/**',
   'webui/src/lib/materials.ts',
   'webui/src/lib/studio/Field.svelte',
   'webui/src/lib/studio/ItemPreview.svelte',
@@ -232,6 +232,65 @@ const WORKBENCH_COVERS = [
   'platform/src/main/java/dev/materione/platform/items/ItemMaterialPalette.java',
   'platform/src/main/java/dev/materione/platform/text/ItemText.java',
 ];
+// Rich text (issue #151, master §5.7): the editor writes MiniMessage, the one plugin
+// pipeline draws it, and both read the shared fixture.
+const RICH_TEXT_COVERS = [
+  ...WORKBENCH_COVERS,
+  'webui/src/app.css',
+  'webui/src/assets/fonts/Minecraftia.ttf',
+  'platform/src/main/java/dev/materione/platform/text/MaterioneText.java',
+  'platform/src/main/java/dev/materione/platform/items/MaterioneStacks.java',
+  'fixtures/text/rich-text.json',
+];
+
+/** A rich text field's text as the author reads it, one line per lore line. */
+async function fieldText(field) {
+  return (await field.innerText()).replace(/\n$/, '');
+}
+
+/** Replaces a rich text field's content by typing, Enter between lines, like an author. */
+async function typeLines(page, field, lines) {
+  await field.click();
+  await field.press('Control+A');
+  await page.keyboard.press('Delete');
+  for (const [index, line] of lines.entries()) {
+    if (index > 0) await page.keyboard.press('Enter');
+    if (line) await page.keyboard.type(line);
+  }
+}
+
+/** The held sample:ruby_sword's name as the client styles it: `rrggbb=text|` per flat run. */
+async function heldNameRuns(ctx) {
+  // indexed Groovy only: DebugBridge wraps collections, closures do not resolve
+  return String(await ctx.exec([
+    'def flat = player.getMainHandItem().getHoverName().toFlatList()',
+    "def out = ''",
+    'for (int i = 0; i < flat.size(); i++) {',
+    '  def part = flat.get(i)',
+    '  def color = part.getStyle().getColor()',
+    "  out += (color == null ? 'none' : String.format('%06x', color.getValue())) + '=' + part.getString() + '|'",
+    '}',
+    'return out',
+  ].join('\n')));
+}
+
+/** Selects the whole Display name in Studio and applies the default gradient from the toolbar. */
+async function applyNameGradient(page, studio) {
+  const name = studio.getByLabel('Display name', { exact: true });
+  await name.click();
+  await name.press('Control+A');
+  await page.getByRole('button', { name: 'Display name: Gradient' }).click();
+  await page.getByRole('button', { name: 'Apply gradient' }).click();
+}
+
+/** Puts sample:ruby_sword's plain name back in the disposable probe copy. */
+async function restoreRubySwordName(ctx, page) {
+  const studio = page.locator('.studio');
+  await typeLines(page, studio.getByLabel('Display name', { exact: true }), ['Ruby Sword']);
+  const save = studio.getByRole('button', { name: 'Save & apply' });
+  if (await save.isEnabled()) await save.click();
+  await assertHeldRubySwordName(ctx, 'Ruby Sword');
+}
 
 async function openSampleItemFile(page) {
   await page.getByLabel('project').selectOption('sample');
@@ -280,7 +339,7 @@ async function waitForDisplayName(page, expected) {
   const field = page.locator('article').getByLabel('Display name', { exact: true });
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    if (await field.inputValue() === expected) return;
+    if (await fieldText(field) === expected) return;
     await page.waitForTimeout(100);
   }
   throw new Error('sample:ruby_sword display name did not load as expected');
@@ -529,16 +588,17 @@ export default [
       await studio.waitFor({ state: 'visible' });
       const nameField = studio.getByLabel('Display name', { exact: true });
       const loreField = studio.getByLabel('Lore', { exact: true });
-      const originalName = await nameField.inputValue();
-      const originalLore = await loreField.inputValue();
+      const originalName = await fieldText(nameField);
+      const originalLore = (await fieldText(loreField)).split('\n');
       const material = studio.getByRole('combobox', { name: 'Base material' });
       await material.fill('netherite sword');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('Enter');
       ctx.expect(await material.inputValue()).toBe('Netherite Sword');
 
+      // typed & codes become formatting; the stored value is MiniMessage
       await nameField.fill('&6Ruby Sword Browser Draft');
-      await loreField.fill('Burns with inner fire\n\nLocal draft only');
+      await typeLines(page, loreField, ['Burns with inner fire', '', 'Local draft only']);
       const previewName = studio.getByRole('button', { name: 'Edit item name' });
       const previewLore = studio.getByRole('button', { name: 'Edit item lore' });
       ctx.expect((await previewName.innerText()).trim()).toBe('Ruby Sword Browser Draft');
@@ -547,8 +607,8 @@ export default [
       await assertHeldRubySwordName(ctx, 'Ruby Sword');
       await studio.getByRole('button', { name: 'Save & apply' }).click();
       await assertHeldRubySwordName(ctx, 'Ruby Sword Browser Draft');
-      await nameField.fill(originalName);
-      await loreField.fill(originalLore);
+      await typeLines(page, nameField, [originalName]);
+      await typeLines(page, loreField, originalLore);
       await studio.getByRole('button', { name: 'Save & apply' }).click();
       await assertHeldRubySwordName(ctx, 'Ruby Sword');
     },
@@ -685,7 +745,7 @@ export default [
       const studio = page.locator('.studio');
       await studio.waitFor({ state: 'visible' });
       await studio.getByLabel('Display name', { exact: true }).fill('&6Ruby Sword Workbench Draft');
-      await studio.getByLabel('Lore', { exact: true }).fill('Burns with inner fire\n\nPreview only');
+      await typeLines(page, studio.getByLabel('Lore', { exact: true }), ['Burns with inner fire', '', 'Preview only']);
       await studio.getByRole('combobox', { name: 'Base material' }).fill('netherite sword');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('Enter');
@@ -694,6 +754,87 @@ export default [
       ctx.needsEyes(
         'the real local Materione App shows sample:ruby_sword in Item Studio with a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action; any game-check/candidate text must not claim that gameplay or player delivery was verified' + IDENTITY_EYES,
       );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-rich-text-gradient',
+    title: 'sample:ruby_sword display name authored as a gradient in the rich text editor reaches the held item with the same gradient',
+    covers: RICH_TEXT_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.waitFor({ state: 'visible' });
+      const name = studio.getByLabel('Display name', { exact: true });
+      ctx.expect(await name.getAttribute('contenteditable')).toBe('true');
+      ctx.expect(await fieldText(name)).toBe('Ruby Sword');
+      // untouched: focusing and selecting writes nothing
+      await name.click();
+      await name.press('Control+A');
+      ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isDisabled()).toBe(true);
+      try {
+        await applyNameGradient(page, studio);
+        ctx.expect(await name.locator('.mc-run').count()).toBe('Ruby Sword'.length);
+        await studio.getByRole('button', { name: 'Save & apply' }).click();
+        await ctx.waitForServerLog(/MTR-0012: applied: /, { timeoutMs: 45_000 });
+        await assertHeldRubySwordName(ctx, 'Ruby Sword');
+        const runs = (await heldNameRuns(ctx)).split('|').filter(Boolean);
+        ctx.log(`held name runs: ${runs.join(' ')}`);
+        // the editor's default gradient: Materione orange to gold, one color per character
+        ctx.expect(runs[0]).toBe('f9731e=R');
+        ctx.expect(runs.at(-1)).toBe('ffd27a=d');
+        ctx.expect(new Set(runs.map((run) => run.split('=')[0])).size).toBeGreaterThan(5);
+      } finally {
+        await restoreRubySwordName(ctx, page);
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-rich-text-gradient-visual',
+    title: 'sample:ruby_sword gradient name looks the same in the editor surface and above the in-game hotbar',
+    mode: 'visual',
+    dependsOn: ['editor.browser-rich-text-gradient'],
+    covers: RICH_TEXT_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.waitFor({ state: 'visible' });
+      try {
+        await applyNameGradient(page, studio);
+        const name = studio.getByLabel('Display name', { exact: true });
+        await name.press('End');
+        await name.press('Shift+ArrowLeft');
+        await name.press('Shift+ArrowLeft');
+        await name.press('Shift+ArrowLeft');
+        await name.press('Shift+ArrowLeft');
+        await name.press('Shift+ArrowLeft');
+        await page.getByRole('button', { name: 'Display name: Bold' }).click();
+        await ctx.browser.browserShot('rich-text-editor-gradient', '[data-field="display_name"]');
+        await ctx.browser.browserShot('rich-text-tooltip-preview', '.item-preview .tooltip');
+        await studio.getByRole('button', { name: 'Save & apply' }).click();
+        await ctx.waitForServerLog(/MTR-0012: applied: /, { timeoutMs: 45_000 });
+        await ctx.reset();
+        await ctx.rcon('materione give sample:ruby_sword Probe');
+        await ctx.waitForChat(/Given sample:ruby_sword/);
+        // switching onto the slot shows the item name above the hotbar for a moment
+        await ctx.exec('player.getInventory().selected = 1');
+        await ctx.sleep(400);
+        await ctx.exec('player.getInventory().selected = 0');
+        await ctx.sleep(300);
+        await ctx.shot('hotbar-name');
+        ctx.needsEyes(
+          'the editor shot shows "Ruby Sword" in the Minecraft-style face (Minecraftia) on the dark purple tooltip panel, colored as one smooth orange (#f9731e) to gold (#ffd27a) gradient with a drop shadow, "Sword" bold, and the floating toolbar above it (B, I, U, S, obfuscated, color, gradient pressed, clear); the tooltip preview shot draws the same; the client shot shows the held item name above the hotbar with the same orange-to-gold gradient and bold "Sword", not white text and not literal <gradient> tags (issue #151)' + IDENTITY_EYES,
+        );
+      } finally {
+        await restoreRubySwordName(ctx, page);
+      }
     },
   }),
 
@@ -715,7 +856,7 @@ export default [
         await studio.waitFor({ state: 'visible' });
         const studioMeta = await studio.locator('header .meta').innerText();
         ctx.expect(studioMeta.split(' · ')[0]).toBe('ruby_sword');
-        ctx.expect(await studio.getByLabel('Display name', { exact: true }).inputValue()).toBe('Ruby Sword');
+        ctx.expect(await fieldText(studio.getByLabel('Display name', { exact: true }))).toBe('Ruby Sword');
         await page.getByRole('button', { name: /Open in Files/ }).click();
         await page.getByRole('heading', { name: 'sample:ruby_sword', exact: true })
           .waitFor({ state: 'visible' });
@@ -730,17 +871,17 @@ export default [
         await page.getByRole('button', { name: 'Files', exact: true }).click();
         await page.getByRole('heading', { name: 'sample:ruby_sword', exact: true })
           .waitFor({ state: 'visible' });
-        ctx.expect(await fileName.inputValue()).toBe('Ruby Sword QA Draft');
+        ctx.expect(await fieldText(fileName)).toBe('Ruby Sword QA Draft');
 
         await page.getByRole('button', { name: 'Content', exact: true }).click();
         await studio.waitFor({ state: 'visible' });
         ctx.expect((await studio.locator('header .meta').innerText()).split(' · ')[0])
           .toBe('ruby_sword');
-        ctx.expect(await studio.getByLabel('Display name', { exact: true }).inputValue()).toBe('Ruby Sword QA Draft');
+        ctx.expect(await fieldText(studio.getByLabel('Display name', { exact: true }))).toBe('Ruby Sword QA Draft');
         await page.getByRole('button', { name: /Open in Files/ }).click();
         await page.getByRole('heading', { name: 'sample:ruby_sword', exact: true })
           .waitFor({ state: 'visible' });
-        ctx.expect(await fileName.inputValue()).toBe('Ruby Sword QA Draft');
+        ctx.expect(await fieldText(fileName)).toBe('Ruby Sword QA Draft');
 
         await assertHeldRubySwordName(ctx, 'Ruby Sword');
         mayNeedRestore = true;
@@ -756,7 +897,7 @@ export default [
           try {
             const currentPage = ctx.browser.page;
             const field = currentPage.locator('article').getByLabel('Display name', { exact: true });
-            if (await field.isVisible() && (await field.inputValue()) !== 'Ruby Sword') {
+            if (await field.isVisible() && (await fieldText(field)) !== 'Ruby Sword') {
               await field.fill('Ruby Sword');
               await field.press('Tab');
               await currentPage.locator('article').getByRole('button', { name: 'Save & apply' }).click();

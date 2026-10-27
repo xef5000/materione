@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { ResourceSummary } from '../api';
-  import LegacyText from '../components/LegacyText.svelte';
+  import RichText from '../components/RichText.svelte';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import { materialLabel } from '../materials';
-  import { plainLegacyText } from '../legacy-text';
+  import { plainText } from '../rich-text/model';
   import { connection, delivery, ui, workspace } from '../state.svelte';
 
   interface Props {
@@ -19,7 +19,7 @@
   }
   let { name, lore, material, visual, render, version, canFocusName, canFocusLore, onFocus }: Props = $props();
   const title = $derived(typeof name === 'string' && name.trim() ? name : materialLabel(material) || 'Unnamed item');
-  const plainTitle = $derived(plainLegacyText(title));
+  const plainTitle = $derived(plainText(title));
   const lines = $derived(Array.isArray(lore) ? lore.filter((line): line is string => typeof line === 'string') : []);
   const unsupportedLore = $derived(lore !== undefined && lore !== null &&
     (!Array.isArray(lore) || lore.some((line) => typeof line !== 'string')));
@@ -41,17 +41,17 @@
     visual ? 'Enlarged texture inspection - not a model render' :
     material ? 'Vanilla item icon where available - no custom visual set' : 'No supported visual available'}</p>
 
-  <div class="tooltip" aria-label="Item tooltip preview">
+  <div class="tooltip mc-tooltip" aria-label="Item tooltip preview">
     <button type="button" class="item-name" disabled={!canFocusName} onclick={() => onFocus('display_name')}
-      aria-label="Edit item name" title="Focus the display name editor"><LegacyText text={title} /></button>
+      aria-label="Edit item name" title="Focus the display name editor"><RichText text={title} /></button>
     <button type="button" class="lore" disabled={!canFocusLore} onclick={() => onFocus('lore')}
       aria-label="Edit item lore" title="Focus the lore editor">
-      {#each lines as line}<span class="lore-line"><LegacyText text={line} /></span>{/each}
+      {#each lines as line}<span class="lore-line"><RichText text={line} tone="lore" /></span>{/each}
       {#if !lines.length}<span class="add-lore">Add a description...</span>{/if}
     </button>
     {#if unsupportedLore}<small>Some lore values need Files and are not previewed.</small>{/if}
   </div>
-  <small class="disclaimer">Draft name and lore update here without saving. Fonts, glyphs, effects, obfuscation and gameplay need an in-game check.</small>
+  <small class="disclaimer">Draft name and lore update here without saving. Text is drawn in Minecraftia, a Minecraft-style font; shader effects and gameplay need an in-game check.</small>
   <div class="game-check">
     <strong>Check in game</strong>
     <span>{connection.connected ? 'Server connected' : 'Server disconnected; status unknown'}</span>
@@ -72,11 +72,11 @@
   .slot { padding: var(--space-1); border: 2px solid var(--border-strong); background: var(--bg-input); }
   .inspection { display: grid; place-items: center; min-height: 150px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-lg); }
   .visual-kind { margin: -6px 0 0; }
-  .tooltip { background: var(--bg-input); border: 2px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-3); min-width: 0; }
-  .item-name, .lore { display: block; width: 100%; min-width: 0; background: none; border: 0; text-align: left; padding: 0; cursor: pointer; font-size: var(--text-base); }
+  .tooltip { min-width: 0; }
+  .item-name, .lore { display: block; width: 100%; min-width: 0; background: none; border: 0; text-align: left; padding: 0; cursor: pointer; }
   .item-name { color: var(--legacy-f); }
   .lore { color: var(--legacy-5); margin-top: var(--space-1); }
-  .lore-line { display: block; min-height: 1.5em; }
+  .lore-line { display: block; min-height: 1.25em; }
   .add-lore { color: var(--muted); font-size: var(--text-sm); }
   .item-name:disabled, .lore:disabled { cursor: default; }
   .item-name:not(:disabled):hover, .lore:not(:disabled):hover { outline: 1px solid var(--border-strong); outline-offset: 3px; }

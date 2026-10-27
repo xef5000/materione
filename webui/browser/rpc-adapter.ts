@@ -527,7 +527,9 @@ function initialDocuments(): Map<string, FixtureDocument> {
   });
   const crate = makeDocument('blocks/ruby_crate.yml', 2, {
     ruby_crate: {
-      display_name: 'Ruby Crate',
+      // legacy codes on purpose: the rich text editor must show them as formatting and
+      // leave the bytes alone until the author changes the look (issue 151)
+      display_name: '&6Ruby &lCrate',
       future_flag: 'block-root',
     },
   });
