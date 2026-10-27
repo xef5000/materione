@@ -362,6 +362,16 @@ section layout; the same philosophy is intended for other content types (#153). 
 data-component modules wait for the component pass-through (#103's M7 item) — modules never
 offer what the plugin does not apply.
 
+**Templates-as-a-choice follow-up (M5 as built, issue #154):** a template is picked when a resource
+is created (the New dialog's *Start from*: blank, a template, or a copy) and managed from a
+**Based on** bar in the studio, not typed into a `template` field; templates are first-class
+content in a Content tab (create, **Save as template**, edit with the served type's own
+display + modules studio, "used by N"). Server-side: `createResource` with a template writes the
+link plus the name only, `detachTemplate` materialises the inherited values in one revision, and a
+derived `authoring.templates` catalog replaces any stored "serves" data. Decision recorded in
+plugin.md §3.1: templates stay a pack-layout concept, not a registered content type. No
+infrastructure state changed.
+
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).

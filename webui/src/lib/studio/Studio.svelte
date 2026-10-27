@@ -20,10 +20,19 @@
   import MechanicsEditor from './MechanicsEditor.svelte';
   import BehaviorRulesEditor from './BehaviorRulesEditor.svelte';
   import ModulesArea from './ModulesArea.svelte';
+  import BasedOn from './BasedOn.svelte';
+  import SaveAsTemplateDialog from '../components/SaveAsTemplateDialog.svelte';
   import { ops, unwrap } from '../api';
   import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
   import { diagnosticNames } from '../diagnostics';
   import { usesModules } from '../modules';
+  import {
+    acceptsTemplates,
+    selectableTemplates,
+    servedSchema,
+    studioSchema,
+    usersLabel,
+  } from '../templates';
   import { tick } from 'svelte';
   import {
     draftDirty,
@@ -49,9 +58,11 @@
     connection,
     errorMessage,
     logActivity,
+    openStudio,
     registerEditorGuard,
     refreshPack,
     revealInAdvanced,
+    revealInStudio,
     session,
     workspace,
   } from '../state.svelte';
@@ -69,6 +80,12 @@
   const rootId = $derived(rootIdForResource(resource.id));
   const loaded = $derived(recordOf(documentDraft.base[rootId]));
   const draft = $derived(recordOf(documentDraft.values[rootId]));
+  /** Read-only template view from the canonical resolver; reflects the saved `template:`. */
+  const inheritance = $derived(
+    (documentDraft.computed.inheritance as Record<string, InheritanceView> | undefined)?.[rootId],
+  );
+  /** What the previews draw: the draft over what the saved template chain supplies. */
+  const effective = $derived<Record<string, unknown>>({ ...(inheritance?.inherited ?? {}), ...draft });
   const rev = $derived(documentDraft.rev);
   const dirty = $derived(draftDirty(documentDraft));
   const saving = $derived(documentDraft.saving);
@@ -91,14 +108,39 @@
   const glyphMeta = $derived(computed.glyphs?.[rootId] ?? null);
 
   const typeDirectory = $derived(resource.path.split('/')[0] ?? '');
-  const schema = $derived(
-    workspace.types.find((type: TypeInfo) => type.directory === typeDirectory) ??
-      workspace.types.find((type: TypeInfo) => type.name === resource.type),
+  /** A template is a partial definition of the type it serves, edited as that type (issue 154). */
+  const isTemplate = $derived(typeDirectory === 'templates');
+  const templateEntry = $derived(
+    isTemplate
+      ? workspace.templates.find((entry) => entry.pack === resource.pack && entry.id === rootId)
+      : undefined,
   );
+  /** Pinned on first sight: saving a template must not switch the studio it is open in. */
+  let pinnedServes = $state('');
+  $effect(() => {
+    if (isTemplate && !pinnedServes && templateEntry?.serves[0]) pinnedServes = templateEntry.serves[0];
+  });
+  const servedDirectory = $derived(isTemplate ? pinnedServes || templateEntry?.serves[0] || '' : typeDirectory);
+  /** The registered type that describes this document's fields. */
+  const ownSchema = $derived(
+    isTemplate
+      ? servedSchema({ serves: servedDirectory ? [servedDirectory] : [] }, workspace.types)
+      : workspace.types.find((type: TypeInfo) => type.directory === typeDirectory) ??
+        workspace.types.find((type: TypeInfo) => type.name === resource.type),
+  );
+  /** What the form renders: no raw `template` control anywhere, and nothing required of a template. */
+  const schema = $derived(studioSchema(ownSchema, isTemplate));
   const sections = $derived(sectionsOf(schema));
-  const advancedOnly = $derived(unrenderableKeys(loaded, schema));
+  const advancedOnly = $derived(unrenderableKeys(loaded, ownSchema));
+  const takesTemplates = $derived(acceptsTemplates(ownSchema));
+  const authoredTemplate = $derived(typeof draft.template === 'string' ? draft.template : '');
+  const parents = $derived(
+    selectableTemplates(workspace.templates, servedDirectory,
+      isTemplate ? { pack: resource.pack, id: rootId } : undefined),
+  );
+  let savingAsTemplate = $state(false);
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
-  const name = $derived(plainText(String(draft.display_name ?? '')).trim() || resource.id);
+  const name = $derived(plainText(String(effective.display_name ?? '')).trim() || resource.id);
   const savedSummary = $derived(workspace.summaries.find((entry) =>
     entry.pack === resource.pack && entry.path === resource.path && entry.id === resource.id,
   ));
@@ -112,7 +154,7 @@
   const visual = $derived(
     draft.texture === loaded.texture && draft.model === loaded.model && savedVisual
       ? savedVisual
-      : localStudioVisual(resource.pack, String(draft.texture ?? ''), String(draft.model ?? ''), workspace.assets),
+      : localStudioVisual(resource.pack, String(effective.texture ?? ''), String(effective.model ?? ''), workspace.assets),
   );
   const fieldsEditable = $derived(documentDraft.loaded && !loading && !saving &&
     !rawDraftDirty(documentDraft) && !documentDraft.uncertain && !documentDraft.stale);
@@ -144,10 +186,6 @@
   const issues = $derived(
     diagnostics.entries.filter((entry) => diagnosticNames(entry, resource)),
   );
-  /** Read-only template view from the canonical resolver; reflects the saved `template:`. */
-  const inheritance = $derived(
-    (documentDraft.computed.inheritance as Record<string, InheritanceView> | undefined)?.[rootId],
-  );
   const templateEdited = $derived(draft.template !== loaded.template);
 
   function templateLabel(id: string): string {
@@ -159,10 +197,35 @@
     return text === undefined ? '' : text.length > 48 ? `${text.slice(0, 47)}…` : text;
   }
 
+  /** A template opens in its own studio (display + modules), like the type it serves. */
   function openTemplate(id: string) {
-    const location = inheritance?.templates[id];
+    const location = inheritance?.templates[id]
+      ?? (() => {
+        const entry = workspace.templates.find((candidate) => candidate.id === templateLabel(id));
+        return entry ? { pack: entry.pack, path: entry.path } : undefined;
+      })();
     if (!location) return;
-    void revealInAdvanced({ pack: location.pack, path: location.path, type: 'templates', id: templateLabel(id) });
+    void revealInStudio({ pack: location.pack, path: location.path, type: 'templates', id: templateLabel(id) });
+  }
+
+  const detachBlocked = $derived(
+    dirty ? 'Save or discard your changes first: detaching rewrites the saved file'
+      : inheritance?.failure ? 'The template does not resolve' : '',
+  );
+
+  /** Copies the inherited values into this resource and drops the link: one revision, then reconcile. */
+  async function detach() {
+    const channel = session.channel;
+    if (!channel || detachBlocked || !inheritance) return;
+    const was = templateLabel(inheritance.template);
+    try {
+      unwrap(await ops.detachTemplate(channel, resource.pack, resource.path, documentDraft.rev, rootId));
+      await reconcileDocumentDraft(documentDraft, channel);
+      await refreshPack();
+      logActivity('save', `${resource.path} detached from ${was}`);
+    } catch (e) {
+      documentDraft.error = errorMessage(e);
+    }
   }
 
   function resetToInherited(fieldId: string) {
@@ -350,7 +413,7 @@
    */
   function editTexture(field: TypeParam) {
     if (!canEditAsset()) return;
-    const reference = String(draft[field.id] ?? '') || `${typeDirectory}/${resource.id}`;
+    const reference = String(draft[field.id] ?? '') || `${servedDirectory}/${resource.id}`;
     textureDirty = false;
     texturing = { field: field.id, reference };
   }
@@ -455,7 +518,24 @@
     </button>
     <span class="name">{name}</span>
     <span class="meta">{resource.id} · rev {rev}</span>
+    {#if isTemplate}
+      <span class="chip chip-accent" data-template-badge>
+        Template for {ownSchema?.displayName ?? 'nothing yet'}
+      </span>
+    {/if}
     <span class="spacer"></span>
+    {#if takesTemplates && !isTemplate}
+      <button
+        type="button"
+        class="yaml"
+        disabled={!fieldsEditable || dirty}
+        title={dirty ? 'Save your changes first: a template is made from the saved values' : 'Share some of these fields as a template'}
+        onclick={() => (savingAsTemplate = true)}
+        data-save-as-template
+      >
+        Save as template…
+      </button>
+    {/if}
     <button
       type="button"
       class="yaml"
@@ -478,19 +558,26 @@
   {#if pendingSummary}
     <p class="notice pending-summary">{pendingSummary}</p>
   {/if}
-  {#if inheritance}
-    <p class="inherits" class:broken={Boolean(inheritance.failure)}>
-      {#if inheritance.failure}
-        Template {inheritance.template} does not resolve ({inheritance.failure}); the server skips this
-        resource until it does.
-      {:else}
-        Inherits from
-        {#each inheritance.chain as id, index (id)}
-          {#if index > 0}<Icon name="chevron-right" size={12} />{/if}
-          <button type="button" class="link" title={`Open ${id} in Files`} onclick={() => openTemplate(id)}>{templateLabel(id)}</button>
-        {/each}
-        {#if templateEdited}· shown for the saved template until you apply{/if}
-      {/if}
+  {#if takesTemplates}
+    <BasedOn
+      authored={authoredTemplate}
+      {inheritance}
+      edited={templateEdited}
+      candidates={parents}
+      detachBlocked={detachBlocked}
+      editable={fieldsEditable}
+      onChange={(ref) => set('template', ref)}
+      onOpen={openTemplate}
+      onDetach={detach}
+    />
+  {/if}
+  {#if templateEntry}
+    <p class="used-by" data-used-by>
+      <strong>{usersLabel(templateEntry.usedBy)}</strong>
+      {#each templateEntry.usedBy as user (user.path + user.id)}
+        <button type="button" class="link" onclick={() => openStudio(user)}>{user.id}</button>
+      {/each}
+      {#if templateEntry.usedBy.length === 0}· base something on it from its New dialog or its Based on control{/if}
     </p>
   {/if}
 
@@ -520,14 +607,14 @@
           height={Number(draft.height ?? 1)}
           nonce={textureVersion}
         />
-      {:else if typeDirectory === 'items'}
-        <ItemPreview name={draft.display_name} lore={draft.lore} material={String(draft.material ?? '')}
+      {:else if servedDirectory === 'items'}
+        <ItemPreview name={effective.display_name} lore={effective.lore} material={String(effective.material ?? '')}
           {visual} {render} version={textureVersion} {canFocusName} {canFocusLore} onFocus={focusField} />
       {:else}
         <StudioPreview
           pack={resource.pack}
-          texture={String(draft.texture ?? '')}
-          model={String(draft.model ?? '')}
+          texture={String(effective.texture ?? '')}
+          model={String(effective.model ?? '')}
           label={name}
           nonce={textureVersion}
           {visual}
@@ -568,6 +655,8 @@
           {missingTexture}
           {fieldIssue}
           showInFile={() => revealInAdvanced(resource)}
+          inherited={inheritance?.inherited ?? {}}
+          inheritedSources={inheritance?.sources ?? {}}
         />
       {:else}
         {#each sections as section (section.id)}
@@ -643,6 +732,19 @@
     {#if saving}<span>Applying…</span>{/if}
   </footer>
 
+  {#if savingAsTemplate}
+    <SaveAsTemplateDialog
+      {resource}
+      onCancel={() => (savingAsTemplate = false)}
+      onDone={async (created) => {
+        savingAsTemplate = false;
+        await refreshPack();
+        logActivity('save', `saved ${created.id} as a template`);
+        openStudio({ pack: created.pack, type: 'templates', path: created.path, id: created.id });
+      }}
+    />
+  {/if}
+
   {#if texturing}
     <div class="overlay">
       <TextureEditor
@@ -670,7 +772,7 @@
         field={[rootId, modelling]}
         modelRef={String(draft[modelling] ?? '')}
         textureRef={String(draft.texture ?? '')}
-        {typeDirectory}
+        typeDirectory={servedDirectory}
         onClose={() => (modelling = null)}
         onSaved={modelSaved}
         onSavingChange={(saving) => (modelSaving = saving)}
@@ -847,16 +949,17 @@
     color: var(--warn);
     font-size: var(--text-sm);
   }
-  .inherits {
-    margin: 0;
+  .used-by {
+    display: flex;
     flex: none;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: 0;
     padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     color: var(--muted);
     font-size: var(--text-sm);
-  }
-  .inherits.broken {
-    color: var(--warn);
   }
   .provenance,
   .field-issue {

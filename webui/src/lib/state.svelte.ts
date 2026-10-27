@@ -3,7 +3,7 @@
  * them. Stateless by design per web.md §6 — a refresh refetches everything
  * through loadWorkspace(); only unsaved editor content lives in tab state.
  */
-import type { AssetRef, DiagnosticEntry, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from './api';
+import type { AssetRef, DiagnosticEntry, ResourceRef, ResourceSummary, RpcChannel, TemplateEntry, TypeInfo } from './api';
 import { RpcError, unwrap, ops, assetOps } from './api';
 import type { BehaviorVocabulary } from './behavior';
 import type { PushFrame } from './events';
@@ -70,6 +70,8 @@ export const workspace = $state({
   resources: [] as ResourceRef[],
   summaries: [] as ResourceSummary[],
   summariesError: '',
+  /** Every template of every pack, as the server derives them (`authoring.templates`). */
+  templates: [] as TemplateEntry[],
   visualVersion: 0,
   types: [] as TypeInfo[],
   /** Registered events, actions and mechanics (`authoring.describe`); null on jars that predate it. */
@@ -410,6 +412,16 @@ async function loadResourceSummaries(channel: RpcChannel, pack: string) {
   }
 }
 
+/** Templates are a convenience layer: a server without the op simply offers none. */
+async function loadTemplates(channel: RpcChannel): Promise<TemplateEntry[]> {
+  try {
+    const data = unwrap(await ops.templates(channel));
+    return Array.isArray(data.templates) ? data.templates as TemplateEntry[] : [];
+  } catch {
+    return [];
+  }
+}
+
 /** Refresh read-only catalog metadata; an older response must not replace a newer snapshot. */
 export async function refreshPack(): Promise<void> {
   const channel = session.channel;
@@ -417,9 +429,9 @@ export async function refreshPack(): Promise<void> {
   if (!channel || !pack) return;
   const generation = ++packRefresh;
   try {
-    const [resources, assets, folders, summaries] = await Promise.all([
+    const [resources, assets, folders, summaries, templates] = await Promise.all([
       ops.resources(channel, pack), assetOps.list(channel, pack), ops.folders(channel, pack),
-      loadResourceSummaries(channel, pack),
+      loadResourceSummaries(channel, pack), loadTemplates(channel),
     ]);
     if (generation !== packRefresh || pack !== workspace.activePack || channel !== session.channel) return;
     workspace.resources = ((unwrap(resources).resources as ResourceRef[]) ?? []).sort((a, b) => a.path.localeCompare(b.path));
@@ -427,6 +439,7 @@ export async function refreshPack(): Promise<void> {
     workspace.folders = ((unwrap(folders).folders as string[]) ?? []).sort((a, b) => a.localeCompare(b));
     workspace.summaries = summaries.resources;
     workspace.summariesError = summaries.error;
+    workspace.templates = templates;
     if (summaries.error) logActivity('error', summaries.error);
   } catch (e) {
     logActivity('error', `browse: ${errorMessage(e)}`);
@@ -573,6 +586,7 @@ export function resetWorkspace(): void {
   workspace.activePack = null;
   workspace.resources = [];
   workspace.summaries = [];
+  workspace.templates = [];
   workspace.summariesError = '';
   workspace.visualVersion = 0;
   workspace.types = [];
