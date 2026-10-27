@@ -7,7 +7,7 @@
    * textures so a new user never leaves the form.
    */
   import { assetOps, unwrap } from '../api';
-  import { connection, errorMessage, logActivity, session } from '../state.svelte';
+  import { connection, errorMessage, logActivity, session, showAssetUsage } from '../state.svelte';
 
   interface Props {
     pack: string;
@@ -135,6 +135,10 @@
       <option value={value}>{value} (missing)</option>
     {/if}
   </select>
+  {#if selected}
+    <button type="button" class="upload" title="See every resource that uses this file"
+      onclick={() => showAssetUsage(selected.path)}>Used by</button>
+  {/if}
   {#if hint === 'texture'}
     <button type="button" class="upload"
       disabled={uploading || !connection.connected}

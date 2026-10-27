@@ -132,6 +132,30 @@ const GUIDED_COVERS = [
   'fixtures/packs/sample/templates/base_item.yml',
 ];
 
+const ASSETS_COVERS = [
+  ...BROWSER_COVERS,
+  'webui/src/lib/api.ts',
+  'webui/src/lib/bulk.ts',
+  'webui/src/lib/bulk-io.ts',
+  'webui/src/lib/views/AssetsView.svelte',
+  'webui/src/lib/components/BulkDialog.svelte',
+  'webui/src/lib/components/CommandPalette.svelte',
+  'webui/src/lib/components/AssetPicker.svelte',
+  'core/src/main/java/dev/materione/core/authoring/ReferenceScanner.java',
+  'fixtures/packs/sample/items/ruby.yml',
+  'fixtures/packs/sample/items/templated_ruby.yml',
+  'fixtures/packs/sample/assets/textures/item/ruby.png',
+];
+
+async function openAssets(page, name) {
+  await page.getByLabel('project').selectOption('sample');
+  await page.getByRole('button', { name: 'Assets', exact: true }).click();
+  await page.getByRole('option', { name: new RegExp(name) }).click();
+  const detail = page.getByRole('region', { name: 'Selected asset' });
+  await detail.getByRole('heading', { name: /^Used by/ }).waitFor({ state: 'visible', timeout: 20_000 });
+  return detail;
+}
+
 async function openSampleStudio(page, name) {
   await page.getByLabel('project').selectOption('sample');
   await page.getByRole('button', { name: 'Content', exact: true }).click();
@@ -861,6 +885,95 @@ export default [
       await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
       ctx.needsEyes(
         'the studio header names the base_item template; material reads "Inherited from base_item: PAPER"; a Soulbound ability card says Built in and when it activates; a rule reads "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write',
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-asset-usage-replace',
+    title: 'Assets lists every user of item/ruby with honest coverage, and Replace everywhere retargets both items in one revision-checked change',
+    covers: ASSETS_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const files = ['ruby.yml', 'templated_ruby.yml'].map((name) => path.join(SERVER_SAMPLE, 'items', name));
+      const originals = files.map((file) => fs.readFileSync(file, 'utf8'));
+      try {
+        const page = await ctx.browser.openEditor();
+        const detail = await openAssets(page, 'item/ruby.png');
+        ctx.expect(await detail.getByRole('heading', { name: /^Used by/ }).innerText()).toMatch(/2 items/);
+        ctx.expect(await detail.getByRole('button', { name: 'ruby', exact: true }).count()).toBe(1);
+        ctx.expect(await detail.getByRole('button', { name: 'templated_ruby' }).count()).toBe(1);
+        ctx.expect(await detail.innerText()).toContain('documents read');
+        ctx.expect(files.map((file, i) => fs.readFileSync(file, 'utf8') === originals[i]).every(Boolean)).toBeTruthy();
+
+        await detail.getByRole('button', { name: 'Replace everywhere…' }).click();
+        await detail.getByLabel('Point them at').selectOption({ label: 'block/marble.png' });
+        await detail.getByRole('button', { name: 'Preview changes' }).click();
+        await detail.getByLabel('impact summary').waitFor({ state: 'visible' });
+        // The preview is a dry run: nothing on disk changed yet.
+        ctx.expect(files.map((file, i) => fs.readFileSync(file, 'utf8') === originals[i]).every(Boolean)).toBeTruthy();
+        await detail.getByRole('button', { name: /^Replace in 2 uses/ }).click();
+        const deadline = Date.now() + 20_000;
+        while (!files.every((file) => fs.readFileSync(file, 'utf8').includes('block/marble')) && Date.now() < deadline) {
+          await ctx.sleep(200);
+        }
+        // Lossless: only the texture line of each file changed.
+        files.forEach((file, i) => ctx.expect(fs.readFileSync(file, 'utf8')).toBe(originals[i].replace('item/ruby', 'block/marble')));
+      } finally {
+        files.forEach((file, i) => fs.writeFileSync(file, originals[i]));
+        try { await ctx.rcon('materione reload'); } catch (e) { ctx.log(`restore reload failed: ${e?.message ?? e}`); }
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-bulk-stale-refusal',
+    title: 'a bulk change refuses entirely when one document changed on disk after its preview: no document is written',
+    covers: ASSETS_COVERS,
+    dependsOn: ['editor.browser-asset-usage-replace'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const files = ['ruby.yml', 'templated_ruby.yml'].map((name) => path.join(SERVER_SAMPLE, 'items', name));
+      const originals = files.map((file) => fs.readFileSync(file, 'utf8'));
+      try {
+        const page = await ctx.browser.openEditor();
+        const detail = await openAssets(page, 'item/ruby.png');
+        await detail.getByRole('button', { name: 'Replace everywhere…' }).click();
+        await detail.getByLabel('Point them at').selectOption({ label: 'block/marble.png' });
+        await detail.getByRole('button', { name: 'Preview changes' }).click();
+        await detail.getByLabel('impact summary').waitFor({ state: 'visible' });
+
+        // Someone edits one of the two files by hand between preview and apply.
+        fs.writeFileSync(files[1], `${originals[1]}# hand edit\n`);
+        await detail.getByRole('button', { name: /^Replace in 2 uses/ }).click();
+        await detail.getByRole('alert').waitFor({ state: 'visible', timeout: 20_000 });
+        ctx.expect(fs.readFileSync(files[0], 'utf8')).toBe(originals[0]);
+        ctx.expect(fs.readFileSync(files[1], 'utf8')).toBe(`${originals[1]}# hand edit\n`);
+      } finally {
+        files.forEach((file, i) => fs.writeFileSync(file, originals[i]));
+        try { await ctx.rcon('materione reload'); } catch (e) { ctx.log(`restore reload failed: ${e?.message ?? e}`); }
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-assets-bulk-visual',
+    title: 'the Assets workspace and the bulk-change preview read as one clear, honest flow',
+    mode: 'visual',
+    dependsOn: ['editor.browser-asset-usage-replace'],
+    covers: ASSETS_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const detail = await openAssets(page, 'item/ruby.png');
+      await ctx.browser.browserShot('assets-used-by');
+      await detail.getByRole('button', { name: 'Replace everywhere…' }).click();
+      await detail.getByLabel('Point them at').selectOption({ label: 'block/marble.png' });
+      await detail.getByRole('button', { name: 'Preview changes' }).click();
+      await detail.getByLabel('impact summary').waitFor({ state: 'visible' });
+      await ctx.browser.browserShot('assets-replace-preview');
+      ctx.needsEyes(
+        'assets-used-by lists ruby and templated_ruby under "Used by — 2 items" with a coverage line that says how many documents were read and that asset files are not searched; assets-replace-preview shows the before → after texture text per document, the line "Written together, or not at all", and an Apply button naming the number of uses; nothing is written until Apply',
       );
     },
   }),

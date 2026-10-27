@@ -254,6 +254,15 @@ export const ops = {
     rev: number,
     edits: FieldEditPayload[],
   ) => c.call('authoring.setFields', { pack, path, rev, edits }),
+  /** Where is an asset or resource used? Bounded; the reply carries what it did not read. */
+  references: (c: EditorChannel, pack: string, kind: 'asset' | 'resource', target: string) =>
+    c.call('authoring.references', { pack, kind, target }),
+  /**
+   * Revision-checked all-or-none authoring over several documents. `dryRun`
+   * returns the impact summary and writes nothing.
+   */
+  bulk: (c: EditorChannel, pack: string, operations: unknown[], dryRun: boolean) =>
+    c.call('authoring.bulk', { pack, operations, dryRun }),
 };
 
 export const assetOps = {

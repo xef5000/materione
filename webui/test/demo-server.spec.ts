@@ -92,6 +92,62 @@ describe('writes stay in the tab and behave like the server', () => {
     expect(resources.map((resource) => resource.id)).toContain('night_lamp');
   });
 
+  it('finds the users of an asset and says what it covered', async () => {
+    for (const id of ['amulet_red', 'amulet_blue']) {
+      const created = await ok('authoring.createResource', { pack: 'sample', id, name: id });
+      await ok('authoring.setFields', {
+        pack: 'sample', path: created.path, rev: created.rev,
+        edits: [{ field: [id, 'texture'], value: 'amulets/shared' }],
+      });
+    }
+    const found = await ok('authoring.references', {
+      pack: 'sample', kind: 'asset', target: 'assets/textures/amulets/shared.png',
+    });
+    expect((found.hits as { id: string }[]).map((hit) => hit.id).sort()).toEqual(['amulet_blue', 'amulet_red']);
+    expect(found.coverage).toMatchObject({ complete: true, truncated: false });
+  });
+
+  it('applies a bulk change to every document together, or none of them', async () => {
+    const red = await ok('authoring.createResource', { pack: 'sample', id: 'amulet_red', name: 'Red' });
+    const blue = await ok('authoring.createResource', { pack: 'sample', id: 'amulet_blue', name: 'Blue' });
+    const edit = (id: string) => [{ field: [id, 'material'], value: 'EMERALD' }];
+    const operations = (blueRev: number) => [
+      { kind: 'set', path: red.path, rev: red.rev, edits: edit('amulet_red') },
+      { kind: 'set', path: blue.path, rev: blueRev, edits: edit('amulet_blue') },
+    ];
+
+    const stale = await server.call('authoring.bulk', { pack: 'sample', operations: operations(99) });
+    expect(stale.ok ? '' : stale.error.code).toBe('MTR-0034');
+    expect(((await ok('browse.get', { pack: 'sample', path: red.path })).parsed as Record<string, { material: string }>)
+      .amulet_red!.material).not.toBe('EMERALD');
+
+    const dry = await ok('authoring.bulk', { pack: 'sample', operations: operations(Number(blue.rev)), dryRun: true });
+    expect(dry.applied).toBe(false);
+    const applied = await ok('authoring.bulk', { pack: 'sample', operations: operations(Number(blue.rev)) });
+    expect(applied.applied).toBe(true);
+    expect((applied.documents as { changes: unknown[] }[]).every((doc) => doc.changes.length === 1)).toBe(true);
+    expect(((await ok('browse.get', { pack: 'sample', path: blue.path })).parsed as Record<string, { material: string }>)
+      .amulet_blue!.material).toBe('EMERALD');
+  });
+
+  it('duplicates variants and creates a recipe in one all-or-none change', async () => {
+    const created = await ok('authoring.createResource', { pack: 'sample', id: 'amulet_red', name: 'Red' });
+    const result = await ok('authoring.bulk', { pack: 'sample', operations: [
+      { kind: 'duplicate', fromPath: created.path, id: 'amulet_teal', edits: [{ field: ['amulet_teal', 'display_name'], value: 'Teal' }] },
+      { kind: 'create', type: 'recipes', id: 'amulet_teal', edits: [{ field: ['amulet_teal', 'result'], value: 'amulet_teal' }] },
+    ] });
+    expect((result.documents as { path: string }[]).map((doc) => doc.path))
+      .toEqual(['items/amulet_teal.yml', 'recipes/amulet_teal.yml']);
+
+    const collision = await server.call('authoring.bulk', { pack: 'sample', operations: [
+      { kind: 'duplicate', fromPath: created.path, id: 'amulet_gold' },
+      { kind: 'duplicate', fromPath: created.path, id: 'amulet_teal' },
+    ] });
+    expect(collision.ok).toBe(false);
+    const ids = ((await ok('browse.resources', { pack: 'sample', type: 'items' })).resources as { id: string }[]).map((r) => r.id);
+    expect(ids).not.toContain('amulet_gold');
+  });
+
   it('never touches the recorded snapshot of another demo', async () => {
     await ok('authoring.setFields', {
       pack: 'sample', path: 'items/ruby.yml', rev: 0,

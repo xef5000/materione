@@ -347,6 +347,12 @@ without replaying writes. **Publish pack** promotes an exact candidate hash, whi
 availability is not presented as proof of player delivery or acceptance. This does not mark M5
 complete or change the D1–D11 architecture.
 
+**Scalable-authoring follow-up (M5 as built, issue #133):** an Assets workspace with typed, bounded
+"used by" queries (partial coverage reported honestly), explicit replace-everywhere versus
+copy-and-retarget, related-recipe and variant creation, and revision-checked all-or-none bulk
+authoring with an impact preview (`authoring.bulk`), plus a keyboard command palette. Menu
+authoring remains M6; no infrastructure state changed.
+
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).

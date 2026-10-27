@@ -7,10 +7,12 @@
    */
   import ContextMenu from '../components/ContextMenu.svelte';
   import type { MenuItem } from '../components/ContextMenu.svelte';
+  import BulkDialog from '../components/BulkDialog.svelte';
   import PromptDialog from '../components/PromptDialog.svelte';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
   import { ops, unwrap } from '../api';
+  import { parseBulkResult, recipeOperation } from '../bulk';
   import type { ResourceRef } from '../api';
   import {
     breadcrumbs,
@@ -53,6 +55,12 @@
   let history = $state<string[]>([]);
   let typeahead = { text: '', at: 0 };
   let presentation = $state(getCatalogPreferences(content.type));
+  /** Resources marked for a bulk change (row keys); Space toggles, Ctrl+A marks what is shown. */
+  let marked = $state<string[]>([]);
+  let bulk = $state<null | {
+    kind: 'field' | 'variants';
+    targets: BrowserEntry[];
+  }>(null);
 
   const tabs = $derived(typeTabs(workspace.types));
   const tab = $derived(
@@ -72,6 +80,43 @@
     ),
   );
   const selected = $derived(rows.find((row) => row.key === content.selected) ?? null);
+  const markedRows = $derived(rows.filter((row) => row.kind === 'doc' && marked.includes(row.key)));
+
+  // Marks belong to the view they were made in: another tab, folder or search starts clean.
+  $effect(() => {
+    void content.type; void content.folder; void content.search;
+    marked = [];
+  });
+
+  function toggleMark(entry: BrowserEntry): void {
+    if (entry.kind !== 'doc') return;
+    marked = marked.includes(entry.key)
+      ? marked.filter((key) => key !== entry.key)
+      : [...marked, entry.key];
+  }
+
+  function markAllShown(): void {
+    marked = rows.filter((row) => row.kind === 'doc').map((row) => row.key);
+  }
+
+  function bulkTargets(entries: BrowserEntry[]) {
+    return entries.map((entry) => ({ path: entry.path, id: entry.id, name: entry.name }));
+  }
+
+  /** A recipe whose result is this item, created in one change; opens it afterwards. */
+  function createRecipe(entry: BrowserEntry): void {
+    void run('create recipe', async () => {
+      const result = parseBulkResult(unwrap(await ops.bulk(
+        session.channel!, workspace.activePack!, [recipeOperation(entry.id)], false,
+      )));
+      await refreshPack();
+      const created = result.documents[0];
+      logActivity('save', `created recipe ${entry.id}; open it to set the ingredients`);
+      if (created) {
+        openStudio({ pack: workspace.activePack!, type: 'recipes', path: created.path, id: entry.id });
+      }
+    });
+  }
 
   // A tab the registry no longer offers must not strand the browser.
   $effect(() => {
@@ -324,7 +369,12 @@
     if (entry.kind === 'doc') {
       if (entry.ids.length === 1) {
         items.push({ label: 'Duplicate…', run: () => duplicate(entry) });
+        items.push({ label: 'Make variants…', run: () => (bulk = { kind: 'variants', targets: [entry] }) });
       }
+      if (entry.resource?.type === 'items') {
+        items.push({ label: 'Create recipe', run: () => createRecipe(entry) });
+      }
+      items.push({ label: marked.includes(entry.key) ? 'Unmark' : 'Mark for bulk change', run: () => toggleMark(entry) });
     }
     items.push({ label: 'Move to…', run: () => moveTo(entry) });
     if (entry.kind === 'doc') {
@@ -357,10 +407,16 @@
       case 'Home': event.preventDefault(); move(0); return;
       case 'End': event.preventDefault(); move(rows.length - 1); return;
       case 'Enter': if (selected) { event.preventDefault(); open(selected); } return;
+      case ' ': if (selected?.kind === 'doc') { event.preventDefault(); toggleMark(selected); } return;
       case 'Backspace': event.preventDefault(); up(); return;
       case 'F2': if (selected) { event.preventDefault(); rename(selected); } return;
       case 'Delete': if (selected) { event.preventDefault(); remove(selected); } return;
       default: break;
+    }
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'a') {
+      event.preventDefault();
+      markAllShown();
+      return;
     }
     // Type-ahead: the way every file manager jumps to a name.
     if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
@@ -467,6 +523,15 @@
         title="Show or hide resource IDs and file paths"
         onclick={() => setPresentation({ showTechnicalColumns: !presentation.showTechnicalColumns })}
       >ID / path</button>
+      {#if markedRows.length}
+        <button
+          class="ghost"
+          disabled={busy}
+          title="Change one field on every marked resource, all together or not at all"
+          onclick={() => (bulk = { kind: 'field', targets: markedRows })}
+        >Edit {markedRows.length} marked…</button>
+        <button class="ghost" title="Clear marks" aria-label="Clear marks" onclick={() => (marked = [])}>✕</button>
+      {/if}
       <button class="ghost" disabled={busy || !workspace.activePack} onclick={createFolder}>
         New folder
       </button>
@@ -505,10 +570,12 @@
         <div
           class="entry"
           class:selected={row.key === content.selected}
+          class:marked={marked.includes(row.key)}
           class:folder={row.kind === 'folder'}
           data-key={row.key}
           role="option"
           aria-selected={row.key === content.selected}
+          aria-checked={row.kind === 'doc' ? marked.includes(row.key) : undefined}
           tabindex="-1"
           onclick={() => (content.selected = row.key)}
           ondblclick={() => open(row)}
@@ -568,6 +635,23 @@
 
 {#if menu}
   <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => (menu = null)} />
+{/if}
+
+{#if bulk}
+  {@const current = bulk}
+  {@const first = current.targets[0]}
+  {#if current.kind === 'field'}
+    <BulkDialog
+      mode={{ kind: 'field', type: content.type, targets: bulkTargets(current.targets) }}
+      onClose={() => (bulk = null)}
+      onDone={() => (marked = [])}
+    />
+  {:else if first}
+    <BulkDialog
+      mode={{ kind: 'variants', type: content.type, source: bulkTargets([first])[0]!, folder }}
+      onClose={() => (bulk = null)}
+    />
+  {/if}
 {/if}
 
 {#if dialog}
@@ -781,6 +865,9 @@
   .entry.selected {
     background: var(--bg-raised);
     outline: 1px solid var(--border-strong);
+  }
+  .entry.marked {
+    box-shadow: inset 3px 0 0 var(--accent);
   }
   .entry span,
   .entry code,

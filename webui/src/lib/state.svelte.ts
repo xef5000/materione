@@ -90,10 +90,25 @@ export const workspace = $state({
  * the author somewhere else ("reveal in Advanced Files") without prop drilling.
  */
 export const ui = $state({
-  view: 'content' as 'start' | 'content' | 'advanced' | 'diagnostics' | 'server',
+  view: 'content' as 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server',
   railCollapsed: false,
   activityOpen: false,
+  /** The command palette (Ctrl+K). */
+  paletteOpen: false,
+  /** Where "Back" returns to after a hop out of Assets into a resource's studio. */
+  returnTo: null as { view: 'assets'; label: string } | null,
 });
+
+/** The Assets workspace's standing: which asset is selected. */
+export const assetsUi = $state({ selected: null as string | null });
+
+/** Opens Assets on one asset ("where is this used?" from a studio's texture slot). */
+export function showAssetUsage(path: string): void {
+  if (!canLeaveEditor('studio')) return;
+  assetsUi.selected = path;
+  ui.returnTo = null;
+  ui.view = 'assets';
+}
 
 /**
  * Where the Content tab is standing: which type tab, which folder inside it,

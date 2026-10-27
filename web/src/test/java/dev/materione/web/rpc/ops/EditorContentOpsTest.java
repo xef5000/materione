@@ -488,6 +488,43 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void bulkAndReferencesOpsRoundTripOverTheWire() throws Exception {
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+        dispatcher.dispatch(request("edit.createPack", "1", object("pack", "demo")));
+        dispatcher.dispatch(request("edit.put", "2", object("pack", "demo",
+                "path", "items/a.yml", "rev", "0", "content", "a:\n  texture: gem\n")));
+        dispatcher.dispatch(request("edit.put", "3", object("pack", "demo",
+                "path", "items/b.yml", "rev", "0", "content", "b:\n  texture: gem\n")));
+
+        JsonObject refs = object("pack", "demo", "kind", "asset", "target", "assets/textures/gem.png");
+        Wire.Response found = dispatcher.dispatch(request("authoring.references", "4", refs));
+        assertThat(found.ok()).isTrue();
+        assertThat(payload(found).getAsJsonArray("hits")).hasSize(2);
+        assertThat(payload(found).getAsJsonObject("coverage").get("complete").getAsBoolean()).isTrue();
+
+        JsonObject body = com.google.gson.JsonParser.parseString(
+                "{\"pack\":\"demo\",\"dryRun\":true,\"operations\":["
+                        + "{\"kind\":\"set\",\"path\":\"items/a.yml\",\"rev\":1,\"edits\":[{\"field\":[\"a\",\"texture\"],\"value\":\"ruby\"}]},"
+                        + "{\"kind\":\"set\",\"path\":\"items/b.yml\",\"rev\":1,\"edits\":[{\"field\":[\"b\",\"texture\"],\"value\":\"ruby\"}]}]}")
+                .getAsJsonObject();
+        Wire.Response dry = dispatcher.dispatch(request("authoring.bulk", "5", body));
+        assertThat(dry.ok()).isTrue();
+        assertThat(payload(dry).get("applied").getAsBoolean()).isFalse();
+        assertThat(payload(dry).getAsJsonArray("documents").get(0).getAsJsonObject()
+                .getAsJsonArray("changes")).hasSize(1);
+
+        body.addProperty("dryRun", false);
+        Wire.Response applied = dispatcher.dispatch(request("authoring.bulk", "6", body));
+        assertThat(applied.ok()).isTrue();
+        assertThat(payload(applied).get("applied").getAsBoolean()).isTrue();
+
+        Wire.Response stale = dispatcher.dispatch(request("authoring.bulk", "7", body));
+        assertThat(stale.ok()).isFalse();
+    }
+
+    @Test
     void setFieldsRemovalEditReachesTheApiAsARemovalAndDropsTheKey() throws Exception {
         DocumentStore store = store();
         List<AuthoringApi.SetFieldsRequest> seen = new java.util.ArrayList<>();
