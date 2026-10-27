@@ -10,6 +10,9 @@
   import Icon from '../components/Icon.svelte';
   import BehaviorRulesEditor from './BehaviorRulesEditor.svelte';
   import ModulePicker from './ModulePicker.svelte';
+  import { fade, fly } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { motionMs } from '../motion';
   import type { DiagnosticEntry, ResourceRef, TypeInfo, TypeParam } from '../api';
   import type { BehaviorVocabulary, MechanicEntry, MechanicInfo } from '../behavior';
   import {
@@ -231,6 +234,9 @@
       : null}
     {@const removable = card.kind === 'unknown' || descriptor?.kind === 'mechanic' || descriptor?.required !== true}
     <article
+      animate:flip={{ duration: motionMs('base') }}
+      in:fly={{ y: -4, duration: motionMs('base') }}
+      out:fade={{ duration: motionMs('fast') }}
       class="card module"
       data-module={card.kind === 'unknown' ? card.entry.name || 'unknown' : descriptor!.id}
       data-field={card.kind === 'unknown' ? card.sourceField : descriptor!.kind === 'mechanic'

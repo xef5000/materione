@@ -26,6 +26,7 @@
   import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
   import { diagnosticNames } from '../diagnostics';
   import { usesModules } from '../modules';
+  import { scrollBehavior } from '../motion';
   import {
     acceptsTemplates,
     selectableTemplates,
@@ -169,7 +170,7 @@
     const control = field?.querySelector<HTMLElement>('[data-field-control]') ??
       field?.querySelector<HTMLElement>('input, textarea, select');
     control?.focus();
-    control?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    control?.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
   }
   const pendingRoots = $derived([
     ...new Set(
@@ -511,7 +512,7 @@
   {/if}
 {/snippet}
 
-<section class="studio">
+<section class="studio view-enter">
   <header>
     <button type="button" class="back" onclick={onClose} title="back to {typeDirectory}" aria-label="back to {typeDirectory}">
       <Icon name="arrow-left" size={16} />

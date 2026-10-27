@@ -6,6 +6,7 @@
    * type's self-description — this component only presents it. Focus stays in
    * the search field: arrow keys move the active row, Enter adds it.
    */
+  import { fly } from 'svelte/transition';
   import Dialog from '../ui/Dialog.svelte';
   import Icon from '../components/Icon.svelte';
   import {
@@ -13,6 +14,7 @@
     categoryLabel,
     type ModuleDescriptor,
   } from '../modules';
+  import { motionMs, staggerDelay } from '../motion';
 
   interface Props {
     catalog: ModuleDescriptor[];
@@ -28,6 +30,12 @@
   let activeCategory = $state('');
   let cursor = $state(0);
   let listElement: HTMLUListElement | undefined;
+  // The rows stagger in while the picker first opens; later filtering enters them at once.
+  let settling = $state(true);
+  $effect(() => {
+    const timer = setTimeout(() => (settling = false), 400);
+    return () => clearTimeout(timer);
+  });
 
   const categories = $derived(categoriesOf(catalog));
 
@@ -118,7 +126,7 @@
     <ul bind:this={listElement} role="listbox" aria-label="Modules">
       {#each matches as module, index (module.id)}
         {@const added = isAdded(module)}
-        <li>
+        <li in:fly|global={{ y: 6, duration: motionMs('base'), delay: settling ? staggerDelay(index) : 0 }}>
           <button
             type="button"
             role="option"

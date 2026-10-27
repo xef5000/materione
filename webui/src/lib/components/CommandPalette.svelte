@@ -4,6 +4,9 @@
    * jump to a field of the open resource, by typing. Every entry runs an
    * action the UI already has; the palette adds no capability of its own.
    */
+  import { fade, scale } from 'svelte/transition';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { motionMs } from '../motion';
   import { onMount, tick } from 'svelte';
   import { rankCommands, type PaletteCommand } from '../bulk';
   import { typeTabs } from '../browser';
@@ -115,9 +118,17 @@
 
 </script>
 
-<div class="scrim" role="presentation" onclick={onClose}>
+<div
+  class="scrim"
+  role="presentation"
+  onclick={onClose}
+  in:fade|global={{ duration: motionMs('base') }}
+  out:fade|global={{ duration: motionMs('fast') }}
+>
   <div
     class="palette"
+    in:scale|global={{ duration: motionMs('base'), start: 0.96, easing: cubicOut }}
+    out:scale|global={{ duration: motionMs('fast'), start: 0.98, easing: cubicIn }}
     role="dialog"
     aria-modal="true"
     aria-label="Command palette"

@@ -232,6 +232,23 @@ const WORKBENCH_COVERS = [
   'platform/src/main/java/dev/materione/platform/items/ItemMaterialPalette.java',
   'platform/src/main/java/dev/materione/platform/text/ItemText.java',
 ];
+// Purposeful motion (issue #155, web.md "Motion"): the editor's transitions, and the reduced-motion path that turns them off.
+const MOTION_COVERS = [
+  ...WORKBENCH_COVERS,
+  'webui/src/app.css',
+  'webui/src/lib/motion.ts',
+  'webui/src/lib/ui/Dialog.svelte',
+  'webui/src/lib/ui/Skeleton.svelte',
+  'webui/src/lib/studio/ModulePicker.svelte',
+  'webui/src/lib/studio/ModulesArea.svelte',
+  'webui/src/lib/studio/StructuredList.svelte',
+  'webui/src/lib/views/ContentView.svelte',
+  'webui/src/lib/components/BlockbenchTab.svelte',
+  'webui/src/lib/components/ContextMenu.svelte',
+  'webui/src/lib/components/CommandPalette.svelte',
+  'webui/playwright.config.ts',
+  'webui/browser/specs/motion.pw.ts',
+];
 // Rich text (issue #151, master §5.7): the editor writes MiniMessage, the one plugin
 // pipeline draws it, and both read the shared fixture.
 const RICH_TEXT_COVERS = [
@@ -558,6 +575,49 @@ export default [
       await ctx.browser.browserShot('sample-glyphs-collapsed-navigation');
       ctx.needsEyes(
         'the real local App shows recognizable glyph source-texture miniatures, uncluttered footer-free space, no Activity bar until requested, and unchanged vertical navigation alignment after labels collapse; source sheets are texture previews, not proof of final font metrics or client pack acceptance' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  test({
+    id: 'editor.browser-motion-reduced',
+    title: 'with prefers-reduced-motion the editor stops its motion: the tokens read 0ms, and a dialog opens with no running animation',
+    covers: MOTION_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByLabel('project').selectOption('sample');
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const tokens = await page.evaluate(() => ['fast', 'base', 'slow']
+        .map((name) => getComputedStyle(document.documentElement).getPropertyValue(`--motion-${name}`).trim()));
+      ctx.expect(tokens).toEqual(['0ms', '0ms', '0ms']);
+      await page.getByRole('button', { name: 'Content', exact: true }).click();
+      await page.getByRole('button', { name: 'New folder' }).click();
+      await page.getByRole('dialog', { name: 'New folder' }).waitFor({ state: 'visible', timeout: 20_000 });
+      const running = await page.evaluate(() => document.getAnimations()
+        .filter((animation) => Number(animation.effect?.getTiming().duration ?? 0) > 0).length);
+      ctx.expect(running).toBe(0);
+      await page.keyboard.press('Escape');
+    },
+  }),
+
+  test({
+    id: 'editor.browser-motion-visual',
+    title: 'the module picker opens with its rows staggered in, and the settled picker is still and legible',
+    mode: 'visual',
+    dependsOn: ['editor.browser-motion-reduced'],
+    covers: MOTION_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await openSampleItemFile(page);
+      await page.getByRole('button', { name: 'Add module' }).click();
+      await page.getByLabel('Search modules').waitFor({ state: 'visible', timeout: 20_000 });
+      // The stagger lasts about 300 ms; the settled frame is what the eyes judge.
+      await page.waitForTimeout(500);
+      await ctx.browser.browserShot('sample-motion-module-picker');
+      ctx.needsEyes(
+        'the module picker is fully opaque and unclipped once settled, its rows are evenly spaced with no half-faded row, and the accent appears only on the focused control or the active row' + IDENTITY_EYES,
       );
     },
   }),

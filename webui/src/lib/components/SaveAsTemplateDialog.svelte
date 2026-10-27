@@ -8,6 +8,7 @@
   import Button from '../ui/Button.svelte';
   import Dialog from '../ui/Dialog.svelte';
   import Field from '../ui/Field.svelte';
+  import Skeleton from '../ui/Skeleton.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef } from '../api';
   import { humanise, idFromName } from '../browser';
@@ -87,7 +88,7 @@
     <fieldset>
       <legend class="field-label">Fields to put in the template</legend>
       {#if loading}
-        <p class="hint">Reading {resource.id}…</p>
+        <Skeleton label={`Reading ${resource.id}`} lines={3} />
       {:else if fields.length === 0}
         <p class="hint">{resource.id} sets nothing yet.</p>
       {:else}

@@ -59,6 +59,8 @@ export interface SettingsTab {
 export type ActivityKind = 'save' | 'reload' | 'error' | 'info';
 
 export interface ActivityEntry {
+  /** Stable across inserts at the top of the log, so the dock keys rows and animates only the new one. */
+  id: number;
   ts: number;
   kind: ActivityKind;
   text: string;
@@ -329,8 +331,10 @@ export function handlePush(frame: PushFrame): void {
   bus.push.emit(frame);
 }
 
+let activitySeq = 0;
+
 export function logActivity(kind: ActivityKind, text: string): void {
-  activityLog.entries.unshift({ ts: Date.now(), kind, text });
+  activityLog.entries.unshift({ id: ++activitySeq, ts: Date.now(), kind, text });
   if (activityLog.entries.length > 200) {
     activityLog.entries.length = 200;
   }

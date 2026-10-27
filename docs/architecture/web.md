@@ -930,6 +930,7 @@ first, then used.
 | Canvas | `--checker-a/b`, `--paint-default`, `--canvas-grid`, `--canvas-hover`, `--canvas-mark`, `--canvas-dim`, `--preview-*` | Read by `token()`; never a literal in a `.ts` file |
 | Legacy | `--legacy-0` … `--legacy-f` | Minecraft's 16 text colors, for the game surface and swatches |
 | Game surface | `--font-minecraft`, `--text-minecraft` (16 px), `--mc-shadow-offset`, `--mc-tooltip-bg`, `--mc-tooltip-border(-low)` | Player-visible text drawn the way the client draws it (§6.2) |
+| Motion | `--motion-fast` 120 ms, `--motion-base` 200 ms, `--motion-slow` 320 ms, `--motion-shimmer`, `--ease-standard`, `--ease-emphasized`, `--ease-exit` | Collapse to 0 ms under `prefers-reduced-motion`; read by `motionMs()` in Svelte (§6.3) |
 
 **Primitives.** The shared look is CSS classes in `app.css`, so a screen gets it without new
 markup: `.btn` (secondary by default) with `.btn-primary` (the accent, one per view), `.btn-ghost`,
@@ -1019,6 +1020,84 @@ shown as formatting and left alone, toolbar formats, a gradient, typed codes and
 undo and redo, lore lines, paste sanitising, glyph chips, block names, and a screenshot. QA
 entries `editor.browser-rich-text-gradient` (+ `-visual`) check the authored gradient on the held
 item in a real client.
+
+### 6.3 Motion (issue #155)
+
+Motion in the editor is for orientation and feedback: a dialog arrives from its trigger, a row
+that moves says where it went, a save lands visibly. It is never decoration, and it never slows a
+large pack. The reference is Lode Studio's restraint: short, eased, and absent where it would cost
+attention.
+
+**Tokens.** Durations and curves are custom properties in `app.css`, next to the color and type
+scales. Components read them through `var()` in CSS, and Svelte transitions read the durations
+through `motionMs()` in `src/lib/motion.ts`, so the two cannot drift.
+
+| Token | Value | Used for |
+|---|---|---|
+| `--motion-fast` | 120 ms | hover, press and focus; dialog, palette and menu exits; chip and row color; the drag band |
+| `--motion-base` | 200 ms | dialog and palette entrances; menu pop-in; module and row add/remove; view switch; thumbnail fade-in |
+| `--motion-slow` | 320 ms | the Save & apply sweep; the success settle |
+| `--motion-shimmer` | 1400 ms | the skeleton loop (a placeholder, not a spinner) |
+| `--ease-standard` | `cubic-bezier(0.2, 0, 0, 1)` | almost everything that moves on screen; Svelte entrances use `cubicOut` |
+| `--ease-emphasized` | `cubic-bezier(0.16, 1, 0.3, 1)` | things that arrive and settle: menus, the save settle |
+| `--ease-exit` | `cubic-bezier(0.4, 0, 1, 1)` | the exit curve for any CSS exit. The editor has none yet, so the Svelte exits use `cubicIn` from `svelte/easing`, the nearest JS curve |
+
+Nothing is faster than 120 ms or slower than 320 ms, except the shimmer, which loops by design.
+
+**Reduced motion is one path.** Under `prefers-reduced-motion: reduce`, app.css collapses the three
+duration tokens to `0ms`, stops every animation loop, and forces `transition-duration` and
+`animation-duration` to 0 on every element. `motionMs()` reads the same tokens, so Svelte
+transitions complete at once. `scrollBehavior()` makes the one JS-driven scroll (focusing a field in
+the studio) instant, because a CSS rule cannot reach `scrollIntoView`. Playwright runs the whole
+suite with `reducedMotion: 'reduce'` (`webui/playwright.config.ts`), so no spec needs an animation
+switch of its own; `browser/specs/motion.pw.ts` turns motion back on to prove each effect, and runs
+the reduced path to prove it is off.
+
+**Tools.** Svelte built-ins only: `fade`, `fly`, `scale` (svelte/transition), `flip`
+(svelte/animate), and CSS transitions and keyframes. No motion library. Two Svelte rules shape the
+code. A transition is *local* by default, so it plays only when its own block is added or removed;
+a dialog, palette or context menu mounted by a parent `{#if}` uses `|global` on its in and out
+transitions, or its exit would be skipped. A keyed list's first intro does not play when the list
+itself mounts, so the module picker's stagger uses the `settling` window that follows mount.
+
+**What moves, and where it is built.**
+
+| Surface | Motion | Built in |
+|---|---|---|
+| Buttons, chips, cards, rail items, list rows, menu items | Color and border on hover, a 2 % press, a 1 px lift on interactive cards | `.btn`, `button.chip`, `.card-interactive`, `.menu-item`, `.entry`, `.rail` |
+| Dialogs and the command palette | Scrim fades; the panel scales from 96 % in, 98 % out | `ui/Dialog.svelte`, `CommandPalette.svelte` |
+| Context menus | Pop-in from the corner on mount (`.menu`); fade out | `ContextMenu.svelte`, `.menu` |
+| Module picker | Rows stagger 18 ms apart on open, capped at 10 rows | `studio/ModulePicker.svelte`, `motion.ts` `staggerDelay` |
+| Modules, structured rows | `animate:flip` on reorder, fly in, fade out | `studio/ModulesArea.svelte`, `studio/StructuredList.svelte` (rows keyed by identity) |
+| Content list rows | `animate:flip` and fade-in, only up to 200 rows | `views/ContentView.svelte`, `motion.ts` `rowsAnimate` |
+| Content ↔ Studio, Start, Files | The new view fades in (`.view-enter`); the old one is removed at once | `ContentView.svelte`, `studio/Studio.svelte` |
+| Thumbnails and previews | Fade in once decoded (`.fade-in`); boxes are sized before the image arrives | `ResourceThumbnail`, `AssetPreviewTab`, `AssetsView`, `GlyphPreview`, `PaintingPreview` |
+| Drag-select | The band fades in; marked rows ease their background and edge | `ContentView.svelte` (`.band`, `.entry`) |
+| Activity entries | Each new entry flies in; entries are keyed by a stable id, so only the new one moves | `dock/ActivityDock.svelte`, `state.svelte.ts` `logActivity` |
+| Save & apply (Blockbench) | A 2 px sweep runs along the button while saving; on success the header button settles green and reads "Applied" for 1.6 s | `components/BlockbenchTab.svelte` |
+| Loading catalogs and previews | A shimmering bar in the shape of the content, not `…` | `ui/Skeleton.svelte`, `.skeleton` |
+
+Toasts: the editor has no toast component today. Its transient messages are Activity entries and
+the offline and reconnect banners; a toast component, if one is added, takes the same `in:fly` and
+`out:fade` pair.
+
+**Large packs.** Svelte's `animate:flip` reads the box of every animated row before and after each
+update, so animating a 1,000-row list would cost thousands of layout reads on every change. Above
+`ROW_MOTION_LIMIT` (200 rows, `motion.ts`) the content list renders a second, unanimated branch: the
+same row markup, no `animate:`, no `in:`. A pack of 1,000 items scrolls at 60 fps (a `frame-budget`
+annotation in the motion spec records the median and p95 frame time); `test/motion.spec.ts` pins the
+limit and the stagger.
+
+**What is not animated.** Anything that happens on every keystroke in a field, the rich-text editor's
+caret and selection, the texture and model canvases, and any list above the limit. Obfuscated
+(`§k`) rich text keeps its existing 0.4 s flicker in the editing surface, which reduced motion turns
+off.
+
+**Verifying it.** `browser/specs/motion.pw.ts` checks each claim by reading the page's running
+animations (`document.getAnimations()`): token values under reduced motion, dialog durations in and
+out, the picker stagger, the flip-free large list, the fade-in of a thumbnail with its box already
+sized. QA entries `editor.motion-*` in `qa/catalog/editor.mjs` cover the same interactions with
+screenshots for eyes review.
 
 ---
 

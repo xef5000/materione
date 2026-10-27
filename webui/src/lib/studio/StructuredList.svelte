@@ -4,8 +4,11 @@
    * shape. Without a shape the studio refuses to render — the field is
    * reported as Advanced-Files-only instead of being mangled.
    */
+  import { fade } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
   import Icon from '../components/Icon.svelte';
   import { blankRow } from '../studio';
+  import { motionMs } from '../motion';
   import type { TypeParam } from '../api';
 
   interface Props {
@@ -26,6 +29,16 @@
       row && typeof row === 'object' ? (row as Record<string, unknown>) : {},
     ),
   );
+  // Rows are keyed by a stable id, not their position, so add and remove move the rest with
+  // flip. Ids follow this component's own adds and removes; rows it has not seen (the value
+  // arrived from elsewhere) fall back to a position key, which is what the list had before.
+  let keys = $state<number[]>([]);
+  let nextKey = 0;
+  const keyed = $derived(rows.map((row, index) => ({ key: keys[index] ?? -1 - index, row })));
+
+  function keysFor(count: number): number[] {
+    return Array.from({ length: count }, (_, index) => keys[index] ?? nextKey++);
+  }
 
   function cellText(row: Record<string, unknown>, column: TypeParam): string {
     const cell = row[column.id];
@@ -53,10 +66,12 @@
   }
 
   function addRow() {
+    keys = [...keysFor(rows.length), nextKey++];
     onChange([...rows.map((row) => ({ ...row })), blankRow(field)]);
   }
 
   function removeRow(index: number) {
+    keys = keysFor(rows.length).filter((_, position) => position !== index);
     onChange(rows.filter((_, position) => position !== index).map((row) => ({ ...row })));
   }
 </script>
@@ -74,8 +89,14 @@
         {/each}
         <span aria-hidden="true"></span>
       </div>
-      {#each rows as row, index (index)}
-        <div class="row" role="row">
+      {#each keyed as { key, row }, index (key)}
+        <div
+          class="row"
+          role="row"
+          animate:flip={{ duration: motionMs('base') }}
+          in:fade={{ duration: motionMs('base') }}
+          out:fade={{ duration: motionMs('fast') }}
+        >
           {#each columns as column (column.id)}
             {#if column.allowedValues && column.allowedValues.length > 0}
               <select

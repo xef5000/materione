@@ -12,6 +12,7 @@ import ArrowUp from '@lucide/svelte/icons/arrow-up';
 import AppWindow from '@lucide/svelte/icons/app-window';
 import Armchair from '@lucide/svelte/icons/armchair';
 import Box from '@lucide/svelte/icons/box';
+import Check from '@lucide/svelte/icons/check';
 import ChefHat from '@lucide/svelte/icons/chef-hat';
 import ChevronDown from '@lucide/svelte/icons/chevron-down';
 import ChevronLeft from '@lucide/svelte/icons/chevron-left';
@@ -89,6 +90,7 @@ export const icons = {
   activity: Activity,
   armchair: Armchair,
   box: Box,
+  check: Check,
   'chef-hat': ChefHat,
   'chevron-down': ChevronDown,
   'chevron-left': ChevronLeft,

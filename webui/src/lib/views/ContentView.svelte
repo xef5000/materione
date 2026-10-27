@@ -15,6 +15,9 @@
   import { contentTypeIcon } from '../components/icons';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
+  import { fade } from 'svelte/transition';
+  import { flip } from 'svelte/animate';
+  import { motionMs, rowsAnimate } from '../motion';
   import { ops, unwrap } from '../api';
   import { parseBulkResult, recipeOperation } from '../bulk';
   import {
@@ -571,7 +574,7 @@
     <Studio {active} resource={content.open} onClose={() => openStudio(null)} />
   {/key}
 {:else}
-  <div class="content">
+  <div class="content view-enter">
     <nav class="types" aria-label="content types">
       {#each tabs as entry (entry.directory)}
         <button
@@ -688,54 +691,82 @@
           <span>Status</span>
         </div>
       {/if}
-      {#each rows as row (row.key)}
-        <div
-          class="entry"
-          class:selected={row.key === content.selected}
-          class:marked={marked.includes(row.key)}
-          class:folder={row.kind === 'folder'}
-          data-key={row.key}
-          role="option"
-          aria-selected={row.key === content.selected}
-          aria-checked={row.kind === 'doc' ? marked.includes(row.key) : undefined}
-          tabindex="-1"
-          onclick={() => { if (!justDragged) content.selected = row.key; }}
-          ondblclick={() => open(row)}
-          oncontextmenu={(event) => showMenu(row, event)}
-          onkeydown={() => {}}
-        >
-          {#if row.kind === 'folder'}
-            <span class="folder-visual" aria-hidden="true"><Icon name="folder" size={20} /></span>
-          {:else}
-            <ResourceThumbnail
-              visual={row.summary?.visual}
-              render={row.summary?.render}
-              material={materialFor(row)}
-              label={row.name}
-              size={presentation.layout === 'grid' ? 56 : 34}
-              version={workspace.visualVersion}
-            />
+      {#snippet entryBody(row: BrowserEntry)}
+        {#if row.kind === 'folder'}
+          <span class="folder-visual" aria-hidden="true"><Icon name="folder" size={20} /></span>
+        {:else}
+          <ResourceThumbnail
+            visual={row.summary?.visual}
+            render={row.summary?.render}
+            material={materialFor(row)}
+            label={row.name}
+            size={presentation.layout === 'grid' ? 56 : 34}
+            version={workspace.visualVersion}
+          />
+        {/if}
+        <span class="copy">
+          <span class="name" title={row.name}>{row.name}</span>
+          <span class="summary" title={summaryFor(row)}>{summaryFor(row)}</span>
+          {#if content.search && row.kind === 'doc' && row.location}
+            <span class="location">In {row.location}</span>
           {/if}
-          <span class="copy">
-            <span class="name" title={row.name}>{row.name}</span>
-            <span class="summary" title={summaryFor(row)}>{summaryFor(row)}</span>
-            {#if content.search && row.kind === 'doc' && row.location}
-              <span class="location">In {row.location}</span>
-            {/if}
-            {#if row.kind === 'doc' && row.ids.length > 1}
-              <span class="shared-file">{row.ids.length} resources in this file</span>
-            {/if}
-          </span>
-          {#if presentation.showTechnicalColumns}
-            <code class="technical-id" title={row.id || 'No resource ID'}>{row.id || '—'}</code>
-            <code class="technical-path" title={row.path}>{row.path}</code>
+          {#if row.kind === 'doc' && row.ids.length > 1}
+            <span class="shared-file">{row.ids.length} resources in this file</span>
           {/if}
-          <span
-            class="health {row.kind === 'doc' ? healthFor(row) : 'folder-status'}"
-            title={healthTitle(row)}
-          >{statusLabel(row)}</span>
-        </div>
-      {/each}
+        </span>
+        {#if presentation.showTechnicalColumns}
+          <code class="technical-id" title={row.id || 'No resource ID'}>{row.id || '—'}</code>
+          <code class="technical-path" title={row.path}>{row.path}</code>
+        {/if}
+        <span
+          class="health {row.kind === 'doc' ? healthFor(row) : 'folder-status'}"
+          title={healthTitle(row)}
+        >{statusLabel(row)}</span>
+      {/snippet}
+      {#if rowsAnimate(rows.length)}
+        {#each rows as row (row.key)}
+          <div
+            class="entry"
+            class:selected={row.key === content.selected}
+            class:marked={marked.includes(row.key)}
+            class:folder={row.kind === 'folder'}
+            data-key={row.key}
+            role="option"
+            aria-selected={row.key === content.selected}
+            aria-checked={row.kind === 'doc' ? marked.includes(row.key) : undefined}
+            tabindex="-1"
+            animate:flip={{ duration: motionMs('base') }}
+            in:fade={{ duration: motionMs('base') }}
+            onclick={() => { if (!justDragged) content.selected = row.key; }}
+            ondblclick={() => open(row)}
+            oncontextmenu={(event) => showMenu(row, event)}
+            onkeydown={() => {}}
+          >
+            {@render entryBody(row)}
+          </div>
+        {/each}
+      {:else}
+        <!-- Above ROW_MOTION_LIMIT rows the list updates without motion: flip reads every row's box on each change. -->
+        {#each rows as row (row.key)}
+          <div
+            class="entry"
+            class:selected={row.key === content.selected}
+            class:marked={marked.includes(row.key)}
+            class:folder={row.kind === 'folder'}
+            data-key={row.key}
+            role="option"
+            aria-selected={row.key === content.selected}
+            aria-checked={row.kind === 'doc' ? marked.includes(row.key) : undefined}
+            tabindex="-1"
+            onclick={() => { if (!justDragged) content.selected = row.key; }}
+            ondblclick={() => open(row)}
+            oncontextmenu={(event) => showMenu(row, event)}
+            onkeydown={() => {}}
+          >
+            {@render entryBody(row)}
+          </div>
+        {/each}
+      {/if}
 
       {#if !rows.length}
         <div class="empty">
@@ -1016,6 +1047,9 @@
     cursor: default;
     font-size: var(--text-base);
     padding: var(--space-2) var(--space-2);
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard);
   }
   .entry:hover {
     background: var(--bg-hover);
@@ -1033,6 +1067,7 @@
     pointer-events: none;
     border: 1px solid var(--accent);
     background: color-mix(in srgb, var(--accent) 18%, transparent);
+    animation: fade-in var(--motion-fast) var(--ease-standard) both;
   }
   .entry.marked {
     box-shadow: inset 3px 0 0 var(--accent);

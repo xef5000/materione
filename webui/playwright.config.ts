@@ -12,6 +12,9 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:4173',
     browserName: 'chromium',
     viewport: { width: 1365, height: 900 },
+    // Every spec runs the reduced-motion path (app.css, "Motion"): transitions and loops
+    // are off, so assertions never race an animation. The motion spec opts back in.
+    reducedMotion: 'reduce',
     trace: 'off',
     screenshot: 'off',
     video: 'off',

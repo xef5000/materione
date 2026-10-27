@@ -1,5 +1,7 @@
 <script lang="ts">
-  /** A right-click menu anchored at the cursor; closes on any outside click. */
+  /** A right-click menu anchored at the cursor; closes on any outside click. Opens with the .menu pop-in (app.css) and fades out. */
+  import { fade } from 'svelte/transition';
+  import { motionMs } from '../motion';
   export interface MenuItem {
     label: string;
     danger?: boolean;
@@ -26,7 +28,13 @@
   });
 </script>
 
-<div class="menu context-menu" style:left="{x}px" style:top="{y}px" role="menu">
+<div
+  class="menu context-menu"
+  style:left="{x}px"
+  style:top="{y}px"
+  role="menu"
+  out:fade|global={{ duration: motionMs('fast') }}
+>
   {#each items as item (item.label)}
     <button
       class="menu-item"
