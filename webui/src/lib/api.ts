@@ -29,6 +29,14 @@ export interface TypeParam {
   advanced?: boolean;
   referenceKind?: string;
   example?: string;
+  /** Module metadata (schema-declared): this parameter is an add/remove module card. */
+  module?: boolean;
+  /** Picker category id; falls back to `section`. */
+  category?: string;
+  /** Icon registry name in the editor's one icon set. */
+  icon?: string;
+  /** One line the module picker shows; falls back to `description`. */
+  summary?: string;
 }
 
 export interface TypeInfo {

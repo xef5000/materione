@@ -68,7 +68,9 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("material", materialType, true, null,
                                 "Vanilla base material (e.g. NETHERITE_SWORD)", supportedMaterials, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Base material", "identity", 10, false, "material", "", "NETHERITE_SWORD")),
+                                        "Base material", "identity", 10, false, "material", "", "NETHERITE_SWORD",
+                                        true, "identity", "box",
+                                        "The vanilla item this builds on - its looks and stats until a model or behaviour takes over")),
                         new ParameterSchema("template", ParameterType.REFERENCE, false, null,
                                 "Template this item inherits from", null, null).withEditor(new ParameterSchema.EditorMetadata("Template", "identity", 20, true, "reference", "template", "")),
                         new ParameterSchema("model", ParameterType.REFERENCE, false, null,
@@ -76,7 +78,10 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
                                 "Texture for the generated model (auto-model path)", null, null).withEditor(new ParameterSchema.EditorMetadata("Texture", "appearance", 10, false, "texture", "texture", "item/my_texture")),
                         new ParameterSchema("model_parent", ParameterType.STRING, false, "item/generated",
-                                "Parent for the generated model", null, null).withEditor(new ParameterSchema.EditorMetadata("Model style", "appearance", 30, true, "text", "", "item/generated")),
+                                "Parent for the generated model", null, null).withEditor(new ParameterSchema.EditorMetadata(
+                                "Model style", "appearance", 30, false, "text", "", "item/generated",
+                                true, "appearance", "layers",
+                                "The shape family the generated model renders with (flat sprite or handheld)")),
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
                                 "Item display name", null, null).withEditor(new ParameterSchema.EditorMetadata("Display name", "identity", 0, false, "formatted-text", "", "Ruby sword")),
                         new ParameterSchema("lore", ParameterType.LIST, false, null,
@@ -84,13 +89,20 @@ public final class ItemType implements ContentType {
                         new ParameterSchema("components", ParameterType.RAW, false, null,
                                 "Vanilla data components (version-aware, platform-gated)", null, null).withEditor(new ParameterSchema.EditorMetadata("Vanilla components", "gameplay", 90, true, "advanced", "", "")),
                         new ParameterSchema("mechanics", ParameterType.LIST, false, null,
-                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata("Abilities", "behavior", 10, false, "mechanics", "mechanic", "")),
+                                "Mechanic bundle: one map per mechanic ({name: parameters})", null, null).withEditor(new ParameterSchema.EditorMetadata(
+                                        "Abilities", "behavior", 10, false, "mechanics", "mechanic", "",
+                                        true, "behaviour", "zap", "")),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
                                 "ECA rules fired by this item (click, break, equip, drop, consume, ...)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Behaviour rules", "behavior", 20, false, "behavior-rules", "", "")),
+                                        "When… do…", "behavior", 20, false, "behavior-rules", "", "",
+                                        true, "behaviour", "activity",
+                                        "React to game events with conditions and actions")),
                         new ParameterSchema("jukebox_song", ParameterType.REFERENCE, false, null,
-                                "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata("Jukebox song", "gameplay", 20, true, "reference", "sound", ""))),
+                                "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata(
+                                        "Jukebox song", "gameplay", 20, false, "reference", "sound", "",
+                                        true, "gameplay", "volume-2",
+                                        "Play a custom song when this disc goes into a jukebox"))),
                 "1.0.0");
     }
 

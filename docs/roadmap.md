@@ -353,6 +353,15 @@ copy-and-retarget, related-recipe and variant creation, and revision-checked all
 authoring with an impact preview (`authoring.bulk`), plus a keyboard command palette. Menu
 authoring remains M6; no infrastructure state changed.
 
+**Item-studio modules follow-up (M5 as built, issue #152):** the item studio became a display card
+plus modules — every module derived from the content type's self-description (new
+`EditorMetadata` module/category/icon/summary fields) and the mechanics registry, never a
+hand-written editor list; a searchable, categorised picker adds them and lossless
+`authoring.setFields` edits stage their add/remove. Types without module-marked fields keep the
+section layout; the same philosophy is intended for other content types (#153). Vanilla
+data-component modules wait for the component pass-through (#103's M7 item) — modules never
+offer what the plugin does not apply.
+
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).

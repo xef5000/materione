@@ -19,9 +19,11 @@
   import ModelWorkbench from './ModelWorkbench.svelte';
   import MechanicsEditor from './MechanicsEditor.svelte';
   import BehaviorRulesEditor from './BehaviorRulesEditor.svelte';
+  import ModulesArea from './ModulesArea.svelte';
   import { ops, unwrap } from '../api';
   import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
   import { diagnosticNames } from '../diagnostics';
+  import { usesModules } from '../modules';
   import { tick } from 'svelte';
   import {
     draftDirty,
@@ -424,6 +426,28 @@
 
 <svelte:window onkeydown={onKeydown} />
 
+{#snippet provenance(fieldId: string)}
+  {#if inheritance && fieldId !== 'template'}
+    {@const source = inheritance.sources[fieldId]}
+    {@const removing = pendingRemoval(documentDraft, [rootId, fieldId])}
+    {#if removing && source}
+      <p class="provenance" data-provenance={fieldId}>
+        Resets to the value from {templateLabel(source)} on Save & apply ({shortValue(inheritance.inherited[fieldId])}).
+        <button type="button" class="link" onclick={() => undoReset(fieldId)}>Undo</button>
+      </p>
+    {:else if source && Object.hasOwn(draft, fieldId)}
+      <p class="provenance" data-provenance={fieldId}>
+        Overrides {templateLabel(source)} ({shortValue(inheritance.inherited[fieldId])}).
+        <button type="button" class="link" onclick={() => resetToInherited(fieldId)}>Reset to inherited</button>
+      </p>
+    {:else if source}
+      <p class="provenance inherited" data-provenance={fieldId}>
+        Inherited from {templateLabel(source)}: {shortValue(inheritance.inherited[fieldId])}
+      </p>
+    {/if}
+  {/if}
+{/snippet}
+
 <section class="studio">
   <header>
     <button type="button" class="back" onclick={onClose} title="back to {typeDirectory}" aria-label="back to {typeDirectory}">
@@ -526,6 +550,25 @@
         <p class="error">No registered type owns {typeDirectory}/ — edit this file as YAML.</p>
       {:else if !documentDraft.loaded}
         <p class="loading">Loading document…</p>
+      {:else if usesModules(schema)}
+        <!-- The module studio (issue 152): display card + one card per module,
+             derived from the same self-description as the sections below. -->
+        <ModulesArea
+          {resource}
+          {schema}
+          vocabulary={workspace.behavior}
+          values={draft}
+          host={schema.name}
+          {provenance}
+          {set}
+          removeField={resetToInherited}
+          onError={(message) => (documentDraft.error = message)}
+          {focusField}
+          {actionFor}
+          {missingTexture}
+          {fieldIssue}
+          showInFile={() => revealInAdvanced(resource)}
+        />
       {:else}
         {#each sections as section (section.id)}
           <fieldset>
@@ -576,25 +619,7 @@
                 {@const issue = fieldIssue(field.id)!}
                 <p class="field-issue" role="note">{issue.code}: {issue.message}{issue.hint ? ` — ${issue.hint}` : ''}</p>
               {/if}
-              {#if inheritance && field.id !== 'template'}
-                {@const source = inheritance.sources[field.id]}
-                {@const removing = pendingRemoval(documentDraft, [rootId, field.id])}
-                {#if removing && source}
-                  <p class="provenance" data-provenance={field.id}>
-                    Resets to the value from {templateLabel(source)} on Save & apply ({shortValue(inheritance.inherited[field.id])}).
-                    <button type="button" class="link" onclick={() => undoReset(field.id)}>Undo</button>
-                  </p>
-                {:else if source && Object.hasOwn(draft, field.id)}
-                  <p class="provenance" data-provenance={field.id}>
-                    Overrides {templateLabel(source)} ({shortValue(inheritance.inherited[field.id])}).
-                    <button type="button" class="link" onclick={() => resetToInherited(field.id)}>Reset to inherited</button>
-                  </p>
-                {:else if source}
-                  <p class="provenance inherited" data-provenance={field.id}>
-                    Inherited from {templateLabel(source)}: {shortValue(inheritance.inherited[field.id])}
-                  </p>
-                {/if}
-              {/if}
+              {@render provenance(field.id)}
             {/each}
           </fieldset>
         {/each}

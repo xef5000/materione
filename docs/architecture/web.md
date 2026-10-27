@@ -721,6 +721,30 @@ cannot read, forge, replay, or reorder anything.
   opens a command palette over views, create starters, every resource, every asset, and — with a
   resource open — that type's fields (the property search). It runs actions the UI already has.
   Menu integration stays M6.
+- *As built (M5 item-studio modules follow-up, issue #152):* the item studio is **a display card
+  plus modules**. A type joins this layout as soon as its self-description marks one parameter
+  `module` (`EditorMetadata.module/category/icon/summary`, plugin.md §3) — the framework is
+  type-agnostic, and types without module fields keep the classic sections. The **display card**
+  holds the formatted name, the lore, and the texture/model slots (with the existing
+  Draw/Edit-in-Blockbench actions and the missing-texture repair panel). Each **module** is a
+  card: schema field modules (base material — required, so its card has no Remove — model style,
+  jukebox song), one card per authored mechanic instance (labelled and explained by the mechanic
+  registry; unregistered entries stay visible with their settings untouched), and one
+  "When… do…" rules module wrapping the rules editor. The **picker** searches labels, summaries
+  and categories with chip filters and keyboard navigation, marks already-added modules
+  (repeatable mechanics stay addable), and offers only mechanics this server registers. Adding
+  and removing stages the same lossless edits as the classic sections — one
+  `authoring.setFields` batch on **Save & apply**; removing the last ability removes the
+  `mechanics:` key rather than writing an empty list; a module with no honest default (a
+  reference the author has not chosen) opens an empty card and writes its key only when a value
+  is set. Advanced fields (the item `template`, `components`) stay reachable through an Advanced
+  disclosure and the footer's Advanced-only report; every card carries **Show in file**.
+  Coverage is honest: only what the plugin applies today is a module (display name/lore, the
+  mechanics, jukebox song) — the `components:` block still warns instead of applying (#103), so
+  component modules (attack damage/speed, glint, tint, can-break…) wait for the M7 pass-through.
+  Enums with 2–4 values render as segmented controls. The derivation is a pure module pinned by
+  vitest; the deterministic `?modules` browser fixture pins add / configure / remove and the
+  resulting field edits.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

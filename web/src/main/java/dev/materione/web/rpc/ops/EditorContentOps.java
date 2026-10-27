@@ -836,6 +836,20 @@ public final class EditorContentOps {
         if (!param.editor().example().isBlank()) {
             object.addProperty("example", param.editor().example());
         }
+        // Module metadata (issue #152): additive; older panels ignore it and
+        // keep the section layout, newer panels hide nothing either way.
+        if (param.editor().module()) {
+            object.addProperty("module", true);
+        }
+        if (!param.editor().category().isBlank()) {
+            object.addProperty("category", param.editor().category());
+        }
+        if (!param.editor().icon().isBlank()) {
+            object.addProperty("icon", param.editor().icon());
+        }
+        if (!param.editor().summary().isBlank()) {
+            object.addProperty("summary", param.editor().summary());
+        }
         return object;
     }
 
