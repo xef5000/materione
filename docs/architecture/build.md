@@ -165,10 +165,19 @@ reducers, editor rules, and protocol fixtures.
 
 `./gradlew :harness:integrationTest` downloads the pinned Paper jar once
 (content-addressed cache at `~/.gradle/caches/materione-paper/<sha256>/paper.jar`),
-builds the shaded jar, prepares a fresh workspace under `harness/build/work/` (eula,
+builds the shaded jar, prepares fresh workspaces under `harness/build/work/` (eula,
 offline flat world, plugin dropped into `plugins/`, fixture packs copied into
 `plugins/Materione/content/packs/`), boots the server, drives the console,
-and asserts the stable log markers:
+and asserts the stable log markers. Five scenario classes perform nine serial
+server launches. A separate **runtime binary cache** seeds fresh workspaces with
+only the server's `cache/`, `libraries/`, and `versions/` JARs, verified against a
+SHA-256 manifest. The first successful boot publishes the cache atomically; entries
+are keyed by Paper JAR hash, OS/architecture, Java major, and layout version. No worlds, plugin
+JARs/remapping, settings, content, allocation state, or generated Materione output
+cross this cache boundary (D1/D7). See [`harness/README.md`](../../harness/README.md)
+for cache bypass and isolated cold-cache runs.
+
+The assertions use these markers:
 
 ```
 MATERIONE-BOOT-OK <version>          MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12|noop>
@@ -179,20 +188,29 @@ MATERIONE-BYE
 
 These markers are test API — treat changes to them like changes to `MTR-####` codes
 (plugin.md §5). The standard scenario (`PaperBootstrapIT`) is the M1 exit gate: boot with
-the fixture corpus (53 live items), then the hot-reload sequence — no-op reload, add an
-item → 54, drop a syntactically broken file → still 54 with `MTR-0007` in the log,
-remove both → 53. A fail-soft variant (`PaperFailSoftIT`) injects a broken `settings.yml`
+the fixture corpus (57 live items), then the hot-reload sequence — no-op reload, add an
+item → 58, drop a syntactically broken file → still 58 with `MTR-0007` in the log,
+remove both → 57. A fail-soft variant (`PaperFailSoftIT`) injects a broken `settings.yml`
 and asserts the server still boots and the diagnostic is reported. The M2 exit gate is
 `PaperWorldPersistenceIT` (`WorldPersistenceRunner`): boots all three fixture packs
-(57 live items), places one block per state technique plus a full furniture cluster, and
-across five boots in four workspaces proves the world survives reload, restart and world
+(76 live items), places one block per state technique plus a full furniture cluster, and
+across five boots in three workspaces proves the world survives reload, restart and world
 copy — with fault injections on both ends (a broken rule file mid-reload; the corruption
 pair that deletes the allocation table and re-sorts definitions so the rebuilt accelerator
 disagrees with chunk-PDC truth, expecting `MTR-0024` + a drifted sweep). Timeouts
-(boot 300 s / command 60 s / stop 60 s) are env-overridable; on failure the assertion
+(boot 300 s / command 60 s / stop 180 s) are env-overridable; on failure the assertion
 includes missing markers, the log tail, and the workspace path. Marker waits are
 cursor-based (`LogWatcher#mark`): a repeated command cannot match its own stale marker
-from a previous occurrence.
+from a previous occurrence. Cursors precede the triggering action; the returned line
+must itself be fresh. Waits detect child exit instead of consuming the whole deadline,
+and exceptional paths terminate owned processes. Persistence boots still wait for a
+clean server exit before restarting or copying the world.
+
+`MTR-HARNESS` records expose workspace preparation, cache hit/miss, launch PID,
+readiness, marker waits, editor-save latency, and shutdown duration using a monotonic
+clock. Full failed assertions and causes are printed without `--info`; editor failures
+retain bounded log tails and actual exit status. Async transport errors reach pending
+RPCs, and direct-editor handover buffers are drained in receive order.
 
 **M3 — the editor handshake gate (`EditorHandshakeRunner` / `PaperEditorHandshakeIT`):**
 boots with the fixture corpus, opens a session via console, and a JDK HTTP/WebSocket
@@ -237,12 +255,29 @@ interactively.
 ## 8. CI (`.github/workflows/ci.yml`)
 
 - **build** (ubuntu): `./gradlew build`; uploads the shaded jar.
-- **paper boot** (ubuntu, needs build): caches the pinned Paper jar keyed on
-  `hashFiles('gradle/libs.versions.toml')`, runs `:harness:integrationTest`, uploads
-  workspaces on failure.
+- **paper boot** (ubuntu, needs change detection only): builds its own shaded JAR
+  and runs `:harness:integrationTest` alongside the unit build. Both `build (ubuntu)`
+  and `paper boot (ubuntu)` remain required checks. PRs changing only docs, webui,
+  or top-level Markdown retain the existing Paper exemption; main pushes, nightly
+  runs, and manual dispatches still run the gate.
+- The Paper cache covers the pinned outer JAR and verified bootstrap JARs, keyed
+  on the catalog hash, OS, Java major, and runtime-cache layout. Scenario execution
+  remains serial on each runner because game/editor/delivery ports are shared.
+- **Diagnostics**: `scripts/ci-report.mjs` prints JUnit failures and phase
+  measurements to the console and job summary before artifact upload. The optional,
+  two-day `harness-debug` artifact is capped at 128 source files / 8 MiB total and
+  256 KiB per file (plus a small manifest), contains redacted XML/log/config/crash
+  evidence including nested fail-soft paths, and excludes runtime/world binaries.
+  Artifact-storage exhaustion cannot hide the assertion or change the test result.
 - **windows-canary** (non-blocking): build + integration on Windows. Promote to required
   after it has been green for a few weeks — Windows is a first-class dev platform here
   (path handling, kill-tree semantics, console encoding all differ).
+
+Use `:harness:integrationTest --rerun` for timing comparisons and flake reproduction.
+Gradle `FROM-CACHE` test results are not actual Paper executions. Compare cold/warm
+binary-cache runs separately, and distinguish cancelled superseded workflows from
+failed assertions. No performance thresholds or automatic retries are changed by
+the CI optimizations.
 
 No JDK matrix: the toolchain pins Java 21 everywhere (foojay provisions Temurin on CI;
 locally-resolvable JDKs like `~/.jdks/...` win when present).

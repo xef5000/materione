@@ -33,8 +33,8 @@ Materione's internals, only these markers.
 | `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
-filtered to sample + corpus (4 + 50 items), so the expected live count is
-**56**; the hot-reload scenario below moves it to 57 and back. The world
+filtered to sample + corpus, with **57** live items including auto placement
+items; the hot-reload scenario below moves it to 58 and back. The world
 smoke between doctor and reload force-loads chunk (0, 0) — a headless boot
 has no players to keep chunks warm — then drives `dev place → inspect →
 sweep → remove` against `sample:amethyst_lamp` at `0 200 0`, the shaped
@@ -43,7 +43,7 @@ cluster at `3 200 3` (placed and removed through the same dev commands).
 
 The **world-persistence scenario** (`WorldPersistenceRunner`,
 `PaperWorldPersistenceIT`) is the M2 exit gate: it boots with all three
-fixture packs (**57** items live) and, across five boots in four
+fixture packs (**76** items live) and, across five boots in three
 workspaces, proves a placed world — one block per state technique, the
 shaped pair, and a furniture cluster with seat, storage, light, label and
 evolution — survives `reload`, a full restart, and a copy of the `world/`
@@ -58,7 +58,8 @@ inspect, `drifted=1` + targeted resync on sweep).
 ## Running
 
 ```bash
-./gradlew :harness:integrationTest          # full boot + command + stop cycle
+./gradlew :harness:integrationTest          # all five scenarios, nine server launches
+./gradlew :harness:integrationTest --rerun  # force execution, not a cached test result
 ./gradlew :harness:downloadPaperServer      # pinned jar (sha256-verified) into Gradle cache
 ./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.4   # bump procedure
 ```
@@ -66,7 +67,50 @@ inspect, `drifted=1` + targeted resync on sweep).
 The server jar is pinned by absolute URL + sha256 in
 `gradle/libs.versions.toml` (the old PaperMC v2 download API is dead; the
 harness makes zero API calls at test time). CI caches the Gradle-cache
-directory keyed on the catalog hash.
+directory keyed on the catalog hash, OS, Java major, and cache layout version.
+
+### Runtime binary cache
+
+Fresh workspaces receive independent copies of the pinned server's bootstrap
+JARs from `cache/`, `libraries/`, and `versions/`. The first successful boot
+populates a checksummed manifest atomically; subsequent workspaces reuse it.
+Entries are addressed by the Paper JAR's SHA-256, OS/architecture, Java major, and layout
+version under `~/.gradle/caches/materione-paper/runtime/`. Every restore verifies
+the manifest before copying any files.
+
+Worlds, settings, content, plugin JARs/remapping, allocation state, and generated
+Materione output are **never** included. Restart, world-copy, and corruption tests
+still operate on their actual scenario state. A corrupt cache fails explicitly;
+remove the named entry or use `-Pharness.runtimeCache=false` to bypass it.
+`-Pharness.runtimeCacheDir=<directory>` isolates a cold-cache experiment.
+Quote these `-P...` arguments in PowerShell.
+
+The binary cache and Gradle's **test-result cache** are different. Use `--rerun`
+when measuring or investigating a flake; `integrationTest FROM-CACHE` does not
+boot a server and is not evidence of improved execution speed.
+
+### Failure evidence and timeouts
+
+`MTR-HARNESS` records identify workspace, launch PID, readiness, marker waits,
+cache hit/miss, editor save, and shutdown durations. Failed tests print complete
+assertion messages, causes, actual process status, and bounded server/stdout tails.
+Session capabilities are redacted. Marker cursors are taken **before** the action;
+waits return only fresh lines and stop immediately if the child exits.
+Child stdout/stderr are explicitly UTF-8 on Windows too. Incomplete trailing log
+lines are not matched or decoded until the writer finishes them.
+
+Boot, command, and clean-stop deadlines default to 300, 60, and 180 seconds.
+Override them with `MTR_HARNESS_BOOT_SECS`, `MTR_HARNESS_COMMAND_SECS`, and
+`MTR_HARNESS_STOP_SECS`. Changing these deadlines is not a fix for a missing
+marker. The architecture's performance budgets are unchanged.
+
+CI runs `node scripts/ci-report.mjs` even after a JVM failure. It prints JUnit
+failures and phase measurements into the job console and summary **before**
+attempting artifact upload. The optional `harness-debug` artifact contains
+redacted XML/log/config/crash evidence, including `failsoft/bootstrap`, capped at
+128 source files / 8 MiB total and 256 KiB per file (plus a small manifest).
+Truncated XML is named `.truncated.txt`, not presented as a valid XML report.
+Artifact quota exhaustion cannot replace or hide the test failure.
 
 Manually debugging a boot (also from IntelliJ — `application` run config on
 `dev.materione.harness.PaperHarnessRunner`): the runner preserves the whole
@@ -76,15 +120,21 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 ## Scenarios
 
 - `PaperBootstrapIT` — the M1 exit gate, live on Paper: boot with the
-  fixture corpus (56 items), then the hot-reload sequence —
+  fixture corpus (57 items), then the hot-reload sequence —
   1. no-op reload (nothing changed since boot),
-  2. add `gem_extra` to the corpus pack → reload → 57 items,
-  3. drop a syntactically broken item file → reload → still 57 items and
+  2. add `gem_extra` to the corpus pack → reload → 58 items,
+  3. drop a syntactically broken item file → reload → still 58 items and
      `MTR-0007` in the log (fault injection, fail-soft D6),
-  4. remove both files → reload → back to 56.
+  4. remove both files → reload → back to 57.
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.
+- `PaperEditorHandshakeIT` — direct editor handshake, signed RPC, authoring,
+  file-watcher and save-back flows, including the unchanged save latency budget.
+- `PaperRelayEditorIT` — the default relay editor flow against a local fake
+  mailbox; no production relay is contacted.
+- `PaperWorldPersistenceIT` — the five-launch persistence and corruption sequence
+  described above. Launches within this scenario remain ordered.
 
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 

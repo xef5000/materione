@@ -39,6 +39,11 @@ dependencies {
 }
 
 tasks.withType<Test>().configureEach {
+    testLogging {
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
     if (name == "integrationTest") {
         // :harness:integrationTest exists to run exactly these. Do NOT add the
         // default exclusion: a tag both included and excluded is silently

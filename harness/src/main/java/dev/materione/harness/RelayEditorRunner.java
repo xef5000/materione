@@ -51,37 +51,29 @@ public final class RelayEditorRunner {
         LogWatcher log = new LogWatcher(workspace.logFile);
         Process process;
         try {
-            process = new ProcessBuilder(
-                    options.javaExecutable().toString(),
-                    "-Xmx2G",
-                    "-Dfile.encoding=UTF-8",
-                    "-DIReallyKnowWhatIAmDoingISwear",
-                    "-jar",
-                    options.paperJar().toString(),
-                    "nogui")
-                    .directory(workspace.root.toFile())
-                    .redirectErrorStream(true)
-                    .redirectOutput(workspace.stdoutFile.toFile())
-                    .start();
+            process = PaperHarnessRunner.start(options, workspace, log);
         } catch (Exception e) {
             return failure(List.of("could not start server: " + e), -1, workspace);
         }
 
         List<String> problems = new ArrayList<>();
+        RelayBrowser browser = null;
         try (ConsoleDriver console = new ConsoleDriver(process.getOutputStream())) {
             if (await(log, "Done (", options.bootTimeout()) == null) {
                 problems.add("boot deadline exceeded");
                 return finish(process, log, options, problems, workspace);
             }
+            workspace.ready(options);
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing");
             }
 
             // 1. the DEFAULT surface — plain 'materione editor' is the cloud
             // relay now; the gate fails if anything but the cloud path answers
+            var openCursor = log.mark();
             console.send("materione editor");
             String urlLine = log.awaitLine(
-                    "MATERIONE-EDITOR " + relayBase + "/?s=", options.commandTimeout(), log.mark());
+                    "MATERIONE-EDITOR " + relayBase + "/?s=", options.commandTimeout(), openCursor);
             if (urlLine == null) {
                 problems.add("MATERIONE-EDITOR cloud url missing after 'materione editor'"
                         + " (the relay path fell back — see MTR-0050 in the log)");
@@ -132,17 +124,17 @@ public final class RelayEditorRunner {
                     KeyFormat.ed25519RawPublic(editorSigning.getPublic()),
                     KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) editorEphemeral.getPublic()),
                     "harness-client");
+            var promptCursor = log.mark();
             client.postMessages(channelId, editorToken, List.of(Wire.canonicalJson(hello.toJson())));
 
             // 4. trust prompt → console approval — identical UX to direct mode
-            int promptCursor = log.mark();
             if (log.awaitLine("wants to connect as editor", options.commandTimeout(), promptCursor) == null) {
-                problems.add("trust prompt never surfaced for nonce " + noncePrefix);
+                throw new java.io.IOException("trust prompt never surfaced for nonce " + noncePrefix);
             }
+            var approvedCursor = log.mark();
             console.send("materione editor approve " + noncePrefix);
-            int approvedCursor = log.mark();
             if (log.awaitLine("MTR-0032", options.commandTimeout(), approvedCursor) == null) {
-                problems.add("approval did not activate the session (MTR-0032 missing)");
+                throw new java.io.IOException("approval did not activate the session (MTR-0032 missing)");
             }
 
             // 5. signed reply + key confirmation. The reader takes messages
@@ -170,7 +162,7 @@ public final class RelayEditorRunner {
             SecretKey sessionKey = SessionCrypto.sessionKey(sharedSecret, transcriptHash);
 
             // 6. sealed RPC + the live-preview loop over the mailbox
-            RelayBrowser browser = new RelayBrowser(
+            browser = new RelayBrowser(
                     client, channelId, editorToken, reader, sessionKey,
                     editorSigning.getPrivate(), KeyFormat.ed25519Public(blob.pluginSigningPubKey()));
             Wire.Response pong = browser.call("ping", new JsonObject());
@@ -205,26 +197,29 @@ public final class RelayEditorRunner {
             // 7. the relay session counts as active; the user surface closes it
             problems.addAll(drive(console, log, options, "materione editor status",
                     "editor transport: running (1 active editor(s)"));
-            console.send("materione editor stop");
-            if (log.awaitLine("MATERIONE-EDITOR-STOPPED", options.commandTimeout(), log.mark()) == null) {
-                problems.add("MATERIONE-EDITOR-STOPPED missing after 'materione editor stop'");
-            }
+            drive(console, log, options, "materione editor stop", "MATERIONE-EDITOR-STOPPED");
 
             String fullLog = log.readAll();
             if (fullLog != null && fullLog.contains("MTR-0050")) {
                 problems.add("relay-unreachable fallback fired (MTR-0050) — the gate must prove the cloud path");
             }
 
-            console.send("stop");
-            if (await(log, "MATERIONE-BYE", options.stopTimeout()) == null) {
-                problems.add("MATERIONE-BYE missing after stop");
-            }
+            PaperHarnessRunner.stop(process, console, log, options);
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             java.io.StringWriter stack = new java.io.StringWriter();
             e.printStackTrace(new java.io.PrintWriter(stack));
             problems.add("relay scenario error: " + stack);
         } finally {
-            PaperHarnessRunner.killTree(process);
+            try {
+                if (browser != null) {
+                    browser.close();
+                }
+            } finally {
+                PaperHarnessRunner.killTree(process);
+            }
         }
         return finish(process, log, options, problems, workspace);
     }
@@ -250,16 +245,19 @@ public final class RelayEditorRunner {
         }
 
         String next() throws Exception {
-            long deadline = System.currentTimeMillis() + 20_000;
-            while (System.currentTimeMillis() < deadline) {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(20);
+            while (System.nanoTime() < deadline) {
                 RelayClient.Poll poll = client.poll(channelId, token, cursor, 2);
+                if (poll.closed()) {
+                    throw new java.io.IOException("relay mailbox closed during handshake");
+                }
                 if (!poll.messages().isEmpty()) {
                     RelayClient.Delivered first = poll.messages().get(0);
                     cursor = first.id();
                     return first.messageText();
                 }
             }
-            throw new AssertionError("no mailbox message arrived in time");
+            throw new java.io.IOException("no mailbox message arrived in time");
         }
 
         long cursor() {
@@ -274,7 +272,7 @@ public final class RelayEditorRunner {
      * lost), routing responses to waiters and pushes to the queue — the
      * relay twin of the direct-mode BrowserClient.
      */
-    private static final class RelayBrowser {
+    private static final class RelayBrowser implements AutoCloseable {
         private final RelayClient client;
         private final String channelId;
         private final String token;
@@ -288,6 +286,7 @@ public final class RelayEditorRunner {
         private final BlockingQueue<Wire.Request> pushes = new LinkedBlockingQueue<>();
         private volatile Exception pumpFailure;
         private long nextId;
+        private final Thread pump;
 
         RelayBrowser(
                 RelayClient client, String channelId, String token, MailboxReader reader,
@@ -299,13 +298,13 @@ public final class RelayEditorRunner {
             this.sessionKey = sessionKey;
             this.editorSigning = editorSigning;
             this.pluginSigning = pluginSigning;
-            Thread pump = new Thread(() -> {
+            pump = new Thread(() -> {
                 long cursor = reader.cursor();
                 try {
                     while (!Thread.currentThread().isInterrupted()) {
                         RelayClient.Poll poll = client.poll(channelId, token, cursor, 2);
                         if (poll.closed()) {
-                            return;
+                            throw new java.io.IOException("relay mailbox closed");
                         }
                         for (RelayClient.Delivered delivered : poll.messages()) {
                             cursor = delivered.id();
@@ -325,6 +324,7 @@ public final class RelayEditorRunner {
                     }
                 } catch (Exception e) {
                     pumpFailure = e;
+                    waiters.values().forEach(waiter -> waiter.completeExceptionally(e));
                 }
             }, "harness-relay-pump");
             pump.setDaemon(true);
@@ -339,24 +339,49 @@ public final class RelayEditorRunner {
             request.addProperty("op", op);
             request.addProperty("id", id);
             request.add("payload", payload);
-            client.postMessages(channelId, token, List.of(Wire.canonicalJson(
-                    sender.seal(sessionKey, editorSigning, Wire.canonicalBytes(request)))));
             try {
+                if (pumpFailure != null) {
+                    throw new IllegalStateException("relay pump failed", pumpFailure);
+                }
+                client.postMessages(channelId, token, List.of(Wire.canonicalJson(
+                        sender.seal(sessionKey, editorSigning, Wire.canonicalBytes(request)))));
                 return future.get(20, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw e;
             } catch (Exception e) {
                 throw new IllegalStateException(
                         "relay RPC '" + op + "' failed; pump failure: " + pumpFailure, e);
+            } finally {
+                waiters.remove(id);
+            }
+        }
+
+        @Override
+        public void close() {
+            pump.interrupt();
+            try {
+                pump.join(10_000);
+                if (pump.isAlive()) {
+                    throw new IllegalStateException("relay reader did not terminate");
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("interrupted terminating relay reader", e);
             }
         }
 
         /** Waits for one pushed event of the given op; null on timeout. */
         Wire.Request awaitPush(String op, long timeout, TimeUnit unit) throws InterruptedException {
-            long deadline = System.currentTimeMillis() + unit.toMillis(timeout);
-            while (System.currentTimeMillis() < deadline) {
-                Wire.Request push = pushes.poll(deadline - System.currentTimeMillis(),
-                        TimeUnit.MILLISECONDS);
+            long deadline = System.nanoTime() + unit.toNanos(timeout);
+            while (System.nanoTime() < deadline) {
+                if (pumpFailure != null) {
+                    throw new IllegalStateException("awaiting relay push '" + op + "' failed", pumpFailure);
+                }
+                Wire.Request push = pushes.poll(Math.max(1, Math.min(
+                        deadline - System.nanoTime(), TimeUnit.MILLISECONDS.toNanos(100))), TimeUnit.NANOSECONDS);
                 if (push == null) {
-                    return null;
+                    continue;
                 }
                 if (op.equals(push.op())) {
                     return push;
@@ -369,26 +394,23 @@ public final class RelayEditorRunner {
     private HarnessResult finish(
             Process process, LogWatcher log, HarnessOptions options, List<String> problems,
             ServerWorkspace workspace) {
-        try {
-            process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        return new HarnessResult(problems.isEmpty(), problems, -1, workspace.root, List.of());
+        PaperHarnessRunner.killTree(process);
+        return new HarnessResult(problems.isEmpty(), problems, PaperHarnessRunner.exitCode(process),
+                workspace.root, PaperHarnessRunner.tails(log, new LogWatcher(workspace.stdoutFile)));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
             String command, String marker) throws Exception {
-        int cursor = log.mark();
+        var cursor = log.mark();
         console.send(command);
         if (log.awaitLine(marker, options.commandTimeout(), cursor) == null) {
-            return List.of("marker '" + marker + "' missing after '" + command + "'");
+            throw new java.io.IOException("marker '" + marker + "' missing after '" + command + "'");
         }
         return List.of();
     }
 
     private static String await(LogWatcher log, String marker, java.time.Duration timeout)
-            throws InterruptedException {
+            throws java.io.IOException, InterruptedException {
         return log.awaitLine(marker, timeout);
     }
 

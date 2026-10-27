@@ -42,6 +42,133 @@ class PaperHarnessRunnerTest {
     }
 
     @Test
+    void cursorReturnsFreshPayloadNotTheFirstMatchingLine(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("latest.log");
+        Files.writeString(file, "REPLY old\n");
+        var watcher = new LogWatcher(file);
+        var cursor = watcher.mark();
+        Files.writeString(file, "REPLY new\n", java.nio.file.StandardOpenOption.APPEND);
+        assertThat(watcher.awaitLine("REPLY", Duration.ofMillis(500), cursor)).isEqualTo("REPLY new");
+        assertThat(watcher.awaitLine("REPLY", Duration.ofMillis(20), watcher.mark())).isNull();
+    }
+
+    @Test
+    void cursorAcceptsReplacedLogButNotPreviousBoot(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("latest.log");
+        Files.writeString(file, "previous boot\nDone (old)\n");
+        var watcher = new LogWatcher(file);
+        var cursor = watcher.mark();
+        assertThat(watcher.awaitLine("Done (", Duration.ofMillis(20), cursor)).isNull();
+        Files.writeString(file, "new boot\nDone (new)\n");
+        assertThat(watcher.awaitLine("Done (", Duration.ofMillis(500), cursor)).isEqualTo("Done (new)");
+    }
+
+    @Test
+    void replyBeforeConsoleSendReturnsIsNotLost(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("latest.log");
+        var watcher = new LogWatcher(file);
+        var cursor = watcher.mark();
+        var out = new ByteArrayOutputStream() {
+            @Override
+            public void flush() throws IOException {
+                Files.writeString(file, "APPROVED\n");
+            }
+        };
+        try (var console = new ConsoleDriver(out)) {
+            console.send("approve");
+            assertThat(watcher.awaitLine("APPROVED", Duration.ofMillis(500), cursor)).isEqualTo("APPROVED");
+        }
+    }
+
+    @Test
+    void exitedChildFailsWithoutWaitingForBootDeadline(@TempDir Path dir) throws Exception {
+        Path javaExecutable = Path.of(System.getProperty("java.home"), "bin",
+                System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
+        Process child = new ProcessBuilder(javaExecutable.toString(), "-version")
+                .redirectErrorStream(true).redirectOutput(dir.resolve("child.log").toFile()).start();
+        try {
+            assertThat(child.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            var watcher = new LogWatcher(dir.resolve("latest.log"));
+            watcher.watch(child);
+            org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(Duration.ofSeconds(5),
+                    () -> assertThatThrownBy(() -> watcher.awaitLine("Done (", Duration.ofMinutes(5)))
+                    .isInstanceOf(IOException.class)
+                    .hasMessageContaining("server exited").hasMessageContaining("exit=0")
+                    .hasMessageContaining("Done ("));
+        } finally {
+            PaperHarnessRunner.killTree(child);
+        }
+    }
+
+    @Test
+    void unreadableLogIsNotReportedAsMissing(@TempDir Path dir) {
+        var watcher = new LogWatcher(dir);
+        assertThatThrownBy(watcher::readAll).isInstanceOf(java.io.UncheckedIOException.class)
+                .hasMessageContaining("could not read harness log");
+    }
+
+    @Test
+    void liveAppendCannotExposeHalfAUtf8CharacterOrMarker(@TempDir Path dir) throws Exception {
+        Path file = dir.resolve("latest.log");
+        Files.write(file, new byte[] {'o', 'k', '\n', 'R', 'E', 'P', 'L', 'Y', ' ', (byte) 0xe2, (byte) 0x80});
+        var watcher = new LogWatcher(file);
+        assertThat(watcher.readAll()).isEqualTo("ok\n");
+        var cursor = watcher.mark();
+        assertThat(watcher.awaitLine("REPLY", Duration.ofMillis(20), cursor)).isNull();
+        Files.write(file, new byte[] {(byte) 0x94, '\n'}, java.nio.file.StandardOpenOption.APPEND);
+        assertThat(watcher.awaitLine("REPLY", Duration.ofMillis(20), cursor)).isNull();
+        Files.writeString(file, "REPLY fresh\n", java.nio.file.StandardOpenOption.APPEND);
+        assertThat(watcher.awaitLine("REPLY", Duration.ofMillis(500), cursor)).isEqualTo("REPLY fresh");
+        assertThat(watcher.readAll()).contains("REPLY \u2014");
+    }
+
+    @Test
+    void redirectedServerStreamsAreUtf8EvenOnWindows(@TempDir Path dir) throws Exception {
+        Path jar = dir.resolve("stub.jar");
+        var manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
+        manifest.getMainAttributes().putValue("Main-Class", StubServer.class.getName());
+        String resource = StubServer.class.getName().replace('.', '/') + ".class";
+        try (var output = new java.util.jar.JarOutputStream(Files.newOutputStream(jar), manifest);
+                var input = StubServer.class.getClassLoader().getResourceAsStream(resource)) {
+            output.putNextEntry(new java.util.jar.JarEntry(resource));
+            java.util.Objects.requireNonNull(input).transferTo(output);
+            output.closeEntry();
+        }
+        Path javaExecutable = Path.of(System.getProperty("java.home"), "bin",
+                System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java");
+        var options = new HarnessOptions(jar, jar, javaExecutable, dir.resolve("work"), "test",
+                Duration.ofSeconds(5), Duration.ofSeconds(5), Duration.ofSeconds(5), null, null, null);
+        var workspace = ServerWorkspace.create(options, "stub");
+        var log = new LogWatcher(workspace.logFile);
+        Process child = PaperHarnessRunner.start(options, workspace, log);
+        try {
+            assertThat(child.waitFor(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+            assertThat(child.exitValue()).isZero();
+            assertThat(new LogWatcher(workspace.stdoutFile).readAll())
+                    .contains("stdout \u2014", "stderr \u2014");
+        } finally {
+            PaperHarnessRunner.killTree(child);
+        }
+    }
+
+    public static final class StubServer {
+        public static void main(String[] args) {
+            System.out.println("stdout \u2014");
+            System.err.println("stderr \u2014");
+        }
+    }
+
+    @Test
+    void harnessFailureRedactsCapabilitiesAndPreservesCause(@TempDir Path dir) {
+        var result = new HarnessResult(false,
+                List.of("RPC failed: timeout http://localhost/?s=capability#wrapping"),
+                7, dir, List.of("MATERIONE-EDITOR http://localhost/s/secret#key"));
+        assertThat(result.summary()).contains("RPC failed", "timeout", "exit 7", "REDACTED")
+                .doesNotContain("capability", "wrapping", "secret", "#key");
+    }
+
+    @Test
     void consoleDriverWritesAndFlushes() throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (ConsoleDriver console = new ConsoleDriver(out)) {

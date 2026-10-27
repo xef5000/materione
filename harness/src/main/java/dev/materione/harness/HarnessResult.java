@@ -12,8 +12,24 @@ public record HarnessResult(
         List<String> logTail) {
 
     public HarnessResult {
-        problems = List.copyOf(problems);
-        logTail = List.copyOf(logTail);
+        problems = problems.stream().map(HarnessResult::redact).toList();
+        logTail = logTail.stream().map(HarnessResult::redact).toList();
+        System.out.println("MTR-HARNESS result=" + (ok ? "PASS" : "FAIL")
+                + " exit=" + exitCode + " workspace=" + workDir);
+    }
+
+    static void phase(Path workspace, String phase, long start, String detail) {
+        System.out.println("MTR-HARNESS phase=" + phase
+                + " elapsedMs=" + java.time.Duration.ofNanos(System.nanoTime() - start).toMillis()
+                + " workspace=" + workspace + " detail=" + redact(detail));
+    }
+
+    static String redact(String text) {
+        return text.replaceAll("(https?://[^\\s\"'<>\\\\]*[?&]s=)[A-Za-z0-9_-]+(#[A-Za-z0-9_-]+)?",
+                        "$1[REDACTED]")
+                .replaceAll("(https?://[^\\s\"'<>\\\\]*?/s/)[A-Za-z0-9_-]+(#[A-Za-z0-9_-]+)?",
+                        "$1[REDACTED]")
+                .replaceAll("(\\beditor session )[A-Za-z0-9_-]{20,}", "$1[REDACTED]");
     }
 
     /** Human-readable summary for test-failure messages. */
