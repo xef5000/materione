@@ -55,18 +55,7 @@ public final class EditorHandshakeRunner {
         LogWatcher log = new LogWatcher(workspace.logFile);
         Process process;
         try {
-            process = new ProcessBuilder(
-                    options.javaExecutable().toString(),
-                    "-Xmx2G",
-                    "-Dfile.encoding=UTF-8",
-                    "-DIReallyKnowWhatIAmDoingISwear",
-                    "-jar",
-                    options.paperJar().toString(),
-                    "nogui")
-                    .directory(workspace.root.toFile())
-                    .redirectErrorStream(true)
-                    .redirectOutput(workspace.stdoutFile.toFile())
-                    .start();
+            process = PaperHarnessRunner.start(options, workspace, log);
         } catch (Exception e) {
             return failure(List.of("could not start server: " + e), -1, workspace);
         }
@@ -77,12 +66,13 @@ public final class EditorHandshakeRunner {
                 problems.add("boot deadline exceeded");
                 return finish(process, log, options, problems, workspace);
             }
+            workspace.ready(options);
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing");
             }
 
             // 1. open a session via console, scrape the capability URL
-            int cursor = log.mark();
+            var cursor = log.mark();
             // The direct-mode gate: pin the local surface explicitly — bare 'materione
             // editor' now defaults to the cloud relay, which CI runners must not dial.
             console.send("materione editor local");
@@ -99,10 +89,12 @@ public final class EditorHandshakeRunner {
             String blobUrl = "http://" + uri.getHost() + ":" + uri.getPort() + "/s/" + code;
 
             // 2. browser step one: the SPA itself is served from the jar...
-            HttpClient http = HttpClient.newHttpClient();
+            HttpClient http = HttpClient.newBuilder()
+                    .connectTimeout(options.commandTimeout()).build();
             var spaResponse = http.send(
                     java.net.http.HttpRequest.newBuilder(
                                     URI.create("http://" + uri.getHost() + ":" + uri.getPort() + "/"))
+                            .timeout(options.commandTimeout())
                             .build(),
                     java.net.http.HttpResponse.BodyHandlers.ofString());
             if (!spaResponse.body().contains("Materione")) {
@@ -110,7 +102,8 @@ public final class EditorHandshakeRunner {
             }
             // ...and the capability fetch decrypts with the fragment key.
             var blobResponse = http.send(
-                    java.net.http.HttpRequest.newBuilder(URI.create(blobUrl)).build(),
+                    java.net.http.HttpRequest.newBuilder(URI.create(blobUrl))
+                            .timeout(options.commandTimeout()).build(),
                     java.net.http.HttpResponse.BodyHandlers.ofString());
             if (blobResponse.statusCode() != 200) {
                 problems.add("session blob fetch returned " + blobResponse.statusCode());
@@ -137,18 +130,18 @@ public final class EditorHandshakeRunner {
                     KeyFormat.ed25519RawPublic(editorSigning.getPublic()),
                     KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) editorEphemeral.getPublic()),
                     "harness-client");
+            var promptCursor = log.mark();
             ws.sendText(Wire.canonicalJson(hello.toJson()), true).get(10, TimeUnit.SECONDS);
 
             // 4. wait for the trust prompt to surface, THEN answer it from
             // the console — the approve must never race the registration
-            int promptCursor = log.mark();
             if (log.awaitLine("wants to connect as editor", options.commandTimeout(), promptCursor) == null) {
-                problems.add("trust prompt never surfaced for nonce " + noncePrefix);
+                throw new java.io.IOException("trust prompt never surfaced for nonce " + noncePrefix);
             }
+            var approvedCursor = log.mark();
             console.send("materione editor approve " + noncePrefix);
-            int approvedCursor = log.mark();
             if (log.awaitLine("MTR-0032", options.commandTimeout(), approvedCursor) == null) {
-                problems.add("approval did not activate the session (MTR-0032 missing)");
+                throw new java.io.IOException("approval did not activate the session (MTR-0032 missing)");
             }
 
             // 5. signed reply + key confirmation
@@ -186,7 +179,7 @@ public final class EditorHandshakeRunner {
             // Save round trip with the plugin.md §9 budget enforced: from
             // send(save) to the push.reload frame announcing the apply —
             // strictly under 2 s.
-            long saveStart = System.currentTimeMillis();
+            long saveStart = System.nanoTime();
             Wire.Response put = browser.call("edit.put", object(
                     "pack", "sample",
                     "path", "items/editor_gem.yml",
@@ -200,7 +193,8 @@ public final class EditorHandshakeRunner {
                 problems.add("edit.put failed: " + put.error());
             }
             Wire.Request reloadPush = browser.awaitPush("push.reload", 15, TimeUnit.SECONDS);
-            long roundTrip = System.currentTimeMillis() - saveStart;
+            long roundTrip = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - saveStart);
+            HarnessResult.phase(workspace.root, "editor-save", saveStart, "push.reload");
             if (reloadPush == null) {
                 problems.add("no push.reload after save — live preview loop broken");
             } else if (roundTrip > 2000) {
@@ -511,16 +505,12 @@ public final class EditorHandshakeRunner {
                     "MATERIONE-RELOAD-OK items=57"));
             problems.addAll(drive(console, log, options, "materione editor status",
                     "editor transport: running"));
-            console.send("materione editor stop");
-            if (log.awaitLine("MATERIONE-EDITOR-STOPPED", options.commandTimeout(), log.mark()) == null) {
-                problems.add("MATERIONE-EDITOR-STOPPED missing after 'materione editor stop'");
-            }
-
-            console.send("stop");
-            if (await(log, "MATERIONE-BYE", options.stopTimeout()) == null) {
-                problems.add("MATERIONE-BYE missing after stop");
-            }
+            drive(console, log, options, "materione editor stop", "MATERIONE-EDITOR-STOPPED");
+            PaperHarnessRunner.stop(process, console, log, options);
         } catch (Exception e) {
+            if (e instanceof InterruptedException) {
+                Thread.currentThread().interrupt();
+            }
             java.io.StringWriter stack = new java.io.StringWriter();
             e.printStackTrace(new java.io.PrintWriter(stack));
             problems.add("handshake scenario error: " + stack);
@@ -533,26 +523,23 @@ public final class EditorHandshakeRunner {
     private HarnessResult finish(
             Process process, LogWatcher log, HarnessOptions options, List<String> problems,
             ServerWorkspace workspace) {
-        try {
-            process.waitFor(10, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        return new HarnessResult(problems.isEmpty(), problems, -1, workspace.root, List.of());
+        PaperHarnessRunner.killTree(process);
+        return new HarnessResult(problems.isEmpty(), problems, PaperHarnessRunner.exitCode(process),
+                workspace.root, PaperHarnessRunner.tails(log, new LogWatcher(workspace.stdoutFile)));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
             String command, String marker) throws Exception {
-        int cursor = log.mark();
+        var cursor = log.mark();
         console.send(command);
         if (log.awaitLine(marker, options.commandTimeout(), cursor) == null) {
-            return List.of("marker '" + marker + "' missing after '" + command + "'");
+            throw new java.io.IOException("marker '" + marker + "' missing after '" + command + "'");
         }
         return List.of();
     }
 
     private static String await(LogWatcher log, String marker, java.time.Duration timeout)
-            throws InterruptedException {
+            throws java.io.IOException, InterruptedException {
         return log.awaitLine(marker, timeout);
     }
 
@@ -564,22 +551,48 @@ public final class EditorHandshakeRunner {
     /** Collects server→browser messages: first the signed reply, then frames.
      * Frames arriving before the browser client attaches buffer instead of
      * dropping — a dropped frame would desync the strict receive sequence. */
-    private static final class WsClient implements WebSocket.Listener {
-        private final CompletableFuture<String> first = new CompletableFuture<>();
+    static final class WsClient implements WebSocket.Listener {
+        final CompletableFuture<String> first = new CompletableFuture<>();
         private java.util.function.Consumer<String> frameConsumer;
-        private final java.util.Deque<String> buffered = new java.util.concurrent.ConcurrentLinkedDeque<>();
+        private java.util.function.Consumer<Throwable> failureConsumer;
+        private Throwable failure;
+        private final java.util.Deque<String> buffered = new java.util.ArrayDeque<>();
         private StringBuilder partial = new StringBuilder();
 
         /** Routes every post-handshake frame text to the browser client. */
-        void onFrame(java.util.function.Consumer<String> consumer) {
+        synchronized void onFrame(java.util.function.Consumer<String> consumer) {
             this.frameConsumer = consumer;
             while (!buffered.isEmpty()) {
                 consumer.accept(buffered.poll());
             }
         }
 
+        synchronized void onFailure(java.util.function.Consumer<Throwable> consumer) {
+            failureConsumer = consumer;
+            if (failure != null) {
+                consumer.accept(failure);
+            }
+        }
+
         @Override
-        public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
+        public synchronized void onError(WebSocket webSocket, Throwable error) {
+            if (failure == null) {
+                failure = error;
+            }
+            first.completeExceptionally(failure);
+            if (failureConsumer != null) {
+                failureConsumer.accept(failure);
+            }
+        }
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+            onError(webSocket, new java.io.IOException("editor WebSocket closed: " + statusCode + " " + reason));
+            return null;
+        }
+
+        @Override
+        public synchronized CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             partial.append(data);
             if (last) {
                 String complete = partial.toString();
@@ -609,11 +622,12 @@ public final class EditorHandshakeRunner {
         private final java.security.PublicKey pluginSigning;
         private final FrameCodec sender = FrameCodec.sender();
         private final FrameCodec receiver = FrameCodec.receiver();
-        private final java.util.Map<String, java.util.function.Consumer<Wire.Response>> waiters =
+        private final java.util.Map<String, CompletableFuture<Wire.Response>> waiters =
                 new java.util.concurrent.ConcurrentHashMap<>();
         private final java.util.concurrent.BlockingQueue<Wire.Request> pushes =
                 new java.util.concurrent.LinkedBlockingQueue<>();
         private long nextId;
+        private volatile Throwable failure;
 
         BrowserClient(WebSocket ws, WsClient sink, SecretKey sessionKey,
                 java.security.PrivateKey editorSigning, java.security.PublicKey pluginSigning) {
@@ -621,7 +635,15 @@ public final class EditorHandshakeRunner {
             this.sessionKey = sessionKey;
             this.editorSigning = editorSigning;
             this.pluginSigning = pluginSigning;
+            sink.onFailure(this::fail);
             sink.onFrame(this::consume);
+        }
+
+        private void fail(Throwable cause) {
+            if (failure == null) {
+                failure = cause;
+            }
+            waiters.values().forEach(waiter -> waiter.completeExceptionally(failure));
         }
 
         private void consume(String frameText) {
@@ -631,37 +653,49 @@ public final class EditorHandshakeRunner {
                 if (message.has("ok")) {
                     var waiter = waiters.remove(message.get("id").getAsString());
                     if (waiter != null) {
-                        waiter.accept(Wire.Response.fromJson(message));
+                        waiter.complete(Wire.Response.fromJson(message));
                     }
                 } else if (message.has("op")) {
                     pushes.offer(Wire.Request.fromJson(message));
                 }
             } catch (Exception e) {
-                throw new RuntimeException("frame handling failed", e);
+                fail(new IllegalStateException("editor frame handling failed", e));
             }
         }
 
         Wire.Response call(String op, JsonObject payload) throws Exception {
             String id = "c" + (++nextId);
             CompletableFuture<Wire.Response> future = new CompletableFuture<>();
-            waiters.put(id, future::complete);
+            waiters.put(id, future);
             JsonObject request = new JsonObject();
             request.addProperty("op", op);
             request.addProperty("id", id);
             request.add("payload", payload);
-            JsonObject frame = sender.seal(sessionKey, editorSigning, Wire.canonicalBytes(request));
-            ws.sendText(Wire.canonicalJson(frame), true).get(10, TimeUnit.SECONDS);
-            return future.get(20, TimeUnit.SECONDS);
+            try {
+                if (failure != null) {
+                    throw new IllegalStateException("editor transport failed", failure);
+                }
+                JsonObject frame = sender.seal(sessionKey, editorSigning, Wire.canonicalBytes(request));
+                ws.sendText(Wire.canonicalJson(frame), true).get(10, TimeUnit.SECONDS);
+                return future.get(20, TimeUnit.SECONDS);
+            } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
+                throw new IllegalStateException("editor RPC '" + op + "' failed", e);
+            } finally {
+                waiters.remove(id);
+            }
         }
 
         /** Waits for one pushed event of the given op; null on timeout. */
         Wire.Request awaitPush(String op, long timeout, TimeUnit unit) throws InterruptedException {
-            long deadline = System.currentTimeMillis() + unit.toMillis(timeout);
-            while (System.currentTimeMillis() < deadline) {
-                Wire.Request push = pushes.poll(deadline - System.currentTimeMillis(),
-                        TimeUnit.MILLISECONDS);
+            long deadline = System.nanoTime() + unit.toNanos(timeout);
+            while (System.nanoTime() < deadline) {
+                if (failure != null) {
+                    throw new IllegalStateException("awaiting editor push '" + op + "' failed", failure);
+                }
+                Wire.Request push = pushes.poll(Math.max(1, Math.min(
+                        deadline - System.nanoTime(), TimeUnit.MILLISECONDS.toNanos(100))), TimeUnit.NANOSECONDS);
                 if (push == null) {
-                    return null;
+                    continue;
                 }
                 if (op.equals(push.op())) {
                     return push;
@@ -677,10 +711,10 @@ public final class EditorHandshakeRunner {
          */
         Wire.Request awaitPush(String op, String payloadNeedle, long timeout, TimeUnit unit)
                 throws InterruptedException {
-            long deadline = System.currentTimeMillis() + unit.toMillis(timeout);
-            while (System.currentTimeMillis() < deadline) {
-                Wire.Request push = awaitPush(op, Math.max(1, deadline - System.currentTimeMillis()),
-                        TimeUnit.MILLISECONDS);
+            long deadline = System.nanoTime() + unit.toNanos(timeout);
+            while (System.nanoTime() < deadline) {
+                Wire.Request push = awaitPush(op, Math.max(1, deadline - System.nanoTime()),
+                        TimeUnit.NANOSECONDS);
                 if (push == null) {
                     return null;
                 }

@@ -55,12 +55,24 @@ val integrationTest by tasks.registering(Test::class) {
         includeTags("integration")
     }
     maxParallelForks = 1
+    testLogging {
+        events("passed", "skipped", "failed", "standardOut", "standardError")
+    }
     dependsOn(":plugin:shadowJar", downloadPaperServer)
     val shadowJarPath = rootProject.projectDir.resolve("plugin/build/libs/Materione-${project.version}.jar")
     systemProperty("paper.jar", downloadPaperServer.get().output.get().asFile.absolutePath)
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
+    val runtimeCache = providers.gradleProperty("harness.runtimeCache").orElse("true")
+    systemProperty(
+        "harness.runtimeCacheDir",
+        if (runtimeCache.get().toBoolean()) {
+            providers.gradleProperty("harness.runtimeCacheDir").orElse(
+                rootProject.gradle.gradleUserHomeDir.resolve("caches/materione-paper/runtime").absolutePath,
+            ).get()
+        } else "",
+    )
     // The fixture corpus (grow-only, roadmap rule 2): sample packs boot on
     // real Paper with the plugin (M1 exit criterion).
     systemProperty(
@@ -71,5 +83,6 @@ val integrationTest by tasks.registering(Test::class) {
     // a rebuilt plugin jar or edited fixture pack would leave the task
     // up-to-date and report a stale green.
     inputs.file(shadowJarPath)
+    inputs.file(downloadPaperServer.flatMap { it.output })
     inputs.dir(rootProject.layout.projectDirectory.dir("fixtures/packs"))
 }

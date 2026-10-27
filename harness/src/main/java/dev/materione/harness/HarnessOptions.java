@@ -18,7 +18,8 @@ public record HarnessOptions(
         Duration commandTimeout,
         Duration stopTimeout,
         String brokenSettingsYaml,
-        Path contentPacksDir) {
+        Path contentPacksDir,
+        Path runtimeCacheDir) {
 
     public static HarnessOptions fromProperties() {
         return new HarnessOptions(
@@ -34,13 +35,14 @@ public record HarnessOptions(
                 // window races that and flakes on slow machines
                 seconds("stop", 180),
                 null,
-                optionalPath("harness.contentPacks"));
+                optionalPath("harness.contentPacks"),
+                optionalPath("harness.runtimeCacheDir"));
     }
 
     public HarnessOptions withScenario(Path scenarioWorkRoot, String brokenSettings) {
         return new HarnessOptions(
                 paperJar, pluginJar, javaExecutable, scenarioWorkRoot, expectedVersion,
-                bootTimeout, commandTimeout, stopTimeout, brokenSettings, contentPacksDir);
+                bootTimeout, commandTimeout, stopTimeout, brokenSettings, contentPacksDir, runtimeCacheDir);
     }
 
     private static boolean isWindows() {

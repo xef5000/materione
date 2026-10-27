@@ -17,6 +17,7 @@ public final class ServerWorkspace {
     public final Path pluginsDir;
     public final Path logFile;
     public final Path stdoutFile;
+    long launchNanos;
 
     private ServerWorkspace(Path root) {
         this.root = root;
@@ -32,11 +33,12 @@ public final class ServerWorkspace {
     /**
      * Creates a workspace carrying only the named packs (null = every pack
      * directory under the fixture root). Scenarios filter so their expected
-     * live counts stay pinned: bootstrap runs sample+corpus (56 items),
+     * live counts stay pinned: bootstrap runs sample+corpus (57 items),
      * the world-persistence scenario adds {@code world}.
      */
     public static ServerWorkspace create(HarnessOptions options, String scenarioName,
             java.util.Set<String> packNames) throws IOException {
+        long start = System.nanoTime();
         Path root = options.workRoot().resolve(scenarioName);
         if (Files.exists(root)) {
             deleteRecursively(root);
@@ -53,6 +55,11 @@ public final class ServerWorkspace {
                 StandardCopyOption.REPLACE_EXISTING);
 
         ServerWorkspace workspace = new ServerWorkspace(root);
+        if (options.runtimeCacheDir() != null) {
+            long cacheStart = System.nanoTime();
+            boolean hit = new PaperRuntimeCache(options.runtimeCacheDir(), options.paperJar()).restore(root);
+            HarnessResult.phase(root, "cache-restore", cacheStart, hit ? "hit" : "miss");
+        }
         if (options.brokenSettingsYaml() != null) {
             Path settings = root.resolve("plugins").resolve("Materione").resolve("settings");
             Files.createDirectories(settings);
@@ -71,7 +78,17 @@ public final class ServerWorkspace {
                 }
             }
         }
+        HarnessResult.phase(root, "workspace", start, scenarioName);
         return workspace;
+    }
+
+    void ready(HarnessOptions options) throws IOException {
+        HarnessResult.phase(root, "boot", launchNanos, "ready");
+        if (options.runtimeCacheDir() != null) {
+            long start = System.nanoTime();
+            new PaperRuntimeCache(options.runtimeCacheDir(), options.paperJar()).capture(root);
+            HarnessResult.phase(root, "cache-capture", start, "ready");
+        }
     }
 
     private static void copyRecursively(Path source, Path target) throws IOException {

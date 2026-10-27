@@ -7,12 +7,11 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The M2 exit gate (roadmap.md §M2): a fixture world with blocks of every
  * technique plus furniture survives <em>reload</em>, <em>restart</em> and
- * <em>world copy</em>. Five boots across four workspaces:
+ * <em>world copy</em>. Five boots across three workspaces:
  *
  * <ol>
  *   <li>boot A — place one block per technique + the shaped pair + a full
@@ -22,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  *   <li>boot A again on the same workspace — restart survival;</li>
  *   <li>fresh workspace B carrying A's copied {@code world} folder —
  *       world-copy survival;</li>
- *   <li>two boots in a fourth workspace for the corruption pair: place a
+ *   <li>two boots in a third workspace for the corruption pair: place a
  *       block, stop, delete the disposable allocation table and add a
  *       definition sorting ahead of it. The reboot rebuilds the accelerator
  *       and hands the slot to the other id — the chunk-PDC truth layer must
@@ -33,6 +32,7 @@ public final class WorldPersistenceRunner {
 
     private LogWatcher lastLog;
     private LogWatcher lastStdout;
+    private Process activeProcess;
 
     /** Runs the scenario; every failure surfaces as a problem string. */
     public HarnessResult run(HarnessOptions options) {
@@ -40,11 +40,15 @@ public final class WorldPersistenceRunner {
         List<String> problems = new ArrayList<>();
         try {
             problems.addAll(runScenario(options, packs));
-        } catch (IOException e) {
+        } catch (IOException | java.io.UncheckedIOException e) {
             problems.add("scenario I/O failure: " + e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             problems.add("interrupted");
+        } finally {
+            if (activeProcess != null) {
+                PaperHarnessRunner.killTree(activeProcess);
+            }
         }
         var tail = new ArrayList<String>();
         if (lastStdout != null) {
@@ -53,7 +57,8 @@ public final class WorldPersistenceRunner {
         if (lastLog != null) {
             tail.addAll(lastLog.tail(50));
         }
-        return new HarnessResult(problems.isEmpty(), problems, problems.isEmpty() ? 0 : -1,
+        return new HarnessResult(problems.isEmpty(), problems,
+                activeProcess == null ? -1 : PaperHarnessRunner.exitCode(activeProcess),
                 options.workRoot(), tail);
     }
 
@@ -183,7 +188,7 @@ public final class WorldPersistenceRunner {
                     - on: click:left
                       do: []
                 """);
-        int cursor = boot.log().mark();
+        var cursor = boot.log().mark();
         drive(boot, options, "materione reload", "MATERIONE-RELOAD-OK items=77", problems);
         if (boot.log().awaitLine("MTR-0022", java.time.Duration.ofSeconds(5), cursor) == null) {
             problems.add("fault injection: MTR-0022 missing for the unparseable condition");
@@ -240,7 +245,7 @@ public final class WorldPersistenceRunner {
             return problems;
         }
         settleChunk(f2, 16, 16);
-        int cursor = f2.log().mark();
+        var cursor = f2.log().mark();
         drive(f2, options, "materione dev inspect 20 200 20 world",
                 "MATERIONE-DEV-INSPECT found=false", problems);
         if (f2.log().awaitLine("MTR-0024", java.time.Duration.ofSeconds(5), cursor) == null) {
@@ -283,55 +288,24 @@ public final class WorldPersistenceRunner {
         // a reused workspace may still hold the previous boot's latest.log
         // (Paper rotates it lazily): this boot's markers only count in content
         // written after the snapshot — appended past it, or in a fresh file
-        String previous = log.readAll();
-        Process process = new ProcessBuilder(
-                options.javaExecutable().toString(),
-                "-Xmx2G",
-                "-Dfile.encoding=UTF-8",
-                "-DIReallyKnowWhatIAmDoingISwear",
-                "-jar",
-                options.paperJar().toString(),
-                "nogui")
-                .directory(workspace.root.toFile())
-                .redirectErrorStream(true)
-                .redirectOutput(workspace.stdoutFile.toFile())
-                .start();
-        String done = awaitBootDone(log, previous, options.bootTimeout());
+        var cursor = log.mark();
+        String previous = cursor.content();
+        Process process = PaperHarnessRunner.start(options, workspace, log);
+        activeProcess = process;
+        String done = log.awaitLine("Done (", options.bootTimeout(), cursor);
         String name = workspace.root.getFileName().toString();
         if (done == null) {
-            problems.add(name + ": boot deadline exceeded (" + options.bootTimeout().toSeconds() + "s)");
-            PaperHarnessRunner.killTree(process);
-            return null;
+            throw new IOException(name + ": boot deadline exceeded (" + options.bootTimeout().toSeconds() + "s)");
         }
+        workspace.ready(options);
         String content = log.readAll();
         if (!newContentContains(content, previous, "MATERIONE-BOOT-OK")) {
-            problems.add(name + ": MATERIONE-BOOT-OK missing after boot");
+            throw new IOException(name + ": MATERIONE-BOOT-OK missing after boot");
         }
         if (contentMarker != null && !newContentContains(content, previous, contentMarker)) {
-            problems.add(name + ": '" + contentMarker + "' missing after boot");
+            throw new IOException(name + ": '" + contentMarker + "' missing after boot");
         }
         return new Boot(process, new ConsoleDriver(process.getOutputStream()), log, stdout, workspace);
-    }
-
-    /**
-     * Waits for THIS boot's {@code Done (} line: content appended past the
-     * pre-boot snapshot, or any position in a rotation-replaced file.
-     */
-    private String awaitBootDone(LogWatcher log, String previous, java.time.Duration timeout)
-            throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        while (System.nanoTime() < deadline) {
-            String content = log.readAll();
-            if (newContentContains(content, previous, "Done (")) {
-                for (String line : content.split("\n", -1)) {
-                    if (line.contains("Done (")) {
-                        return line;
-                    }
-                }
-            }
-            Thread.sleep(200);
-        }
-        return null;
     }
 
     /**
@@ -355,30 +329,22 @@ public final class WorldPersistenceRunner {
 
     private void stop(Boot boot, HarnessOptions options, List<String> problems)
             throws IOException, InterruptedException {
-        String name = boot.workspace().root.getFileName().toString();
-        boot.console().send("stop");
-        if (boot.log().awaitLine("MATERIONE-BYE", options.stopTimeout()) == null) {
-            problems.add(name + ": MATERIONE-BYE missing after stop");
-        }
-        if (!boot.process().waitFor(options.stopTimeout().toSeconds(), TimeUnit.SECONDS)) {
-            problems.add(name + ": server did not exit within "
-                    + options.stopTimeout().toSeconds() + "s of stop");
-        }
+        PaperHarnessRunner.stop(boot.process(), boot.console(), boot.log(), options);
         boot.close();
     }
 
     private void drive(Boot boot, HarnessOptions options, String command, String marker,
             List<String> problems) throws IOException, InterruptedException {
         String name = boot.workspace().root.getFileName().toString();
-        int cursor = boot.log().mark();
+        var cursor = boot.log().mark();
         boot.console().send(command);
         String line = boot.log().awaitLine(marker, options.commandTimeout(), cursor);
         if (line == null) {
             String content = boot.log().readAll();
             boolean presentAnywhere = content != null && content.contains(marker);
-            problems.add(name + ": marker '" + marker + "' missing after '" + command
+            throw new IOException(name + ": marker '" + marker + "' missing after '" + command
                     + "' (marker elsewhere in log: " + presentAnywhere
-                    + ", cursor=" + cursor + ", logLen="
+                    + ", cursor=" + cursor.content().length() + ", logLen="
                     + (content == null ? -1 : content.length()) + ")");
         }
     }
@@ -390,12 +356,14 @@ public final class WorldPersistenceRunner {
      * disk, PDC not yet hydrated).
      */
     private void settleChunk(Boot boot, int x, int z) throws IOException, InterruptedException {
-        int cursor = boot.log().mark();
+        var cursor = boot.log().mark();
         boot.console().send("forceload add " + x + " " + z);
         // matches both responses: "Marked chunk [1, 1] …" and
         // "No chunks were marked for force loading" — the cursor keeps us
         // off Paper's own identically-worded startup line
-        boot.log().awaitLine("arked", java.time.Duration.ofSeconds(15), cursor);
+        if (boot.log().awaitLine("arked", java.time.Duration.ofSeconds(15), cursor) == null) {
+            throw new IOException("forceload response missing for chunk " + x + "," + z);
+        }
         Thread.sleep(2000);
     }
 

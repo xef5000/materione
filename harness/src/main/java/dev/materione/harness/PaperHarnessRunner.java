@@ -35,18 +35,7 @@ public final class PaperHarnessRunner {
 
         Process process;
         try {
-            process = new ProcessBuilder(
-                    options.javaExecutable().toString(),
-                    "-Xmx2G",
-                    "-Dfile.encoding=UTF-8",
-                    "-DIReallyKnowWhatIAmDoingISwear",
-                    "-jar",
-                    options.paperJar().toString(),
-                    "nogui")
-                    .directory(workspace.root.toFile())
-                    .redirectErrorStream(true)
-                    .redirectOutput(workspace.stdoutFile.toFile())
-                    .start();
+            process = start(options, workspace, log);
         } catch (IOException e) {
             return failed(List.of("could not start server: " + e), -1, workspace.root, List.of());
         }
@@ -62,6 +51,7 @@ public final class PaperHarnessRunner {
                 }
                 return failed(problems, exitCode(process), workspace.root, tails(log, stdout));
             }
+            workspace.ready(options);
 
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
@@ -384,16 +374,9 @@ public final class PaperHarnessRunner {
                     "MATERIONE-RELOAD-OK items=57"));
             hotReloadScenario(console, log, workspace, options, problems);
 
-            console.send("stop");
-            String bye = await(log, "MATERIONE-BYE", options.stopTimeout());
-            if (bye == null) {
-                problems.add("MATERIONE-BYE missing after stop");
-            }
-            if (!waitForExit(process, options.stopTimeout())) {
-                problems.add("server did not exit within " + options.stopTimeout().toSeconds() + "s of stop");
-            }
-        } catch (IOException e) {
-            problems.add("console I/O failure: " + e);
+            stop(process, console, log, options);
+        } catch (IOException | java.io.UncheckedIOException e) {
+            problems.add("scenario I/O failure: " + e);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             problems.add("interrupted while waiting for markers");
@@ -443,7 +426,7 @@ public final class PaperHarnessRunner {
 
         Thread.sleep(1000);
         Files.writeString(broken, Files.readString(faultSource));
-        int beforeFaultReload = log.mark();
+        var beforeFaultReload = log.mark();
         problems.addAll(drive(console, log, options, "materione reload",
                 "MATERIONE-RELOAD-OK items=58"));
         if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
@@ -459,18 +442,18 @@ public final class PaperHarnessRunner {
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
             String command, String marker) throws IOException, InterruptedException {
-        int cursor = log.mark(); // only lines from now on may satisfy the marker
+        var cursor = log.mark();
         console.send(command);
         String line = await(log, marker, options.commandTimeout(), cursor);
         if (line == null) {
-            return List.of("marker '" + marker + "' missing after '" + command
+            throw new IOException("marker '" + marker + "' missing after '" + command
                     + "' (" + options.commandTimeout().toSeconds() + "s)");
         }
         return List.of();
     }
 
-    private static String await(LogWatcher log, String marker, java.time.Duration timeout, int cursor)
-            throws InterruptedException {
+    private static String await(LogWatcher log, String marker, java.time.Duration timeout, LogWatcher.Cursor cursor)
+            throws IOException, InterruptedException {
         return log.awaitLine(marker, timeout, cursor);
     }
 
@@ -497,16 +480,45 @@ public final class PaperHarnessRunner {
     }
 
     private static String await(LogWatcher log, String marker, java.time.Duration timeout)
-            throws InterruptedException {
+            throws IOException, InterruptedException {
         return log.awaitLine(marker, timeout);
     }
 
-    private static boolean waitForExit(Process process, java.time.Duration timeout)
-            throws InterruptedException {
-        return process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS);
+    static Process start(HarnessOptions options, ServerWorkspace workspace, LogWatcher log) throws IOException {
+        workspace.launchNanos = System.nanoTime();
+        Process process = new ProcessBuilder(
+                options.javaExecutable().toString(), "-Xmx2G", "-Dfile.encoding=UTF-8",
+                "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8",
+                "-DIReallyKnowWhatIAmDoingISwear", "-jar", options.paperJar().toString(), "nogui")
+                .directory(workspace.root.toFile())
+                .redirectErrorStream(true)
+                .redirectOutput(workspace.stdoutFile.toFile())
+                .start();
+        log.watch(process);
+        HarnessResult.phase(workspace.root, "launch", workspace.launchNanos, "pid=" + process.pid());
+        return process;
     }
 
-    private static int exitCode(Process process) {
+    static void stop(Process process, ConsoleDriver console, LogWatcher log, HarnessOptions options)
+            throws IOException, InterruptedException {
+        long start = System.nanoTime();
+        var cursor = log.mark();
+        console.send("stop");
+        if (log.awaitLine("MATERIONE-BYE", options.stopTimeout(), cursor) == null) {
+            throw new IOException("MATERIONE-BYE missing after stop");
+        }
+        long remaining = options.stopTimeout().toNanos() - (System.nanoTime() - start);
+        if (!process.waitFor(Math.max(0, remaining), TimeUnit.NANOSECONDS)) {
+            throw new IOException("server did not exit after stop (pid=" + process.pid()
+                    + ", timeout=" + options.stopTimeout() + ")");
+        }
+        HarnessResult.phase(options.workRoot(), "shutdown", start, "exit=" + process.exitValue());
+        if (process.exitValue() != 0) {
+            throw new IOException("non-zero server exit after stop: " + process.exitValue());
+        }
+    }
+
+    static int exitCode(Process process) {
         try {
             return process.exitValue();
         } catch (IllegalThreadStateException e) {
@@ -515,11 +527,25 @@ public final class PaperHarnessRunner {
     }
 
     static void killTree(Process process) {
-        process.toHandle().descendants().forEach(ProcessHandle::destroyForcibly);
-        process.destroyForcibly();
+        var descendants = new ArrayList<>(process.descendants().toList());
+        java.util.Collections.reverse(descendants);
+        descendants.forEach(ProcessHandle::destroyForcibly);
+        if (process.isAlive()) {
+            process.destroyForcibly();
+        }
+        try {
+            process.onExit().orTimeout(10, TimeUnit.SECONDS).join();
+            for (ProcessHandle child : descendants) {
+                if (child.isAlive()) {
+                    child.onExit().orTimeout(10, TimeUnit.SECONDS).join();
+                }
+            }
+        } catch (java.util.concurrent.CompletionException e) {
+            throw new IllegalStateException("could not terminate harness server descendants", e);
+        }
     }
 
-    private static List<String> tails(LogWatcher log, LogWatcher stdout) {
+    static List<String> tails(LogWatcher log, LogWatcher stdout) {
         List<String> tail = new ArrayList<>(stdout.tail(50));
         tail.addAll(log.tail(50));
         return tail;
