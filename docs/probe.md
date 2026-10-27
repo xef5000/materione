@@ -118,6 +118,8 @@ already asserts.
   `--keep-world` to debug across restarts).
 - Everything lives under `harness/build/probe/` (a build dir): a killed
   process or a full-disk purge can never dirty the repo.
+- The probe server opts out of bStats usage metrics (`plugins/bStats/config.yml`,
+  `enabled: false`, written on every `up`), so probe boots never report.
 - DebugBridge gates `joinServer`/`quit`/`runCommand` behind
   `session_control_enabled`/`run_command_enabled` in the client's
   `config/debugbridge.json`; the script writes that config (loopback-only

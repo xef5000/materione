@@ -34,6 +34,10 @@ creative = "1.14.4"
 # amendment to the shading policy, recorded in build.md §4. Only the web/
 # module may touch these types (ban rule R8).
 undertow = "2.3.26.Final"
+# bStats (MIT): anonymous usage metrics. Shaded + relocated under
+# materione.libs.org.bstats (build.md §4). Server owners opt out with
+# plugins/bStats/config.yml (enabled: false) — plugin.md §7.2.
+bstats = "3.2.1"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -70,6 +74,7 @@ creative-api = { module = "team.unnamed:creative-api", version.ref = "creative" 
 creative-serializer-minecraft = { module = "team.unnamed:creative-serializer-minecraft", version.ref = "creative" }
 creative-server = { module = "team.unnamed:creative-server", version.ref = "creative" }
 undertow-core = { module = "io.undertow:undertow-core", version.ref = "undertow" }
+bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

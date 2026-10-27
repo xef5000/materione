@@ -1,7 +1,7 @@
 // Assembly-module conventions: the one module that produces the distributable
 // plugin jar. paper-plugin.yml token replacement, generated version source, Shadow
-// wiring. Currently ZERO shaded runtime dependencies — the wiring exists so
-// future deps shade + relocate correctly from day one.
+// wiring. Every shaded runtime dependency is relocated under materione.libs.* in
+// the shadowJar block below (creative, Gson, Undertow, bStats).
 //
 // Written without Kotlin-DSL task accessors (they don't generate reliably in
 // precompiled script plugins); plain named-task references only.
@@ -80,4 +80,6 @@ tasks.named<ShadowJar>("shadowJar") {
     relocate("org.xnio", "materione.libs.org.xnio")
     relocate("org.jboss", "materione.libs.org.jboss")
     relocate("org.wildfly", "materione.libs.org.wildfly")
+    // bStats usage metrics (MIT, build.md §4): referenced only by MaterionePlugin.
+    relocate("org.bstats", "materione.libs.org.bstats")
 }

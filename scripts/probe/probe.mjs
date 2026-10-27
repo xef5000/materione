@@ -296,6 +296,9 @@ async function doUp({ build = true, keepWorld = false } = {}) {
   const plugins = path.join(SERVER_DIR, 'plugins');
   fs.mkdirSync(plugins, { recursive: true });
   fs.copyFileSync(jar, path.join(plugins, 'Materione.jar'));
+  // bStats usage metrics are opt-out per server: probe boots never report.
+  fs.mkdirSync(path.join(plugins, 'bStats'), { recursive: true });
+  fs.writeFileSync(path.join(plugins, 'bStats', 'config.yml'), 'enabled: false\n');
   const packs = path.join(plugins, 'Materione', 'content', 'packs');
   fs.mkdirSync(packs, { recursive: true });
   for (const pack of fs.readdirSync(FIXTURE_PACKS)) {

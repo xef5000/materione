@@ -42,6 +42,8 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import org.bstats.bukkit.Metrics;
+import org.bstats.charts.SimplePie;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -56,6 +58,9 @@ import org.bukkit.plugin.java.JavaPlugin;
  * pipeline/delivery/editor phases arrive with their milestones.
  */
 public final class MaterionePlugin extends JavaPlugin {
+
+    /** bStats plugin id (bstats.org registration); see {@link #startMetrics()}. */
+    private static final int BSTATS_PLUGIN_ID = 34981;
 
     private DiagnosticsBusService diagnostics;
     private RegistryService registries;
@@ -80,6 +85,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private DocumentStore documents;
     private AuditLog audit;
     private AuthoringApiImpl authoringApi;
+    /** bStats handle; null when metrics did not start (see {@link #startMetrics()}). */
+    private Metrics metrics;
 
     /** The API facade; null-tolerant before the content-load phase wires it. */
     public MaterioneAPI api() {
@@ -184,6 +191,7 @@ public final class MaterionePlugin extends JavaPlugin {
                 getLogger().warning(diagnostic.code() + ": " + diagnostic.message());
             }
         }
+        startMetrics();
         // Stable harness marker (harness/README.md) — logged even when degraded.
         getLogger().info("MATERIONE-BOOT-OK " + MaterioneVersion.VERSION);
     }
@@ -211,6 +219,9 @@ public final class MaterionePlugin extends JavaPlugin {
             }
             if (quarantine != null && quarantine.size() > 0) {
                 getLogger().info("quarantined resources: " + quarantine.size());
+            }
+            if (metrics != null) {
+                metrics.shutdown();
             }
             // Stable harness marker: reverse-order shutdown reached the end.
             getLogger().info("MATERIONE-BYE");
@@ -490,5 +501,37 @@ public final class MaterionePlugin extends JavaPlugin {
         return probeResult instanceof ProbeResult.Unsupported unsupported
                 ? unsupported.reason()
                 : "bootstrap failure (see log above)";
+    }
+
+    /**
+     * Anonymous usage metrics (bStats). Fail-soft: any failure is a warning,
+     * never a failed enable. Server owners opt out with {@code enabled: false}
+     * in {@code plugins/bStats/config.yml}; the harness and probe servers
+     * always do.
+     */
+    private void startMetrics() {
+        try {
+            metrics = new Metrics(this, BSTATS_PLUGIN_ID);
+            String editorTransport = editorTransportLabel();
+            metrics.addCustomChart(new SimplePie("editor_transport", () -> editorTransport));
+        } catch (Throwable t) {
+            getLogger().warning("bStats metrics unavailable: " + t);
+        }
+    }
+
+    /**
+     * The editor transport this boot was configured with (the bStats chart
+     * value). Mirrors {@code EditorTransportService}: anything but "local" is
+     * the cloud relay.
+     */
+    private String editorTransportLabel() {
+        if (settings == null) {
+            return "unknown";
+        }
+        if (!settings.getBoolean("editor_enabled", true)) {
+            return "disabled";
+        }
+        String mode = settings.getString("editor_mode", "cloud");
+        return "local".equalsIgnoreCase(mode) ? "local" : "cloud";
     }
 }

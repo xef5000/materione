@@ -17,6 +17,10 @@ dependencies {
     // The editor transport facade (phase 10). web/ shades Undertow via this
     // edge; R8 keeps every protocol reference inside dev.materione.web.
     api(project(":web"))
+    // Anonymous usage metrics (bStats, MIT). Shaded + relocated under
+    // materione.libs.org.bstats; MaterionePlugin is the only reference, behind
+    // a fail-soft wrapper (plugin.md §7.2).
+    implementation(libs.bstats.bukkit)
 }
 
 tasks.named<org.gradle.api.tasks.testing.Test>("test") {

@@ -7,9 +7,9 @@ import java.nio.file.StandardCopyOption;
 
 /**
  * A fresh server workspace under the work root: eula, minimal offline
- * flat-world server properties, and the built plugin installed. The whole
- * directory lives under {@code build/} so a stray kill can never dirty the
- * repo.
+ * flat-world server properties, the built plugin installed, and bStats
+ * opted out. The whole directory lives under {@code build/} so a stray kill
+ * can never dirty the repo.
  */
 public final class ServerWorkspace {
 
@@ -51,6 +51,10 @@ public final class ServerWorkspace {
         // call but BEFORE boot (fail-soft scenario).
         Files.copy(options.pluginJar(), root.resolve("plugins").resolve("Materione.jar"),
                 StandardCopyOption.REPLACE_EXISTING);
+        // bStats usage metrics are opt-out per server: automated boots never report.
+        Path bstats = root.resolve("plugins").resolve("bStats");
+        Files.createDirectories(bstats);
+        Files.writeString(bstats.resolve("config.yml"), "enabled: false\n");
 
         ServerWorkspace workspace = new ServerWorkspace(root);
         if (options.brokenSettingsYaml() != null) {
