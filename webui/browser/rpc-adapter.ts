@@ -1,4 +1,8 @@
 import { scanReferences } from '../src/lib/demo/references';
+// The real server's type self-descriptions, recorded by the plugin's golden
+// test: the ?modules fixture serves the block/furniture/... schemas exactly as
+// Java declares them, so a spec cannot pass against a schema the server lacks.
+import goldenSnapshot from '../../fixtures/golden/editor-demo-snapshot.json';
 import type { AssetRef, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from '../src/lib/api';
 import type { PushFrame } from '../src/lib/events';
 import type { Response } from '../src/lib/protocol/wire';
@@ -313,7 +317,24 @@ const CATALOG_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
 const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'items', path: 'items/ruby_sword.yml', id: 'ruby_sword' },
   { pack: PACK, type: 'items', path: 'items/ember_charm.yml', id: 'ember_charm' },
+  { pack: PACK, type: 'items', path: 'items/ruby.yml', id: 'ruby' },
+  { pack: PACK, type: 'blocks', path: 'blocks/amethyst_lamp.yml', id: 'amethyst_lamp' },
+  { pack: PACK, type: 'blocks', path: 'blocks/plain_stone.yml', id: 'plain_stone' },
+  { pack: PACK, type: 'furnitures', path: 'furnitures/chair.yml', id: 'chair' },
+  { pack: PACK, type: 'furnitures', path: 'furnitures/stool.yml', id: 'stool' },
 ];
+
+function goldenType(name: string): TypeInfo {
+  const found = (goldenSnapshot.types as unknown as TypeInfo[]).find((type) => type.name === name);
+  if (!found) throw new Error(`the golden snapshot has no ${name} type`);
+  return structuredClone(found);
+}
+
+/** The ?modules fixture's types: the module-declaring item stand-in plus the real schemas. */
+function moduleTypes(): TypeInfo[] {
+  return [structuredClone(MODULE_ITEM_TYPE), goldenType('block'), goldenType('furniture'),
+    structuredClone(GLYPH_TYPE)];
+}
 
 const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>> = {
   'items/ruby_sword.yml': {
@@ -337,6 +358,36 @@ const MODULES_DOCUMENTS: Record<string, Record<string, Record<string, unknown>>>
       material: 'BLAZE_ROD',
     },
   },
+  'items/ruby.yml': {
+    ruby: { display_name: 'Ruby', material: 'EMERALD' },
+  },
+  'blocks/amethyst_lamp.yml': {
+    amethyst_lamp: {
+      technique: 'slab',
+      texture: 'block/amethyst_lamp',
+      display_name: 'Amethyst Lamp',
+      blast_resistant: true,
+      drops: ['ruby', 'ruby', 'minecraft:diamond'],
+      item: 'ruby',
+      future_flag: { keep: 'me' },
+    },
+  },
+  'blocks/plain_stone.yml': {
+    plain_stone: { texture: 'block/plain_stone', display_name: 'Plain Stone' },
+  },
+  'furnitures/chair.yml': {
+    chair: {
+      texture: 'block/marble',
+      display_name: 'Chair',
+      rotation: 90,
+      hitboxes: [{ type: 'interaction', offset: [0, 0, 0], width: 1, height: 1 }],
+      seats: [{ offset: [0, 0.3, 0] }],
+      lights: [{ offset: [0.5, 1, 0], level: 12 }],
+    },
+  },
+  'furnitures/stool.yml': {
+    stool: { texture: 'block/marble', display_name: 'Stool' },
+  },
   'templates/base_item.yml': {
     base_item: { display_name: 'A base item' },
   },
@@ -351,7 +402,7 @@ const MODULE_ITEM_TYPE: TypeInfo = {
     {
       id: 'material', type: 'enum', required: true, label: 'Base material',
       section: 'identity', order: 10, uiHint: 'material',
-      allowedValues: ['NETHERITE_SWORD', 'DIAMOND_SWORD', 'BLAZE_ROD', 'STICK'],
+      allowedValues: ['NETHERITE_SWORD', 'DIAMOND_SWORD', 'BLAZE_ROD', 'STICK', 'DIAMOND', 'EMERALD'],
       example: 'NETHERITE_SWORD',
       module: true, category: 'identity', icon: 'box',
       summary: 'The vanilla item this builds on - its looks and stats until a model or behaviour takes over',
@@ -945,7 +996,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'authoring.describe':
         if (this.#modules) {
           return this.success(op, {
-            types: [structuredClone(MODULE_ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
+            types: moduleTypes(),
             behavior: structuredClone(MODULES_VOCABULARY),
           });
         }
@@ -957,7 +1008,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'browse.types':
         return this.success(op, {
           types: this.#modules
-            ? [structuredClone(MODULE_ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)]
+            ? moduleTypes()
             : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
         });
       case 'browse.resources': {

@@ -63,16 +63,16 @@ public final class GlyphType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Font", "appearance", 20, true, "text", "", "")),
                         new ParameterSchema("ascent", ParameterType.INTEGER, false, "8",
                                 "Baseline offset in pixels (distance from the text baseline up to the texture's top)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Ascent", "appearance", 30, false, "integer", "", "8")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Ascent", "appearance", 30, false, "number", "", "8")),
                         new ParameterSchema("height", ParameterType.INTEGER, false, "8",
                                 "Rendered height in pixels (width scales proportionally)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Height", "appearance", 40, false, "integer", "", "8")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Height", "appearance", 40, false, "number", "", "8")),
                         new ParameterSchema("rows", ParameterType.INTEGER, false, "1",
                                 "Sprite-sheet rows (each row gets its own chars string)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Sheet rows", "appearance", 50, true, "integer", "", "1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Sheet rows", "appearance", 50, true, "number", "", "1")),
                         new ParameterSchema("columns", ParameterType.INTEGER, false, "1",
                                 "Sprite-sheet columns", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Sheet columns", "appearance", 60, true, "integer", "", "1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Sheet columns", "appearance", 60, true, "number", "", "1")),
                         new ParameterSchema("frames", ParameterType.LIST, false, null,
                                 "Animation frames: one texture per frame, one codepoint each", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Frames", "appearance", 45, true, "list", "", "gui/heart_frame_1")),
@@ -90,10 +90,10 @@ public final class GlyphType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Permission", "behavior", 20, true, "text", "", "")),
                         new ParameterSchema("emoji", ParameterType.BOOLEAN, false, "false",
                                 "Participates in emoji mode (chat interception + tab-completion)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Emoji", "behavior", 30, false, "boolean", "", "true")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Emoji", "behavior", 30, false, "toggle", "", "true")),
                         new ParameterSchema("tab_complete", ParameterType.BOOLEAN, false, "false",
                                 "Offer placeholders as chat completions", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Chat completion", "behavior", 40, true, "boolean", "", "true")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Chat completion", "behavior", 40, true, "toggle", "", "true")),
                         new ParameterSchema("shadow_color", ParameterType.STRING, false, null,
                                 "Shadow color applied when rendered (#RRGGBB or #AARRGGBB)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Shadow color", "appearance", 90, true, "text", "", "#40000000"))),

@@ -17,6 +17,9 @@ const RENDERABLE = new Set([
   'recipe-grid',
   'mechanics',
   'behavior-rules',
+  // Smart inputs (issue 153): each is a view of a plain YAML value.
+  'item',
+  'item-list',
 ]);
 
 export interface StudioSection {
@@ -89,7 +92,7 @@ const SECTION_LABELS: Record<string, string> = {
 /** True when the studio can both render the field and write it back safely. */
 export function isRenderable(field: TypeParam): boolean {
   const widget = field.uiHint ?? 'text';
-  if (widget === 'structured-list') {
+  if (widget === 'structured-list' || widget === 'spatial-list') {
     // Only with a declared shape; a free-form list of maps belongs in YAML.
     return (field.nested?.length ?? 0) > 0;
   }

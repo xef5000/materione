@@ -55,6 +55,9 @@ const CATEGORY_LABELS: Record<string, string> = {
   gameplay: 'Gameplay',
   behaviour: 'Behaviour',
   behavior: 'Behaviour',
+  placement: 'Placement',
+  audio: 'Audio',
+  crafting: 'Crafting',
 };
 
 const CATEGORY_ICONS: Record<string, IconName> = {
@@ -63,6 +66,9 @@ const CATEGORY_ICONS: Record<string, IconName> = {
   gameplay: 'sparkles',
   behaviour: 'zap',
   behavior: 'zap',
+  placement: 'armchair',
+  audio: 'volume-2',
+  crafting: 'chef-hat',
 };
 
 export function categoryLabel(category: string): string {
@@ -215,6 +221,9 @@ export function presenceOf(
  * write happens when the author sets a value, never as a placeholder.
  */
 export function defaultFor(field: TypeParam): unknown {
+  // A switch module is "turn this on": adding it writes true, whatever the
+  // schema's resting default (false) means for the key being absent.
+  if (field.type === 'boolean') return true;
   if (field.default !== undefined && field.default !== '') {
     return defaultValue(field);
   }
@@ -231,7 +240,7 @@ function defaultValue(field: TypeParam): unknown {
 
 /** Picker categories in reading order; only categories that have modules. */
 export function categoriesOf(catalog: ModuleDescriptor[]): string[] {
-  const order = ['identity', 'appearance', 'gameplay', 'behaviour'];
+  const order = ['identity', 'appearance', 'placement', 'crafting', 'audio', 'gameplay', 'behaviour'];
   const present = new Set(catalog.map((module) => module.category));
   return [...order.filter((category) => present.has(category)),
     ...[...present].filter((category) => !order.includes(category)).sort()];

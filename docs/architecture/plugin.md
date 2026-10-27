@@ -157,6 +157,23 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   the editor expands it into one module per registered mechanic. Required field modules (the
   item's `material`) render as cards that cannot be removed. Validation is unaffected: module
   metadata only controls progressive disclosure.
+- **Smart-input metadata** (*M5, per-type modules, issue #153*). Every other content type applies
+  the same philosophy, so `EditorMetadata` also carries: `options` (`ParameterSchema.EditorOption`:
+  stored value, human label, description — an enum's or a fixed set of numbers' labels; the
+  stored value never changes, so a block's `technique: slab` stays `slab` while the editor says
+  "Slab"), and `min` / `max` / `unit` (a number's inclusive range and unit suffix, e.g. furniture
+  `storage` 9–54 *slots*). Widgets the editor renders beyond the item vocabulary: `item` (one item
+  reference; `referenceKind: pack-item` limits it to this pack's items, the ones that can own a
+  placement link), `item-list` (a list of item references as chips with a count — the drops format
+  has no count, so a count is the same reference repeated, each repeat its own drop) and
+  `spatial-list` (a list of maps with an `offset: [x, y, z]`, drawn on block-scale views; a row
+  with `width`+`height` is a box, with `level` a light, else a seat). A switch (boolean) module
+  is added as *on*. Declared per type: **blocks** — Shape (`technique`), Drops, Explosion
+  resistant, When pushed by pistons, Placed by item, When… do… (`host` stays advanced);
+  **furniture** — Floating label, Rotation snapping, Hitbox, Seats, Light source, Storage,
+  Grows into… (evolution), Placed by item, When… do…. `EditorMetadataTest` pins the invariants
+  (options only name accepted values, ranges are ordered and numeric, modules are never
+  advanced and always carry a category and icon, no field names a widget the editor lacks).
 
 ---
 

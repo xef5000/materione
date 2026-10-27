@@ -37,6 +37,19 @@ export interface TypeParam {
   icon?: string;
   /** One line the module picker shows; falls back to `description`. */
   summary?: string;
+  /** Labelled choices: the stored value stays `value`, the control shows `label`. */
+  options?: TypeOption[];
+  /** Number control range (inclusive) and unit suffix. */
+  min?: number;
+  max?: number;
+  unit?: string;
+}
+
+export interface TypeOption {
+  value: string;
+  label: string;
+  description?: string;
+  icon?: string;
 }
 
 export interface TypeInfo {

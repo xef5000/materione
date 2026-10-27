@@ -12,9 +12,13 @@
     field: TypeParam;
     value: unknown;
     onChange: (value: unknown) => void;
+    /** Hide the heading when a module card already names the field. */
+    compact?: boolean;
+    /** The add button's text when the heading is hidden ("Add seat"). */
+    addLabel?: string;
   }
 
-  let { field, value, onChange }: Props = $props();
+  let { field, value, onChange, compact = false, addLabel }: Props = $props();
 
   const columns = $derived(field.nested ?? []);
   const rows = $derived(
@@ -58,7 +62,7 @@
 </script>
 
 <div class="structured">
-  <span class="label">{field.label || field.id}</span>
+  {#if !compact}<span class="label">{field.label || field.id}</span>{/if}
 
   {#if rows.length > 0}
     <div class="table" role="table" style="--cols:{columns.length}">
@@ -101,10 +105,11 @@
   {/if}
 
   <button type="button" class="add" onclick={addRow}>
-    <Icon name="plus" size={14} /> {(field.label || field.id).replace(/e?s$/i, '')}
+    <Icon name="plus" size={14} />
+    {addLabel ?? (compact ? 'Add row' : (field.label || field.id).replace(/e?s$/i, ''))}
   </button>
 
-  {#if field.description}<small>{field.description}</small>{/if}
+  {#if field.description && !compact}<small>{field.description}</small>{/if}
 </div>
 
 <style>

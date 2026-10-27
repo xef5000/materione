@@ -63,6 +63,23 @@ import RemoveFormatting from '@lucide/svelte/icons/remove-formatting';
 import Shuffle from '@lucide/svelte/icons/shuffle';
 import Sticker from '@lucide/svelte/icons/sticker';
 import Minus from '@lucide/svelte/icons/minus';
+import Lightbulb from '@lucide/svelte/icons/lightbulb';
+import Shield from '@lucide/svelte/icons/shield';
+import MoveHorizontal from '@lucide/svelte/icons/move-horizontal';
+import Hammer from '@lucide/svelte/icons/hammer';
+import RotateCw from '@lucide/svelte/icons/rotate-cw';
+import Archive from '@lucide/svelte/icons/archive';
+import Sprout from '@lucide/svelte/icons/sprout';
+import Search from '@lucide/svelte/icons/search';
+import Play from '@lucide/svelte/icons/play';
+import Pause from '@lucide/svelte/icons/pause';
+import Disc3 from '@lucide/svelte/icons/disc-3';
+import User from '@lucide/svelte/icons/user';
+import Crosshair from '@lucide/svelte/icons/crosshair';
+import Ruler from '@lucide/svelte/icons/ruler';
+import Grid3x3 from '@lucide/svelte/icons/grid-3x3';
+import Flame from '@lucide/svelte/icons/flame';
+import Timer from '@lucide/svelte/icons/timer';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -122,6 +139,23 @@ export const icons = {
   sticker: Sticker,
   strikethrough: Strikethrough,
   underline: Underline,
+  lightbulb: Lightbulb,
+  shield: Shield,
+  'move-horizontal': MoveHorizontal,
+  hammer: Hammer,
+  'rotate-cw': RotateCw,
+  archive: Archive,
+  sprout: Sprout,
+  search: Search,
+  play: Play,
+  pause: Pause,
+  'disc-3': Disc3,
+  user: User,
+  crosshair: Crosshair,
+  ruler: Ruler,
+  'grid-3x3': Grid3x3,
+  flame: Flame,
+  timer: Timer,
 } as const;
 
 export type IconName = keyof typeof icons;

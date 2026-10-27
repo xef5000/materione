@@ -6,6 +6,10 @@
   import AssetPicker from '../components/AssetPicker.svelte';
   import RichTextEditor from '../components/RichTextEditor.svelte';
   import MaterialPicker from '../components/MaterialPicker.svelte';
+  import ItemChips from './ItemChips.svelte';
+  import ItemPicker from './ItemPicker.svelte';
+  import SpatialEditor from './SpatialEditor.svelte';
+  import StructuredList from './StructuredList.svelte';
   import type { TypeParam } from '../api';
 
   interface Props {
@@ -15,14 +19,39 @@
     onChange: (value: unknown) => void;
     /** Rendered next to a texture/model slot: "Edit", "Edit in Blockbench". */
     action?: { label: string; run: () => void };
+    /** A module card already names the field: keep the label for assistive tech only. */
+    hideLabel?: boolean;
   }
 
-  let { field, value, pack, onChange, action }: Props = $props();
+  let { field, value, pack, onChange, action, hideLabel = false }: Props = $props();
   const controlId = $props.id();
 
   const widget = $derived(field.uiHint ?? 'text');
   const text = $derived(value === undefined || value === null ? '' : String(value));
   const lines = $derived(Array.isArray(value) ? value.map((item) => String(item)).join('\n') : '');
+
+  /** Composite widgets carry their own heading (the module card names them). */
+  const composite = $derived(widget === 'structured-list' || widget === 'spatial-list');
+  /** Labelled choices: the schema's options, else the raw allowed values. */
+  const choices = $derived(
+    field.options?.length
+      ? field.options
+      : (field.allowedValues ?? []).map((value) => ({ value, label: value.replaceAll('_', ' '), description: '' })),
+  );
+  const numeric = $derived(field.type === 'integer' || field.type === 'decimal');
+  const chosen = $derived(choices.find((option) => option.value === text));
+
+  /** A choice's stored value in the field's own type (rotation 90 is a number, not "90"). */
+  function coerce(choice: string): unknown {
+    return numeric && choice !== '' ? Number(choice) : choice;
+  }
+
+  function commitNumber(raw: string) {
+    let next = Number(raw);
+    if (field.min !== undefined) next = Math.max(field.min, next);
+    if (field.max !== undefined) next = Math.min(field.max, next);
+    onChange(next);
+  }
 
   function commitLines(raw: string) {
     onChange(
@@ -35,12 +64,25 @@
 </script>
 
 <div class="field" data-field={field.id}>
-  <label class="label" for={controlId}>
-    {field.label || field.id}
-    {#if field.required}<em title="required">*</em>{/if}
-  </label>
+  {#if !composite}
+    <label class="label" class:sr-only={hideLabel && field.type !== 'boolean'} for={controlId}>
+      {field.label || field.id}
+      {#if field.required}<em title="required">*</em>{/if}
+    </label>
+  {/if}
 
-  {#if widget === 'material'}
+  {#if widget === 'structured-list'}
+    <StructuredList {field} {value} {onChange} compact />
+  {:else if widget === 'spatial-list'}
+    <SpatialEditor {field} {value} {onChange} />
+  {:else if widget === 'item'}
+    <ItemPicker id={controlId} {pack} label={field.label || field.id} value={text}
+      packOnly={field.referenceKind === 'pack-item'}
+      placeholder={field.example ? `e.g. ${field.example}` : 'Choose an item'}
+      required={field.required} onPick={(next) => onChange(next)} />
+  {:else if widget === 'item-list'}
+    <ItemChips {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'material'}
     <MaterialPicker id={controlId} label={field.label || field.id} value={text}
       choices={field.allowedValues} required={field.required} onChange={(next) => onChange(next)} />
   {:else if widget === 'formatted-text' || widget === 'formatted-lines'}
@@ -53,10 +95,10 @@
         <button type="button" class="action" onclick={action.run}>{action.label}</button>
       {/if}
     </span>
-  {:else if field.allowedValues && field.allowedValues.length > 1 && field.allowedValues.length <= 4}
-    <!-- Few enum values read as one choice, not a dropdown (module cards' smart input). -->
+  {:else if choices.length > 1 && (choices.length <= 4 || (field.options?.length && choices.length <= 8))}
+    <!-- Few choices (or a few labelled ones) read as one choice, not a dropdown. -->
     <div class="segments" role="radiogroup" aria-label={field.label || field.id}>
-      {#if !field.required}
+      {#if !field.required && !numeric && !field.module}
         <button
           type="button"
           role="radio"
@@ -67,23 +109,26 @@
           onclick={() => onChange('')}
         >—</button>
       {/if}
-      {#each field.allowedValues as option (option)}
+      {#each choices as option (option.value)}
         <button
           type="button"
           role="radio"
-          aria-checked={text === option}
-          class:off={text !== option}
-          onclick={() => onChange(option)}
-        >{option.replaceAll('_', ' ')}</button>
+          aria-checked={text === option.value}
+          class:off={text !== option.value}
+          title={option.description || undefined}
+          onclick={() => onChange(coerce(option.value))}
+        >{option.label}</button>
       {/each}
     </div>
-  {:else if field.allowedValues && field.allowedValues.length > 0}
-    <select id={controlId} value={text} onchange={(event) => onChange(event.currentTarget.value)}>
+    {#if chosen?.description}<small>{chosen.description}</small>{/if}
+  {:else if choices.length > 0}
+    <select id={controlId} value={text} onchange={(event) => onChange(coerce(event.currentTarget.value))}>
       {#if !field.required}<option value=""></option>{/if}
-      {#each field.allowedValues as option (option)}
-        <option value={option}>{option.replaceAll('_', ' ')}</option>
+      {#each choices as option (option.value)}
+        <option value={option.value}>{option.label}</option>
       {/each}
     </select>
+    {#if chosen?.description}<small>{chosen.description}</small>{/if}
   {:else if field.type === 'boolean'}
     <input
       id={controlId}
@@ -92,17 +137,25 @@
       onchange={(event) => onChange(event.currentTarget.checked)}
     />
   {:else if field.type === 'integer' || field.type === 'decimal'}
-    <input
-      id={controlId}
-      type="number"
-      step={field.type === 'decimal' ? 'any' : '1'}
-      value={text}
-      placeholder={field.example ?? ''}
-      onblur={(event) => onChange(Number(event.currentTarget.value))}
-      onkeydown={(event) => {
-        if (event.key === 'Enter') event.currentTarget.blur();
-      }}
-    />
+    <span class="numeric">
+      <input
+        id={controlId}
+        type="number"
+        step={field.type === 'decimal' ? 'any' : '1'}
+        min={field.min}
+        max={field.max}
+        value={text}
+        placeholder={field.example ?? ''}
+        onblur={(event) => commitNumber(event.currentTarget.value)}
+        onkeydown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+        }}
+      />
+      {#if field.unit}<span class="unit">{field.unit}</span>{/if}
+      {#if field.min !== undefined && field.max !== undefined}
+        <span class="range">{field.min}–{field.max}</span>
+      {/if}
+    </span>
   {:else if field.type === 'list'}
     <textarea
       id={controlId}
@@ -126,7 +179,7 @@
     />
   {/if}
 
-  {#if field.description}
+  {#if field.description && !chosen?.description}
     <small>{field.description}</small>
   {/if}
 </div>
@@ -142,6 +195,14 @@
     font-size: var(--text-sm);
     color: var(--muted);
   }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
   .label em {
     color: var(--accent);
     font-style: normal;
@@ -151,6 +212,25 @@
     gap: var(--space-2);
     align-items: center;
     min-width: 0;
+  }
+  .numeric {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-width: 0;
+  }
+  .numeric input {
+    max-width: 10em;
+  }
+  .unit,
+  .range {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    white-space: nowrap;
+  }
+  .range {
+    color: var(--faint);
+    font-size: var(--text-xs);
   }
   .slot :global(.picker) {
     flex: 1;

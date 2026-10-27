@@ -270,7 +270,7 @@
           pack={resource.pack} {host} vocabulary={vocabulary}
           onChange={(next) => set(descriptor!.field!.id, next)} />
       {:else if descriptor!.field}
-        <Field field={descriptor!.field} value={values[descriptor!.field.id]} pack={resource.pack}
+        <Field field={descriptor!.field} value={values[descriptor!.field.id]} pack={resource.pack} hideLabel
           onChange={(next) => set(descriptor!.field!.id, next)} action={actionFor(descriptor!.field)} />
         {@render provenance(descriptor!.field.id)}
         {@const issue = fieldIssue(descriptor!.field.id)}

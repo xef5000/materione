@@ -62,12 +62,24 @@ public final class BlockType implements ContentType {
                                 List.of("note_block", "string", "chorus", "technical",
                                         "stairs", "slab"), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Technique", "identity", 10, false, "select", "",
-                                        "note_block")),
+                                        "Shape", "identity", 10, false, "select", "",
+                                        "note_block", true, "appearance", "box",
+                                        "Cube, slab, stairs, plant: the form the block takes in the world")
+                                        .withOptions(List.of(
+                                                option("note_block", "Full block",
+                                                        "A solid cube: the best default"),
+                                                option("slab", "Slab", "A half-height block"),
+                                                option("stairs", "Stairs", "A stair-shaped block"),
+                                                option("string", "Thin plant",
+                                                        "Plants and thin decorations"),
+                                                option("chorus", "Directional plant",
+                                                        "Plants that connect to neighbours"),
+                                                option("technical", "Custom host",
+                                                        "You pick the vanilla host block (see Advanced)")))),
                         new ParameterSchema("host", ParameterType.STRING, false, null,
                                 "Vanilla host block id (required for technical)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Host block", "identity", 20, true, "text", "",
+                                        "Host block (technical)", "identity", 20, true, "text", "",
                                         "minecraft:tripwire")),
                         new ParameterSchema("template", ParameterType.REFERENCE, false, null,
                                 "Template this block inherits from", null, null)
@@ -94,34 +106,48 @@ public final class BlockType implements ContentType {
                                 "Item ids dropped when broken (default: nothing custom)",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Drops", "gameplay", 10, false, "list", "item",
-                                        "myserver:ruby")),
+                                        "Drops", "gameplay", 10, false, "item-list", "item",
+                                        "myserver:ruby", true, "gameplay", "package",
+                                        "Items that fall when the block is broken; a count repeats the entry")),
                         new ParameterSchema("blast_resistant", ParameterType.BOOLEAN, false,
                                 "false",
                                 "Whether explosions leave the block intact", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Survives explosions", "gameplay", 20, false, "toggle",
-                                        "", "")),
+                                        "Explosion resistant", "gameplay", 20, false, "toggle",
+                                        "", "", true, "gameplay", "shield",
+                                        "Explosions leave the block intact")),
                         new ParameterSchema("move_policy", ParameterType.ENUM, false, "keep",
                                 "What pistons do to this block",
                                 List.of("keep", "break"), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "When a piston pushes it", "gameplay", 30, false,
-                                        "select", "", "keep")),
+                                        "When pushed by pistons", "gameplay", 30, false,
+                                        "select", "", "keep", true, "gameplay", "move-horizontal",
+                                        "Whether a piston moves the block or breaks it")
+                                        .withOptions(List.of(
+                                                option("keep", "Moves with the piston",
+                                                        "The block is pushed like a vanilla block"),
+                                                option("break", "Breaks",
+                                                        "The piston destroys the block")))),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
                                 "Optional custom placement item; auto-generated from this block "
                                         + "when omitted",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Placement item", "gameplay", 40, true, "reference",
-                                        "item", "")),
+                                        "Placed by item", "gameplay", 40, false, "item",
+                                        "pack-item", "", true, "gameplay", "hammer",
+                                        "Choose the item that places this block; blank keeps the generated one")),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
                                 "ECA rules fired on place/break/interact (runtime-systems 2)",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Behaviour rules", "behavior", 10, false,
-                                        "behavior-rules", "", ""))),
+                                        "When… do…", "behavior", 10, false,
+                                        "behavior-rules", "", "", true, "behaviour", "activity",
+                                        "React to the block being placed, broken or used"))),
                 "1.0.0");
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     @Override
