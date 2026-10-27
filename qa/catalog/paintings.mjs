@@ -60,6 +60,33 @@ async function paintingFacingId(ctx, selector) {
   return Number(match[1]);
 }
 
+// Rich text (master §5.7, plugin §6.1): sample:panorama's title is an orange-to-gold
+// gradient and its author `&6Materione`. The client's synced registry entry is read as
+// flat runs `rrggbb=text|`; indexed loops only (DebugBridge wraps collections).
+const PANORAMA_TEXT_READ = `def rk = Class.forName('net.minecraft.core.registries.Registries').getField('PAINTING_VARIANT').get(null)
+def reg = mc.level.registryAccess().@target.lookupOrThrow(rk)
+def idc = Class.forName('net.minecraft.resources.Identifier').getMethod('fromNamespaceAndPath', String, String).invoke(null, 'sample', 'panorama')
+def v = reg.get(idc).get().value()
+def out = ''
+def parts = [v.title().get(), v.author().get()]
+for (int p = 0; p < 2; p++) {
+  def flat = parts[p].toFlatList()
+  for (int i = 0; i < flat.size(); i++) {
+    def part = flat.get(i)
+    def color = part.getStyle().getColor()
+    out += (color == null ? 'none' : String.format('%06x', color.getValue())) + '=' + part.getString() + '|'
+  }
+  out += '#'
+}
+return out`;
+
+const RICH_TEXT_COVERS = [
+  'content/src/main/java/dev/materione/content/paintings/**',
+  'modern/src/main/java/dev/materione/modern/PaintingRegistrar.java',
+  'platform/src/main/java/dev/materione/platform/text/MaterioneText.java',
+  'fixtures/packs/sample/paintings/panorama.yml',
+];
+
 const PAINTING_SCENE = { playerY: 31, floorY: 30, wallZ: 8 };
 
 async function clearPaintingScene(ctx) {
@@ -96,6 +123,9 @@ export default [
     timeoutMs: 240_000,
     steps: async (ctx) => {
       await ctx.reset();
+      // the dev driver needs materione.dev (default op): grant it here rather than
+      // inherit it from whichever suite ran first, so the test runs on its own
+      await ctx.rcon('op Probe');
 
       // --- registry mode is the live seam: composed at bootstrap, nothing
       // deployed, doctor honest about it
@@ -250,6 +280,52 @@ return 'clicked'`;
         'the 2×1 sunrise art (warm rainbow gradient) and 1×2 moonrise (night-blue panel, pale moon, star) hang side by side on the stone wall — pack textures, not checkerboard or vanilla placeholders');
       await ctx.rcon('tp Probe 0 -60 3');
       await clearPaintingScene(ctx);
+    },
+  }),
+
+  test({
+    id: 'paintings.rich-text-title',
+    title: "sample:panorama's rich text title and author reach the client's painting-variant registry formatted: the title an orange (#f9731e) to gold (#ffd27a) gradient, one color per character, the author gold — not literal <gradient> tags or & codes",
+    mode: 'auto',
+    covers: RICH_TEXT_COVERS,
+    dependsOn: ['paintings.registration'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      const [title, author] = String(await ctx.exec(PANORAMA_TEXT_READ, 20_000)).split('#');
+      ctx.log(`panorama title runs: ${title} author runs: ${author}`);
+      const runs = title.split('|').filter(Boolean);
+      ctx.expect(runs.map((run) => run.split('=')[1]).join('')).toBe('Panorama');
+      ctx.expect(runs[0]).toBe('f9731e=P');
+      ctx.expect(runs.at(-1)).toBe('ffd27a=a');
+      ctx.expect(new Set(runs.map((run) => run.split('=')[0])).size).toBeGreaterThan(5);
+      ctx.expect(author).toBe('ffaa00=Materione|');
+    },
+  }),
+
+  test({
+    id: 'paintings.rich-text-title-visual',
+    title: "sample:panorama's gradient title and gold author, rendered by the client from its synced painting-variant registry, look like the editor's preview",
+    mode: 'visual',
+    covers: RICH_TEXT_COVERS,
+    dependsOn: ['paintings.rich-text-title'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      // the registry's own components, drawn by the client's chat renderer
+      await ctx.exec(`def rk = Class.forName('net.minecraft.core.registries.Registries').getField('PAINTING_VARIANT').get(null)
+def reg = mc.level.registryAccess().@target.lookupOrThrow(rk)
+def idc = Class.forName('net.minecraft.resources.Identifier').getMethod('fromNamespaceAndPath', String, String).invoke(null, 'sample', 'panorama')
+def v = reg.get(idc).get().value()
+// 26.x: LocalPlayer#sendSystemMessage adds a client-side chat line (wrapped: @target)
+mc.player.@target.sendSystemMessage(v.title().get())
+mc.player.@target.sendSystemMessage(v.author().get())
+return 'shown'`, 20_000);
+      await ctx.sleep(500);
+      await ctx.shot('panorama-title-author');
+      ctx.needsEyes(
+        'the two newest chat lines are the sample:panorama painting variant\'s title and author as the client renders its synced registry: "Panorama" as a smooth orange (#f9731e) to gold (#ffd27a) gradient and "Materione" in gold, both with the normal text shadow; no literal <gradient> tags, no & codes (issue #151)',
+      );
     },
   }),
 ];

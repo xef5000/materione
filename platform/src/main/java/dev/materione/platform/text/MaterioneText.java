@@ -80,6 +80,28 @@ public final class MaterioneText {
     }
 
     /**
+     * Text compiled once per boot or into files (painting variants): parsed
+     * without glyph or effect registries, so the result never depends on live
+     * runtime state (D7) and is the same on the datapack and registry paths.
+     * Glyph, effect and emoji markers stay literal here.
+     */
+    public static Component parseData(String text) {
+        return parse(text, null, null, GlyphText.Permissions.ALLOW_ALL);
+    }
+
+    /**
+     * {@link #parseData} as JSON text for a data file (Adventure's JSON text
+     * component format). Text without formatting serializes as a JSON string,
+     * so plain titles compile byte-identically to before. Returns text, not a
+     * Gson tree: the plugin jar relocates Gson, and Adventure's Gson types are
+     * Paper's own, so no Gson type may cross this boundary.
+     */
+    public static String componentJson(String text) {
+        return net.kyori.adventure.text.serializer.json.JSONComponentSerializer.json()
+                .serialize(parseData(text == null ? "" : text));
+    }
+
+    /**
      * The legacy {@code §} form of a component, for the surfaces that only
      * take a string. Hex colors use the {@code §x} repeated form; a gradient
      * degrades to one color per character.

@@ -54,6 +54,29 @@ class PaintingTypeTest {
     }
 
     @Test
+    void titleAndAuthorAreRichTextCompiledByTheEmitter() {
+        // master §5.7: the same formatted-text widget as names; the emitter
+        // (the plugin's text pipeline) turns them into text components
+        for (String field : List.of("title", "author")) {
+            var parameter = type.describe().parameters().stream()
+                    .filter(candidate -> candidate.id().equals(field))
+                    .findFirst().orElseThrow();
+            assertThat(parameter.uiHint()).as(field).isEqualTo("formatted-text");
+        }
+        var painting = parsePainting(map("texture", "sunrise", "title", "<red>Sun", "author", "&6Me"));
+        var emitter = new RecordingEmitter() {
+            @Override
+            public Object textComponent(String stored) {
+                return Map.of("compiled", stored);
+            }
+        };
+        type.compile(painting, null, emitter, NO_ALLOCATIONS);
+        assertThat(emitter.datapackFiles.get("data/sample/painting_variant/sunrise.json"))
+                .containsEntry("title", Map.of("compiled", "<red>Sun"))
+                .containsEntry("author", Map.of("compiled", "&6Me"));
+    }
+
+    @Test
     void compileEmitsVariantAndPlaceableTag() {
         var painting = parsePainting(map("texture", "sunrise", "placeable", true, "title", "Sunrise"));
         var emitter = new RecordingEmitter();
@@ -109,7 +132,7 @@ class PaintingTypeTest {
                 }
             };
 
-    private static final class RecordingEmitter implements PackEmitter {
+    private static class RecordingEmitter implements PackEmitter {
         final Map<String, Map<String, Object>> datapackFiles = new LinkedHashMap<>();
 
         @Override

@@ -299,6 +299,38 @@ class MaterioneTextTest {
     }
 
     @Test
+    void componentJsonKeepsPlainTextAPlainString() {
+        // plain painting titles compile byte-identically to before (a string)
+        assertThat(MaterioneText.componentJson("Sunrise")).isEqualTo("\"Sunrise\"");
+        assertThat(MaterioneText.componentJson("")).isEqualTo("\"\"");
+        assertThat(MaterioneText.componentJson("Less \\<b> more")).isEqualTo("\"Less <b> more\"");
+    }
+
+    @Test
+    void componentJsonCarriesFormattingAsATextComponent() {
+        String json = MaterioneText.componentJson("<gradient:#f9731e:#ffd27a>Panorama</gradient>");
+        assertThat(json).startsWith("{").contains("\"color\":\"#F9731E\"").contains("\"color\":\"#FFD27A\"");
+        assertThat(MaterioneText.componentJson("&6Materione")).contains("\"color\":\"gold\"").contains("Materione");
+        // deterministic (D7): the same text compiles to the same JSON
+        assertThat(MaterioneText.componentJson("<b>x</b> <red>y")).isEqualTo(MaterioneText.componentJson("<b>x</b> <red>y"));
+    }
+
+    @Test
+    void dataTextNeverReadsTheLiveRegistries() {
+        // compile output must not depend on runtime state: markers stay literal
+        GlyphText.register(MaterioneTextTest::glyphs);
+        GlyphText.registerEffects(MaterioneTextTest::effects);
+        try {
+            assertThat(plain(MaterioneText.parseData("<glyph:heart> :heart: <effect:rainbow>x</effect>")))
+                    .isEqualTo("<glyph:heart> :heart: <effect:rainbow>x</effect>");
+            assertThat(MaterioneText.componentJson("<glyph:heart>")).isEqualTo("\"<glyph:heart>\"");
+        } finally {
+            GlyphText.register(() -> null);
+            GlyphText.registerEffects(() -> null);
+        }
+    }
+
+    @Test
     void emptyAndNullAreEmpty() {
         assertThat(MaterioneText.parse("", glyphs(), effects(), GlyphText.Permissions.ALLOW_ALL))
                 .isEqualTo(Component.empty());

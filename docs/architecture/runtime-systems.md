@@ -552,6 +552,9 @@ one per boot:
   not a registry entry), and placeable paintings via the post-flatten
   `TAGS(PAINTING_VARIANT)` event. Nothing is written into the world; compose-registered
   entries sync to clients like datapack entries.
+  Painting titles and authors are rich text (master §5.7): both modes parse them with
+  `MaterioneText.parseData` (plugin §6.1). Registry mode passes the component to the builder;
+  datapack mode writes it as a JSON text component, and plain text stays a JSON string.
 - *Datapack mode* (1.21.4/1.21.5 floor): the variants and songs compile into one
   deterministic `datapack.zip` (pack.mcmeta, hash
 marker) that `DatapackService` deploys atomically to the default world's `datapacks/` folder

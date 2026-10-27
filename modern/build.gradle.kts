@@ -3,9 +3,10 @@
 // module compiles against a 26.x paper-api — everything here runs only after
 // RegistryCapabilities confirms the API is present at runtime; a floor server
 // (1.21.4/1.21.5) never links these classes and rides the world-datapack
-// path. Compiles against api/core/content only (no floor paper-api — the
-// modern one replaces it via compileOnly below, like every server-provided
-// surface it is never shaded).
+// path. Compiles against api/core/content, plus platform for the one text
+// pipeline (painting titles parse exactly like the datapack path, plugin
+// §6.1), with no floor paper-api: the modern one replaces it via compileOnly
+// below, and like every server-provided surface it is never shaded.
 plugins {
     id("materione.java-conventions")
     `java-library`
@@ -36,6 +37,8 @@ dependencies {
     api(project(":api"))
     api(project(":core"))
     api(project(":content"))
+    // MaterioneText only: Adventure-level code, no version-specific Bukkit types
+    implementation(project(":platform"))
     compileOnly(libs.findLibrary("paper-api-modern").get())
     compileOnly(libs.findLibrary("snakeyaml").get())
     "testImplementation"(libs.findLibrary("snakeyaml").get())

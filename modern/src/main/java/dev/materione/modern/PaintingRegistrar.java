@@ -1,6 +1,7 @@
 package dev.materione.modern;
 
 import dev.materione.content.paintings.PaintingDefinition;
+import dev.materione.platform.text.MaterioneText;
 import io.papermc.paper.plugin.bootstrap.BootstrapContext;
 import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import io.papermc.paper.registry.RegistryKey;
@@ -9,7 +10,6 @@ import io.papermc.paper.registry.event.RegistryEvents;
 import io.papermc.paper.registry.keys.PaintingVariantKeys;
 import io.papermc.paper.registry.tag.TagKey;
 import net.kyori.adventure.key.Key;
-import net.kyori.adventure.text.Component;
 import org.bukkit.Art;
 
 import java.util.ArrayList;
@@ -49,8 +49,9 @@ final class PaintingRegistrar {
                         try {
                             Key key = Key.key(painting.id().toString());
                             event.registry().register(PaintingVariantKeys.create(key), builder -> builder
-                                    .author(Component.text(painting.author()))
-                                    .title(Component.text(painting.title()))
+                                    // the same parse as the datapack path (plugin §6.1)
+                                    .author(MaterioneText.parseData(painting.author()))
+                                    .title(MaterioneText.parseData(painting.title()))
                                     .assetId(Key.key(painting.assetId()))
                                     .width(painting.width())
                                     .height(painting.height()));

@@ -650,11 +650,49 @@ class PackCompilerTest {
         assertThat(TextEffectShaders.formatRanges()).isEqualTo("46..62, 63..83, 84..87, 88..88");
     }
 
+    @Test
+    void paintingTextGoesThroughTheInjectedTextCompiler(@TempDir Path tempDir) throws IOException {
+        // the plugin passes MaterioneText::componentJson (plugin §6.1); content
+        // types only see PackEmitter#textComponent
+        var compiler = new PackCompiler(stored -> stored.contains("<") || stored.contains("&")
+                ? "{\"text\":\"compiled\",\"color\":\"gold\"}"
+                : "{\"text\":" + new com.google.gson.JsonPrimitive(stored) + "}");
+        var outcome = compileFixtures(
+                tempDir, AllocationTable.load(tempDir.resolve("storage/allocation.bin")), compiler);
+        try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
+            assertThat(entryText(datapack, "data/sample/painting_variant/panorama.json"))
+                    .contains("\"title\":{\"color\":\"gold\",\"text\":\"compiled\"}")
+                    .contains("\"author\":{\"color\":\"gold\",\"text\":\"compiled\"}");
+            // plain titles stay plain strings, even when the converter wraps them
+            assertThat(entryText(datapack, "data/sample/painting_variant/sunrise.json"))
+                    .contains("\"title\":\"Sunrise\"")
+                    .contains("\"author\":\"Materione\"");
+        }
+    }
+
+    @Test
+    void aFailingTextCompilerShipsTheStoredText(@TempDir Path tempDir) throws IOException {
+        // fail-soft (D6): a converter failure must never take the pipeline down
+        var compiler = new PackCompiler(stored -> {
+            throw new NoSuchMethodError("relocated library mismatch");
+        });
+        var outcome = compileFixtures(
+                tempDir, AllocationTable.load(tempDir.resolve("storage/allocation.bin")), compiler);
+        try (ZipFile datapack = new ZipFile(outcome.stagedDatapackZip().toFile())) {
+            assertThat(entryText(datapack, "data/sample/painting_variant/sunrise.json"))
+                    .contains("\"title\":\"Sunrise\"");
+        }
+    }
+
     private PackCompiler.Outcome compileFixtures(Path tempDir) {
         return compileFixtures(tempDir, AllocationTable.load(tempDir.resolve("storage/allocation.bin")));
     }
 
     private PackCompiler.Outcome compileFixtures(Path tempDir, AllocationTable allocation) {
+        return compileFixtures(tempDir, allocation, new PackCompiler());
+    }
+
+    private PackCompiler.Outcome compileFixtures(Path tempDir, AllocationTable allocation, PackCompiler compiler) {
         var quarantine = new QuarantineTracker();
         var runner = new PipelineRunner(diagnostics, quarantine);
         runner.request(new ReloadScope.Everything(), GoldenFiles.fixturesRoot().resolve("packs"));
@@ -662,7 +700,6 @@ class PackCompilerTest {
         // its own compile coverage (harness perf budget test)
         var samplePacks = runner.lastPacks().stream()
                 .filter(p -> p.id().equals("sample")).toList();
-        var compiler = new PackCompiler();
         var result = compiler.compile(
                 samplePacks,
                 // the REAL content types: the golden locks actual compile

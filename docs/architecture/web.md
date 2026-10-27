@@ -875,8 +875,8 @@ palette pairs (WCAG AA: 4.5:1 for text, 3:1 for control outlines and focus).
 
 ### 6.2 Rich text (issue #151)
 
-Player-visible text (item names and lore, block and furniture names, the furniture label) is
-edited in place, in the game's look: there is no code field and no separate preview to read.
+Player-visible text (item names and lore, block and furniture names, the furniture label,
+painting titles and authors) is edited in place, in the game's look: there is no code field and no separate preview to read.
 The stored form is decided in master §5.7 (MiniMessage, legacy codes as input); the plugin side
 is plugin §6.1.
 
