@@ -241,6 +241,47 @@ byte-identical** (comments, ordering, blank lines, unknown fields included). Con
   stay git-reviewable. Hand-written per-editor forms are forbidden for the same reason they're
   forbidden in the plugin: they drift.
 
+### 5.7 Player-visible text: the stored form (decided M5, 2026-10, issue #151)
+
+Item names and lore, block and furniture names, and every later surface that shows authored
+text to a player store that text in **one string form: a MiniMessage subset**, with Materione's
+own tags in the same syntax.
+
+| Construct | Stored as |
+|---|---|
+| Color | `<red>` (the 16 named colors), `<#f9731e>` |
+| Gradient (2 to N stops) | `<gradient:#f9731e:#ffd27a>Ruby Sword</gradient>` |
+| Decorations | `<b>`, `<i>`, `<u>`, `<st>`, `<obf>` |
+| Glyphs, spacing, shader effects | `<glyph:id>`, `<g:id>`, `<shift:N>`, `<effect:pack:id>…</effect>`, `:emoji:` |
+| A literal `<` or `\` in text | `\<`, `\\` (MiniMessage escaping) |
+
+Rules:
+
+- **Legacy codes stay valid input forever.** `&`- and `§`-codes (`&c`, `&l`, `&#rrggbb`,
+  `&x&r&r&g&g&b&b`) parse into the same components, including mixed into a MiniMessage string.
+  Nothing on disk needs migrating.
+- **The editor never writes legacy codes.** It shows `&`-codes as the formatting they mean when
+  it loads a value, and turns a code the author types into formatting as it is typed (the way
+  Ctrl+B works in a word processor). What it saves is MiniMessage.
+- **An untouched value is never rewritten** (§5.6). The editor emits a new string only when the
+  author changes what the text looks like. An edit that ends where it started gives back the
+  original bytes, and an edit to one lore line leaves the other lines' bytes alone.
+- **Authors never see MiniMessage in the content editor.** The stored string is visible where
+  the file is: the raw YAML view of Files. There is no "raw" toggle on the text control.
+- The field type stays a YAML string (a list of strings for lore). The registry marks a field
+  as rich text with the `formatted-text` / `formatted-lines` editor widget. That widget is the
+  one schema source for both the plugin pipeline and the editor.
+
+**Why MiniMessage and not a structured span list.** A YAML list of `{text, color, bold}` spans
+was the alternative. It is unambiguous, but it turns a one-line name into a nested block, so
+hand-editing (D1, constraint #2) gets worse. It changes every existing value's YAML shape, so
+it needs a schema migration, and it cannot hold the glyph and effect tags that already live
+inline in these strings. MiniMessage keeps one readable scalar per line, is the format Paper
+ships and the other content plugins accept (packs move between them), and is already the
+syntax family of Materione's `<glyph:…>` tags. Its cost is a parser on both sides. Both
+parsers are tested against one shared fixture file (`fixtures/text/rich-text.json`, plugin
+doc §6.1), so they cannot drift apart silently.
+
 ---
 
 ## 6. The content pipeline

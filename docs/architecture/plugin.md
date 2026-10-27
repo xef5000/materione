@@ -298,6 +298,47 @@ metadata; the guard does not quarantine otherwise valid runtime content.
 Mojang churns components every release; blast radius of an update = one implementation + one
 descriptor delta. `content/`, `behavior/`, `pack/` consume capabilities, never versions.
 
+### 6.1 The text pipeline (master §5.7)
+
+Authored player-visible text reaches Adventure components through one entry point,
+`platform/text/MaterioneText`. Item names and lore, block and furniture item names, furniture
+labels and storage titles, backpack titles and the `message` action all call it. Adventure lives
+only in `platform/` and above, so the pipeline does too.
+
+```
+ stored string ─► legacy bridge ─► MiniMessage (style subset + Materione tags) ─► emoji pass ─► Component
+   "&6Ruby"        "<gold>Ruby"      gradient · color · b/i/u/st/obf · reset         ":heart:"
+   "<b>Ruby"       (unchanged)       glyph · g · shift · effect/e
+```
+
+1. **Legacy bridge.** `&`- and `§`-codes become MiniMessage tags with legacy meaning: a color or
+   `&r` closes every tag the bridge opened, and decorations open inside the current color. Tags
+   the author wrote are never closed by a legacy code, so `<effect:…>&cHot</effect>` keeps its
+   span. A string with no legacy code passes through unchanged.
+2. **MiniMessage**, with a closed tag set: colors, decorations, `gradient`, `rainbow`,
+   `transition`, `reset`, `font`, plus Materione's resolvers. Click, hover, insertion, selector,
+   NBT and translation tags are not registered, so authored text cannot carry commands or
+   lookups. An unknown or unresolvable tag stays literal text, which keeps the fail-soft rule:
+   an unknown glyph id, a denied glyph or an unknown effect renders as written and never throws.
+3. **Materione tags.** `<glyph:id[:colorable]>` / `<g:…>` insert the glyph's codepoint (forced
+   white unless `colorable`, so a surrounding color or gradient does not tint the bitmap),
+   `<shift:N>` inserts space-provider characters, and `<effect:pack:id>…</effect>` (alias
+   `<e:…>`) colors its content with the effect's shader signal. These are the same semantics as
+   runtime-systems §6.
+4. **Emoji pass.** `:name:` placeholders, and colon-less placeholders, that name an emoji glyph
+   are replaced inside the resulting text nodes. The replacement inherits the node's style.
+
+Callers that need item styling wrap the result with `ItemText.nonItalic` (vanilla renders names
+and lore italic by default). Lore keeps vanilla's dark purple as the default color. A surface
+that only takes a legacy string gets `MaterioneText.legacySection(component)`: `§x` hex runs,
+with a gradient degrading to one color per character. Text that players type themselves (chat,
+signs, books, anvil renames) is not authored content: `GlyphText.resolveComponent` still
+resolves only glyph markers in it and never parses MiniMessage.
+
+Painting titles and authors are not on this pipeline yet. On floor servers they compile into
+the datapack from `content/`, which has no Adventure. They stay plain-text fields until that
+path can emit text components.
+
 ---
 
 ## 7. Persistence layout

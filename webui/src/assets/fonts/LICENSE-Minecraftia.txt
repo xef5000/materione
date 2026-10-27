@@ -1,0 +1,18 @@
+Minecraftia 1.0
+Copyright Andrew Tyler (http://www.andrewtyler.net)
+
+Licensed under the Creative Commons Attribution-ShareAlike 3.0 license:
+http://creativecommons.org/licenses/by-sa/3.0/
+
+The font file's own name table records this license (name IDs 13 and 14).
+Source: Font Library, https://fontlibrary.org/en/font/minecraftia
+(package minecraftia.zip, commit 71962a7e3d4a70435c030466a12f1d63).
+
+Minecraftia.ttf is redistributed unmodified, byte for byte:
+sha256 6124fe5b92735e59548c010f9c03b32f024896ff75f19a3fc36ae5ae2b788e12
+
+Minecraftia is a Minecraft-style pixel font drawn by Andrew Tyler. It is not
+Mojang's font and contains no Mojang assets. Materione uses it only to show
+player-visible text in the editor the way the game draws it (docs/architecture/web.md,
+"Rich text"). ShareAlike applies to the font itself: an adapted version of the
+font must stay under CC BY-SA 3.0. It does not extend to the editor's code.

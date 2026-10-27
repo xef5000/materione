@@ -52,6 +52,16 @@ import Activity from '@lucide/svelte/icons/activity';
 import House from '@lucide/svelte/icons/house';
 import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 import Slash from '@lucide/svelte/icons/slash';
+import Bold from '@lucide/svelte/icons/bold';
+import Italic from '@lucide/svelte/icons/italic';
+import Underline from '@lucide/svelte/icons/underline';
+import Strikethrough from '@lucide/svelte/icons/strikethrough';
+import Palette from '@lucide/svelte/icons/palette';
+import Blend from '@lucide/svelte/icons/blend';
+import RemoveFormatting from '@lucide/svelte/icons/remove-formatting';
+import Shuffle from '@lucide/svelte/icons/shuffle';
+import Sticker from '@lucide/svelte/icons/sticker';
+import Minus from '@lucide/svelte/icons/minus';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -100,6 +110,16 @@ export const icons = {
   'undo-2': Undo2,
   'volume-2': Volume2,
   x: X,
+  blend: Blend,
+  bold: Bold,
+  italic: Italic,
+  minus: Minus,
+  palette: Palette,
+  'remove-formatting': RemoveFormatting,
+  shuffle: Shuffle,
+  sticker: Sticker,
+  strikethrough: Strikethrough,
+  underline: Underline,
 } as const;
 
 export type IconName = keyof typeof icons;

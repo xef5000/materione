@@ -12,10 +12,10 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.platform.items.ItemListCodec;
+import dev.materione.platform.text.MaterioneText;
 import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventPriority;
@@ -102,7 +102,7 @@ public final class BackpackMechanic implements Mechanic {
             }
             Inventory menu = Bukkit.createInventory(
                     new BackpackHolder(this, instanceId), instance.rows() * 9,
-                    LegacyComponentSerializer.legacyAmpersand().deserialize(instance.title()));
+                    MaterioneText.parse(instance.title()));
             ItemStack[] contents = new ItemStack[instance.rows() * 9];
             List<ItemStack> stored = ItemListCodec.decode(BuiltinPdc.bytes(held, DATA_KEY));
             for (int i = 0; i < contents.length && i < stored.size(); i++) {

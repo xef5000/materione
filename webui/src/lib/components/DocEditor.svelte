@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick, untrack } from 'svelte';
   import AssetPicker from './AssetPicker.svelte';
-  import LegacyTextEditor from './LegacyTextEditor.svelte';
+  import RichTextEditor from './RichTextEditor.svelte';
   import MaterialPicker from './MaterialPicker.svelte';
   import { ops, unwrap } from '../api';
   import type { ResourceRef, TypeInfo, TypeParam } from '../api';
@@ -336,7 +336,7 @@
             <MaterialPicker id={controlId} label={field.label || field.id} {value}
               choices={field.allowedValues} required={field.required} onChange={(next) => patch(field.id, next)} />
           {:else if field.uiHint === 'formatted-text' || field.uiHint === 'formatted-lines'}
-            <LegacyTextEditor id={controlId} label={field.label || field.id}
+            <RichTextEditor id={controlId} label={field.label || field.id} placeholder={field.example ?? ''}
               value={(data[rootId] as Record<string, unknown> | undefined)?.[field.id]}
               multiline={field.uiHint === 'formatted-lines'} onChange={(next) => patch(field.id, next)} />
           {:else if field.uiHint === 'texture' || field.uiHint === 'model'}

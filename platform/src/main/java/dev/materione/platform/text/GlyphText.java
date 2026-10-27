@@ -15,8 +15,11 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 
 /**
- * The text pipeline (M4, runtime-systems §6): turns authored strings into
- * components — glyph tags ({@code <glyph:id>}, alias {@code <g:id>}),
+ * Glyph markers (M4, runtime-systems §6). Authored strings go through
+ * {@link MaterioneText}, the one text pipeline, which uses the glyph and
+ * shift components built here; {@link #resolveComponent} resolves markers
+ * inside text players typed themselves (chat, signs, books, anvils). It turns
+ * markers into components — glyph tags ({@code <glyph:id>}, alias {@code <g:id>}),
  * emoji placeholders ({@code :name:}) and shift tags ({@code <shift:N>})
  * become styled components; effect spans ({@code <effect:id>…</effect>})
  * color their content with the effect's shader signal; everything else
@@ -68,24 +71,20 @@ public final class GlyphText {
 
     private GlyphText() {}
 
-    /** Resolves author-intent text (item names, lore) — no permission gate. */
+    /** Resolves author-intent text (item names, lore) — no permission gate; see {@link MaterioneText}. */
     public static Component resolve(String text) {
-        return resolve(text, glyphs(), effects(), Permissions.ALLOW_ALL);
+        return MaterioneText.parse(text);
     }
 
     /** Resolves viewer-dependent text; denied glyphs stay literal. */
     public static Component resolve(String text, RuntimeGlyphs glyphs, Permissions permissions) {
-        var builder = Component.text();
-        appendResolved(builder, text, glyphs, effects(), permissions);
-        return builder.build();
+        return MaterioneText.parse(text, glyphs, effects(), permissions);
     }
 
     /** Resolves viewer-dependent text against explicit registries (tests, editor previews). */
     public static Component resolve(
             String text, RuntimeGlyphs glyphs, RuntimeEffects effects, Permissions permissions) {
-        var builder = Component.text();
-        appendResolved(builder, text, glyphs, effects, permissions);
-        return builder.build();
+        return MaterioneText.parse(text, glyphs, effects, permissions);
     }
 
     /**
@@ -292,21 +291,26 @@ public final class GlyphText {
                 return glyphComponent(entry, glyphs, colorable, permissions);
             }
             case "shift" -> {
-                Integer offset = parseInt(parts[1]);
-                if (offset == null) {
-                    return null;
-                }
-                var builder = Component.text();
-                for (ShiftMath.Shift shift : ShiftMath.decompose(offset)) {
-                    // no font style: every materione font carries the shift provider
-                    builder.append(Component.text(shift.character()));
-                }
-                return builder.build();
+                return shiftComponent(parts[1]);
             }
             default -> {
                 return null;
             }
         }
+    }
+
+    /** {@code <shift:N>}'s advance characters; null when N is not an integer. */
+    static Component shiftComponent(String raw) {
+        Integer offset = parseInt(raw);
+        if (offset == null) {
+            return null;
+        }
+        var builder = Component.text();
+        for (ShiftMath.Shift shift : ShiftMath.decompose(offset)) {
+            // no font style: every materione font carries the shift provider
+            builder.append(Component.text(shift.character()));
+        }
+        return builder.build();
     }
 
     /** The emoji-mode path: placeholders resolve only for emoji glyphs with permission. */
@@ -327,7 +331,7 @@ public final class GlyphText {
      * glyphs carry their font explicitly. Aliases resolve through their
      * target's codepoints.
      */
-    private static Component glyphComponent(
+    static Component glyphComponent(
             RuntimeGlyphs.Entry entry, RuntimeGlyphs glyphs, boolean colorable, Permissions permissions) {
         if (entry == null) {
             return null;

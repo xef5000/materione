@@ -64,7 +64,7 @@ async function editDisplayName(page: Page, value: string): Promise<void> {
   const field = page.getByLabel('Display name', { exact: true });
   await field.fill(value);
   await field.press('Tab');
-  await expect(field).toHaveValue(value);
+  await expect(field).toHaveText(value);
 }
 
 async function readWrites(page: Page) {
@@ -148,7 +148,7 @@ test('navigates from the real Files document into its Studio', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'fixture_pack:ruby_blade' })).toBeVisible();
 
   await page.getByRole('button', { name: /open in studio/i }).click();
-  await expect(page.getByText('Ruby Blade', { exact: true }).last()).toBeVisible();
+  await expect(page.locator('.studio').getByText('Ruby Blade', { exact: true }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: /open.*(files|yaml)/i })).toBeVisible();
 
   const writes = await readWrites(page);
@@ -211,7 +211,7 @@ test('opens the selected resource root when several items share one document', a
   await expect(result).toBeVisible();
   await result.dblclick();
   await expect(page.locator('.studio header .meta')).toContainText('ruby_b');
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Ruby B');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Ruby B');
   const materialField = page.locator('[data-field="material"]');
   await expect(materialField.locator('.current code')).toHaveText('CUSTOM_FUTURE_MATERIAL');
   await expect(materialField).toContainText(/current ID is not in this server's material list/i);
@@ -286,7 +286,7 @@ test('selects the second resource root in a shared Files document before opening
   await expect(page.getByRole('heading', { name: 'fixture_pack:ruby_b' })).toBeVisible();
   await page.getByRole('button', { name: 'Open in Studio' }).click();
 
-  await expect(page.getByText('Ruby B', { exact: true }).last()).toBeVisible();
+  await expect(page.locator('.studio').getByText('Ruby B', { exact: true }).last()).toBeVisible();
   expect(await readWrites(page)).toHaveLength(0);
 });
 
@@ -512,37 +512,38 @@ test('previews formatted name and lore drafts as safe text and formats lore inde
 
   await name.fill('Ruby Sword');
   await name.press('Control+A');
-  await page.getByLabel('Display name color').selectOption('a');
-  await expect(name).toHaveValue('&aRuby Sword');
+  await page.getByRole('button', { name: 'Display name: Color' }).click();
+  await page.getByRole('button', { name: 'Display name: Green' }).click();
   await page.getByRole('button', { name: 'Display name: Bold' }).click();
-  await expect(name).toHaveValue('&a&lRuby Sword');
-  await expect(previewName.locator('.bold')).toHaveText('Ruby Sword');
+  await expect(name).toHaveText('Ruby Sword');
+  await expect(previewName.locator('.mc-b')).toHaveText('Ruby Sword');
 
-  const unsafeLookingText = '&aRuby &lBlade <img src=x onerror=alert(1)> &z';
-  await name.fill(unsafeLookingText);
+  // typed codes become formatting; markup-looking text stays literal text
+  await name.fill('&aRuby &lBlade <img src=x onerror=alert(1)> &z');
+  await expect(name).toHaveText('Ruby Blade <img src=x onerror=alert(1)> &z');
   await expect(previewName).toContainText('Ruby Blade <img src=x onerror=alert(1)> &z');
   await expect(previewName.locator('img')).toHaveCount(0);
-  await expect(previewName.locator('.bold')).toHaveText('Blade <img src=x onerror=alert(1)> &z');
+  await expect(previewName.locator('.mc-b')).toHaveText('Blade <img src=x onerror=alert(1)> &z');
 
-  const loreDraft = '&cBurns with fire\n\n&9  keeps spaces  \n';
-  await lore.fill(loreDraft);
-  await lore.evaluate((element) => {
-    const textarea = element as HTMLTextAreaElement;
-    textarea.setSelectionRange(0, textarea.value.length);
-  });
+  await lore.click();
+  await lore.press('Control+A');
+  await page.keyboard.type('&cBurns with fire');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('&9  keeps spaces  ');
+  await page.keyboard.press('Enter');
+  await lore.press('Control+A');
   await page.getByRole('button', { name: 'Lore: Bold' }).click();
-  const formattedLore = '&l&c&lBurns with fire\n\n&l&9&l  keeps spaces  \n';
-  await expect(lore).toHaveValue(formattedLore);
   await expect(previewLore.locator('.lore-line')).toHaveCount(4);
-  await expect(previewLore.locator('.lore-line').nth(0).locator('.bold')).toHaveText('Burns with fire');
-  await expect(previewLore.locator('.lore-line').nth(2).locator('.bold')).toHaveText('  keeps spaces  ');
+  await expect(previewLore.locator('.lore-line').nth(0).locator('.mc-b')).toHaveText('Burns with fire');
+  await expect(previewLore.locator('.lore-line').nth(2).locator('.mc-b')).toHaveText('  keeps spaces  ');
   expect(await readWrites(page)).toHaveLength(0);
 
   await page.getByRole('button', { name: 'Save & apply' }).click();
   await expect.poll(async () => (await readWrites(page)).length).toBe(1);
   expect((await readWrites(page))[0]?.payload.edits).toEqual([
-    { field: ['ruby_blade', 'display_name'], value: unsafeLookingText },
-    { field: ['ruby_blade', 'lore'], value: ['&l&c&lBurns with fire', '', '&l&9&l  keeps spaces  ', ''] },
+    { field: ['ruby_blade', 'display_name'], value: '<green>Ruby <b>Blade \\<img src=x onerror=alert(1)> &z' },
+    { field: ['ruby_blade', 'lore'], value: ['<red><b>Burns with fire', '', '<blue><b>  keeps spaces  ', ''] },
   ]);
 });
 
@@ -570,7 +571,7 @@ test('texture and model apply commit only their asset/attachment fields, preserv
     { field: ['ruby_blade', 'texture'], value: 'items/ruby_blade' },
   ]);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Name remains a draft');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Name remains a draft');
 
   await page.getByRole('button', { name: 'Edit in Blockbench' }).click();
   await expect(page.getByText('new model, texture attached', { exact: true })).toBeVisible();
@@ -587,7 +588,7 @@ test('texture and model apply commit only their asset/attachment fields, preserv
   ]);
   expect(writes[2]?.payload.field).toEqual(['ruby_blade', 'model']);
   expect(writes[2]?.payload.modelRef).toBe('fixture_pack:ruby_blade');
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Name remains a draft');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Name remains a draft');
 });
 
 test('keeps a lost write outcome uncertain until reconnection/reconciliation', async ({ page }) => {
@@ -604,7 +605,7 @@ test('keeps a lost write outcome uncertain until reconnection/reconciliation', a
     'The save outcome is unknown. Your draft was kept. Reconnect and reconcile before applying anything again.',
     { exact: true },
   )).toBeVisible();
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Submitted before disconnect');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Submitted before disconnect');
   await expect(page.getByLabel('Display name', { exact: true })).toBeDisabled();
 
   const writes = await readWrites(page);
@@ -633,5 +634,5 @@ test('refuses a stale captured publication hash without applying a Studio draft'
     candidateSha256: 'b'.repeat(64),
     publishedSha256: '0'.repeat(64),
   });
-  await expect(page.getByLabel('Display name', { exact: true })).toHaveValue('Do not publish this unsaved name');
+  await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Do not publish this unsaved name');
 });

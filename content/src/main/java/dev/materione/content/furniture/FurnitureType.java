@@ -45,7 +45,7 @@ public final class FurnitureType implements ContentType {
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
                                 "Display name (storage title)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Display name", "identity", 0, false, "text", "",
+                                        "Display name", "identity", 0, false, "formatted-text", "",
                                         "Oak chair")),
                         new ParameterSchema("texture", ParameterType.REFERENCE, false, null,
                                 "Texture for the generated model (auto-model path)", null, null)
@@ -60,7 +60,7 @@ public final class FurnitureType implements ContentType {
                         new ParameterSchema("label", ParameterType.STRING, false, null,
                                 "TextDisplay label above the furniture", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Floating label", "appearance", 30, false, "text", "",
+                                        "Floating label", "appearance", 30, false, "formatted-text", "",
                                         "Sit down")),
                         new ParameterSchema("rotation", ParameterType.DECIMAL, false, "90",
                                 "Rotation snap in degrees: 45, 90, 180, or 0 to disable",

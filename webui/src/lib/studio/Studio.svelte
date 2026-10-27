@@ -39,7 +39,7 @@
   } from '../drafts.svelte';
   import { rootIdForResource, sectionsOf, unrenderableKeys } from '../studio';
   import { localStudioVisual } from '../studio-visual';
-  import { editableLegacyLines, editableLegacyText, plainLegacyText } from '../legacy-text';
+  import { documentOf, plainText } from '../rich-text/model';
   import { invalidateThumbnails } from '../thumbnails';
   import {
     content,
@@ -96,7 +96,7 @@
   const sections = $derived(sectionsOf(schema));
   const advancedOnly = $derived(unrenderableKeys(loaded, schema));
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
-  const name = $derived(plainLegacyText(String(draft.display_name ?? '')).trim() || resource.id);
+  const name = $derived(plainText(String(draft.display_name ?? '')).trim() || resource.id);
   const savedSummary = $derived(workspace.summaries.find((entry) =>
     entry.pack === resource.pack && entry.path === resource.path && entry.id === resource.id,
   ));
@@ -114,9 +114,9 @@
   );
   const fieldsEditable = $derived(documentDraft.loaded && !loading && !saving &&
     !rawDraftDirty(documentDraft) && !documentDraft.uncertain && !documentDraft.stale);
-  const canFocusName = $derived(fieldsEditable && editableLegacyText(draft.display_name) !== null &&
+  const canFocusName = $derived(fieldsEditable && documentOf(draft.display_name, false) !== null &&
     sections.some((section) => section.fields.some((field) => field.id === 'display_name')));
-  const canFocusLore = $derived(fieldsEditable && editableLegacyLines(draft.lore) !== null &&
+  const canFocusLore = $derived(fieldsEditable && documentOf(draft.lore, true) !== null &&
     sections.some((section) => section.fields.some((field) => field.id === 'lore')));
 
   function focusField(fieldId: string) {

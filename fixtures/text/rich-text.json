@@ -1,0 +1,166 @@
+{
+  "description": "Rich text contract (master §5.7, plugin §6.1, web §5.x). Both parsers read this file: the plugin's MaterioneText (platform tests) and the editor's rich-text model (webui vitest). 'stored' is what the YAML holds; 'runs' is what it means (adjacent runs with equal style are merged); 'canonical' is what the editor writes for that meaning (absent = 'stored' is already canonical). 'java: false' marks editor-only cases. Glyph 'heart' and effect 'sample:rainbow' exist in both test registries.",
+  "cases": [
+    { "name": "plain text", "stored": "Ruby Sword", "runs": [{ "text": "Ruby Sword" }] },
+    { "name": "empty", "stored": "", "runs": [] },
+    { "name": "named color", "stored": "<red>Ruby", "runs": [{ "text": "Ruby", "color": "red" }] },
+    { "name": "hex color", "stored": "<#f9731e>Ruby", "runs": [{ "text": "Ruby", "color": "#f9731e" }] },
+    {
+      "name": "hex color closed mid-string",
+      "stored": "<#f9731e>Ruby</#f9731e> <b>Sword",
+      "runs": [{ "text": "Ruby", "color": "#f9731e" }, { "text": " " }, { "text": "Sword", "bold": true }]
+    },
+    {
+      "name": "every decoration",
+      "stored": "<b>Bold</b> <i>Italic</i> <u>Under</u> <st>Strike</st> <obf>Magic",
+      "runs": [
+        { "text": "Bold", "bold": true }, { "text": " " },
+        { "text": "Italic", "italic": true }, { "text": " " },
+        { "text": "Under", "underline": true }, { "text": " " },
+        { "text": "Strike", "strikethrough": true }, { "text": " " },
+        { "text": "Magic", "obfuscated": true }
+      ]
+    },
+    {
+      "name": "stacked decorations",
+      "stored": "<b><i><u><st><obf>All",
+      "runs": [{ "text": "All", "bold": true, "italic": true, "underline": true, "strikethrough": true, "obfuscated": true }]
+    },
+    {
+      "name": "decoration inside a color",
+      "stored": "<gold><b>Ruby</b> Sword",
+      "runs": [{ "text": "Ruby", "color": "gold", "bold": true }, { "text": " Sword", "color": "gold" }]
+    },
+    {
+      "name": "long tag names",
+      "stored": "<bold>Long</bold> <color:red>red</color> <strikethrough>x",
+      "canonical": "<b>Long</b> <red>red</red> <st>x",
+      "runs": [{ "text": "Long", "bold": true }, { "text": " " }, { "text": "red", "color": "red" }, { "text": " " }, { "text": "x", "strikethrough": true }]
+    },
+    {
+      "name": "two-stop gradient",
+      "stored": "<gradient:#f9731e:#ffd27a>Ruby Sword",
+      "runs": [{ "text": "Ruby Sword", "gradient": ["#f9731e", "#ffd27a"] }]
+    },
+    {
+      "name": "three-stop gradient with bold inside",
+      "stored": "<gradient:#ff0000:#00ff00:#0000ff>Ruby <b>Sword</b> X",
+      "runs": [
+        { "text": "Ruby ", "gradient": ["#ff0000", "#00ff00", "#0000ff"] },
+        { "text": "Sword", "gradient": ["#ff0000", "#00ff00", "#0000ff"], "bold": true },
+        { "text": " X", "gradient": ["#ff0000", "#00ff00", "#0000ff"] }
+      ]
+    },
+    {
+      "name": "gradient then plain",
+      "stored": "<gradient:#55ffff:#5555ff>Frost</gradient> blade",
+      "runs": [{ "text": "Frost", "gradient": ["#55ffff", "#5555ff"] }, { "text": " blade" }]
+    },
+    {
+      "name": "glyph inside a color",
+      "stored": "<gold>Gem <glyph:heart> Sword",
+      "runs": [{ "text": "Gem ", "color": "gold" }, { "glyph": "heart", "color": "gold" }, { "text": " Sword", "color": "gold" }]
+    },
+    {
+      "name": "colorable glyph",
+      "stored": "<red><glyph:heart:colorable>",
+      "runs": [{ "glyph": "heart", "colorable": true, "color": "red" }]
+    },
+    {
+      "name": "glyph inside a gradient",
+      "stored": "<gradient:#ff0000:#0000ff>A<glyph:heart>B",
+      "runs": [{ "text": "A", "gradient": ["#ff0000", "#0000ff"] }, { "glyph": "heart", "gradient": ["#ff0000", "#0000ff"] }, { "text": "B", "gradient": ["#ff0000", "#0000ff"] }]
+    },
+    {
+      "name": "effect span",
+      "stored": "<effect:sample:rainbow>Hot</effect> cold",
+      "runs": [{ "text": "Hot", "effect": "sample:rainbow" }, { "text": " cold" }]
+    },
+    {
+      "name": "effect span around formatting",
+      "stored": "<effect:sample:rainbow>Hot <b>stuff</effect>",
+      "canonical": "<effect:sample:rainbow>Hot <b>stuff",
+      "runs": [{ "text": "Hot ", "effect": "sample:rainbow" }, { "text": "stuff", "effect": "sample:rainbow", "bold": true }]
+    },
+    {
+      "name": "shift tag is kept as written",
+      "stored": "a<shift:-3>b",
+      "java": false,
+      "runs": [{ "text": "a" }, { "tag": "<shift:-3>" }, { "text": "b" }]
+    },
+    {
+      "name": "unknown tags are kept as written",
+      "stored": "<rainbow>Pride</rainbow>",
+      "java": false,
+      "runs": [{ "tag": "<rainbow>" }, { "text": "Pride" }, { "tag": "</rainbow>" }]
+    },
+    {
+      "name": "escaped tag and backslash",
+      "stored": "Less \\<b> more \\\\ done",
+      "runs": [{ "text": "Less <b> more \\ done" }]
+    },
+    {
+      "name": "lone backslash and angle stay literal",
+      "stored": "a\\b <9 c > d",
+      "canonical": "a\\\\b \\<9 c > d",
+      "runs": [{ "text": "a\\b <9 c > d" }]
+    },
+    { "name": "literal ampersand", "stored": "Salt & Pepper", "runs": [{ "text": "Salt & Pepper" }] },
+    {
+      "name": "legacy color and decoration",
+      "stored": "&6Ruby &lSword",
+      "canonical": "<gold>Ruby <b>Sword",
+      "runs": [{ "text": "Ruby ", "color": "gold" }, { "text": "Sword", "color": "gold", "bold": true }]
+    },
+    {
+      "name": "legacy reset",
+      "stored": "&cRed&r plain",
+      "canonical": "<red>Red</red> plain",
+      "runs": [{ "text": "Red", "color": "red" }, { "text": " plain" }]
+    },
+    {
+      "name": "legacy color clears decorations",
+      "stored": "&l&nLoud&cRed",
+      "canonical": "<b><u>Loud</u></b><red>Red",
+      "runs": [{ "text": "Loud", "bold": true, "underline": true }, { "text": "Red", "color": "red" }]
+    },
+    {
+      "name": "legacy hex spellings",
+      "stored": "&#12ABEFdirect &x&1&2&a&b&e&fexpanded",
+      "canonical": "<#12abef>direct expanded",
+      "runs": [{ "text": "direct expanded", "color": "#12abef" }]
+    },
+    {
+      "name": "section sign codes",
+      "stored": "§aGreen §oleaf",
+      "canonical": "<green>Green <i>leaf",
+      "runs": [{ "text": "Green ", "color": "green" }, { "text": "leaf", "color": "green", "italic": true }]
+    },
+    {
+      "name": "legacy codes mixed into MiniMessage",
+      "stored": "<b>Bold</b> &9blue",
+      "canonical": "<b>Bold</b> <blue>blue",
+      "runs": [{ "text": "Bold", "bold": true }, { "text": " " }, { "text": "blue", "color": "blue" }]
+    },
+    { "name": "corpus legacy name", "stored": "&dRuby disc", "canonical": "<light_purple>Ruby disc", "runs": [{ "text": "Ruby disc", "color": "light_purple" }] }
+  ],
+  "untouched": [
+    "Blue Amulet",
+    "&dRuby disc",
+    "&6Ruby &lSword",
+    "&cBurns with fire",
+    "",
+    "&9  keeps spaces  ",
+    "&l&c&lBurns with fire",
+    "&aRuby &lBlade <img src=x onerror=alert(1)> &z",
+    "&#12ABEF direct",
+    "&x&1&2&A&B&E&F expanded",
+    "§aGreen",
+    "<bold>Long</bold>",
+    "<gradient:#F9731E:#FFD27A>Ruby Sword</gradient>",
+    "<red>Gem <glyph:heart> <shift:4> :heart: <effect:sample:rainbow>Hot</effect>",
+    "<rainbow>Pride</rainbow> <hover:show_text:'<red>hi'>hover</hover>",
+    "a\\b <9 c > d",
+    "Rock&Roll &z &"
+  ]
+}

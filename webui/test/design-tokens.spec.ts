@@ -15,11 +15,15 @@ const SRC = fileURLToPath(new URL('../src', import.meta.url));
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /**
- * Color literals that are data rather than styling, by file. Empty on purpose:
- * Minecraft's legacy palette and texture pixels live in app.css or in pixel
- * data, never in component code. Add an entry only with a reason beside it.
+ * Color literals that are data rather than styling, by file. Minecraft's
+ * palette for drawing lives in app.css (`--legacy-*`) and texture pixels in
+ * pixel data, never in component code. Add an entry only with a reason beside it.
  */
-const COLOR_ALLOWLIST: Record<string, string> = {};
+const COLOR_ALLOWLIST: Record<string, string> = {
+  // Game data, not styling: gradients and stored colors are computed from the
+  // 16 text colors' values, and the stored form writes hex stops (master §5.7).
+  'src/lib/rich-text/colors.ts': 'Minecraft text color values for gradient math and stored hex stops',
+};
 
 const COLOR = /#[0-9a-fA-F]{3,8}\b|\brgba?\(|\bhsla?\(/g;
 /** Pixel sizes for type and corners in component styles; the scales are in app.css. */

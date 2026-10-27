@@ -4,7 +4,7 @@
  * free of Svelte so it can be pinned by unit tests.
  */
 import type { ResourceRef, ResourceSummary, TypeInfo } from './api';
-import { plainLegacyText } from './legacy-text';
+import { plainText } from './rich-text/model';
 import { materialLabel } from './materials';
 
 export interface BrowserEntry {
@@ -173,7 +173,7 @@ export function listing(
     const key = resourceIdentity(resource);
     if (documents.has(key)) continue;
     const summaryName = typeof summary?.name === 'string'
-      ? plainLegacyText(summary.name).trim()
+      ? plainText(summary.name).trim()
       : '';
     documents.set(key, {
       kind: 'doc',
@@ -232,11 +232,11 @@ function matches(resource: ResourceRef, summary: ResourceSummary | undefined, qu
 }
 
 function searchable(value: string): string {
-  return plainLegacyText(value).replaceAll('_', ' ').toLowerCase();
+  return plainText(value).replaceAll('_', ' ').toLowerCase();
 }
 
 export function materialDisplayName(material: string): string {
-  const plain = plainLegacyText(material);
+  const plain = plainText(material);
   const id = plain.slice(plain.lastIndexOf(':') + 1);
   return materialLabel(id || plain);
 }
