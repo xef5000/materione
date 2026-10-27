@@ -13,6 +13,7 @@ Layout:
 | `tools/` | `GenerateCorpus.java` — the deterministic generator behind `packs/corpus/` (run with `java fixtures/tools/GenerateCorpus.java`; regeneration is for review — the committed bytes are the fixture) | M1 |
 | `importers/` | Real-world ItemsAdder/Oraxen/Nexo pack samples | M7 |
 | `protocol/` | Editor wire-protocol contract fixtures (plugin + Workers tested against the same files) | M5 |
+| `text/` | `rich-text.json`: what each stored rich text string means (master §5.7). The plugin's `MaterioneTextTest` and the editor's `rich-text.spec.ts` both read it, so the two parsers cannot drift | M5 |
 
 Tests reach this directory via the `materione.fixtures.root` system property
 (injected by `materione.java-conventions`, which also declares `fixtures/`

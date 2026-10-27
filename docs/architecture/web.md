@@ -646,7 +646,9 @@ cannot read, forge, replay, or reorder anything.
   only the fields that actually changed, so an untouched resource is never rewritten and the
   round-trip stays lossless.
 - *As built (M5 item workbench follow-up):* the item registry marks display name and lore as
-  formatted legacy text and material as a server-provided material picker. The material picker
+  formatted text and material as a server-provided material picker. *(The `&`-code text controls
+  described below were replaced by the rich text editor, §6.2; the material picker, preview and
+  draft rules stand.)* The material picker
   searches human labels and IDs over the registry's authoritative `allowedValues`, supports
   keyboard selection, and preserves a current ID the server no longer advertises until the author
   chooses a replacement. The name/lore controls edit only the bounded tab-local draft; `&` color
@@ -847,7 +849,8 @@ first, then used.
 | Spacing | `--space-half` 2, `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4` 16, `--space-5` 20, `--space-6` 24, `--space-8` 32, `--space-10` 40 px | 4 px base; 2 px for chips and icon gaps. Optical negative margins stay literal |
 | Radius | `--radius-sm` 4, `--radius` 8, `--radius-lg` 12, `--radius-pill` | Controls use `--radius`; panels and cards `--radius-lg` |
 | Canvas | `--checker-a/b`, `--paint-default`, `--canvas-grid`, `--canvas-hover`, `--canvas-mark`, `--canvas-dim`, `--preview-*` | Read by `token()`; never a literal in a `.ts` file |
-| Legacy | `--legacy-0` … `--legacy-f` | Minecraft's chat colors, for safe text previews only |
+| Legacy | `--legacy-0` … `--legacy-f` | Minecraft's 16 text colors, for the game surface and swatches |
+| Game surface | `--font-minecraft`, `--text-minecraft` (16 px), `--mc-shadow-offset`, `--mc-tooltip-bg`, `--mc-tooltip-border(-low)` | Player-visible text drawn the way the client draws it (§6.2) |
 
 **Primitives.** The shared look is CSS classes in `app.css`, so a screen gets it without new
 markup: `.btn` (secondary by default) with `.btn-primary` (the accent, one per view), `.btn-ghost`,
@@ -869,6 +872,74 @@ is bundled and served from the build, with no font CDN. It is from `@fontsource-
 logo is `public/materione-logo.svg`, identical to the website's `favicon.svg`; the header and the
 landing card use it, and `index.html` links it as the favicon. Contrast checks are run on the
 palette pairs (WCAG AA: 4.5:1 for text, 3:1 for control outlines and focus).
+
+### 6.2 Rich text (issue #151)
+
+Player-visible text (item names and lore, block and furniture names, the furniture label) is
+edited in place, in the game's look: there is no code field and no separate preview to read.
+The stored form is decided in master §5.7 (MiniMessage, legacy codes as input); the plugin side
+is plugin §6.1.
+
+**One control.** `RichTextEditor.svelte` renders every field the registry marks `formatted-text`
+(one line) or `formatted-lines` (lore: Enter starts a line, the value is a list). The studio and
+Files use the same control, so a block name is edited exactly like an item name. A disabled
+`<fieldset>` around it disables it, like a native input. A value whose shape is not text (a map,
+a list with a non-string entry, a string with a line break) is refused with a pointer to Files,
+and the original stays untouched.
+
+**The model owns the text.** `src/lib/rich-text/` holds pure functions with no DOM:
+
+| Module | Role |
+|---|---|
+| `model.ts` | A line is a list of cells: one per character, glyph chip or kept tag, each with a full style (color or gradient, five decorations, effect). `parseLine` reads the stored form; `serializeLine` writes the canonical one (tags open in a fixed order, close only when the style changes, stay open at the end; `<` and `\` escaped). `storedValue` keeps bytes: an unchanged line returns the original string, and an edit that ends where it started returns the original value. |
+| `edit.ts` | Typing, deleting by character, word or line, formatting a selection or the caret's pending style, glyph insertion, copy fragments, and `History` (typing within 800 ms is one undo step). |
+| `dom.ts` | Draws the cells (a block per line, a span per run, a span per character inside a gradient, `contenteditable=false` chips) and maps DOM positions to cell offsets. Text goes in as text nodes only. |
+| `colors.ts` | The 16 named colors as data, and the gradient math (Adventure's: stops spread evenly, first and last character on the end stops). The one allowlisted color file in `design-tokens.spec.ts`. |
+
+The component intercepts `beforeinput`, `paste`, `copy`, `cut` and the shortcuts, applies the
+edit to the model, and redraws; the browser never edits the DOM itself. IME composition is the
+exception: it runs natively and its result is applied as one insert at `compositionend`.
+Unknown input types are blocked rather than let the DOM drift from the model.
+
+**Authoring rules.** A floating toolbar appears while the field has focus: bold, italic,
+underline, strikethrough, obfuscated, color (the 16 named colors as swatches, plus a picker and a
+hex field), gradient (2 to 8 stops, previewed), insert glyph (the open pack's glyph resources,
+with their thumbnails), and clear formatting (which keeps an effect span written in Files).
+Shortcuts: Ctrl+B / I / U, Ctrl+Shift+X (strikethrough), Ctrl+Shift+K (obfuscated),
+`Ctrl+\` (clear), Ctrl+Z / Ctrl+Y or Ctrl+Shift+Z. With a collapsed caret, a format becomes the style of
+what is typed next. Typed text takes the style of the text before the caret. A legacy code typed
+or pasted (`&l`, `&6`, `&#rrggbb`) is removed and becomes formatting, as the user decided on the
+issue. Pasted HTML is ignored: only `text/plain` (control characters dropped, line breaks become
+spaces in a one-line field) or the editor's own fragment format (`application/x-materione-rich-text`,
+written on copy) is read. Tags the model does not edit (`<shift:N>`, `<rainbow>`, a click tag in a
+hand-written file) are kept as chips and written back as they were. There is deliberately no
+"raw" toggle: the stored string is visible in Files' raw view (master §5.7).
+
+**Game look.** The surface and the read-only previews (`RichText.svelte`, used by the item
+tooltip preview) share `dom.ts` and the global `.mc-*` rules in `app.css`: the tooltip panel,
+the client's drop shadow (the text color at 25% brightness), a name's default white and lore's
+default dark purple, non-italic like the plugin's item text. Obfuscated text scrambles in
+previews and flickers while editing (scrambling would fight the caret); both respect
+`prefers-reduced-motion`. Shader effects are marked with a dotted underline, because they only
+animate in game.
+
+**Font.** Minecraftia 1.0 by Andrew Tyler, licensed CC BY-SA 3.0 (the license is recorded in the
+font file's own name table and in `src/assets/fonts/LICENSE-Minecraftia.txt`). It comes from Font
+Library and is bundled unmodified as `Minecraftia.ttf` (18 KB, sha256 `6124fe5b…788e12`); there is
+no font CDN. It is a look-alike drawn by its author, not Mojang's font, which is not ours to
+bundle. Its pixel grid is 1/8 em, so 16 px (`--text-minecraft`) is the game's 2x GUI scale with
+every pixel crisp. ShareAlike binds adaptations of the font itself (a subset or a converted
+file must stay CC BY-SA 3.0). It does not reach the editor's code, so it does not touch the
+project licence question (master §14).
+
+**Tests.** `test/rich-text.spec.ts` runs every case of `fixtures/text/rich-text.json` (the same
+file the plugin's `MaterioneTextTest` reads). It also has a golden check that every display name,
+label and lore list in `fixtures/packs` comes back byte-identical when untouched, plus the
+editing and history rules. `browser/specs/rich-text.pw.ts` drives the real control: legacy codes
+shown as formatting and left alone, toolbar formats, a gradient, typed codes and shortcuts with
+undo and redo, lore lines, paste sanitising, glyph chips, block names, and a screenshot. QA
+entries `editor.browser-rich-text-gradient` (+ `-visual`) check the authored gradient on the held
+item in a real client.
 
 ---
 

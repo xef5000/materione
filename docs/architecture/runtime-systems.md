@@ -381,6 +381,11 @@ included), signs, books and anvil renames, forces white unless `colorable` (the 
 color-bleed trick), applies optional `shadow_color`, and leaves denied or unresolvable markers
 literal. Chat resolution checks the viewer's glyph permission and the live registry —
 placeholders resolve only for emoji glyphs.
+*(Since issue #151, authored text (names, lore, labels, titles) goes through
+`platform/text/MaterioneText`, plugin §6.1: the same markers resolve inside a MiniMessage parse,
+so they can sit inside a color or gradient. Effect spans may then nest, and an unclosed span runs
+to the end of the text instead of staying literal. Player-typed text keeps the marker-only path
+described here.)*
 
 **Text effects (as of the shader-injection slice).** `effects/*.yml` compile to a durable
 signal color (allocation kind `effect-signal`: the band `#FF00FF` downward, blue channel
