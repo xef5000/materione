@@ -40,6 +40,16 @@ class BlockTypeTest {
     };
 
     @Test
+    void displayNameIsRichTextLikeItemNames() {
+        // master §5.7: one formatted-text widget for every player-visible name
+        var displayName = type.describe().parameters().stream()
+                .filter(parameter -> parameter.id().equals("display_name"))
+                .findFirst().orElseThrow();
+        assertThat(displayName.uiHint()).isEqualTo("formatted-text");
+        assertThat(displayName.type()).isEqualTo(dev.materione.api.registry.ParameterType.STRING);
+    }
+
+    @Test
     void schemaDescribesTheAuthoringSurface() {
         var description = type.describe();
         assertThat(type.name()).isEqualTo("block");

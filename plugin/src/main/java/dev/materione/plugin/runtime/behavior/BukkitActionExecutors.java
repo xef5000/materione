@@ -10,9 +10,9 @@ import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.platform.text.MaterioneText;
 import java.util.List;
 import java.util.Map;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -110,8 +110,6 @@ public final class BukkitActionExecutors {
 
     /** {@code message: "&aHi"} or {message: {text, target: player|actionbar|broadcast}}. */
     private static final class Message implements ActionExecutor {
-        private static final LegacyComponentSerializer LEGACY = LegacyComponentSerializer.legacyAmpersand();
-
         @Override
         public String type() {
             return "message";
@@ -121,7 +119,7 @@ public final class BukkitActionExecutors {
         public SelfDescription describe() {
             return new SelfDescription("Send message", "Shows text to the player, on the action bar, or to everyone",
                     List.of(
-                            new ParameterSchema("text", ParameterType.STRING, true, null, "Message text; & colour codes allowed", null, null),
+                            new ParameterSchema("text", ParameterType.STRING, true, null, "Message text; formatting and & colour codes allowed", null, null),
                             new ParameterSchema("target", ParameterType.ENUM, false, "player", "Where the text appears", List.of("player", "actionbar", "broadcast"), null)),
                     "2.0.0");
         }
@@ -145,9 +143,9 @@ public final class BukkitActionExecutors {
             String target = action.param("target") instanceof String t && !t.isBlank() ? t : "player";
             String rendered = interpolate(text, event);
             switch (target) {
-                case "actionbar" -> playerOf(event).sendActionBar(LEGACY.deserialize(rendered));
-                case "broadcast" -> Bukkit.broadcast(LEGACY.deserialize(rendered));
-                default -> playerOf(event).sendMessage(LEGACY.deserialize(rendered));
+                case "actionbar" -> playerOf(event).sendActionBar(MaterioneText.parse(rendered));
+                case "broadcast" -> Bukkit.broadcast(MaterioneText.parse(rendered));
+                default -> playerOf(event).sendMessage(MaterioneText.parse(rendered));
             }
         }
     }

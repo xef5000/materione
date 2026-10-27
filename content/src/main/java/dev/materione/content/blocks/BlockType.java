@@ -51,7 +51,7 @@ public final class BlockType implements ContentType {
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
                                 "Display name of the block's item form", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Display name", "identity", 0, false, "text", "",
+                                        "Display name", "identity", 0, false, "formatted-text", "",
                                         "Ruby ore")),
                         new ParameterSchema("technique", ParameterType.ENUM, false, "note_block",
                                 "How the block is hosted in the world. note_block: the best "

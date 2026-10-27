@@ -11,6 +11,7 @@ import dev.materione.core.runtime.RuntimeFurniture;
 import dev.materione.core.runtime.RuntimeFurnitures;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.runtime.behavior.BehaviorService;
+import dev.materione.platform.text.MaterioneText;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -25,7 +26,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -154,8 +154,8 @@ public final class FurnitureService implements Listener {
         Block anchor = clicked.getRelative(BlockFace.UP);
         float yaw = FurnitureMath.snapYaw(def.get(), event.getPlayer().getYaw());
         if (!spaceOk(anchor, def.get(), yaw)) {
-            event.getPlayer().sendMessage(Component.text(
-                    "Not enough space for " + displayName(def.get()), NamedTextColor.RED));
+            event.getPlayer().sendMessage(Component.text("Not enough space for ", NamedTextColor.RED)
+                    .append(MaterioneText.parse(displayName(def.get()))));
             return;
         }
         spawnCluster(anchor.getWorld(), anchor.getX(), anchor.getY(), anchor.getZ(), def.get(), yaw);
@@ -259,7 +259,7 @@ public final class FurnitureService implements Listener {
             // origin — it clears the model top by 0.25 either way
             TextDisplay label = world.spawn(new Location(world, x + 0.5, y + 1.25, z + 0.5),
                     TextDisplay.class, display -> {
-                display.text(LegacyComponentSerializer.legacyAmpersand().deserialize(def.label()));
+                display.text(MaterioneText.parse(def.label()));
                 display.setBillboard(Display.Billboard.CENTER);
             });
             tagMember(label, root.getUniqueId());
@@ -651,7 +651,7 @@ public final class FurnitureService implements Listener {
             TextDisplay label = center.getWorld().spawn(
                     new Location(center.getWorld(), x + 0.5, y + 1.25, z + 0.5), TextDisplay.class,
                     display -> {
-                        display.text(LegacyComponentSerializer.legacyAmpersand().deserialize(def.label()));
+                        display.text(MaterioneText.parse(def.label()));
                         display.setBillboard(Display.Billboard.CENTER);
                     });
             tagMember(label, root.getUniqueId());
@@ -718,7 +718,7 @@ public final class FurnitureService implements Listener {
         ItemStack[] contents = readStorage(root.getPersistentDataContainer());
         FurnitureStorage holder = new FurnitureStorage(root.getUniqueId());
         holder.inventory(Bukkit.createInventory(holder, def.storage(),
-                Component.text(def.displayName() == null ? "Furniture" : def.displayName())));
+                MaterioneText.parse(def.displayName() == null ? "Furniture" : def.displayName())));
         holder.getInventory().setContents(contents);
         player.openInventory(holder.getInventory());
     }

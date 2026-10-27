@@ -162,12 +162,12 @@ public final class MaterioneStacks {
                             item.id().namespace(), item.id().value()));
                 }
                 if (item.displayName() != null && !item.displayName().isBlank()) {
-                    meta.displayName(legacy(item.displayName()));
+                    meta.displayName(itemText(item.displayName()));
                 }
                 if (!item.lore().isEmpty()) {
                     List<Component> lore = new ArrayList<>();
                     for (String line : item.lore()) {
-                        lore.add(legacy(line));
+                        lore.add(itemText(line));
                     }
                     meta.lore(lore);
                 }
@@ -195,15 +195,9 @@ public final class MaterioneStacks {
             };
         }
 
-        private static Component legacy(String text) {
-            // glyph tags resolve author-intent text without a permission gate
-            dev.materione.core.runtime.RuntimeGlyphs glyphs =
-                    dev.materione.platform.text.GlyphText.glyphs();
-            if (glyphs == null || glyphs.isEmpty()) {
-                return dev.materione.platform.text.ItemText.legacy(text);
-            }
-            return dev.materione.platform.text.GlyphText.resolve(
-                    text, glyphs, dev.materione.platform.text.GlyphText.Permissions.ALLOW_ALL);
+        private static Component itemText(String text) {
+            // the one text pipeline; glyph tags resolve without a permission gate
+            return dev.materione.platform.text.ItemText.text(text);
         }
     }
 }

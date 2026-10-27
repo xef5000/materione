@@ -90,7 +90,7 @@ class GlyphTextTest {
     void glyphTagsWorkForAnyGlyphAndForceWhite() {
         Component resolved = GlyphText.resolve("<glyph:star>", registry(), GlyphText.Permissions.ALLOW_ALL);
         assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo(STAR_CHAR);
-        TextComponent leaf = (TextComponent) resolved.children().get(0);
+        TextComponent leaf = leaf(resolved, STAR_CHAR);
         assertThat(leaf.color()).isEqualTo(NamedTextColor.WHITE);
         assertThat(leaf.font()).isNotNull();
         assertThat(leaf.font().toString()).isEqualTo("sample:default");
@@ -98,15 +98,15 @@ class GlyphTextTest {
 
     @Test
     void colorableArgKeepsSurroundingColor() {
-        Component resolved = GlyphText.resolve("<g:star:colorable>", registry(), GlyphText.Permissions.ALLOW_ALL);
-        TextComponent leaf = (TextComponent) resolved.children().get(0);
-        assertThat(leaf.color()).isNull();
+        Component resolved = GlyphText.resolve("<red><g:star:colorable>", registry(), GlyphText.Permissions.ALLOW_ALL);
+        // no forced white: the glyph takes the surrounding color
+        assertThat(colorOf(resolved, STAR_CHAR)).isEqualTo(NamedTextColor.RED);
     }
 
     @Test
     void defaultFontGlyphsStayUnstyled() {
         Component resolved = GlyphText.resolve("<g:plain>", registry(), GlyphText.Permissions.ALLOW_ALL);
-        TextComponent leaf = (TextComponent) resolved.children().get(0);
+        TextComponent leaf = leaf(resolved, String.valueOf((char) 42002));
         assertThat(PlainTextComponentSerializer.plainText().serialize(resolved))
                 .isEqualTo(String.valueOf((char) 42002));
         // no font style: the client's minecraft:default references the pack font
@@ -186,30 +186,22 @@ class GlyphTextTest {
         Component resolved = GlyphText.resolve(
                 "before <effect:rainbow>hi there</effect> after",
                 registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
-        // the span becomes one child colored with the effect's signal
-        TextComponent span = resolved.children().stream()
-                .filter(c -> PlainTextComponentSerializer.plainText().serialize(c).contains("hi there"))
-                .map(c -> (TextComponent) c)
-                .findFirst().orElseThrow();
-        assertThat(span.color()).as("span signal color").isEqualTo(TextColor.color(0xFF00FE));
+        // the span's text is colored with the effect's signal
+        assertThat(colorOf(resolved, "hi there")).as("span signal color").isEqualTo(TextColor.color(0xFF00FE));
         // the text before/after stays uncolored
-        TextComponent plain = (TextComponent) resolved.children().get(0);
-        assertThat(plain.color()).isNull();
+        assertThat(colorOf(resolved, "before")).isNull();
+        assertThat(colorOf(resolved, "after")).isNull();
     }
 
     @Test
     void shortEffectAliasAndGlyphsInsideSpan() {
-        // <e:…> alias; a glyph inside the span keeps its forced white —
-        // the span wraps one resolved child whose own children carry the text
+        // <e:…> alias; a glyph inside the span keeps its forced white
         Component resolved = GlyphText.resolve(
                 "<e:rainbow>a<glyph:star></e>",
                 registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
-        TextComponent span = (TextComponent) resolved.children().get(0);
-        assertThat(span.color()).isEqualTo(TextColor.color(0xFF00FE));
-        String plain = PlainTextComponentSerializer.plainText().serialize(span);
-        assertThat(plain).isEqualTo("a" + STAR_CHAR);
-        TextComponent glyph = (TextComponent) span.children().get(0).children().get(1);
-        assertThat(glyph.color()).isEqualTo(NamedTextColor.WHITE);
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("a" + STAR_CHAR);
+        assertThat(colorOf(resolved, "a")).isEqualTo(TextColor.color(0xFF00FE));
+        assertThat(colorOf(resolved, STAR_CHAR)).isEqualTo(NamedTextColor.WHITE);
     }
 
     @Test
@@ -221,11 +213,42 @@ class GlyphTextTest {
     }
 
     @Test
-    void unclosedEffectSpanStaysLiteral() {
+    void unclosedEffectSpanRunsToTheEnd() {
+        // MiniMessage semantics since #151 (plugin §6.1): an open tag closes at the end
         Component resolved = GlyphText.resolve(
                 "<effect:rainbow>x", registry(), effects(), GlyphText.Permissions.ALLOW_ALL);
-        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved))
-                .isEqualTo("<effect:rainbow>x");
+        assertThat(PlainTextComponentSerializer.plainText().serialize(resolved)).isEqualTo("x");
+        assertThat(colorOf(resolved, "x")).isEqualTo(TextColor.color(0xFF00FE));
+    }
+
+    // --- tree helpers: assert what renders, not one tree shape ----------------
+
+    /** The leaf text node whose content contains {@code text}. */
+    private static TextComponent leaf(Component component, String text) {
+        if (component instanceof TextComponent node && node.content().contains(text)) {
+            return node;
+        }
+        for (Component child : component.children()) {
+            TextComponent found = leaf(child, text);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /** The color {@code text} renders with: its own, else the nearest ancestor's. */
+    private static TextColor colorOf(Component component, String text) {
+        if (component instanceof TextComponent node && node.content().contains(text)) {
+            return node.color();
+        }
+        for (Component child : component.children()) {
+            if (leaf(child, text) != null) {
+                TextColor inner = colorOf(child, text);
+                return inner != null ? inner : component.color();
+            }
+        }
+        return null;
     }
 
 }

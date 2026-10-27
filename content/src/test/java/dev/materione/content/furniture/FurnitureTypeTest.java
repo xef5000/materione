@@ -27,6 +27,18 @@ class FurnitureTypeTest {
     }
 
     @Test
+    void displayNameAndLabelAreRichText() {
+        // master §5.7: the same formatted-text widget as item names
+        var parameters = type.describe().parameters();
+        for (String field : List.of("display_name", "label")) {
+            var parameter = parameters.stream()
+                    .filter(candidate -> candidate.id().equals(field))
+                    .findFirst().orElseThrow();
+            assertThat(parameter.uiHint()).as(field).isEqualTo("formatted-text");
+        }
+    }
+
+    @Test
     void parsesTheFullChairSurface() {
         Optional<Object> parsed = type.parse(id, Map.of(
                 "texture", "block/marble",
