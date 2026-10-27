@@ -70,20 +70,20 @@
   .summary {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
-    font-size: 12px;
-    margin: 4px 0 10px;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    margin: var(--space-1) 0 var(--space-3);
   }
-  .summary button {
+  .summary button:not(.btn) {
     background: none;
     border: 1px solid var(--border);
     border-radius: var(--radius);
     color: var(--muted);
-    font-size: 11.5px;
-    padding: 2px 8px;
+    font-size: var(--text-xs);
+    padding: var(--space-half) var(--space-2);
     cursor: pointer;
   }
-  .summary button.active {
+  .summary button:not(.btn).active {
     border-color: var(--accent);
     color: var(--fg);
   }
@@ -99,10 +99,10 @@
     padding: 0;
   }
   li {
-    font-size: 12.5px;
-    padding: 6px;
+    font-size: var(--text-sm);
+    padding: var(--space-2);
     border-left: 3px solid var(--border-strong);
-    margin-bottom: 6px;
+    margin-bottom: var(--space-2);
     background: var(--bg-hover);
     border-radius: 0 var(--radius) var(--radius) 0;
   }
@@ -114,7 +114,7 @@
   }
   code {
     color: var(--accent);
-    font-size: 11.5px;
+    font-size: var(--text-xs);
   }
   .msg {
     display: block;
@@ -127,7 +127,7 @@
     background: none;
     border: none;
     color: var(--faint);
-    font-size: 11px;
+    font-size: var(--text-xs);
     padding: 0;
     cursor: pointer;
     text-decoration: underline dotted;
@@ -144,13 +144,13 @@
     text-decoration: none;
   }
   .fix {
-    margin-left: 6px;
+    margin-left: var(--space-2);
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 1px 8px;
-    font-size: 11px;
+    padding: var(--space-half) var(--space-2);
+    font-size: var(--text-xs);
     cursor: pointer;
   }
   .fix:hover {
@@ -158,7 +158,7 @@
   }
   .hint {
     display: block;
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--faint);
   }
   .empty {

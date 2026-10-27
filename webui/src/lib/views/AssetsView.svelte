@@ -369,9 +369,9 @@
           {/if}
 
           <div class="actions">
-            <button type="button" class="ghost" onclick={() => { flow = null; preview = null; }}>Cancel</button>
-            <button type="button" class="ghost" disabled={busy || !canPreview} onclick={() => void runPreview()}>Preview changes</button>
-            <button type="button" class="primary" disabled={busy || !preview} onclick={() => void apply()}>
+            <button type="button" class="btn" onclick={() => { flow = null; preview = null; }}>Cancel</button>
+            <button type="button" class="btn" disabled={busy || !canPreview} onclick={() => void runPreview()}>Preview changes</button>
+            <button type="button" class="btn btn-primary" disabled={busy || !preview} onclick={() => void apply()}>
               {flow === 'replace' ? `Replace in ${userWord(hits.length)}` : `Retarget ${userWord(chosenHits.length)}`}
             </button>
           </div>
@@ -380,20 +380,20 @@
         <div class="actions">
           <button
             type="button"
-            class="ghost"
+            class="btn"
             disabled={!usage || hits.length === 0 || sameKind.length === 0}
             title="Point every user at a different asset"
             onclick={() => startFlow('replace')}
           >Replace everywhere…</button>
           <button
             type="button"
-            class="ghost"
+            class="btn"
             disabled={!usage || hits.length < 2}
             title="Copy this file for some users and leave the rest sharing it"
             onclick={() => startFlow('copy')}
           >Give some users a copy…</button>
           {#if /\.png$/i.test(selected.path)}
-            <button type="button" class="ghost" onclick={editPixels}>
+            <button type="button" class="btn" onclick={editPixels}>
               Edit pixels{hits.length > 1 ? ` (changes all ${userWord(hits.length)})` : ''}
             </button>
           {/if}
@@ -422,8 +422,8 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding: 10px;
+    gap: var(--space-2);
+    padding: var(--space-3);
     border-bottom: 1px solid var(--border);
   }
   .filters input {
@@ -432,24 +432,24 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 6px 9px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-2);
+    font-size: var(--text-base);
   }
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px;
+    gap: var(--space-1);
   }
-  .chips button {
+  .chips button:not(.btn) {
     background: none;
     border: 1px solid var(--border-strong);
-    border-radius: 10px;
+    border-radius: var(--radius-lg);
     color: var(--muted);
-    padding: 2px 9px;
-    font-size: 11.5px;
+    padding: var(--space-half) var(--space-2);
+    font-size: var(--text-xs);
     cursor: pointer;
   }
-  .chips button.active {
+  .chips button:not(.btn).active {
     color: var(--accent);
     border-color: var(--accent);
   }
@@ -457,60 +457,58 @@
     flex: 1 1 0;
     min-height: 0;
     overflow-y: auto;
-    padding: 4px;
+    padding: var(--space-1);
   }
   .row {
     display: flex;
-    gap: 8px;
+    gap: var(--space-2);
     align-items: center;
-    padding: 6px 8px;
+    padding: var(--space-2) var(--space-2);
     border-radius: var(--radius);
-    font-size: 13px;
+    font-size: var(--text-base);
     cursor: default;
     min-width: 0;
   }
   .row:hover { background: var(--bg-hover); }
   .row.selected { background: var(--bg-raised); outline: 1px solid var(--border-strong); }
   .name { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .size { flex: none; color: var(--faint); font-size: 11px; }
+  .size { flex: none; color: var(--faint); font-size: var(--text-xs); }
   .detail {
     flex: 1 1 0;
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
   }
-  header { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; min-width: 0; }
+  header { display: flex; gap: var(--space-3); align-items: center; margin-bottom: var(--space-3); min-width: 0; }
   .thumb { width: 64px; height: 64px; object-fit: contain; image-rendering: pixelated; background: var(--bg-input); border-radius: var(--radius); flex: none; }
   .title { min-width: 0; }
-  h2 { margin: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .title code { color: var(--faint); font-size: 11.5px; overflow-wrap: anywhere; }
-  h3 { margin: 0 0 6px; font-size: 13px; }
-  .note { margin: 0 0 8px; color: var(--muted); font-size: 12px; }
-  .note.partial { color: var(--warn, #d9a43b); }
-  .error { color: var(--danger, #e5484d); font-size: 12.5px; }
-  .hits { list-style: none; margin: 0 0 12px; padding: 0; }
-  .hits li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; min-width: 0; font-size: 12.5px; }
+  h2 { margin: 0; font-size: var(--text-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .title code { color: var(--faint); font-size: var(--text-xs); overflow-wrap: anywhere; }
+  h3 { margin: 0 0 var(--space-2); font-size: var(--text-base); }
+  .note { margin: 0 0 var(--space-2); color: var(--muted); font-size: var(--text-sm); }
+  .note.partial { color: var(--warn); }
+  .error { color: var(--error); font-size: var(--text-sm); }
+  .hits { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
+  .hits li { display: flex; gap: var(--space-2); align-items: baseline; padding: var(--space-1) 0; min-width: 0; font-size: var(--text-sm); }
   .hits li.none { color: var(--muted); }
-  .link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: 12.5px; text-align: left; }
-  .where { color: var(--faint); font-size: 11.5px; white-space: nowrap; }
-  .value { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 11.5px; }
-  .flow { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 12px 14px; margin-bottom: 8px; }
-  .flow label { display: block; margin-bottom: 8px; }
-  .flow label > span { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .link { background: none; border: none; color: var(--accent); cursor: pointer; padding: 0; font-size: var(--text-sm); text-align: left; }
+  .where { color: var(--faint); font-size: var(--text-xs); white-space: nowrap; }
+  .value { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: var(--text-xs); }
+  .flow { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-3) var(--space-4); margin-bottom: var(--space-2); }
+  .flow label { display: block; margin-bottom: var(--space-2); }
+  .flow label > span { display: block; font-size: var(--text-sm); color: var(--muted); margin-bottom: var(--space-1); }
   .flow input, .flow select {
     width: 100%; box-sizing: border-box; background: var(--bg-input); color: inherit;
-    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 6px 9px; font: 12.5px var(--mono);
+    border: 1px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-2) var(--space-2); font: var(--text-sm) var(--mono);
   }
   .impact ul { list-style: none; margin: 0; padding: 0; max-height: 200px; overflow-y: auto; }
-  .impact li { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 12px; padding: 2px 0; }
+  .impact li { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); font-size: var(--text-sm); padding: var(--space-half) 0; }
   .diff { font-family: var(--mono); overflow-wrap: anywhere; }
   del { color: var(--muted); }
   ins { text-decoration: none; color: var(--accent); }
-  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .actions button { border-radius: var(--radius); padding: 5px 14px; cursor: pointer; font-size: 12.5px; }
-  .primary { background: var(--primary); border: none; color: white; }
-  .ghost { background: none; border: 1px solid var(--border-strong); color: inherit; }
-  button:disabled { opacity: 0.5; cursor: default; }
-  .empty { color: var(--muted); padding: 14px; font-size: 13px; }
+  .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+  .actions button:not(.btn) { border-radius: var(--radius); padding: var(--space-1) var(--space-4); cursor: pointer; font-size: var(--text-sm); }
+  button:not(.btn):disabled { opacity: 0.5; cursor: default; }
+  .empty { color: var(--muted); padding: var(--space-4); font-size: var(--text-base); }
 </style>

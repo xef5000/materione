@@ -73,7 +73,7 @@
     background: var(--bg-panel);
     border-right: 1px solid var(--border);
     overflow-y: auto;
-    padding: 10px 10px 12px;
+    padding: var(--space-3) var(--space-3) var(--space-3);
     min-height: 0;
   }
   .center {
@@ -88,7 +88,7 @@
     min-height: 0;
     min-width: 0;
     overflow: auto;
-    padding: 12px 14px;
+    padding: var(--space-3) var(--space-4);
   }
   .pane {
     height: 100%;
@@ -99,6 +99,6 @@
     margin-top: 12vh;
   }
   .welcome span {
-    font-size: 12.5px;
+    font-size: var(--text-sm);
   }
 </style>

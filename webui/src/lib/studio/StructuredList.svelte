@@ -109,29 +109,29 @@
 <style>
   .structured {
     display: grid;
-    gap: 6px;
-    margin-bottom: 16px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
     min-width: 0;
   }
   .label {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .table {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     min-width: 0;
   }
   .head,
   .row {
     display: grid;
     grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)) 24px;
-    gap: 4px;
+    gap: var(--space-1);
     align-items: center;
     min-width: 0;
   }
   .head {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--faint);
   }
   .head span {
@@ -145,8 +145,8 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 4px 6px;
-    font: 12px var(--mono);
+    padding: var(--space-1) var(--space-2);
+    font: var(--text-sm) var(--mono);
     min-width: 0;
     width: 100%;
     box-sizing: border-box;
@@ -162,12 +162,12 @@
   .remove {
     height: 24px;
     line-height: 1;
-    font-size: 14px;
+    font-size: var(--text-md);
   }
   .add {
     justify-self: start;
-    padding: 4px 10px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
   }
   .remove:hover,
   .add:hover {
@@ -176,6 +176,6 @@
   }
   small {
     color: var(--faint);
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
 </style>

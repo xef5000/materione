@@ -85,14 +85,14 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
+    gap: var(--space-2);
     background: none;
     border: none;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    padding: 5px 12px;
+    padding: var(--space-1) var(--space-3);
   }
   .title {
     margin: 0;
@@ -100,13 +100,13 @@
   }
   .count {
     background: var(--bg-raised);
-    border-radius: 8px;
-    padding: 0 7px;
-    font-size: 10.5px;
+    border-radius: var(--radius);
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
   }
   .error-count {
     color: var(--error);
-    font-size: 10.5px;
+    font-size: var(--text-xs);
     font-weight: 600;
     text-transform: none;
     letter-spacing: 0;
@@ -120,9 +120,9 @@
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: inherit;
-    padding: 0 6px;
+    padding: 0 var(--space-2);
     cursor: pointer;
-    font-size: 15px;
+    font-size: var(--text-md);
     line-height: 1.2;
   }
   .close:hover {
@@ -137,13 +137,13 @@
   }
   .clear {
     align-self: flex-end;
-    margin: 0 12px 3px;
+    margin: 0 var(--space-3) var(--space-1);
     background: none;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: var(--faint);
-    font-size: 10.5px;
-    padding: 1px 8px;
+    font-size: var(--text-xs);
+    padding: var(--space-half) var(--space-2);
     cursor: pointer;
   }
   .clear:hover {
@@ -152,16 +152,16 @@
   ul {
     list-style: none;
     margin: 0;
-    padding: 0 12px 8px;
+    padding: 0 var(--space-3) var(--space-2);
     overflow-y: auto;
     min-height: 0;
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: var(--text-xs);
   }
   li {
     display: flex;
-    gap: 8px;
-    padding: 2px 0;
+    gap: var(--space-2);
+    padding: var(--space-half) 0;
     border-bottom: 1px dotted var(--border);
     align-items: baseline;
   }

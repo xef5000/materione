@@ -160,7 +160,7 @@
   .scrim {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--scrim);
     display: flex;
     justify-content: center;
     align-items: flex-start;
@@ -172,7 +172,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-lg);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-3);
     overflow: hidden;
   }
   input {
@@ -182,23 +182,23 @@
     color: inherit;
     border: none;
     border-bottom: 1px solid var(--border);
-    padding: 12px 14px;
-    font-size: 14px;
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-md);
     outline: none;
   }
-  ul { list-style: none; margin: 0; padding: 4px; max-height: 50vh; overflow-y: auto; }
+  ul { list-style: none; margin: 0; padding: var(--space-1); max-height: 50vh; overflow-y: auto; }
   li {
     display: flex;
     justify-content: space-between;
-    gap: 12px;
-    padding: 7px 10px;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-radius: var(--radius);
-    font-size: 13px;
+    font-size: var(--text-base);
     cursor: pointer;
     min-width: 0;
   }
   li.active { background: var(--bg-raised); outline: 1px solid var(--border-strong); }
   li.none { color: var(--muted); cursor: default; }
   .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .group { flex: none; color: var(--faint); font-size: 11.5px; }
+  .group { flex: none; color: var(--faint); font-size: var(--text-xs); }
 </style>

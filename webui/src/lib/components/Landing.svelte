@@ -35,31 +35,31 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 36px 32px 24px;
+    padding: var(--space-10) var(--space-8) var(--space-6);
     text-align: center;
   }
   .logo {
     display: block;
-    margin: 0 auto 14px;
-    border-radius: 16px;
+    margin: 0 auto var(--space-4);
+    border-radius: var(--radius-lg);
   }
   h1 {
     margin: 0;
-    font-size: 30px;
+    font-size: var(--text-display);
     letter-spacing: 0.01em;
   }
   .subtitle {
-    margin: 4px 0 26px;
+    margin: var(--space-1) 0 var(--space-6);
     color: var(--muted);
-    font-size: 15px;
+    font-size: var(--text-md);
   }
   .demo {
-    background: var(--primary);
+    background: var(--accent);
     border: none;
-    color: white;
-    border-radius: 8px;
-    padding: 10px 28px;
-    font-size: 15px;
+    color: var(--accent-ink);
+    border-radius: var(--radius);
+    padding: var(--space-3) var(--space-8);
+    font-size: var(--text-md);
     font-weight: 600;
     cursor: pointer;
   }
@@ -71,7 +71,7 @@
     cursor: default;
   }
   .hint {
-    margin: 26px 0 0;
+    margin: var(--space-6) 0 0;
     color: var(--muted);
     text-wrap: balance;
   }
@@ -79,21 +79,21 @@
     white-space: nowrap;
     background: var(--bg-input);
     color: var(--fg-code);
-    border-radius: 4px;
-    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-half) var(--space-2);
   }
   .error {
     color: var(--error);
-    margin: 14px 0 0;
+    margin: var(--space-4) 0 0;
   }
   .links {
     display: flex;
     justify-content: center;
-    gap: 18px;
-    margin-top: 22px;
-    padding-top: 16px;
+    gap: var(--space-5);
+    margin-top: var(--space-6);
+    padding-top: var(--space-4);
     border-top: 1px solid var(--border);
-    font-size: 13px;
+    font-size: var(--text-base);
   }
   .links a {
     color: var(--faint);

@@ -78,7 +78,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 22px 26px;
+    padding: var(--space-6) var(--space-6);
   }
   h2 {
     margin-top: 0;
@@ -89,32 +89,32 @@
     background: var(--bg-input);
     color: inherit;
     border: 1px solid var(--border-strong);
-    border-radius: 8px;
-    font: 13px var(--mono);
-    padding: 10px;
+    border-radius: var(--radius);
+    font: var(--text-base) var(--mono);
+    padding: var(--space-3);
     resize: vertical;
   }
-  button {
-    margin-top: 10px;
-    background: var(--primary);
+  button:not(.btn) {
+    margin-top: var(--space-3);
+    background: var(--accent);
     border: none;
-    color: white;
-    border-radius: 8px;
-    padding: 8px 18px;
+    color: var(--accent-ink);
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-5);
     cursor: pointer;
   }
-  button:disabled {
+  button:not(.btn):disabled {
     opacity: 0.5;
     cursor: default;
   }
   code {
     background: var(--bg-input);
-    border-radius: 4px;
-    padding: 1px 6px;
+    border-radius: var(--radius-sm);
+    padding: var(--space-half) var(--space-2);
   }
   code.nonce {
     color: var(--accent);
-    font-size: 15px;
+    font-size: var(--text-md);
   }
   .status {
     color: var(--warn);
@@ -123,7 +123,7 @@
     color: var(--error);
   }
   details {
-    margin-top: 16px;
+    margin-top: var(--space-4);
     color: var(--muted);
   }
 </style>

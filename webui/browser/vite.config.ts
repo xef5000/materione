@@ -6,7 +6,7 @@ export default defineConfig({
   optimizeDeps: {
     entries: ['browser/fixture.html'],
   },
-  publicDir: false,
+  publicDir: 'public',
   server: {
     fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden'] },
   },

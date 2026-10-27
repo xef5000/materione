@@ -270,57 +270,58 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 8px 6px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2);
     background: var(--bg-app);
     border-right: 1px solid var(--border);
   }
   .nav-group {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: var(--space-1);
   }
   .support-group {
-    margin-top: 6px;
-    padding-top: 8px;
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
     border-top: 1px solid var(--border);
   }
   .group-label {
-    margin: 3px 8px 4px;
+    margin: var(--space-1) var(--space-2) var(--space-1);
     color: var(--faint);
-    font-size: 10px;
+    font-size: var(--text-xs);
     font-weight: 600;
     letter-spacing: 0.09em;
-    line-height: 1.4;
+    /* Fixed, so a collapsed rail (height: 14px) keeps every row where it was. */
+    line-height: 14px;
     text-transform: uppercase;
   }
-  .rail button {
+  .rail button:not(.btn) {
     position: relative;
     width: 100%;
     min-width: 0;
     min-height: 36px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: var(--space-3);
     border: none;
     border-left: 2px solid transparent;
     border-radius: 0 var(--radius) var(--radius) 0;
     background: none;
     color: var(--muted);
-    padding: 7px 9px;
+    padding: var(--space-2) var(--space-2);
     cursor: pointer;
     text-align: left;
   }
-  .rail button svg {
+  .rail button:not(.btn) svg {
     width: 19px;
     height: 19px;
     flex: none;
   }
-  .rail button:hover {
+  .rail button:not(.btn):hover {
     color: var(--fg);
     background: var(--bg-hover);
   }
-  .rail button.active {
+  .rail button:not(.btn).active {
     color: var(--accent);
     border-left-color: var(--accent);
     background: var(--bg-hover);
@@ -330,10 +331,10 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
   }
   .rail.collapsed {
-    padding-inline: 4px;
+    padding-inline: var(--space-1);
   }
   .rail.collapsed .group-label {
     height: 14px;
@@ -344,7 +345,7 @@
   .rail.collapsed .nav-label {
     display: none;
   }
-  .rail.collapsed button {
+  .rail.collapsed button:not(.btn) {
     justify-content: center;
     padding-inline: 0;
   }
@@ -357,11 +358,11 @@
     right: 4px;
     top: 3px;
     font-style: normal;
-    font-size: 9px;
+    font-size: var(--text-xs);
     font-weight: 700;
     line-height: 1;
-    padding: 2px 3px;
-    border-radius: 6px;
+    padding: var(--space-half) var(--space-1);
+    border-radius: var(--radius);
     background: var(--error);
     color: var(--bg-app);
   }
@@ -392,26 +393,26 @@
   }
   .return-bar {
     flex: none;
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     background: var(--bg-panel);
   }
-  .return-bar button {
+  .return-bar button:not(.btn) {
     background: none;
     border: none;
     color: var(--accent);
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
     padding: 0;
   }
   .panel {
     overflow-y: auto;
     overflow-x: hidden;
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
   }
   .panel h2 {
-    margin: 0 0 12px;
-    font-size: 16px;
+    margin: 0 0 var(--space-3);
+    font-size: var(--text-lg);
     font-weight: 600;
   }
   @media (max-width: 700px) {

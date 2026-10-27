@@ -97,7 +97,7 @@
     <dd>{server.editorRunning ? `running on :${server.editorPort}` : 'stopped'}</dd>
   </dl>
   <div class="actions">
-    <button class="primary" disabled={reloading} onclick={() => void reloadScope('everything')}>
+    <button class="btn btn-primary" disabled={reloading} onclick={() => void reloadScope('everything')}>
       {reloading ? 'reloading…' : 'full reload'}
     </button>
     <button onclick={openSettings}>edit settings.yml</button>
@@ -127,7 +127,7 @@
 <div class="block">
   <div class="head">
     <h3>audit trail</h3>
-    <button class="small" onclick={() => void loadAudit()}>refresh</button>
+    <button class="btn btn-sm" onclick={() => void loadAudit()}>refresh</button>
   </div>
   <input class="filter" placeholder="filter op / target / actor…" bind:value={auditFilter} />
   <table>
@@ -149,15 +149,15 @@
 <style>
   .block {
     border-top: 1px dotted var(--border);
-    padding-top: 8px;
-    margin-top: 10px;
+    padding-top: var(--space-2);
+    margin-top: var(--space-3);
   }
   h3 {
-    font-size: 12px;
+    font-size: var(--text-sm);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: var(--muted);
-    margin: 0 0 6px;
+    margin: 0 0 var(--space-2);
   }
   .head {
     display: flex;
@@ -167,9 +167,9 @@
   dl {
     display: grid;
     grid-template-columns: auto 1fr;
-    gap: 3px 14px;
-    font-size: 12.5px;
-    margin: 4px 0 10px;
+    gap: var(--space-1) var(--space-4);
+    font-size: var(--text-sm);
+    margin: var(--space-1) 0 var(--space-3);
   }
   dt {
     color: var(--muted);
@@ -181,58 +181,48 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 6px;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
   }
-  button {
+  button:not(.btn) {
     border-radius: var(--radius);
     cursor: pointer;
-    font-size: 12.5px;
-    padding: 4px 12px;
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-3);
   }
-  .actions .primary {
-    background: var(--primary);
-    border: none;
-    color: white;
-  }
-  .actions button:not(.primary),
-  .packs button,
-  .head .small {
+  .actions button:not(.btn-primary),
+  .packs button {
     background: none;
     border: 1px solid var(--border-strong);
     color: inherit;
   }
-  .head .small {
-    font-size: 11px;
-    padding: 2px 8px;
-  }
-  button:disabled {
+  button:not(.btn):disabled {
     opacity: 0.5;
     cursor: default;
   }
   .packs {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: var(--space-2);
   }
   .filter {
     width: 100%;
     box-sizing: border-box;
-    margin-bottom: 6px;
+    margin-bottom: var(--space-2);
     background: var(--bg-input);
     color: inherit;
     border: 1px solid var(--border);
     border-radius: var(--radius);
-    padding: 4px 8px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
   }
   table {
     width: 100%;
     border-collapse: collapse;
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   td {
-    padding: 2px 6px 2px 0;
+    padding: var(--space-half) var(--space-2) var(--space-half) 0;
     border-bottom: 1px dotted var(--border);
     vertical-align: top;
   }

@@ -8,6 +8,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+// What every visual pass also checks now that the editor wears the Materione identity
+// (docs/architecture/web.md §6.1): tokens, not ad-hoc colors, sizes or fonts.
+const IDENTITY_EYES = ' Also: the Materione identity (docs/architecture/web.md §6.1) - navy surfaces, the orange accent only on the primary action and focus, Inter type, and text and focus that keep WCAG AA contrast.';
 const TRANSPORT = 'plugin/src/main/java/dev/materione/plugin/runtime/EditorTransportService.java';
 const COMMANDS = 'plugin/src/main/java/dev/materione/plugin/command/EditorCommands.java';
 const ADMIN_API = 'plugin/src/main/java/dev/materione/plugin/runtime/api/AdminApiImpl.java';
@@ -431,7 +434,7 @@ export default [
       await page.setViewportSize({ width: 1024, height: 768 });
       await ctx.browser.browserShot('sample-glyphs-collapsed-navigation');
       ctx.needsEyes(
-        'the real local App shows recognizable glyph source-texture miniatures, uncluttered footer-free space, no Activity bar until requested, and unchanged vertical navigation alignment after labels collapse; source sheets are texture previews, not proof of final font metrics or client pack acceptance',
+        'the real local App shows recognizable glyph source-texture miniatures, uncluttered footer-free space, no Activity bar until requested, and unchanged vertical navigation alignment after labels collapse; source sheets are texture previews, not proof of final font metrics or client pack acceptance' + IDENTITY_EYES,
       );
     },
   }),
@@ -516,7 +519,7 @@ export default [
       await page.locator('.thumbnail.vanilla img').first().waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('sample-vanilla-item-icons');
       ctx.needsEyes(
-        'items without a custom texture or model (e.g. sample:ruby_disc) show the matching vanilla inventory icon, crisp at grid size; items with their own texture still show it, and unsupported models keep their honest fallback',
+        'items without a custom texture or model (e.g. sample:ruby_disc) show the matching vanilla inventory icon, crisp at grid size; items with their own texture still show it, and unsupported models keep their honest fallback' + IDENTITY_EYES,
       );
     },
   }),
@@ -561,7 +564,7 @@ export default [
       await page.locator('.preview .thumbnail.live img').waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('sample-marble-stairs-studio-preview');
       ctx.needsEyes(
-        'sample:amethyst_lamp, marble_slab and marble_stairs show 3D inventory-angle renders (top brightest, left side lighter than right) matching their in-game inventory icons in shape and orientation; the stairs studio preview shows the same render at 180 px; vanilla textures, if any, appear as grey checkers',
+        'sample:amethyst_lamp, marble_slab and marble_stairs show 3D inventory-angle renders (top brightest, left side lighter than right) matching their in-game inventory icons in shape and orientation; the stairs studio preview shows the same render at 180 px; vanilla textures, if any, appear as grey checkers' + IDENTITY_EYES,
       );
     },
   }),
@@ -590,7 +593,7 @@ export default [
       await page.locator('.item-preview .inventory img').waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('corpus-red-gem-inventory-preview');
       ctx.needsEyes(
-        'the real local App shows sample:ruby_sword with an honest unsupported-model fallback, then the corpus texture catalog and corpus:gem_red at inventory and enlarged inspection scales; screenshots are App-scoped and contain no capability URL or session material',
+        'the real local App shows sample:ruby_sword with an honest unsupported-model fallback, then the corpus texture catalog and corpus:gem_red at inventory and enlarged inspection scales; screenshots are App-scoped and contain no capability URL or session material' + IDENTITY_EYES,
       );
     },
   }),
@@ -616,7 +619,7 @@ export default [
       await studio.getByRole('button', { name: 'Edit item name' }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('sample-ruby-sword-item-workbench');
       ctx.needsEyes(
-        'the real local Materione App shows sample:ruby_sword in Item Studio with a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action; any game-check/candidate text must not claim that gameplay or player delivery was verified',
+        'the real local Materione App shows sample:ruby_sword in Item Studio with a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action; any game-check/candidate text must not claim that gameplay or player delivery was verified' + IDENTITY_EYES,
       );
     },
   }),
@@ -711,7 +714,7 @@ export default [
       await page.getByRole('button', { name: 'Publish pack', exact: true }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('sample-ruby-sword-files-draft');
       ctx.needsEyes(
-        'the real local Materione App shows sample:ruby_sword in Files with the staged Ruby Sword Visual Draft clearly unsaved; navigation reads Content, Files, Problems, the file header offers Open in Studio, Save & apply is distinct from Publish pack, and the screenshot contains no capability URL or session material',
+        'the real local Materione App shows sample:ruby_sword in Files with the staged Ruby Sword Visual Draft clearly unsaved; navigation reads Content, Files, Problems, the file header offers Open in Studio, Save & apply is distinct from Publish pack, and the screenshot contains no capability URL or session material' + IDENTITY_EYES,
       );
     },
   }),
@@ -884,7 +887,7 @@ export default [
       await rules.getByRole('button', { name: 'Add rule' }).click();
       await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
       ctx.needsEyes(
-        'the studio header names the base_item template; material reads "Inherited from base_item: PAPER"; a Soulbound ability card says Built in and when it activates; a rule reads "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write',
+        'the studio header names the base_item template; material reads "Inherited from base_item: PAPER"; a Soulbound ability card says Built in and when it activates; a rule reads "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
       );
     },
   }),
@@ -973,7 +976,7 @@ export default [
       await detail.getByLabel('impact summary').waitFor({ state: 'visible' });
       await ctx.browser.browserShot('assets-replace-preview');
       ctx.needsEyes(
-        'assets-used-by lists ruby and templated_ruby under "Used by — 2 items" with a coverage line that says how many documents were read and that asset files are not searched; assets-replace-preview shows the before → after texture text per document, the line "Written together, or not at all", and an Apply button naming the number of uses; nothing is written until Apply',
+        'assets-used-by lists ruby and templated_ruby under "Used by — 2 items" with a coverage line that says how many documents were read and that asset files are not searched; assets-replace-preview shows the before → after texture text per document, the line "Written together, or not at all", and an Apply button naming the number of uses; nothing is written until Apply' + IDENTITY_EYES,
       );
     },
   }),
@@ -1058,7 +1061,7 @@ export default [
       await page.getByText('Sample content in this tab only').waitFor({ state: 'visible', timeout: 15_000 });
       await ctx.browser.browserShot('cloud-demo-workbench', 'main');
       ctx.needsEyes(
-        'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with the sample pack selected, every content type tab (Items to Text effects) and the sample items (Ruby Sword, Obsidian Axe, ...) with their textures in Content',
+        'cloud-landing shows one centred card with the Materione logo, the title Materione, the subtitle Web content editor, a primary View Demo button and the line "To start a new session, run /materione editor in-game"; cloud-demo-workbench shows the Demo banner above the normal workbench with the sample pack selected, every content type tab (Items to Text effects) and the sample items (Ruby Sword, Obsidian Axe, ...) with their textures in Content' + IDENTITY_EYES,
       );
     },
   }),

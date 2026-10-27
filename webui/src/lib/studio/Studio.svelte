@@ -674,8 +674,8 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 10px;
-    padding: 8px 12px;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     min-width: 0;
   }
@@ -683,15 +683,15 @@
     background: none;
     border: none;
     color: var(--muted);
-    font-size: 16px;
+    font-size: var(--text-lg);
     cursor: pointer;
-    padding: 0 4px;
+    padding: 0 var(--space-1);
   }
   .back:hover {
     color: var(--fg);
   }
   .name {
-    font-size: 14px;
+    font-size: var(--text-md);
     font-weight: 600;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -700,7 +700,7 @@
   }
   .meta {
     color: var(--faint);
-    font: 11px var(--mono);
+    font: var(--text-xs) var(--mono);
     white-space: nowrap;
   }
   .spacer {
@@ -714,15 +714,15 @@
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 4px 10px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
     cursor: pointer;
     white-space: nowrap;
   }
   .save {
-    background: var(--primary);
+    background: var(--accent);
     border-color: transparent;
-    color: #fff;
+    color: var(--accent-ink);
   }
   .save:disabled {
     background: none;
@@ -739,8 +739,8 @@
     flex: 1 1 0;
     min-height: 0;
     grid-template-columns: minmax(0, 260px) minmax(0, 1fr);
-    gap: 20px;
-    padding: 16px;
+    gap: var(--space-5);
+    padding: var(--space-4);
     overflow-y: hidden;
     overflow-x: hidden;
     min-width: 0;
@@ -749,20 +749,20 @@
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 4px;
+    padding-right: var(--space-1);
   }
   .form {
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 8px;
+    padding-right: var(--space-2);
     max-width: 620px;
   }
   fieldset {
     border: none;
     border-top: 1px solid var(--border);
-    margin: 0 0 18px;
-    padding: 12px 0 0;
+    margin: 0 0 var(--space-5);
+    padding: var(--space-3) 0 0;
     min-width: 0;
   }
   .field-controls {
@@ -771,20 +771,20 @@
     padding: 0;
   }
   legend {
-    font-size: 11px;
+    font-size: var(--text-xs);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--faint);
-    padding: 0 6px 0 0;
+    padding: 0 var(--space-2) 0 0;
   }
   footer {
     display: flex;
     flex: none;
     align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
     border-top: 1px solid var(--border);
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--muted);
     min-width: 0;
   }
@@ -799,41 +799,41 @@
   .error {
     margin: 0;
     flex: none;
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     background: var(--error-bg);
     color: var(--error);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .notice,
   .loading {
     margin: 0;
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .pending-yaml {
-    margin: 0 0 12px;
-    padding: 8px 10px;
+    margin: 0 0 var(--space-3);
+    padding: var(--space-2) var(--space-3);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
     color: var(--warn);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .inherits {
     margin: 0;
     flex: none;
-    padding: 6px 12px;
+    padding: var(--space-2) var(--space-3);
     border-bottom: 1px solid var(--border);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .inherits.broken {
     color: var(--warn);
   }
   .provenance,
   .field-issue {
-    margin: -6px 0 12px;
-    font-size: 11px;
+    margin: -6px 0 var(--space-3);
+    font-size: var(--text-xs);
     color: var(--muted);
   }
   .provenance.inherited {
@@ -843,25 +843,25 @@
     color: var(--warn);
   }
   .repair {
-    margin: -4px 0 14px;
-    padding: 8px 10px;
+    margin: -4px 0 var(--space-4);
+    padding: var(--space-2) var(--space-3);
     border: 1px solid var(--warn);
     border-radius: var(--radius);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .repair p {
-    margin: 0 0 6px;
+    margin: 0 0 var(--space-2);
     overflow-wrap: anywhere;
   }
-  .repair button {
+  .repair button:not(.btn) {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 3px 9px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
-    margin-right: 6px;
+    margin-right: var(--space-2);
   }
   .pending-summary {
     border-bottom: 1px solid var(--border);

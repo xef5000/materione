@@ -110,12 +110,12 @@
 <style>
   .field {
     display: grid;
-    gap: 4px;
-    margin-bottom: 12px;
+    gap: var(--space-1);
+    margin-bottom: var(--space-3);
     min-width: 0;
   }
   .label {
-    font-size: 12px;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .label em {
@@ -124,7 +124,7 @@
   }
   .slot {
     display: flex;
-    gap: 6px;
+    gap: var(--space-2);
     align-items: center;
     min-width: 0;
   }
@@ -140,8 +140,8 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 5px 8px;
-    font-size: 13px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-base);
     font-family: inherit;
     min-width: 0;
     width: 100%;
@@ -160,8 +160,8 @@
     border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: var(--radius);
-    padding: 4px 9px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-sm);
     cursor: pointer;
     white-space: nowrap;
   }
@@ -170,7 +170,7 @@
   }
   small {
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-xs);
     line-height: 1.4;
   }
 </style>

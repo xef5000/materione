@@ -81,12 +81,12 @@
 </div>
 
 <style>
-  .formatted-editor { display: grid; gap: 5px; min-width: 0; }
-  .tools, .line-tools { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
-  button, select { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: 11px; padding: 3px 7px; cursor: pointer; }
-  button:hover { background: var(--bg-hover); }
-  input, textarea { width: 100%; box-sizing: border-box; min-width: 0; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 6px 8px; font-size: 13px; }
+  .formatted-editor { display: grid; gap: var(--space-1); min-width: 0; }
+  .tools, .line-tools { display: flex; gap: var(--space-1); align-items: center; flex-wrap: wrap; }
+  button:not(.btn), select { background: var(--bg-panel); border: 1px solid var(--border-strong); border-radius: var(--radius); font-size: var(--text-xs); padding: var(--space-1) var(--space-2); cursor: pointer; }
+  button:not(.btn):hover { background: var(--bg-hover); }
+  input, textarea { width: 100%; box-sizing: border-box; min-width: 0; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-2) var(--space-2); font-size: var(--text-base); }
   textarea { resize: vertical; }
-  small, .line-tools, .unsupported { color: var(--muted); font-size: 11px; line-height: 1.4; margin: 0; }
+  small, .line-tools, .unsupported { color: var(--muted); font-size: var(--text-xs); line-height: 1.4; margin: 0; }
   .line-tools { justify-content: space-between; }
 </style>

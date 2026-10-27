@@ -79,7 +79,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
   }
   article.editing {
     padding: 0;
@@ -89,31 +89,31 @@
   header {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: var(--space-3);
   }
-  header button {
+  header button:not(.btn) {
     background: none;
     border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: var(--radius);
-    padding: 3px 10px;
-    font-size: 12px;
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-sm);
     cursor: pointer;
   }
-  header button:hover {
+  header button:not(.btn):hover {
     background: var(--bg-hover);
   }
   h2 {
     margin: 0 auto 0 0;
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
   .meta {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .frame {
-    margin-top: 12px;
-    padding: 24px;
+    margin-top: var(--space-3);
+    padding: var(--space-6);
     background:
       repeating-conic-gradient(var(--bg-raised) 0% 25%, var(--bg-input) 0% 50%) 0 / 16px 16px;
     border-radius: var(--radius);
@@ -126,6 +126,6 @@
   }
   .hint {
     color: var(--faint);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
 </style>

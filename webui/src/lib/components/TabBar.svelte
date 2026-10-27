@@ -64,12 +64,12 @@
   .tab .main {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: var(--space-2);
     background: none;
     border: none;
     color: var(--muted);
-    font-size: 12.5px;
-    padding: 7px 6px 7px 12px;
+    font-size: var(--text-sm);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
     cursor: pointer;
   }
   .tab.active .main {
@@ -86,10 +86,10 @@
     background: none;
     border: none;
     color: var(--faint);
-    font-size: 11px;
-    padding: 3px 7px;
-    margin-right: 4px;
-    border-radius: 4px;
+    font-size: var(--text-xs);
+    padding: var(--space-1) var(--space-2);
+    margin-right: var(--space-1);
+    border-radius: var(--radius-sm);
     cursor: pointer;
   }
   .close:hover {

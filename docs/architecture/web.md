@@ -803,6 +803,57 @@ cannot read, forge, replay, or reorder anything.
   the demo starts. Being client-side only, the demo adds no public endpoint and nothing to the
   cost model.
 
+### 6.1 Design tokens and primitives
+
+The editor carries the Materione identity: navy surfaces, the orange accent, Inter. The palette
+is the marketing site's (`materione-website`, `:root` in `src/pages/index.astro`), so the two
+surfaces read as one product. Dark only for now; a light theme is not designed yet.
+
+**One source.** Every color, font size and corner radius the editor draws is a custom property in
+`webui/src/app.css`. Components reference `var(--token)`, and canvas code reads the same properties
+through `token()` in `src/lib/tokens.ts` (canvas cannot take `var()`). `test/design-tokens.spec.ts`
+fails on any hex, `rgb()` or `hsl()` literal in `src/**/*.{svelte,ts}`, on a `font-size` or
+`border-radius` in pixels in a component, and on a `var()` that app.css does not define. The
+allowlist is empty and must stay justified beside any entry. `index.html` is the one place with a
+literal: the `theme-color` meta, which HTML cannot read from CSS. A new color is added to app.css
+first, then used.
+
+| Group | Tokens | Notes |
+|---|---|---|
+| Brand | `--brand-bg` `#04101d`, `--brand-navy` `#00274a`, `--brand-accent` `#f9731e`, `--brand-accent-hover` `#fb9450`, `--brand-accent-low` `#3d1f08` | Raw brand values; the names below alias them |
+| Surfaces | `--bg-app` (level 0), `--bg-panel`, `--bg-raised`, `--bg-hover`, `--bg-input` (recessed), `--navy` | Four elevation steps lifted from the background toward navy |
+| Lines | `--border` `#132539` (dividers), `--border-strong` `#2a3d55` (card outlines), `--control-line` `#5a7798` (inputs, buttons) | Controls meet WCAG 1.4.11 (3:1) on every surface; decorative dividers need not |
+| Text | `--fg` `#f5f7fa`, `--fg-code`, `--muted` `#9fb0c3`, `--faint` `#8193ab` | AA on every surface, including tinted status rows (4.7:1 on hover) |
+| Accent | `--accent`, `--accent-hover`, `--accent-low`, `--accent-ink` (`#04101d` on orange, 6.8:1) | The accent is for the one primary action, focus and selection |
+| Status | `--ok`/`--ok-bg`, `--warn`/`--warn-bg`, `--error`/`--error-bg` | Text on its tinted surface stays above 6:1 |
+| Focus and effects | `--focus-ring`, `--selection`, `--shadow-1..3`, `--scrim` | Focus is a 2px outline, offset 2px |
+| Type | `--text-xs` 11, `--text-sm` 12, `--text-base` 13, `--text-md` 14, `--text-lg` 16, `--text-xl` 22, `--text-display` 30 px; `--font-sans` (Inter), `--mono` | Seven steps; a size between steps takes the step below (12.5 px becomes 12, 15 px becomes 14) |
+| Spacing | `--space-half` 2, `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4` 16, `--space-5` 20, `--space-6` 24, `--space-8` 32, `--space-10` 40 px | 4 px base; 2 px for chips and icon gaps. Optical negative margins stay literal |
+| Radius | `--radius-sm` 4, `--radius` 8, `--radius-lg` 12, `--radius-pill` | Controls use `--radius`; panels and cards `--radius-lg` |
+| Canvas | `--checker-a/b`, `--paint-default`, `--canvas-grid`, `--canvas-hover`, `--canvas-mark`, `--canvas-dim`, `--preview-*` | Read by `token()`; never a literal in a `.ts` file |
+| Legacy | `--legacy-0` … `--legacy-f` | Minecraft's chat colors, for safe text previews only |
+
+**Primitives.** The shared look is CSS classes in `app.css`, so a screen gets it without new
+markup: `.btn` (secondary by default) with `.btn-primary` (the accent, one per view), `.btn-ghost`,
+`.btn-danger`, `.btn-sm`; `.chip` with `.chip-ok|warn|error|accent`; `.card`; `.field` with
+`.field-label`, `.field-hint` and `.field-error`; `.menu` with `.menu-item`; `.dialog-actions`.
+Form controls (`input`, `select`, `textarea`) get the field look globally. The Svelte wrappers in
+`src/lib/ui/` (`Button`, `Chip`, `Field`, `Dialog`) apply the same classes; a screen that needs only the
+look uses the class. `Dialog` owns the
+scrim, the labelled panel, Escape, and a scrim click; `dismissOnScrim={false}` keeps a dialog with
+unsaved work open on a stray click. Escape always cancels.
+
+Svelte scopes a component's rules, so a local `button { … }` rule outranks the global `.btn`. A
+component that still has unclassed buttons writes its generic button rule as
+`button:not(.btn)`; a button that carries `.btn` takes its chrome from the primitive alone.
+
+**Type and brand assets.** Inter Variable (latin subset, `src/assets/fonts/InterVariable-latin.woff2`)
+is bundled and served from the build, with no font CDN. It is from `@fontsource-variable/inter`
+5.3.0, licensed under the SIL Open Font License 1.1 (`src/assets/fonts/LICENSE-Inter.txt`). The
+logo is `public/materione-logo.svg`, identical to the website's `favicon.svg`; the header and the
+landing card use it, and `index.html` links it as the favicon. Contrast checks are run on the
+palette pairs (WCAG AA: 4.5:1 for text, 3:1 for control outlines and focus).
+
 ---
 
 ## 7. Project website (deferred)

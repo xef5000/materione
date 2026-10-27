@@ -260,7 +260,7 @@
       <button onclick={() => void revealInStudio({ ...resource, id: rootId })}>Open in Studio</button>
     {/if}
     <button disabled={saving || draft.loading || !connection.connected} onclick={() => void load()}>reload</button>
-    <button class="primary" disabled={blocked || !dirty || invalidNumbers.length > 0} onclick={() => void save()}>
+    <button class="btn btn-primary" disabled={blocked || !dirty || invalidNumbers.length > 0} onclick={() => void save()}>
       {saving ? 'Saving...' : 'Save & apply'}
     </button>
   </header>
@@ -470,7 +470,7 @@
     background: var(--bg-panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
-    padding: 14px 18px;
+    padding: var(--space-4) var(--space-5);
     height: 100%;
     box-sizing: border-box;
     display: flex;
@@ -479,16 +479,16 @@
   header {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+    gap: var(--space-3);
     flex-wrap: wrap;
   }
   h2 {
     margin: 0 auto 0 0;
-    font-size: 16px;
+    font-size: var(--text-lg);
   }
   .meta {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-sm);
     margin-right: auto;
   }
   .modes {
@@ -497,55 +497,50 @@
     border-radius: var(--radius);
     overflow: hidden;
   }
-  .modes button {
+  .modes button:not(.btn) {
     background: none;
     border: none;
     color: var(--muted);
-    font-size: 12px;
-    padding: 3px 10px;
+    font-size: var(--text-sm);
+    padding: var(--space-1) var(--space-3);
     cursor: pointer;
   }
-  .modes button.active {
+  .modes button:not(.btn).active {
     background: var(--bg-raised);
     color: var(--accent);
   }
-  button {
+  button:not(.btn) {
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 4px 12px;
+    padding: var(--space-1) var(--space-3);
     cursor: pointer;
-    font-size: 13px;
+    font-size: var(--text-base);
   }
-  button.primary {
-    background: var(--primary);
-    border-color: var(--primary);
-    color: white;
-  }
-  button:disabled {
+  button:not(.btn):disabled {
     opacity: 0.5;
     cursor: default;
   }
   .form {
-    margin-top: 12px;
+    margin-top: var(--space-3);
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 4px 20px;
+    gap: var(--space-1) var(--space-5);
     align-content: start;
   }
   fieldset { border: 0; padding: 0; margin: 0; min-width: 0; overflow: auto; }
-  .impact { color: var(--muted); font-size: 12px; margin: 8px 0; }
+  .impact { color: var(--muted); font-size: var(--text-sm); margin: var(--space-2) 0; }
   .studio-section { display: contents; }
-  .studio-section h3 { grid-column: 1 / -1; margin: 14px 0 2px; color: var(--muted); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .studio-section h3 { grid-column: 1 / -1; margin: var(--space-4) 0 var(--space-half); color: var(--muted); font-size: var(--text-xs); letter-spacing: .08em; text-transform: uppercase; }
   .studio-section:first-child h3 { margin-top: 0; }
   .field {
     display: block;
-    margin: 6px 0;
+    margin: var(--space-2) 0;
   }
   .fid {
     display: block;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
     font-weight: 600;
   }
   .fid em {
@@ -562,77 +557,77 @@
     color: inherit;
     border: 1px solid var(--border-strong);
     border-radius: var(--radius);
-    padding: 6px 8px;
-    font: 13px var(--mono);
+    padding: var(--space-2) var(--space-2);
+    font: var(--text-base) var(--mono);
   }
   textarea.code {
     resize: vertical;
     line-height: 1.55;
   }
   textarea.full {
-    margin-top: 12px;
+    margin-top: var(--space-3);
     flex: 1;
     min-height: 380px;
   }
   textarea.list {
-    font-size: 12.5px;
+    font-size: var(--text-sm);
   }
   small {
     color: var(--muted);
     display: block;
-    font-size: 11px;
+    font-size: var(--text-xs);
   }
   .advanced {
     grid-column: 1 / -1;
-    margin-top: 10px;
+    margin-top: var(--space-3);
     border-top: 1px dotted var(--border-strong);
-    padding-top: 8px;
+    padding-top: var(--space-2);
   }
   .advanced summary {
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
     color: var(--muted);
   }
   .advanced .keys {
     color: var(--faint);
     font-family: var(--mono);
-    font-size: 11.5px;
+    font-size: var(--text-xs);
   }
   .advrow {
     display: flex;
     justify-content: flex-end;
-    margin-top: 6px;
+    margin-top: var(--space-2);
   }
   .error {
     background: var(--error-bg);
     color: var(--error);
-    border-radius: 8px;
-    padding: 8px 12px;
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
     white-space: pre-wrap;
   }
   .stale-banner {
-    margin-top: 10px;
+    margin-top: var(--space-3);
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: var(--warn-bg, rgba(255, 193, 7, 0.12));
+    gap: var(--space-3);
+    background: var(--warn-bg);
     color: var(--warn);
-    border-radius: 8px;
-    padding: 6px 12px;
-    font-size: 13px;
+    border-radius: var(--radius);
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-base);
   }
-  .stale-banner button {
+  .stale-banner button:not(.btn) {
     margin-left: auto;
     border: 1px solid var(--border-strong);
     background: none;
     color: inherit;
     border-radius: var(--radius);
-    padding: 2px 10px;
+    padding: var(--space-half) var(--space-3);
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: var(--text-sm);
   }
   footer {
-    margin-top: 10px;
+    margin-top: var(--space-3);
     display: flex;
     justify-content: flex-end;
   }

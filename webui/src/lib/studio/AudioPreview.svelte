@@ -126,7 +126,7 @@
 <style>
   .preview {
     display: grid;
-    gap: 10px;
+    gap: var(--space-3);
     min-width: 0;
   }
   .player {
@@ -136,30 +136,30 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     background:
-      conic-gradient(from 90deg, #1a1e26 25%, #151920 0 50%, #1a1e26 0 75%, #151920 0) 0 0 / 16px
+      conic-gradient(from 90deg, var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0 / 16px
         16px;
     overflow: hidden;
-    padding: 12px;
+    padding: var(--space-3);
   }
   audio {
     width: 100%;
   }
   .empty {
     color: var(--faint);
-    font-size: 12px;
+    font-size: var(--text-sm);
   }
   .sources {
     display: grid;
-    gap: 4px;
+    gap: var(--space-1);
     min-width: 0;
   }
   .head {
-    font-size: 11px;
+    font-size: var(--text-xs);
     color: var(--faint);
   }
   .row {
     display: flex;
-    gap: 6px;
+    gap: var(--space-2);
     align-items: center;
     min-width: 0;
   }
@@ -167,7 +167,7 @@
     flex: 1;
     min-width: 0;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -181,8 +181,8 @@
     border: 1px solid var(--border-strong);
     color: inherit;
     border-radius: var(--radius);
-    padding: 3px 8px;
-    font-size: 11px;
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--text-xs);
     cursor: pointer;
     white-space: nowrap;
   }

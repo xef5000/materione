@@ -1,33 +1,110 @@
+/* Inter Variable (OFL-1.1, see assets/fonts/LICENSE-Inter.txt), latin subset, bundled: no runtime font CDN. */
+@font-face {
+  font-family: 'Inter Variable';
+  src: url('./assets/fonts/InterVariable-latin.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 /*
- * Design tokens — the ONLY place raw colors live. Components reference the
- * custom properties; nothing else may hardcode a hex value. Palette is the
- * original Tokyo-Night-ish scheme, extracted verbatim from the first M3 SPA.
+ * Design tokens — the ONLY place raw colors, type, spacing and radius values
+ * live. Components reference the custom properties; `test/design-tokens.spec.ts`
+ * fails the build on any hex/rgb/hsl literal outside this file. Palette is the
+ * Materione brand, read from the marketing site (materione-website, `:root` in
+ * src/pages/index.astro). Dark only: there is no light theme yet.
+ * Documented in docs/architecture/web.md ("Design tokens").
  */
 :root {
-  /* surfaces */
-  --bg-app: #12151b;
-  --bg-panel: #181c24;
-  --bg-raised: #212734;
-  --bg-hover: #1c2129;
-  --bg-input: #0e1116;
+  /* brand */
+  --brand-bg: #04101d;
+  --brand-navy: #00274a;
+  --brand-accent: #f9731e;
+  --brand-accent-hover: #fb9450;
+  --brand-accent-low: #3d1f08;
 
-  /* lines */
-  --border: #262c37;
-  --border-strong: #3b4453;
+  /* surfaces: four elevation steps lifted from --brand-bg toward --brand-navy */
+  --bg-app: var(--brand-bg);
+  --bg-panel: #071a2c;
+  --bg-raised: #0b2238;
+  --bg-hover: #102a44;
+  --bg-input: #030d18;
+  --navy: var(--brand-navy);
 
-  /* text */
-  --fg: #dfe4ec;
-  --fg-code: #c8d3f5;
-  --muted: #8b93a5;
-  --faint: #586074;
+  /* lines: hairline dividers; control outlines meet WCAG 1.4.11 (3:1) */
+  --border: #132539;
+  --border-strong: #2a3d55;
+  --control-line: #5a7798;
 
-  /* semantics */
-  --accent: #7aa2f7;
-  --primary: #2f6fed;
-  --ok: #9ece6a;
-  --warn: #e0af68;
-  --error: #f7768e;
-  --error-bg: #2a1620;
+  /* text (AA on every surface above) */
+  --fg: #f5f7fa;
+  --fg-code: #c6dcf2;
+  --muted: #9fb0c3;
+  --faint: #8193ab;
+  --accent-ink: var(--brand-bg);
+
+  /* accent: the orange brand color; --accent-low tints selections and chips */
+  --accent: var(--brand-accent);
+  --accent-hover: var(--brand-accent-hover);
+  --accent-low: var(--brand-accent-low);
+  --focus-ring: var(--brand-accent-hover);
+  --selection: rgb(249 115 30 / 0.35);
+
+  /* semantics, each with a tinted surface for banners and rows */
+  --ok: #5ed39b;
+  --ok-bg: #0b2b22;
+  --warn: #f5c04e;
+  --warn-bg: #2d2408;
+  --error: #ff7a85;
+  --error-bg: #2e1419;
+
+  /* elevation and scrims */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-3: 0 16px 48px rgb(0 0 0 / 0.55);
+  --scrim: rgb(2 8 16 / 0.66);
+
+  /* transparency checkerboard behind previews (read by canvas code too) */
+  --checker-a: #0b1f33;
+  --checker-b: #081829;
+
+  /* canvas colors, read by the texture and model previews through lib/tokens.ts */
+  --paint-default: #c94f4f;
+  --canvas-grid: rgb(255 255 255 / 0.06);
+  --canvas-hover: rgb(255 255 255 / 0.75);
+  --canvas-mark: #ffffff;
+  --canvas-dim: rgb(0 0 0 / 0.5);
+  --preview-shade: #000000;
+  --preview-missing-a: #8b8b8b;
+  --preview-missing-b: #6f6f6f;
+
+  /* type: a 7-step scale on Inter, with the mono stack for ids and code */
+  --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 22px;
+  --text-display: 30px;
+
+  /* spacing: 4px base, with a 2px half step for tight chips and icon gaps */
+  --space-half: 2px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+
+  /* radius: three steps plus a pill for chips and avatars */
+  --radius-sm: 4px;
+  --radius: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
 
   /* Minecraft legacy text colors, shared by safe text previews. */
   --legacy-0: #000000;
@@ -46,10 +123,6 @@
   --legacy-d: #ff55ff;
   --legacy-e: #ffff55;
   --legacy-f: #ffffff;
-
-  --radius: 6px;
-  --radius-lg: 12px;
-  --mono: ui-monospace, monospace;
 }
 
 html {
@@ -60,9 +133,8 @@ body {
   margin: 0;
   background: var(--bg-app);
   color: var(--fg);
-  font:
-    15px/1.5 system-ui,
-    sans-serif;
+  font: var(--text-md) / 1.5 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
 button {
@@ -77,13 +149,196 @@ textarea {
   color: inherit;
 }
 
+::selection {
+  background: var(--selection);
+}
+
 *:focus-visible {
-  outline: 1px solid var(--accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 /* Slim, unobtrusive scrollbars for the pane-heavy workbench. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
+}
+
+/*
+ * Primitives. Components compose these classes (or the wrappers in
+ * src/lib/ui/); a component's own <style> only adds layout.
+ */
+
+/* Buttons: secondary by default; the accent is reserved for the one primary action. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 28px;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  font: 500 var(--text-base) / 1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+.btn-primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
+}
+.btn-ghost {
+  border-color: transparent;
+  color: var(--muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--fg);
+}
+.btn-danger {
+  border-color: var(--error);
+  color: var(--error);
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--error-bg);
+}
+.btn-sm {
+  min-height: 24px;
+  padding: var(--space-half) var(--space-2);
+  font-size: var(--text-sm);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Chips: small status and category labels. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-half) var(--space-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+.chip-accent {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.chip-ok {
+  border-color: var(--ok);
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+.chip-warn {
+  border-color: var(--warn);
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.chip-error {
+  border-color: var(--error);
+  background: var(--error-bg);
+  color: var(--error);
+}
+
+/* Cards: a raised surface with a hairline outline. */
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+/* Fields: a label over a control, with an optional hint or validation line. */
+.field {
+  display: grid;
+  gap: var(--space-1);
+}
+.field-label {
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+.field-hint {
+  color: var(--faint);
+  font-size: var(--text-xs);
+}
+.field-error {
+  color: var(--error);
+  font-size: var(--text-xs);
+}
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  box-sizing: border-box;
+  border: 1px solid var(--control-line);
+  border-radius: var(--radius);
+  background: var(--bg-input);
+  padding: var(--space-2) var(--space-2);
+  font-size: var(--text-base);
+}
+input:not([type='checkbox']):not([type='radio']):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.6;
+}
+
+/* Dialog footers: one row, right-aligned, the primary action last. */
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+/* Menus and popovers: the surface for context menus, palettes and pickers. */
+.menu {
+  min-width: 180px;
+  padding: var(--space-1);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-base);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: var(--bg-hover);
+}
+.menu-item[aria-disabled='true'],
+.menu-item:disabled {
+  color: var(--faint);
+  cursor: default;
 }

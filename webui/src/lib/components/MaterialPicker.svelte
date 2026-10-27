@@ -89,15 +89,15 @@
 </div>
 
 <style>
-  .material-picker { position: relative; min-width: 0; display: grid; gap: 4px; }
-  input { width: 100%; min-width: 0; box-sizing: border-box; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 6px 8px; font-size: 13px; }
+  .material-picker { position: relative; min-width: 0; display: grid; gap: var(--space-1); }
+  input { width: 100%; min-width: 0; box-sizing: border-box; background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: var(--space-2) var(--space-2); font-size: var(--text-base); }
   .options { position: absolute; top: 33px; left: 0; right: 0; z-index: 3; background: var(--bg-raised); border: 1px solid var(--border-strong); border-radius: var(--radius); }
   .results { max-height: 230px; overflow-y: auto; }
-  .results button { display: grid; gap: 1px; background: none; border: none; width: 100%; text-align: left; cursor: pointer; padding: 6px 9px; font-size: 12px; }
-  .results button:hover, .results button[aria-selected='true'] { background: var(--bg-input); }
-  code { font: 10px var(--mono); color: var(--muted); overflow-wrap: anywhere; }
-  small, p { font-size: 11px; color: var(--muted); margin: 0; }
-  p { padding: 6px 9px; }
-  .current { display: flex; justify-content: space-between; gap: 5px; }
-  .current button { padding: 0; font-size: 11px; background: none; border: none; color: var(--accent); cursor: pointer; }
+  .results button:not(.btn) { display: grid; gap: var(--space-half); background: none; border: none; width: 100%; text-align: left; cursor: pointer; padding: var(--space-2) var(--space-2); font-size: var(--text-sm); }
+  .results button:not(.btn):hover, .results button:not(.btn)[aria-selected='true'] { background: var(--bg-input); }
+  code { font: var(--text-xs) var(--mono); color: var(--muted); overflow-wrap: anywhere; }
+  small, p { font-size: var(--text-xs); color: var(--muted); margin: 0; }
+  p { padding: var(--space-2) var(--space-2); }
+  .current { display: flex; justify-content: space-between; gap: var(--space-1); }
+  .current button:not(.btn) { padding: 0; font-size: var(--text-xs); background: none; border: none; color: var(--accent); cursor: pointer; }
 </style>
