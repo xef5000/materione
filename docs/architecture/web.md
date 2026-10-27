@@ -745,6 +745,27 @@ cannot read, forge, replay, or reorder anything.
   Enums with 2–4 values render as segmented controls. The derivation is a pure module pinned by
   vitest; the deterministic `?modules` browser fixture pins add / configure / remove and the
   resulting field edits.
+- *As built (M5 per-type modules, issue #153 — blocks and furniture):* blocks and furniture use
+  the same display + modules framework, with every module declared in the Java self-description
+  (plugin.md §3) and the browser fixture serving those schemas straight from the plugin's golden
+  snapshot, so a spec cannot pass against a schema the server does not have. **Blocks**: the
+  display card (name, texture/model slots, preview) plus **Shape** (the `technique` key as labelled
+  choices — Full block / Slab / Stairs / Thin plant / Directional plant / Custom host), **Drops**,
+  **Explosion resistant**, **When pushed by pistons**, **Placed by item**, and **When… do…**; the
+  `host` key stays under Advanced. **Furniture**: Floating label, **Rotation snapping** (Free / 45°
+  / 90° / 180°, stored as the number), **Hitbox**, **Seats**, **Light source**, **Storage** (a
+  number with its 9–54 slots range), **Grows into…**, Placed by item, When… do…. Smart inputs:
+  the **item picker** (this pack's items, blocks and furniture, then the server's vanilla items,
+  each with its icon — pack visuals from the summaries, vanilla icons through the pinned
+  `vanilla-icons.ts` package; placement links offer pack items only), **item chips** with a count
+  stepper (drops; the file stores a repeated reference, entries the chips cannot show are kept as
+  written), segmented controls for up to eight *labelled* choices, number controls that clamp to
+  their declared range and show the unit, and the **spatial editor**: seats, hitboxes and lights
+  are drawn on a front (x, y) and a top (x, z) view at block scale — handles drag or take arrow
+  keys (5 cm steps, Shift for 25 cm), only the row's `offset` is rewritten — with the exact
+  numeric rows beneath as the fallback. It is an approximation of where things sit, not a client
+  render; the preview model is not drawn behind it. Honest gaps: block drops have no count key in
+  the format (the repeat is documented above); furniture has no model overlay yet.
 - **Texture editing** (master §9.3): a built-in pixel editor — pencil, eraser, flood fill,
   eyedropper, line, rectangle, crop, vertical mirror, zoom/pan, pixel grid, bounded undo/redo,
   PNG import/export, free canvas resize — opens in place from a studio's texture slot and from

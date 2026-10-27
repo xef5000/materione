@@ -58,6 +58,21 @@ public record ParameterSchema(
         return editor.widget();
     }
 
+    /** One labelled choice of an enum or fixed-number parameter. */
+    public record EditorOption(String value, String label, String description, String icon) {
+
+        public EditorOption {
+            Objects.requireNonNull(value, "value");
+            label = label == null || label.isBlank() ? value : label;
+            description = description == null ? "" : description;
+            icon = icon == null ? "" : icon;
+        }
+
+        public static EditorOption of(String value, String label, String description) {
+            return new EditorOption(value, label, description, "");
+        }
+    }
+
         /**
          * Declarative, additive rendering metadata. Validation remains in the
          * content type; this object only controls progressive disclosure.
@@ -69,6 +84,11 @@ public record ParameterSchema(
          * {@code mechanics} widget marked as a module is a <em>source</em>: the
          * editor expands it into one module per registered mechanic.
          *
+         * <p>Smart-input metadata (issue #153): {@code options} give an enum or
+         * a fixed set of numbers human labels (the stored value never changes);
+         * {@code min}/{@code max}/{@code unit} give a number field its range and
+         * unit. All of it is presentation only — validation stays in the type.
+         *
          * @param module this parameter renders as an add/remove module card
          * @param category picker category id ("appearance", "behaviour", …);
          *        blank falls back to {@code section}
@@ -76,6 +96,11 @@ public record ParameterSchema(
          *        falls back to the category's icon
          * @param summary one line the module picker shows; blank falls back to
          *        the parameter description
+         * @param options labelled choices (stored value + label + description);
+         *        empty means the raw allowed values are the labels
+         * @param min inclusive lower bound the number control enforces, or null
+         * @param max inclusive upper bound the number control enforces, or null
+         * @param unit unit suffix the number control shows ("blocks", "s"), blank for none
          */
         public record EditorMetadata(
                 String label,
@@ -88,7 +113,11 @@ public record ParameterSchema(
                 boolean module,
                 String category,
                 String icon,
-                String summary) {
+                String summary,
+                List<ParameterSchema.EditorOption> options,
+                Double min,
+                Double max,
+                String unit) {
 
             public EditorMetadata {
                 label = label == null || label.isBlank() ? "" : label;
@@ -99,6 +128,17 @@ public record ParameterSchema(
                 category = category == null || category.isBlank() ? "" : category;
                 icon = icon == null || icon.isBlank() ? "" : icon;
                 summary = summary == null || summary.isBlank() ? "" : summary;
+                options = options == null ? List.of() : List.copyOf(options);
+                unit = unit == null || unit.isBlank() ? "" : unit;
+            }
+
+            /** Compatibility constructor for callers predating smart-input metadata. */
+            public EditorMetadata(
+                    String label, String section, int order, boolean advanced,
+                    String widget, String referenceKind, String example,
+                    boolean module, String category, String icon, String summary) {
+                this(label, section, order, advanced, widget, referenceKind, example,
+                        module, category, icon, summary, List.of(), null, null, "");
             }
 
             /** Compatibility constructor for callers predating module metadata. */
@@ -107,6 +147,24 @@ public record ParameterSchema(
                     String widget, String referenceKind, String example) {
                 this(label, section, order, advanced, widget, referenceKind, example,
                         false, "", "", "");
+            }
+
+            /** This metadata declared as a module (category/icon/summary as given). */
+            public EditorMetadata asModule(String category, String icon, String summary) {
+                return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
+                        example, true, category, icon, summary, options, min, max, unit);
+            }
+
+            /** This metadata with labelled choices. */
+            public EditorMetadata withOptions(List<ParameterSchema.EditorOption> choices) {
+                return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
+                        example, module, category, icon, summary, choices, min, max, unit);
+            }
+
+            /** This metadata with a number range and unit ({@code null} bound = open). */
+            public EditorMetadata withRange(Double lower, Double upper, String suffix) {
+                return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
+                        example, module, category, icon, summary, options, lower, upper, suffix);
             }
 
         public static EditorMetadata defaults(String id, ParameterType type) {

@@ -2298,14 +2298,50 @@
               "stairs",
               "slab"
             ],
+            "category": "appearance",
             "default": "note_block",
             "description": "How the block is hosted in the world. note_block: the best default, a full solid block. string: plants and thin decorations. chorus: directional plants. stairs and slab: partial shapes. technical: you pick the host block yourself.",
             "example": "note_block",
+            "icon": "box",
             "id": "technique",
-            "label": "Technique",
+            "label": "Shape",
+            "module": true,
+            "options": [
+              {
+                "description": "A solid cube: the best default",
+                "label": "Full block",
+                "value": "note_block"
+              },
+              {
+                "description": "A half-height block",
+                "label": "Slab",
+                "value": "slab"
+              },
+              {
+                "description": "A stair-shaped block",
+                "label": "Stairs",
+                "value": "stairs"
+              },
+              {
+                "description": "Plants and thin decorations",
+                "label": "Thin plant",
+                "value": "string"
+              },
+              {
+                "description": "Plants that connect to neighbours",
+                "label": "Directional plant",
+                "value": "chorus"
+              },
+              {
+                "description": "You pick the vanilla host block (see Advanced)",
+                "label": "Custom host",
+                "value": "technical"
+              }
+            ],
             "order": 10,
             "required": false,
             "section": "identity",
+            "summary": "Cube, slab, stairs, plant: the form the block takes in the world",
             "type": "enum",
             "uiHint": "select"
           },
@@ -2314,7 +2350,7 @@
             "description": "Vanilla host block id (required for technical)",
             "example": "minecraft:tripwire",
             "id": "host",
-            "label": "Host block",
+            "label": "Host block (technical)",
             "order": 20,
             "required": false,
             "section": "identity",
@@ -2373,26 +2409,34 @@
           },
           {
             "advanced": false,
+            "category": "gameplay",
             "description": "Item ids dropped when broken (default: nothing custom)",
             "example": "myserver:ruby",
+            "icon": "package",
             "id": "drops",
             "label": "Drops",
+            "module": true,
             "order": 10,
             "referenceKind": "item",
             "required": false,
             "section": "gameplay",
+            "summary": "Items that fall when the block is broken; a count repeats the entry",
             "type": "list",
-            "uiHint": "list"
+            "uiHint": "item-list"
           },
           {
             "advanced": false,
+            "category": "gameplay",
             "default": "false",
             "description": "Whether explosions leave the block intact",
+            "icon": "shield",
             "id": "blast_resistant",
-            "label": "Survives explosions",
+            "label": "Explosion resistant",
+            "module": true,
             "order": 20,
             "required": false,
             "section": "gameplay",
+            "summary": "Explosions leave the block intact",
             "type": "boolean",
             "uiHint": "toggle"
           },
@@ -2402,37 +2446,61 @@
               "keep",
               "break"
             ],
+            "category": "gameplay",
             "default": "keep",
             "description": "What pistons do to this block",
             "example": "keep",
+            "icon": "move-horizontal",
             "id": "move_policy",
-            "label": "When a piston pushes it",
+            "label": "When pushed by pistons",
+            "module": true,
+            "options": [
+              {
+                "description": "The block is pushed like a vanilla block",
+                "label": "Moves with the piston",
+                "value": "keep"
+              },
+              {
+                "description": "The piston destroys the block",
+                "label": "Breaks",
+                "value": "break"
+              }
+            ],
             "order": 30,
             "required": false,
             "section": "gameplay",
+            "summary": "Whether a piston moves the block or breaks it",
             "type": "enum",
             "uiHint": "select"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "gameplay",
             "description": "Optional custom placement item; auto-generated from this block when omitted",
+            "icon": "hammer",
             "id": "item",
-            "label": "Placement item",
+            "label": "Placed by item",
+            "module": true,
             "order": 40,
-            "referenceKind": "item",
+            "referenceKind": "pack-item",
             "required": false,
             "section": "gameplay",
+            "summary": "Choose the item that places this block; blank keeps the generated one",
             "type": "reference",
-            "uiHint": "reference"
+            "uiHint": "item"
           },
           {
             "advanced": false,
+            "category": "behaviour",
             "description": "ECA rules fired on place/break/interact (runtime-systems 2)",
+            "icon": "activity",
             "id": "behavior",
-            "label": "Behaviour rules",
+            "label": "When… do…",
+            "module": true,
             "order": 10,
             "required": false,
             "section": "behavior",
+            "summary": "React to the block being placed, broken or used",
             "type": "list",
             "uiHint": "behavior-rules"
           }
@@ -2483,34 +2551,67 @@
           },
           {
             "advanced": false,
+            "category": "appearance",
             "description": "TextDisplay label above the furniture",
             "example": "Sit down",
+            "icon": "type",
             "id": "label",
             "label": "Floating label",
+            "module": true,
             "order": 30,
             "required": false,
             "section": "appearance",
+            "summary": "Text that floats above the furniture",
             "type": "string",
             "uiHint": "formatted-text"
           },
           {
             "advanced": false,
+            "category": "placement",
             "default": "90",
             "description": "Rotation snap in degrees: 45, 90, 180, or 0 to disable",
             "example": "90",
+            "icon": "rotate-cw",
             "id": "rotation",
-            "label": "Rotation snap",
+            "label": "Rotation snapping",
+            "module": true,
+            "options": [
+              {
+                "description": "Any angle",
+                "label": "Free",
+                "value": "0"
+              },
+              {
+                "description": "Eight directions",
+                "label": "45°",
+                "value": "45"
+              },
+              {
+                "description": "Four directions",
+                "label": "90°",
+                "value": "90"
+              },
+              {
+                "description": "Front or back only",
+                "label": "180°",
+                "value": "180"
+              }
+            ],
             "order": 10,
             "required": false,
             "section": "placement",
+            "summary": "How finely a player can turn the furniture when placing it",
             "type": "decimal",
             "uiHint": "number"
           },
           {
             "advanced": false,
+            "category": "placement",
             "description": "Interaction/barrier hitboxes: {type, offset: [x,y,z], width, height}",
+            "icon": "crosshair",
             "id": "hitboxes",
-            "label": "Hitboxes",
+            "label": "Hitbox",
+            "module": true,
             "nested": [
               {
                 "advanced": false,
@@ -2568,14 +2669,18 @@
             "order": 20,
             "required": false,
             "section": "placement",
+            "summary": "The clickable or solid space the furniture occupies",
             "type": "list",
-            "uiHint": "structured-list"
+            "uiHint": "spatial-list"
           },
           {
             "advanced": false,
+            "category": "placement",
             "description": "Seat mount points: {offset: [x,y,z]}",
+            "icon": "armchair",
             "id": "seats",
             "label": "Seats",
+            "module": true,
             "nested": [
               {
                 "advanced": false,
@@ -2593,14 +2698,18 @@
             "order": 30,
             "required": false,
             "section": "placement",
+            "summary": "Where players sit when they right-click",
             "type": "list",
-            "uiHint": "structured-list"
+            "uiHint": "spatial-list"
           },
           {
             "advanced": false,
+            "category": "placement",
             "description": "Light blocks: {offset: [x,y,z], level}",
+            "icon": "lightbulb",
             "id": "lights",
-            "label": "Lights",
+            "label": "Light source",
+            "module": true,
             "nested": [
               {
                 "advanced": false,
@@ -2630,26 +2739,37 @@
             "order": 40,
             "required": false,
             "section": "placement",
+            "summary": "Invisible light blocks that make the furniture glow",
             "type": "list",
-            "uiHint": "structured-list"
+            "uiHint": "spatial-list"
           },
           {
             "advanced": false,
+            "category": "gameplay",
             "description": "Storage size in slots (multiple of 9, max 54)",
             "example": "27",
+            "icon": "archive",
             "id": "storage",
-            "label": "Storage slots",
+            "label": "Storage",
+            "max": 54.0,
+            "min": 9.0,
+            "module": true,
             "order": 10,
             "required": false,
             "section": "gameplay",
+            "summary": "A chest-like inventory players open from the furniture",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "slots"
           },
           {
             "advanced": false,
+            "category": "gameplay",
             "description": "Timed stages: {target: furniture-id, after: seconds}",
+            "icon": "sprout",
             "id": "evolution",
-            "label": "Evolution stages",
+            "label": "Grows into…",
+            "module": true,
             "nested": [
               {
                 "advanced": false,
@@ -2678,29 +2798,38 @@
             "order": 20,
             "required": false,
             "section": "gameplay",
+            "summary": "After a delay, turns into another furniture piece",
             "type": "list",
             "uiHint": "structured-list"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "gameplay",
             "description": "Optional custom placement item; auto-generated from this furniture when omitted",
+            "icon": "hammer",
             "id": "item",
-            "label": "Placement item",
+            "label": "Placed by item",
+            "module": true,
             "order": 30,
-            "referenceKind": "item",
+            "referenceKind": "pack-item",
             "required": false,
             "section": "gameplay",
+            "summary": "Choose the item that places this furniture; blank keeps the generated one",
             "type": "reference",
-            "uiHint": "reference"
+            "uiHint": "item"
           },
           {
             "advanced": false,
+            "category": "behaviour",
             "description": "ECA rules fired on place/click",
+            "icon": "activity",
             "id": "behavior",
-            "label": "Behaviour rules",
+            "label": "When… do…",
+            "module": true,
             "order": 10,
             "required": false,
             "section": "behavior",
+            "summary": "React to the furniture being placed or clicked",
             "type": "list",
             "uiHint": "behavior-rules"
           }
@@ -2747,7 +2876,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": false,
@@ -2760,7 +2889,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": true,
@@ -2773,7 +2902,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": true,
@@ -2786,7 +2915,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": true,
@@ -2858,7 +2987,7 @@
             "required": false,
             "section": "behavior",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           },
           {
             "advanced": true,
@@ -2871,7 +3000,7 @@
             "required": false,
             "section": "behavior",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           },
           {
             "advanced": true,
@@ -2979,7 +3108,7 @@
             "required": false,
             "section": "audio",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           },
           {
             "advanced": true,
@@ -2992,7 +3121,7 @@
             "required": false,
             "section": "audio",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": true,
@@ -3005,7 +3134,7 @@
             "required": false,
             "section": "audio",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           },
           {
             "advanced": true,
@@ -3017,7 +3146,7 @@
             "required": false,
             "section": "audio",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": true,
@@ -3030,7 +3159,7 @@
             "required": false,
             "section": "audio",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           },
           {
             "advanced": true,
@@ -3086,7 +3215,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": false,
@@ -3099,7 +3228,7 @@
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "integer"
+            "uiHint": "number"
           },
           {
             "advanced": false,
@@ -3137,7 +3266,7 @@
             "required": false,
             "section": "behavior",
             "type": "boolean",
-            "uiHint": "boolean"
+            "uiHint": "toggle"
           }
         ]
       },
@@ -7739,14 +7868,50 @@
             "stairs",
             "slab"
           ],
+          "category": "appearance",
           "default": "note_block",
           "description": "How the block is hosted in the world. note_block: the best default, a full solid block. string: plants and thin decorations. chorus: directional plants. stairs and slab: partial shapes. technical: you pick the host block yourself.",
           "example": "note_block",
+          "icon": "box",
           "id": "technique",
-          "label": "Technique",
+          "label": "Shape",
+          "module": true,
+          "options": [
+            {
+              "description": "A solid cube: the best default",
+              "label": "Full block",
+              "value": "note_block"
+            },
+            {
+              "description": "A half-height block",
+              "label": "Slab",
+              "value": "slab"
+            },
+            {
+              "description": "A stair-shaped block",
+              "label": "Stairs",
+              "value": "stairs"
+            },
+            {
+              "description": "Plants and thin decorations",
+              "label": "Thin plant",
+              "value": "string"
+            },
+            {
+              "description": "Plants that connect to neighbours",
+              "label": "Directional plant",
+              "value": "chorus"
+            },
+            {
+              "description": "You pick the vanilla host block (see Advanced)",
+              "label": "Custom host",
+              "value": "technical"
+            }
+          ],
           "order": 10,
           "required": false,
           "section": "identity",
+          "summary": "Cube, slab, stairs, plant: the form the block takes in the world",
           "type": "enum",
           "uiHint": "select"
         },
@@ -7755,7 +7920,7 @@
           "description": "Vanilla host block id (required for technical)",
           "example": "minecraft:tripwire",
           "id": "host",
-          "label": "Host block",
+          "label": "Host block (technical)",
           "order": 20,
           "required": false,
           "section": "identity",
@@ -7814,26 +7979,34 @@
         },
         {
           "advanced": false,
+          "category": "gameplay",
           "description": "Item ids dropped when broken (default: nothing custom)",
           "example": "myserver:ruby",
+          "icon": "package",
           "id": "drops",
           "label": "Drops",
+          "module": true,
           "order": 10,
           "referenceKind": "item",
           "required": false,
           "section": "gameplay",
+          "summary": "Items that fall when the block is broken; a count repeats the entry",
           "type": "list",
-          "uiHint": "list"
+          "uiHint": "item-list"
         },
         {
           "advanced": false,
+          "category": "gameplay",
           "default": "false",
           "description": "Whether explosions leave the block intact",
+          "icon": "shield",
           "id": "blast_resistant",
-          "label": "Survives explosions",
+          "label": "Explosion resistant",
+          "module": true,
           "order": 20,
           "required": false,
           "section": "gameplay",
+          "summary": "Explosions leave the block intact",
           "type": "boolean",
           "uiHint": "toggle"
         },
@@ -7843,37 +8016,61 @@
             "keep",
             "break"
           ],
+          "category": "gameplay",
           "default": "keep",
           "description": "What pistons do to this block",
           "example": "keep",
+          "icon": "move-horizontal",
           "id": "move_policy",
-          "label": "When a piston pushes it",
+          "label": "When pushed by pistons",
+          "module": true,
+          "options": [
+            {
+              "description": "The block is pushed like a vanilla block",
+              "label": "Moves with the piston",
+              "value": "keep"
+            },
+            {
+              "description": "The piston destroys the block",
+              "label": "Breaks",
+              "value": "break"
+            }
+          ],
           "order": 30,
           "required": false,
           "section": "gameplay",
+          "summary": "Whether a piston moves the block or breaks it",
           "type": "enum",
           "uiHint": "select"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "gameplay",
           "description": "Optional custom placement item; auto-generated from this block when omitted",
+          "icon": "hammer",
           "id": "item",
-          "label": "Placement item",
+          "label": "Placed by item",
+          "module": true,
           "order": 40,
-          "referenceKind": "item",
+          "referenceKind": "pack-item",
           "required": false,
           "section": "gameplay",
+          "summary": "Choose the item that places this block; blank keeps the generated one",
           "type": "reference",
-          "uiHint": "reference"
+          "uiHint": "item"
         },
         {
           "advanced": false,
+          "category": "behaviour",
           "description": "ECA rules fired on place/break/interact (runtime-systems 2)",
+          "icon": "activity",
           "id": "behavior",
-          "label": "Behaviour rules",
+          "label": "When… do…",
+          "module": true,
           "order": 10,
           "required": false,
           "section": "behavior",
+          "summary": "React to the block being placed, broken or used",
           "type": "list",
           "uiHint": "behavior-rules"
         }
@@ -7924,34 +8121,67 @@
         },
         {
           "advanced": false,
+          "category": "appearance",
           "description": "TextDisplay label above the furniture",
           "example": "Sit down",
+          "icon": "type",
           "id": "label",
           "label": "Floating label",
+          "module": true,
           "order": 30,
           "required": false,
           "section": "appearance",
+          "summary": "Text that floats above the furniture",
           "type": "string",
           "uiHint": "formatted-text"
         },
         {
           "advanced": false,
+          "category": "placement",
           "default": "90",
           "description": "Rotation snap in degrees: 45, 90, 180, or 0 to disable",
           "example": "90",
+          "icon": "rotate-cw",
           "id": "rotation",
-          "label": "Rotation snap",
+          "label": "Rotation snapping",
+          "module": true,
+          "options": [
+            {
+              "description": "Any angle",
+              "label": "Free",
+              "value": "0"
+            },
+            {
+              "description": "Eight directions",
+              "label": "45°",
+              "value": "45"
+            },
+            {
+              "description": "Four directions",
+              "label": "90°",
+              "value": "90"
+            },
+            {
+              "description": "Front or back only",
+              "label": "180°",
+              "value": "180"
+            }
+          ],
           "order": 10,
           "required": false,
           "section": "placement",
+          "summary": "How finely a player can turn the furniture when placing it",
           "type": "decimal",
           "uiHint": "number"
         },
         {
           "advanced": false,
+          "category": "placement",
           "description": "Interaction/barrier hitboxes: {type, offset: [x,y,z], width, height}",
+          "icon": "crosshair",
           "id": "hitboxes",
-          "label": "Hitboxes",
+          "label": "Hitbox",
+          "module": true,
           "nested": [
             {
               "advanced": false,
@@ -8009,14 +8239,18 @@
           "order": 20,
           "required": false,
           "section": "placement",
+          "summary": "The clickable or solid space the furniture occupies",
           "type": "list",
-          "uiHint": "structured-list"
+          "uiHint": "spatial-list"
         },
         {
           "advanced": false,
+          "category": "placement",
           "description": "Seat mount points: {offset: [x,y,z]}",
+          "icon": "armchair",
           "id": "seats",
           "label": "Seats",
+          "module": true,
           "nested": [
             {
               "advanced": false,
@@ -8034,14 +8268,18 @@
           "order": 30,
           "required": false,
           "section": "placement",
+          "summary": "Where players sit when they right-click",
           "type": "list",
-          "uiHint": "structured-list"
+          "uiHint": "spatial-list"
         },
         {
           "advanced": false,
+          "category": "placement",
           "description": "Light blocks: {offset: [x,y,z], level}",
+          "icon": "lightbulb",
           "id": "lights",
-          "label": "Lights",
+          "label": "Light source",
+          "module": true,
           "nested": [
             {
               "advanced": false,
@@ -8071,26 +8309,37 @@
           "order": 40,
           "required": false,
           "section": "placement",
+          "summary": "Invisible light blocks that make the furniture glow",
           "type": "list",
-          "uiHint": "structured-list"
+          "uiHint": "spatial-list"
         },
         {
           "advanced": false,
+          "category": "gameplay",
           "description": "Storage size in slots (multiple of 9, max 54)",
           "example": "27",
+          "icon": "archive",
           "id": "storage",
-          "label": "Storage slots",
+          "label": "Storage",
+          "max": 54.0,
+          "min": 9.0,
+          "module": true,
           "order": 10,
           "required": false,
           "section": "gameplay",
+          "summary": "A chest-like inventory players open from the furniture",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "slots"
         },
         {
           "advanced": false,
+          "category": "gameplay",
           "description": "Timed stages: {target: furniture-id, after: seconds}",
+          "icon": "sprout",
           "id": "evolution",
-          "label": "Evolution stages",
+          "label": "Grows into…",
+          "module": true,
           "nested": [
             {
               "advanced": false,
@@ -8119,29 +8368,38 @@
           "order": 20,
           "required": false,
           "section": "gameplay",
+          "summary": "After a delay, turns into another furniture piece",
           "type": "list",
           "uiHint": "structured-list"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "gameplay",
           "description": "Optional custom placement item; auto-generated from this furniture when omitted",
+          "icon": "hammer",
           "id": "item",
-          "label": "Placement item",
+          "label": "Placed by item",
+          "module": true,
           "order": 30,
-          "referenceKind": "item",
+          "referenceKind": "pack-item",
           "required": false,
           "section": "gameplay",
+          "summary": "Choose the item that places this furniture; blank keeps the generated one",
           "type": "reference",
-          "uiHint": "reference"
+          "uiHint": "item"
         },
         {
           "advanced": false,
+          "category": "behaviour",
           "description": "ECA rules fired on place/click",
+          "icon": "activity",
           "id": "behavior",
-          "label": "Behaviour rules",
+          "label": "When… do…",
+          "module": true,
           "order": 10,
           "required": false,
           "section": "behavior",
+          "summary": "React to the furniture being placed or clicked",
           "type": "list",
           "uiHint": "behavior-rules"
         }
@@ -8188,7 +8446,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": false,
@@ -8201,7 +8459,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": true,
@@ -8214,7 +8472,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": true,
@@ -8227,7 +8485,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": true,
@@ -8299,7 +8557,7 @@
           "required": false,
           "section": "behavior",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         },
         {
           "advanced": true,
@@ -8312,7 +8570,7 @@
           "required": false,
           "section": "behavior",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         },
         {
           "advanced": true,
@@ -8420,7 +8678,7 @@
           "required": false,
           "section": "audio",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         },
         {
           "advanced": true,
@@ -8433,7 +8691,7 @@
           "required": false,
           "section": "audio",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": true,
@@ -8446,7 +8704,7 @@
           "required": false,
           "section": "audio",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         },
         {
           "advanced": true,
@@ -8458,7 +8716,7 @@
           "required": false,
           "section": "audio",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": true,
@@ -8471,7 +8729,7 @@
           "required": false,
           "section": "audio",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         },
         {
           "advanced": true,
@@ -8527,7 +8785,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": false,
@@ -8540,7 +8798,7 @@
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "integer"
+          "uiHint": "number"
         },
         {
           "advanced": false,
@@ -8578,7 +8836,7 @@
           "required": false,
           "section": "behavior",
           "type": "boolean",
-          "uiHint": "boolean"
+          "uiHint": "toggle"
         }
       ]
     },

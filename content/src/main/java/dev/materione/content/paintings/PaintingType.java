@@ -52,10 +52,10 @@ public final class PaintingType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Texture", "appearance", 10, false, "texture", "texture", "painting/sunrise")),
                         new ParameterSchema("width", ParameterType.INTEGER, false, "1",
                                 "Width in blocks (1..16)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Width (blocks)", "appearance", 20, false, "integer", "", "1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Width (blocks)", "appearance", 20, false, "number", "", "1")),
                         new ParameterSchema("height", ParameterType.INTEGER, false, "1",
                                 "Height in blocks (1..16)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Height (blocks)", "appearance", 30, false, "integer", "", "1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Height (blocks)", "appearance", 30, false, "number", "", "1")),
                         new ParameterSchema("author", ParameterType.STRING, false, "Unknown",
                                 "Shown in the variant tooltip", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Author", "identity", 10, false, "formatted-text", "", "Unknown")),
@@ -64,7 +64,7 @@ public final class PaintingType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Title", "identity", 20, false, "formatted-text", "", "Sunrise")),
                         new ParameterSchema("placeable", ParameterType.BOOLEAN, false, "false",
                                 "Join the vanilla random-placement pool", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Placeable", "behavior", 10, false, "boolean", "", "false"))),
+                                .withEditor(new ParameterSchema.EditorMetadata("Placeable", "behavior", 10, false, "toggle", "", "false"))),
                 "1.0.0");
     }
 

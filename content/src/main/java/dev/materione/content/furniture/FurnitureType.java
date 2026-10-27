@@ -61,13 +61,20 @@ public final class FurnitureType implements ContentType {
                                 "TextDisplay label above the furniture", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Floating label", "appearance", 30, false, "formatted-text", "",
-                                        "Sit down")),
+                                        "Sit down", true, "appearance", "type",
+                                        "Text that floats above the furniture")),
                         new ParameterSchema("rotation", ParameterType.DECIMAL, false, "90",
                                 "Rotation snap in degrees: 45, 90, 180, or 0 to disable",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Rotation snap", "placement", 10, false, "number", "",
-                                        "90")),
+                                        "Rotation snapping", "placement", 10, false, "number", "",
+                                        "90", true, "placement", "rotate-cw",
+                                        "How finely a player can turn the furniture when placing it")
+                                        .withOptions(List.of(
+                                                option("0", "Free", "Any angle"),
+                                                option("45", "45°", "Eight directions"),
+                                                option("90", "90°", "Four directions"),
+                                                option("180", "180°", "Front or back only")))),
                         new ParameterSchema("hitboxes", ParameterType.LIST, false, null,
                                 "Interaction/barrier hitboxes: {type, offset: [x,y,z], width, "
                                         + "height}",
@@ -85,15 +92,17 @@ public final class FurnitureType implements ContentType {
                                         new ParameterSchema("height", ParameterType.DECIMAL, false,
                                                 "1", "Height in blocks", null, null)))
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Hitboxes", "placement", 20, false, "structured-list", "",
-                                        "")),
+                                        "Hitbox", "placement", 20, false, "spatial-list", "",
+                                        "", true, "placement", "crosshair",
+                                        "The clickable or solid space the furniture occupies")),
                         new ParameterSchema("seats", ParameterType.LIST, false, null,
                                 "Seat mount points: {offset: [x,y,z]}", null,
                                 List.of(new ParameterSchema("offset", ParameterType.LIST, false,
                                         "[0, 0, 0]", "Where the player sits", null, null)))
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Seats", "placement", 30, false, "structured-list", "",
-                                        "")),
+                                        "Seats", "placement", 30, false, "spatial-list", "",
+                                        "", true, "placement", "armchair",
+                                        "Where players sit when they right-click")),
                         new ParameterSchema("lights", ParameterType.LIST, false, null,
                                 "Light blocks: {offset: [x,y,z], level}", null,
                                 List.of(
@@ -102,13 +111,16 @@ public final class FurnitureType implements ContentType {
                                         new ParameterSchema("level", ParameterType.INTEGER, false,
                                                 "15", "Light level 0..15", null, null)))
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Lights", "placement", 40, false, "structured-list", "",
-                                        "")),
+                                        "Light source", "placement", 40, false, "spatial-list", "",
+                                        "", true, "placement", "lightbulb",
+                                        "Invisible light blocks that make the furniture glow")),
                         new ParameterSchema("storage", ParameterType.INTEGER, false, null,
                                 "Storage size in slots (multiple of 9, max 54)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Storage slots", "gameplay", 10, false, "number", "",
-                                        "27")),
+                                        "Storage", "gameplay", 10, false, "number", "",
+                                        "27", true, "gameplay", "archive",
+                                        "A chest-like inventory players open from the furniture")
+                                        .withRange(9.0, 54.0, "slots")),
                         new ParameterSchema("evolution", ParameterType.LIST, false, null,
                                 "Timed stages: {target: furniture-id, after: seconds}", null,
                                 List.of(
@@ -117,21 +129,28 @@ public final class FurnitureType implements ContentType {
                                         new ParameterSchema("after", ParameterType.INTEGER, true,
                                                 "60", "Seconds before it changes", null, null)))
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Evolution stages", "gameplay", 20, false,
-                                        "structured-list", "", "")),
+                                        "Grows into…", "gameplay", 20, false,
+                                        "structured-list", "", "", true, "gameplay", "sprout",
+                                        "After a delay, turns into another furniture piece")),
                         new ParameterSchema("item", ParameterType.REFERENCE, false, null,
                                 "Optional custom placement item; auto-generated from this "
                                         + "furniture when omitted",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Placement item", "gameplay", 30, true, "reference",
-                                        "item", "")),
+                                        "Placed by item", "gameplay", 30, false, "item",
+                                        "pack-item", "", true, "gameplay", "hammer",
+                                        "Choose the item that places this furniture; blank keeps the generated one")),
                         new ParameterSchema("behavior", ParameterType.LIST, false, null,
                                 "ECA rules fired on place/click", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Behaviour rules", "behavior", 10, false,
-                                        "behavior-rules", "", ""))),
+                                        "When… do…", "behavior", 10, false,
+                                        "behavior-rules", "", "", true, "behaviour", "activity",
+                                        "React to the furniture being placed or clicked"))),
                 "1.0.0");
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     @Override

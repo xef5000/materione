@@ -70,19 +70,19 @@ public final class SoundType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Category", "audio", 50, true, "select", "", "master")),
                         new ParameterSchema("stream", ParameterType.BOOLEAN, false, "false",
                                 "Stream from disk instead of loading into memory (long files)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Stream", "audio", 60, true, "boolean", "", "false")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Stream", "audio", 60, true, "toggle", "", "false")),
                         new ParameterSchema("weight", ParameterType.INTEGER, false, "1",
                                 "Pick weight when several sources are set", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Weight", "audio", 70, true, "integer", "", "1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Weight", "audio", 70, true, "number", "", "1")),
                         new ParameterSchema("preload", ParameterType.BOOLEAN, false, "false",
                                 "Load with the pack instead of on first play", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Preload", "audio", 80, true, "boolean", "", "false")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Preload", "audio", 80, true, "toggle", "", "false")),
                         new ParameterSchema("attenuation_distance", ParameterType.INTEGER, false, null,
                                 "Distance the sound carries (vanilla default 16)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Attenuation", "audio", 90, true, "integer", "", "16")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Attenuation", "audio", 90, true, "number", "", "16")),
                         new ParameterSchema("replace", ParameterType.BOOLEAN, false, "false",
                                 "Replace same-named entries from lower packs instead of adding", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Replace", "audio", 100, true, "boolean", "", "false")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Replace", "audio", 100, true, "toggle", "", "false")),
                         new ParameterSchema("replace_vanilla", ParameterType.STRING, false, null,
                                 "Vanilla sound event this definition overrides outright (e.g. block.wood.step) — event-level replace is forced, a bare merge would only add to vanilla's pool", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Override vanilla", "audio", 110, true, "text", "", "")),

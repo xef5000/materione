@@ -850,6 +850,32 @@ public final class EditorContentOps {
         if (!param.editor().summary().isBlank()) {
             object.addProperty("summary", param.editor().summary());
         }
+        // Smart-input metadata (issue #153): labelled choices and number range/unit.
+        if (!param.editor().options().isEmpty()) {
+            var options = new com.google.gson.JsonArray();
+            for (var option : param.editor().options()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("value", option.value());
+                entry.addProperty("label", option.label());
+                if (!option.description().isBlank()) {
+                    entry.addProperty("description", option.description());
+                }
+                if (!option.icon().isBlank()) {
+                    entry.addProperty("icon", option.icon());
+                }
+                options.add(entry);
+            }
+            object.add("options", options);
+        }
+        if (param.editor().min() != null) {
+            object.addProperty("min", param.editor().min());
+        }
+        if (param.editor().max() != null) {
+            object.addProperty("max", param.editor().max());
+        }
+        if (!param.editor().unit().isBlank()) {
+            object.addProperty("unit", param.editor().unit());
+        }
         return object;
     }
 
