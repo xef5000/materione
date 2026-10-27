@@ -17,8 +17,11 @@
     value?: string;
     id?: string;
     label: string;
-    /** `single` shows the chosen item; `add` is a button that only emits picks. */
-    mode?: 'single' | 'add';
+    /**
+     * `single` shows the chosen item; `add` is a button that only emits picks;
+     * `slot` is a square icon button (a crafting grid cell) that can clear itself.
+     */
+    mode?: 'single' | 'add' | 'slot';
     /** Only pack items (the ones that can own a placement link). */
     packOnly?: boolean;
     required?: boolean;
@@ -79,10 +82,16 @@
   }
 </script>
 
-<div class="item-picker" bind:this={root} onfocusout={(event) => {
+<div class="item-picker" class:slotted={mode === 'slot'} bind:this={root} onfocusout={(event) => {
   if (!(event.relatedTarget instanceof Node) || !root?.contains(event.relatedTarget)) close();
 }}>
-  {#if mode === 'add'}
+  {#if mode === 'slot'}
+    <button type="button" class="trigger slot" class:filled={Boolean(value)} {id} data-field-control
+      aria-haspopup="listbox" aria-expanded={open} title={value || 'empty'}
+      aria-label={`${label}: ${value ? itemLabel(value, pack) : 'empty'}`} onclick={show}>
+      {#if value}<ItemIcon {value} {pack} size={32} />{/if}
+    </button>
+  {:else if mode === 'add'}
     <button type="button" class="trigger add" {id} data-field-control aria-haspopup="listbox"
       aria-expanded={open} onclick={show}>
       <Icon name="plus" size={14} /> {label}
@@ -119,6 +128,12 @@
         oninput={(event) => { query = event.currentTarget.value; selected = 0; }}
         onkeydown={keyboard} />
       <div class="results" role="listbox" id={listId} aria-label={`${label} choices`}>
+        {#if mode === 'slot' && value}
+          <button type="button" class="clear-row" tabindex="-1"
+            onpointerdown={(event) => event.preventDefault()} onclick={() => choose('')}>
+            <Icon name="x" size={14} /> Clear slot
+          </button>
+        {/if}
         {#each visible as choice, index (choice.value)}
           <button type="button" role="option" id={`${listId}-${index}`} data-index={index}
             data-choice={choice.value} tabindex="-1" aria-selected={index === selected}
@@ -143,6 +158,10 @@
     position: relative;
     min-width: 0;
   }
+  .slotted .popover {
+    min-width: 280px;
+    right: auto;
+  }
   .current {
     display: flex;
     gap: var(--space-1);
@@ -166,6 +185,16 @@
   }
   .trigger:hover {
     border-color: var(--control-line);
+  }
+  .trigger.slot {
+    flex: none;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    padding: var(--space-half);
+  }
+  .trigger.slot.filled {
+    background: var(--bg-raised);
   }
   .trigger.add {
     flex: none;
@@ -249,6 +278,9 @@
   .results button:hover,
   .results button[aria-selected='true'] {
     background: var(--bg-hover);
+  }
+  .clear-row {
+    color: var(--muted);
   }
   .group {
     margin-left: auto;

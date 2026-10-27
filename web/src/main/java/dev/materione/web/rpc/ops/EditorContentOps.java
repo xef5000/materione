@@ -876,6 +876,12 @@ public final class EditorContentOps {
         if (!param.editor().unit().isBlank()) {
             object.addProperty("unit", param.editor().unit());
         }
+        if (param.editor().display()) {
+            object.addProperty("display", true);
+        }
+        if (!param.editor().shownWhen().isBlank()) {
+            object.addProperty("shownWhen", param.editor().shownWhen());
+        }
         return object;
     }
 

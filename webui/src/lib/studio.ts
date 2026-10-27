@@ -20,6 +20,10 @@ const RENDERABLE = new Set([
   // Smart inputs (issue 153): each is a view of a plain YAML value.
   'item',
   'item-list',
+  'chips',
+  'presets',
+  'frames',
+  'recipe-ingredients',
 ]);
 
 export interface StudioSection {

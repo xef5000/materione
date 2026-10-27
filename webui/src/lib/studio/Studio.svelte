@@ -15,6 +15,7 @@
   import GlyphPreview from './GlyphPreview.svelte';
   import AudioPreview from './AudioPreview.svelte';
   import PaintingPreview from './PaintingPreview.svelte';
+  import RecipePreview from './RecipePreview.svelte';
   import TextureEditor from './TextureEditor.svelte';
   import ModelWorkbench from './ModelWorkbench.svelte';
   import MechanicsEditor from './MechanicsEditor.svelte';
@@ -205,23 +206,6 @@
     content.focus = null;
     void tick().then(() => focusField(request.field));
   });
-
-  /** Ingredient choices for the crafting grid: this pack's items, then materials. */
-  const choices = $derived([
-    ...workspace.resources
-      .filter((entry) => entry.path.startsWith('items/'))
-      .map((entry) => ({
-        value: `${entry.pack}:${entry.id}`,
-        label: entry.id,
-        group: 'pack',
-      })),
-    ...materialChoices(),
-  ]);
-
-  function materialChoices(): { value: string; label: string; group: string }[] {
-    const materials = schema?.parameters.find((field) => field.id === 'material')?.allowedValues;
-    return (materials ?? []).map((value) => ({ value, label: value.toLowerCase(), group: 'vanilla' }));
-  }
 
   function recordOf(value: unknown): Record<string, unknown> {
     return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -519,6 +503,21 @@
           width={Number(draft.width ?? 1)}
           height={Number(draft.height ?? 1)}
           nonce={textureVersion}
+          onResize={fieldsEditable ? (nextWidth, nextHeight) => {
+            set('width', nextWidth);
+            set('height', nextHeight);
+          } : undefined}
+        />
+      {:else if typeDirectory === 'recipes'}
+        <RecipePreview
+          pack={resource.pack}
+          kind={String(draft.type ?? 'shaped')}
+          shape={draft.shape}
+          ingredients={draft.ingredients}
+          input={String(draft.input ?? '')}
+          result={String(draft.result ?? '')}
+          experience={draft.experience}
+          cookingTime={draft.cookingtime}
         />
       {:else if typeDirectory === 'items'}
         <ItemPreview name={draft.display_name} lore={draft.lore} material={String(draft.material ?? '')}
@@ -587,7 +586,7 @@
                 <RecipeGrid
                   shape={draft.shape}
                   ingredients={draft.ingredients}
-                  {choices}
+                  pack={resource.pack}
                   onChange={(next) => {
                     set('shape', next.shape);
                     set('ingredients', next.ingredients);

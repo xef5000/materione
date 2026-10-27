@@ -43,6 +43,10 @@ export interface TypeParam {
   min?: number;
   max?: number;
   unit?: string;
+  /** Belongs on the display card (the resource's identity) rather than being a module. */
+  display?: boolean;
+  /** `field=value|value`: applies only while that sibling holds one of the values. */
+  shownWhen?: string;
 }
 
 export interface TypeOption {

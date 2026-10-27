@@ -63,10 +63,20 @@ public final class GlyphType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Font", "appearance", 20, true, "text", "", "")),
                         new ParameterSchema("ascent", ParameterType.INTEGER, false, "8",
                                 "Baseline offset in pixels (distance from the text baseline up to the texture's top)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Ascent", "appearance", 30, false, "number", "", "8")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Baseline", "appearance", 30, false, "number", "", "8",
+                                        true, "appearance", "arrow-up",
+                                        "How far the glyph's top sits above the text baseline")
+                                        .withRange(-128.0, 512.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, false, "8",
                                 "Rendered height in pixels (width scales proportionally)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Height", "appearance", 40, false, "number", "", "8")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Size", "appearance", 40, false, "presets", "", "8",
+                                        true, "appearance", "ruler",
+                                        "How tall the glyph draws in text; width follows the texture")
+                                        .withOptions(List.of(
+                                                option("8", "Emoji", "As tall as a line of text"),
+                                                option("12", "Inline icon", "A little taller than the text"),
+                                                option("24", "Big title", "Three lines of text tall")))
+                                        .withRange(1.0, 512.0, "px")),
                         new ParameterSchema("rows", ParameterType.INTEGER, false, "1",
                                 "Sprite-sheet rows (each row gets its own chars string)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Sheet rows", "appearance", 50, true, "number", "", "1")),
@@ -75,7 +85,9 @@ public final class GlyphType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Sheet columns", "appearance", 60, true, "number", "", "1")),
                         new ParameterSchema("frames", ParameterType.LIST, false, null,
                                 "Animation frames: one texture per frame, one codepoint each", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Frames", "appearance", 45, true, "list", "", "gui/heart_frame_1")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Animation frames", "appearance", 45, false, "frames", "texture", "gui/heart_frame_1",
+                                        true, "appearance", "layers",
+                                        "A strip of textures, one codepoint each, for animated glyphs")),
                         new ParameterSchema("reference", ParameterType.REFERENCE, false, null,
                                 "Alias another glyph's bitmaps (no codepoint of its own)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Reference glyph", "appearance", 70, true, "reference", "glyph", "")),
@@ -84,16 +96,24 @@ public final class GlyphType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata("Cells", "appearance", 80, true, "text", "", "1")),
                         new ParameterSchema("placeholders", ParameterType.LIST, false, null,
                                 "Chat placeholders that produce this glyph (e.g. :heart:)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Placeholders", "behavior", 10, false, "list", "", ":heart:")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Chat placeholders", "behavior", 10, false, "chips", "", ":heart:",
+                                        true, "chat", "sticker",
+                                        "Words players type in chat to get this glyph")),
                         new ParameterSchema("permission", ParameterType.STRING, false, null,
                                 "Permission required to use this glyph in chat", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Permission", "behavior", 20, true, "text", "", "")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Permission", "behavior", 20, false, "text", "", "",
+                                        true, "chat", "shield",
+                                        "Only players with this permission can use the glyph in chat")),
                         new ParameterSchema("emoji", ParameterType.BOOLEAN, false, "false",
                                 "Participates in emoji mode (chat interception + tab-completion)", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Emoji", "behavior", 30, false, "toggle", "", "true")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Emoji mode", "behavior", 30, false, "toggle", "", "true",
+                                        true, "chat", "sparkles",
+                                        "Chat words turn into the glyph and complete as emoji")),
                         new ParameterSchema("tab_complete", ParameterType.BOOLEAN, false, "false",
                                 "Offer placeholders as chat completions", null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata("Chat completion", "behavior", 40, true, "toggle", "", "true")),
+                                .withEditor(new ParameterSchema.EditorMetadata("Chat completion", "behavior", 40, false, "toggle", "", "true",
+                                        true, "chat", "list",
+                                        "Offer the placeholders as completions while typing")),
                         new ParameterSchema("shadow_color", ParameterType.STRING, false, null,
                                 "Shadow color applied when rendered (#RRGGBB or #AARRGGBB)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata("Shadow color", "appearance", 90, true, "text", "", "#40000000"))),
@@ -232,6 +252,10 @@ public final class GlyphType implements ContentType {
         out.put("height", height);
         out.put("chars", chars);
         return out;
+    }
+
+    private static ParameterSchema.EditorOption option(String value, String label, String description) {
+        return ParameterSchema.EditorOption.of(value, label, description);
     }
 
     private static String bitmapFile(String texture) {

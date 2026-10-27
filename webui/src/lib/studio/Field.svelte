@@ -6,8 +6,11 @@
   import AssetPicker from '../components/AssetPicker.svelte';
   import RichTextEditor from '../components/RichTextEditor.svelte';
   import MaterialPicker from '../components/MaterialPicker.svelte';
+  import ChipsEditor from './ChipsEditor.svelte';
+  import FrameStrip from './FrameStrip.svelte';
   import ItemChips from './ItemChips.svelte';
   import ItemPicker from './ItemPicker.svelte';
+  import RecipeGrid from './RecipeGrid.svelte';
   import SpatialEditor from './SpatialEditor.svelte';
   import StructuredList from './StructuredList.svelte';
   import type { TypeParam } from '../api';
@@ -21,9 +24,14 @@
     action?: { label: string; run: () => void };
     /** A module card already names the field: keep the label for assistive tech only. */
     hideLabel?: boolean;
+    /**
+     * The resource's other values and a setter, for composite widgets that write
+     * more than one key (the crafting grid writes `shape` and `ingredients`).
+     */
+    siblings?: { values: Record<string, unknown>; set: (field: string, value: unknown) => void };
   }
 
-  let { field, value, pack, onChange, action, hideLabel = false }: Props = $props();
+  let { field, value, pack, onChange, action, hideLabel = false, siblings }: Props = $props();
   const controlId = $props.id();
 
   const widget = $derived(field.uiHint ?? 'text');
@@ -82,6 +90,38 @@
       required={field.required} onPick={(next) => onChange(next)} />
   {:else if widget === 'item-list'}
     <ItemChips {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'recipe-ingredients'}
+    <ItemChips {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'recipe-grid'}
+    {#if siblings}
+      <RecipeGrid shape={siblings.values.shape} ingredients={siblings.values.ingredients} {pack}
+        onChange={(next) => {
+          siblings.set('shape', next.shape);
+          siblings.set('ingredients', next.ingredients);
+        }} />
+    {/if}
+  {:else if widget === 'chips'}
+    <ChipsEditor {value} label={field.label || field.id} placeholder={field.example ? `e.g. ${field.example}` : undefined}
+      {onChange} />
+  {:else if widget === 'frames'}
+    <FrameStrip {value} {pack} label={field.label || field.id} {onChange} />
+  {:else if widget === 'presets'}
+    <div class="presets">
+      <div class="segments" role="radiogroup" aria-label={field.label || field.id}>
+        {#each choices as option (option.value)}
+          <button type="button" role="radio" aria-checked={text === option.value}
+            class:off={text !== option.value} title={option.description || undefined}
+            onclick={() => onChange(coerce(option.value))}>{option.label}</button>
+        {/each}
+      </div>
+      <span class="numeric">
+        <input id={controlId} type="number" step="1" min={field.min} max={field.max} value={text}
+          aria-label={`${field.label || field.id} (custom)`} placeholder={field.example ?? ''}
+          onblur={(event) => commitNumber(event.currentTarget.value)}
+          onkeydown={(event) => { if (event.key === 'Enter') event.currentTarget.blur(); }} />
+        {#if field.unit}<span class="unit">{field.unit}</span>{/if}
+      </span>
+    </div>
   {:else if widget === 'material'}
     <MaterialPicker id={controlId} label={field.label || field.id} value={text}
       choices={field.allowedValues} required={field.required} onChange={(next) => onChange(next)} />
@@ -211,6 +251,13 @@
     display: flex;
     gap: var(--space-2);
     align-items: center;
+    min-width: 0;
+  }
+  .presets {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-3);
     min-width: 0;
   }
   .numeric {

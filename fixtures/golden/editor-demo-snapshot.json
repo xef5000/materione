@@ -2185,9 +2185,27 @@
             ],
             "default": "shaped",
             "description": "How the recipe is crafted. shaped: the layout matters. shapeless: any arrangement. furnace: smelting.",
+            "display": true,
             "example": "shaped",
             "id": "type",
             "label": "Recipe kind",
+            "options": [
+              {
+                "description": "The layout in the crafting grid matters",
+                "label": "Shaped",
+                "value": "shaped"
+              },
+              {
+                "description": "Any arrangement of the ingredients works",
+                "label": "Shapeless",
+                "value": "shapeless"
+              },
+              {
+                "description": "One input cooked in a furnace",
+                "label": "Smelting",
+                "value": "furnace"
+              }
+            ],
             "order": 0,
             "required": true,
             "section": "identity",
@@ -2197,6 +2215,7 @@
           {
             "advanced": false,
             "description": "Resulting item id",
+            "display": true,
             "example": "myserver:ruby_sword",
             "id": "result",
             "label": "Result",
@@ -2205,33 +2224,39 @@
             "required": true,
             "section": "identity",
             "type": "reference",
-            "uiHint": "reference"
+            "uiHint": "item"
           },
           {
             "advanced": false,
             "description": "Shaped rows, one string per row (shaped only)",
+            "display": true,
             "id": "shape",
-            "label": "Grid",
+            "label": "Crafting grid",
             "order": 10,
             "required": false,
             "section": "crafting",
+            "shownWhen": "type=shaped",
             "type": "list",
             "uiHint": "recipe-grid"
           },
           {
             "advanced": false,
             "description": "Char→item map (shaped) or item list (shapeless)",
+            "display": true,
             "id": "ingredients",
             "label": "Ingredients",
             "order": 20,
+            "referenceKind": "item",
             "required": false,
             "section": "crafting",
+            "shownWhen": "type=shapeless",
             "type": "raw",
-            "uiHint": "recipe-grid"
+            "uiHint": "recipe-ingredients"
           },
           {
             "advanced": false,
             "description": "Furnace input item id",
+            "display": true,
             "example": "myserver:ruby_ore",
             "id": "input",
             "label": "Smelts",
@@ -2239,34 +2264,43 @@
             "referenceKind": "item",
             "required": false,
             "section": "crafting",
+            "shownWhen": "type=furnace",
             "type": "reference",
-            "uiHint": "reference"
+            "uiHint": "item"
           },
           {
             "advanced": false,
             "default": "0",
             "description": "Furnace experience",
+            "display": true,
             "example": "0.7",
             "id": "experience",
             "label": "Experience",
+            "min": 0.0,
             "order": 40,
             "required": false,
             "section": "crafting",
+            "shownWhen": "type=furnace",
             "type": "decimal",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "xp"
           },
           {
             "advanced": false,
             "default": "200",
             "description": "Furnace cooking time in ticks",
+            "display": true,
             "example": "200",
             "id": "cookingtime",
-            "label": "Cooking time (ticks)",
+            "label": "Cooking time",
+            "min": 1.0,
             "order": 50,
             "required": false,
             "section": "crafting",
+            "shownWhen": "type=furnace",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "ticks (20 = 1 s)"
           }
         ]
       },
@@ -2867,29 +2901,60 @@
           },
           {
             "advanced": false,
+            "category": "appearance",
             "default": "8",
             "description": "Baseline offset in pixels (distance from the text baseline up to the texture's top)",
             "example": "8",
+            "icon": "arrow-up",
             "id": "ascent",
-            "label": "Ascent",
+            "label": "Baseline",
+            "max": 512.0,
+            "min": -128.0,
+            "module": true,
             "order": 30,
             "required": false,
             "section": "appearance",
+            "summary": "How far the glyph's top sits above the text baseline",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "px"
           },
           {
             "advanced": false,
+            "category": "appearance",
             "default": "8",
             "description": "Rendered height in pixels (width scales proportionally)",
             "example": "8",
+            "icon": "ruler",
             "id": "height",
-            "label": "Height",
+            "label": "Size",
+            "max": 512.0,
+            "min": 1.0,
+            "module": true,
+            "options": [
+              {
+                "description": "As tall as a line of text",
+                "label": "Emoji",
+                "value": "8"
+              },
+              {
+                "description": "A little taller than the text",
+                "label": "Inline icon",
+                "value": "12"
+              },
+              {
+                "description": "Three lines of text tall",
+                "label": "Big title",
+                "value": "24"
+              }
+            ],
             "order": 40,
             "required": false,
             "section": "appearance",
+            "summary": "How tall the glyph draws in text; width follows the texture",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "presets",
+            "unit": "px"
           },
           {
             "advanced": true,
@@ -2918,16 +2983,21 @@
             "uiHint": "number"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "appearance",
             "description": "Animation frames: one texture per frame, one codepoint each",
             "example": "gui/heart_frame_1",
+            "icon": "layers",
             "id": "frames",
-            "label": "Frames",
+            "label": "Animation frames",
+            "module": true,
             "order": 45,
+            "referenceKind": "texture",
             "required": false,
             "section": "appearance",
+            "summary": "A strip of textures, one codepoint each, for animated glyphs",
             "type": "list",
-            "uiHint": "list"
+            "uiHint": "frames"
           },
           {
             "advanced": true,
@@ -2955,50 +3025,66 @@
           },
           {
             "advanced": false,
+            "category": "chat",
             "description": "Chat placeholders that produce this glyph (e.g. :heart:)",
             "example": ":heart:",
+            "icon": "sticker",
             "id": "placeholders",
-            "label": "Placeholders",
+            "label": "Chat placeholders",
+            "module": true,
             "order": 10,
             "required": false,
             "section": "behavior",
+            "summary": "Words players type in chat to get this glyph",
             "type": "list",
-            "uiHint": "list"
+            "uiHint": "chips"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "chat",
             "description": "Permission required to use this glyph in chat",
+            "icon": "shield",
             "id": "permission",
             "label": "Permission",
+            "module": true,
             "order": 20,
             "required": false,
             "section": "behavior",
+            "summary": "Only players with this permission can use the glyph in chat",
             "type": "string",
             "uiHint": "text"
           },
           {
             "advanced": false,
+            "category": "chat",
             "default": "false",
             "description": "Participates in emoji mode (chat interception + tab-completion)",
             "example": "true",
+            "icon": "sparkles",
             "id": "emoji",
-            "label": "Emoji",
+            "label": "Emoji mode",
+            "module": true,
             "order": 30,
             "required": false,
             "section": "behavior",
+            "summary": "Chat words turn into the glyph and complete as emoji",
             "type": "boolean",
             "uiHint": "toggle"
           },
           {
-            "advanced": true,
+            "advanced": false,
+            "category": "chat",
             "default": "false",
             "description": "Offer placeholders as chat completions",
             "example": "true",
+            "icon": "list",
             "id": "tab_complete",
             "label": "Chat completion",
+            "module": true,
             "order": 40,
             "required": false,
             "section": "behavior",
+            "summary": "Offer the placeholders as completions while typing",
             "type": "boolean",
             "uiHint": "toggle"
           },
@@ -3208,36 +3294,45 @@
             "advanced": false,
             "default": "1",
             "description": "Width in blocks (1..16)",
+            "display": true,
             "example": "1",
             "id": "width",
-            "label": "Width (blocks)",
+            "label": "Width",
+            "max": 16.0,
+            "min": 1.0,
             "order": 20,
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "blocks"
           },
           {
             "advanced": false,
             "default": "1",
             "description": "Height in blocks (1..16)",
+            "display": true,
             "example": "1",
             "id": "height",
-            "label": "Height (blocks)",
+            "label": "Height",
+            "max": 16.0,
+            "min": 1.0,
             "order": 30,
             "required": false,
             "section": "appearance",
             "type": "integer",
-            "uiHint": "number"
+            "uiHint": "number",
+            "unit": "blocks"
           },
           {
             "advanced": false,
             "default": "Unknown",
             "description": "Shown in the variant tooltip",
+            "display": true,
             "example": "Unknown",
             "id": "author",
             "label": "Author",
-            "order": 10,
+            "order": 15,
             "required": false,
             "section": "identity",
             "type": "string",
@@ -3249,7 +3344,7 @@
             "example": "Sunrise",
             "id": "title",
             "label": "Title",
-            "order": 20,
+            "order": 10,
             "required": false,
             "section": "identity",
             "type": "string",
@@ -3257,14 +3352,18 @@
           },
           {
             "advanced": false,
+            "category": "gameplay",
             "default": "false",
             "description": "Join the vanilla random-placement pool",
             "example": "false",
+            "icon": "shuffle",
             "id": "placeable",
-            "label": "Placeable",
+            "label": "Random placement",
+            "module": true,
             "order": 10,
             "required": false,
             "section": "behavior",
+            "summary": "Players can get this painting from the vanilla painting item",
             "type": "boolean",
             "uiHint": "toggle"
           }
@@ -7755,9 +7854,27 @@
           ],
           "default": "shaped",
           "description": "How the recipe is crafted. shaped: the layout matters. shapeless: any arrangement. furnace: smelting.",
+          "display": true,
           "example": "shaped",
           "id": "type",
           "label": "Recipe kind",
+          "options": [
+            {
+              "description": "The layout in the crafting grid matters",
+              "label": "Shaped",
+              "value": "shaped"
+            },
+            {
+              "description": "Any arrangement of the ingredients works",
+              "label": "Shapeless",
+              "value": "shapeless"
+            },
+            {
+              "description": "One input cooked in a furnace",
+              "label": "Smelting",
+              "value": "furnace"
+            }
+          ],
           "order": 0,
           "required": true,
           "section": "identity",
@@ -7767,6 +7884,7 @@
         {
           "advanced": false,
           "description": "Resulting item id",
+          "display": true,
           "example": "myserver:ruby_sword",
           "id": "result",
           "label": "Result",
@@ -7775,33 +7893,39 @@
           "required": true,
           "section": "identity",
           "type": "reference",
-          "uiHint": "reference"
+          "uiHint": "item"
         },
         {
           "advanced": false,
           "description": "Shaped rows, one string per row (shaped only)",
+          "display": true,
           "id": "shape",
-          "label": "Grid",
+          "label": "Crafting grid",
           "order": 10,
           "required": false,
           "section": "crafting",
+          "shownWhen": "type=shaped",
           "type": "list",
           "uiHint": "recipe-grid"
         },
         {
           "advanced": false,
           "description": "Char→item map (shaped) or item list (shapeless)",
+          "display": true,
           "id": "ingredients",
           "label": "Ingredients",
           "order": 20,
+          "referenceKind": "item",
           "required": false,
           "section": "crafting",
+          "shownWhen": "type=shapeless",
           "type": "raw",
-          "uiHint": "recipe-grid"
+          "uiHint": "recipe-ingredients"
         },
         {
           "advanced": false,
           "description": "Furnace input item id",
+          "display": true,
           "example": "myserver:ruby_ore",
           "id": "input",
           "label": "Smelts",
@@ -7809,34 +7933,43 @@
           "referenceKind": "item",
           "required": false,
           "section": "crafting",
+          "shownWhen": "type=furnace",
           "type": "reference",
-          "uiHint": "reference"
+          "uiHint": "item"
         },
         {
           "advanced": false,
           "default": "0",
           "description": "Furnace experience",
+          "display": true,
           "example": "0.7",
           "id": "experience",
           "label": "Experience",
+          "min": 0.0,
           "order": 40,
           "required": false,
           "section": "crafting",
+          "shownWhen": "type=furnace",
           "type": "decimal",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "xp"
         },
         {
           "advanced": false,
           "default": "200",
           "description": "Furnace cooking time in ticks",
+          "display": true,
           "example": "200",
           "id": "cookingtime",
-          "label": "Cooking time (ticks)",
+          "label": "Cooking time",
+          "min": 1.0,
           "order": 50,
           "required": false,
           "section": "crafting",
+          "shownWhen": "type=furnace",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "ticks (20 = 1 s)"
         }
       ]
     },
@@ -8437,29 +8570,60 @@
         },
         {
           "advanced": false,
+          "category": "appearance",
           "default": "8",
           "description": "Baseline offset in pixels (distance from the text baseline up to the texture's top)",
           "example": "8",
+          "icon": "arrow-up",
           "id": "ascent",
-          "label": "Ascent",
+          "label": "Baseline",
+          "max": 512.0,
+          "min": -128.0,
+          "module": true,
           "order": 30,
           "required": false,
           "section": "appearance",
+          "summary": "How far the glyph's top sits above the text baseline",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "px"
         },
         {
           "advanced": false,
+          "category": "appearance",
           "default": "8",
           "description": "Rendered height in pixels (width scales proportionally)",
           "example": "8",
+          "icon": "ruler",
           "id": "height",
-          "label": "Height",
+          "label": "Size",
+          "max": 512.0,
+          "min": 1.0,
+          "module": true,
+          "options": [
+            {
+              "description": "As tall as a line of text",
+              "label": "Emoji",
+              "value": "8"
+            },
+            {
+              "description": "A little taller than the text",
+              "label": "Inline icon",
+              "value": "12"
+            },
+            {
+              "description": "Three lines of text tall",
+              "label": "Big title",
+              "value": "24"
+            }
+          ],
           "order": 40,
           "required": false,
           "section": "appearance",
+          "summary": "How tall the glyph draws in text; width follows the texture",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "presets",
+          "unit": "px"
         },
         {
           "advanced": true,
@@ -8488,16 +8652,21 @@
           "uiHint": "number"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "appearance",
           "description": "Animation frames: one texture per frame, one codepoint each",
           "example": "gui/heart_frame_1",
+          "icon": "layers",
           "id": "frames",
-          "label": "Frames",
+          "label": "Animation frames",
+          "module": true,
           "order": 45,
+          "referenceKind": "texture",
           "required": false,
           "section": "appearance",
+          "summary": "A strip of textures, one codepoint each, for animated glyphs",
           "type": "list",
-          "uiHint": "list"
+          "uiHint": "frames"
         },
         {
           "advanced": true,
@@ -8525,50 +8694,66 @@
         },
         {
           "advanced": false,
+          "category": "chat",
           "description": "Chat placeholders that produce this glyph (e.g. :heart:)",
           "example": ":heart:",
+          "icon": "sticker",
           "id": "placeholders",
-          "label": "Placeholders",
+          "label": "Chat placeholders",
+          "module": true,
           "order": 10,
           "required": false,
           "section": "behavior",
+          "summary": "Words players type in chat to get this glyph",
           "type": "list",
-          "uiHint": "list"
+          "uiHint": "chips"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "chat",
           "description": "Permission required to use this glyph in chat",
+          "icon": "shield",
           "id": "permission",
           "label": "Permission",
+          "module": true,
           "order": 20,
           "required": false,
           "section": "behavior",
+          "summary": "Only players with this permission can use the glyph in chat",
           "type": "string",
           "uiHint": "text"
         },
         {
           "advanced": false,
+          "category": "chat",
           "default": "false",
           "description": "Participates in emoji mode (chat interception + tab-completion)",
           "example": "true",
+          "icon": "sparkles",
           "id": "emoji",
-          "label": "Emoji",
+          "label": "Emoji mode",
+          "module": true,
           "order": 30,
           "required": false,
           "section": "behavior",
+          "summary": "Chat words turn into the glyph and complete as emoji",
           "type": "boolean",
           "uiHint": "toggle"
         },
         {
-          "advanced": true,
+          "advanced": false,
+          "category": "chat",
           "default": "false",
           "description": "Offer placeholders as chat completions",
           "example": "true",
+          "icon": "list",
           "id": "tab_complete",
           "label": "Chat completion",
+          "module": true,
           "order": 40,
           "required": false,
           "section": "behavior",
+          "summary": "Offer the placeholders as completions while typing",
           "type": "boolean",
           "uiHint": "toggle"
         },
@@ -8778,36 +8963,45 @@
           "advanced": false,
           "default": "1",
           "description": "Width in blocks (1..16)",
+          "display": true,
           "example": "1",
           "id": "width",
-          "label": "Width (blocks)",
+          "label": "Width",
+          "max": 16.0,
+          "min": 1.0,
           "order": 20,
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "blocks"
         },
         {
           "advanced": false,
           "default": "1",
           "description": "Height in blocks (1..16)",
+          "display": true,
           "example": "1",
           "id": "height",
-          "label": "Height (blocks)",
+          "label": "Height",
+          "max": 16.0,
+          "min": 1.0,
           "order": 30,
           "required": false,
           "section": "appearance",
           "type": "integer",
-          "uiHint": "number"
+          "uiHint": "number",
+          "unit": "blocks"
         },
         {
           "advanced": false,
           "default": "Unknown",
           "description": "Shown in the variant tooltip",
+          "display": true,
           "example": "Unknown",
           "id": "author",
           "label": "Author",
-          "order": 10,
+          "order": 15,
           "required": false,
           "section": "identity",
           "type": "string",
@@ -8819,7 +9013,7 @@
           "example": "Sunrise",
           "id": "title",
           "label": "Title",
-          "order": 20,
+          "order": 10,
           "required": false,
           "section": "identity",
           "type": "string",
@@ -8827,14 +9021,18 @@
         },
         {
           "advanced": false,
+          "category": "gameplay",
           "default": "false",
           "description": "Join the vanilla random-placement pool",
           "example": "false",
+          "icon": "shuffle",
           "id": "placeable",
-          "label": "Placeable",
+          "label": "Random placement",
+          "module": true,
           "order": 10,
           "required": false,
           "section": "behavior",
+          "summary": "Players can get this painting from the vanilla painting item",
           "type": "boolean",
           "uiHint": "toggle"
         }

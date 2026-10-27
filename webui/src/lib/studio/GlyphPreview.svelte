@@ -28,6 +28,11 @@
   );
   const shown = $derived(frameList[0] ?? texture);
   const scale = $derived(Math.max(2, Math.min(12, Math.floor(128 / Math.max(1, height)))));
+  /** The text face is drawn at 2x the game's 8 px, so a glyph's pixel height is too. */
+  const TEXT_SCALE = 2;
+  const inline = $derived(
+    `height: ${height * TEXT_SCALE}px; vertical-align: ${(ascent - height) * TEXT_SCALE}px;`,
+  );
   const codepointHex = $derived(
     codepoint != null ? `U+${codepoint.toString(16).toUpperCase().padStart(4, '0')}` : '',
   );
@@ -57,6 +62,15 @@
     {:else}
       <span class="empty">no texture</span>
     {/if}
+  </div>
+  <div class="contexts" aria-label="Glyph in text">
+    <div class="chat mc-text" data-context="chat">
+      <span>&lt;Steve&gt; look at this </span>{#if image}<img class="inline" src={image} alt="glyph" style={inline} />{:else}<span class="blank">?</span>{/if}<span> nice</span>
+    </div>
+    <div class="mc-tooltip" data-context="item-name">
+      <span class="mc-text">Ruby {#if image}<img class="inline" src={image} alt="glyph" style={inline} />{:else}<span class="blank">?</span>{/if} Sword</span>
+    </div>
+    <small>In chat and in an item name, at 2× the game's text size (browser approximation).</small>
   </div>
   {#if frameList.length > 1}
     <p class="note">{frameList.length} frames — the client shows frame 1 until a surface cycles them</p>
@@ -91,6 +105,22 @@
   .glyph img {
     image-rendering: pixelated;
     display: block;
+  }
+  .contexts {
+    display: grid;
+    gap: var(--space-2);
+  }
+  .chat {
+    padding: var(--space-1) var(--space-2);
+    background: color-mix(in srgb, var(--preview-shade) 50%, transparent);
+    white-space: normal;
+  }
+  .inline {
+    image-rendering: pixelated;
+  }
+  .contexts small {
+    color: var(--faint);
+    font-size: var(--text-xs);
   }
   .empty {
     color: var(--faint);

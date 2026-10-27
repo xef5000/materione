@@ -80,6 +80,7 @@ import Ruler from '@lucide/svelte/icons/ruler';
 import Grid3x3 from '@lucide/svelte/icons/grid-3x3';
 import Flame from '@lucide/svelte/icons/flame';
 import Timer from '@lucide/svelte/icons/timer';
+import ArrowRight from '@lucide/svelte/icons/arrow-right';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -156,6 +157,7 @@ export const icons = {
   'grid-3x3': Grid3x3,
   flame: Flame,
   timer: Timer,
+  'arrow-right': ArrowRight,
 } as const;
 
 export type IconName = keyof typeof icons;

@@ -101,6 +101,13 @@ public record ParameterSchema(
          * @param min inclusive lower bound the number control enforces, or null
          * @param max inclusive upper bound the number control enforces, or null
          * @param unit unit suffix the number control shows ("blocks", "s"), blank for none
+         * @param display this parameter belongs on the studio's display card (the
+         *        resource's own identity: a recipe's mode and result, a painting's
+         *        size) rather than being an add/remove module
+         * @param shownWhen {@code field=value[|value…]}: the parameter applies only
+         *        while that sibling holds one of the values (a recipe's grid shows
+         *        for {@code type=shaped}); an unset sibling counts as its default.
+         *        Keys that do not apply stay in the file untouched.
          */
         public record EditorMetadata(
                 String label,
@@ -117,7 +124,9 @@ public record ParameterSchema(
                 List<ParameterSchema.EditorOption> options,
                 Double min,
                 Double max,
-                String unit) {
+                String unit,
+                boolean display,
+                String shownWhen) {
 
             public EditorMetadata {
                 label = label == null || label.isBlank() ? "" : label;
@@ -130,6 +139,17 @@ public record ParameterSchema(
                 summary = summary == null || summary.isBlank() ? "" : summary;
                 options = options == null ? List.of() : List.copyOf(options);
                 unit = unit == null || unit.isBlank() ? "" : unit;
+                shownWhen = shownWhen == null ? "" : shownWhen.trim();
+            }
+
+            /** Compatibility constructor for callers predating display/shownWhen. */
+            public EditorMetadata(
+                    String label, String section, int order, boolean advanced,
+                    String widget, String referenceKind, String example,
+                    boolean module, String category, String icon, String summary,
+                    List<ParameterSchema.EditorOption> options, Double min, Double max, String unit) {
+                this(label, section, order, advanced, widget, referenceKind, example,
+                        module, category, icon, summary, options, min, max, unit, false, "");
             }
 
             /** Compatibility constructor for callers predating smart-input metadata. */
@@ -138,7 +158,7 @@ public record ParameterSchema(
                     String widget, String referenceKind, String example,
                     boolean module, String category, String icon, String summary) {
                 this(label, section, order, advanced, widget, referenceKind, example,
-                        module, category, icon, summary, List.of(), null, null, "");
+                        module, category, icon, summary, List.of(), null, null, "", false, "");
             }
 
             /** Compatibility constructor for callers predating module metadata. */
@@ -152,19 +172,33 @@ public record ParameterSchema(
             /** This metadata declared as a module (category/icon/summary as given). */
             public EditorMetadata asModule(String category, String icon, String summary) {
                 return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
-                        example, true, category, icon, summary, options, min, max, unit);
+                        example, true, category, icon, summary, options, min, max, unit, display, shownWhen);
             }
 
             /** This metadata with labelled choices. */
             public EditorMetadata withOptions(List<ParameterSchema.EditorOption> choices) {
                 return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
-                        example, module, category, icon, summary, choices, min, max, unit);
+                        example, module, category, icon, summary, choices, min, max, unit, display, shownWhen);
             }
 
             /** This metadata with a number range and unit ({@code null} bound = open). */
             public EditorMetadata withRange(Double lower, Double upper, String suffix) {
                 return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
-                        example, module, category, icon, summary, options, lower, upper, suffix);
+                        example, module, category, icon, summary, options, lower, upper, suffix, display, shownWhen);
+            }
+
+            /** This metadata placed on the display card instead of the module list. */
+            public EditorMetadata onDisplayCard() {
+                return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
+                        example, false, category, icon, summary, options, min, max, unit, true,
+                        shownWhen);
+            }
+
+            /** This metadata that applies only while a sibling holds one of the values. */
+            public EditorMetadata shownWhen(String condition) {
+                return new EditorMetadata(label, section, order, advanced, widget, referenceKind,
+                        example, module, category, icon, summary, options, min, max, unit, display,
+                        condition);
             }
 
         public static EditorMetadata defaults(String id, ParameterType type) {
