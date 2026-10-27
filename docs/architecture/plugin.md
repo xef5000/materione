@@ -60,6 +60,14 @@ Invariants:
 All four funnel into the same pipeline entry (one-path, D6). A running reload **serializes** —
 a second trigger queues (no concurrent pipelines); triggers arriving mid-run coalesce per-scope.
 
+The composed pipeline API holds that serialization through compilation, the scheduled
+global-thread apply, and delivery; its future and reload event complete only afterwards.
+Queued scopes coalesce into a follow-up run even if no later trigger arrives. Coalescing
+never crosses an actor or delivery-mode boundary: one author's preview cannot become
+another author's preview or an implicit publication. Each pass refreshes quarantine from
+the current resources rather than accumulating past failures, retaining cached syntax
+failures in untouched scopes until those files are repaired or deleted.
+
 ### 1.3 Platform probe & floor enforcement
 
 Runs before anything version-sensitive. Answers: exact server version, Paper vs **Folia server
@@ -196,6 +204,10 @@ suggestion.
 - **Compile is pure & deterministic**: identical graph + allocation → byte-identical pack.
   Output is staged in `generated/pack/` and hashed; hash equals live pack's hash → skip apply
   and delivery entirely (no-op reloads are free and invisible).
+- The resource-pack ZIP is written and post-processed in a temporary sibling before
+  replacing `generated/pack/pack.zip` (atomic move where supported). Readers see the
+  previous complete archive until replacement; failed staging retains it and reports
+  `MTR-0011`, without applying or delivering the failed compile.
 - **Pack-format policy (as built)**: the staged `pack.mcmeta` advertises the 1.21.4 floor
   (46) through the newest known bound in *both* schema generations — `pack_format` +
   `supported_formats` for pre-25w31a clients, `min_format`/`max_format` for 1.21.9+/26.x

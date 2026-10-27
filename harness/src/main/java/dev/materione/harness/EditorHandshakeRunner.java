@@ -137,16 +137,16 @@ public final class EditorHandshakeRunner {
                     KeyFormat.ed25519RawPublic(editorSigning.getPublic()),
                     KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) editorEphemeral.getPublic()),
                     "harness-client");
+            int promptCursor = log.mark();
             ws.sendText(Wire.canonicalJson(hello.toJson()), true).get(10, TimeUnit.SECONDS);
 
             // 4. wait for the trust prompt to surface, THEN answer it from
             // the console — the approve must never race the registration
-            int promptCursor = log.mark();
             if (log.awaitLine("wants to connect as editor", options.commandTimeout(), promptCursor) == null) {
                 problems.add("trust prompt never surfaced for nonce " + noncePrefix);
             }
-            console.send("materione editor approve " + noncePrefix);
             int approvedCursor = log.mark();
+            console.send("materione editor approve " + noncePrefix);
             if (log.awaitLine("MTR-0032", options.commandTimeout(), approvedCursor) == null) {
                 problems.add("approval did not activate the session (MTR-0032 missing)");
             }
@@ -274,25 +274,19 @@ public final class EditorHandshakeRunner {
             if (!glyphPut.ok()) {
                 problems.add("glyph edit.put failed: " + glyphPut.error());
             }
-            Wire.Request glyphReload = browser.awaitPush("push.reload", 15, TimeUnit.SECONDS);
-            if (glyphReload == null) {
-                problems.add("no push.reload after glyph save — the preview loop misses glyphs");
+            // Allocation is durable before ZIP staging, and push.reload has
+            // no save correlation. A queued console reload is a FIFO barrier
+            // for the preceding editor mutations, including their apply.
+            int glyphBarrier = log.mark();
+            console.send("materione reload");
+            if (log.awaitLine("MATERIONE-RELOAD-OK", options.commandTimeout(), glyphBarrier) == null) {
+                problems.add("glyph reload completion barrier missing");
+                return finish(process, log, options, problems, workspace);
             }
-            // Pushes buffer (the texture upload's reload push may still be
-            // queued), so the codepoint metadata is polled rather than
-            // assumed: it must appear within a few reload heartbeats.
-            boolean computedSeen = false;
-            String computedData = "";
-            for (int attempt = 0; attempt < 20 && !computedSeen; attempt++) {
-                Wire.Response glyphGet = browser.call("browse.get", object(
-                        "pack", "sample", "path", "glyphs/harness_heart.yml"));
-                if (glyphGet.ok() && glyphGet.data().toString().contains("\"computed\"")) {
-                    computedSeen = true;
-                    computedData = glyphGet.data().toString();
-                } else {
-                    Thread.sleep(500);
-                }
-            }
+            Wire.Response glyphGet = browser.call("browse.get", object(
+                    "pack", "sample", "path", "glyphs/harness_heart.yml"));
+            String computedData = glyphGet.ok() ? glyphGet.data().toString() : "";
+            boolean computedSeen = computedData.contains("\"computed\"");
             if (!computedSeen) {
                 problems.add("browse.get missing computed glyph metadata (the allocated codepoint)");
             } else {
@@ -511,8 +505,9 @@ public final class EditorHandshakeRunner {
                     "MATERIONE-RELOAD-OK items=57"));
             problems.addAll(drive(console, log, options, "materione editor status",
                     "editor transport: running"));
+            int stopCursor = log.mark();
             console.send("materione editor stop");
-            if (log.awaitLine("MATERIONE-EDITOR-STOPPED", options.commandTimeout(), log.mark()) == null) {
+            if (log.awaitLine("MATERIONE-EDITOR-STOPPED", options.commandTimeout(), stopCursor) == null) {
                 problems.add("MATERIONE-EDITOR-STOPPED missing after 'materione editor stop'");
             }
 
@@ -538,7 +533,7 @@ public final class EditorHandshakeRunner {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        return new HarnessResult(problems.isEmpty(), problems, -1, workspace.root, List.of());
+        return new HarnessResult(problems.isEmpty(), problems, -1, workspace.root, log.tail(60));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,

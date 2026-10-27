@@ -140,7 +140,7 @@ public final class EditorTransportService {
         // announce here (manual always, saves only on real changes).
         reloadSubscription = api.pipeline().subscribeReloads(event -> {
             EditorSessions current = sessions;
-            if (current != null && (event.announceAlways() || !event.noop())) {
+            if (current != null && (event.announceAlways() || !event.noop() || !event.accepted())) {
                 dev.materione.web.SessionPush.reload(current, event.scope(),
                         event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
             }

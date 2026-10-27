@@ -22,6 +22,9 @@ public interface PipelineApi {
      * bytes are delivered afterwards: {@code PUBLISH_DEFAULT} publishes to
      * everyone, {@code CANDIDATE_PREVIEW} stages the candidate bound to the
      * actor's in-game identity only (master §8.4).
+     * Completion includes runtime apply and delivery staging. Concurrent requests
+     * queue and may coalesce with requests from the same actor and delivery mode;
+     * every caller receives the outcome of the run covering its scope.
      */
     CompletableFuture<ApiResult<ReloadSummary>> reload(ActorContext actor, ReloadRequest request);
 

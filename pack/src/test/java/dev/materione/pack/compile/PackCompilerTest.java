@@ -36,7 +36,7 @@ import org.junit.jupiter.api.io.TempDir;
 class PackCompilerTest {
 
     /** Minimal item semantics for fixture compilation (mirrors ItemType's floor). */
-    private static final class StubItemType implements ContentType {
+    private static class StubItemType implements ContentType {
         @Override
         public String name() {
             return "item";
@@ -151,6 +151,58 @@ class PackCompilerTest {
     }
 
     private final DiagnosticsBusService diagnostics = new DiagnosticsBusService(256);
+
+    @Test
+    void previousArchiveRemainsReadableUntilItsReplacementIsComplete(@TempDir Path tempDir) throws IOException {
+        Path pack = tempDir.resolve("packs/atomic");
+        writePackSkeleton(pack, "atomic");
+        writeFile(pack.resolve("items/item.yml"), "item:\n  material: STICK\n".getBytes());
+        var first = compilePack(tempDir, "atomic");
+        byte[] previous = Files.readAllBytes(first.stagedZip());
+        var allocation = AllocationTable.load(tempDir.resolve("storage-atomic/allocation.bin"));
+        ContentType copyingPrevious = new StubItemType() {
+            @Override
+            public void compile(Object definition, NamespacedId modelId, PackEmitter emitter,
+                    dev.materione.api.content.Allocations allocations) {
+                super.compile(definition, modelId, emitter, allocations);
+                emitter.copyAsset(first.stagedZip(), "assets/atomic/previous.zip");
+            }
+        };
+        var second = compilePack(tempDir, "atomic", allocation, List.of(copyingPrevious));
+        assertThat(second).isNotNull();
+        try (ZipFile zip = new ZipFile(second.stagedZip().toFile())) {
+            assertThat(zip.getInputStream(zip.getEntry("assets/atomic/previous.zip")).readAllBytes())
+                    .isEqualTo(previous);
+        }
+        try (var files = Files.list(second.stagedZip().getParent())) {
+            assertThat(files.map(file -> file.getFileName().toString())).containsExactly("pack.zip");
+        }
+    }
+
+    @Test
+    void stagingFailureRetainsThePreviousArchiveAndReportsTheError(@TempDir Path tempDir) throws IOException {
+        Path pack = tempDir.resolve("packs/atomic");
+        writePackSkeleton(pack, "atomic");
+        writeFile(pack.resolve("items/item.yml"), "item:\n  material: STICK\n".getBytes());
+        var first = compilePack(tempDir, "atomic");
+        byte[] previous = Files.readAllBytes(first.stagedZip());
+        ContentType missingAsset = new StubItemType() {
+            @Override
+            public void compile(Object definition, NamespacedId modelId, PackEmitter emitter,
+                    dev.materione.api.content.Allocations allocations) {
+                emitter.copyAsset(tempDir.resolve("missing.png"), "assets/atomic/missing.png");
+            }
+        };
+        var second = compilePack(tempDir, "atomic",
+                AllocationTable.load(tempDir.resolve("storage-atomic/allocation.bin")), List.of(missingAsset));
+        assertThat(second).isNull();
+        assertThat(Files.readAllBytes(first.stagedZip())).isEqualTo(previous);
+        assertThat(diagnostics.recent(256)).anySatisfy(diagnostic ->
+                assertThat(diagnostic.message()).contains("pack staging failed"));
+        try (var files = Files.list(first.stagedZip().getParent())) {
+            assertThat(files.map(file -> file.getFileName().toString())).containsExactly("pack.zip");
+        }
+    }
 
     @Test
     void compilesFixturePackToStagedZip(@TempDir Path tempDir) throws IOException {

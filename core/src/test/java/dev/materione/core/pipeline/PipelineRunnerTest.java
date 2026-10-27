@@ -60,6 +60,38 @@ class PipelineRunnerTest {
     }
 
     @Test
+    void targetedReloadRetainsSyntaxQuarantineInUntouchedPacks(@TempDir Path packsRoot) throws IOException {
+        installFaultPack(packsRoot, "broken", "broken-syntax.yml", "items/broken.yml");
+        Files.createDirectories(packsRoot.resolve("good/items"));
+        Files.writeString(packsRoot.resolve("good/pack.yml"), "id: good\n");
+        Files.writeString(packsRoot.resolve("good/items/ok.yml"), "ok:\n  material: PAPER\n");
+        var fingerprints = FingerprintCache.empty();
+        runner.replaceFingerprints(fingerprints);
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        var original = quarantine.all();
+        assertThat(original).hasSize(1);
+        for (String id : java.util.List.of("broken", "good")) {
+            fingerprints.record(id + "/pack.yml", FingerprintCache.sha256(packsRoot.resolve(id + "/pack.yml")));
+        }
+
+        assertThat(runner.request(new ReloadScope.OnePack("good"), packsRoot).completed()).isTrue();
+        assertThat(diagnostics.recent(256)).noneMatch(d -> d.message().contains("targeted scope expanded"));
+        assertThat(quarantine.all()).isEqualTo(original);
+
+        Path broken = packsRoot.resolve("broken/items/broken.yml");
+        Files.delete(broken);
+        assertThat(runner.request(new ReloadScope.OnePack("good"), packsRoot).completed()).isTrue();
+        assertThat(quarantine.all()).isEmpty();
+        Files.writeString(broken, "broken: [");
+        assertThat(runner.request(new ReloadScope.OnePack("broken"), packsRoot).completed()).isTrue();
+        assertThat(quarantine.size()).isOne();
+        Files.writeString(broken, "repaired:\n  material: PAPER\n");
+        assertThat(runner.request(new ReloadScope.OnePack("broken"), packsRoot).completed()).isTrue();
+        assertThat(quarantine.all()).isEmpty();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("broken:repaired"))).isPresent();
+    }
+
+    @Test
     void unresolvedReferenceQuarantinesWithSuggestion(@TempDir Path packsRoot) throws IOException {
         installFaultPack(packsRoot, "faulty", "unresolved-ref.yml", "items/unresolved-ref.yml");
         // a sibling template so the "did you mean" has something to suggest
@@ -122,6 +154,29 @@ class PipelineRunnerTest {
         Diagnostic reason = quarantine.all().get(0).reason();
         assertThat(reason.code()).isEqualTo(DiagnosticCodes.UNRESOLVED_REFERENCE);
         assertThat(reason.message()).contains("references unknown glyph");
+    }
+
+    @Test
+    void quarantineReflectsTheCurrentRunAfterRepeatedErrorsRepairsAndDeletes(@TempDir Path packsRoot)
+            throws IOException {
+        installFaultPack(packsRoot, "faulty", "dangling-glyph.yml", "glyphs/dangling-glyph.yml");
+        Path glyph = packsRoot.resolve("faulty/glyphs/dangling-glyph.yml");
+        for (int i = 0; i < 3; i++) {
+            assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+            assertThat(quarantine.size()).isOne();
+        }
+        Files.createDirectories(packsRoot.resolve("faulty/assets/textures"));
+        Files.write(packsRoot.resolve("faulty/assets/textures/heart.png"), new byte[] {1, 2, 3});
+        Files.writeString(glyph, "fixed:\n  texture: heart\n");
+        assertThat(runner.request(new ReloadScope.FileSet(java.util.Set.of(glyph)), packsRoot).completed())
+                .isTrue();
+        assertThat(quarantine.all()).isEmpty();
+        Files.writeString(glyph, "broken_again:\n  reference: missing\n");
+        assertThat(runner.request(new ReloadScope.OnePack("faulty"), packsRoot).completed()).isTrue();
+        assertThat(quarantine.size()).isOne();
+        Files.delete(glyph);
+        assertThat(runner.request(new ReloadScope.OnePack("faulty"), packsRoot).completed()).isTrue();
+        assertThat(quarantine.all()).isEmpty();
     }
 
     @Test
