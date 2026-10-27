@@ -95,6 +95,59 @@
       : [...marked, entry.key];
   }
 
+  // Rubber-band selection, like a file manager: drag across rows to mark them
+  // (Ctrl/Cmd/Shift keeps the existing marks). A plain click is unchanged.
+  let band = $state<{ left: number; top: number; width: number; height: number } | null>(null);
+  let bandStart: { x: number; y: number; base: string[]; active: boolean } | null = null;
+  let justDragged = false;
+
+  function bandDown(event: PointerEvent): void {
+    if (event.button !== 0 || (event.target as HTMLElement).closest('button, input, a')) return;
+    bandStart = {
+      x: event.clientX,
+      y: event.clientY,
+      base: event.ctrlKey || event.metaKey || event.shiftKey ? marked : [],
+      active: false,
+    };
+  }
+
+  function bandMove(event: PointerEvent): void {
+    if (!bandStart) return;
+    if (!bandStart.active) {
+      if (Math.hypot(event.clientX - bandStart.x, event.clientY - bandStart.y) < 5) return;
+      bandStart.active = true;
+      list?.setPointerCapture(event.pointerId);
+    }
+    const left = Math.min(bandStart.x, event.clientX);
+    const top = Math.min(bandStart.y, event.clientY);
+    const width = Math.abs(event.clientX - bandStart.x);
+    const height = Math.abs(event.clientY - bandStart.y);
+    band = { left, top, width, height };
+    const hit: string[] = [];
+    list?.querySelectorAll<HTMLElement>('.entry:not(.folder)').forEach((node) => {
+      const box = node.getBoundingClientRect();
+      if (box.right >= left && box.left <= left + width && box.bottom >= top && box.top <= top + height) {
+        hit.push(node.dataset.key ?? '');
+      }
+    });
+    marked = [...new Set([...bandStart.base, ...hit.filter(Boolean)])];
+  }
+
+  function bandEnd(event: PointerEvent): void {
+    if (!bandStart) return;
+    const dragged = bandStart.active;
+    const plainClickOnEmpty = !dragged && event.target === list && !bandStart.base.length;
+    if (dragged) {
+      justDragged = true;
+      setTimeout(() => (justDragged = false), 0);
+      list?.releasePointerCapture(event.pointerId);
+    } else if (plainClickOnEmpty) {
+      marked = [];
+    }
+    bandStart = null;
+    band = null;
+  }
+
   function markAllShown(): void {
     marked = rows.filter((row) => row.kind === 'doc').map((row) => row.key);
   }
@@ -557,6 +610,10 @@
       tabindex="0"
       aria-label="{tab?.label ?? 'content'} in {folder}"
       onkeydown={onKey}
+      onpointerdown={bandDown}
+      onpointermove={bandMove}
+      onpointerup={bandEnd}
+      onpointercancel={bandEnd}
     >
       {#if presentation.layout === 'list' && rows.length}
         <div class="list-head" class:technical={presentation.showTechnicalColumns} aria-hidden="true">
@@ -577,7 +634,7 @@
           aria-selected={row.key === content.selected}
           aria-checked={row.kind === 'doc' ? marked.includes(row.key) : undefined}
           tabindex="-1"
-          onclick={() => (content.selected = row.key)}
+          onclick={() => { if (!justDragged) content.selected = row.key; }}
           ondblclick={() => open(row)}
           oncontextmenu={(event) => showMenu(row, event)}
           onkeydown={() => {}}
@@ -631,6 +688,17 @@
       {/if}
     </div>
   </div>
+{/if}
+
+{#if band}
+  <div
+    class="band"
+    aria-hidden="true"
+    style:left="{band.left}px"
+    style:top="{band.top}px"
+    style:width="{band.width}px"
+    style:height="{band.height}px"
+  ></div>
 {/if}
 
 {#if menu}
@@ -865,6 +933,16 @@
   .entry.selected {
     background: var(--bg-raised);
     outline: 1px solid var(--border-strong);
+  }
+  .list {
+    user-select: none;
+  }
+  .band {
+    position: fixed;
+    z-index: 40;
+    pointer-events: none;
+    border: 1px solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
   }
   .entry.marked {
     box-shadow: inset 3px 0 0 var(--accent);

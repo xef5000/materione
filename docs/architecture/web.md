@@ -691,7 +691,8 @@ cannot read, forge, replay, or reorder anything.
   not part of the atomic change — and is removed again if the bulk call is refused (and named in the
   error if even that fails). **Edit pixels** states how many uses the change will reach. A texture or model slot's **Used by**
   button opens this view on its asset.
-  In Content, **Space** marks rows (**Ctrl/Cmd+A** marks everything shown, so a search narrows the
+  In Content, **dragging a rectangle** over rows marks them (Ctrl/Cmd/Shift adds to the marks; a click on empty space clears them),
+  **Space** marks rows (**Ctrl/Cmd+A** marks everything shown, so a search narrows the
   set), and **Edit N marked…** opens the bulk dialog: pick a registry field, give a value (or remove the
   field), **Preview changes**, then **Apply** — one revision per document, written together or not at
   all, with the revisions read when the dialog was previewed (a document that changed in between

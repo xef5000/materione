@@ -161,3 +161,23 @@ test('the command palette goes to views, resources and fields from the keyboard'
   await page.keyboard.press('Escape');
   await expect(palette).toHaveCount(0);
 });
+
+test('dragging a rectangle across rows marks them, like a file manager', async ({ page }) => {
+  await openCatalog(page);
+  await page.getByRole('button', { name: 'Content', exact: true }).click();
+  await page.getByPlaceholder(/search items/i).fill('amulet');
+  const rows = page.getByRole('option', { name: /Amulet/ });
+  await expect(rows).toHaveCount(6);
+  const first = await rows.nth(0).boundingBox();
+  const third = await rows.nth(2).boundingBox();
+  const list = await page.getByRole('listbox', { name: /items in/i }).boundingBox();
+  if (!first || !third || !list) throw new Error('rows are not laid out');
+  // start in the list's own space (right of the rows if any), drag over the first three
+  await page.mouse.move(first.x + 2, first.y + 2);
+  await page.mouse.down();
+  await page.mouse.move(third.x + third.width - 2, third.y + third.height - 2, { steps: 8 });
+  await expect(page.locator('.band')).toBeVisible();
+  await page.mouse.up();
+  await expect(page.getByRole('button', { name: 'Edit 3 marked…' })).toBeVisible();
+  expect(await writes(page)).toEqual([]);
+});
