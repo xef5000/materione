@@ -13,6 +13,8 @@
   import ServerView from '../views/ServerView.svelte';
   import StartView from '../views/StartView.svelte';
   import ActivityDock from '../dock/ActivityDock.svelte';
+  import Icon from './Icon.svelte';
+  import type { IconName } from './icons';
   import { activityLog, diagnostics, ui } from '../state.svelte';
 
   interface Props {
@@ -23,31 +25,19 @@
 
   type RailView = 'start' | 'content' | 'assets' | 'advanced' | 'diagnostics' | 'server';
   type RailTarget = RailView | 'activity';
-  type RailEntry = { id: RailTarget; label: string; icon: string };
+  type RailEntry = { id: RailTarget; label: string; icon: IconName };
 
   const authoringViews: RailEntry[] = [
-    { id: 'start', label: 'Start', icon: 'M12 3 3 10v11h6v-6h6v6h6V10z' },
-    { id: 'content', label: 'Content', icon: 'M4 5.5h16v14H4zM7 2h10v3H7z' },
-    { id: 'assets', label: 'Assets', icon: 'M4 4h16v16H4zM4 15l5-5 4 4 3-3 4 4M15 8.5h.01' },
-    {
-      id: 'advanced',
-      label: 'Files',
-      icon: 'M3 4.5A1.5 1.5 0 0 1 4.5 3h4l2 2h9A1.5 1.5 0 0 1 21 6.5v13a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z',
-    },
+    { id: 'start', label: 'Start', icon: 'house' },
+    { id: 'content', label: 'Content', icon: 'layers' },
+    { id: 'assets', label: 'Assets', icon: 'image' },
+    { id: 'advanced', label: 'Files', icon: 'folder' },
   ];
 
   const supportViews: RailEntry[] = [
-    {
-      id: 'diagnostics',
-      label: 'Problems',
-      icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zm0 4v6m0 3.5v.5',
-    },
-    { id: 'activity', label: 'Activity', icon: 'M3 12h4l3-8 4 16 3-8h4' },
-    {
-      id: 'server',
-      label: 'Server',
-      icon: 'M4 4h16v6H4zm0 10h16v6H4zM7.5 7h.01M7.5 17h.01',
-    },
+    { id: 'diagnostics', label: 'Problems', icon: 'triangle-alert' },
+    { id: 'activity', label: 'Activity', icon: 'activity' },
+    { id: 'server', label: 'Server', icon: 'server' },
   ];
 
   let initialized = $state<Record<RailView, boolean>>({
@@ -117,9 +107,7 @@
             aria-current={ui.view === entry.id ? 'page' : undefined}
             onclick={() => activate(entry.id)}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-              <path d={entry.icon} />
-            </svg>
+            <Icon name={entry.icon} size={19} />
             <span class="nav-label">{entry.label}</span>
           </button>
         {/each}
@@ -140,9 +128,7 @@
             id={entry.id === 'activity' ? 'activity-toggle' : undefined}
             onclick={() => activate(entry.id)}
           >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-              <path d={entry.icon} />
-            </svg>
+            <Icon name={entry.icon} size={19} />
             <span class="nav-label">{entry.label}</span>
             {#if count > 0}
               <em class="badge" aria-hidden="true">{count > 9 ? '9+' : count}</em>
@@ -159,9 +145,7 @@
         title={ui.railCollapsed ? 'Expand navigation labels' : 'Collapse navigation labels'}
         onclick={() => (ui.railCollapsed = !ui.railCollapsed)}
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
-          <path d={ui.railCollapsed ? 'm9 18 6-6-6-6' : 'm15 18-6-6 6-6'} />
-        </svg>
+        <Icon name={ui.railCollapsed ? 'chevron-right' : 'chevron-left'} size={19} />
         <span class="nav-label">{ui.railCollapsed ? 'Expand labels' : 'Collapse labels'}</span>
       </button>
     </nav>
@@ -182,7 +166,7 @@
           <button
             type="button"
             onclick={() => { ui.view = 'assets'; ui.returnTo = null; }}
-          >← Back to {ui.returnTo.label}</button>
+          ><Icon name="arrow-left" size={14} /> Back to {ui.returnTo.label}</button>
         </div>
       {/if}
       {#if initialized.content}
@@ -312,7 +296,7 @@
     cursor: pointer;
     text-align: left;
   }
-  .rail button:not(.btn) svg {
+  .rail button:not(.btn) :global(svg) {
     width: 19px;
     height: 19px;
     flex: none;

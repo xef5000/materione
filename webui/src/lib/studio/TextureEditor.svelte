@@ -1,5 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import Icon from '../components/Icon.svelte';
+  import type { IconName } from '../components/icons';
   /**
    * A pixel editor for pack textures. It exists so that "change three pixels"
    * does not mean "boot a 3D modelling application": it opens in place over
@@ -65,18 +67,18 @@
    */
   const TOOLS: {
     id: Tool;
-    glyph: string;
+    icon: IconName;
     label: string;
     key: string;
     needsColor: boolean;
   }[] = [
-    { id: 'pencil', glyph: '✏', label: 'Pencil', key: 'B', needsColor: true },
-    { id: 'eraser', glyph: '⌫', label: 'Eraser', key: 'E', needsColor: false },
-    { id: 'fill', glyph: '▧', label: 'Fill', key: 'G', needsColor: true },
-    { id: 'pick', glyph: '⊙', label: 'Pick colour', key: 'I', needsColor: false },
-    { id: 'line', glyph: '╱', label: 'Line', key: 'L', needsColor: true },
-    { id: 'rect', glyph: '▭', label: 'Rectangle', key: 'R', needsColor: true },
-    { id: 'crop', glyph: '⬚', label: 'Crop', key: 'C', needsColor: false },
+    { id: 'pencil', icon: 'pencil', label: 'Pencil', key: 'B', needsColor: true },
+    { id: 'eraser', icon: 'eraser', label: 'Eraser', key: 'E', needsColor: false },
+    { id: 'fill', icon: 'paint-bucket', label: 'Fill', key: 'G', needsColor: true },
+    { id: 'pick', icon: 'pipette', label: 'Pick colour', key: 'I', needsColor: false },
+    { id: 'line', icon: 'slash', label: 'Line', key: 'L', needsColor: true },
+    { id: 'rect', icon: 'square', label: 'Rectangle', key: 'R', needsColor: true },
+    { id: 'crop', icon: 'crop', label: 'Crop', key: 'C', needsColor: false },
   ];
 
   const PAINT_TOOLS: Tool[] = ['pencil', 'eraser', 'line', 'rect'];
@@ -681,9 +683,11 @@
     {#if loadState === 'loading'}<span class="loading">loading…</span>{/if}
     {#if missing}<span class="new">new</span>{/if}
     <span class="spacer"></span>
-    <button type="button" onclick={undo} disabled={!canEdit || !history.canUndo} title="undo (Ctrl+Z)">↶</button>
-    <button type="button" onclick={redo} disabled={!canEdit || !history.canRedo} title="redo (Ctrl+Shift+Z)">
-      ↷
+    <button type="button" onclick={undo} disabled={!canEdit || !history.canUndo} title="undo (Ctrl+Z)" aria-label="Undo">
+      <Icon name="undo-2" size={16} />
+    </button>
+    <button type="button" onclick={redo} disabled={!canEdit || !history.canRedo} title="redo (Ctrl+Shift+Z)" aria-label="Redo">
+      <Icon name="redo-2" size={16} />
     </button>
     <label class="ghost" title="replace with a PNG">
       Import
@@ -708,9 +712,10 @@
           type="button"
           class:active={tool === entry.id}
           title="{entry.label} ({entry.key})"
+          aria-label={entry.label}
           onclick={() => (tool = entry.id)}
         >
-          {entry.glyph}
+          <Icon name={entry.icon} size={16} />
         </button>
       {/each}
     </aside>
@@ -802,16 +807,16 @@
         {/if}
       {:else if PAINT_TOOLS.includes(tool)}
         <label class="range" title="brush size">
-          ⬛
+          <Icon name="circle" size={14} />
           <input type="range" min="1" max="8" bind:value={size} />
         </label>
         <div class="chips">
           <button type="button" class:active={mirror} title="mirror across the vertical axis" onclick={() => (mirror = !mirror)}>
-            ⇔ mirror
+            <Icon name="arrow-left-right" size={14} /> mirror
           </button>
           {#if tool === 'rect'}
             <button type="button" class:active={filled} title="filled" onclick={() => (filled = !filled)}>
-              ■ filled
+              <Icon name="square" size={14} /> filled
             </button>
           {/if}
         </div>
