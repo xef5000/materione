@@ -564,6 +564,22 @@ cannot read, forge, replay, or reorder anything.
 - **Stack**: TypeScript, a lightweight reactive framework (framework choice is an
   implementation decision — the architecture requires: build to static files, no SSR need,
   embed-capable), Vite build, output deployed as static assets.
+- **Icons** (issue #149): one icon set for the whole editor, **Lucide** (ISC licence;
+  `@lucide/svelte`, the official Svelte 5 package). Lucide matches the stroke grammar of the rail's
+  hand-drawn icons (24-unit grid, rounded strokes) and is permissively licensed, so bundling it
+  is compatible with the project licence question (master §14) either way. Icons are per-file
+  imports (`@lucide/svelte/icons/<name>`), tree-shaken because the package is `sideEffects: false`;
+  there is no icon font and no runtime CDN. `webui/src/lib/components/icons.ts` is the single
+  registry: it names every icon the editor draws and maps each content type to its icon
+  (`CONTENT_TYPE_ICONS`, used in the Content tabs, Start tiles and empty states). `Icon.svelte`
+  renders a registry name at a given size, decorative (`aria-hidden`) unless it is given a
+  `label`, and inherits `currentColor`. Unicode glyphs are not icons: a control whose only content
+  is an icon carries an accessible name (`aria-label`). **Bundle delta** (`vite build`, this
+  change against `main`): the entry chunk grows from 325.0 kB to 351.0 kB (111.5 kB to 119.3 kB
+  gzip), about 26 kB raw / 7.8 kB gzip for the 46 icons the editor names. Enforcement:
+  `webui/test/icons.spec.ts` (vitest) fails on a glyph used as an icon-only control's content or as
+  an icon-map value; `webui/browser/specs/icons.pw.ts` and the `editor.browser-icon-set*` QA
+  entries check the rendered DOM. Blockbench's own icons inside its iframe are out of scope.
 - **Stateless by design**: durable content state lives in server files; a refresh re-fetches the
   document snapshot from the plugin. Unsaved edits are bounded browser-session state, not a
   second content store. Undo/redo is client-side per editor session and bounded.

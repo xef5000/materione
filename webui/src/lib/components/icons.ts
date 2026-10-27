@@ -1,0 +1,123 @@
+/**
+ * The editor's one icon set: Lucide (ISC — see docs/architecture/web.md, "Icons").
+ *
+ * Every icon is a per-file import, so the bundle carries only the icons named
+ * here, never the whole set and never a runtime CDN. To use a new icon, import
+ * it below, add it to `icons`, and it becomes available as `<Icon name=… />`.
+ * Keys are Lucide's own names, so the lucide.dev docs apply directly.
+ */
+import ArrowLeft from '@lucide/svelte/icons/arrow-left';
+import ArrowLeftRight from '@lucide/svelte/icons/arrow-left-right';
+import ArrowUp from '@lucide/svelte/icons/arrow-up';
+import AppWindow from '@lucide/svelte/icons/app-window';
+import Armchair from '@lucide/svelte/icons/armchair';
+import Box from '@lucide/svelte/icons/box';
+import ChefHat from '@lucide/svelte/icons/chef-hat';
+import ChevronDown from '@lucide/svelte/icons/chevron-down';
+import ChevronLeft from '@lucide/svelte/icons/chevron-left';
+import ChevronRight from '@lucide/svelte/icons/chevron-right';
+import ChevronUp from '@lucide/svelte/icons/chevron-up';
+import Circle from '@lucide/svelte/icons/circle';
+import Crop from '@lucide/svelte/icons/crop';
+import Eraser from '@lucide/svelte/icons/eraser';
+import File from '@lucide/svelte/icons/file';
+import FileBraces from '@lucide/svelte/icons/file-braces';
+import FileCode from '@lucide/svelte/icons/file-code';
+import Folder from '@lucide/svelte/icons/folder';
+import Frame from '@lucide/svelte/icons/frame';
+import Image from '@lucide/svelte/icons/image';
+import ImageOff from '@lucide/svelte/icons/image-off';
+import Info from '@lucide/svelte/icons/info';
+import Layers from '@lucide/svelte/icons/layers';
+import LayoutGrid from '@lucide/svelte/icons/layout-grid';
+import LayoutTemplate from '@lucide/svelte/icons/layout-template';
+import List from '@lucide/svelte/icons/list';
+import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+import PaintBucket from '@lucide/svelte/icons/paint-bucket';
+import Package from '@lucide/svelte/icons/package';
+import Pencil from '@lucide/svelte/icons/pencil';
+import Pipette from '@lucide/svelte/icons/pipette';
+import Plus from '@lucide/svelte/icons/plus';
+import Redo2 from '@lucide/svelte/icons/redo-2';
+import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+import Save from '@lucide/svelte/icons/save';
+import Server from '@lucide/svelte/icons/server';
+import Sparkles from '@lucide/svelte/icons/sparkles';
+import Square from '@lucide/svelte/icons/square';
+import Type from '@lucide/svelte/icons/type';
+import Undo2 from '@lucide/svelte/icons/undo-2';
+import Volume2 from '@lucide/svelte/icons/volume-2';
+import X from '@lucide/svelte/icons/x';
+import Activity from '@lucide/svelte/icons/activity';
+import House from '@lucide/svelte/icons/house';
+import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+import Slash from '@lucide/svelte/icons/slash';
+
+export const icons = {
+  'arrow-left': ArrowLeft,
+  'arrow-left-right': ArrowLeftRight,
+  'app-window': AppWindow,
+  'arrow-up': ArrowUp,
+  activity: Activity,
+  armchair: Armchair,
+  box: Box,
+  'chef-hat': ChefHat,
+  'chevron-down': ChevronDown,
+  'chevron-left': ChevronLeft,
+  'chevron-right': ChevronRight,
+  'chevron-up': ChevronUp,
+  circle: Circle,
+  crop: Crop,
+  eraser: Eraser,
+  file: File,
+  'file-braces': FileBraces,
+  'file-code': FileCode,
+  folder: Folder,
+  frame: Frame,
+  house: House,
+  image: Image,
+  'image-off': ImageOff,
+  info: Info,
+  layers: Layers,
+  'layout-grid': LayoutGrid,
+  'layout-template': LayoutTemplate,
+  list: List,
+  'loader-circle': LoaderCircle,
+  package: Package,
+  'paint-bucket': PaintBucket,
+  pencil: Pencil,
+  pipette: Pipette,
+  plus: Plus,
+  'redo-2': Redo2,
+  'refresh-cw': RefreshCw,
+  save: Save,
+  server: Server,
+  slash: Slash,
+  sparkles: Sparkles,
+  square: Square,
+  type: Type,
+  'triangle-alert': TriangleAlert,
+  'undo-2': Undo2,
+  'volume-2': Volume2,
+  x: X,
+} as const;
+
+export type IconName = keyof typeof icons;
+
+/** Each content type's icon, used in its tab, Start tile and empty states. */
+export const CONTENT_TYPE_ICONS: Record<string, IconName> = {
+  items: 'package',
+  blocks: 'box',
+  furnitures: 'armchair',
+  recipes: 'chef-hat',
+  templates: 'layout-template',
+  glyphs: 'type',
+  sounds: 'volume-2',
+  paintings: 'frame',
+  effects: 'sparkles',
+  guis: 'app-window',
+};
+
+export function contentTypeIcon(directory: string): IconName {
+  return CONTENT_TYPE_ICONS[directory] ?? 'file';
+}
