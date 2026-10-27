@@ -1,6 +1,8 @@
 <script lang="ts">
+  import { fly } from 'svelte/transition';
   import Icon from '../components/Icon.svelte';
   import type { IconName } from '../components/icons';
+  import { motionMs } from '../motion';
   import { activityLog } from '../state.svelte';
   import type { ActivityKind } from '../state.svelte';
 
@@ -58,8 +60,8 @@
       >clear</button>
     {/if}
     <ul>
-      {#each activityLog.entries as entry, index (entry.ts + '-' + index)}
-        <li class={entry.kind}>
+      {#each activityLog.entries as entry (entry.id)}
+        <li class={entry.kind} in:fly={{ y: 6, duration: motionMs('base') }}>
           <span class="glyph"><Icon name={glyph[entry.kind]} size={13} /></span>
           <span class="ts">{time(entry.ts)}</span>
           <span class="text">{entry.text}</span>

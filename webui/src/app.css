@@ -116,6 +116,21 @@
   --radius-lg: 12px;
   --radius-pill: 999px;
 
+  /*
+   * motion: three durations and three curves (docs/architecture/web.md, "Motion").
+   * Hover, press and focus use fast; dialogs, menus and view switches use base;
+   * the module picker's first open and large reveals use slow. Svelte transitions
+   * read the durations through motionMs() in src/lib/motion.ts, so CSS and JS share
+   * one source. Under prefers-reduced-motion they all collapse to 0ms (see below).
+   */
+  --motion-fast: 120ms;
+  --motion-base: 200ms;
+  --motion-slow: 320ms;
+  --motion-shimmer: 1400ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+
   /* Minecraft legacy text colors, shared by safe text previews. */
   --legacy-0: #000000;
   --legacy-1: #0000aa;
@@ -203,9 +218,18 @@ textarea {
   font: 500 var(--text-base) / 1 var(--font-sans);
   white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
 }
 .btn:hover:not(:disabled) {
   background: var(--bg-hover);
+}
+/* Press: a 2% shrink, so the click reads as physical without moving the layout. */
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
 }
 .btn-primary {
   border-color: var(--accent);
@@ -252,6 +276,22 @@ textarea {
   color: var(--muted);
   font-size: var(--text-xs);
   line-height: 1.4;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    filter var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+/* A chip that is a button (filters, toggles) answers hover and press; brightness works for every tone. */
+button.chip {
+  cursor: pointer;
+}
+button.chip:hover:not(:disabled) {
+  filter: brightness(1.2);
+}
+button.chip:active:not(:disabled) {
+  transform: scale(0.96);
 }
 .chip-accent {
   border-color: var(--accent);
@@ -278,6 +318,22 @@ textarea {
   background: var(--bg-raised);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
+}
+/* A card that is a button or link: hover lifts it a pixel, press settles it back. */
+.card-interactive {
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    box-shadow var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+.card-interactive:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
+}
+.card-interactive:active:not(:disabled) {
+  transform: translateY(0) scale(0.99);
 }
 
 /* Fields: a label over a control, with an optional hint or validation line. */
@@ -307,6 +363,7 @@ textarea {
   background: var(--bg-input);
   padding: var(--space-2) var(--space-2);
   font-size: var(--text-base);
+  transition: border-color var(--motion-fast) var(--ease-standard);
 }
 input:not([type='checkbox']):not([type='radio']):focus,
 select:focus,
@@ -337,6 +394,9 @@ textarea:disabled {
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
+  /* Opens from its corner: a fade plus a 4px settle, on every mount. */
+  transform-origin: top left;
+  animation: pop-in var(--motion-base) var(--ease-emphasized) both;
 }
 .menu-item {
   display: flex;
@@ -351,6 +411,9 @@ textarea:disabled {
   font-size: var(--text-base);
   text-align: left;
   cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
 }
 .menu-item:hover:not(:disabled),
 .menu-item:focus-visible {
@@ -434,4 +497,69 @@ textarea:disabled {
   border-bottom-color: var(--mc-tooltip-border-low);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
+}
+
+/*
+ * Motion (docs/architecture/web.md, "Motion"). Keyframes are shared; a component opts in
+ * by class, so the durations and curves above stay the only numbers. Svelte transitions
+ * (fade, fly, scale, flip) take the same durations through motionMs().
+ */
+@keyframes pop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+/* A view that mounts (Content ↔ Studio) fades in; the outgoing one is removed at once. */
+.view-enter {
+  animation: fade-in var(--motion-base) var(--ease-standard) both;
+}
+/* Images and previews fade in once decoded; their boxes are sized before the image arrives. */
+.fade-in {
+  animation: fade-in var(--motion-base) var(--ease-standard) both;
+}
+/*
+ * Loading placeholder for a catalog or preview that is still arriving: a shimmering bar
+ * sized by the caller, so the layout is in place before the data is.
+ */
+.skeleton {
+  display: block;
+  height: 1em;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, var(--bg-raised) 0%, var(--bg-hover) 50%, var(--bg-raised) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer var(--motion-shimmer) linear infinite;
+}
+
+/*
+ * prefers-reduced-motion: every duration collapses to 0, nothing loops, and the
+ * Svelte transitions read 0 from motionMs(). This is the one reduced-motion path:
+ * Playwright's `reducedMotion: 'reduce'` (playwright.config.ts) runs the whole suite
+ * through it, so no spec needs its own animation switch.
+ */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+    --motion-shimmer: 0ms;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+  /* A loading bar that cannot move reads as a plain placeholder, not a stuck spinner. */
+  .skeleton {
+    animation: none;
+  }
 }

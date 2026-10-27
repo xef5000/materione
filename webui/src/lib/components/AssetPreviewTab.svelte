@@ -1,5 +1,6 @@
 <script lang="ts">
   import TextureEditor from '../studio/TextureEditor.svelte';
+  import Skeleton from '../ui/Skeleton.svelte';
   import { assetOps, unwrap } from '../api';
   import { connection, errorMessage, logActivity, registerEditorGuard, session } from '../state.svelte';
 
@@ -66,10 +67,10 @@
     </header>
     {#if dataUrl}
       <div class="frame">
-        <img src={dataUrl} alt={path} />
+        <img class="fade-in" src={dataUrl} alt={path} />
       </div>
     {:else}
-      <p class="hint">loading…</p>
+      <Skeleton label={`Loading ${path}`} lines={2} />
     {/if}
   {/if}
 </article>
@@ -123,9 +124,5 @@
   img {
     image-rendering: pixelated;
     max-width: min(320px, 100%);
-  }
-  .hint {
-    color: var(--faint);
-    font-size: var(--text-sm);
   }
 </style>

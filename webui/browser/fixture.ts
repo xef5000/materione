@@ -16,6 +16,7 @@ async function startFixture(): Promise<void> {
     guided: params.has('guided'),
     catalog: params.has('catalog'),
     modules: params.has('modules'),
+    rows: Number(params.get('rows')) || 0,
   });
   adapter.setPushHandler(handlePush);
   adapter.setDisconnectHandler(() => markConnectionLost('Deterministic browser fixture disconnected.'));

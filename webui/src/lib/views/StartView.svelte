@@ -63,7 +63,7 @@
     {/if}
     <div class="starters">
       {#each creatable as tab (tab.directory)}
-        <button type="button" class="starter" onclick={() => startCreate(tab.directory)}>
+        <button type="button" class="starter card-interactive" onclick={() => startCreate(tab.directory)}>
           <strong><Icon name={contentTypeIcon(tab.directory)} size={16} /> New {tab.singular}</strong>
           <span>{descriptions[tab.directory] ?? ''}</span>
           <small>{counts[tab.directory] ?? 0} in this project</small>

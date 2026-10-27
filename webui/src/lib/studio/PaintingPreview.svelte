@@ -42,7 +42,7 @@
 <div class="preview">
   <div class="canvas" style="aspect-ratio: {aspect};">
     {#if image}
-      <img src={image} alt="painting texture" />
+      <img class="fade-in" src={image} alt="painting texture" />
     {:else}
       <span class="empty">no texture</span>
     {/if}

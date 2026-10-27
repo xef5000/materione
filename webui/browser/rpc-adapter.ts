@@ -815,7 +815,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #guided: boolean;
   readonly #modules: boolean;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
@@ -830,6 +830,15 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       this.#resources.push(...MODULES_RESOURCES);
       for (const [path, parsed] of Object.entries(MODULES_DOCUMENTS)) {
         this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
+      }
+    }
+    if (options.rows) {
+      // A large pack: one item per row, for the list-motion limit and the 60 fps budget (web.md, "Motion").
+      for (let n = 0; n < options.rows; n++) {
+        const path = `items/bulk_${String(n).padStart(4, '0')}.yml`;
+        const id = path.slice('items/'.length, -'.yml'.length);
+        this.#resources.push({ pack: PACK, type: 'items', path, id });
+        this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, { [id]: { display_name: `Bulk ${n}`, material: 'STICK' } }));
       }
     }
     if (options.catalog) {

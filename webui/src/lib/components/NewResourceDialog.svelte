@@ -405,6 +405,10 @@
     background: var(--bg-panel);
     cursor: pointer;
     min-width: 0;
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard),
+      box-shadow var(--motion-fast) var(--ease-standard);
   }
   .card:hover,
   .card.highlight {

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import Icon from './Icon.svelte';
   /**
    * The embedded Blockbench workbench (architecture.md §9.3): the pinned,
    * unmodified web build in a same-origin iframe, with our bridge injected
@@ -74,6 +75,9 @@
   // save-back dialog state
   let dialog = $state(false);
   let saving = $state(false);
+  // Briefly true after a save lands: the header button shows the result before it settles back.
+  let applied = $state(false);
+  let appliedTimer: ReturnType<typeof setTimeout> | undefined;
   let pack = $state('');
   let modelPath = $state('');
   let textureTargets = $state<{ link: string; target: string }[]>([]);
@@ -451,6 +455,9 @@
         }
       }
       logActivity('save', `Blockbench model saved to ${pack}/${modelPath}; targeted reload queued`);
+      applied = true;
+      clearTimeout(appliedTimer);
+      appliedTimer = setTimeout(() => (applied = false), 1600);
       dialog = false;
       saveData = null;
       void refreshPack();
@@ -503,11 +510,14 @@
       />
     </label>
     <button
-      class="btn btn-primary"
+      class="btn btn-primary save"
+      class:busy
+      class:done={applied && !busy}
       disabled={!active || !bridgeReady || !projectReady || !connection.connected || !session.channel || busy}
       onclick={() => void collect()}
     >
-      {busy ? 'Working…' : 'Save & apply…'}
+      {#if applied && !busy}<Icon name="check" size={14} />{/if}
+      {busy ? 'Working…' : applied ? 'Applied' : 'Save & apply…'}
     </button>
   </header>
 
@@ -616,7 +626,7 @@
 
         <footer>
           <button disabled={saving} onclick={() => (dialog = false)}>cancel</button>
-          <button class="btn btn-primary" disabled={!active || saving} onclick={() => void doSave()}>
+          <button class="btn btn-primary save" class:busy={saving} disabled={!active || saving} onclick={() => void doSave()}>
             {saving ? 'Saving…' : 'Save & apply'}
           </button>
         </footer>
@@ -768,5 +778,33 @@
     display: flex;
     justify-content: flex-end;
     gap: var(--space-3);
+  }
+  /* Save & apply: a sweep along the button while the save runs, then a green settle when it lands. */
+  .save {
+    position: relative;
+    overflow: hidden;
+  }
+  .save.busy::after {
+    content: '';
+    position: absolute;
+    inset: auto 0 0;
+    height: 2px;
+    background: var(--accent-ink);
+    opacity: 0.6;
+    animation: save-sweep var(--motion-slow) var(--ease-standard) infinite;
+  }
+  .save.done {
+    border-color: var(--ok);
+    background: var(--ok);
+    color: var(--bg-app);
+    animation: save-settle var(--motion-slow) var(--ease-emphasized) both;
+  }
+  @keyframes save-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+  }
+  @keyframes save-settle {
+    from { transform: scale(0.96); }
+    to { transform: none; }
   }
 </style>

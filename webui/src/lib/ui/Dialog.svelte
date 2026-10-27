@@ -5,6 +5,9 @@
    * is a `.dialog-actions` row, right-aligned, primary action last.
    */
   import type { Snippet } from 'svelte';
+  import { fade, scale } from 'svelte/transition';
+  import { cubicIn, cubicOut } from 'svelte/easing';
+  import { motionMs } from '../motion';
 
   interface Props {
     title: string;
@@ -32,11 +35,21 @@
 <div
   class="scrim"
   role="presentation"
+  in:fade|global={{ duration: motionMs('base') }}
+  out:fade|global={{ duration: motionMs('fast') }}
   onclick={(event) => {
     if (dismissOnScrim && event.target === event.currentTarget) onClose();
   }}
 >
-  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} style:width={`min(${width}, calc(100vw - 48px))`}>
+  <div
+    class="dialog"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby={titleId}
+    style:width={`min(${width}, calc(100vw - 48px))`}
+    in:scale|global={{ duration: motionMs('base'), start: 0.96, easing: cubicOut }}
+    out:scale|global={{ duration: motionMs('fast'), start: 0.98, easing: cubicIn }}
+  >
     <h2 id={titleId}>{title}</h2>
     {@render children()}
   </div>

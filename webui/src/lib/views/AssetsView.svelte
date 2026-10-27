@@ -289,7 +289,7 @@
       <p class="empty">Select an asset to see what uses it.</p>
     {:else}
       <header>
-        {#if thumb}<img src={thumb} alt="" class="thumb" />{/if}
+        {#if thumb}<img src={thumb} alt="" class="thumb fade-in" />{/if}
         <div class="title">
           <h2 title={selected.path}>{fileName(selected.path)}</h2>
           <code>{selected.path}</code>

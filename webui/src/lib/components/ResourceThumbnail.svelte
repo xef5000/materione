@@ -206,7 +206,7 @@
   style:height="{size}px"
 >
   {#if thumbnailState === 'ready' && image}
-    <img src={image} alt="" draggable="false" loading="lazy" referrerpolicy="no-referrer"
+    <img class="fade-in" src={image} alt="" draggable="false" loading="lazy" referrerpolicy="no-referrer"
       onerror={imageFailed} />
   {:else}
     <span aria-hidden="true"><Icon name={placeholderIcon} size={placeholderSize} /></span>

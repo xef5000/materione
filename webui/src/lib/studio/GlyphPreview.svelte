@@ -52,7 +52,7 @@
   <div class="canvas">
     {#if image}
       <div class="glyph" style="height: {height * scale}px; margin-top: {(height - ascent) * scale}px;">
-        <img src={image} alt="glyph texture" style="height: {height * scale}px;" />
+        <img class="fade-in" src={image} alt="glyph texture" style="height: {height * scale}px;" />
       </div>
     {:else}
       <span class="empty">no texture</span>

@@ -295,6 +295,10 @@
     padding: var(--space-2) var(--space-2);
     cursor: pointer;
     text-align: left;
+    transition:
+      background-color var(--motion-fast) var(--ease-standard),
+      color var(--motion-fast) var(--ease-standard),
+      border-color var(--motion-fast) var(--ease-standard);
   }
   .rail button:not(.btn) :global(svg) {
     width: 19px;
