@@ -1113,7 +1113,8 @@ export default [
     steps: async (ctx) => {
       const page = await ctx.browser.openEditor();
       const studio = await openSampleStudio(page, 'Ruby Sword');
-      // Abilities are module cards; adding one goes through the picker.
+      // Abilities are module rows; adding one goes through the picker and selects it, so its settings open in the panel.
+      const panel = studio.getByRole('region', { name: 'Module settings' });
       await studio.getByRole('button', { name: 'Add module' }).click();
       const picker = page.getByRole('dialog', { name: 'Add a module' });
       await picker.getByLabel('Search modules').fill('food');
@@ -1121,8 +1122,8 @@ export default [
       await picker.getByLabel('Search modules').press('Enter');
       const card = studio.locator('[data-module="mechanic:materione:food"]');
       await card.waitFor({ state: 'visible' });
-      // Origin and activation are a hover hint on the ability's name, not copy on the card.
-      const hint = await card.locator('header strong').getAttribute('title');
+      // Origin and activation are a hover hint on the ability's name, not copy on the row.
+      const hint = await panel.locator('header strong').getAttribute('title');
       ctx.expect(hint).toContain('Built in');
       ctx.expect(hint).toContain('Activates: When the player eats');
 
@@ -1130,7 +1131,7 @@ export default [
       await studio.getByRole('button', { name: 'Add module' }).click();
       await page.getByLabel('Search modules').fill('when');
       await page.getByLabel('Search modules').press('Enter');
-      const rules = studio.locator('[data-module="behavior"]');
+      const rules = panel;
       await rules.getByRole('button', { name: 'Add rule' }).click();
       const events = await rules.getByLabel('When').locator('option').allInnerTexts();
       ctx.expect(events.includes('Click')).toBeTruthy();
@@ -1210,8 +1211,11 @@ export default [
     steps: async (ctx) => {
       const page = await ctx.browser.openEditor();
       const studio = await openSampleStudio(page, 'Templated Ruby');
-      const material = studio.locator('[data-provenance="material"]');
-      ctx.expect((await material.innerText()).trim()).toBe('Inherited from base_item: PAPER');
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      // The inherited Base material row selects into the panel, which names its template and value.
+      await studio.getByRole('button', { name: 'Base material', exact: true }).click();
+      ctx.expect((await panel.innerText())).toContain('Inherited from base_item');
+      ctx.expect((await panel.innerText())).toContain('PAPER');
 
       await studio.getByRole('button', { name: 'Add module' }).click();
       await page.getByLabel('Search modules').fill('soulbound');
@@ -1221,12 +1225,12 @@ export default [
       await studio.getByRole('button', { name: 'Add module' }).click();
       await page.getByLabel('Search modules').fill('when');
       await page.getByLabel('Search modules').press('Enter');
-      const rules = studio.locator('[data-module="behavior"]');
+      const rules = panel;
       await rules.getByLabel('Rule starting point').selectOption({ label: 'Right-click sends a message' });
       await rules.getByRole('button', { name: 'Add rule' }).click();
       await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
       ctx.needsEyes(
-        'the studio reads as a display card plus module cards: the header shows the resource id with a compact template chip naming the base_item template (no full-width Based on row); the Base material module card reads "Inherited from base_item: PAPER"; a Soulbound module card shows its name with no origin tag or activation copy (its hover hint carries both); a When… do… module holds a rule reading "On right click: send message …" with no explanatory line under it; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
+        'the studio shows the resource id with a compact template chip naming the base_item template (no full-width Based on row); the module list holds compact rows (title and markers only, the inherited Base material row marked Inherited); the settings panel on the right holds only the selected module, and the selected Base material reads "Inherited from base_item" with PAPER and Override here; a Soulbound row has no settings or activation copy in the list; a When… do… module in the panel holds a rule reading "On right click: send message …" with no explanatory line under it; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
       );
     },
   }),
@@ -1410,13 +1414,15 @@ export default [
   // still one lossless authoring.setFields batch (D1/D6).
   test({
     id: 'editor.browser-item-modules',
-    title: 'sample:ruby_sword edits through a display card plus module cards, and modules add/remove losslessly',
+    title: 'sample:ruby_sword edits through a display card, a module list and a settings panel, and modules add/remove losslessly',
     covers: [
       ...WORKBENCH_COVERS,
       'api/src/main/java/dev/materione/api/registry/ParameterSchema.java',
       'webui/src/lib/modules.ts',
       'webui/src/lib/studio/ModulePicker.svelte',
       'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/lib/studio/Studio.svelte',
+      'webui/src/lib/drafts.svelte.ts',
       'webui/src/lib/components/icons.ts',
     ],
     timeoutMs: 180_000,
@@ -1431,35 +1437,38 @@ export default [
       await display.getByRole('textbox', { name: 'Display name' }).waitFor({ state: 'visible' });
       await display.getByRole('textbox', { name: 'Lore' }).waitFor({ state: 'visible' });
 
-      // Required module: the base material is the floor, not an add/remove card.
+      // Required module: the base material is the floor, not a removable row.
       const material = studio.locator('[data-module="material"]');
       await material.waitFor({ state: 'visible' });
       ctx.expect(await material.getByRole('button', { name: 'Remove' }).count()).toBe(0);
 
-      // Authored abilities are one card each, with the registry's own words.
-      const durability = studio.locator('[data-module="mechanic:materione:durability"]');
-      await durability.waitFor({ state: 'visible' });
-      ctx.expect(await durability.getByRole('spinbutton').inputValue()).toBe('500');
-      ctx.expect(await studio.locator('[data-module="mechanic:materione:soulbound"]').innerText())
-        .toContain('When the owner dies');
+      // Rows hold titles and markers only (no inputs); the selected module's settings open in the panel.
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      ctx.expect(await studio.getByRole('list', { name: 'Modules' }).locator('input, select, textarea').count()).toBe(0);
+      await studio.getByRole('button', { name: 'Durability', exact: true }).click();
+      ctx.expect(await panel.getByRole('spinbutton').inputValue()).toBe('500');
+      await studio.getByRole('button', { name: 'Soulbound', exact: true }).click();
+      // Origin and activation are a hover hint on the panel's title, not copy in the list.
+      ctx.expect(await panel.locator('header strong').getAttribute('title')).toContain('When the owner dies');
+      ctx.expect(await panel.getByRole('spinbutton').count()).toBe(0);
 
       // Unknown keys keep the honest Advanced-only report.
       ctx.expect(await studio.getByText('only editable in Advanced Files').innerText())
         .toContain('future_component');
 
-      // Add a module through the picker, configure it, save, then remove it
-      // again — the sample pack must end the test exactly as it started.
+      // Add a module through the picker: it is selected, so its settings open in the panel.
+      // Configure it, save, then remove it again — the sample pack must end the test exactly as it started.
       await studio.getByRole('button', { name: 'Add module' }).click();
       const picker = page.getByRole('dialog', { name: 'Add a module' });
       await picker.getByLabel('Search modules').fill('food');
       await picker.getByRole('option', { name: /Food/ }).waitFor({ state: 'visible' });
       await picker.getByLabel('Search modules').press('Enter');
       const food = studio.locator('[data-module="mechanic:materione:food"]');
-      await food.getByLabel('Nutrition').fill('4');
-      await food.getByLabel('Nutrition').press('Tab');
-      await food.getByLabel('Saturation').fill('0.3');
-      await food.getByLabel('Saturation').press('Tab');
-      await food.getByLabel('Can always eat').check();
+      await panel.getByLabel('Nutrition').fill('4');
+      await panel.getByLabel('Nutrition').press('Tab');
+      await panel.getByLabel('Saturation').fill('0.3');
+      await panel.getByLabel('Saturation').press('Tab');
+      await panel.getByLabel('Can always eat').check();
 
       const save = studio.getByRole('button', { name: 'Save & apply' });
       await save.click();
@@ -1471,13 +1480,14 @@ export default [
       await save.click();
       await waitForSaved(page);
       ctx.expect(await studio.locator('[data-module="mechanic:materione:food"]').count()).toBe(0);
-      ctx.expect(await durability.getByRole('spinbutton').inputValue()).toBe('500');
+      await studio.getByRole('button', { name: 'Durability', exact: true }).click();
+      ctx.expect(await panel.getByRole('spinbutton').inputValue()).toBe('500');
     },
   }),
 
   test({
     id: 'editor.browser-item-modules-visual',
-    title: 'the item studio reads as a display card plus module cards with a searchable, categorised picker',
+    title: 'the item studio shows compact module rows beside a settings panel holding only the selected module, with a searchable, categorised picker',
     mode: 'visual',
     dependsOn: ['editor.browser-item-modules'],
     covers: [
@@ -1485,6 +1495,7 @@ export default [
       'webui/src/lib/modules.ts',
       'webui/src/lib/studio/ModulePicker.svelte',
       'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/lib/studio/Studio.svelte',
     ],
     timeoutMs: 180_000,
     steps: async (ctx) => {
@@ -1494,13 +1505,72 @@ export default [
       const studio = page.locator('.studio');
       await studio.locator('[data-module="material"]').waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('item-modules-studio', '.studio');
+      // Selecting a row opens its settings in the panel on the right (issue 174).
+      await studio.getByRole('button', { name: 'Durability', exact: true }).click();
+      await studio.getByRole('region', { name: 'Module settings' }).getByRole('spinbutton').waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-modules-panel', '.studio');
       await studio.getByRole('button', { name: 'Add module' }).click();
       await page.getByRole('dialog', { name: 'Add a module' }).getByRole('option').first()
         .waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('item-modules-picker', '.scrim');
       ctx.needsEyes(
-        'item-modules-studio shows the display card (name, lore, texture/model slots and the preview) at the top, then one compact card per module (Base material, Durability, Soulbound, Console Commands) each with its Lucide icon, origin line and Remove; the dashed Add module button sits after the cards; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
+        'item-modules-studio shows the Appearance component at the top left, then the module list below it: compact rows with an icon and the name only (Base material, Durability, Soulbound, Console Commands), no settings inside a row, a trash icon at the end of each removable row, and the dashed Add module button after the rows; the right side holds the settings panel, empty with nothing selected; item-modules-panel shows only the selected Durability settings (Max durability 500) in the panel with the row highlighted; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
       );
+    },
+  }),
+
+  // The module list and its settings panel (issue 174): rows hold titles and markers only, one
+  // selected module's settings are in the panel, the arrow keys move the list, Escape returns from
+  // the panel, and removal is an icon with Undo. Nothing is saved, so the sample pack ends as it started.
+  test({
+    id: 'editor.browser-item-module-panel',
+    title: 'sample:ruby_sword opens one module\'s settings in the panel; arrows move the module list, Enter and Escape move focus, and a removed module comes back with Undo',
+    dependsOn: ['editor.browser-item-modules'],
+    covers: [
+      ...WORKBENCH_COVERS,
+      'webui/src/lib/modules.ts',
+      'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/lib/studio/Studio.svelte',
+      'webui/src/lib/drafts.svelte.ts',
+      'webui/src/lib/components/icons.ts',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.locator('[data-module="material"]').waitFor({ state: 'visible', timeout: 20_000 });
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      const rowNamed = (name) => studio.getByRole('button', { name: new RegExp(`^${name}( Inherited)?( Has a problem)?$`) });
+
+      // Nothing selected: the panel holds no module's settings.
+      ctx.expect(await panel.getByRole('spinbutton').count()).toBe(0);
+      await rowNamed('Durability').click();
+      ctx.expect(await panel.getByRole('spinbutton').inputValue()).toBe('500');
+      // Selecting another row swaps the settings: only one module is in the panel at a time.
+      await rowNamed('Console Commands').click();
+      ctx.expect(await panel.getByRole('spinbutton').count()).toBe(0);
+      ctx.expect(await rowNamed('Durability').getAttribute('aria-current')).toBe(null);
+
+      // Arrow keys move through the list and select as they go.
+      await rowNamed('Base material').focus();
+      await page.keyboard.press('ArrowDown');
+      ctx.expect(await rowNamed('Soulbound').evaluate((node) => node === document.activeElement)).toBeTruthy();
+      // Enter opens the settings and moves focus into the panel; Escape returns focus to the list.
+      await rowNamed('Durability').focus();
+      await page.keyboard.press('Enter');
+      ctx.expect(await page.evaluate(() => Boolean(document.activeElement?.closest('[aria-label="Module settings"]')))).toBeTruthy();
+      await page.keyboard.press('Escape');
+      ctx.expect(await rowNamed('Durability').evaluate((node) => node === document.activeElement)).toBeTruthy();
+      await studio.getByRole('button', { name: /open in files/i }).waitFor({ state: 'visible' });
+
+      // Remove is a trash icon on the row; Undo brings it back, and nothing was staged to save.
+      await studio.locator('[data-module="mechanic:materione:soulbound"]').getByRole('button', { name: 'Remove Soulbound' }).click();
+      ctx.expect(await studio.locator('[data-module="mechanic:materione:soulbound"]').count()).toBe(0);
+      await studio.getByRole('status').filter({ hasText: 'Removed Soulbound' }).getByRole('button', { name: 'Undo' }).click();
+      ctx.expect(await studio.locator('[data-module="mechanic:materione:soulbound"]').count()).toBe(1);
+      ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isDisabled()).toBeTruthy();
     },
   }),
 

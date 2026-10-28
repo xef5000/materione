@@ -192,8 +192,7 @@ export function removeDraftField(draft: DocumentDraft, field: string[]): void {
     throw new Error('Apply or discard the pending YAML/uncertain write before editing fields.');
   }
   if (!field.length) throw new Error('A field path is required.');
-  draft.values = { ...draft.values };
-  unassign(draft.values, field);
+  draft.values = withoutPath(draft.values, field);
   draft.edits = draft.edits.filter((edit) => !samePath(edit.field, field));
   if (fieldValue(draft.base, field) !== undefined) {
     draft.edits.push({ field: [...field], value: undefined, remove: true });
@@ -212,14 +211,25 @@ export function pendingRemoval(draft: DocumentDraft, field: string[]): boolean {
   return draft.edits.some((edit) => edit.remove && samePath(edit.field, field));
 }
 
-function unassign(values: Record<string, unknown>, path: string[]): void {
-  let parent = values;
-  for (const key of path.slice(0, -1)) {
-    if (!Object.hasOwn(parent, key) || record(parent[key]) !== parent[key]) return;
-    assignOwn(parent, key, { ...record(parent[key]) });
-    parent = record(parent[key]);
+/**
+ * The values without the key at `path`, copied along the way. A `delete` on a
+ * Svelte state proxy is not enough: Svelte 5 keeps the key's descriptor, so
+ * `Object.hasOwn` still reports a removed key and a removed module stayed on
+ * screen. A copy has no such residue, and every level it touches is new, so the
+ * studio's derived values see the change.
+ */
+function withoutPath(values: Record<string, unknown>, path: string[]): Record<string, unknown> {
+  const [head, ...rest] = path;
+  if (head === undefined || !Object.hasOwn(values, head)) return values;
+  const copy = { ...values };
+  if (rest.length === 0) {
+    delete copy[head];
+    return copy;
   }
-  delete parent[path[path.length - 1]!];
+  const child = values[head];
+  if (record(child) !== child) return values;
+  assignOwn(copy, head, withoutPath(record(child), rest));
+  return copy;
 }
 
 export async function saveDocumentDraft(draft: DocumentDraft, channel: RpcChannel): Promise<boolean> {

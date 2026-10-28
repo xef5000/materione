@@ -684,10 +684,11 @@ cannot read, forge, replay, or reorder anything.
   `target` field opens the studio with that field scrolled into view and focused; resource matching
   is exact (`<pack>:<id>`), not a substring.
   Studios render two behaviour widgets from the type registry: `mechanics` (an item's abilities) and
-  `behavior-rules` (`behavior:` on items, blocks and furniture). Ability cards are generated from each
-  mechanic's self-description: the name carries a hover hint with the description, **Activates:**
-  (the declared sentence, or an explicit "does not say") and built-in or "added by <plugin>"; an
-  add-on's origin also shows on the card (issue #172). Parameters go through the shared field
+  `behavior-rules` (`behavior:` on items, blocks and furniture). Ability rows open their settings in
+  the studio's settings panel (issue #174, below), generated from each mechanic's self-description:
+  the panel's title carries a hover hint with the description, **Activates:** (the declared sentence,
+  or an explicit "does not say") and built-in or "added by <plugin>"; an add-on's origin also shows in
+  the panel (issue #172). Parameters go through the shared field
   control, and their schema descriptions are hover hints too. Non-repeatable abilities cannot be added twice; unqualified names are written for
   `materione:` mechanics and qualified names for add-ons. Entries the server does not register stay
   visible as "not registered on this server" with their settings untouched, and parameters the
@@ -712,8 +713,9 @@ cannot read, forge, replay, or reorder anything.
   rewrites the saved file; the menu says why) and reconciles the draft from the result. When a root
   inherits through more than one template, the menu shows the chain (each link opens that
   template); a template that does not resolve turns the chip into a warning, and the menu states
-  the resolution failure. The modules a resource only has through its template appear as dashed **Inherited from
-  …** cards with the value and **Override here** (copies the template's value into the resource);
+  the resolution failure. The modules a resource only has through its template appear as dashed rows
+  marked **Inherited**; selecting one shows **Inherited from …**, its value and **Override here** (copies the
+  template's value into the resource) in the settings panel;
   display-card fields and extras keep their per-field lines — **Inherited from …** with the
   effective value, or **Overrides …** with the template's value and **Reset to inherited**, which
   stages a removal edit (undoable) applied by the next revision-checked **Save & apply**. The
@@ -767,8 +769,8 @@ cannot read, forge, replay, or reorder anything.
   holds the formatted name, the lore, and the texture/model slots (with the existing
   Draw/Edit-in-Blockbench actions and the missing-texture repair panel); for items it is the
   **Appearance component** (issue #173, below). Each **module** is a
-  card: schema field modules (base material — required, so its card has no Remove — model style,
-  jukebox song), one card per authored mechanic instance (labelled and explained by the mechanic
+  row (issue #174): schema field modules (base material — required, so its row has no remove icon — model style,
+  jukebox song), one row per authored mechanic instance (labelled and explained by the mechanic
   registry; unregistered entries stay visible with their settings untouched), and one
   "When… do…" rules module wrapping the rules editor. The **picker** searches labels, summaries
   and categories with chip filters and keyboard navigation, marks already-added modules
@@ -776,9 +778,10 @@ cannot read, forge, replay, or reorder anything.
   and removing stages the same lossless edits as the classic sections — one
   `authoring.setFields` batch on **Save & apply**; removing the last ability removes the
   `mechanics:` key rather than writing an empty list; a module with no honest default (a
-  reference the author has not chosen) opens an empty card and writes its key only when a value
+  reference the author has not chosen) opens an empty module and writes its key only when a value
   is set. Advanced fields (`components`) stay reachable through an Advanced
-  disclosure and the footer's Advanced-only report; every card carries **Show in file**.
+  disclosure and the footer's Advanced-only report. **Show in file** is gone from the rows (issue #174):
+  **Open in Files** in the studio header is the way to the file.
   Coverage is honest: only what the plugin applies today is a module (display name/lore, the
   mechanics, jukebox song) — the `components:` block still warns instead of applying (#103), so
   component modules (attack damage/speed, glint, tint, can-break…) wait for the M7 pass-through.
@@ -800,11 +803,34 @@ cannot read, forge, replay, or reorder anything.
   `authoring.setFields`. **Name and lore are the tooltip**: two `RichTextEditor`s (`bare`: no
   frame of their own) inside one Minecraft-style tooltip, with the selection toolbar. Appearance-
   category field modules (the model style) become the component's `...` menu rather than module
-  cards. Inheritance lines (Inherited from / Overrides / Reset to inherited) sit under the control
+  rows. Inheritance lines (Inherited from / Overrides / Reset to inherited) sit under the control
   they concern. Blocks, furniture and the other types keep the display card until a later pass
   reuses the component. The classic (non-module) item layout keeps its side preview, minus the
   duplicate slot. Specs: `appearance.pw.ts`, `asset-choice.spec.ts`; QA entries
   `editor.browser-item-appearance[-visual]`.
+- *As built (M5 module list and settings panel, issue #174):* the modules area is a **list and a
+  panel**. The list (`ModulesArea.svelte`, with the Appearance component above it for items) holds one
+  compact row per module: its icon and name, a **Has a problem** marker when a diagnostic names its
+  field (or its texture is missing), and **Inherited** for a template's module. A row holds no
+  settings. Selecting a row (a click, or the arrow keys, which move focus and selection together) opens
+  that module in the **settings panel** on the right, and only the selected module is rendered there:
+  a field's control with its inheritance line, an ability's parameters, the **When… do…** editor, or an
+  inherited module's value with **Override here**. With nothing selected the panel is an empty column.
+  **Add module** stays last in the list and selects what it adds, so its settings open and take focus.
+  The trash icon (accessible name "Remove <module>") stages the same removal as before; a
+  **Removed … · Undo** notice under the list restores it until the next add or removal. Keyboard:
+  arrows and Home/End move through the rows, **Enter** opens the settings and moves focus into the
+  panel, and **Escape** in the panel returns focus to the selected row (the studio's Escape-to-close
+  does not fire there). A Problems **Fix**, or a repair link, for a module field selects its module
+  before it focuses the control (`ModulesArea.reveal`, called from `Studio.focusField`). The list and the
+  panel share the studio body and scroll separately; below 1100 px the panel stacks under the list. The
+  panel's layout is a media query, not a container query: a container ancestor would turn every
+  `position: fixed` rich-text toolbar into a child of that box. The draft store removes a key by copying
+  along its path rather than deleting it from the state proxy, so a removed module leaves the list at
+  once. Blocks and furniture use the same area and get the panel too. Motion: a selection change fades
+  its settings in over `--motion-fast`; reduced motion makes it instant. Specs: `item-modules.pw.ts`,
+  `block-furniture-modules.pw.ts`, `templates.pw.ts`, `motion.pw.ts`; QA entries
+  `editor.browser-item-module-panel` and `editor.browser-item-modules[-visual]`.
 - *As built (M5 per-type modules, issue #153 — blocks and furniture):* blocks and furniture use
   the same display + modules framework, with every module declared in the Java self-description
   (plugin.md §3) and the browser fixture serving those schemas straight from the plugin's golden
@@ -1063,7 +1089,7 @@ through `motionMs()` in `src/lib/motion.ts`, so the two cannot drift.
 
 | Token | Value | Used for |
 |---|---|---|
-| `--motion-fast` | 120 ms | hover, press and focus; dialog, palette and menu exits; chip and row color; the drag band |
+| `--motion-fast` | 120 ms | hover, press and focus; dialog, palette and menu exits; chip and row color; the drag band; the settings panel when the selected module changes |
 | `--motion-base` | 200 ms | dialog and palette entrances; menu pop-in; module and row add/remove; view switch; thumbnail fade-in |
 | `--motion-slow` | 320 ms | the Save & apply sweep; the success settle |
 | `--motion-shimmer` | 1400 ms | the skeleton loop (a placeholder, not a spinner) |

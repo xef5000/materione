@@ -87,10 +87,15 @@ export default [
       // base_item sets the material: it arrives as an inherited module, not a copy.
       const inherited = studio.locator('[data-inherited-module="material"]');
       await inherited.waitFor({ state: 'visible', timeout: 20_000 });
-      ctx.expect(await inherited.innerText()).toContain('Inherited from base_item');
+      ctx.expect(await inherited.innerText()).toContain('Inherited');
+
+      // Select the inherited row: its origin and value show in the settings panel, where it is overridden.
+      await inherited.getByRole('button').click();
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      ctx.expect(await panel.innerText()).toContain('Inherited from base_item');
 
       // Override it here, apply, then detach: the template's values become the item's own.
-      await inherited.getByRole('button', { name: 'Override here' }).click();
+      await panel.getByRole('button', { name: 'Override here' }).click();
       const save = studio.getByRole('button', { name: 'Save & apply' });
       await save.click();
       const deadline = Date.now() + 20_000;

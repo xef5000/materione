@@ -511,6 +511,19 @@ const MODULES_VOCABULARY = {
   ],
 };
 
+// The ?modules fixture's module diagnostic: a Problems row whose Fix opens the
+// item with its base material module selected and the field focused (issue 174).
+const MODULES_DIAGNOSTICS = [
+  {
+    code: 'MTR-0012',
+    severity: 'WARN',
+    message: 'resource fixture_pack:ruby_sword: material NETHERITE_SWORD is not available on this server version',
+    resource: 'fixture_pack:ruby_sword',
+    hint: 'choose another material, then /materione reload',
+    target: { field: ['material'] },
+  },
+];
+
 const GUIDED_DIAGNOSTICS = [
   {
     code: 'MTR-0010',
@@ -1088,7 +1101,9 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.moveAsset(op, payload);
       case 'admin.diagnostics.recent':
         return this.success(op, {
-          diagnostics: structuredClone(this.#guided ? [...DIAGNOSTICS, ...GUIDED_DIAGNOSTICS] : DIAGNOSTICS),
+          diagnostics: structuredClone(this.#guided
+            ? [...DIAGNOSTICS, ...GUIDED_DIAGNOSTICS]
+            : this.#modules ? [...DIAGNOSTICS, ...MODULES_DIAGNOSTICS] : DIAGNOSTICS),
         });
       case 'delivery.status':
         return this.success(op, {
