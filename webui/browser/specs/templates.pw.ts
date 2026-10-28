@@ -53,7 +53,7 @@ test('Ruby Dagger from base_item: create, see the inherited modules, change a va
   await expect(page.locator('[data-inherited-module="material"]')).toContainText('PAPER');
   await expect(page.locator('[data-inherited-module="model_parent"]')).toContainText('item/handheld');
   await expect(page.locator('[data-inherited-module="mechanic:materione:durability#0"]')).toContainText('max 250');
-  await expect(page.getByText('Inherits from')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
 
   // Step 2: override one module; the save writes only that key, the link stays.
   await page.locator('[data-inherited-module="model_parent"]').getByRole('button', { name: 'Override here' }).click();
@@ -75,7 +75,7 @@ test('Ruby Dagger from base_item: create, see the inherited modules, change a va
   // Step 3: detach copies what is inherited, keeps the override and drops the link.
   await page.locator('[data-based-on-button]').click();
   await page.locator('[data-detach]').click();
-  await expect(page.getByText('Nothing is inherited; every value is set here.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Template: No template' })).toBeVisible();
   const detached = await documentOf(page, 'items/ruby_dagger.yml');
   expect(detached?.parsed.ruby_dagger).toEqual({
     display_name: 'Ruby Dagger',
@@ -194,7 +194,7 @@ test('Templates is a Content tab: create one from scratch, edit it with the type
   expect(pageErrors).toEqual([]);
 });
 
-test('no studio shows a raw template field: the link is the "Based on" control', async ({ page }) => {
+test('no studio shows a raw template field: the link is the template control in the header', async ({ page }) => {
   const pageErrors = await openModules(page);
   await openResource(page, 'Items', 'Ruby Sword');
   await expect(page.locator('[data-based-on]')).toBeVisible();
@@ -222,17 +222,17 @@ test('no studio shows a raw template field: the link is the "Based on" control',
   expect(pageErrors).toEqual([]);
 });
 
-test('Based on switches the template without leaving the studio, and says what applies when', async ({ page }) => {
+test('the template chip switches the template without leaving the studio; Save & apply writes it', async ({ page }) => {
   const pageErrors = await openModules(page);
   await openResource(page, 'Items', 'Ember Charm');
-  await expect(page.locator('[data-based-on-button]')).toContainText('Nothing');
-  await expect(page.getByText('Nothing is inherited; every value is set here.')).toBeVisible();
+  await expect(page.locator('[data-based-on-button]')).toContainText('No template');
   // a resource with no link cannot be "detached"
   await page.locator('[data-based-on-button]').click();
   await expect(page.locator('[data-detach]')).toHaveCount(0);
   await page.getByRole('searchbox', { name: 'Search templates' }).fill('base');
   await page.getByRole('option', { name: /A base item/ }).getByRole('button').click();
-  await expect(page.getByText(/Will inherit from A base item once you apply/)).toBeVisible();
+  // the chip shows the staged choice; nothing is written until Save & apply
+  await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
   const save = await saveAndApply(page, 1);
   expect(save.payload.edits).toEqual([{ field: ['ember_charm', 'template'], value: 'base_item' }]);
   await expect(page.locator('[data-inherited-module="model_parent"]')).toContainText('item/handheld');

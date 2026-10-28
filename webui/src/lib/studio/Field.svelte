@@ -63,7 +63,8 @@
   }
 </script>
 
-<div class="field" data-field={field.id}>
+<!-- The schema's description is a hover hint, not a visible paragraph (issue 172). -->
+<div class="field" data-field={field.id} title={field.description || undefined}>
   {#if !composite}
     <label class="label" class:sr-only={hideLabel && field.type !== 'boolean'} for={controlId}>
       {field.label || field.id}
@@ -120,15 +121,14 @@
         >{option.label}</button>
       {/each}
     </div>
-    {#if chosen?.description}<small>{chosen.description}</small>{/if}
   {:else if choices.length > 0}
-    <select id={controlId} value={text} onchange={(event) => onChange(coerce(event.currentTarget.value))}>
+    <select id={controlId} value={text} title={chosen?.description || undefined}
+      onchange={(event) => onChange(coerce(event.currentTarget.value))}>
       {#if !field.required}<option value=""></option>{/if}
       {#each choices as option (option.value)}
         <option value={option.value}>{option.label}</option>
       {/each}
     </select>
-    {#if chosen?.description}<small>{chosen.description}</small>{/if}
   {:else if field.type === 'boolean'}
     <input
       id={controlId}
@@ -177,10 +177,6 @@
         if (event.key === 'Enter') event.currentTarget.blur();
       }}
     />
-  {/if}
-
-  {#if field.description && !chosen?.description}
-    <small>{field.description}</small>
   {/if}
 </div>
 
@@ -300,10 +296,5 @@
   }
   .action:hover {
     background: var(--bg-hover);
-  }
-  small {
-    color: var(--muted);
-    font-size: var(--text-xs);
-    line-height: 1.4;
   }
 </style>

@@ -113,6 +113,29 @@ export function mechanicInfo(vocabulary: BehaviorVocabulary | null, name: string
   return vocabulary?.mechanics.find((mechanic) => mechanic.id === id);
 }
 
+/** Built into Materione (as opposed to added by a plugin). */
+export function isBuiltInMechanic(mechanic: Pick<MechanicInfo, 'id'>): boolean {
+  return mechanic.id.startsWith('materione:');
+}
+
+/** Where a mechanic comes from, as the editor words it. */
+export function mechanicOrigin(mechanic: MechanicInfo): string {
+  return isBuiltInMechanic(mechanic) ? 'Built in' : `Added by ${mechanic.registeredBy}`;
+}
+
+/**
+ * What an ability does, when it activates and where it comes from, as one
+ * hover hint on its name (issue 172): the cards show the name, not this copy.
+ */
+export function mechanicHint(mechanic: MechanicInfo | null | undefined): string | undefined {
+  if (!mechanic) return undefined;
+  return [
+    mechanic.description,
+    `Activates: ${mechanic.activation ?? 'this ability does not say when it activates; check its documentation.'}`,
+    mechanicOrigin(mechanic),
+  ].filter(Boolean).join('\n');
+}
+
 /** Sets (or, when blank, removes) one parameter of one mechanic entry. Other entries are untouched. */
 export function setMechanicParam(value: unknown, index: number, key: string, next: unknown): unknown[] {
   const list = Array.isArray(value) ? clone(value) : [];

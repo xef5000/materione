@@ -131,7 +131,7 @@
         {#if matches.length === 0}
           <p class="none">No matching item.</p>
         {:else if matches.length > visible.length}
-          <p class="none">Showing {visible.length} of {matches.length}. Keep typing to narrow the list.</p>
+          <p class="none">Showing {visible.length} of {matches.length}.</p>
         {/if}
       </div>
     </div>

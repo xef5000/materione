@@ -71,7 +71,7 @@
           {/each}
         </div>
         {#if !matches.length}<p>No matching material on this server.</p>
-        {:else if matches.length > visible.length}<p>Showing {visible.length} of {matches.length}. Keep typing to narrow the list.</p>{/if}
+        {:else if matches.length > visible.length}<p>Showing {visible.length} of {matches.length}.</p>{/if}
       </div>
     {/if}
   {:else}

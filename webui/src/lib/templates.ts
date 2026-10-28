@@ -22,7 +22,8 @@ export function acceptsTemplates(schema: TypeInfo | undefined): boolean {
 
 /**
  * The schema a studio renders: the template link is a creation choice shown by
- * the "Based on" control, so the raw field is not a form control anywhere.
+ * the template control in the studio header, so the raw field is not a form
+ * control anywhere.
  * A template itself is a *partial* definition, so nothing is required of it.
  */
 export function studioSchema(schema: TypeInfo | undefined, partial: boolean): TypeInfo | undefined {

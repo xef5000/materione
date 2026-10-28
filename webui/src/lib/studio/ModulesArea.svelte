@@ -14,13 +14,16 @@
   import { flip } from 'svelte/animate';
   import { motionMs } from '../motion';
   import type { DiagnosticEntry, ResourceRef, TypeInfo, TypeParam } from '../api';
-  import type { BehaviorVocabulary, MechanicEntry, MechanicInfo } from '../behavior';
+  import type { BehaviorVocabulary, MechanicEntry } from '../behavior';
   import {
     addMechanic,
     authoredMechanicName,
     fullMechanicId,
+    isBuiltInMechanic,
+    mechanicHint,
     mechanicInfo,
     mechanicEntries,
+    mechanicOrigin,
     removeAt,
     setMechanicParam,
   } from '../behavior';
@@ -178,10 +181,6 @@
     }
   }
 
-  function originOf(mechanic: MechanicInfo): string {
-    return mechanic.id.startsWith('materione:') ? 'Built in' : `Added by ${mechanic.registeredBy}`;
-  }
-
   function cardLabel(card: Card): string {
     if (card.kind !== 'unknown') return card.descriptor.label;
     return card.entry.name ? authoredMechanicName(fullMechanicId(card.entry.name)) : 'Unreadable entry';
@@ -244,9 +243,9 @@
     >
       <header>
         <Icon name={cardIcon(card)} size={16} />
-        <strong>{cardLabel(card)}</strong>
+        <strong title={mechanicHint(info)}>{cardLabel(card)}</strong>
         {#if info}
-          <span class="origin">{originOf(info)}</span>
+          {#if !isBuiltInMechanic(info)}<span class="origin">{mechanicOrigin(info)}</span>{/if}
         {:else if card.kind === 'unknown' && card.entry.name}
           <span class="origin">{fullMechanicId(card.entry.name)} · not registered on this server</span>
         {:else if card.kind === 'unknown'}
@@ -263,11 +262,6 @@
       </header>
       {#if card.kind === 'mechanic'}
         {#if info}
-          <p class="description">{info.description}</p>
-          <p class="activation" class:unknown={!info.activation}>
-            <span>Activates:</span>
-            {info.activation ?? 'this ability does not say when it activates; check its documentation.'}
-          </p>
           {#each info.parameters ?? [] as param (param.id)}
             <Field field={param} value={paramValue(card.entry.params, param)} pack={resource.pack}
               onChange={(next) => run(() => set(card.descriptor.sourceField ?? 'mechanics',
@@ -386,7 +380,6 @@
     white-space: nowrap;
   }
   .origin {
-    flex: 1;
     min-width: 0;
     color: var(--faint);
     font-size: var(--text-xs);
@@ -394,8 +387,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  /* Pushes the header's buttons to the end, whether or not an origin tag is shown. */
   .spacer {
-    flex: none;
+    flex: 1 1 0;
+    min-width: 0;
   }
   .ghost {
     border: 1px solid var(--border-strong);
@@ -415,18 +410,10 @@
   .inherited {
     border-style: dashed;
   }
-  .description,
-  .activation,
   .note {
     margin: 0 0 var(--space-2);
     font-size: var(--text-sm);
     color: var(--muted);
-  }
-  .activation span {
-    color: var(--fg);
-  }
-  .activation.unknown {
-    color: var(--warn);
   }
   .field-issue {
     margin: 0;

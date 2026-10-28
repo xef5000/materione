@@ -210,7 +210,7 @@ test('opens the selected resource root when several items share one document', a
   });
   await expect(result).toBeVisible();
   await result.dblclick();
-  await expect(page.locator('.studio header .meta')).toContainText('ruby_b');
+  await expect(page.locator('.studio').getByRole('heading', { name: 'ruby_b', exact: true })).toBeVisible();
   await expect(page.getByLabel('Display name', { exact: true })).toHaveText('Ruby B');
   const materialField = page.locator('[data-field="material"]');
   await expect(materialField.locator('.current code')).toHaveText('CUSTOM_FUTURE_MATERIAL');

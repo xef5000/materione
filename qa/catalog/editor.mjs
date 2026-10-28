@@ -840,7 +840,7 @@ export default [
 
   test({
     id: 'editor.browser-item-workbench-visual',
-    title: 'sample:ruby_sword Item Studio presents a browser-only formatted draft and honest game-check status',
+    title: 'sample:ruby_sword Item Studio presents a browser-only formatted draft under its id, with no explanatory copy beside the fields',
     mode: 'visual',
     dependsOn: ['editor.browser-item-workbench-draft'],
     covers: WORKBENCH_COVERS,
@@ -859,7 +859,7 @@ export default [
       await studio.getByRole('button', { name: 'Edit item name' }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('sample-ruby-sword-item-workbench');
       ctx.needsEyes(
-        'the real local Materione App shows sample:ruby_sword in Item Studio with a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action; any game-check/candidate text must not claim that gameplay or player delivery was verified' + IDENTITY_EYES,
+        'the real local Materione App shows sample:ruby_sword in Item Studio with the resource id as its header title, a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action, with no explanatory copy under the fields; nothing claims that gameplay or player delivery was verified' + IDENTITY_EYES,
       );
     },
   }),
@@ -961,8 +961,7 @@ export default [
         await page.getByRole('button', { name: 'Open in Studio' }).click();
         const studio = page.locator('.studio');
         await studio.waitFor({ state: 'visible' });
-        const studioMeta = await studio.locator('header .meta').innerText();
-        ctx.expect(studioMeta.split(' · ')[0]).toBe('ruby_sword');
+        ctx.expect(await studio.getByRole('heading', { name: 'ruby_sword', exact: true }).count()).toBe(1);
         ctx.expect(await fieldText(studio.getByLabel('Display name', { exact: true }))).toBe('Ruby Sword');
         await page.getByRole('button', { name: /Open in Files/ }).click();
         await page.getByRole('heading', { name: 'sample:ruby_sword', exact: true })
@@ -982,8 +981,7 @@ export default [
 
         await page.getByRole('button', { name: 'Content', exact: true }).click();
         await studio.waitFor({ state: 'visible' });
-        ctx.expect((await studio.locator('header .meta').innerText()).split(' · ')[0])
-          .toBe('ruby_sword');
+        ctx.expect(await studio.getByRole('heading', { name: 'ruby_sword', exact: true }).count()).toBe(1);
         ctx.expect(await fieldText(studio.getByLabel('Display name', { exact: true }))).toBe('Ruby Sword QA Draft');
         await page.getByRole('button', { name: /Open in Files/ }).click();
         await page.getByRole('heading', { name: 'sample:ruby_sword', exact: true })
@@ -1120,8 +1118,10 @@ export default [
       await picker.getByLabel('Search modules').press('Enter');
       const card = studio.locator('[data-module="mechanic:materione:food"]');
       await card.waitFor({ state: 'visible' });
-      ctx.expect(await card.innerText()).toContain('Built in');
-      ctx.expect(await card.innerText()).toContain('Activates: When the player eats');
+      // Origin and activation are a hover hint on the ability's name, not copy on the card.
+      const hint = await card.locator('header strong').getAttribute('title');
+      ctx.expect(hint).toContain('Built in');
+      ctx.expect(hint).toContain('Activates: When the player eats');
 
       // Rules are their own When… do… module; events come from the server's table.
       await studio.getByRole('button', { name: 'Add module' }).click();
@@ -1223,7 +1223,7 @@ export default [
       await rules.getByRole('button', { name: 'Add rule' }).click();
       await ctx.browser.browserShot('sample-templated-ruby-guided-authoring');
       ctx.needsEyes(
-        'the studio reads as a display card plus module cards: the header names the base_item template; the Base material module card reads "Inherited from base_item: PAPER"; a Soulbound module card says Built in and when it activates; a When… do… module holds a rule reading "On right click: send message …" with an activation line from the event table; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
+        'the studio reads as a display card plus module cards: the header shows the resource id with a compact template chip naming the base_item template (no full-width Based on row); the Base material module card reads "Inherited from base_item: PAPER"; a Soulbound module card shows its name with no origin tag or activation copy (its hover hint carries both); a When… do… module holds a rule reading "On right click: send message …" with no explanatory line under it; nothing claims the behaviour was verified in game and Save & apply is the only write' + IDENTITY_EYES,
       );
     },
   }),

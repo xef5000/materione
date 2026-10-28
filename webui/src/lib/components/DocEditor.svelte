@@ -264,7 +264,6 @@
       {saving ? 'Saving...' : 'Save & apply'}
     </button>
   </header>
-  <p class="impact">Saving applies gameplay changes server-wide. Publish pack releases the resource pack to other players.</p>
   {#if source && draft.loaded}
     <section class="source">
       <p class="impact">
