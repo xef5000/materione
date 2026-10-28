@@ -8,3 +8,14 @@ dependencies {
     api(project(":api"))
     api(project(":core"))
 }
+
+sourceSets {
+    main {
+        // The smallcaps font source is one file shared with the studio (fonts/smallcaps/, gui.md
+        // section 4): the jar carries it so SmallcapsFont reads the same pixels the webui does.
+        resources {
+            srcDir(rootProject.file("fonts"))
+            include("**/*.txt")
+        }
+    }
+}

@@ -1,8 +1,8 @@
 diagnostics: 0
 fonts:
   shop:gui {type=bitmap, file=shop:font/materione/gui/shop.png, ascent=13, height=222, chars=[]}
-  shop:gui/smallcaps_y6 {type=space, advances={ =4}}
+  shop:gui/smallcaps_y6 {type=space, advances={ =3}}
   shop:gui/smallcaps_y6 {type=bitmap, file=shop:font/materione/smallcaps.png, ascent=7, height=16, chars=[\u0000!"#$%&'()*+,-./, 0123456789:;<=>?, @ABCDEFGHIJKLMNO, PQRSTUVWXYZ[\]^_, `abcdefghijklmno, pqrstuvwxyz{|}~\u0000]}
 assets:
   assets/shop/textures/font/materione/gui/shop.png 176x222 a2787ea9a8c0f460eb5eb82c3f26f7827bf6a034087c128472cb81dd998d7e84
-  assets/shop/textures/font/materione/smallcaps.png 128x96 c607b0f8552c770099c8eb146e0ce7f7efb72cee15f6d0a33f8b45b80dd2ba95
+  assets/shop/textures/font/materione/smallcaps.png 128x96 3a800a0ac6656933d78ca25a38654fb9778522bc95d988344a039ccdc8dc4897
