@@ -521,8 +521,11 @@ Editor connectivity comes in two modes, speaking the **same versioned API**:
   behind shared hosting, NAT, or a proxy network.
 - **Direct mode (opt-in).** The plugin embeds the same HTTP + WS API in a local server (bound
   to localhost by default; reverse-proxy pattern documented for teams). For LAN, air-gapped, or
-  "I self-host everything" setups — and as the fallback if relay infrastructure is ever
-  unreachable.
+  "I self-host everything" setups — and as the explicit alternative if relay infrastructure is
+  ever unreachable (never an automatic fallback: whether the port is reachable from the admin's
+  browser is unknowable server-side). The cloud editor switches to a local listener on its own
+  only after the browser proves, with a session-bound signature, that it can reach it
+  (web.md §4.4).
 
 The frontend is a **separate build artifact** (SPA) — no Node on the server, no build step for
 the admin. It talks only to the documented API, which is therefore also the automation surface

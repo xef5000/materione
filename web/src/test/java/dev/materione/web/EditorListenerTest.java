@@ -237,6 +237,118 @@ class EditorListenerTest {
         ws.abort();
     }
 
+    @Test
+    void probeProvesTheSessionBoundIdentityWithoutBurningTheSession() throws Exception {
+        int port = PORT_BASE + new SecureRandom().nextInt(PORT_SPREAD);
+        KeyPair identity = KeyFormat.generateEd25519(new SecureRandom());
+        EditorSessions sessions = new EditorSessions(
+                identity, (prefix, browser) ->
+                        CompletableFuture.completedFuture(TrustPrompt.Decision.APPROVED),
+                null, bus);
+        listener = new EditorListener(
+                sessions, new EditorSockets(sessions, new RpcDispatcher(), bus), new RpcDispatcher(), bus);
+        assertThat(listener.start(new EditorConfig("127.0.0.1", port))).isTrue();
+        String code = URI.create(listener.openSessionUrl(null)).getQuery().substring("s=".length());
+
+        HttpClient http = HttpClient.newHttpClient();
+        WsClient client = new WsClient();
+        WebSocket ws = http.newWebSocketBuilder()
+                .buildAsync(URI.create("ws://127.0.0.1:" + listener.boundPort() + "/editor/ws"), client)
+                .get(10, TimeUnit.SECONDS);
+        String challenge = Wire.encode(nonce());
+        ws.sendText(probeText(code, challenge), true).get(5, TimeUnit.SECONDS);
+
+        JsonObject reply = Wire.parseObject(client.firstMessage.get(10, TimeUnit.SECONDS));
+        assertThat(reply.get("type").getAsString()).isEqualTo("probe-reply");
+        assertThat(reply.get("sessionId").getAsString()).isEqualTo(code);
+        // the signature verifies under the identity key the blob advertises, over the bound text
+        assertThat(SessionCrypto.verify(
+                identity.getPublic(),
+                dev.materione.web.protocol.ProbeMessage.signedBytes(code, challenge),
+                Wire.requiredBinary(reply, "sig"))).isTrue();
+        // ... and does NOT verify for another challenge: a recorded reply is useless
+        assertThat(SessionCrypto.verify(
+                identity.getPublic(),
+                dev.materione.web.protocol.ProbeMessage.signedBytes(code, Wire.encode(nonce())),
+                Wire.requiredBinary(reply, "sig"))).isFalse();
+
+        // the very same socket then completes a normal handshake: probing is free
+        KeyPair editorSigning = KeyFormat.generateEd25519(new SecureRandom());
+        KeyPair editorEphemeral = KeyFormat.generateP256(new SecureRandom());
+        HelloMessage hello = new HelloMessage(
+                nonce(), code, Wire.VERSION,
+                KeyFormat.ed25519RawPublic(editorSigning.getPublic()),
+                KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) editorEphemeral.getPublic()),
+                "after-probe");
+        ws.sendText(Wire.canonicalJson(hello.toJson()), true).get(5, TimeUnit.SECONDS);
+        long deadline = System.currentTimeMillis() + 10_000;
+        while (listener.activeSessions() < 1 && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        assertThat(listener.activeSessions()).isEqualTo(1);
+        // a clean probe is not a protocol violation
+        assertThat(published).doesNotContain("MTR-0033");
+        ws.abort();
+    }
+
+    @Test
+    void probeForAnUnknownOrClaimedSessionIsDeclinedQuietly() throws Exception {
+        int port = PORT_BASE + new SecureRandom().nextInt(PORT_SPREAD);
+        KeyPair identity = KeyFormat.generateEd25519(new SecureRandom());
+        // never answers the trust prompt: the first hello leaves the session claimed
+        EditorSessions sessions = new EditorSessions(
+                identity, (prefix, browser) -> new CompletableFuture<>(), null, bus);
+        listener = new EditorListener(
+                sessions, new EditorSockets(sessions, new RpcDispatcher(), bus), new RpcDispatcher(), bus);
+        assertThat(listener.start(new EditorConfig("127.0.0.1", port))).isTrue();
+        String code = URI.create(listener.openSessionUrl(null)).getQuery().substring("s=".length());
+        HttpClient http = HttpClient.newHttpClient();
+        String uri = "ws://127.0.0.1:" + listener.boundPort() + "/editor/ws";
+
+        // unknown session id: socket closed (4404), nothing answered, no diagnostic
+        CloseWatcher unknown = new CloseWatcher();
+        WebSocket stranger = http.newWebSocketBuilder().buildAsync(URI.create(uri), unknown).get(10, TimeUnit.SECONDS);
+        stranger.sendText(probeText("zzzzzzzzzzzzzzzzzzzzzz", Wire.encode(nonce())), true).get(5, TimeUnit.SECONDS);
+        assertThat(unknown.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(4404);
+
+        // a session already claimed by a hello is no longer probeable
+        WebSocket claimant = http.newWebSocketBuilder().buildAsync(URI.create(uri), new WsClient()).get(10, TimeUnit.SECONDS);
+        KeyPair editorSigning = KeyFormat.generateEd25519(new SecureRandom());
+        KeyPair editorEphemeral = KeyFormat.generateP256(new SecureRandom());
+        claimant.sendText(Wire.canonicalJson(new HelloMessage(
+                nonce(), code, Wire.VERSION,
+                KeyFormat.ed25519RawPublic(editorSigning.getPublic()),
+                KeyFormat.p256RawPublic((java.security.interfaces.ECPublicKey) editorEphemeral.getPublic()),
+                "claimant").toJson()), true).get(5, TimeUnit.SECONDS);
+        Thread.sleep(300);
+        CloseWatcher late = new CloseWatcher();
+        WebSocket prober = http.newWebSocketBuilder().buildAsync(URI.create(uri), late).get(10, TimeUnit.SECONDS);
+        prober.sendText(probeText(code, Wire.encode(nonce())), true).get(5, TimeUnit.SECONDS);
+        assertThat(late.closeCode.get(10, TimeUnit.SECONDS)).isEqualTo(4404);
+
+        assertThat(published).doesNotContain("MTR-0033");
+        claimant.abort();
+    }
+
+    private static String probeText(String sessionId, String challenge) {
+        JsonObject probe = new JsonObject();
+        probe.addProperty("type", "probe");
+        probe.addProperty("sessionId", sessionId);
+        probe.addProperty("challenge", challenge);
+        return Wire.canonicalJson(probe);
+    }
+
+    /** Records only how (and with which code) the server closed the socket. */
+    private static final class CloseWatcher implements WebSocket.Listener {
+        final CompletableFuture<Integer> closeCode = new CompletableFuture<>();
+
+        @Override
+        public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
+            closeCode.complete(statusCode);
+            return null;
+        }
+    }
+
     // ------------------------------------------------------------------
 
     /** Thin bus wrapper collecting codes; the real service works too but this keeps tests hermetic. */

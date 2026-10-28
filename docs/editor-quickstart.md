@@ -18,9 +18,12 @@ publication is a separate action.
    `https://editor.materione.com/s/…#…`. Open it in a desktop browser
    (Chrome/Edge 133+, Firefox 129+, or Safari 17+). Your server dials out
    to the relay; nothing listens inbound, so this works identically behind
-   NAT, shared hosting, or a proxy network. If you are on the same LAN as
-   the server, the editor automatically prefers the faster local listener
-   when one is reachable.
+   NAT, shared hosting, or a proxy network. If you run the command in game
+   from the same computer that hosts the server, the page also checks — with
+   a cryptographic proof, in a fraction of a second — whether the server's
+   local editor is reachable and quietly uses it if so; in every other case
+   it simply stays on the cloud, with nothing to configure and no error. The
+   Server view shows which one you are on.
 
 3. The first connection asks for trust in game: an **[Approve]** /
    **[Deny]** prompt appears for every admin online (and the console).
@@ -31,10 +34,22 @@ publication is a separate action.
 
 Prefer everything local? `/materione editor local` always opens the
 embedded listener (`editor_host`/`editor_port` in `settings.yml`, loopback
-by default) — the power-user and air-gapped path, no cloud involved. If the
-relay is ever unreachable, `/materione editor` falls back to it
-automatically and says so. Servers can also point `relay_base_url` at their
-own relay instance (self-hosting: `cloud/editor-worker/README.md`).
+by default) — the power-user and air-gapped path, no cloud involved. That
+link only loads from a computer that can reach the editor port directly;
+behind a hosting panel or NAT it will not, which is why the cloud editor is
+the default. If the relay is ever unreachable, `/materione editor` says so
+and opens nothing — it never switches to the local link on its own, because
+the server cannot know whether that port is reachable from your browser.
+Servers can also point `relay_base_url` at their own relay instance
+(self-hosting: `cloud/editor-worker/README.md`).
+
+Optional `settings.yml` keys: `editor_direct_hint` (`off` default, `auto`,
+`always` — whether cloud links invite the local-editor check),
+`editor_public_url` (an `https://` address of a reverse proxy in front of the
+listener, so the cloud page can use it), and `editor_local_listener: false`
+(never open the editor port at all — relay only, the safest choice on shared
+hosts). In a browser, `?mode=relay` on the editor link forces the cloud, and
+the Server view has "always use the cloud relay in this browser".
 
 Document drafts are kept in this browser tab's memory (up to 32 documents).
 They survive workspace navigation and an unexpected disconnect, but are not

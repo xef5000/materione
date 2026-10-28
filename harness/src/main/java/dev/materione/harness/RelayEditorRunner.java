@@ -117,6 +117,14 @@ public final class RelayEditorRunner {
                 problems.add("session blob carries no relay capability (v2 shape)");
                 return finish(process, log, options, problems, workspace);
             }
+            // web.md §4.4: the default hint mode ('off') never invites a browser probe;
+            // even 'auto' would stay silent here, since this
+            // session came from the console, which says nothing about the
+            // browser — advertising the loopback listener here would be a guess.
+            if (blob.direct() != null) {
+                problems.add("console-origin cloud session carries a direct-mode hint"
+                        + " (the default editor_direct_hint 'off' must never advertise the listener)");
+            }
             String channelId = blob.relay().channelId();
             String editorToken = blob.relay().editorToken();
 

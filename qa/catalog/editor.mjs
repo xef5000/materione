@@ -449,32 +449,70 @@ export default [
       await ctx.rcon('materione editor local');
       await ctx.waitForServerLog(/Editor session ready \(local\)/);
       await ctx.waitForServerLog(/MATERIONE-EDITOR http:\/\/127\.0\.0\.1:\d+\/\?s=/);
+      // The explicit local link never pretends to be universally usable: it says
+      // the port must be reachable from the admin's computer (web.md §4.4).
+      await ctx.waitForServerLog(/only works from a computer that can reach port \d+/);
     },
   }),
 
   test({
     id: 'editor.default-surface',
-    title: '/materione editor (cloud default) hands out an editor URL — cloud when the relay answers, local with MTR-0050 when it does not',
+    title: '/materione editor (cloud default) hands out a cloud URL when the relay answers, and NEVER a local URL when it does not (MTR-0050 refusal)',
     covers: [
       TRANSPORT,
       COMMANDS,
       ADMIN_API,
       'web/src/main/java/dev/materione/web/relay/RelaySessions.java',
       'web/src/main/java/dev/materione/web/relay/RelayClient.java',
+      'web/src/main/java/dev/materione/web/relay/DirectHint.java',
     ],
     dependsOn: ['editor.local-url'],
     steps: async (ctx) => {
       await ctx.rcon('materione editor');
-      const marker = await ctx.waitForServerLog(/MATERIONE-EDITOR https?:\/\//);
-      const cloudUrl = /MATERIONE-EDITOR https:\/\/[^/\s]+\/\?s=/.test(marker);
-      const localUrl = /MATERIONE-EDITOR http:\/\/127\.0\.0\.1:\d+\/\?s=/.test(marker);
-      const ready = await ctx.waitForServerLog(/Editor session ready \((cloud|local)\)/);
-      const localFallback = ready.includes('(local)');
-      // Keep URL-bearing log values out of assertion output.
-      ctx.expect(localFallback ? localUrl : cloudUrl).toBeTruthy();
-      if (localFallback) {
-        await ctx.waitForServerLog(/MTR-0050/);
+      const outcome = await ctx.waitForServerLog(/Editor session ready \(cloud\)|MTR-0050/);
+      // The bare command must never hand out a loopback/local link on its own:
+      // whether that port is reachable from the admin's browser is unknowable
+      // server-side, so relay failure ends in a refusal, not a guess.
+      let localLeak = false;
+      try {
+        ctx.serverLogLine(/Editor session ready \(local\)|MATERIONE-EDITOR http:\/\/127\.0\.0\.1/);
+        localLeak = true;
+      } catch {
+        // expected: no such line since this test started
       }
+      ctx.expect(localLeak).toBe(false);
+      if (/Editor session ready \(cloud\)/.test(outcome)) {
+        // Keep URL-bearing log values out of assertion output.
+        const marker = await ctx.waitForServerLog(/MATERIONE-EDITOR https:\/\/[^/\s]+\/\?s=/);
+        ctx.expect(/MATERIONE-EDITOR https:\/\//.test(marker)).toBeTruthy();
+      } else {
+        await ctx.waitForServerLog(/no editor session was opened/);
+      }
+    },
+  }),
+
+  test({
+    id: 'editor.browser-transport-choice',
+    title: 'the Server view says which pipe the session rides (plugin-served = direct) and remembers the per-browser "always use the cloud relay" switch',
+    covers: [
+      ...BROWSER_COVERS,
+      'webui/src/lib/views/ServerView.svelte',
+      'webui/src/lib/protocol/connect.ts',
+      'webui/src/lib/protocol/probe.ts',
+      'webui/src/lib/protocol/transport-plan.ts',
+    ],
+    dependsOn: ['editor.local-url'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.getByRole('button', { name: 'Server', exact: true }).click();
+      await page.getByText('direct — this page is served by the plugin').waitFor({ state: 'visible' });
+      const toggle = page.getByLabel('always use the cloud relay in this browser');
+      ctx.expect(await toggle.isChecked()).toBe(false);
+      await toggle.check();
+      ctx.expect(await page.evaluate(() => localStorage.getItem('materione.transport'))).toBe('cloud');
+      await toggle.uncheck();
+      ctx.expect(await page.evaluate(() => localStorage.getItem('materione.transport'))).toBe('auto');
     },
   }),
 

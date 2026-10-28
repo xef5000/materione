@@ -372,6 +372,21 @@ derived `authoring.templates` catalog replaces any stored "serves" data. Decisio
 plugin.md §3.1: templates stay a pack-layout concept, not a registered content type. No
 infrastructure state changed.
 
+**Central hosting & direct-mode preference (M5 as built, issue #3):** the SPA is served from
+`editor.materione.com` (same build as the jar) and the cloud relay is the default. The
+"auto-preference" is deliberately *proof-gated*, not LAN-guessing (web.md §4.4): a cloud session
+carries a direct hint only when the browser looks co-located (a loopback player, or an owner-pinned
+`https` front), and the SPA switches to the local listener **only** after an authenticated,
+session-bound `probe` challenge/response (Ed25519 under the blob's plugin key) succeeds before the
+first hello; every other outcome — no hint, mixed-content block, timeout, wrong server, prompt
+declined — stays on the relay with no visible error. Plain-HTTP LAN addresses are unreachable from
+the HTTPS cloud page by browser rules and are not attempted. A relay failure no longer falls back to
+a local link on its own (`MTR-0050` now refuses and points at `/materione editor local`, with the
+reachability caveat). New settings: `editor_direct_hint` (`off` default / `auto` / `always`),
+`editor_public_url`, `editor_local_listener`; per-browser "always use the cloud relay" in the
+Server view; `?mode=relay|direct` now actually works (it was lost to the address-bar scrub). The
+Worker is unchanged — no new endpoint, no cost-model change.
+
 ## M6 — Menus, dialogs, HUDs (the GUI differentiators)
 
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).

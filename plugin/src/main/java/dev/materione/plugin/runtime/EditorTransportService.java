@@ -71,6 +71,10 @@ public final class EditorTransportService {
     private AutoCloseable diagnosticsSubscription;
     private dev.materione.core.document.PackWatcher packWatcher;
     private String advertiseHost = "";
+    /** {@code editor_direct_hint}: whether/when cloud sessions advertise the local listener (web.md §4.4). */
+    private dev.materione.web.relay.DirectHint.Mode directHintMode = dev.materione.web.relay.DirectHint.Mode.OFF;
+    /** {@code editor_public_url}: an https:// origin fronting the listener (TLS reverse proxy), or blank. */
+    private String publicUrl = "";
     /** Trust prompts awaiting an in-game answer, keyed by nonce prefix. */
     private final Map<String, CompletableFuture<dev.materione.web.TrustPrompt.Decision>> pendingTrust =
             new ConcurrentHashMap<>();
@@ -109,6 +113,9 @@ public final class EditorTransportService {
         advertiseHost = settings.getString("editor_public_host", "");
         relayBaseUrl = settings.getString("relay_base_url", "https://editor.materione.com");
         editorMode = settings.getString("editor_mode", "cloud");
+        directHintMode = dev.materione.web.relay.DirectHint.Mode.parse(
+                settings.getString("editor_direct_hint", "off"));
+        publicUrl = settings.getString("editor_public_url", "");
 
         KeyPair identity = new IdentityKeystore(diagnostics, new SecureRandom()).load(storage.storageDir());
         workstations = new dev.materione.web.EditorWorkstations(
@@ -118,7 +125,10 @@ public final class EditorTransportService {
         relaySessions = new dev.materione.web.relay.RelaySessions(sessions, dispatcher, diagnostics);
         listener = new EditorListener(
                 sessions, new EditorSockets(sessions, dispatcher, diagnostics), dispatcher, diagnostics);
-        boolean bound = listener.start(new EditorConfig(host, port));
+        // editor_local_listener: false is the shared-host switch — no port is
+        // ever opened and the cloud relay is the only surface (web.md §4.4).
+        boolean wantListener = settings.getBoolean("editor_local_listener", true);
+        boolean bound = wantListener && listener.start(new EditorConfig(host, port));
         // Relay mode needs no listener: sessions and the dispatcher live on
         // even when the local bind fails, so the cloud editor still works.
         if (!bound) {
@@ -145,7 +155,9 @@ public final class EditorTransportService {
                         event.accepted(), event.noop(), event.itemsLive(), event.quarantined());
             }
         });
-        if (bound && settings.getBoolean("editor_file_watcher", true)) {
+        // The watcher feeds every connected editor (relay sessions included),
+        // so it does not depend on the local listener being bound.
+        if (settings.getBoolean("editor_file_watcher", true)) {
             startFileWatcher(storage);
         }
         return true;
@@ -351,7 +363,7 @@ public final class EditorTransportService {
     public String openLocalSession(CommandSender sender) {
         if (listener == null || !listener.isRunning()) {
             sender.sendMessage(Component.text(
-                    "the local editor listener is not running — enable it with editor_enabled: true "
+                    "the local editor listener is not running — enable it with editor_enabled: true and editor_local_listener: true "
                             + "in settings.yml (or check the boot log for MTR-0030)",
                     NamedTextColor.RED));
             return null;
@@ -367,13 +379,21 @@ public final class EditorTransportService {
                 "The part after # is secret and stays in your browser. Approve the connection in game "
                         + "within " + TRUST_PROMPT_TIMEOUT_SECONDS + "s.",
                 NamedTextColor.GRAY));
+        sender.sendMessage(Component.text(
+                "This link only works from a computer that can reach port " + listener.boundPort()
+                        + " on this server directly. Behind a hosting panel or NAT it will not — use "
+                        + "/materione editor (the cloud editor) instead.",
+                NamedTextColor.GRAY));
         return url;
     }
 
     /**
      * The default path (web.md §4.1 over the mailbox): create the channel,
-     * upload the sealed blob, print the cloud editor URL. Falls back to the
-     * local listener when the relay is unreachable (MTR-0050).
+     * upload the sealed blob, print the cloud editor URL. When the relay is
+     * unreachable this does NOT fall back to the local listener (MTR-0050):
+     * whether that port is reachable from the admin's browser is exactly
+     * what a server cannot know, and a link to an unreachable port is worse
+     * than a clear refusal (web.md §4.4).
      */
     public String openCloudSession(CommandSender sender) {
         if (relaySessions == null) {
@@ -382,7 +402,7 @@ public final class EditorTransportService {
             return null;
         }
         String ownerId = sender instanceof org.bukkit.entity.Player player ? player.getUniqueId().toString() : "";
-        String directHint = localDirectBase();
+        String directHint = directHintFor(sender);
         try {
             var client = new dev.materione.web.relay.RelayClient(java.net.URI.create(relayBaseUrl));
             var ticket = relaySessions.open(client, relayBaseUrl, ownerId, directHint);
@@ -393,7 +413,8 @@ public final class EditorTransportService {
             sender.sendMessage(Component.text(ticket.url(), NamedTextColor.AQUA)
                     .clickEvent(ClickEvent.openUrl(ticket.url())));
             String extra = directHint == null ? ""
-                    : " A local listener was detected; the editor will prefer it when reachable.";
+                    : " The page will check whether your browser can reach this server's local editor "
+                            + "directly and quietly use it if so; otherwise it stays on the cloud.";
             sender.sendMessage(Component.text(
                     "The part after # is secret and stays in your browser. Approve the connection in game "
                             + "within " + TRUST_PROMPT_TIMEOUT_SECONDS + "s." + extra,
@@ -405,23 +426,37 @@ public final class EditorTransportService {
                     dev.materione.api.diagnostics.Severity.WARN,
                     "relay " + relayBaseUrl + " unavailable: " + e.getMessage(),
                     null, null,
-                    "check relay_base_url in settings.yml, or edit via /materione editor local"));
+                    "check relay_base_url in settings.yml and this server's outbound HTTPS; "
+                            + "/materione editor local needs the editor port reachable from your browser"));
             sender.sendMessage(Component.text(
-                    "cloud editor unreachable (" + e.getMessage() + ") — trying the local listener",
+                    "cloud editor unreachable (" + e.getMessage() + ") — no editor session was opened.",
+                    NamedTextColor.RED));
+            sender.sendMessage(Component.text(
+                    "Retry in a moment. If this server's editor port is reachable from your own "
+                            + "computer you can use /materione editor local instead — on most hosting "
+                            + "panels and behind NAT it is not reachable, so that link would not load.",
                     NamedTextColor.YELLOW));
-            return openLocalSession(sender);
+            return null;
         }
     }
 
-    /** Direct-mode base for the blob's LAN hint, or null when not listening. */
-    private String localDirectBase() {
-        if (listener == null || !listener.isRunning()) {
-            return null;
+    /**
+     * The direct-mode hint for this sender's cloud session, or null. Policy
+     * lives in {@link dev.materione.web.relay.DirectHint}; the hint is only
+     * an invitation to probe — the browser proves reachability itself.
+     */
+    private String directHintFor(CommandSender sender) {
+        java.net.InetAddress address = null;
+        if (sender instanceof org.bukkit.entity.Player player) {
+            java.net.InetSocketAddress socket = player.getAddress();
+            address = socket == null ? null : socket.getAddress();
         }
-        String host = advertiseHost == null || advertiseHost.isBlank()
-                ? ("0.0.0.0".equals(listener.boundHost()) ? "127.0.0.1" : listener.boundHost())
-                : advertiseHost;
-        return "http://" + host + ":" + listener.boundPort();
+        return dev.materione.web.relay.DirectHint.resolve(
+                directHintMode,
+                listener != null && listener.isRunning(),
+                listener == null ? "" : listener.boundHost(),
+                listener == null ? -1 : listener.boundPort(),
+                publicUrl, advertiseHost, relayBaseUrl, address);
     }
 
     public void stop() {

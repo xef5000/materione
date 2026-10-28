@@ -234,8 +234,9 @@ The session blob is the trust root of the whole exchange, so its key transport i
    encrypted with the wrapping key (AES-256-GCM). The blob contains: session id, channel id,
    editor capability token, plugin signing public key, protocol versions supported, the
    **capabilities** naming the editor features this build implements — plus,
-   when the embedded listener is reachable from the admin's machine, a **direct-mode hint**
-   (LAN auto-preference, §4.4). The self-description travels inside the encryption so the
+   when the browser looks co-located with the embedded listener (or the owner pinned an HTTPS
+   front), a **direct-mode hint** that only *invites* a browser-side reachability proof
+   (LAN auto-preference, §4.4 — the hint is never trusted). The self-description travels inside the encryption so the
    panel can negotiate and gate before any RPC: `protocolVersions` is the jar's accepted
    hello versions (§4.2); `capabilities` lists named feature areas (`items`, `blocks`,
    `furniture`, `paintings`, `glyphs`, `text-effects`, `sounds`, `recipes`, `models`,
@@ -481,8 +482,8 @@ download: fetch manifest → fetch chunks (parallel) → decrypt → verify → 
   privacy holds).
 - **Bandwidth honesty**: through the shared relay, every asset byte crosses the edge twice
   (upload + download). Large asset workflows (Blockbench sessions with many textures) should
-  prefer direct mode on LAN — the editor detects a reachable direct endpoint and prefers it
-  automatically.
+  prefer direct mode where it is possible — when the browser can prove the local listener
+  reachable, the editor uses it automatically (§4.4 rules); otherwise it stays on the relay.
 
 ### 4.4 Direct mode (embedded)
 
@@ -498,14 +499,107 @@ applies in direct mode** — loopback binding is a convenience, not the auth (an
 reach the port still must complete the handshake and in-game trust).
 
 M5 additions: the embedded listener also serves the **store-compatible routes**
-(`/v1/store*`) so the §4.3 chunk flow is one client implementation on both transports, and it
-sends CORS headers on its read routes (`GET /s/{code}`, `GET /v1/store/*`) so the
-centrally-hosted SPA can probe a reachable local server and prefer it — **LAN
-auto-preference**: the session blob carries the direct hint when the listener is likely
-reachable, the cloud-hosted SPA probes it with a short timeout before the first frame and
-switches to the local WebSocket transport when it answers, falling back to the relay
-otherwise. Manual override is a URL parameter. Direct mode exists so relay outage ≠ editor
-outage, and for air-gapped setups.
+(`/v1/store*`) so the §4.3 chunk flow is one client implementation on both transports, and
+the cloud-hosted SPA may *prefer* a reachable local listener under the rules below.
+Direct mode exists so relay outage ≠ editor outage, and for air-gapped setups.
+
+#### Direct-mode preference ("LAN auto-preference")
+
+**Stance.** The cloud relay is the default because it needs zero setup and works from every
+network. A direct connection may replace it only when **this browser has just proven the
+listener is reachable from here** — never because the server believes it should be. The
+failure this rules out is the worst one in the product: an editor opened against a port that
+shared hosting (panels, Apex-style hosts), NAT or a container never exposed. Server-side
+facts cannot prevent it — "my address is private", "the port is bound", "the player joined from
+a LAN address" are all true on hosts where the port is unreachable — so they are used only to
+decide whether it is *worth asking*, and the browser decides.
+
+```
+plugin (per cloud session)                    browser (editor.materione.com)
+  hint = DirectHint.resolve(...)  ──blob──►   plan: hint? https page ⇒ loopback/https only?
+  (usually: none)                              prefer-cloud / ?mode=relay? ──► relay (done)
+                                               │ probe ws://hint/editor/ws  (≤ 1.5 s total)
+  probe: sign(identity,                        │   {type:probe, sessionId, challenge(16B random)}
+    "materione-probe/v1\nS\nC")  ◄─────────────┘
+                                   ──reply──►  verify Ed25519 under blob.pluginSigningPubKey
+                                               ├─ valid   ⇒ adopt THIS socket, hello on it (direct)
+                                               └─ anything else ⇒ close, hello over the relay
+```
+
+**Decision rules** (SPA `connect.ts` / `transport-plan.ts`; first match wins):
+
+1. `?mode=relay` → relay. Manual override; always honoured.
+2. No `direct` hint in the blob → relay. The server never invited a probe.
+3. The per-browser switch "always use the cloud relay" is set (`localStorage`
+   `materione.transport=cloud`, Server view) and `?mode=direct` is absent → relay.
+4. Hint malformed, or an `http:` hint with a non-loopback host on an `https:` page → relay
+   without opening a socket (mixed content, below).
+5. Otherwise **probe**. Direct is chosen **iff** the probe returns a valid signature. A timeout,
+   refusal, close, garbage, wrong signature, wrong session, or a thrown `SecurityError` all
+   mean relay, silently. `?mode=direct` only bypasses rule 3; it can never force a direct
+   transport that was not proven.
+
+The probe runs **before** the first `hello`. That ordering is load-bearing: a `hello` that
+reaches the wrong place consumes the session (a failed handshake closes it, §4.1), so
+reachability must be established by something that burns nothing. `probe` is therefore a
+separate pre-hello message answered only on **direct sockets** (the untrusted relay is never
+offered a signing oracle), at most once per socket, only for a session this server holds that is
+still unclaimed (`NEW`), and declined without a diagnostic otherwise (close code `4404`). The
+signature binds the session id and a fresh browser-chosen challenge, with a domain-separation
+tag no other signed artifact can start with (`ProbeMessage`; golden vector in
+`fixtures/protocol/editor-protocol-v1.json` → `probe`, verified by JVM and SPA tests). So a
+different Materione server, a reverse proxy answering for a dead backend, another service that
+merely accepts WebSockets, or a replayed recording cannot pass. The proven socket is reused for
+the hello — no second connect, no window for the answer to change. After the handshake the
+channel never changes pipe; the next session decides again.
+
+**What the hint is.** `DirectHint` (plugin) puts `direct.url` in the *sealed* blob only when
+asking is worthwhile. `editor_direct_hint` (default `off`; missing or unrecognized values also read as `off`):
+
+| Mode | Hint emitted when |
+|---|---|
+| `auto` | the command sender is a player connected from a **loopback** address (browser and server share a machine) and the listener answers on loopback; **or** `editor_public_url` pins an `https://` front (reverse proxy). Console, remote and LAN senders get none. |
+| `always` | the listener runs (dev/test, or an owner who knows the browser is co-located) |
+| `off` (default) | never — the listener is not advertised; cloud links never invite a local probe, so no browser local-network prompt can appear |
+
+`editor_local_listener: false` goes further and never opens the port (relay-only, the
+shared-hosting posture). The listener default is unchanged and safe: bound to `127.0.0.1`,
+handshake auth regardless of binding (above).
+
+**Browser constraints, stated honestly** (the reason the rules look the way they do):
+
+- *Mixed content.* An `https:` page may not open `ws://` or fetch `http://` to a non-loopback
+  host. Browsers treat `localhost`/`127.0.0.0/8`/`::1` as potentially trustworthy, so
+  Chromium and Firefox allow those (Safari may not — the probe simply fails and the relay is
+  used). **Consequently the cloud page can never reach a plain-HTTP LAN address
+  (`ws://192.168.x.x`)**: for the true LAN case the only supported routes are an `https://`
+  front the owner pins (`editor_public_url`, certificate valid for the browser) or opening the
+  editor from the plugin's own origin (`/materione editor local`). The page does not try the
+  doomed case (rule 4), so it costs nothing.
+- *Private Network Access / Local Network Access.* Chromium gates requests from public pages
+  to local or loopback targets: PNA required CORS preflights with
+  `Access-Control-Allow-Private-Network`; Chrome 142 replaced that with a **user permission
+  prompt** ("access devices on your local network") for `fetch`/subresources. Chrome's own
+  documentation (checked 2026-10) lists WebSocket as not yet gated; a third-party vendor guide
+  reports a prompt for loopback WebSockets from Chrome 147, which we could not confirm — treat
+  the prompt as possible. We use a
+  **WebSocket** probe — no CORS, no preflight, no `fetch` — and, because a prompt would be
+  visible, the `auto` hint stays silent unless the browser looks co-located, so most admins
+  never trigger one. Where a prompt does appear and is declined, the probe fails and the relay is
+  used; "always use the cloud relay" in the Server view stops probing for that browser.
+- The probe cannot be made invisible to the browser's devtools (a failed `ws://` leaves a
+  console line); it is invisible to the user and to the session.
+
+**Relay failure never becomes a guess.** If `/materione editor` cannot create the relay
+session, nothing is opened: the plugin reports `MTR-0050`, says no session was created, and
+points at `/materione editor local` *with the caveat that the port must be reachable from the
+admin's computer* (usually false on hosts). (Until this change the plugin silently fell back
+to a loopback link; that was exactly the broken-link failure above.) If the relay is down when
+the browser loads the link, the SPA says so and names the same escape hatch; it never switches
+by itself. `/materione editor local` always prints a reachability warning.
+
+**Cost.** None: the probe is SPA ↔ plugin traffic. The Worker is unchanged (no new endpoint,
+no new quota, nothing to rate-limit).
 
 ---
 
@@ -1239,7 +1333,9 @@ in CI.
 | Malicious editor (second browser joins) | Explicit in-game approval with nonce disambiguation (§4.1) |
 | Replay of old payloads | Envelope nonces + session binding; GCM rejects reuse |
 | Direct-mode port exposed on LAN/hosting | Loopback-by-default, `0.0.0.0` warning, handshake auth applies regardless of binding (§4.4) |
-| Relay/store outage | Direct mode is a complete fallback (master D11, §4.4) |
+| Relay/store outage | Direct mode is a complete fallback (master D11, §4.4) — **offered, never automatic**: the admin runs `/materione editor local` knowing the port must be reachable |
+| Editor opened against an unreachable / wrong direct endpoint | Direct is chosen only after a browser-side Ed25519 proof bound to the session id and a fresh challenge (§4.4); any other outcome stays on the relay |
+| Probe used as a signing oracle | Answered on direct sockets only, ≤ 1 per socket, only for an unclaimed session, domain-separated signed text (§4.4) |
 | Compromised `materione.com` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
 | Abuse of the shared free instance | Rate-limiter binding per IP, envelope-only store, hard quotas below free-tier ceilings; the free plan's hard stops mean abuse causes 429s and availability loss — never billing (§3.3) |
 | Abuse of free store as file host | Envelope-only content type, size caps, TTLs, per-IP limits, content-addressed dedup keeps honest traffic cheap (§3, §4.3) |

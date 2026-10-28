@@ -114,6 +114,17 @@ class GoldenProtocolFixturesTest {
         assertThat(blob.sessionId()).isEqualTo(hello.sessionId());
         assertThat(blob.protocolVersions()).containsExactly(Wire.VERSION);
         assertThat(blob.capabilities()).containsExactlyElementsOf(SessionBlob.CURRENT_CAPABILITIES);
+
+        // The probe: the request parses and the reply verifies under the plugin key.
+        JsonObject probe = fixture.getAsJsonObject("probe");
+        ProbeMessage.Request probeRequest =
+                ProbeMessage.parse(Wire.canonicalJson(probe.getAsJsonObject("request")));
+        byte[] signed = ProbeMessage.signedBytes(probeRequest.sessionId(), probeRequest.challenge());
+        assertThat(new String(signed, StandardCharsets.UTF_8))
+                .isEqualTo(probe.getAsJsonPrimitive("signedText").getAsString());
+        assertThat(SessionCrypto.verify(
+                pluginSigning.getPublic(), signed,
+                Wire.requiredBinary(probe.getAsJsonObject("reply"), "sig"))).isTrue();
     }
 
     // ------------------------------------------------------------------
@@ -190,6 +201,20 @@ class GoldenProtocolFixturesTest {
         blobSection.add("envelope", envelope);
         blobSection.add("plaintext", blob.toJson());
 
+        // Direct-mode reachability probe (web.md §4.4): Ed25519 is deterministic,
+        // so the signature is byte-stable and the browser verifies it verbatim.
+        String probeChallengeText = Wire.encode(filled(16, 0x77));
+        byte[] probeSigned = ProbeMessage.signedBytes(SESSION_ID, probeChallengeText);
+        JsonObject probeRequest = new JsonObject();
+        probeRequest.addProperty("type", ProbeMessage.TYPE);
+        probeRequest.addProperty("sessionId", SESSION_ID);
+        probeRequest.addProperty("challenge", probeChallengeText);
+        JsonObject probe = new JsonObject();
+        probe.add("request", probeRequest);
+        probe.addProperty("signedText", new String(probeSigned, StandardCharsets.UTF_8));
+        probe.add("reply", ProbeMessage.reply(
+                SESSION_ID, SessionCrypto.sign(pluginSigning.getPrivate(), probeSigned)));
+
         JsonObject meta = new JsonObject();
         meta.addProperty("name", "materione editor wire protocol");
         meta.addProperty("version", Wire.VERSION);
@@ -202,6 +227,7 @@ class GoldenProtocolFixturesTest {
         root.add("handshake", handshake);
         root.add("sessionBlob", blobSection);
         root.add("frames", frames);
+        root.add("probe", probe);
         return root;
     }
 

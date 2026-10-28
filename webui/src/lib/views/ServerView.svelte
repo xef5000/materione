@@ -5,7 +5,9 @@
    * behave like every other document in the workbench.
    */
   import { ops, unwrap } from '../api';
+  import { readPreference, writePreference } from '../protocol/transport-plan';
   import {
+    connection,
     errorMessage,
     logActivity,
     openSettings,
@@ -30,6 +32,13 @@
   }
 
   type AuditRow = AuditEntry & { occurrence: number };
+
+  // Per-browser, applies from the next session: the live channel never changes pipe.
+  let preferCloud = $state(readPreference() === 'cloud');
+  function setPreferCloud(value: boolean) {
+    preferCloud = value;
+    writePreference(value ? 'cloud' : 'auto');
+  }
 
   let audit = $state<AuditRow[]>([]);
   let auditFilter = $state('');
@@ -95,7 +104,21 @@
     <dd>v{server.protocolVersion || '—'}</dd>
     <dt>editor listener</dt>
     <dd>{server.editorRunning ? `running on :${server.editorPort}` : 'stopped'}</dd>
+    {#if connection.transportNote}
+      <dt>connection</dt>
+      <dd class="plain">{connection.transportNote}</dd>
+    {/if}
   </dl>
+  {#if connection.transport}
+    <label class="pref" title="Applies the next time you open the editor from /materione editor. Never probes a local server from this browser.">
+      <input
+        type="checkbox"
+        checked={preferCloud}
+        onchange={(event) => setPreferCloud(event.currentTarget.checked)}
+      />
+      always use the cloud relay in this browser
+    </label>
+  {/if}
   <div class="actions">
     <button class="btn btn-primary" disabled={reloading} onclick={() => void reloadScope('everything')}>
       {reloading ? 'reloading…' : 'full reload'}
@@ -177,6 +200,17 @@
   dd {
     margin: 0;
     font-family: var(--mono);
+  }
+  dd.plain {
+    font-family: inherit;
+  }
+  .pref {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-bottom: var(--space-3);
   }
   .actions {
     display: flex;

@@ -62,6 +62,18 @@ public final class EditorSockets {
         }
 
         @Override
+        public boolean acceptsProbes() {
+            return true;
+        }
+
+        @Override
+        public void decline() {
+            if (channel.isOpen()) {
+                WebSockets.sendClose(4404, "no such session", channel, null);
+            }
+        }
+
+        @Override
         public void violation(String detail) {
             diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.warn(
                     DiagnosticCodes.EDITOR_PROTOCOL_VIOLATION,
