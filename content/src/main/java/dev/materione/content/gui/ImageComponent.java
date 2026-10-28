@@ -3,10 +3,13 @@ package dev.materione.content.gui;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
+import dev.materione.api.gui.RasterCanvas;
 import dev.materione.api.gui.RenderTarget;
+import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.content.gui.raster.Blit;
 import java.util.List;
 
 /**
@@ -34,22 +37,22 @@ public final class ImageComponent implements GuiComponent {
                                 "Left edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "X", "placement", 20, false, "number", "", "0")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(-512.0, 512.0, "px")),
                         new ParameterSchema("y", ParameterType.INTEGER, false, "0",
                                 "Top edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Y", "placement", 30, false, "number", "", "0")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(-512.0, 512.0, "px")),
                         new ParameterSchema("width", ParameterType.INTEGER, false, null,
                                 "Drawn width in GUI pixels; absent keeps the texture's own width", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Width", "placement", 40, true, "number", "", "")
-                                        .withRange(1.0, 512.0, "px")),
+                                        .withRange(0.0, 512.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, false, null,
                                 "Drawn height in GUI pixels; absent keeps the texture's own height", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 50, true, "number", "", "")
-                                        .withRange(1.0, 512.0, "px"))),
+                                        .withRange(0.0, 512.0, "px"))),
                 "1.0.0");
     }
 
@@ -64,10 +67,10 @@ public final class ImageComponent implements GuiComponent {
                 || configuration.parameters().containsKey("height");
         return new Layer(
                 GuiTextures.required(configuration, "image"),
-                configuration.integer("x", 0, 0, 512),
-                configuration.integer("y", 0, 0, 512),
-                sized ? configuration.requiredInteger("width", 1, 512) : 0,
-                sized ? configuration.requiredInteger("height", 1, 512) : 0,
+                configuration.integer("x", 0, -512, 512),
+                configuration.integer("y", 0, -512, 512),
+                sized ? configuration.requiredInteger("width", 0, 512) : 0,
+                sized ? configuration.requiredInteger("height", 0, 512) : 0,
                 sized);
     }
 
@@ -81,6 +84,13 @@ public final class ImageComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.RASTER;
+        }
+
+        @Override
+        public void paint(RasterCanvas canvas, TextureSource textures) {
+            TextureSource.Pixels pixels = textures.texture(texture).orElseThrow(
+                    () -> new IllegalStateException("texture " + texture + " is missing or unreadable"));
+            Blit.draw(canvas, x, y, sized ? width : pixels.width(), sized ? height : pixels.height(), pixels);
         }
     }
 }

@@ -235,6 +235,13 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode GUI_LAYER_SKIPPED =
             new DiagnosticCode("MTR-0052", Severity.WARN, "GUI layer skipped");
 
+    /**
+     * The GUI background codepoint block (U+E200..U+F8FF) is used up. The GUI is not
+     * compiled; the rest of the pack is unaffected.
+     */
+    public static final DiagnosticCode GUI_BACKGROUND_EXHAUSTED =
+            new DiagnosticCode("MTR-0053", Severity.ERROR, "GUI background codepoint space exhausted");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -287,7 +294,8 @@ public final class DiagnosticCodes {
             EDITOR_RELAY_SESSION_ENDED,
             EDITOR_RELAY_UNREACHABLE,
             AUTHORING_SUMMARY_BUDGET_EXCEEDED,
-            GUI_LAYER_SKIPPED);
+            GUI_LAYER_SKIPPED,
+            GUI_BACKGROUND_EXHAUSTED);
 
     private DiagnosticCodes() {}
 
