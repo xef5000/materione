@@ -252,6 +252,12 @@ interactively.
   **draft** GitHub release with `Materione-<version>.jar` and the tag's `CHANGELOG.md`
   section as notes. Publishing the draft is a manual maintainer step.
 
+**Editor compatibility gate.** The cloud editor and relay redeploy independently of the jars
+servers run, so each release commits `fixtures/protocol/released/<version>.json` (release
+workflow step; generate it with `node scripts/compat/editor-compat.mjs snapshot <version>`
+before tagging). The **build** job and `deploy.yml` run `editor-compat.mjs check`, and the
+**cloud** job's Worker tests replay every released relay route (web.md §6, "Versioning").
+
 **Snapshot vs release versions.** `gradle.properties` holds the bare version (`0.1.0`). The
 root `build.gradle.kts` appends `-SNAPSHOT` to every project unless the build runs with
 `-Prelease`, so local and CI jars are always `Materione-<version>-SNAPSHOT.jar` and only the

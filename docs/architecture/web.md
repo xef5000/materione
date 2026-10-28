@@ -915,6 +915,18 @@ cannot read, forge, replay, or reorder anything.
   releases land independently; capabilities (§4.1) let a newer panel hide features the
   connected jar predates instead of surfacing per-call errors. Not yet built: the plugin
   serving "a newer editor is available — refresh" hints when the cached SPA is stale.
+  *Release compatibility gate (as built):* every published jar leaves a contract manifest,
+  `fixtures/protocol/released/<version>.json` (accepted protocol versions, registered RPC ops,
+  advertised capabilities, relay routes it calls), written by
+  `scripts/compat/editor-compat.mjs snapshot` and required by the release workflow.
+  `editor-compat.mjs check` (CI and `deploy.yml`) fails when the SPA in `webui/src` shares no
+  protocol version with a release or calls an op the release does not register. An op newer
+  than a release passes only when `fixtures/protocol/editor-op-gates.json` gates it on a
+  capability that release does not advertise and the SPA checks it with `hasCapability`.
+  The Worker tests (`released-routes.test.ts`) assert every released relay route is still
+  routed. Dropping support for a release is deleting its manifest. Static only: request and
+  response *shapes* stay covered by the protocol fixtures against the current code, not
+  against old jars.
 - **Cloud landing & demo (as built, M5):** with no session in the address, the cloud editor shows a
   landing card (Materione · Web content editor · **View Demo** · "To start a new session, run
   `/materione editor` in-game") instead of the paste-a-link card; the plugin-served editor keeps

@@ -56,6 +56,15 @@ jobs:
           node --test qa/evidence-redaction.test.mjs
           node qa/runner.mjs check
 
+      # The cloud editor must keep working with every released plugin
+      # (fixtures/protocol/released/): protocol versions overlap and every RPC
+      # op it calls is registered or capability-gated. Pure Node, no install.
+      # The relay half runs in the cloud job (released-routes.test.ts).
+      - name: Editor compatibility with released plugins
+        run: |
+          node --test scripts/compat/editor-compat.test.mjs
+          node scripts/compat/editor-compat.mjs check
+
       # Artifacts bill against the Actions storage quota (500 MB on the
       # free plan). The jar is reproducible from any commit; two days of
       # history keeps a testable build around while several runs per day

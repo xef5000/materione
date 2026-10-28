@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
@@ -14,10 +14,22 @@ export default defineConfig({
         path.resolve(process.cwd(), "../../fixtures/protocol/relay-mailbox-v1.json"),
         "utf8",
       );
+      // Relay routes every released plugin calls (fixtures/protocol/released/,
+      // scripts/compat/editor-compat.mjs): a redeployed Worker must keep them.
+      const releasedDir = path.resolve(process.cwd(), "../../fixtures/protocol/released");
+      const releasedJson = JSON.stringify(
+        readdirSync(releasedDir)
+          .filter((name) => name.endsWith(".json"))
+          .map((name) => JSON.parse(readFileSync(path.join(releasedDir, name), "utf8"))),
+      );
       return {
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
-          bindings: { TEST_MIGRATIONS: migrations, MAILBOX_FIXTURE_JSON: fixtureJson },
+          bindings: {
+            TEST_MIGRATIONS: migrations,
+            MAILBOX_FIXTURE_JSON: fixtureJson,
+            RELEASED_MANIFESTS_JSON: releasedJson,
+          },
         },
       };
     }),

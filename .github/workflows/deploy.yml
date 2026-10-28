@@ -32,6 +32,14 @@ jobs:
 
       # One artifact, two homes: this same build is embedded in the plugin
       # jar and served by the worker as static assets.
+      # Refuse to deploy an editor that would break a released plugin
+      # (fixtures/protocol/released/, build.md §8). The worker tests below
+      # include the matching relay check (released-routes.test.ts).
+      - name: Editor compatibility with released plugins
+        run: |
+          node --test scripts/compat/editor-compat.test.mjs
+          node scripts/compat/editor-compat.mjs check
+
       - name: Build editor SPA
         run: ./gradlew :webui:assembleSpa
 
