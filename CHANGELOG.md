@@ -44,6 +44,9 @@ This entry describes everything the release contains, not a diff.
   `disable-chorus-plant-updates` to `true` in `config/paper-global.yml`.
 - **Permissions.** Every node defaults to operators. Grant `materione.editor` (and
   `materione.admin` to approve editor browsers) deliberately.
+- **Usage statistics.** The plugin sends anonymous usage data to
+  [bStats](https://bstats.org) (plugin id 34981). To opt out, set `enabled: false` in
+  `plugins/bStats/config.yml`.
 - **Create content.** Run `/materione editor`, approve the browser in game, and create a
   project and your first item. You can also write the pack files by hand and run
   `/materione reload`.
@@ -107,6 +110,11 @@ Materione turns the files under `plugins/Materione/content/packs/` into live ser
 #### Performance budgets
 
 - **Asserted in the build.** `ContentPerfBudgetTest` fails when a full reload takes 10 s or more, a pack build 30 s or more, a no-op decision 100 ms or more, an apply swap 50 ms or more, a single-file reload 1 s or more, or a steady-state item lookup 1 microsecond or more. It runs on the 62-item fixture corpus, not on large installations.
+
+#### Usage statistics
+
+- **bStats.** Anonymous metrics (plugin id 34981) start after boot. Along with bStats' standard server fields, the plugin reports one custom chart, `editor_transport` (`cloud`, `local`, `disabled` or `unknown`). Details are in `docs/architecture/plugin.md` §7.2.
+- **Opt-out.** Set `enabled: false` in `plugins/bStats/config.yml`. That switch is global for every plugin that uses bStats. A bStats failure is logged as a warning and never blocks startup.
 
 #### Not yet included
 
