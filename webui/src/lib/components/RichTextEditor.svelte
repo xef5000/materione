@@ -118,7 +118,7 @@
   // --- obfuscated text ----------------------------------------------------------
   // Drawn scrambled, as the client does. A run the caret is in (or that the
   // selection touches) shows its real characters so it can be edited; leaving
-  // it scrambles it again. The model never holds scrambled text — only the
+  // it scrambles it again. The model never holds scrambled text â€” only the
   // drawn text nodes are swapped, with the same number of characters, so the
   // DOM <-> offset mapping is unaffected.
   const SCRAMBLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';

@@ -66,7 +66,8 @@
   let menuButton: HTMLButtonElement | undefined = $state();
   let stageWidth = $state(0);
   /** One large render: as wide as its column, within a sensible range. */
-  const size = $derived(Math.max(160, Math.min(440, Math.floor(stageWidth))));
+  /** A whole multiple of the 128 px live render, so scaled pixels stay even (nearest-neighbour). */
+  const size = $derived(128 * Math.max(1, Math.min(3, Math.floor(stageWidth / 128))));
   /** The slot buttons return focus here when a picker closes. */
   let slotButtons = $state<Record<string, HTMLButtonElement | undefined>>({});
 

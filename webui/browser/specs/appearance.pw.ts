@@ -46,7 +46,7 @@ test('the item is drawn once, large, with no form rows for its look', async ({ p
   await expect(appearance.getByRole('img')).toHaveCount(1);
   const render = await appearance.getByRole('img').boundingBox();
   const body = await page.locator('section.studio .body').boundingBox();
-  expect(render!.width).toBeGreaterThanOrEqual(body!.width / 3 - 4);
+  expect(render!.width).toBeGreaterThanOrEqual(body!.width * 0.3);
   expect(render!.width).toBeLessThanOrEqual(body!.width / 2 + 4);
 
   // name and lore live in the tooltip; texture and model are pickers, not dropdowns

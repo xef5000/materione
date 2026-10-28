@@ -234,5 +234,6 @@
     object-fit: contain;
     image-rendering: pixelated;
   }
-  .model img { image-rendering: auto; }
+  /* Cached game renders are smooth images; the live render is 128 px pixel art and scales with hard edges. */
+  .model:not(.live) img { image-rendering: auto; }
 </style>
