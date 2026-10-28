@@ -121,4 +121,36 @@ class PackWatcherTest {
 
         assertThat(changes).isEmpty();
     }
+
+    @Test
+    void nestedDocumentEditsArriveWithTheirFullPath() throws Exception {
+        DocumentStore store = store();
+        store.write("demo", "items/weapons/sword.yml", 0, "sword:\n  material: IRON_SWORD\n", "editor:test");
+        start(store);
+
+        Files.writeString(temp.resolve("packs").resolve("demo/items/weapons/sword.yml"),
+                "sword:\n  material: DIAMOND_SWORD\n", StandardCharsets.UTF_8);
+
+        awaitChange(1, 10);
+        assertThat(changes).singleElement().satisfies(change -> {
+            assertThat(change.pack()).isEqualTo("demo");
+            assertThat(change.path()).isEqualTo("items/weapons/sword.yml");
+            assertThat(change.deleted()).isFalse();
+        });
+    }
+
+    @Test
+    void dotDirectoryDocumentsAreNotWatched() throws Exception {
+        DocumentStore store = store();
+        start(store);
+        Thread.sleep(300);
+
+        // the same shape as a nested item, but under a dot-directory: not content
+        Files.createDirectories(temp.resolve("packs").resolve("demo/items/.trash"));
+        Files.writeString(temp.resolve("packs").resolve("demo/items/.trash/old.yml"),
+                "old:\n  material: STICK\n", StandardCharsets.UTF_8);
+        Thread.sleep(2000);
+
+        assertThat(changes).isEmpty();
+    }
 }

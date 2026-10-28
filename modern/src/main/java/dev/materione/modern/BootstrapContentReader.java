@@ -8,6 +8,7 @@ import dev.materione.content.sounds.SoundDefinition;
 import dev.materione.content.sounds.SoundType;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
+import dev.materione.core.pipeline.PackLayout;
 import dev.materione.core.pipeline.PackManifest;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -58,7 +59,9 @@ public final class BootstrapContentReader {
         }
         List<Path> packDirs;
         try (var packs = Files.list(packsRoot)) {
-            packDirs = packs.filter(Files::isDirectory).sorted().toList();
+            packDirs = packs.filter(Files::isDirectory)
+                    .filter(dir -> PackLayout.isDiscoveredDirectory(dir.getFileName().toString()))
+                    .sorted().toList();
         } catch (IOException e) {
             warnings.accept("could not list packs under " + packsRoot + ": " + e.getMessage());
             return new RegistryContent(List.of(), List.of());
@@ -107,11 +110,7 @@ public final class BootstrapContentReader {
     private static void collectDir(
             Path packDir, String dir, String packId,
             Map<String, Map<String, Object>> templates, Consumer<String> warnings) {
-        Path dirPath = packDir.resolve(dir);
-        if (!Files.isDirectory(dirPath)) {
-            return;
-        }
-        for (Map.Entry<String, Map<String, Object>> entry : documents(dirPath, warnings)) {
+        for (Map.Entry<String, Map<String, Object>> entry : documents(packDir, dir, warnings)) {
             try {
                 templates.put(NamespacedId.of(packId, entry.getKey()).toString(), entry.getValue());
             } catch (IllegalArgumentException e) {
@@ -125,12 +124,8 @@ public final class BootstrapContentReader {
             Path packDir, String dir, String packId, Map<String, Map<String, Object>> templates,
             dev.materione.api.content.ContentType type, Class<T> resultType,
             Consumer<String> warnings) {
-        Path dirPath = packDir.resolve(dir);
-        if (!Files.isDirectory(dirPath)) {
-            return List.of();
-        }
         var out = new ArrayList<T>();
-        for (Map.Entry<String, Map<String, Object>> entry : documents(dirPath, warnings)) {
+        for (Map.Entry<String, Map<String, Object>> entry : documents(packDir, dir, warnings)) {
             NamespacedId id;
             try {
                 id = NamespacedId.of(packId, entry.getKey());
@@ -162,15 +157,11 @@ public final class BootstrapContentReader {
      * pipeline once the plugin is up.
      */
     private static List<Map.Entry<String, Map<String, Object>>> documents(
-            Path dirPath, Consumer<String> warnings) {
+            Path packDir, String dir, Consumer<String> warnings) {
         var out = new ArrayList<Map.Entry<String, Map<String, Object>>>();
-        List<Path> yamls;
-        try (var files = Files.list(dirPath)) {
-            yamls = files.filter(p -> p.toString().endsWith(".yml")).sorted().toList();
-        } catch (IOException e) {
-            warnings.accept("could not list " + dirPath + ": " + e.getMessage());
-            return out;
-        }
+        // the same recursive, sorted discovery the pipeline uses (plugin.md §4.2)
+        List<Path> yamls = PackLayout.contentDocuments(packDir, dir,
+                failure -> warnings.accept("could not list " + packDir.resolve(dir) + ": " + failure.getMessage()));
         for (Path file : yamls) {
             LosslessYamlDocument document;
             try {

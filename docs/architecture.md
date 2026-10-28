@@ -412,6 +412,11 @@ Rules that matter for robustness and tooling:
 - **A file contains resources of exactly one content type**, keyed by id. (Ecosystem-compatible
   with incumbent converters, keeps parsing and error reporting precise, keeps web-UI writes
   small and atomic.)
+- **Content directories may have subfolders.** Every `*.yml` beneath a content directory, at any
+  depth, is a content document (`items/weapons/sword.yml`); dot-directories such as
+  `.materione/` are never content. A resource's identity is its key, never its path, so folders
+  organise files without renaming anything. The discovery rule is specified in plugin
+  architecture §4.2.
 - **Config and assets colocated in the pack** — a pack zips into a shareable unit as-is.
 - **Hand-authored vs generated are separated by directory**: users author `assets/` and `*.yml`;
   the compiler writes only `generated/`. Nothing the compiler writes ever overwrites something a

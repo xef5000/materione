@@ -63,6 +63,32 @@ class BootstrapContentReaderTest {
         assertThat(byId(content.paintings(), "sample:sunrise").assetId()).isEqualTo("sample:sunrise");
     }
 
+    @Test
+    void nestedPaintingsAndSongsRegisterAtBoot(@TempDir Path dataDir) throws Exception {
+        // the sample pack with every painting and sound moved one folder down: the
+        // bootstrap discovers recursively, exactly as the pipeline does (issue #191)
+        Path sample = dataDir.resolve("content").resolve("packs").resolve("sample");
+        copyTree(Path.of(System.getProperty("materione.fixtures.root"), "packs", "sample"), sample);
+        for (String dir : List.of("paintings", "sounds")) {
+            Path source = sample.resolve(dir);
+            Path nested = Files.createDirectories(source.resolve("moved").resolve("deeper"));
+            List<Path> files;
+            try (var listing = Files.list(source)) {
+                files = listing.filter(Files::isRegularFile).toList();
+            }
+            for (Path file : files) {
+                Files.move(file, nested.resolve(file.getFileName()));
+            }
+        }
+        var warnings = new ArrayList<String>();
+        BootstrapContentReader.RegistryContent content =
+                BootstrapContentReader.read(dataDir, warnings::add);
+
+        assertThat(warnings).isEmpty();
+        assertThat(byId(content.paintings(), "sample:sunrise").assetId()).isEqualTo("sample:sunrise");
+        assertThat(content.songs().stream().map(song -> song.id().toString())).contains("sample:anthem");
+    }
+
     private static PaintingDefinition byId(List<PaintingDefinition> paintings, String id) {
         return paintings.stream()
                 .filter(p -> p.id().toString().equals(id))

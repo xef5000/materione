@@ -56,7 +56,9 @@ public final class ParseStage {
         }
         java.util.List<Path> packDirs;
         try (var packs = Files.list(root)) {
-            packDirs = packs.filter(Files::isDirectory).sorted().toList();
+            packDirs = packs.filter(Files::isDirectory)
+                    .filter(dir -> PackLayout.isDiscoveredDirectory(dir.getFileName().toString()))
+                    .sorted().toList();
         } catch (IOException e) {
             context.diagnostics().publish(new Diagnostic(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
@@ -69,12 +71,12 @@ public final class ParseStage {
             for (Path packDir : packDirs) {
                 context.packs().add(buildPack(context, packDir, ALL_FILES));
             }
-            pruneFingerprints(context, root);
+            pruneFingerprints(context, root, packDirs);
             return;
         }
         parseTargeted(context, root, scope instanceof ReloadScope.OnePack p ? p : null,
                 scope instanceof ReloadScope.FileSet f ? f : null, packDirs);
-        pruneFingerprints(context, root);
+        pruneFingerprints(context, root, packDirs);
     }
 
     /** Untouched packs retain their cached parse failures across targeted runs. */
@@ -103,10 +105,12 @@ public final class ParseStage {
     }
 
     /** Drops fingerprints of files that left the tree, so deletions can't wedge targeted scopes. */
-    private void pruneFingerprints(PipelineContext context, Path root) {
+    private void pruneFingerprints(PipelineContext context, Path root, java.util.List<Path> packDirs) {
         var kept = new java.util.HashSet<String>();
-        for (Path packDir : java.util.List.of(root)) {
-            collectRelativeYamls(packDir, root, kept);
+        for (Path packDir : packDirs) {
+            for (Path file : PackLayout.sourceDocuments(packDir, failure -> { })) {
+                kept.add(relativeOf(root, file));
+            }
         }
         FingerprintCache fingerprints = context.fingerprints();
         if (fingerprints != null && !kept.isEmpty()) {
@@ -123,7 +127,9 @@ public final class ParseStage {
         if (one != null) {
             touchedPacks.add(one.packId());
             Path packDir = root.resolve(one.packId());
-            collectRelativeYamls(packDir, root, inScope);
+            for (Path file : PackLayout.sourceDocuments(packDir, failure -> { })) {
+                inScope.add(relativeOf(root, file));
+            }
         } else {
             for (Path file : fileSet.files()) {
                 Path normalized = file.toAbsolutePath().normalize();
@@ -184,19 +190,6 @@ public final class ParseStage {
 
     private static ContentPack previousPack(java.util.List<ContentPack> packs, String id) {
         return packs.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
-    }
-
-    private static void collectRelativeYamls(Path dir, Path root, java.util.Set<String> out) {
-        if (!Files.isDirectory(dir)) {
-            return;
-        }
-        try (var walk = Files.walk(dir)) {
-            walk.filter(f -> Files.isRegularFile(f) && f.toString().endsWith(".yml"))
-                    .sorted()
-                    .forEach(f -> out.add(relativeOf(root, f)));
-        } catch (IOException e) {
-            // unreadable pack: nothing in scope, expansion guard covers safety
-        }
     }
 
     private static String relativeOf(Path root, Path file) {
@@ -344,37 +337,33 @@ public final class ParseStage {
             PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out,
             java.util.function.Predicate<Path> include) {
         Path dirPath = packDir.resolve(dir);
-        if (!Files.isDirectory(dirPath)) {
-            return;
-        }
         String contentType = dir.endsWith("templates") ? "template" : dir.substring(0, dir.length() - 1);
-        try (var files = Files.list(dirPath)) {
-            var yamls = files.filter(p -> p.toString().endsWith(".yml")).sorted().toList();
-            for (Path file : yamls) {
-                if (!include.test(file.toAbsolutePath().normalize())) {
-                    continue; // out of a targeted scope's reach — rides over from the previous run
-                }
-                var document = documentOf(context, file);
-                if (document.parseError().isPresent()) {
+        // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
+        // reported and skipped, its siblings still parse
+        var yamls = PackLayout.contentDocuments(packDir, dir, failure -> context.diagnostics().publish(
+                new Diagnostic(
+                        DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
+                        "could not list " + dirPath + ": " + failure.getMessage(),
+                        null, null, "check file permissions")));
+        for (Path file : yamls) {
+            if (!include.test(file.toAbsolutePath().normalize())) {
+                continue; // out of a targeted scope's reach — rides over from the previous run
+            }
+            var document = documentOf(context, file);
+            if (document.parseError().isPresent()) {
+                continue;
+            }
+            // one file, one content type, many keyed resources (§7.2)
+            for (var entry : document.data().entrySet()) {
+                if (!(entry.getValue() instanceof java.util.Map)) {
                     continue;
                 }
-                // one file, one content type, many keyed resources (§7.2)
-                for (var entry : document.data().entrySet()) {
-                    if (!(entry.getValue() instanceof java.util.Map)) {
-                        continue;
-                    }
-                    out.add(new ContentResource(
-                            NamespacedId.of(packId, entry.getKey()),
-                            contentType,
-                            file,
-                            document));
-                }
+                out.add(new ContentResource(
+                        NamespacedId.of(packId, entry.getKey()),
+                        contentType,
+                        file,
+                        document));
             }
-        } catch (IOException e) {
-            context.diagnostics().publish(new Diagnostic(
-                    DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
-                    "could not list " + dirPath + ": " + e.getMessage(),
-                    null, null, "check file permissions"));
         }
     }
 

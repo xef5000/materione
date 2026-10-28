@@ -33,8 +33,9 @@ Materione's internals, only these markers.
 | `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
-filtered to sample + corpus (4 + 50 items), so the expected live count is
-**56**; the hot-reload scenario below moves it to 57 and back. The world
+filtered to sample + corpus + nested (4 + 50 items, plus the nested pack's
+item under `items/weapons/`, #191), so the expected live count is **58**; the
+hot-reload scenarios below move it to 59 and back. The world
 smoke between doctor and reload force-loads chunk (0, 0) — a headless boot
 has no players to keep chunks warm — then drives `dev place → inspect →
 sweep → remove` against `sample:amethyst_lamp` at `0 200 0`, the shaped
@@ -76,12 +77,15 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 ## Scenarios
 
 - `PaperBootstrapIT` — the M1 exit gate, live on Paper: boot with the
-  fixture corpus (56 items), then the hot-reload sequence —
+  fixture corpus (58 items), then the hot-reload sequence —
   1. no-op reload (nothing changed since boot),
-  2. add `gem_extra` to the corpus pack → reload → 57 items,
-  3. drop a syntactically broken item file → reload → still 57 items and
+  2. add `gem_extra` to the corpus pack → reload → 59 items,
+  3. drop a syntactically broken item file → reload → still 59 items and
      `MTR-0007` in the log (fault injection, fail-soft D6),
-  4. remove both files → reload → back to 56.
+  4. remove both files → reload → back to 58,
+  5. nested (#191): add `nested_gem` under `nested/items/weapons/` → reload →
+     59 items; a broken file beside it → still 59 and `MTR-0007`; remove both →
+     back to 58.
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.

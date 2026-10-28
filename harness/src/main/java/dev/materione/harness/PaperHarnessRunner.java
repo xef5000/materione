@@ -23,9 +23,10 @@ public final class PaperHarnessRunner {
     public HarnessResult run(HarnessOptions options, Set<String> toleratedErrorMarkers) {
         ServerWorkspace workspace;
         try {
-            // sample+corpus only: the bootstrap gate pins 57 live items; the
-            // world pack belongs to the world-persistence scenario
-            workspace = ServerWorkspace.create(options, "bootstrap", Set.of("sample", "corpus"));
+            // sample+corpus+nested: the bootstrap gate pins 58 live items (the nested
+            // pack's item is one of them, #191); the world pack belongs to the
+            // world-persistence scenario
+            workspace = ServerWorkspace.create(options, "bootstrap", Set.of("sample", "corpus", "nested"));
         } catch (IOException e) {
             return failed(List.of("could not create workspace: " + e), -1, options.workRoot(), List.of());
         }
@@ -66,10 +67,11 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-BOOT-OK")) {
                 problems.add("MATERIONE-BOOT-OK missing after boot");
             }
-            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=57")) {
-                problems.add("MATERIONE-CONTENT-OK items=57 missing after boot "
+            if (log.readAll() == null || !log.readAll().contains("MATERIONE-CONTENT-OK items=58")) {
+                problems.add("MATERIONE-CONTENT-OK items=58 missing after boot "
                         + "(fixture packs: 4 sample items (incl. the music disc) + 50 corpus "
-                        + "items + 2 auto placement items (marble_stairs/slab) should be live)");
+                        + "items + 2 auto placement items (marble_stairs/slab) + the nested "
+                        + "pack's item (#191) should be live)");
             }
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
@@ -379,10 +381,11 @@ public final class PaperHarnessRunner {
                     "materione dev remove 3 200 3 world",
                     "MATERIONE-DEV-FURNITURE-REMOVE ok=true removed furniture"));
             console.send("forceload remove all");
-            // no-op reload first: nothing changed since boot
+            // no-op reload first: nothing changed since boot (58 includes the nested fixture item, #191)
             problems.addAll(drive(console, log, options, "materione reload",
-                    "MATERIONE-RELOAD-OK items=57"));
+                    "MATERIONE-RELOAD-OK items=58"));
             hotReloadScenario(console, log, workspace, options, problems);
+            nestedHotReloadScenario(console, log, workspace, options, problems);
 
             console.send("stop");
             String bye = await(log, "MATERIONE-BYE", options.stopTimeout());
@@ -439,13 +442,13 @@ public final class PaperHarnessRunner {
                   display_name: "Extra Gem"
                 """);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=58"));
+                "MATERIONE-RELOAD-OK items=59"));
 
         Thread.sleep(1000);
         Files.writeString(broken, Files.readString(faultSource));
         int beforeFaultReload = log.mark();
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=58"));
+                "MATERIONE-RELOAD-OK items=59"));
         if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
             problems.add("fault injection: MTR-0007 missing after reloading a broken item file");
         }
@@ -454,7 +457,55 @@ public final class PaperHarnessRunner {
         Files.deleteIfExists(extra);
         Files.deleteIfExists(broken);
         problems.addAll(drive(console, log, options, "materione reload",
-                "MATERIONE-RELOAD-OK items=57"));
+                "MATERIONE-RELOAD-OK items=58"));
+    }
+
+    /**
+     * The nested-discovery scenario (issue #191), live on Paper: an item in a
+     * subfolder of a content directory goes live on reload, a broken file in that
+     * subfolder is quarantined with MTR-0007 while everything else stays live, and
+     * removing both returns to the boot state. The same sequence as the flat
+     * scenario above, one folder deeper.
+     */
+    private void nestedHotReloadScenario(ConsoleDriver console, LogWatcher log, ServerWorkspace workspace,
+            HarnessOptions options, List<String> problems) throws IOException, InterruptedException {
+        Path nestedItems = workspace.root
+                .resolve("plugins").resolve("Materione")
+                .resolve("content").resolve("packs").resolve("nested")
+                .resolve("items").resolve("weapons");
+        Path faultSource = options.contentPacksDir() == null
+                ? null
+                : options.contentPacksDir().getParent().resolve("faults").resolve("hot-reload-broken.yml");
+        if (faultSource == null || !Files.isDirectory(nestedItems) || !Files.isRegularFile(faultSource)) {
+            problems.add("nested hot-reload scenario skipped: nested pack or fault fixture missing");
+            return;
+        }
+
+        Path extra = nestedItems.resolve("nested_gem.yml");
+        Path broken = nestedItems.resolve("nested_gem_broken.yml");
+
+        Files.writeString(extra, """
+                nested_gem:
+                  material: DIAMOND
+                  display_name: "Nested Gem"
+                """);
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=59"));
+
+        Thread.sleep(1000);
+        Files.writeString(broken, Files.readString(faultSource));
+        int beforeFaultReload = log.mark();
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=59"));
+        if (log.awaitLine("MTR-0007", java.time.Duration.ofSeconds(5), beforeFaultReload) == null) {
+            problems.add("fault injection: MTR-0007 missing after reloading a broken nested item file");
+        }
+
+        Thread.sleep(1000);
+        Files.deleteIfExists(extra);
+        Files.deleteIfExists(broken);
+        problems.addAll(drive(console, log, options, "materione reload",
+                "MATERIONE-RELOAD-OK items=58"));
     }
 
     private List<String> drive(ConsoleDriver console, LogWatcher log, HarnessOptions options,
