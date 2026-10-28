@@ -19,7 +19,7 @@ away as a dev tool), an embedded pinned Blockbench build with save-back and `.bb
 import, a pixel editor, live diagnostics, and a control center with manual reloads,
 settings editing and the audit trail. Hand-edited files on disk stream into open editors
 instead of colliding. Every save goes live via targeted reload (<2 s round trip enforced
-in CI). Next: the relay/cloud path (M5), then menus/dialogs/HUDs (M6). See
+in CI). The cloud editor at editor.materione.com (M5) works from behind NAT with zero setup. Next: menus/dialogs/HUDs (M6). See
 [`docs/roadmap.md`](docs/roadmap.md), the [`editor quickstart`](docs/editor-quickstart.md),
 and the [feature-parity matrix](docs/feature-parity.md) — ItemsAdder/Oraxen/Nexo side by
 side with what Materione has added (and what's QA-tested) per feature.
