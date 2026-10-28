@@ -399,6 +399,8 @@ Worker is unchanged — no new endpoint, no cost-model change.
 **Goal:** the three gaps none of the incumbents fill well (master §5 differentiators).
 
 - Menu builder (chest + free-form canvas layouts, pagination/search, ECA click bindings).
+  v1 is design-first: a layered canvas studio over the `gui` content type
+  ([`architecture/gui.md`](architecture/gui.md)); logic follows through the same component seam.
 - Server-side dialogs (1.21+ wrapper, dialog.submit → ECA).
 - Native HUD system (image/text/bar layers, bindings, per-world conditions).
 - In-game content browser GUI (categories, search, get-item).
