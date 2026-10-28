@@ -227,10 +227,11 @@
     border-radius: var(--radius-lg);
     background: var(--bg-raised);
   }
-  /* The render takes a third to half of the content; the tooltip it belongs to sits beside it. */
+  /* The render is the focal point (up to 440px); the tooltip it belongs to sits right beside it and is as
+     wide as its text needs, up to a cap. Neither stretches to fill a wide column: leftover room stays empty. */
   .stage {
     display: grid;
-    grid-template-columns: minmax(220px, 5fr) minmax(0, 4fr);
+    grid-template-columns: minmax(220px, 440px) fit-content(360px);
     gap: var(--space-5);
     align-items: start;
     min-width: 0;
@@ -352,7 +353,7 @@
   .tooltip-column {
     display: grid;
     gap: var(--space-1);
-    min-width: 0;
+    min-width: min(220px, 100%);
     align-content: start;
   }
   .tooltip {

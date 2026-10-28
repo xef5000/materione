@@ -592,12 +592,14 @@
 {/if}
 
 <style>
-  /* Two columns: the list (Appearance on top, then the modules) and the settings panel. Each scrolls on its own. */
+  /* Two columns: the list (Appearance on top, then the modules) and the settings panel. Each scrolls on its own.
+     Both are capped (--studio-* tokens, app.css) and centered as one group, so the panel sits right next to the list. */
   .modules {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
+    grid-template-columns: minmax(0, var(--studio-column-max)) minmax(300px, var(--studio-panel-width));
+    justify-content: center;
     grid-template-rows: minmax(0, 1fr);
-    gap: var(--space-5);
+    gap: var(--studio-gap);
     flex: 1 1 0;
     min-width: 0;
     min-height: 0;
@@ -640,7 +642,7 @@
      container query: a container ancestor would also contain the fixed rich-text toolbars. */
   @media (max-width: 1100px) {
     .modules {
-      grid-template-columns: minmax(0, 1fr);
+      grid-template-columns: minmax(0, var(--studio-column-max));
       grid-template-rows: auto;
       overflow-y: auto;
     }

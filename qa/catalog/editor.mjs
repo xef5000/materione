@@ -1514,7 +1514,56 @@ export default [
         .waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('item-modules-picker', '.scrim');
       ctx.needsEyes(
-        'item-modules-studio shows the Appearance component at the top left, then the module list below it: compact rows with an icon and the name only (Base material, Durability, Soulbound, Console Commands), no settings inside a row, a trash icon at the end of each removable row, and the dashed Add module button after the rows; the right side holds the settings panel, empty with nothing selected; item-modules-panel shows only the selected Durability settings (Max durability 500) in the panel with the row highlighted; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
+        'item-modules-studio shows the Appearance component at the top of the centered column, then the module list below it: compact rows with an icon and the name only (Base material, Durability, Soulbound, Console Commands), no settings inside a row, a trash icon at the end of each removable row, and the dashed Add module button after the rows; the settings panel beside the column is empty with nothing selected; item-modules-panel shows only the selected Durability settings (Max durability 500) in the panel with the row highlighted; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  // The centered studio layout: on a wide window the studio body is one capped group in the
+  // middle, with the settings panel next to the list and empty background on both sides.
+  test({
+    id: 'editor.browser-studio-centered-layout',
+    title: 'on a wide window the item studio is a centered group: capped Appearance card, rows and panel side by side, empty background on both sides',
+    mode: 'visual',
+    dependsOn: ['editor.browser-item-modules'],
+    covers: [
+      ...WORKBENCH_COVERS,
+      'webui/src/app.css',
+      'webui/src/lib/studio/ItemAppearance.svelte',
+      'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/lib/studio/Studio.svelte',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      await page.setViewportSize({ width: 1920, height: 1080 });
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.locator('[data-module="material"]').waitFor({ state: 'visible', timeout: 20_000 });
+      await studio.getByRole('button', { name: 'Durability', exact: true }).click();
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      await panel.getByRole('spinbutton').waitFor({ state: 'visible', timeout: 20_000 });
+
+      // The caps hold and the group is centered: equal empty margins, the panel beside the column.
+      const body = await studio.locator('.body').boundingBox();
+      const card = await studio.getByRole('article', { name: 'Appearance' }).boundingBox();
+      const side = await panel.boundingBox();
+      ctx.expect(card.width).toBeLessThan(801);
+      ctx.expect(side.width).toBeLessThan(321);
+      const left = card.x - body.x;
+      const right = body.x + body.width - (side.x + side.width);
+      ctx.expect(left).toBeGreaterThan(120);
+      ctx.expect(Math.abs(left - right)).toBeLessThan(25);
+      ctx.expect(side.x - (card.x + card.width)).toBeLessThan(41);
+      await ctx.browser.browserShot('item-studio-wide', 'main');
+
+      // 1440 px: the same group, narrower margins; the panel stays beside the list.
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await panel.getByRole('spinbutton').waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-studio-1440', 'main');
+      ctx.needsEyes(
+        'item-studio-wide shows the Appearance card (render with the tooltip right beside it, not at the far edge), the module rows and the dashed Add module bar as one column about 800 px wide, the selected Durability settings panel directly to its right, and plain empty background on both sides, the group centered under the full-width header; item-studio-1440 shows the same group with narrower margins and nothing cramped or clipped' + IDENTITY_EYES,
       );
     },
   }),
