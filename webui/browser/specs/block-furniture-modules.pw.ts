@@ -1,14 +1,16 @@
 import { expect, test } from '@playwright/test';
 import {
-  addModule, blockCdn, documentOf, openModules, openResource, saveAndApply,
+  addModule, blockCdn, documentOf, moduleRow, openModules, openResource, saveAndApply, selectModule,
+  selectModuleById, settingsPanel,
 } from './helpers/modules';
 
 // Blocks and furniture as display + modules (issue #153). The schemas come
 // from the plugin's golden snapshot: the module list, labels, option labels
-// and widgets are exactly what the Java registry declares.
+// and widgets are exactly what the Java registry declares. Since issue #174 a
+// module's settings open in the panel beside the list when its row is selected.
 test.beforeEach(async ({ page }) => blockCdn(page));
 
-test('a block reads as a display card plus the modules the registry declares', async ({ page }) => {
+test('a block reads as a display card plus the modules the registry declares, with the selected module in the panel', async ({ page }) => {
   const pageErrors = await openModules(page);
   await openResource(page, 'Blocks', 'Amethyst Lamp');
 
@@ -17,21 +19,19 @@ test('a block reads as a display card plus the modules the registry declares', a
   await expect(display.getByLabel('Texture', { exact: true })).toBeVisible();
 
   // "Shape" replaces the backend word `technique`; the stored value stays the key's own.
-  const shape = page.locator('[data-module="technique"]');
-  await expect(shape).toContainText('Shape');
-  await expect(shape.getByRole('radio', { name: 'Slab' })).toHaveAttribute('aria-checked', 'true');
-  await expect(shape.getByRole('radio', { name: 'Full block' })).toHaveAttribute('aria-checked', 'false');
+  await expect(page.locator('[data-module="technique"]')).toContainText('Shape');
+  await selectModule(page, 'Shape');
+  await expect(settingsPanel(page).getByRole('radio', { name: 'Slab' })).toHaveAttribute('aria-checked', 'true');
+  await expect(settingsPanel(page).getByRole('radio', { name: 'Full block' })).toHaveAttribute('aria-checked', 'false');
 
   // Drops are item chips with counts: a repeated reference is its count.
-  const drops = page.locator('[data-module="drops"]');
-  await expect(drops).toContainText('Drops');
-  await expect(drops.locator('[data-item="ruby"] output')).toHaveText('2');
-  await expect(drops.locator('[data-item="minecraft:diamond"] output')).toHaveText('1');
+  await selectModule(page, 'Drops');
+  await expect(settingsPanel(page).locator('[data-item="ruby"] output')).toHaveText('2');
+  await expect(settingsPanel(page).locator('[data-item="minecraft:diamond"] output')).toHaveText('1');
 
   await expect(page.locator('[data-module="blast_resistant"]')).toContainText('Explosion resistant');
-  const placedBy = page.locator('[data-module="item"]');
-  await expect(placedBy).toContainText('Placed by item');
-  await expect(placedBy.getByRole('button', { name: /Placed by item: Ruby/ })).toBeVisible();
+  await selectModule(page, 'Placed by item');
+  await expect(settingsPanel(page).getByRole('button', { name: /Placed by item: Ruby/ })).toBeVisible();
 
   // The host block is advanced; the unknown key keeps its honest report.
   await expect(page.getByText('1 field is only editable in Advanced Files (future_flag)')).toBeVisible();
@@ -43,10 +43,12 @@ test('block modules write the same lossless edits: shape, drops with counts, pis
   const pageErrors = await openModules(page);
   await openResource(page, 'Blocks', 'Amethyst Lamp');
 
-  await page.locator('[data-module="technique"]').getByRole('radio', { name: 'Stairs' }).click();
+  await selectModule(page, 'Shape');
+  await settingsPanel(page).getByRole('radio', { name: 'Stairs' }).click();
 
   // Drops: another ruby, a new vanilla item found by search, and one removed.
-  const drops = page.locator('[data-module="drops"]');
+  await selectModule(page, 'Drops');
+  const drops = settingsPanel(page);
   await drops.getByRole('button', { name: 'More Ruby' }).click();
   await drops.getByRole('button', { name: 'Add item' }).click();
   await page.getByRole('combobox', { name: 'Search items for Add item' }).fill('emerald');
@@ -56,7 +58,7 @@ test('block modules write the same lossless edits: shape, drops with counts, pis
 
   // A new module: pistons, written with the schema's default and changed to "Breaks".
   await addModule(page, 'piston');
-  const pistons = page.locator('[data-module="move_policy"]');
+  const pistons = settingsPanel(page);
   await expect(pistons.getByRole('radio', { name: 'Moves with the piston' })).toHaveAttribute('aria-checked', 'true');
   await pistons.getByRole('radio', { name: 'Breaks' }).click();
 
@@ -75,9 +77,10 @@ test('block modules write the same lossless edits: shape, drops with counts, pis
     future_flag: { keep: 'me' },
   });
 
-  // Removing a switch module removes exactly its key.
+  // Removing a switch module from its row removes exactly its key.
   await page.locator('[data-module="blast_resistant"]')
     .getByRole('button', { name: 'Remove Explosion resistant' }).click();
+  await expect(page.locator('[data-module="blast_resistant"]')).toHaveCount(0);
   const removal = await saveAndApply(page, 2);
   expect(removal.payload.edits).toEqual([{ field: ['amethyst_lamp', 'blast_resistant'], remove: true }]);
   expect((await documentOf(page, 'blocks/amethyst_lamp.yml'))?.raw).not.toContain('blast_resistant');
@@ -95,7 +98,8 @@ test('adding "Explosion resistant" turns it on, and the picker lists the block m
   }
   await picker.getByLabel('Search modules').fill('explosion');
   await picker.getByLabel('Search modules').press('Enter');
-  await expect(page.locator('[data-module="blast_resistant"]').getByRole('checkbox')).toBeChecked();
+  await expect(moduleRow(page, 'Explosion resistant')).toHaveAttribute('aria-current', 'true');
+  await expect(settingsPanel(page).getByRole('checkbox')).toBeChecked();
 
   const save = await saveAndApply(page, 1);
   expect(save.payload.edits).toEqual([{ field: ['plain_stone', 'blast_resistant'], value: true }]);
@@ -106,8 +110,8 @@ test('the placed-by picker offers this pack\'s items with icons and clears with 
   const pageErrors = await openModules(page);
   await openResource(page, 'Blocks', 'Amethyst Lamp');
 
-  const placedBy = page.locator('[data-module="item"]');
-  await placedBy.getByRole('button', { name: /Placed by item: Ruby/ }).click();
+  await selectModule(page, 'Placed by item');
+  await settingsPanel(page).getByRole('button', { name: /Placed by item: Ruby/ }).click();
   const search = page.getByRole('combobox', { name: 'Search items for Placed by item' });
   // Placement links are pack items only: no vanilla materials are offered.
   await search.fill('diamond');
@@ -125,8 +129,8 @@ test('furniture modules: seats, hitbox and light on a block-scale picture, rotat
   const pageErrors = await openModules(page);
   await openResource(page, 'Furniture', 'Chair');
 
-  const seats = page.locator('[data-module="seats"]');
-  await expect(seats).toContainText('Seats');
+  await selectModule(page, 'Seats');
+  const seats = settingsPanel(page);
   const front = seats.getByRole('group', { name: 'Seats, front view' });
   await expect(front.getByRole('button', { name: 'Seats 1 at x 0, y 0.3, z 0' })).toBeVisible();
 
@@ -148,17 +152,19 @@ test('furniture modules: seats, hitbox and light on a block-scale picture, rotat
   await expect(front.getByRole('button', { name: 'Seats 1 at x 0.5, y 0.5, z 0' })).toBeVisible();
 
   // The light and the hitbox draw too, and the exact numbers stay editable.
-  await expect(page.locator('[data-module="lights"]').getByRole('group', { name: 'Light source, top view' })).toBeVisible();
-  await expect(page.locator('[data-module="hitboxes"]')).toContainText('Hitbox');
+  await selectModuleById(page, 'lights');
+  await expect(settingsPanel(page).getByRole('group', { name: 'Light source, top view' })).toBeVisible();
+  await selectModuleById(page, 'hitboxes');
+  await expect(settingsPanel(page)).toContainText('Hitbox');
 
   // Rotation snapping reads as labelled choices of numbers.
-  const rotation = page.locator('[data-module="rotation"]');
-  await expect(rotation.getByRole('radio', { name: '90°' })).toHaveAttribute('aria-checked', 'true');
-  await rotation.getByRole('radio', { name: '45°' }).click();
+  await selectModuleById(page, 'rotation');
+  await expect(settingsPanel(page).getByRole('radio', { name: '90°' })).toHaveAttribute('aria-checked', 'true');
+  await settingsPanel(page).getByRole('radio', { name: '45°' }).click();
 
   // Storage: a new module with a range and a unit.
   await addModule(page, 'storage');
-  const storage = page.locator('[data-module="storage"]');
+  const storage = settingsPanel(page);
   await expect(storage).toContainText('slots');
   await expect(storage).toContainText('9–54');
   await storage.getByRole('spinbutton', { name: 'Storage' }).fill('100');
@@ -184,13 +190,13 @@ test('furniture: "Grows into…" and the light module add rows through the same 
   await openResource(page, 'Furniture', 'Stool');
 
   await addModule(page, 'grows');
-  const grows = page.locator('[data-module="evolution"]');
+  const grows = settingsPanel(page);
   await expect(grows).toContainText('Grows into…');
   await grows.getByRole('button', { name: 'Add row' }).click();
   await expect(grows.getByRole('row')).toHaveCount(2); // header + one stage
 
   await addModule(page, 'light');
-  await page.locator('[data-module="lights"]').getByRole('button', { name: 'Add light' }).click();
+  await settingsPanel(page).getByRole('button', { name: 'Add light' }).click();
 
   const save = await saveAndApply(page, 1);
   const edits = save.payload.edits as { field: string[]; value: unknown }[];

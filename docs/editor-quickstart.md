@@ -219,11 +219,14 @@ Server view).
 
 ## 7b. Abilities, rules and templates
 
-- **Abilities** — in an item's studio, **Add an ability** lists every mechanic the
-  server registers (built-in, or "added by" an add-on plugin). Each card says what
-  the ability does and **Activates:** when it acts (hover the ability's name to read
-  it); fill in its settings and **Save & apply**. An ability the server does not know (its plugin is missing)
-  stays on the item with its settings untouched.
+- **Abilities** — in an item's studio, **Add module** lists every mechanic the server
+  registers (built-in, or "added by" an add-on plugin). Each ability is a row in the
+  module list; click it (or move to it with the arrow keys and press Enter) and its
+  settings open in the panel on the right. The panel says what the ability does and
+  **Activates:** when it acts (hover the ability's name to read it). Fill in its
+  settings and **Save & apply**. The trash icon on a row removes it; **Undo** brings it
+  back until you add or remove another module. An ability the server does not know
+  (its plugin is missing) stays on the item with its settings untouched.
 - **Behaviour rules** — **Add rule** starts from a blank rule or a starting point
   such as "Right-click sends a message". Each rule reads as a sentence; click it to
   choose **When** (only events this kind of content actually fires), **Only if**

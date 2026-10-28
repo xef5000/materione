@@ -42,6 +42,13 @@ function animations(page: Page, clickText?: string) {
 test.describe('reduced motion', () => {
   test.use({ reducedMotion: 'reduce' });
 
+  test('selecting a module swaps its settings in the panel with no animation', async ({ page }) => {
+    await openModules(page);
+    await openResource(page, 'Items', 'Ruby Sword');
+    expect(await animations(page, 'Durability')).toEqual([]);
+    await expect(page.getByRole('region', { name: 'Module settings' }).getByLabel(/max durability/i)).toHaveValue('500');
+  });
+
   test('the motion tokens collapse to 0ms and transitions stop', async ({ page }) => {
     await openFixture(page);
     const tokens = await page.evaluate(() => {
@@ -107,6 +114,14 @@ test.describe('motion on', () => {
     await expect(page.getByRole('dialog', { name: 'New folder' })).toHaveCount(0);
   });
 
+  test('a selected module settles into the panel over the fast token', async ({ page }) => {
+    await openModules(page);
+    await openResource(page, 'Items', 'Ruby Sword');
+    // Click and read in one task: the settings fade lasts 120ms, longer than the 30ms read.
+    const selecting = await animations(page, 'Durability');
+    expect(selecting).toContainEqual(expect.objectContaining({ target: 'div.settings', duration: 120 }));
+  });
+
   test('the module picker staggers its rows in on first open', async ({ page }) => {
     const pageErrors = await openModules(page);
     await openResource(page, 'Blocks', 'Plain Stone');
@@ -125,13 +140,13 @@ test.describe('motion on', () => {
     expect(pageErrors).toEqual([]);
   });
 
-  test('a card added to the studio flies in; the studio fades in on open', async ({ page }) => {
+  test('a module row added to the studio flies in; the studio fades in on open', async ({ page }) => {
     await openModules(page);
     await openResource(page, 'Blocks', 'Plain Stone');
     await addModule(page, 'explosion');
     await expect(page.locator('[data-module="blast_resistant"]')).toBeVisible();
     const added = await animations(page);
-    expect(added).toContainEqual(expect.objectContaining({ target: 'article.card', duration: 200 }));
+    expect(added).toContainEqual(expect.objectContaining({ target: 'li.row-item', duration: 200 }));
 
     // The Studio mounts with the view-enter class: the Content <-> Studio switch fades in.
     const studio = page.locator('section.studio.view-enter');

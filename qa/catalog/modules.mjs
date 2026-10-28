@@ -1,5 +1,6 @@
 // Per-type display + modules studios (issue #153, building on the item studio of
-// issue #152): every content type is a display card plus module cards derived
+// issue #152; since issue #174 a module's settings open in the settings panel beside
+// the module rows): every content type is a display card plus module rows derived
 // from the registry self-description, with a purpose-built smart input where the
 // outcome has one (item chips, the block-scale spatial picture, ranges, ...).
 // Real local App through the normal trust flow, against the `sample` pack; each
@@ -94,12 +95,12 @@ export default [
       ctx.expect(await placedBy.innerText()).toContain('Placed by item');
       ctx.expect(await studio.locator('[data-module="behavior"]').count()).toBe(1);
 
-      // Add Drops through the picker, then an item chip from the item picker.
+      // Add Drops through the picker (it is selected, so its settings open in the panel), then an item chip from the item picker.
       await studio.getByRole('button', { name: 'Add module' }).click();
       const picker = page.getByRole('dialog', { name: 'Add a module' });
       await picker.getByLabel('Search modules').fill('drops');
       await picker.getByLabel('Search modules').press('Enter');
-      const drops = studio.locator('[data-module="drops"]');
+      const drops = studio.getByRole('region', { name: 'Module settings' });
       await drops.getByRole('button', { name: 'Add item' }).click();
       await page.getByRole('combobox', { name: 'Search items for Add item' }).fill('diamond');
       await page.getByRole('option', { name: /^Diamond/ }).first().waitFor({ state: 'visible', timeout: 20_000 });
@@ -114,7 +115,7 @@ export default [
       ctx.expect(await drops.locator('[data-item="minecraft:diamond"] output').innerText()).toBe('2');
 
       // Remove it again: the sample block ends exactly as it started.
-      await drops.getByRole('button', { name: 'Remove Drops' }).click();
+      await studio.locator('[data-module="drops"]').getByRole('button', { name: 'Remove Drops' }).click();
       await save.click();
       await waitForSaved(page);
       ctx.expect(await studio.locator('[data-module="drops"]').count()).toBe(0);
@@ -124,7 +125,7 @@ export default [
 
   test({
     id: 'modules.browser-block-modules-visual',
-    title: 'the block studio reads as a display card plus Shape, Drops and world-policy cards with item chips',
+    title: 'the block studio reads as a display card plus Shape, Drops and world-policy rows, with the selected module in a settings panel',
     mode: 'visual',
     dependsOn: ['modules.browser-block-modules'],
     covers: BLOCK_COVERS,
@@ -139,7 +140,7 @@ export default [
         .waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('block-modules-picker', '.scrim');
       ctx.needsEyes(
-        'block-modules-studio shows the display card (name, texture/model slots, preview) then one compact card per module - Explosion resistant (a checkbox), Placed by item (an item chip with the Ruby icon and an x) and When... do... - each with its Lucide icon; block-modules-picker lists Shape, Drops, Explosion resistant, When pushed by pistons, Placed by item and When... do... with one-line descriptions, grouped under Appearance, Gameplay and Behaviour chips' + IDENTITY_EYES,
+        'block-modules-studio shows the display card (name, texture/model slots, preview) then one compact row per module, each with its Lucide icon and no controls inside; the settings panel on the right holds the controls of the selected module (Explosion resistant as a checkbox, Placed by item as an item chip with the Ruby icon and an x, When... do...); block-modules-picker lists Shape, Drops, Explosion resistant, When pushed by pistons, Placed by item and When... do... with one-line descriptions, grouped under Appearance, Gameplay and Behaviour chips' + IDENTITY_EYES,
       );
     },
   }),
@@ -153,9 +154,11 @@ export default [
       const page = await ctx.browser.openEditor();
       const studio = await openSampleResource(page, 'Furniture', 'Chair');
 
-      const seats = studio.locator('[data-module="seats"]');
-      await seats.waitFor({ state: 'visible', timeout: 20_000 });
-      const front = seats.getByRole('group', { name: 'Seats, front view' });
+      // The Seats row opens its picture in the settings panel.
+      await studio.locator('[data-module="seats"]').waitFor({ state: 'visible', timeout: 20_000 });
+      await studio.getByRole('button', { name: 'Seats', exact: true }).click();
+      const panel = studio.getByRole('region', { name: 'Module settings' });
+      const front = panel.getByRole('group', { name: 'Seats, front view' });
       const handle = front.getByRole('button', { name: /^Seats 1 at x 0, y 0.3, z 0/ });
       await handle.waitFor({ state: 'visible' });
 
@@ -167,22 +170,21 @@ export default [
       await front.getByRole('button', { name: /^Seats 1 at x 0, y 0.3, z 0/ }).waitFor({ state: 'visible' });
 
       // Rotation is a set of labelled numbers, not a free number box.
-      const rotation = studio.locator('[data-module="rotation"]');
-      ctx.expect(await rotation.getByRole('radio', { name: '90°' }).getAttribute('aria-checked')).toBe('true');
+      await studio.locator('[data-module="rotation"] [data-row-key]').click();
+      ctx.expect(await panel.getByRole('radio', { name: '90°' }).getAttribute('aria-checked')).toBe('true');
 
-      // Storage: add (with its slot range and unit), save, remove, save.
+      // Storage: add (it is selected, so its slot range and unit show in the panel), save, remove, save.
       await studio.getByRole('button', { name: 'Add module' }).click();
       const picker = page.getByRole('dialog', { name: 'Add a module' });
       await picker.getByLabel('Search modules').fill('storage');
       await picker.getByLabel('Search modules').press('Enter');
-      const storage = studio.locator('[data-module="storage"]');
-      ctx.expect(await storage.innerText()).toContain('slots');
-      await storage.getByRole('spinbutton', { name: 'Storage' }).fill('27');
-      await storage.getByRole('spinbutton', { name: 'Storage' }).press('Tab');
+      ctx.expect(await panel.innerText()).toContain('slots');
+      await panel.getByRole('spinbutton', { name: 'Storage' }).fill('27');
+      await panel.getByRole('spinbutton', { name: 'Storage' }).press('Tab');
       const save = studio.getByRole('button', { name: 'Save & apply' });
       await save.click();
       await waitForSaved(page);
-      await storage.getByRole('button', { name: 'Remove Storage' }).click();
+      await studio.locator('[data-module="storage"]').getByRole('button', { name: 'Remove Storage' }).click();
       await save.click();
       await waitForSaved(page);
       ctx.expect(await studio.locator('[data-module="storage"]').count()).toBe(0);
@@ -200,10 +202,11 @@ export default [
     steps: async (ctx) => {
       const page = await ctx.browser.openEditor();
       const studio = await openSampleResource(page, 'Furniture', 'Chair');
-      await studio.locator('[data-module="seats"] svg').first().waitFor({ state: 'visible', timeout: 20_000 });
+      await studio.getByRole('button', { name: 'Seats', exact: true }).click();
+      await studio.getByRole('region', { name: 'Module settings' }).locator('svg').first().waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('furniture-modules-studio', '.studio');
       ctx.needsEyes(
-        'furniture-modules-studio shows the display card then Rotation snapping (Free / 45 / 90 / 180 choices, 90 selected), Hitbox and Seats cards - each with a front (x, y) and a top (x, z) view on a one-block grid, a 1x1 block outline, an orange draggable handle numbered 1 (the hitbox also a shaded rectangle) - and the exact numeric rows below the pictures' + IDENTITY_EYES,
+        'furniture-modules-studio shows the display card and compact rows for Rotation snapping (Free / 45 / 90 / 180 choices, 90 selected), Hitbox and Seats; with Seats selected the settings panel on the right shows its front (x, y) and top (x, z) views on a one-block grid, a 1x1 block outline, an orange draggable handle numbered 1 (the hitbox also a shaded rectangle) - and the exact numeric rows below the pictures' + IDENTITY_EYES,
       );
     },
   }),

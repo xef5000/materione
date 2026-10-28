@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import '../contract';
-import { blockCdn, documentOf, openModules, openResource, saveAndApply, writes } from './helpers/modules';
+import {
+  blockCdn, documentOf, moduleRow, openModules, openResource, saveAndApply, selectModule, settingsPanel, writes,
+} from './helpers/modules';
 
 // Templates as a creation choice, not a field (issue #154). Everything runs on
 // the deterministic ?modules fixture, whose `base_item` template mirrors the
@@ -49,13 +51,18 @@ test('Ruby Dagger from base_item: create, see the inherited modules, change a va
 
   // The studio shows what it inherits: as modules, with the template named.
   await expect(page.locator('[data-based-on-button]')).toContainText('A base item');
-  await expect(page.locator('[data-inherited-module="material"]')).toContainText('Inherited from base_item');
-  await expect(page.locator('[data-inherited-module="material"]')).toContainText('PAPER');
+  // Inherited modules are dashed rows marked Inherited; the template's value and its origin open in the panel.
+  await expect(page.locator('[data-inherited-module="material"]')).toContainText('Inherited');
+  await selectModule(page, 'Base material');
+  await expect(settingsPanel(page)).toContainText('Inherited from base_item');
+  await expect(settingsPanel(page)).toContainText('PAPER');
   // the model style is an option of the Appearance component, with its inheritance line
   await page.getByRole('button', { name: 'More appearance options' }).click();
   await expect(page.locator('[data-provenance="model_parent"]')).toContainText('Inherited from base_item: item/handheld');
   await page.getByRole('button', { name: 'More appearance options' }).click();
-  await expect(page.locator('[data-inherited-module="mechanic:materione:durability#0"]')).toContainText('max 250');
+  await selectModule(page, 'Durability');
+  await expect(page.locator('[data-inherited-module="mechanic:materione:durability#0"]')).toContainText('Inherited');
+  await expect(settingsPanel(page)).toContainText('max 250');
   await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
 
   // Step 2: override one module; the save writes only that key, the link stays.
@@ -92,6 +99,36 @@ test('Ruby Dagger from base_item: create, see the inherited modules, change a va
   // the values are now this resource's own modules
   await expect(page.locator('[data-module="material"]')).toBeVisible();
   await expect(page.locator('[data-inherited-module]')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('an inherited module is overridden from the settings panel, and Reset to inherited hands it back to the template', async ({ page }) => {
+  const pageErrors = await openModules(page);
+  // ruby_sword sets its own material; the template's PAPER is what Reset brings back.
+  await openResource(page, 'Items', 'Ruby Sword');
+  await selectModule(page, 'Base material');
+  const panel = settingsPanel(page);
+  await expect(panel).toContainText('Overrides base_item (PAPER)');
+  await panel.getByRole('button', { name: 'Reset to inherited' }).click();
+
+  // Reset stages a removal: the module becomes a dashed inherited row, and it stays selected.
+  await expect(page.locator('[data-inherited-module="material"]')).toBeVisible();
+  await expect(moduleRow(page, 'Base material')).toHaveAttribute('aria-current', 'true');
+  await expect(panel).toContainText('Inherited from base_item');
+  await expect(panel).toContainText('PAPER');
+  expect(await writes(page)).toEqual([]);
+
+  // Override here, in the panel, copies the template's value back into the resource.
+  await panel.getByRole('button', { name: 'Override here' }).click();
+  await expect(page.locator('[data-inherited-module]')).toHaveCount(0);
+  await expect(page.locator('[data-module="material"]')).toBeVisible();
+  await expect(panel).toContainText('Overrides base_item (PAPER)');
+
+  // One edit: the later value replaces the staged removal, and the link stays.
+  const save = await saveAndApply(page, 1);
+  expect(save.payload.edits).toEqual([{ field: ['ruby_sword', 'material'], value: 'PAPER' }]);
+  expect((await documentOf(page, 'items/ruby_sword.yml'))?.parsed.ruby_sword)
+    .toMatchObject({ template: 'base_item', material: 'PAPER' });
   expect(pageErrors).toEqual([]);
 });
 

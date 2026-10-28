@@ -133,6 +133,8 @@
   /** What the form renders: no raw `template` control anywhere, and nothing required of a template. */
   const schema = $derived(studioSchema(ownSchema, isTemplate));
   const sections = $derived(sectionsOf(schema));
+  /** The module layout (display card or Appearance, list, settings panel) fills the form and scrolls by pane. */
+  const modulesLayout = $derived(usesModules(schema));
   const advancedOnly = $derived(unrenderableKeys(loaded, ownSchema));
   const takesTemplates = $derived(acceptsTemplates(ownSchema));
   const authoredTemplate = $derived(typeof draft.template === 'string' ? draft.template : '');
@@ -175,7 +177,16 @@
   const canFocusLore = $derived(fieldsEditable && documentOf(draft.lore, true) !== null &&
     sections.some((section) => section.fields.some((field) => field.id === 'lore')));
 
+  /** The module studio's list and panel: asked to select the module that owns a field (issue 174). */
+  let modules = $state<{ reveal: (fieldId: string) => boolean } | undefined>();
+
+  /** Focuses a field, selecting the module that owns it first so its control is on screen. */
   function focusField(fieldId: string) {
+    modules?.reveal(fieldId);
+    void tick().then(() => focusControl(fieldId));
+  }
+
+  function focusControl(fieldId: string) {
     const field = [...(formElement?.querySelectorAll<HTMLElement>('[data-field]') ?? [])]
       .find((element) => element.dataset.field === fieldId);
     const control = field?.querySelector<HTMLElement>('[data-field-control]') ??
@@ -636,7 +647,7 @@
     </aside>
     {/if}
 
-    <div class="form" bind:this={formElement}>
+    <div class="form" class:modules-form={modulesLayout} bind:this={formElement}>
       {#if rawDraftDirty(documentDraft)}
         <p class="pending-yaml">
           Advanced Files YAML changes are pending. Apply or discard them there before editing structured fields.
@@ -651,9 +662,10 @@
       {:else if !documentDraft.loaded}
         <p class="loading">Loading document…</p>
       {:else if usesModules(schema)}
-        <!-- The module studio (issue 152): display card + one card per module,
-             derived from the same self-description as the sections below. -->
+        <!-- The module studio (issues 152, 174): display card or Appearance, one row per module
+             and the settings panel, derived from the same self-description as the sections below. -->
         <ModulesArea
+          bind:this={modules}
           {resource}
           {schema}
           vocabulary={workspace.behavior}
@@ -667,7 +679,6 @@
           {actionFor}
           {missingTexture}
           {fieldIssue}
-          showInFile={() => revealInAdvanced(resource)}
           inherited={inheritance?.inherited ?? {}}
           inheritedSources={inheritance?.sources ?? {}}
           appearance={itemAppearance ? appearanceHost : undefined}
@@ -885,12 +896,23 @@
     overflow-x: hidden;
     min-width: 0;
   }
-  /* The Appearance component is the studio's centre: one column, no side preview (room for a settings panel later). */
+  /* The Appearance component is the studio's centre: one column, no side preview (the settings panel sits beside the list). */
   .body.appearance {
     grid-template-columns: minmax(0, 1fr);
   }
-  .body.appearance .form {
-    max-width: 920px;
+  /* The modules layout (issue 174) fills the form: the list and the settings panel each scroll on their own.
+     No container-type here: containment makes this box the containing block of the fixed rich-text toolbars. */
+  .form.modules-form {
+    display: flex;
+    flex-direction: column;
+    max-width: none;
+    overflow: hidden;
+  }
+  .form.modules-form > .field-controls {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
   }
   .preview {
     min-width: 0;

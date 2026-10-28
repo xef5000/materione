@@ -162,7 +162,7 @@ component operations stay in the platform layer.
 
 ## Editor self-description
 
-`describe()` is also the editor's only source for an ability card (web.md §6): display name,
+`describe()` is also the editor's only source for an ability's row and settings panel (web.md §6): display name,
 description, parameters, and the optional `activation` sentence — the answer to "when does this
 run?". Declare it with the five-argument `SelfDescription` constructor; an addon that omits it is
 still listed and editable, and the editor says that its activation is not described rather than

@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import '../../contract';
 
 /**
@@ -36,6 +36,30 @@ export function documentOf(page: Page, path: string) {
     const found = window.__materioneTestControls?.documents().find((entry) => entry.path === target);
     return found ? { raw: found.raw, parsed: found.parsed } : null;
   }, [path]);
+}
+
+/**
+ * The module row named `name` (issue 174: a row is the title and markers only;
+ * an inherited row also says so). Matched whole, so "Remove Durability" is not it.
+ */
+export function moduleRow(page: Page, name: string): Locator {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return page.getByRole('button', { name: new RegExp(`^${escaped}( Inherited)?( Has a problem)?$`) });
+}
+
+/** Select a module row: its settings open in the panel. */
+export async function selectModule(page: Page, name: string): Promise<void> {
+  await moduleRow(page, name).click();
+}
+
+/** Select a module row by its id (its `data-module`), for specs that do not need its label. */
+export async function selectModuleById(page: Page, id: string): Promise<void> {
+  await page.locator(`li[data-module="${id}"] button[data-row-key]`).click();
+}
+
+/** The settings panel: holds the selected module's settings and nothing else. */
+export function settingsPanel(page: Page): Locator {
+  return page.getByRole('region', { name: 'Module settings' });
 }
 
 /** Add a module through the picker by searching its label. */
