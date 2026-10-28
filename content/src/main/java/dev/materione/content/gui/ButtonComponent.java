@@ -3,10 +3,13 @@ package dev.materione.content.gui;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
+import dev.materione.api.gui.RasterCanvas;
 import dev.materione.api.gui.RenderTarget;
+import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.content.gui.raster.Bevels;
 import java.util.List;
 
 /**
@@ -14,6 +17,9 @@ import java.util.List;
  * Its clicks are v1-cancelled; bindings arrive with the logic seam (§8). Raster target.
  */
 public final class ButtonComponent implements GuiComponent {
+
+    /** The highlight and shadow thickness of a button (a panel uses 2). */
+    static final int BUTTON_EDGE = 1;
 
     @Override
     public String name() {
@@ -30,22 +36,22 @@ public final class ButtonComponent implements GuiComponent {
                                 "Left edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "X", "placement", 10, false, "number", "", "115")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(-512.0, 512.0, "px")),
                         new ParameterSchema("y", ParameterType.INTEGER, false, "0",
                                 "Top edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Y", "placement", 20, false, "number", "", "70")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(-512.0, 512.0, "px")),
                         new ParameterSchema("width", ParameterType.INTEGER, true, null,
                                 "Width in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Width", "placement", 30, false, "number", "", "52")
-                                        .withRange(1.0, 512.0, "px")),
+                                        .withRange(0.0, 512.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, true, null,
                                 "Height in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 40, false, "number", "", "20")
-                                        .withRange(1.0, 512.0, "px")),
+                                        .withRange(0.0, 512.0, "px")),
                         new ParameterSchema("style", ParameterType.RAW, false, null,
                                 "Bevel colours: {fill, highlight, shadow, outline} as #RRGGBB or #AARRGGBB",
                                 null, null)
@@ -62,10 +68,10 @@ public final class ButtonComponent implements GuiComponent {
     @Override
     public CompiledGuiLayer parse(GuiComponentConfiguration configuration) {
         return new Layer(
-                configuration.integer("x", 0, 0, 512),
-                configuration.integer("y", 0, 0, 512),
-                configuration.requiredInteger("width", 1, 512),
-                configuration.requiredInteger("height", 1, 512),
+                configuration.integer("x", 0, -512, 512),
+                configuration.integer("y", 0, -512, 512),
+                configuration.requiredInteger("width", 0, 512),
+                configuration.requiredInteger("height", 0, 512),
                 GuiBevel.read(configuration));
     }
 
@@ -75,6 +81,12 @@ public final class ButtonComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.RASTER;
+        }
+
+        @Override
+        public void paint(RasterCanvas canvas, TextureSource textures) {
+            Bevels.raised(canvas, x, y, width, height, BUTTON_EDGE,
+                    bevel.outline(), bevel.highlight(), bevel.shadow(), bevel.fill());
         }
     }
 }

@@ -1,0 +1,16 @@
+{
+  "name": "slots-container-1row",
+  "description": "Inset 18x18 slot wells for the container region of a 1-row chest (wells drawn at item origin - 1).",
+  "canvas": {
+    "width": 176,
+    "height": 132
+  },
+  "rows": 1,
+  "layers": [
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "container"
+    }
+  ]
+}

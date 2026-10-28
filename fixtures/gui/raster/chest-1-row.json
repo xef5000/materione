@@ -1,0 +1,24 @@
+{
+  "name": "chest-1-row",
+  "description": "The same starter on the smallest chest, 176x132.",
+  "canvas": {
+    "width": 176,
+    "height": 132
+  },
+  "rows": 1,
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 132
+    },
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all"
+    }
+  ]
+}

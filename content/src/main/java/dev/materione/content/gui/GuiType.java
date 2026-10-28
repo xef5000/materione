@@ -2,6 +2,7 @@ package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.content.Allocations;
+import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
 import dev.materione.api.diagnostics.Diagnostic;
@@ -36,9 +37,8 @@ import java.util.regex.Pattern;
  * bad layer is quarantined alone ({@link GuiDefinition#skipped()}, published as
  * {@code MTR-0052} through {@link #diagnose}); the rest of the GUI parses.
  *
- * <p>Compilation (flattening, the background glyph, the title and the slot table)
- * is GUI 2/5 (#184). Until then {@link #compile} accepts a parsed GUI and emits
- * nothing, so a valid GUI never breaks a reload.
+ * <p>Compilation ({@link GuiCompiler}) flattens the raster layers, bakes the background
+ * glyph, assembles the title and builds the slot table (gui.md §4).
  */
 public final class GuiType implements ContentType {
 
@@ -184,13 +184,29 @@ public final class GuiType implements ContentType {
     }
 
     /**
-     * TODO(#184): flatten the raster layers onto one canvas, encode the background
-     * glyph, assemble the title and build the slot table (gui.md §4). Until then a
-     * parsed GUI compiles to nothing, so it cannot break a reload.
+     * Compiles one GUI into pack output (gui.md §4) through {@link GuiCompiler}: the
+     * background PNG and its glyph provider, the offset fonts actually used, and the
+     * diagnostics of skipped layers. The background codepoint is the GUI's durable
+     * {@link GuiBackgrounds#ALLOCATION_KIND} allocation; a used-up block quarantines this
+     * GUI with {@code MTR-0053} and the pack still compiles.
      */
     @Override
     public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {
-        // intentionally empty: compile is GUI 2/5 (#184)
+        if (!(definition instanceof GuiDefinition gui)) {
+            return;
+        }
+        int number = allocations.range(gui.id(), GuiBackgrounds.ALLOCATION_KIND, 1).start();
+        if (!GuiBackgrounds.fits(number)) {
+            throw new CompileRejectException(
+                    DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
+                    "GUI " + gui.id() + " has no background codepoint left (U+E200..U+F8FF is used up)",
+                    "retire unused GUIs; the allocation table never reuses codepoints");
+        }
+        GuiCompilation compiled = GuiCompiler.compile(
+                gui, GuiBackgrounds.codepoint(number), emitter.textures());
+        compiled.diagnostics().forEach(emitter::diagnostic);
+        compiled.assets().forEach(emitter::generatedAsset);
+        compiled.fonts().forEach(font -> emitter.fontProvider(font.fontKey(), font.provider()));
     }
 
     // ------------------------------------------------------------------

@@ -97,5 +97,10 @@ public final class TextComponent implements GuiComponent {
         public RenderTarget target() {
             return RenderTarget.TEXT;
         }
+
+        @Override
+        public void drawText(TitleSink sink) {
+            sink.run(x, y, text, font, argb);
+        }
     }
 }

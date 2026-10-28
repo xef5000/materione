@@ -119,6 +119,8 @@ public final class PackCompiler {
         /** Compiled text effects, in compile order — the shader ladder's input. */
         final List<dev.materione.api.content.EffectSpec> textEffects = new ArrayList<>();
         final List<String[]> assetCopies = new ArrayList<>(); // [source, destination]
+        /** Compiler-generated binary assets (GUI backgrounds, the small-caps sheet), by destination. */
+        final Map<String, byte[]> generatedAssets = new TreeMap<>();
         final List<VanillaFragment> vanillaFragments = new ArrayList<>();
         /** User-shipped override files; they merge ahead of generated fragments. */
         final List<VanillaFragment> userVanillaFragments = new ArrayList<>();
@@ -126,9 +128,34 @@ public final class PackCompiler {
         String atlasJson;
         String itemsAtlasJson;
         Map<String, Map<String, Object>> vanillaJson;
+        private final dev.materione.api.diagnostics.DiagnosticsBus diagnosticsBus;
+        /** The pack whose resources are compiling now; textures resolve against its folder. */
+        private dev.materione.api.gui.TextureSource textures = dev.materione.api.gui.TextureSource.NONE;
 
-        Emitter(java.util.function.Function<String, String> textComponents) {
+        Emitter(java.util.function.Function<String, String> textComponents,
+                dev.materione.api.diagnostics.DiagnosticsBus diagnosticsBus) {
             this.textComponents = textComponents;
+            this.diagnosticsBus = diagnosticsBus;
+        }
+
+        /** Points the pixel source at {@code pack} for the resources that follow. */
+        void beginPack(ContentPack pack) {
+            textures = new dev.materione.core.texture.PackTextures(pack.id(), pack.directory());
+        }
+
+        @Override
+        public void generatedAsset(String destination, byte[] bytes) {
+            generatedAssets.put(destination, bytes.clone());
+        }
+
+        @Override
+        public dev.materione.api.gui.TextureSource textures() {
+            return textures;
+        }
+
+        @Override
+        public void diagnostic(Diagnostic diagnostic) {
+            diagnosticsBus.publish(diagnostic);
         }
 
         @Override
@@ -167,7 +194,11 @@ public final class PackCompiler {
 
         @Override
         public void fontProvider(String fontKey, Map<String, Object> providerJson) {
-            fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>()).add(providerJson);
+            // an identical provider from another GUI (the same offset font, the same sheet) is one provider
+            List<Map<String, Object>> providers = fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>());
+            if (!providers.contains(providerJson)) {
+                providers.add(providerJson);
+            }
         }
 
         @Override
@@ -267,7 +298,7 @@ public final class PackCompiler {
         for (ContentType type : contentTypes) {
             byDirectory.put(type.directory(), type);
         }
-        var emitter = new Emitter(textComponents);
+        var emitter = new Emitter(textComponents, diagnostics);
         dev.materione.api.content.Allocations allocations = new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
@@ -305,6 +336,7 @@ public final class PackCompiler {
             if (pack.manifest() == null) {
                 continue;
             }
+            emitter.beginPack(pack);
             copyPackAssets(emitter, pack);
             for (ContentResource resource : pack.resources()) {
                 ContentType type = byDirectory.get(resource.contentType() + "s");
@@ -893,6 +925,10 @@ public final class PackCompiler {
         for (String[] copy : emitter.assetCopies) {
             // verbatim asset copy: binary content as-is (textures, sounds…)
             pack.unknownFile(copy[1], team.unnamed.creative.base.Writable.path(java.nio.file.Path.of(copy[0])));
+        }
+        for (var generated : emitter.generatedAssets.entrySet()) {
+            // compiler-generated binary: GUI backgrounds, the small-caps sheet (gui.md §4)
+            pack.unknownFile(generated.getKey(), team.unnamed.creative.base.Writable.bytes(generated.getValue()));
         }
         if (emitter.atlasJson != null) {
             pack.unknownFile(ATLAS_PATH, team.unnamed.creative.base.Writable.stringUtf8(emitter.atlasJson));

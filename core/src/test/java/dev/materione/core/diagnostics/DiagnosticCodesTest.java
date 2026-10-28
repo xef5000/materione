@@ -21,6 +21,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(52); // MTR-0052: GUI layer skipped.
+        assertThat(DiagnosticCodes.all()).hasSize(53); // MTR-0053: GUI background codepoint space exhausted.
     }
 }

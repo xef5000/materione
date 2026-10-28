@@ -1,5 +1,7 @@
 package dev.materione.api.content;
 
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.gui.TextureSource;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -10,6 +12,34 @@ import java.util.Map;
  * the pack module owns how bytes are produced (creative, M1).
  */
 public interface PackEmitter {
+
+    /**
+     * Emits a binary file the compiler generated, at a pack-relative path under
+     * {@code assets/} ({@code assets/<ns>/textures/font/…png}). Unlike
+     * {@link #copyAsset} the bytes come from the content type, not from a source
+     * file (GUI backgrounds, the first-party small-caps sheet). Emitting the same
+     * path twice with the same bytes is harmless; different bytes keep the last.
+     */
+    default void generatedAsset(String destination, byte[] bytes) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
+    /**
+     * Pixel access to the owning pack's own textures, for compile hooks that
+     * composite raster output (gui.md §4). Reads only: it does not make a texture
+     * an output. Parsing never uses it.
+     */
+    default TextureSource textures() {
+        return TextureSource.NONE;
+    }
+
+    /**
+     * Publishes a non-fatal problem against the resource being compiled, such as one
+     * GUI layer skipped at compile time. The resource's output is still emitted.
+     */
+    default void diagnostic(Diagnostic diagnostic) {
+        // default no-op so addon content types compiled against older cores link
+    }
 
     /** Emits {@code assets/<ns>/items/<id>.json} (1.21.4+ item definition). */
     void itemDefinition(dev.materione.api.NamespacedId id, Map<String, Object> itemModelJson);

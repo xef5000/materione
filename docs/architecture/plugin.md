@@ -360,7 +360,8 @@ bus, once per layer, targeting `layers.<index>` so the editor opens that layer:
 
 | Code | Severity | Meaning and recovery |
 |---|---|---|
-| `MTR-0052` | warning | A GUI layer was skipped: unknown or malformed `type:`, a missing or invalid field the component rejects, a duplicate or malformed `id:`, or a component that failed while parsing. The layer is absent from the compiled GUI; the GUI and its other layers are unaffected. Fix the named layer's fields. |
+| `MTR-0052` | warning | A GUI layer was skipped: unknown or malformed `type:`, a missing or invalid field the component rejects, a duplicate or malformed `id:`, or a component that failed while parsing. At compile time (gui.md §4) the same code also covers a layer whose texture is missing or unreadable, a text run the fonts cannot draw (non-ASCII, `< \ & §`, a `default` run above row 5, or text placed after a `default` run), and an item overwritten by a later layer in the same slot. The layer is absent from the compiled GUI; the GUI and its other layers are unaffected. Fix the named layer's fields or its texture. |
+| `MTR-0053` | error | The GUI background codepoint block (`U+E200`–`U+F8FF`, one durable allocation per GUI) is used up. That GUI is quarantined and the rest of the pack compiles. Retire unused GUIs; the allocation table never reuses codepoints. |
 
 ---
 

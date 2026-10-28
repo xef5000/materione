@@ -1,0 +1,63 @@
+{
+  "name": "clipping",
+  "description": "Layers partly or entirely outside the canvas are clipped to it; a layer left of or above the origin keeps its bevel only where it overlaps.",
+  "canvas": {
+    "width": 24,
+    "height": 16
+  },
+  "images": {
+    "gui/test/checker": {
+      "width": 2,
+      "height": 2,
+      "pixels": [
+        "#FF0000",
+        "#00FF00",
+        "#0000FF",
+        "#FFFFFF"
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "left",
+      "type": "panel",
+      "x": -5,
+      "y": -3,
+      "width": 14,
+      "height": 10
+    },
+    {
+      "id": "right",
+      "type": "button",
+      "x": 18,
+      "y": 10,
+      "width": 14,
+      "height": 10
+    },
+    {
+      "id": "img",
+      "type": "image",
+      "image": "gui/test/checker",
+      "x": 10,
+      "y": -4,
+      "width": 8,
+      "height": 8
+    },
+    {
+      "id": "away",
+      "type": "panel",
+      "x": 40,
+      "y": 40,
+      "width": 10,
+      "height": 10
+    },
+    {
+      "id": "empty",
+      "type": "button",
+      "x": 3,
+      "y": 3,
+      "width": 0,
+      "height": 5
+    }
+  ]
+}

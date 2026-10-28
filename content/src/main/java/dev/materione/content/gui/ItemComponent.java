@@ -5,6 +5,7 @@ import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
 import dev.materione.api.gui.RenderTarget;
+import dev.materione.api.gui.SlotSink;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -78,6 +79,11 @@ public final class ItemComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.SLOT;
+        }
+
+        @Override
+        public void placeSlots(SlotSink sink) {
+            sink.place(slot, item, amount);
         }
     }
 }

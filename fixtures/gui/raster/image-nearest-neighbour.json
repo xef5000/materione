@@ -1,0 +1,156 @@
+{
+  "name": "image-nearest-neighbour",
+  "description": "Image blits: exact 4x and 3x upscales, a non-integer 7x5 stretch of a 3x3, a 3x3 downscale of a 4x4, a 1x1 stretch, translucent texels, and a natural-size image (no width/height).",
+  "canvas": {
+    "width": 48,
+    "height": 32
+  },
+  "images": {
+    "gui/test/checker": {
+      "width": 2,
+      "height": 2,
+      "pixels": [
+        "#FF0000",
+        "#00FF00",
+        "#0000FF",
+        "#FFFFFF"
+      ]
+    },
+    "gui/test/grad3": {
+      "width": 3,
+      "height": 3,
+      "pixels": [
+        "#101010",
+        "#404040",
+        "#707070",
+        "#A0A0A0",
+        "#D0D0D0",
+        "#FFFFFF",
+        "#FF0000",
+        "#00FF00",
+        "#0000FF"
+      ]
+    },
+    "gui/test/grad4": {
+      "width": 4,
+      "height": 4,
+      "pixels": [
+        "#FF0000",
+        "#FF8000",
+        "#FFFF00",
+        "#80FF00",
+        "#00FF00",
+        "#00FF80",
+        "#00FFFF",
+        "#0080FF",
+        "#0000FF",
+        "#8000FF",
+        "#FF00FF",
+        "#FF0080",
+        "#000000",
+        "#555555",
+        "#AAAAAA",
+        "#FFFFFF"
+      ]
+    },
+    "gui/test/dot": {
+      "width": 1,
+      "height": 1,
+      "pixels": [
+        "#FFAA00"
+      ]
+    },
+    "gui/test/glass": {
+      "width": 2,
+      "height": 2,
+      "pixels": [
+        "#80FF0000",
+        "#00000000",
+        "#400000FF",
+        "#FFFFFFFF"
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "x4",
+      "type": "image",
+      "image": "gui/test/checker",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 8
+    },
+    {
+      "id": "x3",
+      "type": "image",
+      "image": "gui/test/checker",
+      "x": 10,
+      "y": 0,
+      "width": 6,
+      "height": 6
+    },
+    {
+      "id": "stretch",
+      "type": "image",
+      "image": "gui/test/grad3",
+      "x": 18,
+      "y": 0,
+      "width": 7,
+      "height": 5
+    },
+    {
+      "id": "down",
+      "type": "image",
+      "image": "gui/test/grad4",
+      "x": 28,
+      "y": 0,
+      "width": 3,
+      "height": 3
+    },
+    {
+      "id": "dot",
+      "type": "image",
+      "image": "gui/test/dot",
+      "x": 34,
+      "y": 0,
+      "width": 4,
+      "height": 2
+    },
+    {
+      "id": "glass",
+      "type": "image",
+      "image": "gui/test/glass",
+      "x": 0,
+      "y": 12,
+      "width": 8,
+      "height": 8
+    },
+    {
+      "id": "natural",
+      "type": "image",
+      "image": "gui/test/grad4",
+      "x": 12,
+      "y": 12
+    },
+    {
+      "id": "blur",
+      "type": "image",
+      "image": "gui/test/glass",
+      "x": 20,
+      "y": 12,
+      "width": 8,
+      "height": 8,
+      "opacity": 50
+    },
+    {
+      "id": "missing",
+      "type": "image",
+      "image": "gui/test/not_there",
+      "x": 30,
+      "y": 12,
+      "width": 8,
+      "height": 8
+    }
+  ]
+}
