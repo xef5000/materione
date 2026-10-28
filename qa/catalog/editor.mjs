@@ -226,6 +226,9 @@ const WORKBENCH_COVERS = [
   'webui/src/lib/materials.ts',
   'webui/src/lib/studio/Field.svelte',
   'webui/src/lib/studio/ItemPreview.svelte',
+  'webui/src/lib/studio/ItemAppearance.svelte',
+  'webui/src/lib/studio/AssetExplorer.svelte',
+  'webui/src/lib/asset-choice.ts',
   'webui/src/lib/studio-visual.ts',
   'webui/src/lib/components/ResourceThumbnail.svelte',
   'webui/src/lib/thumbnails.ts',
@@ -706,10 +709,9 @@ export default [
       // typed & codes become formatting; the stored value is MiniMessage
       await nameField.fill('&6Ruby Sword Browser Draft');
       await typeLines(page, loreField, ['Burns with inner fire', '', 'Local draft only']);
-      const previewName = studio.getByRole('button', { name: 'Edit item name' });
-      const previewLore = studio.getByRole('button', { name: 'Edit item lore' });
-      ctx.expect((await previewName.innerText()).trim()).toBe('Ruby Sword Browser Draft');
-      ctx.expect(await previewLore.locator('.lore-line').count()).toBe(3);
+      // the tooltip is the editor (issue 173): the same two textboxes show the typed result
+      ctx.expect((await nameField.innerText()).trim()).toBe('Ruby Sword Browser Draft');
+      ctx.expect(await loreField.locator('.mc-line').count()).toBe(3);
       ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isEnabled()).toBeTruthy();
       await assertHeldRubySwordName(ctx, 'Ruby Sword');
       await studio.getByRole('button', { name: 'Save & apply' }).click();
@@ -828,12 +830,13 @@ export default [
       await gem.locator('.thumbnail img').waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('corpus-textured-content-catalog');
       await gem.dblclick();
-      await page.getByRole('button', { name: 'Edit item name' }).filter({ hasText: 'Red Gem' })
+      await page.getByRole('textbox', { name: 'Display name' }).filter({ hasText: 'Red Gem' })
         .waitFor({ state: 'visible' });
-      await page.locator('.item-preview .inventory img').waitFor({ state: 'visible', timeout: 20_000 });
+      await page.getByRole('article', { name: 'Appearance' }).locator('.thumbnail img')
+        .waitFor({ state: 'visible', timeout: 20_000 });
       await ctx.browser.browserShot('corpus-red-gem-inventory-preview');
       ctx.needsEyes(
-        'the real local App shows sample:ruby_sword with an honest unsupported-model fallback, then the corpus texture catalog and corpus:gem_red at inventory and enlarged inspection scales; screenshots are App-scoped and contain no capability URL or session material' + IDENTITY_EYES,
+        'the real local App shows sample:ruby_sword with an honest unsupported-model fallback, then the corpus texture catalog and corpus:gem_red as the one large Appearance render; screenshots are App-scoped and contain no capability URL or session material' + IDENTITY_EYES,
       );
     },
   }),
@@ -856,10 +859,10 @@ export default [
       await studio.getByRole('combobox', { name: 'Base material' }).fill('netherite sword');
       await page.keyboard.press('ArrowDown');
       await page.keyboard.press('Enter');
-      await studio.getByRole('button', { name: 'Edit item name' }).waitFor({ state: 'visible' });
+      await studio.getByRole('textbox', { name: 'Display name' }).waitFor({ state: 'visible' });
       await ctx.browser.browserShot('sample-ruby-sword-item-workbench');
       ctx.needsEyes(
-        'the real local Materione App shows sample:ruby_sword in Item Studio with the resource id as its header title, a 32 px inventory slot, enlarged static visual, live formatted name/lore tooltip, local draft fields and the explicit Save & apply action, with no explanatory copy under the fields; nothing claims that gameplay or player delivery was verified' + IDENTITY_EYES,
+        'the real local Materione App shows sample:ruby_sword in Item Studio with the resource id as its header title, one large Appearance render with the texture and 3D model pickers under it, the formatted name/lore edited in place in the Minecraft-style tooltip, the material module and the explicit Save & apply action, with no explanatory copy under the fields; nothing claims that gameplay or player delivery was verified' + IDENTITY_EYES,
       );
     },
   }),
@@ -1424,7 +1427,7 @@ export default [
       const studio = page.locator('.studio');
       await studio.waitFor({ state: 'visible' });
 
-      const display = studio.getByRole('article', { name: 'Display' });
+      const display = studio.getByRole('article', { name: 'Appearance' });
       await display.getByRole('textbox', { name: 'Display name' }).waitFor({ state: 'visible' });
       await display.getByRole('textbox', { name: 'Lore' }).waitFor({ state: 'visible' });
 
@@ -1497,6 +1500,108 @@ export default [
       await ctx.browser.browserShot('item-modules-picker', '.scrim');
       ctx.needsEyes(
         'item-modules-studio shows the display card (name, lore, texture/model slots and the preview) at the top, then one compact card per module (Base material, Durability, Soulbound, Console Commands) each with its Lucide icon, origin line and Remove; the dashed Add module button sits after the cards; item-modules-picker shows the search field, category chips (All, Identity, Appearance, Gameplay, Behaviour) and one row per module with icon, label and one-line description, Added rows clearly marked' + IDENTITY_EYES,
+      );
+    },
+  }),
+
+  // The item studio's one Appearance component (issue 173): the picker and the in-place
+  // tooltip are exercised without saving, so the sample pack ends as it started.
+  test({
+    id: 'editor.browser-item-appearance',
+    title: 'sample:ruby_sword has one Appearance render; the texture and model pickers open, search and close; an obfuscated name is scrambled until the caret enters it',
+    covers: [
+      ...WORKBENCH_COVERS,
+      'webui/src/lib/modules.ts',
+      'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/app.css',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      await studio.waitFor({ state: 'visible' });
+      const appearance = studio.getByRole('article', { name: 'Appearance' });
+      await appearance.waitFor({ state: 'visible', timeout: 20_000 });
+
+      // one render, no duplicate inventory slot, no Display name / Lore form rows outside the tooltip
+      ctx.expect(await appearance.getByRole('img').count()).toBe(1);
+      ctx.expect(await studio.getByText('Inventory scale').count()).toBe(0);
+      ctx.expect(await studio.locator('select').filter({ hasText: 'none' }).count()).toBe(0);
+
+      // the texture picker: a dialog with a searchbox and thumbnails; Escape closes it and returns focus
+      await appearance.getByRole('button', { name: /^Texture:/ }).click();
+      const textures = page.getByRole('dialog', { name: 'Choose texture' });
+      await textures.getByRole('searchbox', { name: 'Search textures' }).waitFor({ state: 'visible' });
+      ctx.expect(await textures.getByRole('option').count()).toBeGreaterThan(1);
+      await textures.getByRole('searchbox', { name: 'Search textures' }).fill('zzz-no-such-texture');
+      ctx.expect(await textures.getByText(/No texture matches/).count()).toBe(1);
+      await page.keyboard.press('Escape');
+      await textures.waitFor({ state: 'detached' });
+      ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isDisabled()).toBeTruthy();
+
+      // the model picker offers Blockbench for this entry
+      await appearance.getByRole('button', { name: /^3D model:/ }).click();
+      const models = page.getByRole('dialog', { name: 'Choose 3D model' });
+      await models.getByRole('button', { name: /in Blockbench/ }).waitFor({ state: 'visible' });
+      await page.keyboard.press('Escape');
+      await models.waitFor({ state: 'detached' });
+
+      // obfuscated: scrambled while idle, real characters while the caret is inside (nothing is saved)
+      const name = appearance.getByRole('textbox', { name: 'Display name' });
+      const real = (await name.innerText()).trim();
+      await name.click();
+      await name.press('Control+A');
+      await name.press('Control+Shift+K');
+      const run = name.locator('.mc-obf').first();
+      ctx.expect((await run.innerText()).trim()).toBe(real);
+      await appearance.getByRole('textbox', { name: 'Lore' }).click();
+      await page.waitForTimeout(300);
+      ctx.expect((await run.innerText()).trim()).not.toBe(real);
+      await run.click();
+      ctx.expect((await run.innerText()).trim()).toBe(real);
+      await name.press('Control+Z');
+      ctx.expect(await studio.getByRole('button', { name: 'Save & apply' }).isDisabled()).toBeTruthy();
+    },
+  }),
+
+  test({
+    id: 'editor.browser-item-appearance-visual',
+    title: 'the Appearance component shows one large render with the texture and model pickers, the tooltip as the editor, and scrambled obfuscated text',
+    mode: 'visual',
+    dependsOn: ['editor.browser-item-appearance'],
+    covers: [
+      ...WORKBENCH_COVERS,
+      'webui/src/lib/modules.ts',
+      'webui/src/lib/studio/ModulesArea.svelte',
+      'webui/src/app.css',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const page = await ctx.browser.openEditor();
+      const row = await openSampleItemCatalog(page);
+      await row.dblclick();
+      const studio = page.locator('.studio');
+      const appearance = studio.getByRole('article', { name: 'Appearance' });
+      await appearance.waitFor({ state: 'visible', timeout: 20_000 });
+      await appearance.locator('.thumbnail[aria-busy="false"]').waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-appearance-component', '.studio');
+      await appearance.getByRole('button', { name: /^Texture:/ }).click();
+      await page.getByRole('dialog', { name: 'Choose texture' }).getByRole('option').first()
+        .waitFor({ state: 'visible', timeout: 20_000 });
+      await ctx.browser.browserShot('item-appearance-texture-picker', '.scrim');
+      await page.keyboard.press('Escape');
+      const name = appearance.getByRole('textbox', { name: 'Display name' });
+      await name.click();
+      await name.press('Control+A');
+      await name.press('Control+Shift+K');
+      await appearance.getByRole('textbox', { name: 'Lore' }).click();
+      await page.waitForTimeout(300);
+      await ctx.browser.browserShot('item-appearance-obfuscated', '.studio');
+      await name.press('Control+Z');
+      ctx.needsEyes(
+        'item-appearance-component shows sample:ruby_sword with ONE large item render (roughly a third to half of the studio width, no 32 px inventory slot), the Texture and 3D model buttons under it, and the Minecraft-style tooltip beside it with the name and lore as the editable text (no Display name / Lore form rows); item-appearance-texture-picker shows the compact explorer dialog with a search field, thumbnail rows grouped by folder, the current texture marked and Upload / Edit current / New texture actions; item-appearance-obfuscated shows the name drawn as scrambled characters of the same length while the lore is focused' + IDENTITY_EYES,
       );
     },
   }),

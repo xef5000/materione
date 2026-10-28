@@ -70,7 +70,9 @@
   }
 
   // Ctrl/Cmd+K opens the palette from anywhere; the palette owns the keys while it is open.
+  // Ctrl+Shift+K is the rich-text editor's obfuscated shortcut, so a handled or shifted press is not ours.
   function onWindowKey(event: KeyboardEvent): void {
+    if (event.defaultPrevented || event.shiftKey || event.altKey) return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       ui.paletteOpen = !ui.paletteOpen;

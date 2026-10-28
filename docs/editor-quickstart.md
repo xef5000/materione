@@ -53,14 +53,20 @@ disconnect asks before discarding tracked drafts or leaving an active editor.
 1. Open **Content** and choose **Create your first item**.
 2. Name the project once, then name the item. Materione creates the pack,
    item document, and display name in one operation; no paths are shown.
-3. The Item Studio groups controls by Identity, Appearance, Gameplay, and
-   Behavior. Search **Base material** by its human label or technical ID; the
-   choices come from this server's registered material list. If an existing
-   item has an ID the server no longer advertises, it stays intact until you
-   choose a replacement. Choose a **texture** — the picker lists the pack's
-   textures with thumbnails, the upload button takes a PNG straight from your
-   disk, and **Edit pixels** opens Materione's own pixel editor (pencil, fill,
-   eyedropper, shapes, mirror, undo/redo) without leaving the item.
+3. The Item Studio opens on one **Appearance** component: the item drawn once
+   and large, with the Minecraft-style tooltip beside it. Click the name or a
+   lore line in the tooltip and type; select text for the formatting toolbar.
+   The **Texture** and **3D model** buttons under the render open a compact
+   picker over the pack's textures or models, with search and thumbnails.
+   For a texture, **Upload** takes a PNG straight from your disk and **New
+   texture** or **Edit current** opens Materione's own pixel editor (pencil,
+   fill, eyedropper, shapes, mirror, undo/redo) without leaving the item; for a
+   model, the picker opens Blockbench on this item's model. **Used by** lists
+   what else uses the chosen file. The **...** menu on the render holds the
+   remaining appearance options (the model style). Below it, search **Base
+   material** by its human label or technical ID; the choices come from this
+   server's registered material list. If an existing item has an ID the
+   server no longer advertises, it stays intact until you choose a replacement.
 4. Choose **Save & apply**. Only changed fields are sent in one revision-checked
    batch; comments and fields the studio does not show stay untouched, and a
    footer says when fields are only editable in Files. Save & apply updates the
@@ -69,17 +75,18 @@ disconnect asks before discarding tracked drafts or leaving an active editor.
    attribute that signal to this particular save. Check the item with
    `/materione dev stack <pack>:<item>`.
 
-The item preview keeps its 32 px inventory slot and enlarged static visual
-separate from the scrolling form. Its live name/lore tooltip is a browser
-approximation: existing `&` color/decorations are shown, unsupported tokens
-stay literal, and authored text is not interpreted as HTML. Fonts, glyphs,
-effects, obfuscation, and gameplay still need an in-game check. Click the
-preview name or lore to focus that editor field. Name and lore edits—including
-blank lore lines and spaces—remain local until **Save & apply**; moving focus
-away does not save. An unchanged document is not written. The preview's
-**View server and pack status** link opens the Server support view; candidate
-availability or a connected-server label is not proof that an item is live in
-game or that a client accepted the pack.
+The Appearance render is a browser approximation: existing `&` color/decorations
+are shown in the tooltip, unsupported tokens stay literal as chips, and authored
+text is not interpreted as HTML. Fonts, glyphs, effects, and gameplay still need
+an in-game check. **Obfuscated** text is drawn scrambled, as in game; select it
+or put the caret inside it to see and edit the real characters, and leaving it
+scrambles it again (with reduced motion the scramble is static). Name and lore
+edits—including blank lore lines and spaces—remain local until **Save & apply**;
+moving focus away does not save. An unchanged document is not written. When the
+item inherits its name, lore, texture or model from a template, a short line
+under the control says so, with **Reset to inherited** once you override it.
+Candidate availability or a connected-server label is not proof that an item is
+live in game or that a client accepted the pack.
 
 The plain-lines lore editor refuses non-string entries and entries containing
 embedded line breaks rather than flattening them; the original value remains

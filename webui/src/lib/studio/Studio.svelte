@@ -25,7 +25,8 @@
   import { ops, unwrap } from '../api';
   import type { InheritanceView, ResourceRef, TypeInfo, TypeParam } from '../api';
   import { diagnosticNames } from '../diagnostics';
-  import { usesModules } from '../modules';
+  import { usesModules, type AppearanceHost } from '../modules';
+  import { freshTextureReference } from '../asset-choice';
   import { scrollBehavior } from '../motion';
   import {
     acceptsTemplates,
@@ -157,6 +158,16 @@
       ? savedVisual
       : localStudioVisual(resource.pack, String(effective.texture ?? ''), String(effective.model ?? ''), workspace.assets),
   );
+  /** Items (and the templates that serve them) draw their look with the one Appearance component (issue 173). */
+  const itemAppearance = $derived(servedDirectory === 'items' && usesModules(schema));
+  const appearanceHost = $derived<AppearanceHost>({
+    visual,
+    render,
+    material: String(effective.material ?? ''),
+    version: textureVersion,
+    onDrawTexture: (field, fresh) => editTexture(field, fresh),
+    onEditModel: (field) => editModel(field),
+  });
   const fieldsEditable = $derived(documentDraft.loaded && !loading && !saving &&
     !rawDraftDirty(documentDraft) && !documentDraft.uncertain && !documentDraft.stale);
   const canFocusName = $derived(fieldsEditable && documentOf(draft.display_name, false) !== null &&
@@ -411,9 +422,11 @@
    * owning field is written the moment the PNG lands, so the entry is never
    * left pointing at nothing.
    */
-  function editTexture(field: TypeParam) {
+  function editTexture(field: TypeParam, fresh = false) {
     if (!canEditAsset()) return;
-    const reference = String(draft[field.id] ?? '') || `${servedDirectory}/${resource.id}`;
+    const reference = fresh
+      ? freshTextureReference(workspace.assets, servedDirectory, resource.id)
+      : String(draft[field.id] ?? '') || `${servedDirectory}/${resource.id}`;
     textureDirty = false;
     texturing = { field: field.id, reference };
   }
@@ -479,7 +492,8 @@
 
   function onKeydown(event: KeyboardEvent) {
     if (!active || event.defaultPrevented || event.isComposing || texturing || modelling) return;
-    if (event.key === 'Escape' && !dirty) onClose();
+    // An open dialog (the asset picker) owns Escape: it closes the dialog, not the studio.
+    if (event.key === 'Escape' && !dirty && !document.querySelector('[role="dialog"][aria-modal="true"]')) onClose();
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
       void save();
@@ -578,7 +592,8 @@
     </p>
   {/if}
 
-  <div class="body">
+  <div class="body" class:appearance={itemAppearance}>
+    {#if !itemAppearance}
     <aside class="preview">
       {#if typeDirectory === 'glyphs'}
         <GlyphPreview
@@ -619,6 +634,7 @@
         />
       {/if}
     </aside>
+    {/if}
 
     <div class="form" bind:this={formElement}>
       {#if rawDraftDirty(documentDraft)}
@@ -654,6 +670,7 @@
           showInFile={() => revealInAdvanced(resource)}
           inherited={inheritance?.inherited ?? {}}
           inheritedSources={inheritance?.sources ?? {}}
+          appearance={itemAppearance ? appearanceHost : undefined}
         />
       {:else}
         {#each sections as section (section.id)}
@@ -867,6 +884,13 @@
     overflow-y: hidden;
     overflow-x: hidden;
     min-width: 0;
+  }
+  /* The Appearance component is the studio's centre: one column, no side preview (room for a settings panel later). */
+  .body.appearance {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .body.appearance .form {
+    max-width: 920px;
   }
   .preview {
     min-width: 0;

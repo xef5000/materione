@@ -32,9 +32,14 @@
     placeholder?: string;
     /** Read-only. A surrounding disabled `<fieldset>` disables it too, like a native input. */
     disabled?: boolean;
+    /**
+     * No tooltip frame of its own: a parent draws one tooltip around several
+     * editors (the item studio's name and lore), so the text is edited in place.
+     */
+    bare?: boolean;
     onChange: (value: unknown) => void;
   }
-  let { id, label, value, multiline = false, tone, placeholder = '', disabled = false, onChange }: Props = $props();
+  let { id, label, value, multiline = false, tone, placeholder = '', disabled = false, bare = false, onChange }: Props = $props();
 
   const RICH_MIME = 'application/x-materione-rich-text';
   const surfaceTone = $derived(tone ?? (multiline ? 'lore' : 'name'));
@@ -105,8 +110,67 @@
     if (!root) return;
     renderDocument(root, cells, { glyphImage: (glyph) => glyphImages.get(glyph) });
     untrack(() => {
+      scrambleObfuscated(true);
       if (document.activeElement === root && !composing) placeSelection();
     });
+  });
+
+  // --- obfuscated text ----------------------------------------------------------
+  // Drawn scrambled, as the client does. A run the caret is in (or that the
+  // selection touches) shows its real characters so it can be edited; leaving
+  // it scrambles it again. The model never holds scrambled text — only the
+  // drawn text nodes are swapped, with the same number of characters, so the
+  // DOM <-> offset mapping is unaffected.
+  const SCRAMBLE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true;
+
+  function revealed(start: number, length: number): boolean {
+    if (!focusWithin) return false;
+    const low = Math.min(selection.anchor, selection.focus);
+    const high = Math.max(selection.anchor, selection.focus);
+    return high >= start && low <= start + length;
+  }
+
+  /** `reroll` redraws every scrambled run; without it only reveal/hide transitions change. */
+  function scrambleObfuscated(reroll: boolean) {
+    if (!root) return;
+    let moved = false;
+    for (const run of root.querySelectorAll<HTMLElement>('.mc-obf')) {
+      const node = run.firstChild;
+      if (!(node instanceof Text)) continue;
+      const start = Number(run.dataset.start ?? 0);
+      const length = Number(run.dataset.length ?? 0);
+      const real = cells.slice(start, start + length).map((cell) => (cell.kind === 'char' ? cell.ch : '')).join('');
+      const open = revealed(start, length);
+      if (open) {
+        run.dataset.revealed = 'true';
+        run.removeAttribute('title');
+        if (node.data !== real) {
+          node.data = real;
+          moved = true;
+        }
+      } else {
+        delete run.dataset.revealed;
+        run.title = real;
+        const hidden = run.dataset.hidden === 'true';
+        if (reroll || !hidden) {
+          node.data = [...real].map((ch) => (/\s/.test(ch) ? ch : SCRAMBLE[Math.floor(Math.random() * SCRAMBLE.length)]!)).join('');
+          if (!hidden) moved = true;
+        }
+        run.dataset.hidden = 'true';
+      }
+      if (open) delete run.dataset.hidden;
+    }
+    // Writing into the node that holds the caret moves it; put it back where the model says it is.
+    if (moved && focusWithin && document.activeElement === root && !composing) placeSelection();
+  }
+
+  // The client rerolls every frame; a few times a second reads the same. Reduced motion keeps one static scramble.
+  $effect(() => {
+    if (!root || !cells.some((cell) => cell.style.obfuscated)) return;
+    if (reducedMotion()) return;
+    const timer = window.setInterval(() => scrambleObfuscated(true), 90);
+    return () => window.clearInterval(timer);
   });
 
   $effect(() => {
@@ -339,6 +403,7 @@
     focusWithin = false;
     popover = '';
     history.seal();
+    scrambleObfuscated(false);
   }
 
   onMount(() => {
@@ -356,6 +421,7 @@
       if (composing || document.activeElement !== root) return;
       syncSelection();
       positionToolbar();
+      scrambleObfuscated(false);
     };
     const reposition = () => focusWithin && positionToolbar();
     document.addEventListener('selectionchange', onSelection);
@@ -383,13 +449,13 @@
   {#if !supported}
     <p class="unsupported">This value cannot be edited as plain lines without changing its structure. Use Files; the original value is preserved.</p>
   {:else}
-    <div class="surface mc-tooltip">
+    <div class="surface" class:mc-tooltip={!bare} class:bare>
       <div
         {id}
         bind:this={root}
         class="mc-text editable"
         class:mc-lore={surfaceTone === 'lore'}
-        class:multiline
+        class:multiline={multiline && !bare}
         contenteditable={locked ? 'false' : 'true'}
         role="textbox"
         tabindex="0"
@@ -528,6 +594,13 @@
   .surface:focus-within {
     outline: 2px solid var(--focus-ring);
     outline-offset: 2px;
+  }
+  .surface.bare:focus-within {
+    outline-offset: 1px;
+    border-radius: var(--radius-sm);
+  }
+  .surface.bare .placeholder {
+    inset: 0;
   }
   .placeholder {
     position: absolute;

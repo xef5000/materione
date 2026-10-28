@@ -38,12 +38,13 @@ test('the item studio reads as a display card plus module cards derived from the
   const pageErrors = await openModules(page);
   await openItem(page, 'Ruby Sword');
 
-  const display = page.getByRole('article', { name: 'Display' });
-  // The display name is the WYSIWYG rich-text editor (contenteditable textbox).
+  // Items draw their look with the one Appearance component (issue 173): name and lore are the
+  // rich-text editors inside its tooltip; texture and model are pickers, not form rows.
+  const display = page.getByRole('article', { name: 'Appearance' });
   await expect(display.getByRole('textbox', { name: 'Display name' })).toContainText('Ruby Sword');
   await expect(display.getByRole('textbox', { name: 'Lore' })).toBeVisible();
-  await expect(display.getByLabel('Texture')).toBeVisible();
-  await expect(display.getByLabel('3D model')).toHaveValue('fixture_pack:ruby_sword_model');
+  await expect(display.getByRole('button', { name: /^Texture: none/ })).toBeVisible();
+  await expect(display.getByRole('button', { name: /^3D model: ruby_sword_model/ })).toBeVisible();
 
   const material = page.locator('[data-module="material"]');
   await expect(material).toContainText('Base material');
@@ -124,12 +125,14 @@ test('adding, configuring and removing modules writes through the lossless layer
   await food.getByLabel('Saturation').press('Tab');
   await food.getByLabel('Can always eat').check();
 
-  // A module with a declared default writes it the moment it is added.
+  // The model style is an option of the Appearance component, not a module card.
   await page.getByRole('button', { name: 'Add module' }).click();
   await page.getByLabel('Search modules').fill('model style');
-  await page.getByLabel('Search modules').press('Enter');
-  await expect(page.locator('[data-module="model_parent"]')
-    .getByRole('textbox', { name: 'Model style' })).toHaveValue('item/generated');
+  await expect(page.getByText(/No module matches/)).toBeVisible();
+  await page.getByLabel('Search modules').press('Escape');
+  await page.getByRole('button', { name: 'More appearance options' }).click();
+  await page.getByRole('textbox', { name: 'Model style' }).fill('item/generated');
+  await page.getByRole('textbox', { name: 'Model style' }).press('Tab');
 
   // A reference module with no default opens an empty card; the first value
   // writes the key.

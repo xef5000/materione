@@ -61,7 +61,9 @@ import Strikethrough from '@lucide/svelte/icons/strikethrough';
 import Palette from '@lucide/svelte/icons/palette';
 import Blend from '@lucide/svelte/icons/blend';
 import RemoveFormatting from '@lucide/svelte/icons/remove-formatting';
+import Ellipsis from '@lucide/svelte/icons/ellipsis';
 import Shuffle from '@lucide/svelte/icons/shuffle';
+import Upload from '@lucide/svelte/icons/upload';
 import Sticker from '@lucide/svelte/icons/sticker';
 import Minus from '@lucide/svelte/icons/minus';
 import Lightbulb from '@lucide/svelte/icons/lightbulb';
@@ -138,6 +140,8 @@ export const icons = {
   palette: Palette,
   'remove-formatting': RemoveFormatting,
   shuffle: Shuffle,
+  ellipsis: Ellipsis,
+  upload: Upload,
   sticker: Sticker,
   strikethrough: Strikethrough,
   underline: Underline,

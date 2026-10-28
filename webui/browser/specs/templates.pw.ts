@@ -51,15 +51,18 @@ test('Ruby Dagger from base_item: create, see the inherited modules, change a va
   await expect(page.locator('[data-based-on-button]')).toContainText('A base item');
   await expect(page.locator('[data-inherited-module="material"]')).toContainText('Inherited from base_item');
   await expect(page.locator('[data-inherited-module="material"]')).toContainText('PAPER');
-  await expect(page.locator('[data-inherited-module="model_parent"]')).toContainText('item/handheld');
+  // the model style is an option of the Appearance component, with its inheritance line
+  await page.getByRole('button', { name: 'More appearance options' }).click();
+  await expect(page.locator('[data-provenance="model_parent"]')).toContainText('Inherited from base_item: item/handheld');
+  await page.getByRole('button', { name: 'More appearance options' }).click();
   await expect(page.locator('[data-inherited-module="mechanic:materione:durability#0"]')).toContainText('max 250');
   await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
 
   // Step 2: override one module; the save writes only that key, the link stays.
-  await page.locator('[data-inherited-module="model_parent"]').getByRole('button', { name: 'Override here' }).click();
-  const style = page.locator('[data-module="model_parent"]');
-  await style.getByRole('textbox').fill('item/generated');
-  await style.getByRole('textbox').press('Tab'); // text fields commit on blur
+  await page.getByRole('button', { name: 'More appearance options' }).click();
+  const style = page.getByRole('textbox', { name: 'Model style' });
+  await style.fill('item/generated');
+  await style.press('Tab'); // text fields commit on blur
   await saveAndApply(page, 2);
   const changed = await documentOf(page, 'items/ruby_dagger.yml');
   expect(changed?.parsed.ruby_dagger).toEqual({
@@ -182,7 +185,8 @@ test('Templates is a Content tab: create one from scratch, edit it with the type
   await expect(page.locator('[data-used-by]').getByRole('button', { name: 'ruby_sword' })).toBeVisible();
 
   // Edited with the item's own modules; the save is one lossless field edit.
-  const style = page.locator('[data-module="model_parent"]').getByRole('textbox');
+  await page.getByRole('button', { name: 'More appearance options' }).click();
+  const style = page.getByRole('textbox', { name: 'Model style' });
   await style.fill('item/generated');
   await style.press('Tab'); // text fields commit on blur
   const save = await saveAndApply(page, 2);
@@ -235,7 +239,8 @@ test('the template chip switches the template without leaving the studio; Save &
   await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
   const save = await saveAndApply(page, 1);
   expect(save.payload.edits).toEqual([{ field: ['ember_charm', 'template'], value: 'base_item' }]);
-  await expect(page.locator('[data-inherited-module="model_parent"]')).toContainText('item/handheld');
+  await page.getByRole('button', { name: 'More appearance options' }).click();
+  await expect(page.locator('[data-provenance="model_parent"]')).toContainText('item/handheld');
   expect((await documentOf(page, 'items/ember_charm.yml'))?.raw).toContain('template: base_item');
   expect(pageErrors).toEqual([]);
 });

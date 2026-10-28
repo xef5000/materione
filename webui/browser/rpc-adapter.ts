@@ -831,6 +831,16 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       for (const [path, parsed] of Object.entries(MODULES_DOCUMENTS)) {
         this.#documents.set(`${PACK}/${path}`, makeDocument(path, 1, structuredClone(parsed)));
       }
+      // Something to pick in the item studio's asset picker: a second texture and two models.
+      this.#assets.set(assetPath(PACK, 'assets/textures/items/ruby_gem.png'),
+        { path: 'assets/textures/items/ruby_gem.png', kind: 'png', data: CRATE_PNG, bytes: 214 });
+      const pickable = new TextEncoder().encode(JSON.stringify(LAMP_MODEL));
+      for (const name of ['ruby_sword_model', 'items/ruby_gem']) {
+        this.#assets.set(assetPath(PACK, `assets/models/${name}.json`), {
+          path: `assets/models/${name}.json`, kind: 'json',
+          data: btoa(String.fromCharCode(...pickable)), bytes: pickable.length,
+        });
+      }
     }
     if (options.rows) {
       // A large pack: one item per row, for the list-motion limit and the 60 fps budget (web.md, "Motion").
