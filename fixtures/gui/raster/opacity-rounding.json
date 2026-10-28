@@ -149,10 +149,10 @@
       "height": 8,
       "opacity": 50,
       "style": {
-        "fill": "#FFFFFF03",
-        "highlight": "#FFFFFF03",
-        "shadow": "#FFFFFF03",
-        "outline": "#FFFFFF03"
+        "fill": "#03FFFFFF",
+        "highlight": "#03FFFFFF",
+        "shadow": "#03FFFFFF",
+        "outline": "#03FFFFFF"
       }
     },
     {
@@ -164,10 +164,10 @@
       "height": 8,
       "opacity": 49,
       "style": {
-        "fill": "#FFFFFF01",
-        "highlight": "#FFFFFF01",
-        "shadow": "#FFFFFF01",
-        "outline": "#FFFFFF01"
+        "fill": "#01FFFFFF",
+        "highlight": "#01FFFFFF",
+        "shadow": "#01FFFFFF",
+        "outline": "#01FFFFFF"
       }
     },
     {
@@ -179,10 +179,10 @@
       "height": 8,
       "opacity": 50,
       "style": {
-        "fill": "#FFFFFF01",
-        "highlight": "#FFFFFF01",
-        "shadow": "#FFFFFF01",
-        "outline": "#FFFFFF01"
+        "fill": "#01FFFFFF",
+        "highlight": "#01FFFFFF",
+        "shadow": "#01FFFFFF",
+        "outline": "#01FFFFFF"
       }
     }
   ]

@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { GUI_COMPONENTS, GUI_TYPE, sampleGuiRaw, scaffoldGui } from '../src/lib/demo/gui';
+import { sampleGuiRaw } from '../src/lib/demo/gui';
+import { registry, scaffoldGui } from './helpers/gui-registry';
 import {
   isHidden,
   isLocked,
@@ -17,10 +18,9 @@ import {
   starterDocument,
   uniqueId,
 } from '../src/lib/gui/model';
-import { newLayer, readRegistry, transformability, defaultValue, componentOf } from '../src/lib/gui/registry';
+import { newLayer, readRegistry, transformability, defaultValue, componentOf, fullComponentId } from '../src/lib/gui/registry';
 
 const sample = parse(sampleGuiRaw()) as Record<string, unknown>;
-const registry = readRegistry({ guiComponents: GUI_COMPONENTS })!;
 
 describe('parseGui', () => {
   it('reads a resource-rooted file (the id -> fields mapping every other type uses)', () => {
@@ -33,11 +33,12 @@ describe('parseGui', () => {
     expect(parsed.blocking).toEqual([]);
   });
 
-  it('reads a flat file (the gui.md section 2 example) with an empty field prefix', () => {
+  it('reads a flat file (the unkeyed sketch) leniently but refuses to write it: a GUI file is keyed by its id', () => {
     const flat = (sample.main as Record<string, unknown>);
     const parsed = parseGui(flat, 'main')!;
-    expect(parsed.location.prefix).toEqual([]);
+    expect(parsed.location.flat).toBe(true);
     expect(parsed.doc.layers).toHaveLength(9);
+    expect(parsed.blocking.join()).toContain('no resource key');
   });
 
   it('locates the body or refuses what is not a GUI', () => {
@@ -127,29 +128,34 @@ describe('helpers', () => {
     expect(starter.layers.map((layer) => layer.type)).toEqual(['panel', 'slots']);
     expect(starter.layers[0]).toMatchObject({ x: 0, y: 0, width: 176, height: 222 });
     expect(starter.layers[1]).toMatchObject({ region: 'all' });
-    // the server-side scaffold the demo uses describes the very same GUI
+    // the server's own starter, as recorded in the golden snapshot
     const scaffold = parseGui(parse(scaffoldGui('shop_two', 'Shop Two')), 'shop_two')!;
-    expect(scaffold.doc.rows).toBe(6);
+    expect(scaffold.doc.rows).toBe(3);
     expect(scaffold.doc.title).toBe('Shop Two');
-    expect(scaffold.doc.layers.map((layer) => [layer.type, layer.region ?? layer.height])).toEqual([['panel', 222], ['slots', 'all']]);
+    expect(scaffold.doc.layers.map((layer) => [layer.type, layer.region ?? layer.height])).toEqual([['panel', 168], ['slots', 'all']]);
   });
 });
 
 describe('the gui-components registry description', () => {
-  it('is read from the describe answer wherever the server nests it, and refused when absent', () => {
-    expect(readRegistry({ guiComponents: GUI_COMPONENTS })!.components).toHaveLength(7);
-    expect(readRegistry({ gui: { components: GUI_COMPONENTS } })!.components).toHaveLength(7);
-    expect(readRegistry({ 'gui-components': GUI_COMPONENTS })!.components).toHaveLength(7);
+  it('is read from the describe answer\'s guiComponents, and refused when absent', () => {
+    expect(readRegistry({ guiComponents: registry.components })!.components).toHaveLength(7);
     expect(readRegistry({ types: [] })).toBeNull();
     expect(readRegistry(null)).toBeNull();
   });
 
+  it('matches a layer\'s type to the registry id with the built-in namespace optional', () => {
+    expect(fullComponentId('panel')).toBe('materione:panel');
+    expect(fullComponentId('example:progress')).toBe('example:progress');
+    expect(componentOf(registry, 'panel')?.id).toBe('materione:panel');
+    expect(componentOf(registry, 'materione:panel')?.id).toBe('materione:panel');
+    expect(componentOf(registry, 'nope')).toBeUndefined();
+  });
+
   it('describes the seven v1 components with their render targets', () => {
     expect(registry.components.map((component) => [component.id, component.target])).toEqual([
-      ['panel', 'RASTER'], ['slots', 'RASTER'], ['image', 'RASTER'], ['paint', 'RASTER'],
-      ['button', 'RASTER'], ['text', 'TEXT'], ['item', 'SLOT'],
+      ['materione:panel', 'raster'], ['materione:slots', 'raster'], ['materione:image', 'raster'], ['materione:paint', 'raster'],
+      ['materione:button', 'raster'], ['materione:text', 'text'], ['materione:item', 'slot'],
     ]);
-    expect(GUI_TYPE.directory).toBe('guis');
   });
 
   it('derives what may be transformed from the fields, not from names', () => {
@@ -162,13 +168,13 @@ describe('the gui-components registry description', () => {
     expect(can('slots')).toEqual({ movable: false, resizable: false, slotBound: false });
     expect(can('paint').movable).toBe(false);
     // an addon component the studio has never heard of, described with x/y/width/height, is just as movable
-    const addon = { id: 'addon:bar', displayName: 'Bar', description: '', target: 'RASTER' as const, parameters: GUI_COMPONENTS[0]!.parameters };
+    const addon = { ...componentOf(registry, 'panel')!, id: 'addon:bar' };
     expect(transformability(addon).resizable).toBe(true);
   });
 
   it('builds a new layer from required defaults only, with a unique id', () => {
     const button = newLayer(componentOf(registry, 'button')!, ['button']);
-    expect(button).toEqual({ id: 'button_2', type: 'button', name: 'Button', x: 0, y: 0, width: 52, height: 20 });
+    expect(button).toEqual({ id: 'button_2', type: 'button', name: 'Button', x: 0, y: 0, width: 48, height: 24 });
     expect(Object.keys(newLayer(componentOf(registry, 'panel')!, []))).not.toContain('style');
     expect(defaultValue({ id: 'n', type: 'integer', required: true, default: '7' })).toBe(7);
     expect(defaultValue({ id: 'b', type: 'boolean', required: true, default: 'true' })).toBe(true);

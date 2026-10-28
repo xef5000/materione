@@ -11,7 +11,7 @@ import { loadSnapshot } from '../src/lib/demo/snapshot';
 import { patchLayers, addLayer, setDocumentFields } from '../src/lib/gui/commands';
 import { GuiHistory } from '../src/lib/gui/history';
 import { parseGui } from '../src/lib/gui/model';
-import { isEmptyPlan, paintReference, planSave, saveRequest, sendSave, textureAssetPath } from '../src/lib/gui/save';
+import { isEmptyPlan, paintReference, planSave, sendSave, textureAssetPath } from '../src/lib/gui/save';
 
 let server: DemoServer;
 const PATH = 'guis/shop/main.yml';
@@ -46,12 +46,6 @@ describe('the save plan', () => {
     expect(both.edits.map((edit) => edit.field)).toEqual([['main', 'title'], ['main', 'layers']]);
   });
 
-  it('a flat file (no resource root) is written without a prefix', () => {
-    const gui = parseGui({ rows: 1, layers: [] }, 'whatever')!;
-    const next = { ...gui.doc, rows: 2 };
-    expect(planSave(gui.location.prefix, gui.doc, next, new Map()).edits).toEqual([{ field: ['rows'], value: 2 }]);
-  });
-
   it('names a paint layer\'s PNG after the document and the layer', () => {
     expect(paintReference('guis/shop/main.yml', 'art')).toBe('gui/shop/main/art');
     expect(paintReference('guis/hud.yml', 'bg')).toBe('gui/hud/bg');
@@ -65,13 +59,10 @@ describe('the save plan', () => {
     expect(planSave([], gui.doc, gui.doc, dirty).assets).toEqual([]);
     const withLayer = addLayer(gui.doc, { id: 'scratch', type: 'paint', image: 'gui/shop/main/scratch' })!.apply(gui.doc);
     const plan = planSave(['main'], gui.doc, withLayer, dirty);
-    expect(plan.assets).toEqual([{ path: 'assets/textures/gui/shop/main/scratch.png', bytes: 'QUJD' }]);
-    expect(saveRequest('sample', PATH, 3, plan)).toEqual({
-      pack: 'sample', path: PATH, rev: 3, edits: plan.edits, assets: plan.assets,
-    });
-    // a pixels-only change still sends one edit, because the op wants at least one
+    expect(plan.assets).toEqual([{ path: 'assets/textures/gui/shop/main/scratch.png', data: 'QUJD' }]);
+    // a pixels-only change sends the asset with empty edits (the layers did not change)
     const pixelsOnly = planSave(['main'], withLayer, withLayer, dirty);
-    expect(pixelsOnly.edits).toHaveLength(1);
+    expect(pixelsOnly.edits).toEqual([]);
     expect(pixelsOnly.assets).toHaveLength(1);
   });
 });
@@ -118,6 +109,7 @@ describe('against the server', () => {
     const data = (created as { data: { parsed: unknown; raw: string } }).data;
     const gui = parseGui(data.parsed, 'chest_two')!;
     expect(gui.doc.layers.map((layer) => layer.type)).toEqual(['panel', 'slots']);
+    expect(gui.doc.rows).toBe(3);
     expect(parse(data.raw)).toBeTruthy();
   });
 
@@ -126,6 +118,6 @@ describe('against the server', () => {
     expect(response.ok).toBe(true);
     const data = (response as { data: { guiComponents: { id: string }[] } }).data;
     expect(data.guiComponents.map((component) => component.id)).toEqual(
-      ['panel', 'slots', 'image', 'paint', 'button', 'text', 'item']);
+      ['materione:panel', 'materione:slots', 'materione:image', 'materione:paint', 'materione:button', 'materione:text', 'materione:item']);
   });
 });

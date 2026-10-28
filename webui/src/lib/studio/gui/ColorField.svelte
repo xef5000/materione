@@ -1,7 +1,7 @@
 <script lang="ts">
   /**
    * A color control for GUI styles: a swatch (the native picker) and a hex
-   * field that takes `#RRGGBB` or `#RRGGBBAA`. A color the layer does not set
+   * field that takes `#RRGGBB` or `#AARRGGBB`. A color the layer does not set
    * shows the component's default, dimmed, and "reset" removes the key again so
    * the file stays as small as the author's intent.
    */

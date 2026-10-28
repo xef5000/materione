@@ -47,6 +47,12 @@ export const SLOT_DEFAULT: BevelStyle = {
   outline: 0xff000000,
 };
 
+/** A layer's component name without the built-in namespace (`materione:panel` is `panel`). */
+export function bareType(layer: Layer): string {
+  const type = typeof layer.type === 'string' ? layer.type : '';
+  return type.startsWith('materione:') ? type.slice('materione:'.length) : type;
+}
+
 export function whole(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.floor(value) : fallback;
 }
@@ -117,7 +123,7 @@ export function isVisible(layer: Layer): boolean {
 
 /** Paints one layer onto a fresh transparent canvas; null when it is not a raster component. */
 export function paintRasterLayer(layer: Layer, scene: RasterScene): ArgbCanvas | null {
-  const painter = typeof layer.type === 'string' ? RASTER_PAINTERS[layer.type] : undefined;
+  const painter = RASTER_PAINTERS[bareType(layer)];
   if (!painter) return null;
   const out = new ArgbCanvas(scene.width, scene.height);
   painter(layer, scene, out);

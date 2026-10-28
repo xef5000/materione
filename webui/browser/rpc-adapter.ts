@@ -1,4 +1,4 @@
-import { GUI_COMPONENTS, GUI_TYPE, SAMPLE_GUI_ASSETS, sampleGuiRaw, scaffoldGui } from '../src/lib/demo/gui';
+import { SAMPLE_GUI_ASSETS, sampleGuiRaw } from '../src/lib/demo/gui';
 import { parse as parseYaml } from 'yaml';
 import { scanReferences } from '../src/lib/demo/references';
 import { detached, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
@@ -328,6 +328,11 @@ const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'furnitures', path: 'furnitures/stool.yml', id: 'stool' },
   { pack: PACK, type: 'templates', path: 'templates/base_item.yml', id: 'base_item' },
 ];
+
+/** The server's own New GUI starter (recorded in the golden snapshot), for `id` titled `title`. */
+function guiScaffold(id: string, title: string): string {
+  return goldenSnapshot.scaffolds.guis.replaceAll('demo_scaffold', id).replace('Demo Scaffold', title);
+}
 
 function goldenType(name: string): TypeInfo {
   const found = (goldenSnapshot.types as unknown as TypeInfo[]).find((type) => type.name === name);
@@ -1055,7 +1060,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
           return this.success(op, {
             types: this.typeList(),
             behavior: structuredClone(GUIDED_VOCABULARY),
-            guiComponents: structuredClone(GUI_COMPONENTS),
+            guiComponents: structuredClone(goldenSnapshot.describe.guiComponents),
           });
         }
         if (this.#modules) {
@@ -1148,7 +1153,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const types = this.#modules
       ? moduleTypes()
       : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)];
-    return this.#gui ? [...types, structuredClone(GUI_TYPE)] : types;
+    return this.#gui ? [...types, goldenType('gui')] : types;
   }
 
   private createResource(op: string, payload: Record<string, unknown>): Response {
@@ -1164,7 +1169,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     }
     if (type === 'guis') {
       // The starter is a vanilla chest: a panel plus an all-region slots layer.
-      const created = makeDocument(path, 1, parseYaml(scaffoldGui(id, name)) as Record<string, Record<string, unknown>>);
+      const created = makeDocument(path, 1, parseYaml(guiScaffold(id, name)) as Record<string, Record<string, unknown>>);
       this.#documents.set(`${pack}/${path}`, created);
       this.#resources.push({ pack, type, path, id });
       return this.success(op, { pack, path, id, rev: 1, raw: created.raw, parsed: structuredClone(created.parsed) });
@@ -1393,10 +1398,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     }
     // issue #183: pixel assets commit with the fields (`bytes` is base64)
     for (const asset of Array.isArray(payload.assets) ? payload.assets : []) {
-      if (isRecord(asset)) this.storeAsset(document.pack, stringValue(asset.path), stringValue(asset.bytes));
+      if (isRecord(asset)) this.storeAsset(document.pack, stringValue(asset.path), stringValue(asset.data));
     }
     document.parsed = parsed;
-    document.rev += edits.length > 0 ? 1 : 0;
+    document.rev += edits.length > 0 || Array.isArray(payload.assets) && payload.assets.length > 0 ? 1 : 0;
     document.raw = serializeFixtureYaml(document.parsed);
     return this.success(op, { rev: document.rev });
   }

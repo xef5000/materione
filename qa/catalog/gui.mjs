@@ -62,21 +62,21 @@ function removeFixtureFile() {
 export default [
   test({
     id: 'gui.studio-new-chest',
-    title: 'a new GUI (sample:qa_chest) opens as a vanilla 6-row chest: panel + slots layers, 176x222, the compiled bevel pixels on the canvas',
+    title: 'a new GUI (sample:qa_chest) opens as the starter chest from the server: panel + slots layers, 176x168, the compiled bevel pixels on the canvas',
     covers: STUDIO_COVERS,
     timeoutMs: 180_000,
     steps: async (ctx) => {
       try {
         const page = await openNewChest(ctx);
-        ctx.expect(await page.getByTestId('gui-art').evaluate((element) => [element.width, element.height])).toEqual([176, 222]);
-        ctx.expect(await page.locator('.layers .row .name').allInnerTexts()).toEqual(['Slots', 'Frame']);
-        // the same pixels as fixtures/gui/raster/chest-6-rows.png
+        ctx.expect(await page.getByTestId('gui-art').evaluate((element) => [element.width, element.height])).toEqual([176, 168]);
+        ctx.expect(await page.locator('.layers .row .name').allInnerTexts()).toEqual(['wells', 'frame']);
+        // the same bevel rules as fixtures/gui/raster (panel + slots, region all)
         ctx.expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]);
         ctx.expect(await pixel(page, 1, 0)).toEqual([0, 0, 0, 255]);
         ctx.expect(await pixel(page, 1, 1)).toEqual([255, 255, 255, 255]);
         ctx.expect(await pixel(page, 7, 17)).toEqual([55, 55, 55, 255]);
-        ctx.expect(await pixel(page, 8, 139)).toEqual([139, 139, 139, 255]);
-        ctx.expect(await pixel(page, 8, 197)).toEqual([139, 139, 139, 255]);
+        ctx.expect(await pixel(page, 8, 85)).toEqual([139, 139, 139, 255]);
+        ctx.expect(await pixel(page, 8, 143)).toEqual([139, 139, 139, 255]);
         ctx.expect((await page.locator('[data-status]').innerText()).trim()).toBe('Saved');
       } finally {
         removeFixtureFile();
@@ -139,18 +139,18 @@ export default [
         await page.getByRole('button', { name: 'Button', exact: true }).first().dblclick();
         await page.getByLabel('Layer name').fill('Buy');
         await page.keyboard.press('Enter');
-        ctx.expect(await names.allInnerTexts()).toEqual(['Panel', 'Buy', 'Slots', 'Frame']);
+        ctx.expect(await names.allInnerTexts()).toEqual(['Panel', 'Buy', 'wells', 'frame']);
 
         await page.locator('.layers .row', { hasText: 'Buy' }).dragTo(
           page.locator('.layers .row', { hasText: 'Panel' }), { targetPosition: { x: 60, y: 2 } });
-        ctx.expect(await names.allInnerTexts()).toEqual(['Buy', 'Panel', 'Slots', 'Frame']);
+        ctx.expect(await names.allInnerTexts()).toEqual(['Buy', 'Panel', 'wells', 'frame']);
         await page.keyboard.press('Control+z');
-        ctx.expect(await names.allInnerTexts()).toEqual(['Panel', 'Buy', 'Slots', 'Frame']);
+        ctx.expect(await names.allInnerTexts()).toEqual(['Panel', 'Buy', 'wells', 'frame']);
 
-        const before = await pixel(page, 88, 111);
+        const before = await pixel(page, 88, 84);
         await page.getByRole('button', { name: 'Hide Panel' }).click();
         await page.getByRole('button', { name: 'Hide Buy' }).click();
-        const hidden = await pixel(page, 88, 111);
+        const hidden = await pixel(page, 88, 84);
         ctx.expect(hidden).not.toEqual(before);
         await page.getByRole('button', { name: 'Show Panel' }).click();
         await page.getByRole('button', { name: 'Lock Panel' }).click();

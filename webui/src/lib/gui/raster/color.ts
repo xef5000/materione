@@ -6,7 +6,7 @@
  * one representation, which keeps pixel-for-pixel comparison honest.
  *
  * On disk and on the wire a color is a string: six hex digits (`RRGGBB`,
- * opaque) or eight (`RRGGBBAA`, CSS order), led by a hash sign.
+ * opaque) or eight (`AARRGGBB`, alpha first, matching the gui-components descriptions), led by a hash sign.
  */
 
 export type Argb = number;
@@ -33,14 +33,14 @@ export function blueOf(color: Argb): number {
   return color & 255;
 }
 
-const HEX = /^#?([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/;
+const HEX = /^#?(?:([0-9a-fA-F]{2}))?([0-9a-fA-F]{6})$/;
 
-/** `RRGGBB` / `RRGGBBAA` (hash optional) to ARGB; null when it is neither. */
+/** `RRGGBB` / `AARRGGBB` (hash optional) to ARGB; null when it is neither. */
 export function parseColor(text: string): Argb | null {
   const match = HEX.exec(text.trim());
   if (!match) return null;
-  const rgb = parseInt(match[1]!, 16);
-  const a = match[2] === undefined ? 255 : parseInt(match[2], 16);
+  const rgb = parseInt(match[2]!, 16);
+  const a = match[1] === undefined ? 255 : parseInt(match[1], 16);
   return argb(a, (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255);
 }
 
@@ -53,12 +53,15 @@ export function formatColor(color: Argb): string {
   const a = alphaOf(color);
   const head = String.fromCharCode(35);
   const body = pair(redOf(color)) + pair(greenOf(color)) + pair(blueOf(color));
-  return a === 255 ? head + body : head + body + pair(a);
+  return a === 255 ? head + body : head + pair(a) + body;
 }
 
-/** The same color as CSS: eight-digit hex is valid there, so the stored form is the CSS form. */
+/** The same color as CSS, which puts alpha last: `#RRGGBBAA`. */
 export function cssColor(color: Argb): string {
-  return formatColor(color);
+  const a = alphaOf(color);
+  const head = String.fromCharCode(35);
+  const body = pair(redOf(color)) + pair(greenOf(color)) + pair(blueOf(color));
+  return a === 255 ? head + body : head + body + pair(a);
 }
 
 /** `<input type=color>` wants exactly six digits, lowercase, no alpha. */

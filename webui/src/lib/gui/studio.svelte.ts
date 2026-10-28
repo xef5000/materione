@@ -22,6 +22,7 @@ import {
 } from './model';
 import * as ops from './ops';
 import { ArgbCanvas } from './raster/canvas';
+import { bareType } from './raster/flatten';
 import { componentOf, type GuiComponentInfo, type GuiRegistry } from './registry';
 import { base64Of, isEmptyPlan, paintReference, planSave, sendSave, textureAssetPath } from './save';
 import type { Guide } from './snap';
@@ -189,7 +190,7 @@ export class GuiStudioState {
     if (this.readOnly) return;
     const { layer } = ops.addComponent(this.doc, this.scene, info);
     let made = layer;
-    if (info.id === 'paint') {
+    if (bareType(layer) === 'paint') {
       // A paint layer owns a canvas-sized PNG; it exists from the first moment, blank, and is written on save.
       const reference = paintReference(this.path, layer.id);
       made = { ...layer, image: reference } as GuiLayer;
@@ -235,7 +236,7 @@ export class GuiStudioState {
     const to = canvasSize(next);
     const frames: Record<string, { height: number }> = {};
     for (const layer of this.doc.layers) {
-      if (layer.type === 'panel' && layer.x === 0 && layer.y === 0 && layer.width === from.width && layer.height === from.height) {
+      if (bareType(layer) === 'panel' && layer.x === 0 && layer.y === 0 && layer.width === from.width && layer.height === from.height) {
         frames[layer.id] = { height: to.height };
       }
     }

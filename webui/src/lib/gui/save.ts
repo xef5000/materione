@@ -5,20 +5,14 @@
  * `rows`, `layers`), so an untouched document sends nothing and a lossless
  * round trip stays byte-identical.
  *
- * `authoring.setFields` takes an optional `assets` list as of issue 183
- * (`assets: [{ path, bytes }]`, `bytes` base64). That op and its protocol
- * types belong to issue 183; this adapter calls the documented shape through the
- * channel's generic `call`, so the editor's own protocol files stay untouched.
+ * The wire shape is `ops.setFields(channel, pack, path, rev, edits, assets)` in
+ * api.ts: `assets` is `[{ path, data }]`, `path` pack-relative under `assets/`
+ * and `data` standard base64, committed by the server with the edits or not at all.
  */
-import type { FieldEditPayload, RpcChannel } from '../api';
+import { ops, type AssetUpload, type FieldEditPayload, type RpcChannel } from '../api';
 import type { GuiDocument } from './model';
 
-export interface SaveAsset {
-  /** Pack-relative asset path, `assets/textures/<ref>.png`. */
-  path: string;
-  /** Base64 of the PNG. */
-  bytes: string;
-}
+export type SaveAsset = AssetUpload;
 
 export interface SavePlan {
   edits: FieldEditPayload[];
@@ -65,20 +59,14 @@ export function planSave(
   );
   const assets: SaveAsset[] = [];
   for (const [reference, bytes] of dirtyAssets) {
-    if (referenced.has(reference)) assets.push({ path: textureAssetPath(reference), bytes });
+    if (referenced.has(reference)) assets.push({ path: textureAssetPath(reference), data: bytes });
   }
-  // The op wants at least one edit; a pixels-only save rewrites `layers` with the value it already has.
-  if (!edits.length && assets.length) set('layers', current.layers);
   return { edits, assets };
 }
 
-export function saveRequest(pack: string, path: string, rev: number, plan: SavePlan): Record<string, unknown> {
-  return { pack, path, rev, edits: plan.edits, ...(plan.assets.length ? { assets: plan.assets } : {}) };
-}
-
-/** Sends the plan as one `authoring.setFields` call. */
+/** Sends the plan as one `authoring.setFields` call (a pixels-only save has empty `edits`). */
 export function sendSave(channel: RpcChannel, pack: string, path: string, rev: number, plan: SavePlan) {
-  return channel.call('authoring.setFields', saveRequest(pack, path, rev, plan));
+  return ops.setFields(channel, pack, path, rev, plan.edits, plan.assets);
 }
 
 export function base64Of(bytes: Uint8Array): string {

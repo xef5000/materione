@@ -143,12 +143,12 @@ describe('chest geometry', () => {
 describe('compositing', () => {
   it('formats and parses colors', () => {
     expect(parseColor('#336699')).toBe(argb(255, 0x33, 0x66, 0x99));
-    expect(parseColor('336699CC')).toBe(argb(0xcc, 0x33, 0x66, 0x99));
+    expect(parseColor('CC336699')).toBe(argb(0xcc, 0x33, 0x66, 0x99));
     expect(parseColor('#12')).toBeNull();
     expect(formatColor(argb(255, 0xc6, 0xc6, 0xc6))).toBe('#C6C6C6');
-    expect(formatColor(argb(0x80, 1, 2, 3))).toBe('#01020380');
+    expect(formatColor(argb(0x80, 1, 2, 3))).toBe('#80010203');
     // alpha 0 has exactly one representation
-    expect(parseColor('#FFFFFF00')).toBe(0);
+    expect(parseColor('#00FFFFFF')).toBe(0);
   });
 
   it('opacity scales alpha with round half up', () => {

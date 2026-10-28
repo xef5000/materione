@@ -14,10 +14,10 @@
       "width": 30,
       "height": 24,
       "style": {
-        "fill": "#FF0000C0",
-        "highlight": "#00FF0080",
-        "shadow": "#0000FF40",
-        "outline": "#FFFFFF20"
+        "fill": "#C0FF0000",
+        "highlight": "#8000FF00",
+        "shadow": "#400000FF",
+        "outline": "#20FFFFFF"
       }
     },
     {
@@ -28,9 +28,9 @@
       "width": 30,
       "height": 16,
       "style": {
-        "fill": "#3366CC99",
-        "highlight": "#FFFF0033",
-        "shadow": "#00000099",
+        "fill": "#993366CC",
+        "highlight": "#33FFFF00",
+        "shadow": "#99000000",
         "outline": "#80808080"
       }
     },
@@ -42,10 +42,10 @@
       "width": 12,
       "height": 24,
       "style": {
-        "fill": "#FFFFFF01",
-        "highlight": "#FFFFFF02",
-        "shadow": "#00000003",
-        "outline": "#00000004"
+        "fill": "#01FFFFFF",
+        "highlight": "#02FFFFFF",
+        "shadow": "#03000000",
+        "outline": "#04000000"
       }
     }
   ]

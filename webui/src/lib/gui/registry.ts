@@ -5,71 +5,70 @@
  * the studio keeps no component list of its own, so an addon component with a
  * schema gets a palette entry and an inspector for free.
  */
-import type { TypeParam } from '../api';
+import { guiComponentsOf, type GuiComponentInfo, type GuiRenderTarget, type TypeParam } from '../api';
 import type { IconName } from '../components/icons';
 import { icons } from '../components/icons';
-import { isRecord, uniqueId, type GuiLayer, type Json } from './model';
+import { uniqueId, type GuiLayer, type Json } from './model';
 
 /** Where a component's output physically lands (gui.md section 4). */
-export type RenderTarget = 'RASTER' | 'TEXT' | 'SLOT';
+export type RenderTarget = GuiRenderTarget;
 
-export interface GuiComponentInfo {
-  /** The `type:` value of a layer. */
-  id: string;
-  displayName: string;
-  description: string;
-  target: RenderTarget;
-  icon?: string;
-  /** The component's own fields; the common ones (id, name, visible, locked, opacity) are the gui type's. */
-  parameters: TypeParam[];
-}
+export type { GuiComponentInfo };
 
 export interface GuiRegistry {
   components: GuiComponentInfo[];
 }
 
-function targetOf(value: unknown): RenderTarget {
-  const upper = typeof value === 'string' ? value.toUpperCase() : '';
-  return upper === 'TEXT' || upper === 'SLOT' ? upper : 'RASTER';
+/**
+ * The registry as an `authoring.describe` answer carries it (`guiComponents`,
+ * parsed by `guiComponentsOf` in api.ts). `null` when the server describes no
+ * components at all (an older jar), so the studio can say so.
+ */
+export function readRegistry(described: Record<string, unknown> | null | undefined): GuiRegistry | null {
+  const components = described ? guiComponentsOf(described) : [];
+  return components.length ? { components } : null;
 }
 
-/**
- * Reads the component descriptions out of an `authoring.describe` answer. The
- * registry is described like `mechanics`: a list of `{ id, displayName,
- * description, target, parameters }` entries. Tolerant of where it sits (the
- * issue 183 wire shape), strict about entry shape, and `null` when the server
- * does not describe GUI components at all (an older jar).
- */
-export function readRegistry(described: unknown): GuiRegistry | null {
-  if (!isRecord(described)) return null;
-  const gui = isRecord(described.gui) ? described.gui : null;
-  const behavior = isRecord(described.behavior) ? described.behavior : null;
-  const source = described.guiComponents ?? described['gui-components'] ?? gui?.components ??
-    behavior?.guiComponents;
-  if (!Array.isArray(source)) return null;
-  const components: GuiComponentInfo[] = [];
-  for (const entry of source) {
-    if (!isRecord(entry) || typeof entry.id !== 'string' || !entry.id) continue;
-    components.push({
-      id: entry.id,
-      displayName: typeof entry.displayName === 'string' && entry.displayName ? entry.displayName : entry.id,
-      description: typeof entry.description === 'string' ? entry.description : '',
-      target: targetOf(entry.target),
-      ...(typeof entry.icon === 'string' ? { icon: entry.icon } : {}),
-      parameters: Array.isArray(entry.parameters) ? (entry.parameters as TypeParam[]) : [],
-    });
-  }
-  return { components };
+/** A layer's `type:` is the registry id with the built-in namespace optional (`panel` is `materione:panel`). */
+export function fullComponentId(type: string): string {
+  return type.includes(':') ? type : `materione:${type}`;
 }
 
 export function componentOf(registry: GuiRegistry | null, type: string): GuiComponentInfo | undefined {
-  return registry?.components.find((component) => component.id === type);
+  const wanted = fullComponentId(type);
+  return registry?.components.find((component) => component.id === wanted);
 }
 
-/** An icon the editor's set has, else a neutral one: a registry may name any string. */
+/** The unqualified name of a registry id (`materione:panel` -> `panel`). */
+function bareName(id: string): string {
+  return id.slice(id.lastIndexOf(':') + 1);
+}
+
+/**
+ * Palette and layer icons. The registry description carries none, so this is
+ * cosmetic knowledge only: a few well-known names, else the render target's icon.
+ */
+const ICONS: Record<string, IconName> = {
+  panel: 'square',
+  slots: 'grid-3x3',
+  image: 'image',
+  paint: 'pencil',
+  button: 'rectangle-horizontal',
+  text: 'type',
+  item: 'package',
+};
+const TARGET_ICONS: Record<RenderTarget, IconName> = { raster: 'square', text: 'type', slot: 'package' };
+
 export function componentIcon(info: GuiComponentInfo | undefined): IconName {
-  const named = info?.icon as IconName | undefined;
-  return named && named in icons ? named : 'square';
+  if (!info) return 'square';
+  const named = (info as { icon?: string }).icon as IconName | undefined;
+  if (named && named in icons) return named;
+  return ICONS[bareName(info.id)] ?? TARGET_ICONS[info.target];
+}
+
+/** What a registry id is called in the palette when it brings no display name of its own. */
+export function shortName(info: GuiComponentInfo): string {
+  return info.displayName || bareName(info.id);
 }
 
 export function paramOf(info: GuiComponentInfo | undefined, id: string): TypeParam | undefined {
@@ -112,21 +111,32 @@ export function transformability(info: GuiComponentInfo | undefined, layer?: Gui
 }
 
 /**
- * The layer a palette click adds: every required field with its declared
- * default, positioned by the caller. Optional fields (styles, opacity) are
- * left out so the file stays as small as the author's intent.
+ * Starting values for required fields the schema gives no default for: the
+ * editor needs *some* visible size and a valid slot to put a new layer on the
+ * canvas. Everything optional is left out so the file stays as small as the
+ * author's intent.
  */
+const REQUIRED_FALLBACKS: Record<string, unknown> = {
+  width: 48,
+  height: 24,
+  slot: 0,
+  text: 'Text',
+  item: 'minecraft:stone',
+};
+
+/** The layer a palette click adds: required fields with their default (or a starting value), positioned by the caller. */
 export function newLayer(
   info: GuiComponentInfo,
   taken: Iterable<string>,
   overrides: Json = {},
 ): GuiLayer {
-  const id = uniqueId(info.id, taken);
-  const layer: Json = { id, type: info.id, name: info.displayName };
+  const bare = bareName(info.id);
+  const id = uniqueId(bare, taken);
+  const layer: Json = { id, type: bare, name: shortName(info) };
   for (const param of info.parameters) {
-    if (!param.required) continue;
-    const value = defaultValue(param);
+    if (!param.required && !(param.id === 'x' || param.id === 'y')) continue;
+    const value = defaultValue(param) ?? (param.required ? REQUIRED_FALLBACKS[param.id] : undefined);
     if (value !== undefined) layer[param.id] = value;
   }
-  return { ...layer, ...overrides, id, type: info.id } as GuiLayer;
+  return { ...layer, ...overrides, id, type: bare } as GuiLayer;
 }

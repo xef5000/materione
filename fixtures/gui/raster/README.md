@@ -30,7 +30,7 @@ the committed bytes are the fixture, and CI never regenerates.
   "images": {                          // bitmaps by the reference `image`/`paint` layers use
     "gui/test/checker": {
       "width": 2, "height": 2,
-      "pixels": ["#FF0000", "#00FF00", "#0000FF", "#FFFFFF80"]   // row-major, one color per pixel
+      "pixels": ["#FF0000", "#00FF00", "#0000FF", "#80FFFFFF"]   // row-major, one color per pixel
     }
   },
   "layers": [ /* gui.md section 2 layer objects, bottom to top */ ]
@@ -41,7 +41,7 @@ the committed bytes are the fixture, and CI never regenerates.
 document with its textures inlined. Vectors only contain *valid* layers; validation and
 quarantine are not part of this contract. Fields a renderer does not know are ignored.
 
-**Colors** are strings: `#RRGGBB` (opaque) or `#RRGGBBAA` (CSS order, alpha last). Internally a
+**Colors** are strings: `#RRGGBB` (opaque) or `#AARRGGBB` (alpha first, as the gui-components descriptions say). Internally a
 color is one ARGB integer with straight alpha. **Alpha 0 is always stored as `0x00000000`**:
 transparent has exactly one representation, so a pixel of a bitmap with alpha 0 is never
 written to the canvas, whatever its RGB.

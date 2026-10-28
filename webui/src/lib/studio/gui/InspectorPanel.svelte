@@ -15,6 +15,8 @@
   import type { GuiStudioState } from '../../gui/studio.svelte';
   import { unionOf } from '../../gui/transform';
   import { MAX_ROWS, MIN_ROWS, canvasSize } from '../../gui/chest';
+  import { formatColor } from '../../gui/raster/color';
+  import { RAISED_DEFAULT, SLOT_DEFAULT, bareType } from '../../gui/raster/flatten';
   import ColorField from './ColorField.svelte';
   import ScrubNumber from './ScrubNumber.svelte';
 
@@ -32,7 +34,7 @@
   const info = $derived(layer ? studio.infoOf(layer) : undefined);
   const can = $derived(layer ? transformability(info, layer) : null);
   const bounds = $derived(layer ? studio.boundsOf(layer) : null);
-  const target = $derived(layer ? (info?.target ?? 'RASTER') : 'RASTER');
+  const target = $derived(layer ? (info?.target ?? 'raster') : 'raster');
   const rows = $derived(studio.doc.rows);
   const locked = $derived(layer ? isLocked(layer) : false);
   const disabled = $derived(studio.readOnly || locked);
@@ -102,13 +104,24 @@
   }
 
   function kindOf(param: TypeParam): 'style' | 'color' | 'choice' | 'number' | 'texture' | 'toggle' | 'text' {
-    if (param.uiHint === 'style' && param.nested?.length) return 'style';
-    if (param.uiHint === 'color') return 'color';
+    // the bevel style is a raw map in the schema; its four colors are spec (gui.md section 4), not schema
+    if (param.id === 'style') return 'style';
+    if (param.uiHint === 'color' || param.id === 'color') return 'color';
     if (param.uiHint === 'select' || param.allowedValues?.length) return 'choice';
     if (param.type === 'integer' || param.type === 'decimal' || param.uiHint === 'number') return 'number';
     if (param.uiHint === 'texture') return 'texture';
     if (param.type === 'boolean' || param.uiHint === 'toggle') return 'toggle';
     return 'text';
+  }
+
+  /** The bevel style's colors and the vanilla look an unset one falls back to (gui.md section 4). */
+  function styleParts(l: GuiLayer): { id: string; label: string; fallback: string }[] {
+    const slots = bareType(l) === 'slots';
+    const base = slots ? SLOT_DEFAULT : RAISED_DEFAULT;
+    const parts = [['fill', 'Fill'], ['highlight', 'Highlight'], ['shadow', 'Shadow'], ['outline', 'Outline']] as const;
+    return parts
+      .filter(([id]) => !(slots && id === 'outline'))
+      .map(([id, label]) => ({ id, label, fallback: formatColor(base[id]) }));
   }
 
   const rowCounts = Array.from({ length: MAX_ROWS - MIN_ROWS + 1 }, (_, index) => MIN_ROWS + index);
@@ -175,14 +188,14 @@
       <section class="group">
         {#if kind === 'style'}
           <div class="titled">
-            <h3>{param.label ?? param.id}</h3>
+            <h3>{param.label ?? 'Style'}</h3>
             <button type="button" class="link" disabled={disabled || raw === undefined} onclick={() => studio.setField(layer.id, param.id, undefined)}>Reset</button>
           </div>
-          {#each param.nested ?? [] as part (part.id)}
+          {#each styleParts(layer) as part (part.id)}
             <ColorField
-              label={part.label ?? part.id}
+              label={part.label}
               value={typeof styleOf(layer, param.id)[part.id] === 'string' ? (styleOf(layer, param.id)[part.id] as string) : undefined}
-              fallback={part.default ?? ''}
+              fallback={part.fallback}
               {disabled}
               onchange={(value) => setStyle(layer, param.id, part.id, value)}
             />
@@ -223,7 +236,7 @@
               list="gui-textures"
               spellcheck="false"
               value={typeof raw === 'string' ? raw : ''}
-              disabled={disabled || layer.type === 'paint'}
+              disabled={disabled || bareType(layer) === 'paint'}
               placeholder="gui/example"
               oninput={(event) => studio.setField(layer.id, param.id, event.currentTarget.value)}
             />
@@ -249,7 +262,7 @@
       </section>
     {/each}
 
-    {#if target === 'RASTER'}
+    {#if target === 'raster'}
       <section class="group">
         <h3>Opacity</h3>
         <div class="opacity">

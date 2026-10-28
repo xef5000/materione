@@ -16,7 +16,7 @@
   import { toImageData } from '../../gui/browser-image';
   import { isLocked, type GuiLayer } from '../../gui/model';
   import * as ops from '../../gui/ops';
-  import { flattenRaster, regionOf } from '../../gui/raster/flatten';
+  import { bareType, flattenRaster, regionOf } from '../../gui/raster/flatten';
   import type { Rect } from '../../gui/raster/canvas';
   import { hitTest, layerBounds, layersInRect } from '../../gui/scene';
   import { collectTargets, snapMove, snapResize, snapThreshold } from '../../gui/snap';
@@ -154,7 +154,7 @@
     | { kind: 'pan'; x: number; y: number; panX: number; panY: number }
     | { kind: 'move'; start: Point; origin: Record<string, Rect>; moved: boolean; clickedId: string; wasSelected: boolean }
     | { kind: 'resize'; handle: Handle; start: Point; origin: Record<string, Rect>; box: Rect; moved: boolean }
-    | { kind: 'marquee'; start: Point; base: string[]; moved: boolean };
+    | { kind: 'marquee'; start: Point; base: string[]; moved: boolean; clickId?: string };
   let drag: Drag | null = null;
   let pending: ReturnType<typeof ops.setRects> = null;
 
@@ -198,6 +198,15 @@
         return;
       }
       const wasSelected = studio.selection.includes(hit.id);
+      // A layer that fills the whole canvas (the frame) is the backdrop: dragging on it marquee-selects
+      // what is on top of it, like a Figma frame. A click selects it, and once selected it moves.
+      const bounds = layerBounds(hit, studio.scene);
+      if (!wasSelected && bounds && bounds.x <= 0 && bounds.y <= 0 &&
+          bounds.x + bounds.w >= studio.size.width && bounds.y + bounds.h >= studio.size.height) {
+        drag = { kind: 'marquee', start: gui, base: [], moved: false, clickId: hit.id };
+        studio.select([]);
+        return;
+      }
       if (!wasSelected) studio.select([hit.id]);
       const movers = studio.doc.layers.filter((layer) => studio.selection.includes(layer.id) && !isLocked(layer));
       drag = {
@@ -231,7 +240,7 @@
       rows: studio.doc.rows,
       slots: true,
       siblings: studio.doc.layers.flatMap((layer) => {
-        if (excluded.includes(layer.id) || layer.visible === false || layer.type === 'paint') return [];
+        if (excluded.includes(layer.id) || layer.visible === false || bareType(layer) === 'paint') return [];
         const rect = layerBounds(layer, studio.scene);
         return rect && layer.type !== 'slots' ? [rect] : [];
       }),
@@ -326,6 +335,7 @@
     studio.guides = [];
     studio.dropSlot = null;
     if (!active) return;
+    if (active.kind === 'marquee' && !active.moved && active.clickId) studio.select([active.clickId]);
     if (active.kind === 'move' && !active.moved && active.wasSelected && studio.selection.length > 1) {
       studio.select([active.clickedId]);
     }
@@ -355,14 +365,14 @@
 
   /** A slot layer is outlined well by well (its bounding box would be the whole screen). */
   function outlines(layer: GuiLayer, rect: Rect): Rect[] {
-    return layer.type === 'slots' ? cellsOf(studio.doc.rows, regionOf(layer)).map(wellRect) : [rect];
+    return bareType(layer) === 'slots' ? cellsOf(studio.doc.rows, regionOf(layer)).map(wellRect) : [rect];
   }
   const showGrid = $derived(zoom >= GRID_ZOOM && studio.showPixelGrid);
   const placeholders = $derived(studio.marked);
   /** Image layers whose texture is not available get a marked placeholder instead of silence. */
   const missingImages = $derived(
     studio.shown.layers.flatMap((layer) => {
-      if (layer.visible === false || layer.type !== 'image' || typeof layer.image !== 'string') return [];
+      if (layer.visible === false || bareType(layer) !== 'image' || typeof layer.image !== 'string') return [];
       if (studio.hasImage(layer.image)) return [];
       const rect = layerBounds(layer, studio.scene);
       return rect ? [{ layer, rect }] : [];
@@ -432,7 +442,7 @@
       {@const rect = entry.rect}
       <g class="placeholder" data-layer={entry.layer.id}>
         <rect x={sx(rect.x)} y={sy(rect.y)} width={rect.w * zoom} height={rect.h * zoom} />
-        {#if entry.target === 'TEXT'}
+        {#if entry.target === 'text'}
           <text
             class="mc"
             x={sx(rect.x)}

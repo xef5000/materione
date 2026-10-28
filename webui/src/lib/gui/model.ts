@@ -26,9 +26,11 @@ export interface GuiDocument {
 
 /** Where the GUI's fields live inside the parsed file. */
 export interface GuiLocation {
-  /** Path prefix to a field: `[rootId]` for a resource-root file, `[]` for a flat one. */
+  /** Path prefix to a field: `[rootId]`. A GUI file is keyed like every other type (one resource per top-level key). */
   prefix: string[];
   body: Json;
+  /** The file has no resource key (gui.md section 2's unkeyed sketch): read leniently, never written. */
+  flat?: boolean;
 }
 
 export interface ParsedGui {
@@ -64,7 +66,7 @@ export function locateBody(parsed: unknown, rootId: string): GuiLocation | null 
   if (isRecord(rooted) && (Array.isArray(rooted.layers) || 'rows' in rooted || 'title' in rooted)) {
     return { prefix: [rootId], body: rooted };
   }
-  if (Array.isArray(parsed.layers) || 'rows' in parsed) return { prefix: [], body: parsed };
+  if (Array.isArray(parsed.layers) || 'rows' in parsed) return { prefix: [], body: parsed, flat: true };
   if (isRecord(rooted)) return { prefix: [rootId], body: rooted };
   const only = Object.entries(parsed).filter(([, value]) => isRecord(value));
   if (only.length === 1 && Object.keys(parsed).length === 1) {
@@ -79,6 +81,7 @@ export function parseGui(parsed: unknown, rootId: string): ParsedGui | null {
   const { body } = location;
   const issues: string[] = [];
   const blocking: string[] = [];
+  if (location.flat) blocking.push('no resource key (a GUI file is keyed by its id like every other type)');
   const layers: GuiLayer[] = [];
   const seen = new Set<string>();
   if (body.layers !== undefined && !Array.isArray(body.layers)) {

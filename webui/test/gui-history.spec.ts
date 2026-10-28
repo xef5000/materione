@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { GUI_COMPONENTS, sampleGuiRaw } from '../src/lib/demo/gui';
+import { sampleGuiRaw } from '../src/lib/demo/gui';
+import { registry } from './helpers/gui-registry';
 import {
   addLayer,
   compose,
@@ -18,10 +19,9 @@ import {
 import { COALESCE_WINDOW_MS, GuiHistory } from '../src/lib/gui/history';
 import { parseGui, starterDocument, type GuiDocument, type GuiLayer } from '../src/lib/gui/model';
 import * as ops from '../src/lib/gui/ops';
-import { readRegistry, componentOf } from '../src/lib/gui/registry';
+import { componentOf } from '../src/lib/gui/registry';
 import { sceneOf } from '../src/lib/gui/scene';
 
-const registry = readRegistry({ guiComponents: GUI_COMPONENTS })!;
 const sample = (): GuiDocument => parseGui(parse(sampleGuiRaw()), 'main')!.doc;
 const sceneFor = (doc: GuiDocument) => sceneOf(doc, registry, () => null);
 const ids = (doc: GuiDocument): string[] => doc.layers.map((layer) => layer.id);
@@ -234,11 +234,11 @@ describe('layer operations', () => {
   it('adds a palette component centered on the canvas, with registry defaults, on top', () => {
     const doc = starterDocument(6);
     const { command, layer } = ops.addComponent(doc, sceneFor(doc), componentOf(registry, 'button')!);
-    expect(layer).toMatchObject({ type: 'button', id: 'button', width: 52, height: 20, x: 62, y: 101 });
+    expect(layer).toMatchObject({ type: 'button', id: 'button', width: 48, height: 24, x: 64, y: 99 });
     expect(ids(command.apply(doc)).at(-1)).toBe('button');
     // a slot-bound item has no free position to center
     const item = ops.addComponent(doc, sceneFor(doc), componentOf(registry, 'item')!).layer;
-    expect(item).toMatchObject({ type: 'item', slot: 13 });
+    expect(item).toMatchObject({ type: 'item', slot: 0, item: 'minecraft:stone' });
     expect('x' in item).toBe(false);
   });
 

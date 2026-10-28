@@ -185,7 +185,7 @@ own transparent canvas and composited with its `opacity` (group opacity); source
 straight-alpha with round-half-up; a raised bevel's "off-diagonal corners" are `edge x edge`
 blocks (so a 2 px panel has 2 x 2 blocks of `fill`); image blits sample the destination pixel's
 center (`floor((2i+1) * sourceWidth / (2 * width))`); a `paint` bitmap is copied 1:1 at the
-origin; alpha 0 is always stored as `0x00000000`; `style` fields fall back per field to the
+origin; alpha 0 is always stored as `0x00000000`; colors are `#RRGGBB` or `#AARRGGBB` (alpha first, as the component descriptions say); `style` fields fall back per field to the
 vanilla defaults (`slots` use `#8B8B8B` / `#FFFFFF` / `#373737`). Changing a rule means amending
 that README, `generate-vectors.mjs` and both implementations together.
 
@@ -253,12 +253,12 @@ Content for any `guis/**` file.
 | Piece | Where | Notes |
 |---|---|---|
 | Raster mirror | `gui/raster/` | `ArgbCanvas`, `paintRaised`/`paintInset`, `blitScaled`, `flattenRaster`; the canvas preview calls the very function the vectors test |
-| Document model | `gui/model.ts` | the API's own `title`/`rows`/`layers` structure, immutable; unknown fields, layer types and top-level keys ride along; a file with a layer the model cannot hold (no type, missing or duplicate id) opens **read-only** instead of being rewritten. Reads both the resource-rooted layout (`<id>:` then the fields) and the flat layout of section 2's example |
+| Document model | `gui/model.ts` | the API's own `title`/`rows`/`layers` structure, immutable; unknown fields, layer types and top-level keys ride along; a file with a layer the model cannot hold (no type, missing or duplicate id) opens **read-only** instead of being rewritten. The file is keyed by its resource id (`<id>:` then the fields) and field paths are `[id, 'layers']`; an unkeyed file is read for display only and never written |
 | History | `gui/commands.ts`, `gui/history.ts` | every edit is an invertible command (patch, insert, remove, reorder, document fields, composite); drags commit one command on release; nudges and scrubs coalesce within 900 ms; undoing back to the saved baseline makes the document clean |
 | Canvas rules | `gui/scene.ts`, `snap.ts`, `transform.ts`, `viewport.ts` | bounds, hit testing, snapping (canvas edges and middle, slot grid, sibling edges and centers; whole pixels only), 8-handle resize, zoom 1-16x anchored at the cursor |
 | Compiled order | `gui/scene.ts` | raster layers, then text, then slot items, each in list order; a layer listed on the wrong side of a layer of another target carries a `#n` badge. The relative order of title text and slot items is still the open question of section 9.1, so the studio states the assumption in one place (`TARGET_RANK`) |
-| Registry | `gui/registry.ts` | palette, inspector fields, defaults for a new layer and what may be dragged or resized are all derived from the component descriptions (`x`/`y`/`width`/`height` fields mean movable and resizable, `slot` means slot-bound); no component list lives in the studio |
-| Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `rows`, `layers`) and `assets: [{ path, bytes }]` (base64 PNG) for pixel assets a layer still refers to; a pixels-only save re-sends `layers` because the op wants at least one edit |
+| Registry | `gui/registry.ts` | palette, inspector fields, defaults for a new layer and what may be dragged or resized are all derived from the component descriptions (`guiComponentsOf` over `authoring.describe`; `x`/`y`/`width`/`height` fields mean movable and resizable, `slot` means slot-bound; a layer's `type:` matches the registry id with `materione:` optional); no component list lives in the studio. Cosmetic icons and the bevel style's four colors (a raw map in the schema) are the only studio-side knowledge |
+| Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `rows`, `layers`) and `assets: [{ path, data }]` (base64 PNG, via `ops.setFields`) for pixel assets a layer still refers to; a pixels-only save sends empty `edits` |
 
 Text and item layers are drawn as clearly marked placeholders until the paint, image, text and
 item studio work lands (issue 187); it plugs in by registering painters, not by changing the

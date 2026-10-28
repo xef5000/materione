@@ -5,10 +5,10 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { GUI_COMPONENTS, sampleGuiRaw } from '../src/lib/demo/gui';
+import { sampleGuiRaw } from '../src/lib/demo/gui';
+import { registry } from './helpers/gui-registry';
 import { parseGui, type GuiDocument, type GuiLayer } from '../src/lib/gui/model';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
-import { readRegistry } from '../src/lib/gui/registry';
 import {
   compiledOrder,
   hitTest,
@@ -35,7 +35,6 @@ import {
   type View,
 } from '../src/lib/gui/viewport';
 
-const registry = readRegistry({ guiComponents: GUI_COMPONENTS })!;
 const sample = (): GuiDocument => parseGui(parse(sampleGuiRaw()), 'main')!.doc;
 const art = new ArgbCanvas(176, 168);
 art.set(60, 100, 0xffff0000);
@@ -99,7 +98,7 @@ describe('compiled order and badges (gui.md section 4)', () => {
     const doc = sample();
     const marked = placeholders(doc, scene(doc));
     expect(marked.map((entry) => [entry.layer.id, entry.target])).toEqual(
-      [['heading', 'TEXT'], ['sword', 'SLOT'], ['apple', 'SLOT']]);
+      [['heading', 'text'], ['sword', 'slot'], ['apple', 'slot']]);
     expect(marked[1]!.rect).toMatchObject({ w: 16, h: 16 });
   });
 });
@@ -135,6 +134,8 @@ describe('hit testing', () => {
     const touched = layersInRect(doc, s, { x: 110, y: 15, w: 60, h: 60 }).map((entry) => entry.id);
     expect(touched).toEqual(expect.arrayContaining(['tag', 'buy', 'coin']));
     expect(touched).not.toContain('art');
+    expect(touched).not.toContain('frame'); // the backdrop is what you marquee over
+    expect(touched).toContain('wells'); // wells count when the marquee fully covers one
   });
 });
 

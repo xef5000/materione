@@ -41,16 +41,16 @@ async function at(page: Page, x: number, y: number): Promise<[number, number]> {
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
 
-test('a new GUI opens as a vanilla chest: a panel and slot wells, 176 x 222, drawn by the shared bevel', async ({ page }) => {
+test('a new GUI opens as a vanilla chest: a panel and slot wells from the server starter, drawn by the shared bevel', async ({ page }) => {
   await openFixture(page);
   await page.getByRole('button', { name: /new gui/i }).first().click();
   await page.getByRole('dialog').getByRole('textbox').first().fill('Chest Test');
   await page.keyboard.press('Enter');
   await expect(canvas(page)).toBeVisible();
-  expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 222]);
-  await expect(page.locator('.layers .row .name')).toHaveText(['Slots', 'Frame']);
+  expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 168]); // the starter is a 3-row chest
+  await expect(page.locator('.layers .row .name')).toHaveText(['wells', 'frame']);
 
-  // the compiled background, pixel for pixel (fixtures/gui/raster/chest-6-rows.png)
+  // the compiled background, pixel for pixel (fixtures/gui/raster: panel + slots region all)
   expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]); // transparent corner
   expect(await pixel(page, 1, 0)).toEqual([0, 0, 0, 255]); // outline
   expect(await pixel(page, 1, 1)).toEqual([255, 255, 255, 255]); // highlight
@@ -59,8 +59,8 @@ test('a new GUI opens as a vanilla chest: a panel and slot wells, 176 x 222, dra
   expect(await pixel(page, 7, 17)).toEqual([55, 55, 55, 255]); // slot well, dark edge
   expect(await pixel(page, 8, 18)).toEqual([139, 139, 139, 255]); // slot well interior
   expect(await pixel(page, 24, 34)).toEqual([255, 255, 255, 255]); // slot well, light edge
-  expect(await pixel(page, 8, 139)).toEqual([139, 139, 139, 255]); // first inventory slot (y = 6*18+31)
-  expect(await pixel(page, 8, 197)).toEqual([139, 139, 139, 255]); // hotbar slot (y = 6*18+89)
+  expect(await pixel(page, 8, 85)).toEqual([139, 139, 139, 255]); // first inventory slot (y = 3*18+31)
+  expect(await pixel(page, 8, 143)).toEqual([139, 139, 139, 255]); // hotbar slot (y = 3*18+89)
 });
 
 test('select, nudge with arrow keys (Shift = 10), undo and redo; the status follows the history', async ({ page }) => {
@@ -150,14 +150,14 @@ test('the layers panel renames, hides, locks and reorders; the badge says what t
 test('adds components from the registry palette, schema-derived inspector, then saves ONE transaction with the paint asset', async ({ page }) => {
   await openShop(page);
   await expect(page.getByRole('region', { name: 'Components' }).getByRole('button')).toHaveText(
-    ['Panel', 'Slot wells', 'Image', 'Paint', 'Button', 'Text', 'Item']);
+    ['Panel', 'Slots', 'Image', 'Paint', 'Button', 'Text', 'Item']);
   await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Panel' }).click();
   await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Paint' }).click();
   await expect(page.locator('.layers .row .name').first()).toHaveText('Paint');
 
   await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Panel', exact: true }).first().click();
   // x/y/w/h scrub fields and the style colors come from the component's description
-  await expect(page.getByRole('textbox', { name: 'W', exact: true })).toHaveValue('64');
+  await expect(page.getByRole('textbox', { name: 'W', exact: true })).toHaveValue('48');
   await page.getByRole('textbox', { name: 'Fill hex' }).fill('#3C8527');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('textbox', { name: 'Fill hex' })).toHaveValue('#3C8527');
@@ -171,6 +171,34 @@ test('adds components from the registry palette, schema-derived inspector, then 
   expect(payload.assets.map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/paint.png']);
   const saved = await documentOf(page, 'guis/shop/main.yml');
   expect((saved!.parsed.main as { layers: { id: string }[] }).layers.map((layer) => layer.id)).toContain('panel');
+});
+
+test('dragging on the frame marquee-selects what is on it; a click selects the frame, and a selected frame moves', async ({ page }) => {
+  await openShop(page);
+  await page.getByRole('button', { name: 'Lock Slots' }).click(); // the wells under the tag would be covered by the marquee too
+  const [x0, y0] = await at(page, 110, 12);
+  const [x1, y1] = await at(page, 170, 76);
+  await page.mouse.move(x0, y0);
+  await page.mouse.down();
+  await page.mouse.move(x1, y1, { steps: 6 });
+  await page.mouse.up();
+  const selected = page.getByRole('region', { name: 'Layers' }).locator('.row.selected .name');
+  await expect(selected).toContainText(['Coin', 'Buy button', 'Price tag']);
+  await expect(page.getByRole('textbox', { name: 'X', exact: true })).toHaveCount(1); // the group's transform
+  // the frame itself was not moved
+  await page.getByRole('button', { name: 'Frame', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'X', exact: true })).toHaveValue('0');
+  // a plain click on the frame selects it
+  const [cx, cy] = await at(page, 3, 100);
+  await page.keyboard.press('Escape');
+  await page.mouse.click(cx, cy);
+  await expect(selected).toHaveText(['Frame']);
+  // now that it is selected, dragging moves it
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 30, cy + 30, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByRole('textbox', { name: 'X', exact: true })).not.toHaveValue('0');
 });
 
 test('zoom 1x to 16x around the cursor, pixel grid from 8x, 0 fits and 1 is 100%, space-drag pans', async ({ page }) => {

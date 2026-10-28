@@ -19,12 +19,12 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------- colors
 
-/** `#RRGGBB` or `#RRGGBBAA` to [r, g, b, a]. */
+/** `#RRGGBB` or `#AARRGGBB` (alpha first, as the server's component descriptions say) to [r, g, b, a]. */
 function parse(text) {
-  const m = /^#([0-9a-fA-F]{6})([0-9a-fA-F]{2})?$/.exec(text);
+  const m = /^#(?:([0-9a-fA-F]{2}))?([0-9a-fA-F]{6})$/.exec(text);
   if (!m) throw new Error(`bad color ${text}`);
-  const n = parseInt(m[1], 16);
-  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, m[2] === undefined ? 255 : parseInt(m[2], 16)];
+  const n = parseInt(m[2], 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255, m[1] === undefined ? 255 : parseInt(m[1], 16)];
 }
 
 const RAISED = { fill: '#C6C6C6', highlight: '#FFFFFF', shadow: '#555555', outline: '#000000' };
@@ -328,9 +328,9 @@ const vectors = [
     description: 'Translucent fills over transparent, translucent and opaque backgrounds (the full straight-alpha source-over formula).',
     canvas: { width: 48, height: 24 },
     layers: [
-      { id: 'base', type: 'panel', x: 0, y: 0, width: 30, height: 24, style: { fill: '#FF0000C0', highlight: '#00FF0080', shadow: '#0000FF40', outline: '#FFFFFF20' } },
-      { id: 'over', type: 'panel', x: 12, y: 4, width: 30, height: 16, style: { fill: '#3366CC99', highlight: '#FFFF0033', shadow: '#00000099', outline: '#80808080' } },
-      { id: 'cover', type: 'button', x: 36, y: 0, width: 12, height: 24, style: { fill: '#FFFFFF01', highlight: '#FFFFFF02', shadow: '#00000003', outline: '#00000004' } },
+      { id: 'base', type: 'panel', x: 0, y: 0, width: 30, height: 24, style: { fill: '#C0FF0000', highlight: '#8000FF00', shadow: '#400000FF', outline: '#20FFFFFF' } },
+      { id: 'over', type: 'panel', x: 12, y: 4, width: 30, height: 16, style: { fill: '#993366CC', highlight: '#33FFFF00', shadow: '#99000000', outline: '#80808080' } },
+      { id: 'cover', type: 'button', x: 36, y: 0, width: 12, height: 24, style: { fill: '#01FFFFFF', highlight: '#02FFFFFF', shadow: '#03000000', outline: '#04000000' } },
     ],
   },
   {
@@ -343,9 +343,9 @@ const vectors = [
         id: `o${opacity}`, type: 'button', x: 1 + i * 9, y: 1, width: 8, height: 8, opacity,
         style: { fill: '#F0A030', highlight: '#F0A030', shadow: '#F0A030', outline: '#F0A030' },
       })),
-      { id: 'half', type: 'button', x: 1, y: 12, width: 8, height: 8, opacity: 50, style: { fill: '#FFFFFF03', highlight: '#FFFFFF03', shadow: '#FFFFFF03', outline: '#FFFFFF03' } },
-      { id: 'tiny', type: 'button', x: 11, y: 12, width: 8, height: 8, opacity: 49, style: { fill: '#FFFFFF01', highlight: '#FFFFFF01', shadow: '#FFFFFF01', outline: '#FFFFFF01' } },
-      { id: 'tiny2', type: 'button', x: 21, y: 12, width: 8, height: 8, opacity: 50, style: { fill: '#FFFFFF01', highlight: '#FFFFFF01', shadow: '#FFFFFF01', outline: '#FFFFFF01' } },
+      { id: 'half', type: 'button', x: 1, y: 12, width: 8, height: 8, opacity: 50, style: { fill: '#03FFFFFF', highlight: '#03FFFFFF', shadow: '#03FFFFFF', outline: '#03FFFFFF' } },
+      { id: 'tiny', type: 'button', x: 11, y: 12, width: 8, height: 8, opacity: 49, style: { fill: '#01FFFFFF', highlight: '#01FFFFFF', shadow: '#01FFFFFF', outline: '#01FFFFFF' } },
+      { id: 'tiny2', type: 'button', x: 21, y: 12, width: 8, height: 8, opacity: 50, style: { fill: '#01FFFFFF', highlight: '#01FFFFFF', shadow: '#01FFFFFF', outline: '#01FFFFFF' } },
     ],
   },
   {
@@ -360,7 +360,7 @@ const vectors = [
         pixels: ['#FF0000', '#FF8000', '#FFFF00', '#80FF00', '#00FF00', '#00FF80', '#00FFFF', '#0080FF', '#0000FF', '#8000FF', '#FF00FF', '#FF0080', '#000000', '#555555', '#AAAAAA', '#FFFFFF'],
       },
       'gui/test/dot': image(1, 1, ['#FFAA00']),
-      'gui/test/glass': image(2, 2, ['#FF000080', '#00000000', '#0000FF40', '#FFFFFFFF']),
+      'gui/test/glass': image(2, 2, ['#80FF0000', '#00000000', '#400000FF', '#FFFFFFFF']),
     },
     layers: [
       { id: 'x4', type: 'image', image: 'gui/test/checker', x: 0, y: 0, width: 8, height: 8 },
@@ -381,7 +381,7 @@ const vectors = [
     images: {
       'gui/test/art': {
         width: 4, height: 3,
-        pixels: ['#FF0000', '#FF000080', '#00000000', '#FFFFFF', '#00FF00', '#00FF0040', '#0000FF', '#0000FF01', '#FFFF00', '#FFFF00C0', '#FF00FF', '#00FFFF'],
+        pixels: ['#FF0000', '#80FF0000', '#00000000', '#FFFFFF', '#00FF00', '#4000FF00', '#0000FF', '#010000FF', '#FFFF00', '#C0FFFF00', '#FF00FF', '#00FFFF'],
       },
     },
     layers: [

@@ -11,7 +11,7 @@
 import { canvasSize, cellsOf, itemRect, slotCell, wellRect } from './chest';
 import { isHidden, isLocked, type GuiDocument, type GuiLayer } from './model';
 import type { ArgbCanvas, Rect } from './raster/canvas';
-import { regionOf, whole } from './raster/flatten';
+import { bareType, regionOf, whole } from './raster/flatten';
 import { componentOf, type GuiRegistry, type RenderTarget } from './registry';
 
 export interface Scene {
@@ -40,7 +40,7 @@ export function measureTextLayer(layer: GuiLayer): { w: number; h: number } {
 }
 
 export function renderTargetOf(layer: GuiLayer, scene: Pick<Scene, 'registry'>): RenderTarget {
-  return componentOf(scene.registry, layer.type)?.target ?? 'RASTER';
+  return componentOf(scene.registry, layer.type)?.target ?? 'raster';
 }
 
 function union(rects: Rect[]): Rect | null {
@@ -58,17 +58,17 @@ function union(rects: Rect[]): Rect | null {
  */
 export function layerBounds(layer: GuiLayer, scene: Scene): Rect | null {
   const target = renderTargetOf(layer, scene);
-  if (layer.type === 'slots') return union(cellsOf(scene.rows, regionOf(layer)).map(wellRect));
-  if (layer.type === 'paint') return { x: 0, y: 0, w: scene.width, h: scene.height };
-  if (target === 'SLOT' && typeof layer.slot === 'number') {
+  if (bareType(layer) === 'slots') return union(cellsOf(scene.rows, regionOf(layer)).map(wellRect));
+  if (bareType(layer) === 'paint') return { x: 0, y: 0, w: scene.width, h: scene.height };
+  if (target === 'slot' && typeof layer.slot === 'number') {
     const cell = slotCell(scene.rows, layer.slot);
     return cell ? itemRect(cell) : null;
   }
   const x = whole(layer.x, Number.NaN);
   const y = whole(layer.y, Number.NaN);
   if (Number.isNaN(x) || Number.isNaN(y)) return null;
-  if (target === 'TEXT') return { x, y, ...measureTextLayer(layer) };
-  const natural = layer.type === 'image' && typeof layer.image === 'string' ? scene.image(layer.image) : null;
+  if (target === 'text') return { x, y, ...measureTextLayer(layer) };
+  const natural = bareType(layer) === 'image' && typeof layer.image === 'string' ? scene.image(layer.image) : null;
   return {
     x,
     y,
@@ -77,7 +77,7 @@ export function layerBounds(layer: GuiLayer, scene: Scene): Rect | null {
   };
 }
 
-const TARGET_RANK: Record<RenderTarget, number> = { RASTER: 0, TEXT: 1, SLOT: 2 };
+const TARGET_RANK: Record<RenderTarget, number> = { raster: 0, text: 1, slot: 2 };
 
 /** Visible layers in the order the player sees them, bottom to top: by target, then by list position. */
 export function compiledOrder(doc: GuiDocument, scene: Pick<Scene, 'registry'>): GuiLayer[] {
@@ -139,7 +139,7 @@ export function orderBadges(doc: GuiDocument, scene: Pick<Scene, 'registry'>): M
 /** A layer the player-visible raster does not contain: drawn as a marked placeholder until issue 187 renders it. */
 export interface Placeholder {
   layer: GuiLayer;
-  target: Exclude<RenderTarget, 'RASTER'>;
+  target: Exclude<RenderTarget, 'raster'>;
   rect: Rect;
 }
 
@@ -147,7 +147,7 @@ export function placeholders(doc: GuiDocument, scene: Scene): Placeholder[] {
   const out: Placeholder[] = [];
   for (const layer of compiledOrder(doc, scene)) {
     const target = renderTargetOf(layer, scene);
-    if (target === 'RASTER') continue;
+    if (target === 'raster') continue;
     const rect = layerBounds(layer, scene);
     if (rect) out.push({ layer, target, rect });
   }
@@ -169,7 +169,7 @@ export function hitTest(
   for (let index = order.length - 1; index >= 0; index--) {
     const layer = order[index]!;
     if (isLocked(layer)) continue;
-    if (layer.type === 'slots') {
+    if (bareType(layer) === 'slots') {
       const hit = cellsOf(scene.rows, regionOf(layer)).some((cell) => {
         const well = wellRect(cell);
         return point.x >= well.x && point.x < well.x + well.w && point.y >= well.y && point.y < well.y + well.h;
@@ -177,7 +177,7 @@ export function hitTest(
       if (hit) return layer;
       continue;
     }
-    if (layer.type === 'paint') {
+    if (bareType(layer) === 'paint') {
       if (paintAlpha?.(layer, Math.floor(point.x), Math.floor(point.y))) return layer;
       continue;
     }
@@ -193,9 +193,20 @@ export function hitTest(
 /** Layers whose bounds intersect a marquee rectangle (unlocked and visible; slots and paint by their own rules). */
 export function layersInRect(doc: GuiDocument, scene: Scene, marquee: Rect): GuiLayer[] {
   return compiledOrder(doc, scene).filter((layer) => {
-    if (isLocked(layer) || layer.type === 'paint') return false;
-    const bounds = layerBounds(layer, scene);
-    return !!bounds && bounds.x < marquee.x + marquee.w && bounds.x + bounds.w > marquee.x &&
+    if (isLocked(layer) || bareType(layer) === 'paint') return false;
+    const touches = (bounds: Rect): boolean => bounds.x < marquee.x + marquee.w && bounds.x + bounds.w > marquee.x &&
       bounds.y < marquee.y + marquee.h && bounds.y + bounds.h > marquee.y;
+    // slot wells count one by one (their bounding box is the whole screen) and only when the marquee covers one
+    if (bareType(layer) === 'slots') {
+      return cellsOf(scene.rows, regionOf(layer)).some((cell) => {
+        const well = wellRect(cell);
+        return well.x >= marquee.x && well.y >= marquee.y && well.x + well.w <= marquee.x + marquee.w &&
+          well.y + well.h <= marquee.y + marquee.h;
+      });
+    }
+    const bounds = layerBounds(layer, scene);
+    // the backdrop (a layer filling the whole canvas) is what you marquee over, never part of the result
+    if (!bounds || (bounds.x <= 0 && bounds.y <= 0 && bounds.x + bounds.w >= scene.width && bounds.y + bounds.h >= scene.height)) return false;
+    return touches(bounds);
   });
 }
