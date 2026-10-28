@@ -1,0 +1,70 @@
+# Release — builds the production jar for a version tag and stages a DRAFT
+# GitHub release. Publishing the draft stays a manual maintainer action.
+#
+#   git tag v0.1.0 && git push origin v0.1.0
+#
+# The tag must equal `v` + gradle.properties `version`. The build runs with
+# -Prelease, which drops the -SNAPSHOT suffix every other build carries
+# (build.gradle.kts, build.md §8). Release notes are the tag's section of
+# CHANGELOG.md.
+
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: build + draft release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches gradle.properties version
+        run: |
+          version="$(sed -n 's/^version=//p' gradle.properties)"
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match gradle.properties version ${version}"
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build (release)
+        run: ./gradlew build -Prelease
+
+      - name: Jar carries the release version
+        run: test -f "plugin/build/libs/Materione-${VERSION}.jar"
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          awk -v head="## [${VERSION}]" '
+            index($0, head) == 1 { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md || { echo "::error::no CHANGELOG.md section for ${VERSION}"; exit 1; }
+
+      - name: Draft GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            "plugin/build/libs/Materione-${VERSION}.jar" \
+            --draft --verify-tag \
+            --title "Materione ${VERSION}" \
+            --notes-file release-notes.md
