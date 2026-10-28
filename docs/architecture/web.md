@@ -1098,6 +1098,7 @@ first, then used.
 | Spacing | `--space-half` 2, `--space-1` 4, `--space-2` 8, `--space-3` 12, `--space-4` 16, `--space-5` 20, `--space-6` 24, `--space-8` 32, `--space-10` 40 px | 4 px base; 2 px for chips and icon gaps. Optical negative margins stay literal |
 | Radius | `--radius-sm` 4, `--radius` 8, `--radius-lg` 12, `--radius-pill` | Controls use `--radius`; panels and cards `--radius-lg` |
 | Canvas | `--checker-a/b`, `--paint-default`, `--canvas-grid`, `--canvas-hover`, `--canvas-mark`, `--canvas-dim`, `--preview-*` | Read by `token()`; never a literal in a `.ts` file |
+| GUI studio | `--gui-stage`, `--gui-guide`, `--gui-slot-grid`, `--gui-pixel-grid`, `--gui-hover`, `--gui-marquee`, `--gui-placeholder` | The canvas stage and its overlays (gui.md §6); the GUI's own pixels are data (the raster vectors), never tokens |
 | Legacy | `--legacy-0` … `--legacy-f` | Minecraft's 16 text colors, for the game surface and swatches |
 | Game surface | `--font-minecraft`, `--text-minecraft` (16 px), `--mc-shadow-offset`, `--mc-tooltip-bg`, `--mc-tooltip-border(-low)` | Player-visible text drawn the way the client draws it (§6.2) |
 | Motion | `--motion-fast` 120 ms, `--motion-base` 200 ms, `--motion-slow` 320 ms, `--motion-shimmer`, `--ease-standard`, `--ease-emphasized`, `--ease-exit` | Collapse to 0 ms under `prefers-reduced-motion`; read by `motionMs()` in Svelte (§6.3) |

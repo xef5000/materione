@@ -179,6 +179,16 @@ PNG). **Both the Java compiler and the TypeScript studio renderer test against t
 vectors**, the protocol-fixture pattern (web.md): the studio's preview is not an
 approximation of the compiled background, it is the same function.
 
+The vectors' [README](../../fixtures/gui/raster/README.md) is the normative statement of the
+rules, including what the prose above leaves to arithmetic: each raster layer is painted on its
+own transparent canvas and composited with its `opacity` (group opacity); source-over is integer
+straight-alpha with round-half-up; a raised bevel's "off-diagonal corners" are `edge x edge`
+blocks (so a 2 px panel has 2 x 2 blocks of `fill`); image blits sample the destination pixel's
+center (`floor((2i+1) * sourceWidth / (2 * width))`); a `paint` bitmap is copied 1:1 at the
+origin; alpha 0 is always stored as `0x00000000`; `style` fields fall back per field to the
+vanilla defaults (`slots` use `#8B8B8B` / `#FFFFFF` / `#373737`). Changing a rule means amending
+that README, `generate-vectors.mjs` and both implementations together.
+
 **Fonts for text layers.** `smallcaps` is a first-party bitmap font authored in this repo
 (original artwork — no Mojang or incumbent glyphs), shipped in the pack, previewed in the
 studio from the same PNG, so text preview is pixel-exact. `default` uses the client's own
@@ -235,6 +245,26 @@ canvas tool, not a form.
   property, transform, paint-stroke and layer-structure edits.
 - **Save** writes the YAML `layers` (lossless, changed fields only) and any dirty paint PNGs
   in **one** authoring transaction with rollback (§7); then the normal reload applies it.
+
+**As built (issue 186: canvas, layers, transforms, history).** The studio lives in
+`webui/src/lib/gui/` (pure TS, no DOM) and `webui/src/lib/studio/gui/` (Svelte), opened from
+Content for any `guis/**` file.
+
+| Piece | Where | Notes |
+|---|---|---|
+| Raster mirror | `gui/raster/` | `ArgbCanvas`, `paintRaised`/`paintInset`, `blitScaled`, `flattenRaster`; the canvas preview calls the very function the vectors test |
+| Document model | `gui/model.ts` | the API's own `title`/`rows`/`layers` structure, immutable; unknown fields, layer types and top-level keys ride along; a file with a layer the model cannot hold (no type, missing or duplicate id) opens **read-only** instead of being rewritten. Reads both the resource-rooted layout (`<id>:` then the fields) and the flat layout of section 2's example |
+| History | `gui/commands.ts`, `gui/history.ts` | every edit is an invertible command (patch, insert, remove, reorder, document fields, composite); drags commit one command on release; nudges and scrubs coalesce within 900 ms; undoing back to the saved baseline makes the document clean |
+| Canvas rules | `gui/scene.ts`, `snap.ts`, `transform.ts`, `viewport.ts` | bounds, hit testing, snapping (canvas edges and middle, slot grid, sibling edges and centers; whole pixels only), 8-handle resize, zoom 1-16x anchored at the cursor |
+| Compiled order | `gui/scene.ts` | raster layers, then text, then slot items, each in list order; a layer listed on the wrong side of a layer of another target carries a `#n` badge. The relative order of title text and slot items is still the open question of section 9.1, so the studio states the assumption in one place (`TARGET_RANK`) |
+| Registry | `gui/registry.ts` | palette, inspector fields, defaults for a new layer and what may be dragged or resized are all derived from the component descriptions (`x`/`y`/`width`/`height` fields mean movable and resizable, `slot` means slot-bound); no component list lives in the studio |
+| Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `rows`, `layers`) and `assets: [{ path, bytes }]` (base64 PNG) for pixel assets a layer still refers to; a pixels-only save re-sends `layers` because the op wants at least one edit |
+
+Text and item layers are drawn as clearly marked placeholders until the paint, image, text and
+item studio work lands (issue 187); it plugs in by registering painters, not by changing the
+canvas. Shortcuts: `V` select, `H` hand, `Space` (hold) pan, `0` fit, `1` 100%, `+`/`-` zoom,
+`Ctrl+Z` / `Ctrl+Shift+Z` undo/redo, `Ctrl+D` duplicate, `Del` delete, `Ctrl+A` all, `Ctrl+]`/`[`
+raise/lower, `F2` rename, arrows nudge (`Shift` = 10 px), `Ctrl+S` save.
 
 ## 7. Wire & API surface
 

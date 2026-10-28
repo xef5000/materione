@@ -49,7 +49,7 @@ describe('the demo server replays the recorded real server', () => {
     await loadWorkspace();
     expect(workspace.activePack).toBe('sample');
     expect(new Set(workspace.summaries.map((summary) => summary.type)))
-      .toEqual(new Set(['items', 'blocks', 'furnitures', 'glyphs', 'sounds', 'paintings', 'effects', 'recipes', 'templates']));
+      .toEqual(new Set(['items', 'blocks', 'furnitures', 'glyphs', 'sounds', 'paintings', 'effects', 'recipes', 'templates', 'guis']));
     const lamp = workspace.summaries.find((summary) => summary.id === 'amethyst_lamp')!;
     expect(lamp.render?.model).toBeTruthy();
     const texture = await ok('assets.get', { pack: 'sample', path: lamp.visual!.path });

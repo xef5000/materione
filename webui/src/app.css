@@ -88,6 +88,15 @@
   --preview-missing-a: #8b8b8b;
   --preview-missing-b: #6f6f6f;
 
+  /* GUI studio canvas (gui.md section 6): the stage around the screen and its overlays */
+  --gui-stage: #050f1b;
+  --gui-guide: #ff5fb2;
+  --gui-slot-grid: rgb(120 200 255 / 0.6);
+  --gui-pixel-grid: rgb(255 255 255 / 0.14);
+  --gui-hover: rgb(255 255 255 / 0.55);
+  --gui-marquee: rgb(249 115 30 / 0.16);
+  --gui-placeholder: rgb(249 115 30 / 0.2);
+
   /* type: a 7-step scale on Inter, with the mono stack for ids and code */
   --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;

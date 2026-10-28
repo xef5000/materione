@@ -26,6 +26,14 @@ const SURFACES = [
   'src/lib/components/CommandPalette.svelte',
   'src/lib/studio/MechanicsEditor.svelte',
   'src/lib/studio/BehaviorRulesEditor.svelte',
+  // the GUI studio (issue 186): a canvas tool with three columns that must all shrink
+  'src/lib/studio/gui/GuiStudio.svelte',
+  'src/lib/studio/gui/GuiCanvas.svelte',
+  'src/lib/studio/gui/LayersPanel.svelte',
+  'src/lib/studio/gui/InspectorPanel.svelte',
+  'src/lib/studio/gui/ComponentPalette.svelte',
+  'src/lib/studio/gui/ScrubNumber.svelte',
+  'src/lib/studio/gui/ColorField.svelte',
 ];
 
 function source(relative: string): string {
@@ -85,6 +93,8 @@ describe('the surface that fills the rest of the view', () => {
     ['src/lib/views/ContentView.svelte', '.list'],
     ['src/lib/studio/Studio.svelte', '.body'],
     ['src/lib/studio/TextureEditor.svelte', '.work'],
+    ['src/lib/studio/gui/GuiStudio.svelte', '.body'],
+    ['src/lib/studio/gui/GuiCanvas.svelte', '.stage'],
     ['src/lib/studio/ModelWorkbench.svelte', 'iframe'],
     ['src/lib/components/Workbench.svelte', '.main'],
   ];

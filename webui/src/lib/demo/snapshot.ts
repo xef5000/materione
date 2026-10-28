@@ -6,6 +6,7 @@
  * packs answers. Never edit the JSON by hand: regenerate it.
  */
 import type { AssetRef, ResourceRef, ResourceSummary, TypeInfo } from '../api';
+import { withGui } from './gui';
 
 export interface SnapshotDocument {
   raw: string;
@@ -31,7 +32,12 @@ export interface SnapshotPack {
 export interface DemoSnapshot {
   format: number;
   session: Record<string, unknown>;
-  describe: { types: TypeInfo[]; behavior: Record<string, unknown> };
+  describe: {
+    types: TypeInfo[];
+    behavior: Record<string, unknown>;
+    /** The `gui-components` registry description (gui.md section 7). */
+    guiComponents?: unknown;
+  };
   types: TypeInfo[];
   diagnostics: Record<string, unknown>[];
   delivery: { publishedSha256: string; candidateSha256: string };
@@ -45,5 +51,6 @@ export interface DemoSnapshot {
 /** Loaded on demand: the snapshot is the bulk of the demo chunk. */
 export async function loadSnapshot(): Promise<DemoSnapshot> {
   const module = await import('../../../../fixtures/golden/editor-demo-snapshot.json');
-  return structuredClone(module.default) as unknown as DemoSnapshot;
+  // The GUI type is added in the tab until the recorded snapshot carries the server's own.
+  return withGui(structuredClone(module.default) as unknown as DemoSnapshot);
 }

@@ -15,6 +15,7 @@
   import { contentTypeIcon } from '../components/icons';
   import ResourceThumbnail from '../components/ResourceThumbnail.svelte';
   import Studio from '../studio/Studio.svelte';
+  import GuiStudio from '../studio/gui/GuiStudio.svelte';
   import { fade } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { motionMs, rowsAnimate } from '../motion';
@@ -571,7 +572,12 @@
 
 {#if content.open}
   {#key `${content.open.pack}/${content.open.path}#${content.open.id}`}
-    <Studio {active} resource={content.open} onClose={() => openStudio(null)} />
+    {#if content.open.path.startsWith('guis/')}
+      <!-- a GUI is designed on a canvas, not filled in as a form (gui.md section 6) -->
+      <GuiStudio {active} resource={content.open} onClose={() => openStudio(null)} />
+    {:else}
+      <Studio {active} resource={content.open} onClose={() => openStudio(null)} />
+    {/if}
   {/key}
 {:else}
   <div class="content view-enter">
