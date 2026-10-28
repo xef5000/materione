@@ -200,6 +200,24 @@ public final class EditorSession {
                 });
     }
 
+    /**
+     * Answers a direct-mode reachability probe (web.md §4.4): signs the
+     * browser's fresh challenge with the identity key, but ONLY while the
+     * session is still unclaimed ({@code NEW}). A session that is mid-hello,
+     * active or closed stays silent — the probe's purpose is "can this
+     * browser complete a handshake here", and for those states it cannot.
+     * Reads no secret and changes no state, so a probe never burns the
+     * capability.
+     */
+    public java.util.Optional<byte[]> answerProbe(String challenge) {
+        if (state != State.NEW) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(SessionCrypto.sign(
+                pluginSigning.getPrivate(),
+                dev.materione.web.protocol.ProbeMessage.signedBytes(sessionId, challenge)));
+    }
+
     /** Derives the session key and produces the signed plaintext reply. */
     private String completeHandshake() {
         byte[] sharedSecret = SessionCrypto.ecdhSharedSecret(

@@ -2,7 +2,8 @@
   import Landing from './lib/components/Landing.svelte';
   import Login from './lib/components/Login.svelte';
   import Workbench from './lib/components/Workbench.svelte';
-  import { openChannel } from './lib/protocol/connect';
+  import { describeDecision, openChannel } from './lib/protocol/connect';
+  import { parseOverride } from './lib/protocol/transport-plan';
   import type { ChannelState, EditorChannel } from './lib/protocol/session';
   import { encodeBase64Url } from './lib/protocol/wire';
   import { detectHost, startIntent, type EditorHost } from './lib/host';
@@ -34,6 +35,9 @@
   let demoError = $state('');
   let serverIdentity = '';
   let browserLabel = navigator.userAgent.replace(/^.*\)\s*/, '').slice(0, 40) || 'browser';
+  // `?mode=relay|direct` is read once, up front: the capability URL is scrubbed
+  // from the address bar before connect() runs, which would otherwise drop it.
+  const transportOverride = parseOverride(location.search);
 
   // Fires mid-handshake, before EditorChannel.open resolves.
   function handleHandshakeState(state: ChannelState): void {
@@ -49,7 +53,8 @@
     try {
       // Transport selection lives in connect.ts: the blob decides relay vs
       // direct, with a reachable local listener preferred (LAN auto-preference).
-      const opened = await openChannel(code, fragmentKey, browserLabel, handleHandshakeState, origin);
+      const opened = await openChannel(
+        code, fragmentKey, browserLabel, handleHandshakeState, origin, transportOverride);
       const identity = encodeBase64Url(opened.channel.blob.pluginSigningPubKey);
       if (serverIdentity && identity !== serverIdentity) {
         opened.channel.close();
@@ -59,6 +64,8 @@
       channel = opened.channel;
       session.channel = channel;
       connection.error = '';
+      connection.transport = opened.mode;
+      connection.transportNote = describeDecision(opened.mode, opened.reason);
       // The channel allows a single listener per kind; everything below
       // subscribes through the fan-out signals instead.
       channel.onState((state: ChannelState) => {

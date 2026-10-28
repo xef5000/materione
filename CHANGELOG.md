@@ -5,6 +5,32 @@ All notable changes to Materione are recorded here. The format follows
 [Semantic Versioning](https://semver.org/). While the version is 0.x, minor
 releases may change file formats, settings and the public API.
 
+## [Unreleased]
+
+### Changed
+
+- **The cloud editor no longer falls back to the local link on its own.** If the relay cannot be
+  reached, `/materione editor` now reports `MTR-0050`, opens nothing, and points at
+  `/materione editor local` with a note that the editor port must be reachable from your computer.
+  The server cannot know that, and a link to an unreachable port is worse than a clear refusal.
+- **Direct-mode preference is proof-gated.** A cloud editor session carries a local-listener hint
+  only when you run the command from the server's own machine (or pin `editor_public_url`). The
+  page uses the local listener only after your browser verifies it cryptographically (a signed,
+  session-bound challenge); any other outcome stays on the cloud silently.
+- `/materione editor local` now says the link only works from a computer that can reach the port.
+
+### Added
+
+- Settings `editor_direct_hint` (`auto`/`always`/`off`), `editor_public_url` (an `https://`
+  reverse-proxy front for the listener) and `editor_local_listener` (`false` never opens the port).
+- The Server view shows whether the session is on the cloud relay or direct, with a per-browser
+  "always use the cloud relay" switch.
+
+### Fixed
+
+- `?mode=relay|direct` on the editor link was silently ignored (the address bar was cleared first).
+- The editor file watcher no longer depends on the local listener being bound.
+
 ## [0.1.0] - 2026-10-27
 
 The first public release. Materione is one free, open-source Paper plugin, with a web

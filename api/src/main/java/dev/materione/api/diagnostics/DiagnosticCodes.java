@@ -221,7 +221,7 @@ public final class DiagnosticCodes {
 
     /** The editor relay was unreachable or quota-limited; local mode used as fallback. */
     public static final DiagnosticCode EDITOR_RELAY_UNREACHABLE =
-            new DiagnosticCode("MTR-0050", Severity.WARN, "Editor relay unreachable; fell back to local mode");
+            new DiagnosticCode("MTR-0050", Severity.WARN, "Editor relay unreachable; no cloud editor session opened");
 
     /** The read-only editor resource-summary projection exceeded its bounded in-memory budget. */
     public static final DiagnosticCode AUTHORING_SUMMARY_BUDGET_EXCEEDED =

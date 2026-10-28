@@ -204,6 +204,10 @@ export const connection = $state({
   lastReload: '' as string,
   connected: false,
   error: '',
+  /** Which pipe this session rides (web.md §4.4); '' until a channel opens. */
+  transport: '' as '' | 'cloud' | 'direct',
+  /** Plain-words why (Server view); informational, never an error. */
+  transportNote: '',
 });
 
 export const delivery = $state({
@@ -617,6 +621,8 @@ export function resetWorkspace(): void {
   delivery.error = '';
   connection.connected = false;
   connection.error = '';
+  connection.transport = '';
+  connection.transportNote = '';
   server.version = '';
   server.minecraftVersion = '';
   server.protocolVersion = 0;

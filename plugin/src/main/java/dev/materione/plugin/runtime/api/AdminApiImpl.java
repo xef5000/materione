@@ -288,7 +288,7 @@ public final class AdminApiImpl implements AdminApi {
             String url = opener.apply(transport);
             return url == null
                     ? ApiResult.fail(DiagnosticCodes.EDITOR_LISTENER_FAILED,
-                            "no editor surface is available (listener down and relay unreachable)")
+                            "no editor session was opened (the cloud relay is unreachable, or the local listener is not running for /materione editor local)")
                     : ApiResult.ok(url);
         }
 

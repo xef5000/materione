@@ -3,6 +3,7 @@ package dev.materione.web;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.web.protocol.HelloMessage;
+import dev.materione.web.protocol.ProbeMessage;
 import dev.materione.web.protocol.ProtocolException;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
@@ -26,6 +27,18 @@ public final class SessionDriver {
         void send(String text);
 
         void violation(String detail);
+
+        /**
+         * True only for direct sockets: the pre-hello reachability probe
+         * (web.md §4.4) is a signing exchange, and the untrusted relay must
+         * never be offered one.
+         */
+        default boolean acceptsProbes() {
+            return false;
+        }
+
+        /** Quietly ends a connection that asked for something this server cannot serve (no diagnostic). */
+        default void decline() {}
     }
 
     private final EditorSessions sessions;
@@ -35,6 +48,7 @@ public final class SessionDriver {
 
     private EditorSession session;
     private boolean helloSeen;
+    private boolean probeSeen;
 
     public SessionDriver(
             EditorSessions sessions, RpcDispatcher dispatcher, DiagnosticsBus diagnostics, Out out) {
@@ -47,6 +61,10 @@ public final class SessionDriver {
     /** Feeds one inbound channel message (hello first, sealed frames after). */
     public void handle(String messageText) {
         if (!helloSeen) {
+            if (out.acceptsProbes() && ProbeMessage.looksLikeProbe(messageText)) {
+                handleProbe(messageText);
+                return;
+            }
             helloSeen = true;
             beginHello(messageText);
             return;
@@ -73,6 +91,35 @@ public final class SessionDriver {
     }
 
     // ------------------------------------------------------------------
+
+    /**
+     * The pre-hello reachability probe: at most one per connection, signed
+     * only for a session this server really holds and nobody has claimed.
+     * Anything else is declined without a diagnostic — a stray probe (another
+     * Materione instance on the same address, a stale tab) is expected noise,
+     * not a violation, and the browser simply stays on the relay.
+     */
+    private void handleProbe(String text) {
+        if (probeSeen) {
+            out.violation("repeated probe");
+            return;
+        }
+        probeSeen = true;
+        try {
+            ProbeMessage.Request request = ProbeMessage.parse(text);
+            EditorSession target = sessions.find(request.sessionId());
+            var signature = target == null
+                    ? java.util.Optional.<byte[]>empty()
+                    : target.answerProbe(request.challenge());
+            if (signature.isEmpty()) {
+                out.decline();
+                return;
+            }
+            out.send(Wire.canonicalJson(ProbeMessage.reply(request.sessionId(), signature.get())));
+        } catch (ProtocolException e) {
+            out.decline();
+        }
+    }
 
     private void beginHello(String text) {
         try {
