@@ -125,6 +125,58 @@ class EditorFieldAssetsTest {
     }
 
     @Test
+    void aPixelOnlySaveTakesARevisionWithoutEditingTheYaml() throws Exception {
+        open();
+        Wire.Response saved = dispatcher.dispatch(request("authoring.setFields", "3",
+                pixelOnlyBody(1, "assets/textures/gui/shop/art.png", "png-bytes")));
+
+        assertThat(saved.ok()).isTrue();
+        assertThat(saved.data().getAsJsonObject().get("rev").getAsInt()).isEqualTo(2);
+        assertThat(saved.data().getAsJsonObject().get("raw").getAsString()).isEqualTo(SEED);
+        assertThat(Files.readString(temp.resolve("packs/demo/assets/textures/gui/shop/art.png")))
+                .isEqualTo("png-bytes");
+    }
+
+    @Test
+    void aStalePixelOnlySaveIsConflictedAndWritesNothing() throws Exception {
+        open();
+        Wire.Response refused = dispatcher.dispatch(request("authoring.setFields", "3",
+                pixelOnlyBody(0, "assets/textures/gui/shop/art.png", "png")));
+
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.error().code()).isEqualTo("MTR-0034");
+        assertThat(Files.exists(temp.resolve("packs/demo/assets/textures/gui/shop/art.png"))).isFalse();
+        assertThat(store.read("demo", "guis/shop.yml").revision()).isEqualTo(1);
+    }
+
+    @Test
+    void aSaveWithNoEditsAndNoAssetsIsStillRejected() throws Exception {
+        open();
+        JsonObject empty = saveBody("3", 1);
+        empty.add("edits", new JsonArray());
+
+        Wire.Response refused = dispatcher.dispatch(request("authoring.setFields", "4", empty));
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.error().code()).isEqualTo("MTR-0008");
+        assertThat(store.read("demo", "guis/shop.yml").revision()).isEqualTo(1);
+    }
+
+    /** A paint-only studio save: an empty edits list and one binary. */
+    private static JsonObject pixelOnlyBody(int revision, String assetPath, String data) {
+        JsonObject body = object("pack", "demo", "path", "guis/shop.yml");
+        body.addProperty("rev", revision);
+        body.add("edits", new JsonArray());
+        var asset = new JsonObject();
+        asset.addProperty("path", assetPath);
+        asset.addProperty("data", Base64.getEncoder().encodeToString(data.getBytes(
+                java.nio.charset.StandardCharsets.UTF_8)));
+        var assets = new JsonArray();
+        assets.add(asset);
+        body.add("assets", assets);
+        return body;
+    }
+
+    @Test
     void describeCarriesTheGuiComponentRegistryWithItsTarget() throws Exception {
         open();
         Wire.Response described = dispatcher.dispatch(request("authoring.describe", "7", new JsonObject()));

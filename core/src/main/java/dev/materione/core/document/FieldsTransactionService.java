@@ -52,6 +52,9 @@ public final class FieldsTransactionService {
             String actor, String pack, String path, int expectedRevision,
             List<DocumentStore.FieldEdit> edits, List<ModelTransaction.Asset> assets,
             Runnable afterAssetPromotion) throws IOException {
+        if (edits.isEmpty() && assets.isEmpty()) {
+            throw new IllegalArgumentException("nothing to save: no edits and no assets");
+        }
         synchronized (AssetStaging.LOCK) {
             Path packRoot = AssetStaging.packRoot(packsRoot, pack);
             // Fail fast on a stale revision before any binary touches disk; the
@@ -77,8 +80,11 @@ public final class FieldsTransactionService {
                     AssetStaging.move(asset.temp(), asset.target());
                 }
                 afterAssetPromotion.run();
-                DocumentStore.Document updated = documents.setScalars(
-                        pack, path, expectedRevision, edits, actor);
+                // A binary-only save (a paint layer) has no field edits: it still takes a
+                // revision, guarded like any write, so a stale studio save conflicts.
+                DocumentStore.Document updated = edits.isEmpty()
+                        ? documents.recordRevision(pack, path, expectedRevision, "assets", actor)
+                        : documents.setScalars(pack, path, expectedRevision, edits, actor);
                 audit.record(actor, "authoring.setFields",
                         pack + "/" + path + " (" + edits.size() + " fields, "
                                 + staged.size() + " assets)");

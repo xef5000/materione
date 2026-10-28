@@ -95,6 +95,23 @@ describe('writes stay in the tab and behave like the server', () => {
     expect((await ok('browse.get', { pack: 'sample', path: 'blocks/amethyst_lamp.yml' })).rev).toBe(saved.rev);
   });
 
+  it('takes a revision for a paint-only save, and refuses a save with neither edits nor binaries', async () => {
+    const before = await ok('browse.get', { pack: 'sample', path: 'blocks/amethyst_lamp.yml' });
+    const saved = await ok('authoring.setFields', {
+      pack: 'sample', path: 'blocks/amethyst_lamp.yml', rev: before.rev, edits: [],
+      assets: [{ path: 'assets/textures/gui/paint_only.png', data: btoa('\u0089PNG') }],
+    });
+    expect(saved.rev).toBe(Number(before.rev) + 1);
+    expect(saved.raw).toBe(before.raw);
+
+    const refused = await server.call('authoring.setFields', {
+      pack: 'sample', path: 'blocks/amethyst_lamp.yml', rev: saved.rev, edits: [],
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error.code).toBe('MTR-0008');
+    expect((await ok('browse.get', { pack: 'sample', path: 'blocks/amethyst_lamp.yml' })).rev).toBe(saved.rev);
+  });
+
   it('rejects a stale revision with the server conflict code', async () => {
     const response = await server.call('edit.put', {
       pack: 'sample', path: 'items/ruby.yml', rev: 999, content: 'ruby:\n  material: STICK\n',

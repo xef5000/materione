@@ -347,6 +347,7 @@ export const ops = {
   /**
    * One studio save: many fields, one revision, one reload. `assets` are committed in the
    * same transaction as the edits (a paint layer's PNG): all of them land, or none does.
+   * `edits` may be empty only when `assets` is not (a paint-only save still takes a revision).
    */
   setFields: (
     c: EditorChannel,

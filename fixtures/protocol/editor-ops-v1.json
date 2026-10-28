@@ -42,6 +42,47 @@
         "op": "authoring.setFields"
       }
     },
+    "pixelOnly": {
+      "request": {
+        "id": "ops-3",
+        "op": "authoring.setFields",
+        "payload": {
+          "assets": [
+            {
+              "data": "iVBORw0KGgo=",
+              "path": "assets/textures/gui/shop/art.png"
+            }
+          ],
+          "edits": [],
+          "pack": "demo",
+          "path": "guis/shop.yml",
+          "rev": 2
+        }
+      },
+      "response": {
+        "data": {
+          "parsed": {
+            "shop": {
+              "layers": [
+                {
+                  "height": 168,
+                  "id": "frame",
+                  "type": "panel",
+                  "width": 176
+                }
+              ],
+              "rows": 3,
+              "title": "Market"
+            }
+          },
+          "raw": "shop:\n  title: Market\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
+          "rev": 3
+        },
+        "id": "ops-3",
+        "ok": true,
+        "op": "authoring.setFields"
+      }
+    },
     "request": {
       "id": "ops-1",
       "op": "authoring.setFields",

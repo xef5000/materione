@@ -328,8 +328,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
             for (FieldEdit edit : request.edits()) {
                 edits.add(new DocumentStore.FieldEdit(edit.field(), edit.value(), edit.remove()));
             }
-            if (edits.isEmpty()) {
-                throw new IllegalArgumentException("'edits' must be a non-empty array");
+            if (edits.isEmpty() && request.assets().isEmpty()) {
+                throw new IllegalArgumentException("'edits' must be a non-empty array unless the save carries assets");
             }
             if (edits.size() > 256) {
                 throw new IllegalArgumentException("too many edits in one save");

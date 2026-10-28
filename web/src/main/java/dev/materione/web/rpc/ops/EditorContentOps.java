@@ -331,14 +331,16 @@ public final class EditorContentOps {
             JsonObject body = request.payload();
             try {
                 var element = body.get("edits");
-                if (element == null || !element.isJsonArray() || element.getAsJsonArray().isEmpty()) {
-                    throw new IllegalArgumentException("'edits' must be a non-empty array");
+                if (element == null || !element.isJsonArray()) {
+                    throw new IllegalArgumentException("'edits' must be an array");
                 }
-                if (element.getAsJsonArray().size() > 256) {
-                    throw new IllegalArgumentException("too many edits in one save");
-                }
+                // a pixel-only save (paint layers) carries binaries and no field edits
                 List<AuthoringApi.FieldEdit> edits = parseEdits(element);
                 List<AuthoringApi.ModelAsset> assets = parseAssets(body.get("assets"));
+                if (edits.isEmpty() && assets.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "'edits' must be a non-empty array unless the save carries assets");
+                }
                 ApiResult<AuthoringApi.DocumentView> result = authoring.setFields(
                         actorFor.apply(actorOf(request)),
                         new AuthoringApi.SetFieldsRequest(

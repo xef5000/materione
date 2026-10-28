@@ -252,7 +252,18 @@ under one lock; a stale revision, a refused path, an oversized binary or a faile
 restores both (the model save-back's rollback, shared as `AssetStaging`). Binaries may
 only land under `assets/`: thumbnails stay the model transaction's. The golden frames are
 `fixtures/protocol/editor-ops-v1.json`, checked by `EditorOpsGoldenTest` (JVM) and
-`ops-golden.spec.ts` (SPA). `authoring.describe` carries `guiComponents` next to
+`ops-golden.spec.ts` (SPA).
+
+A **paint-only save** is a `setFields` with an empty `edits` list and at least one asset (a
+paint layer changed, no field did). It takes a new revision with the YAML bytes unchanged,
+so a stale studio save still conflicts. The revision is recorded as a journal entry
+(`DocumentStore.recordRevision`, action `assets`) that repeats the document's current hash.
+This is the cleanest correct form for the journal model: `syncRevision` infers an external
+edit only when the file's hash differs from the last entry, so a repeated hash is consistent,
+and it avoids rewriting identical bytes. The save keeps the same guarantees as any other:
+the revision check, the all-or-none rollback (the journal is restored with the assets), one
+audit line and one reload. A save with neither edits nor assets is refused (`MTR-0008`),
+on the server and in the demo. `authoring.describe` carries `guiComponents` next to
 `behavior`, one entry per `gui-components` registry entry (`id`, the self-description,
 `target`, `registeredBy`), read on every call like the mechanics vocabulary.
 

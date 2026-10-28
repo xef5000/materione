@@ -219,6 +219,11 @@ export class DemoServer implements RpcChannel {
     const current = this.#document(pack, path);
     this.#checkRev(current, p.rev);
     if (!Array.isArray(p.edits)) throw new DemoError('MTR-0008', 'edits must be a list');
+    const carriesAssets = Array.isArray(p.assets) && p.assets.length > 0;
+    // a paint-only save has no field edits; a save with neither is refused, as the server refuses it
+    if (p.edits.length === 0 && !carriesAssets) {
+      throw new DemoError('MTR-0008', "'edits' must be a non-empty array unless the save carries assets");
+    }
     const yaml = parseDocument(current.raw);
     for (const edit of p.edits as Record<string, unknown>[]) {
       const field = edit.field;

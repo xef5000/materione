@@ -24,6 +24,7 @@ const fixture = JSON.parse(
     request: Frame;
     response: Response;
     conflict: { request: Frame; response: Response };
+    pixelOnly: { request: Frame; response: Response };
   };
 };
 
@@ -79,6 +80,21 @@ describe('golden op frames (fixtures/protocol/editor-ops-v1.json)', () => {
     } catch (error) {
       expect((error as RpcError).code).toBe('MTR-0034');
     }
+  });
+
+  it('a paint-only save sends an empty edits list with its binary, and keeps the YAML', async () => {
+    const { request, response } = fixture.setFields.pixelOnly;
+    const { sent, channel } = recordingChannel(response);
+    const { pack, path, rev, edits, assets } = request.payload;
+
+    await ops.setFields(channel, pack, path, rev, edits, assets);
+
+    expect(sent[0]!.op).toBe(request.op);
+    expect(canonicalJson(sent[0]!.payload)).toBe(canonicalJson(request.payload));
+    expect(sent[0]!.payload.edits).toEqual([]);
+    const data = unwrap(response) as { rev: number; raw: string };
+    expect(data.rev).toBe(Number(rev) + 1);
+    expect(data.raw).toBe(unwrap(fixture.setFields.response).raw);
   });
 
   it('pins the paint bytes as standard base64 of a PNG signature at an assets/ path', () => {

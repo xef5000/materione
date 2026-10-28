@@ -90,6 +90,11 @@ class EditorOpsGoldenTest {
         Wire.Response refused = dispatcher.dispatch(stale);
         assertThat(refused.ok()).isFalse();
 
+        // a paint-only save: no field edits, one binary, at the revision the first save left
+        Wire.Request paint = paintOnlyFrame("ops-3", 2);
+        Wire.Response painted = dispatcher.dispatch(paint);
+        assertThat(painted.ok()).isTrue();
+
         var root = new JsonObject();
         var meta = new JsonObject();
         meta.addProperty("file", FILE_NAME);
@@ -103,6 +108,10 @@ class EditorOpsGoldenTest {
         conflict.add("request", stale.toJson());
         conflict.add("response", refused.toJson());
         setFields.add("conflict", conflict);
+        var pixelOnly = new JsonObject();
+        pixelOnly.add("request", paint.toJson());
+        pixelOnly.add("response", painted.toJson());
+        setFields.add("pixelOnly", pixelOnly);
         root.add("setFields", setFields);
         return root;
     }
@@ -125,6 +134,20 @@ class EditorOpsGoldenTest {
         JsonObject payload = object("pack", PACK, "path", PATH);
         payload.addProperty("rev", revision); // a JSON number, as the SPA sends it
         payload.add("edits", edits);
+        payload.add("assets", assets);
+        return new Wire.Request("authoring.setFields", id, payload);
+    }
+
+    /** A paint-only save: an empty edits list and the paint PNG, at the given revision. */
+    private static Wire.Request paintOnlyFrame(String id, int revision) {
+        var asset = new JsonObject();
+        asset.addProperty("path", "assets/textures/gui/shop/art.png");
+        asset.addProperty("data", java.util.Base64.getEncoder().encodeToString(PAINT));
+        var assets = new JsonArray();
+        assets.add(asset);
+        JsonObject payload = object("pack", PACK, "path", PATH);
+        payload.addProperty("rev", revision);
+        payload.add("edits", new JsonArray());
         payload.add("assets", assets);
         return new Wire.Request("authoring.setFields", id, payload);
     }

@@ -114,23 +114,72 @@ class FieldsTransactionServiceTest {
     }
 
     @Test
-    void aBadEditAfterAssetsAreStagedRestoresEveryFile() throws IOException {
+    void aPixelOnlySaveTakesARevisionWithTheYamlUnchanged() throws IOException {
+        DocumentStore documents = seeded();
+
+        DocumentStore.Document updated = service(documents).save(
+                "editor:session-one", "demo", GUI, 1, List.of(),
+                List.of(art("assets/textures/gui/shop/art.png", "png-bytes")));
+
+        assertThat(updated.revision()).isEqualTo(2);
+        assertThat(updated.raw()).isEqualTo(GUI_RAW);
+        assertThat(Files.readString(temp.resolve("packs/demo/assets/textures/gui/shop/art.png")))
+                .isEqualTo("png-bytes");
+        assertThat(Files.readString(temp.resolve("audit.log")))
+                .contains("authoring.setFields").contains("0 fields, 1 assets");
+        // the journal records the save with the document's unchanged hash, so no external edit is inferred
+        // history is oldest first: the save is the last entry, and it repeats the hash before it
+        var history = documents.history("demo", GUI, 10);
+        var latest = history.get(history.size() - 1);
+        var before = history.get(history.size() - 2);
+        assertThat(latest.action()).isEqualTo("assets");
+        assertThat(latest.sha256()).isEqualTo(before.sha256());
+        assertThat(documents.read("demo", GUI).revision()).isEqualTo(2);
+    }
+
+    @Test
+    void aStalePixelOnlySaveWritesNothingAndKeepsTheRevision() throws IOException {
+        DocumentStore documents = seeded();
+
+        assertThatThrownBy(() -> service(documents).save(
+                "editor:session-one", "demo", GUI, 0, List.of(),
+                List.of(art("assets/textures/gui/shop/art.png", "png"))))
+                .isInstanceOf(DocumentConflictException.class);
+
+        assertThat(Files.exists(temp.resolve("packs/demo/assets/textures/gui/shop/art.png"))).isFalse();
+        assertThat(documents.read("demo", GUI).revision()).isEqualTo(1);
+    }
+
+    @Test
+    void aFailureAfterPromotionRollsBackAPixelOnlySaveToItsOldRevision() throws IOException {
         DocumentStore documents = seeded();
         Path existing = temp.resolve("packs/demo/assets/textures/gui/shop/art.png");
         Files.createDirectories(existing.getParent());
         Files.writeString(existing, "old");
 
-        // no edits is rejected by the document store, after the assets were already promoted
         assertThatThrownBy(() -> service(documents).save(
                 "editor:session-one", "demo", GUI, 1, List.of(),
                 List.of(art("assets/textures/gui/shop/art.png", "new"),
-                        art("assets/textures/gui/shop/extra.png", "new"))))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("no edits");
+                        art("assets/textures/gui/shop/extra.png", "new")),
+                () -> {
+                    throw new IllegalStateException("injected failure after promotion");
+                }))
+                .isInstanceOf(IllegalStateException.class);
 
         assertThat(Files.readString(existing)).isEqualTo("old");
         assertThat(Files.exists(temp.resolve("packs/demo/assets/textures/gui/shop/extra.png"))).isFalse();
-        assertThat(documents.read("demo", GUI).raw()).contains("title: Shop");
+        assertThat(documents.read("demo", GUI).revision()).isEqualTo(1);
+        assertThat(documents.history("demo", GUI, 10)).hasSize(1);
+    }
+
+    @Test
+    void aSaveWithNeitherEditsNorAssetsIsRejectedBeforeAnyWrite() throws IOException {
+        DocumentStore documents = seeded();
+
+        assertThatThrownBy(() -> service(documents).save(
+                "editor:session-one", "demo", GUI, 1, List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("nothing to save");
         assertThat(documents.read("demo", GUI).revision()).isEqualTo(1);
     }
 
