@@ -6,7 +6,9 @@
 # The tag must equal `v` + gradle.properties `version`. The build runs with
 # -Prelease, which drops the -SNAPSHOT suffix every other build carries
 # (build.gradle.kts, build.md §8). Release notes are the tag's section of
-# CHANGELOG.md.
+# CHANGELOG.md. The tag must also carry fixtures/protocol/released/<version>.json
+# (node scripts/compat/editor-compat.mjs snapshot <version>), the editor/relay
+# contract later cloud deploys are checked against.
 
 name: release
 
@@ -36,6 +38,11 @@ jobs:
             exit 1
           fi
           echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      # Every release records its editor/relay contract so later cloud deploys
+      # are checked against it (scripts/compat/editor-compat.mjs, build.md §8).
+      - name: Compatibility manifest is committed and current
+        run: node scripts/compat/editor-compat.mjs snapshot "${VERSION}" --check
 
       - uses: actions/setup-java@v4
         with:
