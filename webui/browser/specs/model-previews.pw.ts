@@ -60,5 +60,6 @@ test('the block studio shows the live render while shape fields are unedited', a
   await page.getByRole('option', { name: /Crate Stairs/ }).dblclick();
   const preview = page.locator('.preview .thumbnail');
   await expect(preview).toHaveClass(/live/);
-  await expect(page.getByText('Model preview drawn in the browser')).toBeVisible();
+  // The preview kind is a hover hint on the image, not a caption under it.
+  await expect(preview).toHaveAttribute('title', /Live model preview/);
 });

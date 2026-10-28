@@ -53,16 +53,17 @@ test('the item studio reads as a display card plus module cards derived from the
 
   const durability = page.locator('[data-module="mechanic:materione:durability"]');
   await expect(durability).toContainText('Durability');
-  await expect(durability).toContainText('Built in');
+  // Origin and activation are hover hints on the ability's name, not copy on the card.
+  await expect(durability.locator('strong')).toHaveAttribute('title', /Built in/);
   await expect(durability.getByLabel(/max durability/i)).toHaveValue('500');
 
-  await expect(page.locator('[data-module="mechanic:materione:soulbound"]'))
-    .toContainText(/Activates: When the owner dies/);
+  await expect(page.locator('[data-module="mechanic:materione:soulbound"] strong'))
+    .toHaveAttribute('title', /Activates: When the owner dies/);
   await expect(page.locator('[data-module="mechanic:materione:commands"]'))
     .toContainText('Console Commands');
 
   // Inheritance stays explained: ruby_sword overrides its template's name.
-  await expect(page.getByText('Inherits from')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Template: A base item' })).toBeVisible();
   await expect(page.locator('[data-provenance="display_name"]'))
     .toContainText('Overrides base_item (A base item)');
 

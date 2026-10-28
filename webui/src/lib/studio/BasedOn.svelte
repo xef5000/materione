@@ -1,11 +1,11 @@
 <script lang="ts">
   /**
-   * The studio's inheritance header (issue 154). A template is a creation
-   * choice, so the raw `template:` field never appears as a form control;
-   * this bar shows the link instead — "Based on: Ruby Base ▾" — and offers
-   * what you can do with it: change it, open it, or detach (copy the inherited
-   * values into this resource and drop the link). Per-field provenance and
-   * "Reset to inherited" stay with the fields themselves.
+   * The template control in the studio header (issue 154, compact since issue
+   * 172): a chip next to the id names the template this resource is based on.
+   * Its menu changes the template, opens it, or detaches it (copy the inherited
+   * values into this resource and drop the link). A template that does not
+   * resolve turns the chip into a warning. Per-field provenance ("Inherited
+   * from", "Overrides") stays with the fields themselves.
    */
   import Icon from '../components/Icon.svelte';
   import { searchTemplates, templateRef, templateSets, templateTitle, servedSchema } from '../templates';
@@ -17,8 +17,6 @@
     authored: string;
     /** The saved link's resolution, when the saved file names a template. */
     inheritance?: InheritanceView;
-    /** The draft's link differs from the saved one. */
-    edited: boolean;
     /** Templates this resource may switch to. */
     candidates: TemplateEntry[];
     /** Why detaching is unavailable right now ('' when it is available). */
@@ -29,7 +27,7 @@
     onDetach: () => void;
   }
 
-  let { authored, inheritance, edited, candidates, detachBlocked, editable, onChange, onOpen, onDetach }: Props =
+  let { authored, inheritance, candidates, detachBlocked, editable, onChange, onOpen, onDetach }: Props =
     $props();
 
   let open = $state(false);
@@ -45,6 +43,22 @@
       ? candidates.find((entry) => templateRef(entry, workspace.activePack) === authored)
         ?? workspace.templates.find((entry) => entry.id === label)
       : undefined,
+  );
+  /** The validation message for a template that does not resolve ('' when it does). */
+  const failure = $derived(
+    authored && inheritance?.failure
+      ? `“${inheritance.template}” does not resolve (${inheritance.failure}); the server skips this resource until it does.`
+      : '',
+  );
+  const named = $derived(authored ? (current ? templateTitle(current) : label) : '');
+  const chipText = $derived(
+    failure ? `${named} does not resolve` : named || 'No template',
+  );
+  /** Hover text: the failure in full, or the chain of templates this one inherits through. */
+  const chipHint = $derived(
+    failure || (inheritance && inheritance.chain.length > 1
+      ? `Inherits from ${inheritance.chain.map((id) => title(id)).join(' › ')}`
+      : undefined),
   );
 
   function title(id: string): string {
@@ -88,123 +102,111 @@
 
 <svelte:window onpointerdown={onWindowPointer} />
 
-<div class="based" class:broken={Boolean(inheritance?.failure)} bind:this={root} data-based-on>
-  <Icon name="layout-template" size={14} />
-  <span class="lead">Based on</span>
-  <div class="control">
-    <button
-      type="button"
-      class="btn btn-sm picker"
-      aria-haspopup="listbox"
-      aria-expanded={open}
-      disabled={!editable}
-      onclick={toggle}
-      data-based-on-button
-    >
-      {authored ? (current ? templateTitle(current) : label) : 'Nothing'}
-      <Icon name="chevron-down" size={12} />
-    </button>
-    {#if open}
-      <div class="menu popover" role="presentation" onkeydown={onKey}>
-        <input
-          bind:this={search}
-          bind:value={query}
-          type="search"
-          placeholder="Search templates…"
-          aria-label="Search templates"
-          spellcheck="false"
-          autocomplete="off"
-          onkeydown={onKey}
-        />
-        <ul role="listbox" aria-label="Templates">
-          {#each shown as entry, index (entry.pack + ':' + entry.id)}
-            {@const ref = templateRef(entry, workspace.activePack)}
-            <li
-              role="option"
-              aria-selected={ref === authored}
-              class="menu-item"
-              class:highlight={index === highlighted}
-              data-template={entry.id}
-            >
-              <button type="button" class="row" onclick={() => choose(entry)}>
-                <span class="name">{templateTitle(entry)}</span>
-                <code>{entry.id}</code>
-                <span class="sets">sets {templateSets(entry, servedSchema(entry, workspace.types)).length}</span>
-              </button>
-            </li>
-          {/each}
-          {#if shown.length === 0}
-            <li class="none">{candidates.length ? `Nothing matches “${query}”.` : 'No templates fit this yet.'}</li>
-          {/if}
-        </ul>
-        {#if authored}
-          <div class="actions">
-            <button type="button" class="menu-item" onclick={() => { open = false; onOpen(inheritance?.chain[0] ?? authored); }}>
-              <Icon name="file" size={13} /> Open template
+<div class="based" bind:this={root} data-based-on>
+  <button
+    type="button"
+    class="chip template-chip"
+    class:chip-warn={Boolean(failure)}
+    aria-haspopup="listbox"
+    aria-expanded={open}
+    aria-label={`Template: ${chipText}`}
+    title={chipHint}
+    disabled={!editable}
+    onclick={toggle}
+    data-based-on-button
+  >
+    <Icon name={failure ? 'triangle-alert' : 'layout-template'} size={13} />
+    <span>{chipText}</span>
+    <Icon name="chevron-down" size={12} />
+  </button>
+  {#if open}
+    <div class="menu popover" role="presentation" onkeydown={onKey}>
+      <input
+        bind:this={search}
+        bind:value={query}
+        type="search"
+        placeholder="Search templates…"
+        aria-label="Search templates"
+        spellcheck="false"
+        autocomplete="off"
+        onkeydown={onKey}
+      />
+      <ul role="listbox" aria-label="Templates">
+        {#each shown as entry, index (entry.pack + ':' + entry.id)}
+          {@const ref = templateRef(entry, workspace.activePack)}
+          <li
+            role="option"
+            aria-selected={ref === authored}
+            class="menu-item"
+            class:highlight={index === highlighted}
+            data-template={entry.id}
+          >
+            <button type="button" class="row" onclick={() => choose(entry)}>
+              <span class="name">{templateTitle(entry)}</span>
+              <code>{entry.id}</code>
+              <span class="sets">sets {templateSets(entry, servedSchema(entry, workspace.types)).length}</span>
             </button>
-            <button
-              type="button"
-              class="menu-item"
-              disabled={Boolean(detachBlocked)}
-              title={detachBlocked || 'Copy the inherited values into this resource and drop the link'}
-              onclick={() => { open = false; onDetach(); }}
-              data-detach
-            >
-              <Icon name="layers" size={13} /> Detach — keep the values here
-            </button>
-          </div>
+          </li>
+        {/each}
+        {#if shown.length === 0}
+          <li class="none">{candidates.length ? `Nothing matches “${query}”.` : 'No templates fit this yet.'}</li>
         {/if}
-      </div>
-    {/if}
-  </div>
-
-  {#if authored && inheritance?.failure}
-    <span class="status">
-      “{inheritance.template}” does not resolve ({inheritance.failure}); the server skips this resource until it does.
-    </span>
-  {:else if authored && inheritance}
-    <span class="status chain">
-      Inherits from
-      {#each inheritance.chain as id, index (id)}
-        {#if index > 0}<Icon name="chevron-right" size={12} />{/if}
-        <button type="button" class="link" title={`Open ${id}`} onclick={() => onOpen(id)}>{title(id)}</button>
-      {/each}
-      {#if edited}· shown for the saved template until you apply{/if}
-    </span>
-  {:else if authored && edited}
-    <span class="status">Will inherit from {title(authored)} once you apply.</span>
-  {:else if !authored && edited}
-    <span class="status">The link is removed once you apply; inherited values go with it.</span>
-  {:else if !authored}
-    <span class="status">Nothing is inherited; every value is set here.</span>
+      </ul>
+      {#if authored}
+        {#if failure}
+          <p class="failure" role="note">{failure}</p>
+        {:else if inheritance && inheritance.chain.length > 1}
+          <p class="chain">
+            Inherits from
+            {#each inheritance.chain as id, index (id)}
+              {#if index > 0}<Icon name="chevron-right" size={12} />{/if}
+              <button type="button" class="link" title={`Open ${id}`} onclick={() => { open = false; onOpen(id); }}>{title(id)}</button>
+            {/each}
+          </p>
+        {/if}
+        <div class="actions">
+          <button type="button" class="menu-item" onclick={() => { open = false; onOpen(inheritance?.chain[0] ?? authored); }}>
+            <Icon name="file" size={13} /> Open template
+          </button>
+          <button
+            type="button"
+            class="menu-item"
+            disabled={Boolean(detachBlocked)}
+            title={detachBlocked || 'Copy the inherited values into this resource and drop the link'}
+            onclick={() => { open = false; onDetach(); }}
+            data-detach
+          >
+            <Icon name="layers" size={13} /> Detach template
+          </button>
+          {#if detachBlocked}<p class="blocked">{detachBlocked}</p>{/if}
+        </div>
+      {/if}
+    </div>
   {/if}
 </div>
 
 <style>
   .based {
     position: relative;
-    display: flex;
+    display: inline-flex;
     flex: none;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-2);
-    padding: var(--space-2) var(--space-3);
-    border-bottom: 1px solid var(--border);
-    color: var(--muted);
+    min-width: 0;
+  }
+  .template-chip {
+    max-width: 260px;
+    padding: var(--space-half) var(--space-2);
+    color: var(--fg);
     font-size: var(--text-sm);
   }
-  .based.broken {
-    color: var(--warn);
+  .template-chip span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .lead {
-    color: var(--faint);
-  }
-  .control {
-    position: relative;
-  }
-  .picker {
-    gap: var(--space-1);
-    color: var(--fg);
+  .template-chip:disabled {
+    opacity: 0.6;
+    cursor: default;
   }
   .popover {
     position: absolute;
@@ -266,6 +268,27 @@
     color: var(--faint);
     text-align: center;
   }
+  .chain,
+  .failure,
+  .blocked {
+    margin: 0;
+    padding: 0 var(--space-2);
+    font-size: var(--text-xs);
+  }
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-1);
+    color: var(--muted);
+  }
+  .failure {
+    color: var(--warn);
+  }
+  .blocked {
+    padding-bottom: var(--space-1);
+    color: var(--faint);
+  }
   .actions {
     display: flex;
     flex-direction: column;
@@ -280,12 +303,6 @@
   .actions .menu-item:disabled {
     opacity: 0.5;
     cursor: default;
-  }
-  .status {
-    display: inline-flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--space-1);
   }
   .link {
     border: none;

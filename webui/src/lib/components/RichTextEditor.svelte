@@ -500,7 +500,6 @@
         {/if}
       </div>
     {/if}
-    <small class="hint">Select text to format it. Typed &amp; codes become formatting.{multiline ? ' Enter starts a new line.' : ''}</small>
   {/if}
 </div>
 
@@ -654,7 +653,6 @@
     max-height: 220px;
     overflow: auto;
   }
-  .hint,
   .unsupported {
     color: var(--muted);
     font-size: var(--text-xs);

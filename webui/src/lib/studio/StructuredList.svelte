@@ -76,7 +76,7 @@
   }
 </script>
 
-<div class="structured">
+<div class="structured" title={field.description || undefined}>
   {#if !compact}<span class="label">{field.label || field.id}</span>{/if}
 
   {#if rows.length > 0}
@@ -129,8 +129,6 @@
     <Icon name="plus" size={14} />
     {addLabel ?? (compact ? 'Add row' : (field.label || field.id).replace(/e?s$/i, ''))}
   </button>
-
-  {#if field.description && !compact}<small>{field.description}</small>{/if}
 </div>
 
 <style>
@@ -200,9 +198,5 @@
   .add:hover {
     background: var(--bg-hover);
     color: var(--fg);
-  }
-  small {
-    color: var(--faint);
-    font-size: var(--text-xs);
   }
 </style>

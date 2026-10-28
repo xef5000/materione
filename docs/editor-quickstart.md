@@ -214,16 +214,17 @@ Server view).
 
 - **Abilities** — in an item's studio, **Add an ability** lists every mechanic the
   server registers (built-in, or "added by" an add-on plugin). Each card says what
-  the ability does and **Activates:** when it acts; fill in its settings and
-  **Save & apply**. An ability the server does not know (its plugin is missing)
+  the ability does and **Activates:** when it acts (hover the ability's name to read
+  it); fill in its settings and **Save & apply**. An ability the server does not know (its plugin is missing)
   stays on the item with its settings untouched.
 - **Behaviour rules** — **Add rule** starts from a blank rule or a starting point
   such as "Right-click sends a message". Each rule reads as a sentence; click it to
   choose **When** (only events this kind of content actually fires), **Only if**
   expressions, the **Then** actions and their settings, and **Limits** such as a
   cooldown. A rule that can never run on this content type says so.
-- **Templates** — an item or block with `template:` shows "Inherits from …" in the
-  studio header. Fields show **Inherited from** (with the value) or **Overrides**;
+- **Templates** — an item or block with `template:` shows its template as a chip beside
+  its id in the studio header; click the chip to change, open or detach it. Fields show
+  **Inherited from** (with the value) or **Overrides**;
   **Reset to inherited** removes your override on the next **Save & apply**
   (**Undo** before then). Nothing else in the file changes.
 

@@ -128,10 +128,11 @@
       {@const activation = activationOf(current, vocabulary, host)}
       <article class="rule" class:never={!activation.fires} data-rule={index}>
         <button type="button" class="sentence" aria-expanded={expanded === index}
+          title={activation.fires ? activation.text : undefined}
           onclick={() => (expanded = expanded === index ? null : index)}>
           {ruleSentence(current, vocabulary)}
         </button>
-        <p class="activation" class:never={!activation.fires}>{activation.text}</p>
+        {#if !activation.fires}<p class="activation never">{activation.text}</p>{/if}
         {#if expanded === index}
           <div class="editor">
             <div class="row">
@@ -171,7 +172,7 @@
                 {@const info = actionInfo(vocabulary, view.type)}
                 <div class="action" data-action={view.type}>
                   <div class="row">
-                    <select aria-label="Action" value={view.type}
+                    <select aria-label="Action" value={view.type} title={info?.description || undefined}
                       onchange={(e) => changeActionType(index, actionIndex, e.currentTarget.value)}>
                       {#if !info}<option value={view.type}>{view.type || 'unreadable'} (not registered)</option>{/if}
                       {#each vocabulary.actions as choice (choice.id)}
@@ -180,7 +181,6 @@
                     </select>
                     <button type="button" class="btn btn-sm" onclick={() => removeAction(index, actionIndex)}>Remove</button>
                   </div>
-                  {#if info?.description}<small>{info.description}</small>{/if}
                   {#if !view.valid}
                     <p class="note">This action is not one type key with settings; edit it in Files.</p>
                   {:else if info?.parameters}
@@ -329,12 +329,6 @@
   textarea {
     font-family: var(--mono);
     resize: vertical;
-  }
-  small {
-    display: block;
-    color: var(--muted);
-    font-size: var(--text-xs);
-    margin: var(--space-1) 0;
   }
   details summary {
     font-size: var(--text-sm);

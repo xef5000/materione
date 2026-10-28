@@ -77,7 +77,7 @@ export default [
       await card.click();
       await dialog.getByRole('button', { name: 'Create' }).click();
 
-      // The studio shows the link as "Based on", never as a raw field.
+      // The studio shows the link as the template chip beside the id, never as a raw field.
       const studio = page.locator('.studio');
       await studio.waitFor({ state: 'visible', timeout: 20_000 });
       const based = studio.locator('[data-based-on-button]');
@@ -99,7 +99,7 @@ export default [
 
       await based.click();
       await page.locator('[data-detach]').click();
-      await studio.getByText('Nothing is inherited; every value is set here.').waitFor({ state: 'visible', timeout: 20_000 });
+      await based.filter({ hasText: 'No template' }).waitFor({ state: 'visible', timeout: 20_000 });
       ctx.expect(await studio.locator('[data-inherited-module]').count()).toBe(0);
 
       await deleteRow(page, 'Items', 'QA Ruby Dagger');
@@ -162,7 +162,7 @@ export default [
 
   test({
     id: 'templates.browser-new-dialog-visual',
-    title: 'the New dialog offers Blank / A template / An existing one with template cards, and the studio shows the Based on bar and inherited modules',
+    title: 'the New dialog offers Blank / A template / An existing one with template cards, and the studio shows the template chip beside the id and inherited modules',
     mode: 'visual',
     dependsOn: ['templates.browser-create-from-template'],
     covers: TEMPLATE_COVERS,
@@ -184,9 +184,9 @@ export default [
       const studio = page.locator('.studio');
       await studio.locator('[data-based-on-button]').waitFor({ state: 'visible', timeout: 20_000 });
       await studio.locator('[data-based-on-button]').click();
-      await ctx.browser.browserShot('based-on-menu', '.studio');
+      await ctx.browser.browserShot('template-chip-menu', '.studio');
       ctx.needsEyes(
-        'new-dialog-templates shows the name field, the Start from pills (Blank, A template with a count, An existing one), a search box and one card per template with a preview icon, its name and id, accent chips for the modules it sets and "Used by N"; based-on-menu shows the Based on bar with a searchable template menu plus Open template and Detach actions, the inherited-from chain beside it, and dashed inherited module cards below' + IDENTITY_EYES,
+        'new-dialog-templates shows the name field, the Start from pills (Blank, A template with a count, An existing one), a search box and one card per template with a preview icon, its name and id, accent chips for the modules it sets and "Used by N"; template-chip-menu shows the studio header with the resource id and a compact template chip (no full-width Based on row), its menu with a searchable template list plus Open template and Detach template actions, and dashed inherited module cards below, with no explanatory copy under the fields' + IDENTITY_EYES,
       );
     },
   }),

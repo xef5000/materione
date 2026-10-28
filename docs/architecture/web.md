@@ -671,9 +671,10 @@ cannot read, forge, replay, or reorder anything.
   legacy codes as text (not authored HTML); unsupported tokens remain literal. A sticky item preview
   shows a 32 px inventory slot, an enlarged static visual, and the draft name/lore; clicking
   either text focuses its editor control. This is a browser approximation, not proof of the
-  Minecraft font, glyphs, effects, obfuscation, or gameplay result. The game-check link opens the
-  Server support view and keeps candidate/acceptance status explicit; it does not claim runtime
-  verification.
+  Minecraft font, glyphs, effects, obfuscation, or gameplay result. The studio says so in hover
+  hints (the kind of image, issue #172), not in visible copy, and it has no game-check block:
+  pack status and publishing live in the app header, which keeps candidate and acceptance status
+  explicit and does not claim runtime verification. The header title is the resource id.
 - *As built (M5 guided authoring):* **Start** heads the authoring group; Content remains the landing
   view. Its creation starters are the registered content types (`authoring.describe`) and open
   Content's existing create dialog for that type. It lists warning/error diagnostics that name a
@@ -684,30 +685,34 @@ cannot read, forge, replay, or reorder anything.
   is exact (`<pack>:<id>`), not a substring.
   Studios render two behaviour widgets from the type registry: `mechanics` (an item's abilities) and
   `behavior-rules` (`behavior:` on items, blocks and furniture). Ability cards are generated from each
-  mechanic's self-description: name, built-in or "added by <plugin>", description, **Activates:**
-  (the declared sentence, or an explicit "does not say"), and its parameters through the shared field
-  control. Non-repeatable abilities cannot be added twice; unqualified names are written for
+  mechanic's self-description: the name carries a hover hint with the description, **Activates:**
+  (the declared sentence, or an explicit "does not say") and built-in or "added by <plugin>"; an
+  add-on's origin also shows on the card (issue #172). Parameters go through the shared field
+  control, and their schema descriptions are hover hints too. Non-repeatable abilities cannot be added twice; unqualified names are written for
   `materione:` mechanics and qualified names for add-ons. Entries the server does not register stay
   visible as "not registered on this server" with their settings untouched, and parameters the
   description does not declare are kept as written. Rules read as a sentence ("On right click, if …:
   send message “…” (at most every 3 s)") and expand into **When** (only events the host's runtime
   fires, plus the current one marked if it never fires), side, **Only if** expressions, **Then**
-  actions with their described parameters and timing, and **Limits** (rule options). Each rule
-  states when it activates from the event table — or that it never runs on this content type.
+  actions with their described parameters and timing, and **Limits** (rule options). A rule's
+  sentence carries a hover hint with when it activates from the event table; a rule that never
+  runs on this content type says so on the card (issue #172).
   Starting points are a small client list of on/action pairs written in the existing format and
   offered only when this server fires the event for the host and registers the action; they are
   starting values, not a rule language. A scalar shorthand (`message: "Hi"`) round-trips as a scalar
   while only its shorthand parameter is set; unknown rule keys and action keys are preserved.
   **Templates are a creation choice, not a field (issue #154).** No studio renders the raw
   `template` field: the editor finds the field by its declared `referenceKind: template` and
-  replaces it with an inheritance bar, **Based on: A base item ▾**, under the header. The menu
-  searches the templates that serve this type (never itself or anything inheriting from it) and
-  **stages** the new `template:` value like any field edit (applied by **Save & apply**, labelled
-  as pending until then); **Open template** opens it in its own studio; **Detach — keep the
-  values here** calls `authoring.detachTemplate` (disabled while the draft has unsaved edits,
-  because it rewrites the saved file) and reconciles the draft from the result. When a root
-  inherits, the bar shows the template chain (each link opens that template) or the resolution
-  failure. The modules a resource only has through its template appear as dashed **Inherited from
+  shows it as a compact chip beside the resource id in the studio header, **A base item ▾** (the
+  full-width bar was removed in issue #172). The menu searches the templates that serve this type
+  (never itself or anything inheriting from it) and **stages** the new `template:` value like any
+  field edit (the chip shows the staged value; nothing is written until **Save & apply**);
+  **Open template** opens it in its own studio; **Detach template** (hover hint: copy the inherited
+  values here and drop the link) calls `authoring.detachTemplate` (disabled while the draft has unsaved edits, because it
+  rewrites the saved file; the menu says why) and reconciles the draft from the result. When a root
+  inherits through more than one template, the menu shows the chain (each link opens that
+  template); a template that does not resolve turns the chip into a warning, and the menu states
+  the resolution failure. The modules a resource only has through its template appear as dashed **Inherited from
   …** cards with the value and **Override here** (copies the template's value into the resource);
   display-card fields and extras keep their per-field lines — **Inherited from …** with the
   effective value, or **Overrides …** with the template's value and **Reset to inherited**, which

@@ -11,12 +11,14 @@
     addMechanic,
     canAddMechanic,
     fullMechanicId,
+    isBuiltInMechanic,
     mechanicEntries,
+    mechanicHint,
     mechanicInfo,
+    mechanicOrigin,
     removeAt,
     setMechanicParam,
     type BehaviorVocabulary,
-    type MechanicInfo,
   } from '../behavior';
 
   interface Props {
@@ -34,10 +36,6 @@
   const entries = $derived(mechanicEntries(value));
   const registered = $derived(vocabulary?.mechanics ?? []);
   const chosen = $derived(registered.find((mechanic) => mechanic.id === choice));
-
-  function origin(mechanic: MechanicInfo): string {
-    return mechanic.id.startsWith('materione:') ? 'Built in' : `Added by ${mechanic.registeredBy}`;
-  }
 
   function run(change: () => unknown) {
     try {
@@ -67,17 +65,16 @@
     {@const info = mechanicInfo(vocabulary, entry.name)}
     <article class="card" data-mechanic={entry.name || `#${entry.index}`}>
       <header>
-        <strong>{info?.displayName ?? (entry.name || 'Unreadable entry')}</strong>
-        <span class="origin">{info ? origin(info) : entry.name ? `${fullMechanicId(entry.name)} · not registered on this server` : 'not a single ability mapping'}</span>
+        <strong title={mechanicHint(info)}>{info?.displayName ?? (entry.name || 'Unreadable entry')}</strong>
+        {#if info}
+          {#if !isBuiltInMechanic(info)}<span class="origin">{mechanicOrigin(info)}</span>{/if}
+        {:else}
+          <span class="origin">{entry.name ? `${fullMechanicId(entry.name)} · not registered on this server` : 'not a single ability mapping'}</span>
+        {/if}
         <button type="button" class="remove" aria-label={`Remove ${info?.displayName ?? entry.name}`}
           onclick={() => run(() => removeAt(value, entry.index))}>Remove</button>
       </header>
       {#if info}
-        <p class="description">{info.description}</p>
-        <p class="activation" class:unknown={!info.activation}>
-          <span>Activates:</span>
-          {info.activation ?? 'this ability does not say when it activates; check its documentation.'}
-        </p>
         {#each info.parameters ?? [] as param (param.id)}
           <Field field={param} value={paramValue(entry.params, param)} {pack}
             onChange={(next) => run(() => setMechanicParam(value, entry.index, param.id, next))} />
@@ -101,7 +98,7 @@
     <div class="add">
       <label>
         <span>Add an ability</span>
-        <select bind:value={choice}>
+        <select bind:value={choice} title={mechanicHint(chosen)}>
           <option value="">Choose…</option>
           {#each registered as mechanic (mechanic.id)}
             <option value={mechanic.id} disabled={!canAddMechanic(value, mechanic)}>
@@ -112,12 +109,6 @@
       </label>
       <button type="button" disabled={!chosen} onclick={add}>Add</button>
     </div>
-    {#if chosen}
-      <p class="preview">
-        <strong>{chosen.displayName}</strong> — {chosen.description}.
-        <span class="activation-inline">Activates: {chosen.activation ?? 'not described by its plugin.'}</span>
-      </p>
-    {/if}
   {/if}
 </section>
 
@@ -150,13 +141,15 @@
     font-size: var(--text-base);
   }
   .origin {
-    flex: 1;
     min-width: 0;
     color: var(--faint);
     font-size: var(--text-xs);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  header .remove {
+    margin-left: auto;
   }
   .remove,
   .add button:not(.btn) {
@@ -168,19 +161,10 @@
     font-size: var(--text-sm);
     cursor: pointer;
   }
-  .description,
-  .activation,
-  .note,
-  .preview {
+  .note {
     margin: var(--space-1) 0 var(--space-2);
     font-size: var(--text-sm);
     color: var(--muted);
-  }
-  .activation span {
-    color: var(--fg);
-  }
-  .activation.unknown {
-    color: var(--warn);
   }
   .add {
     display: flex;
@@ -203,8 +187,5 @@
     padding: var(--space-1) var(--space-2);
     font-size: var(--text-base);
     min-width: 0;
-  }
-  .activation-inline {
-    display: block;
   }
 </style>

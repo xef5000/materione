@@ -28,8 +28,6 @@
   <div class="canvas">
     <ResourceThumbnail visual={shown} {render} {label} size={180} version={nonce + workspace.visualVersion} />
   </div>
-  <small>{render ? 'Model preview drawn in the browser; vanilla textures show as grey checkers.' :
-    shown?.kind === 'model-thumbnail' ? 'Cached model thumbnail, not interactive 3D.' : 'Texture approximation, not a client render.'}</small>
   <dl>
     <dt>texture</dt>
     <dd title={texture}>{texture || '—'}</dd>
@@ -54,10 +52,6 @@
       conic-gradient(from 90deg, var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0 / 16px
       16px;
     overflow: hidden;
-  }
-  small {
-    color: var(--faint);
-    font-size: var(--text-sm);
   }
   dl {
     display: grid;

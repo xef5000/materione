@@ -106,7 +106,6 @@
 
   <div class="guidance">
     <span class="brand"><img src="/materione-logo.svg" alt="" width="16" height="16" />materione</span>
-    <p>Save &amp; apply changes gameplay server-wide. Publish pack releases the resource pack to other players.</p>
   </div>
 
   <div class="release">
@@ -200,12 +199,6 @@
     display: block;
     border-radius: var(--radius-sm);
   }
-  .guidance p {
-    margin: 0;
-    color: var(--muted);
-    font-size: var(--text-xs);
-    line-height: 1.3;
-  }
   .release {
     display: flex;
     gap: var(--space-3);
@@ -261,9 +254,6 @@
     .packs select {
       flex: 1;
       max-width: none;
-    }
-    .guidance p {
-      font-size: var(--text-xs);
     }
     .release {
       flex: 1 1 100%;

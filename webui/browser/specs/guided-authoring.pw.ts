@@ -47,7 +47,7 @@ test('inherited values show their template and Reset stages a single revision-ch
   const pageErrors = await openGuided(page);
   await openItem(page, 'Templated Blade');
 
-  await expect(page.getByText('Inherits from')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Template: Blade base' })).toBeVisible();
   await expect(page.locator('[data-provenance="lore"]')).toHaveText(/Inherited from blade_base: \["Forged from a template"\]/);
   const material = page.locator('[data-provenance="material"]');
   await expect(material).toContainText('Overrides blade_base (DIAMOND_SWORD)');
@@ -78,15 +78,17 @@ test('abilities and rules are added from the server vocabulary and saved in the 
   await openItem(page, 'Storm Wand');
 
   const abilities = page.getByRole('region', { name: 'Abilities' });
+  // What an ability does and when it activates is a hover hint on the picker and the card name.
   await abilities.getByLabel('Add an ability').selectOption({ label: 'Soulbound' });
-  await expect(abilities.getByText(/Activates: When the owner dies/)).toBeVisible();
+  await expect(abilities.getByLabel('Add an ability')).toHaveAttribute('title', /Activates: When the owner dies/);
   await abilities.getByRole('button', { name: 'Add', exact: true }).click();
-  await expect(abilities.locator('[data-mechanic="soulbound"]')).toContainText('Built in');
+  await expect(abilities.locator('[data-mechanic="soulbound"] strong')).toHaveAttribute('title', /Built in/);
   await expect(abilities.getByLabel('Add an ability').locator('option', { hasText: 'Soulbound' }))
     .toHaveJSProperty('disabled', true);
 
   await abilities.getByLabel('Add an ability').selectOption({ label: 'Charge (ExampleAddon)' });
-  await expect(abilities.getByText(/Activates: not described by its plugin/)).toBeVisible();
+  await expect(abilities.getByLabel('Add an ability'))
+    .toHaveAttribute('title', /Activates: this ability does not say when it activates/);
   await abilities.getByRole('button', { name: 'Add', exact: true }).click();
   const charge = abilities.locator('[data-mechanic="example:charge"]');
   await expect(charge).toContainText('Added by ExampleAddon');
@@ -100,8 +102,9 @@ test('abilities and rules are added from the server vocabulary and saved in the 
   await rules.getByLabel('Rule starting point').selectOption({ label: 'Right-click sends a message' });
   await rules.getByRole('button', { name: 'Add rule' }).click();
   await expect(rules.getByRole('button', { name: 'On right click: send message “&aHello!”' })).toBeVisible();
-  await expect(rules.getByText('The player left- or right-clicks with the item, or right-clicks the furniture (right only).'))
-    .toBeVisible();
+  // When a rule fires, its activation is a hover hint on the sentence, not copy under it.
+  await expect(rules.getByRole('button', { name: 'On right click: send message “&aHello!”' }))
+    .toHaveAttribute('title', /The player left- or right-clicks with the item/);
   await expect(rules.getByLabel('When').locator('option')).toHaveText(['Click', 'Break', 'Consume']);
   expect(await writes(page)).toEqual([]);
 
@@ -121,7 +124,8 @@ test('changing the event of a rule re-explains when it runs, from the server eve
   const rules = page.getByRole('region', { name: 'Behaviour rules' });
   await rules.getByRole('button', { name: 'Add rule' }).click();
   await rules.getByLabel('When').selectOption({ label: 'Consume' });
-  await expect(rules.getByText('The player eats or drinks the item.')).toBeVisible();
+  // The explanation is the sentence's hover hint; the When select already names the event.
+  await expect(rules.locator('[data-rule="0"] .sentence')).toHaveAttribute('title', /The player eats or drinks the item/);
   expect(pageErrors).toEqual([]);
 });
 

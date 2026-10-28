@@ -364,7 +364,7 @@ offer what the plugin does not apply.
 
 **Templates-as-a-choice follow-up (M5 as built, issue #154):** a template is picked when a resource
 is created (the New dialog's *Start from*: blank, a template, or a copy) and managed from a
-**Based on** bar in the studio, not typed into a `template` field; templates are first-class
+template chip in the studio header (a **Based on** bar until issue #172), not typed into a `template` field; templates are first-class
 content in a Content tab (create, **Save as template**, edit with the served type's own
 display + modules studio, "used by N"). Server-side: `createResource` with a template writes the
 link plus the name only, `detachTemplate` materialises the inherited values in one revision, and a

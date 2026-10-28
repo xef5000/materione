@@ -187,7 +187,6 @@
   const issues = $derived(
     diagnostics.entries.filter((entry) => diagnosticNames(entry, resource)),
   );
-  const templateEdited = $derived(draft.template !== loaded.template);
 
   function templateLabel(id: string): string {
     return id.slice(id.lastIndexOf(':') + 1);
@@ -517,8 +516,19 @@
     <button type="button" class="back" onclick={onClose} title="back to {typeDirectory}" aria-label="back to {typeDirectory}">
       <Icon name="arrow-left" size={16} />
     </button>
-    <span class="name">{name}</span>
-    <span class="meta">{resource.id} · rev {rev}</span>
+    <h2 class="id" title="revision {rev}">{resource.id}</h2>
+    {#if takesTemplates}
+      <BasedOn
+        authored={authoredTemplate}
+        {inheritance}
+        candidates={parents}
+        detachBlocked={detachBlocked}
+        editable={fieldsEditable}
+        onChange={(ref) => set('template', ref)}
+        onOpen={openTemplate}
+        onDetach={detach}
+      />
+    {/if}
     {#if isTemplate}
       <span class="chip chip-accent" data-template-badge>
         Template for {ownSchema?.displayName ?? 'nothing yet'}
@@ -559,26 +569,12 @@
   {#if pendingSummary}
     <p class="notice pending-summary">{pendingSummary}</p>
   {/if}
-  {#if takesTemplates}
-    <BasedOn
-      authored={authoredTemplate}
-      {inheritance}
-      edited={templateEdited}
-      candidates={parents}
-      detachBlocked={detachBlocked}
-      editable={fieldsEditable}
-      onChange={(ref) => set('template', ref)}
-      onOpen={openTemplate}
-      onDetach={detach}
-    />
-  {/if}
   {#if templateEntry}
     <p class="used-by" data-used-by>
       <strong>{usersLabel(templateEntry.usedBy)}</strong>
       {#each templateEntry.usedBy as user (user.path + user.id)}
         <button type="button" class="link" onclick={() => openStudio(user)}>{user.id}</button>
       {/each}
-      {#if templateEntry.usedBy.length === 0}· base something on it from its New dialog or its Based on control{/if}
     </p>
   {/if}
 
@@ -821,18 +817,14 @@
   .back:hover {
     color: var(--fg);
   }
-  .name {
-    font-size: var(--text-md);
-    font-weight: 600;
+  /* The resource id is the header's title: an identifier, so it is set in the mono face. */
+  .id {
+    margin: 0;
+    font: 600 var(--text-md) var(--mono);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
-  }
-  .meta {
-    color: var(--faint);
-    font: var(--text-xs) var(--mono);
-    white-space: nowrap;
   }
   .spacer {
     flex: 1;
