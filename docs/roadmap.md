@@ -12,7 +12,7 @@
 > wrong — stop and amend the architecture doc first.
 >
 > **Tracking lives on GitHub** (since 2026-10-09): open work is
-> [issues](https://github.com/xef5000/materione/issues) under milestones M5–M8, viewable
+> [issues](https://github.com/xef5000/materione/issues) under milestones M6–M8, viewable
 > on the [Materione Roadmap board](https://github.com/users/xef5000/projects/1); open
 > questions from architecture §14 are `kind:decision` issues. This document keeps the
 > milestone definitions, the shipped record (as-built notes below), and the
@@ -322,7 +322,7 @@ signal color (runtime-systems §6). Use `<effect:pack:id>…</effect>` in any re
 animated glyphs emit all frames and render frame 1; per-surface frame cycling arrives with
 M6 HUDs.
 
-## M5 — Relay mode & the cloud (zero-config editing anywhere)
+## M5 — Relay mode & the cloud (zero-config editing anywhere) — ✅ shipped 2026-10-28
 
 **Goal:** `/materione editor` works from behind NAT.
 
@@ -339,6 +339,13 @@ M6 HUDs.
   milestone (docs live in-repo; `materione.dev` abandoned).
 
 **Exit:** an admin on shared hosting edits their server through the public editor URL.
+
+**M5 closeout (shipped 2026-10-28):** the relay Worker (frame mailbox + payload store, #1), the
+relay handshake with workstation whitelisting (#2), and central hosting with a proof-gated direct
+mode (#3) all landed. The cloud editor is the default; direct mode is chosen only after a
+session-bound browser probe succeeds, `editor_direct_hint` defaults to `off`, and a relay failure
+reports `MTR-0050` instead of handing out a local link (web.md §4.4). Remaining polish and CI
+chores (#162, #134, #114) moved to M6.
 
 **Editor-trust follow-up (M5 as built; independent of the relay/cloud exit):** the editor is
 items-first, with shared Content/Files navigation and a bounded, session-memory-only draft store.
