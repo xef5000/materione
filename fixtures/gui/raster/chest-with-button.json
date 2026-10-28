@@ -1,0 +1,41 @@
+{
+  "name": "chest-with-button",
+  "description": "A starter chest with a button on top: later layers cover earlier ones, bevel pixels included.",
+  "canvas": {
+    "width": 176,
+    "height": 168
+  },
+  "rows": 3,
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 168
+    },
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all"
+    },
+    {
+      "id": "buy",
+      "type": "button",
+      "x": 115,
+      "y": 24,
+      "width": 52,
+      "height": 20
+    },
+    {
+      "id": "inner",
+      "type": "panel",
+      "x": 60,
+      "y": 60,
+      "width": 40,
+      "height": 24,
+      "opacity": 70
+    }
+  ]
+}

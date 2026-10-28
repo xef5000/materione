@@ -1,0 +1,42 @@
+{
+  "name": "panel-2px-bevel",
+  "description": "Raised 2 px bevel (a panel): the 2x2 off-diagonal corner blocks are fill; small panels where the bands meet.",
+  "canvas": {
+    "width": 56,
+    "height": 36
+  },
+  "layers": [
+    {
+      "id": "big",
+      "type": "panel",
+      "x": 2,
+      "y": 2,
+      "width": 30,
+      "height": 24
+    },
+    {
+      "id": "small",
+      "type": "panel",
+      "x": 36,
+      "y": 2,
+      "width": 8,
+      "height": 8
+    },
+    {
+      "id": "tiny",
+      "type": "panel",
+      "x": 46,
+      "y": 2,
+      "width": 6,
+      "height": 6
+    },
+    {
+      "id": "thin",
+      "type": "panel",
+      "x": 36,
+      "y": 14,
+      "width": 16,
+      "height": 5
+    }
+  ]
+}

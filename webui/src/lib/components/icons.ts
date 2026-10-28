@@ -84,6 +84,20 @@ import Grid3x3 from '@lucide/svelte/icons/grid-3x3';
 import Flame from '@lucide/svelte/icons/flame';
 import Timer from '@lucide/svelte/icons/timer';
 import Trash2 from '@lucide/svelte/icons/trash-2';
+import MousePointer2 from '@lucide/svelte/icons/mouse-pointer-2';
+import Hand from '@lucide/svelte/icons/hand';
+import ZoomIn from '@lucide/svelte/icons/zoom-in';
+import ZoomOut from '@lucide/svelte/icons/zoom-out';
+import Eye from '@lucide/svelte/icons/eye';
+import EyeOff from '@lucide/svelte/icons/eye-off';
+import Lock from '@lucide/svelte/icons/lock';
+import LockOpen from '@lucide/svelte/icons/lock-open';
+import Copy from '@lucide/svelte/icons/copy';
+import GripVertical from '@lucide/svelte/icons/grip-vertical';
+import Magnet from '@lucide/svelte/icons/magnet';
+import Scan from '@lucide/svelte/icons/scan';
+import RectangleHorizontal from '@lucide/svelte/icons/rectangle-horizontal';
+import SquareDashed from '@lucide/svelte/icons/square-dashed';
 
 export const icons = {
   'arrow-left': ArrowLeft,
@@ -164,6 +178,20 @@ export const icons = {
   flame: Flame,
   timer: Timer,
   'trash-2': Trash2,
+  'mouse-pointer-2': MousePointer2,
+  'hand': Hand,
+  'zoom-in': ZoomIn,
+  'zoom-out': ZoomOut,
+  'eye': Eye,
+  'eye-off': EyeOff,
+  'lock': Lock,
+  'lock-open': LockOpen,
+  'copy': Copy,
+  'grip-vertical': GripVertical,
+  'magnet': Magnet,
+  'scan': Scan,
+  'rectangle-horizontal': RectangleHorizontal,
+  'square-dashed': SquareDashed,
 } as const;
 
 export type IconName = keyof typeof icons;

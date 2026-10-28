@@ -1,0 +1,20 @@
+{
+  "name": "slots-custom-style",
+  "description": "Slot wells with a partial style: shadow and fill overridden, highlight left at the slot default.",
+  "canvas": {
+    "width": 176,
+    "height": 150
+  },
+  "rows": 2,
+  "layers": [
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all",
+      "style": {
+        "fill": "#4A5568",
+        "shadow": "#1A202C"
+      }
+    }
+  ]
+}

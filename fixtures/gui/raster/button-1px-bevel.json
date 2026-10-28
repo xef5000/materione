@@ -1,0 +1,58 @@
+{
+  "name": "button-1px-bevel",
+  "description": "Raised 1 px bevel at several sizes: transparent outline corners, highlight top/left, shadow bottom/right, fill at the two off-diagonal corners.",
+  "canvas": {
+    "width": 56,
+    "height": 28
+  },
+  "layers": [
+    {
+      "id": "a",
+      "type": "button",
+      "x": 1,
+      "y": 1,
+      "width": 10,
+      "height": 6
+    },
+    {
+      "id": "b",
+      "type": "button",
+      "x": 14,
+      "y": 1,
+      "width": 20,
+      "height": 12
+    },
+    {
+      "id": "c",
+      "type": "button",
+      "x": 38,
+      "y": 1,
+      "width": 5,
+      "height": 5
+    },
+    {
+      "id": "d",
+      "type": "button",
+      "x": 1,
+      "y": 14,
+      "width": 3,
+      "height": 3
+    },
+    {
+      "id": "e",
+      "type": "button",
+      "x": 8,
+      "y": 14,
+      "width": 2,
+      "height": 2
+    },
+    {
+      "id": "f",
+      "type": "button",
+      "x": 14,
+      "y": 16,
+      "width": 40,
+      "height": 10
+    }
+  ]
+}

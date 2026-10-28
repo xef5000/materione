@@ -1,0 +1,36 @@
+{
+  "name": "button-custom-style",
+  "description": "A button with a full custom style, and one with a partial style (the missing fields fall back to the raised defaults).",
+  "canvas": {
+    "width": 64,
+    "height": 24
+  },
+  "layers": [
+    {
+      "id": "full",
+      "type": "button",
+      "x": 2,
+      "y": 2,
+      "width": 28,
+      "height": 18,
+      "style": {
+        "fill": "#3C8527",
+        "highlight": "#7FD158",
+        "shadow": "#1D4A12",
+        "outline": "#102308"
+      }
+    },
+    {
+      "id": "partial",
+      "type": "button",
+      "x": 34,
+      "y": 2,
+      "width": 28,
+      "height": 18,
+      "style": {
+        "fill": "#8B4A2B",
+        "outline": "#2B1408"
+      }
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { SAMPLE_GUI_ASSETS, sampleGuiRaw } from '../src/lib/demo/gui';
+import { parse as parseYaml } from 'yaml';
 import { scanReferences } from '../src/lib/demo/references';
 import { detached, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
 // The real server's type self-descriptions, recorded by the plugin's golden
@@ -326,6 +328,11 @@ const MODULES_RESOURCES: ResourceRef[] = [
   { pack: PACK, type: 'furnitures', path: 'furnitures/stool.yml', id: 'stool' },
   { pack: PACK, type: 'templates', path: 'templates/base_item.yml', id: 'base_item' },
 ];
+
+/** The server's own New GUI starter (recorded in the golden snapshot), for `id` titled `title`. */
+function guiScaffold(id: string, title: string): string {
+  return goldenSnapshot.scaffolds.guis.replaceAll('demo_scaffold', id).replace('Demo Scaffold', title);
+}
 
 function goldenType(name: string): TypeInfo {
   const found = (goldenSnapshot.types as unknown as TypeInfo[]).find((type) => type.name === name);
@@ -827,12 +834,23 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
 
   readonly #guided: boolean;
   readonly #modules: boolean;
+  readonly #gui: boolean;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; rows?: number } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
+    this.#gui = options.gui ?? false;
     this.#resources = [...RESOURCES];
+    if (this.#gui) {
+      // The GUI studio's fixture (issue #186): the sample shop screen with its two textures.
+      this.#resources.push({ pack: PACK, type: 'guis', path: 'guis/shop/main.yml', id: 'main' });
+      this.#documents.set(`${PACK}/guis/shop/main.yml`,
+        makeDocument('guis/shop/main.yml', 1, parseYaml(sampleGuiRaw()) as Record<string, Record<string, unknown>>));
+      for (const sample of SAMPLE_GUI_ASSETS) {
+        this.#assets.set(assetPath(PACK, sample.path), { path: sample.path, kind: 'png', data: sample.data, bytes: sample.data.length });
+      }
+    }
     if (this.#guided) {
       this.#resources.push(...GUIDED_RESOURCES);
       for (const [path, parsed] of Object.entries(GUIDED_DOCUMENTS)) {
@@ -1038,6 +1056,13 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'browse.packs':
         return this.success(op, { packs: [PACK] });
       case 'authoring.describe':
+        if (this.#gui) {
+          return this.success(op, {
+            types: this.typeList(),
+            behavior: structuredClone(GUIDED_VOCABULARY),
+            guiComponents: structuredClone(goldenSnapshot.describe.guiComponents),
+          });
+        }
         if (this.#modules) {
           return this.success(op, {
             types: moduleTypes(),
@@ -1050,11 +1075,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
           behavior: structuredClone(GUIDED_VOCABULARY),
         });
       case 'browse.types':
-        return this.success(op, {
-          types: this.#modules
-            ? moduleTypes()
-            : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)],
-        });
+        return this.success(op, { types: this.typeList() });
       case 'browse.resources': {
         const pack = stringValue(payload.pack);
         return this.success(op, {
@@ -1066,7 +1087,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'authoring.summaries':
         return this.summaries(op, payload);
       case 'browse.folders':
-        return this.success(op, { folders: [] });
+        return this.success(op, { folders: this.#gui ? ['guis', 'guis/shop'] : [] });
       case 'browse.get':
         return this.getDocument(op, payload);
       case 'edit.put':
@@ -1129,9 +1150,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
 
   /** The registry types this fixture serves, as `browse.types` reports them. */
   private typeList(): TypeInfo[] {
-    return this.#modules
+    const types = this.#modules
       ? moduleTypes()
       : [structuredClone(ITEM_TYPE), structuredClone(BLOCK_TYPE), structuredClone(GLYPH_TYPE)];
+    return this.#gui ? [...types, goldenType('gui')] : types;
   }
 
   private createResource(op: string, payload: Record<string, unknown>): Response {
@@ -1144,6 +1166,13 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const path = `${type}/${id}.yml`;
     if (this.#documents.has(`${pack}/${path}`)) {
       return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
+    }
+    if (type === 'guis') {
+      // The starter is a vanilla chest: a panel plus an all-region slots layer.
+      const created = makeDocument(path, 1, parseYaml(guiScaffold(id, name)) as Record<string, Record<string, unknown>>);
+      this.#documents.set(`${pack}/${path}`, created);
+      this.#resources.push({ pack, type, path, id });
+      return this.success(op, { pack, path, id, rev: 1, raw: created.raw, parsed: structuredClone(created.parsed) });
     }
     const start = startingFields(
       this.#documents, pack, type, id, name, stringValue(payload.template), stringValue(payload.serves, 'items'));
@@ -1367,8 +1396,12 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.failure(op, 'MTR-0012', 'fixture field path is malformed');
       }
     }
+    // issue #183: pixel assets commit with the fields (`bytes` is base64)
+    for (const asset of Array.isArray(payload.assets) ? payload.assets : []) {
+      if (isRecord(asset)) this.storeAsset(document.pack, stringValue(asset.path), stringValue(asset.data));
+    }
     document.parsed = parsed;
-    document.rev += edits.length > 0 ? 1 : 0;
+    document.rev += edits.length > 0 || Array.isArray(payload.assets) && payload.assets.length > 0 ? 1 : 0;
     document.raw = serializeFixtureYaml(document.parsed);
     return this.success(op, { rev: document.rev });
   }

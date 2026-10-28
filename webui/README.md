@@ -32,6 +32,14 @@ bar.
   save-back math (texture mapping, model normalization; vitest-pinned in
   `test/blockbench-bridge.spec.ts`). `src/lib/external.ts` — the
   `push.document.changed` decision reducer (`test/external.spec.ts`).
+- `src/lib/gui/` + `src/lib/studio/gui/` — the GUI studio (M6, gui.md §6): a canvas tool for
+  `guis/**`. `gui/raster/` is the TS mirror of the compiler's raster (ARGB canvas, bevel painter,
+  nearest-neighbour blit, layer compositing), pinned pixel for pixel by the shared vectors in
+  `fixtures/gui/raster/` (`test/gui-raster.spec.ts`); `gui/model.ts` + `commands.ts` +
+  `history.ts` are the lossless document model and command stack; `scene.ts`/`snap.ts`/
+  `transform.ts`/`viewport.ts` are the canvas rules; `save.ts` plans the one authoring
+  transaction. The palette and inspector come from the `gui-components` registry
+  description, never a component list of the studio's own.
 - `public/blockbench/` — the pinned, unmodified Blockbench v5.1.6 web build
   (see its PIN.md for the pin + build recipe; upgrades are pin bumps).
   `public/materione-bridge.js` — our injected iframe bridge.
