@@ -1,0 +1,52 @@
+{
+  "name": "blend-translucent",
+  "description": "Translucent fills over transparent, translucent and opaque backgrounds (the full straight-alpha source-over formula).",
+  "canvas": {
+    "width": 48,
+    "height": 24
+  },
+  "layers": [
+    {
+      "id": "base",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 24,
+      "style": {
+        "fill": "#FF0000C0",
+        "highlight": "#00FF0080",
+        "shadow": "#0000FF40",
+        "outline": "#FFFFFF20"
+      }
+    },
+    {
+      "id": "over",
+      "type": "panel",
+      "x": 12,
+      "y": 4,
+      "width": 30,
+      "height": 16,
+      "style": {
+        "fill": "#3366CC99",
+        "highlight": "#FFFF0033",
+        "shadow": "#00000099",
+        "outline": "#80808080"
+      }
+    },
+    {
+      "id": "cover",
+      "type": "button",
+      "x": 36,
+      "y": 0,
+      "width": 12,
+      "height": 24,
+      "style": {
+        "fill": "#FFFFFF01",
+        "highlight": "#FFFFFF02",
+        "shadow": "#00000003",
+        "outline": "#00000004"
+      }
+    }
+  ]
+}

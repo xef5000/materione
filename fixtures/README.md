@@ -15,6 +15,7 @@ Layout:
 | `protocol/` | Editor wire-protocol contract fixtures (plugin + Workers tested against the same files) | M5 |
 | `gui/` | Golden GUI YAML: `shop.yml` (all seven built-in components; load → save is byte-identical, unknown fields survive) and `bad-layer.yml` (each broken layer skipped alone with `MTR-0052`). Read by `GuiTypeTest` (gui.md §10) | M6 |
 | `protocol/editor-ops-v1.json` | Op-level frames: `authoring.setFields` with a paint asset, and the same save refused as stale. The JVM regenerates it (`EditorOpsGoldenTest`); the SPA wrapper must send it byte for byte (`ops-golden.spec.ts`) | M6 |
+| `gui/raster/` | The GUI raster vectors (gui.md §4): `<name>.json` input + `<name>.png` expected for panel/button/slots bevels, slot grid, image/paint blits, opacity and compositing. The Java compiler and the editor's TS renderer (`webui/test/gui-raster.spec.ts`) both pass the same files; its README is the exact pixel-rule spec, `generate-vectors.mjs` an independent reference renderer | M6 |
 | `text/` | `rich-text.json`: what each stored rich text string means (master §5.7). The plugin's `MaterioneTextTest` and the editor's `rich-text.spec.ts` both read it, so the two parsers cannot drift | M5 |
 
 Tests reach this directory via the `materione.fixtures.root` system property

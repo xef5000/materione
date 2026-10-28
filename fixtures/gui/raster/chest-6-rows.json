@@ -1,0 +1,24 @@
+{
+  "name": "chest-6-rows",
+  "description": "The vanilla look of a new GUI: a panel plus an all-region slots layer on a 176x222 canvas.",
+  "canvas": {
+    "width": 176,
+    "height": 222
+  },
+  "rows": 6,
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 222
+    },
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all"
+    }
+  ]
+}

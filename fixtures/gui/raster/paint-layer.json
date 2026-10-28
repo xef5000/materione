@@ -1,0 +1,49 @@
+{
+  "name": "paint-layer",
+  "description": "A paint layer is copied 1:1 at the origin (a bitmap smaller than the canvas leaves the rest untouched), then composited with its opacity.",
+  "canvas": {
+    "width": 32,
+    "height": 24
+  },
+  "images": {
+    "gui/test/art": {
+      "width": 4,
+      "height": 3,
+      "pixels": [
+        "#FF0000",
+        "#FF000080",
+        "#00000000",
+        "#FFFFFF",
+        "#00FF00",
+        "#00FF0040",
+        "#0000FF",
+        "#0000FF01",
+        "#FFFF00",
+        "#FFFF00C0",
+        "#FF00FF",
+        "#00FFFF"
+      ]
+    }
+  },
+  "layers": [
+    {
+      "id": "floor",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 32,
+      "height": 24
+    },
+    {
+      "id": "art",
+      "type": "paint",
+      "image": "gui/test/art"
+    },
+    {
+      "id": "ghost",
+      "type": "paint",
+      "image": "gui/test/art",
+      "opacity": 50
+    }
+  ]
+}

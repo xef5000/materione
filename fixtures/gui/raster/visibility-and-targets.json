@@ -1,0 +1,51 @@
+{
+  "name": "visibility-and-targets",
+  "description": "Hidden layers are skipped; text, item and unknown components are not raster components and draw nothing.",
+  "canvas": {
+    "width": 40,
+    "height": 20
+  },
+  "layers": [
+    {
+      "id": "shown",
+      "type": "button",
+      "x": 1,
+      "y": 1,
+      "width": 12,
+      "height": 8
+    },
+    {
+      "id": "hidden",
+      "type": "button",
+      "x": 15,
+      "y": 1,
+      "width": 12,
+      "height": 8,
+      "visible": false
+    },
+    {
+      "id": "label",
+      "type": "text",
+      "x": 2,
+      "y": 12,
+      "text": "Shop",
+      "font": "smallcaps",
+      "color": "#404040"
+    },
+    {
+      "id": "sword",
+      "type": "item",
+      "slot": 3,
+      "item": "minecraft:diamond_sword",
+      "amount": 1
+    },
+    {
+      "id": "future",
+      "type": "addon:progress",
+      "x": 20,
+      "y": 12,
+      "width": 10,
+      "height": 4
+    }
+  ]
+}

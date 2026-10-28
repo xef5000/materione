@@ -1,0 +1,189 @@
+{
+  "name": "opacity-rounding",
+  "description": "Layer opacity scales source alpha with round half up: opacities 0, 1, 33, 49, 50, 67, 99, 100 over an opaque panel, then a translucent fill at 50 and 51.",
+  "canvas": {
+    "width": 80,
+    "height": 32
+  },
+  "layers": [
+    {
+      "id": "floor",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 80,
+      "height": 32,
+      "style": {
+        "fill": "#202020",
+        "highlight": "#202020",
+        "shadow": "#202020",
+        "outline": "#202020"
+      }
+    },
+    {
+      "id": "o0",
+      "type": "button",
+      "x": 1,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 0,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o1",
+      "type": "button",
+      "x": 10,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 1,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o33",
+      "type": "button",
+      "x": 19,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 33,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o49",
+      "type": "button",
+      "x": 28,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 49,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o50",
+      "type": "button",
+      "x": 37,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 50,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o67",
+      "type": "button",
+      "x": 46,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 67,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o99",
+      "type": "button",
+      "x": 55,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 99,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "o100",
+      "type": "button",
+      "x": 64,
+      "y": 1,
+      "width": 8,
+      "height": 8,
+      "opacity": 100,
+      "style": {
+        "fill": "#F0A030",
+        "highlight": "#F0A030",
+        "shadow": "#F0A030",
+        "outline": "#F0A030"
+      }
+    },
+    {
+      "id": "half",
+      "type": "button",
+      "x": 1,
+      "y": 12,
+      "width": 8,
+      "height": 8,
+      "opacity": 50,
+      "style": {
+        "fill": "#FFFFFF03",
+        "highlight": "#FFFFFF03",
+        "shadow": "#FFFFFF03",
+        "outline": "#FFFFFF03"
+      }
+    },
+    {
+      "id": "tiny",
+      "type": "button",
+      "x": 11,
+      "y": 12,
+      "width": 8,
+      "height": 8,
+      "opacity": 49,
+      "style": {
+        "fill": "#FFFFFF01",
+        "highlight": "#FFFFFF01",
+        "shadow": "#FFFFFF01",
+        "outline": "#FFFFFF01"
+      }
+    },
+    {
+      "id": "tiny2",
+      "type": "button",
+      "x": 21,
+      "y": 12,
+      "width": 8,
+      "height": 8,
+      "opacity": 50,
+      "style": {
+        "fill": "#FFFFFF01",
+        "highlight": "#FFFFFF01",
+        "shadow": "#FFFFFF01",
+        "outline": "#FFFFFF01"
+      }
+    }
+  ]
+}

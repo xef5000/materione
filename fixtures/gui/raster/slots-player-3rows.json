@@ -1,0 +1,16 @@
+{
+  "name": "slots-player-3rows",
+  "description": "The player inventory region of a 3-row chest: 27 slots from y = rows*18+31, then the hotbar at y = rows*18+89.",
+  "canvas": {
+    "width": 176,
+    "height": 168
+  },
+  "rows": 3,
+  "layers": [
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "player"
+    }
+  ]
+}
