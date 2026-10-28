@@ -479,16 +479,11 @@ textarea:disabled {
   height: 1em;
   image-rendering: pixelated;
 }
-/* Editing surface: obfuscated text flickers instead of scrambling, so it stays editable. */
-.mc-text[contenteditable] .mc-obf {
-  animation: mc-obfuscated 0.4s steps(2, jump-none) infinite;
-}
-@keyframes mc-obfuscated {
-  from { opacity: 1; filter: none; }
-  to { opacity: 0.55; filter: blur(1px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .mc-text[contenteditable] .mc-obf { animation: none; text-decoration: underline wavy var(--muted); }
+/* Editing surface: obfuscated text is drawn scrambled (RichTextEditor swaps the drawn characters,
+   never the model); the run being edited shows its real characters and a dashed underline. */
+.mc-text[contenteditable] .mc-obf[data-revealed='true'] {
+  text-decoration: underline dashed var(--muted);
+  text-underline-offset: 3px;
 }
 /* A Minecraft tooltip: the near-black purple panel with its two-tone border. */
 .mc-tooltip {

@@ -7,7 +7,7 @@
  * schema source per content type (§5.6, D5). Type-agnostic by design: any
  * content type that marks its fields as modules gets the same layout (issue 153).
  */
-import type { TypeInfo, TypeParam } from './api';
+import type { ResourceSummary, TypeInfo, TypeParam } from './api';
 import type { BehaviorVocabulary, MechanicEntry, MechanicInfo } from './behavior';
 import { fullMechanicId, mechanicEntries } from './behavior';
 import { icons, type IconName } from './components/icons';
@@ -33,6 +33,20 @@ export interface ModuleDescriptor {
   sourceField?: string;
   /** Required field modules are always present and cannot be removed. */
   required?: boolean;
+}
+
+/**
+ * Hands the display card over to the item studio's Appearance component
+ * (issue 173): one large render with the texture/model pickers and the
+ * in-place tooltip. Without it the classic display card is drawn.
+ */
+export interface AppearanceHost {
+  visual?: ResourceSummary['visual'];
+  render?: ResourceSummary['render'];
+  material: string;
+  version: number;
+  onDrawTexture: (field: TypeParam, fresh: boolean) => void;
+  onEditModel: (field: TypeParam) => void;
 }
 
 export interface DisplayFields {

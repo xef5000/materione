@@ -10,6 +10,7 @@
   import Icon from '../components/Icon.svelte';
   import BehaviorRulesEditor from './BehaviorRulesEditor.svelte';
   import ModulePicker from './ModulePicker.svelte';
+  import ItemAppearance from './ItemAppearance.svelte';
   import { fade, fly } from 'svelte/transition';
   import { flip } from 'svelte/animate';
   import { motionMs } from '../motion';
@@ -35,6 +36,7 @@
     inheritedModules,
     moduleCatalog,
     presenceOf,
+    type AppearanceHost,
     type ModuleDescriptor,
   } from '../modules';
   import type { Snippet } from 'svelte';
@@ -60,15 +62,26 @@
     /** What the template chain supplies per key, and which template supplies it (read-only). */
     inherited?: Record<string, unknown>;
     inheritedSources?: Record<string, string>;
+    appearance?: AppearanceHost;
   }
 
   let {
     resource, schema, vocabulary, values, host, provenance,
     set, removeField, onError, focusField, actionFor, missingTexture, fieldIssue, showInFile,
-    inherited = {}, inheritedSources = {},
+    inherited = {}, inheritedSources = {}, appearance,
   }: Props = $props();
 
-  const catalog = $derived(moduleCatalog(schema, vocabulary));
+  const fullCatalog = $derived(moduleCatalog(schema, vocabulary));
+  /**
+   * With the Appearance component, the appearance-category field modules (the
+   * model style) are its options menu, not module cards.
+   */
+  const appearanceOptions = $derived(appearance
+    ? fullCatalog.flatMap((module) => module.kind === 'field' && module.category === 'appearance' && module.field
+      ? [module.field] : [])
+    : []);
+  const catalog = $derived(fullCatalog.filter((module) =>
+    !(module.field && appearanceOptions.some((option) => option.id === module.field!.id))));
   const display = $derived(displayFieldsOf(schema));
   const extraFields = $derived(extraFieldsOf(schema));
   const advancedFields = $derived(advancedFieldsOf(schema));
@@ -196,6 +209,29 @@
 </script>
 
 <section class="modules" aria-label="Display and modules">
+  {#if appearance}
+    <ItemAppearance
+      pack={resource.pack}
+      {values}
+      {inherited}
+      name={display.name}
+      lore={display.lore}
+      texture={display.slots.find((slot) => slot.uiHint === 'texture')}
+      model={display.slots.find((slot) => slot.uiHint === 'model')}
+      options={appearanceOptions}
+      visual={appearance.visual}
+      render={appearance.render}
+      material={appearance.material}
+      version={appearance.version}
+      {set}
+      {removeField}
+      {provenance}
+      {missingTexture}
+      {fieldIssue}
+      onDrawTexture={appearance.onDrawTexture}
+      onEditModel={appearance.onEditModel}
+    />
+  {:else}
   <article class="card display" aria-label="Display">
     {#if display.name}
       <Field field={display.name} value={values[display.name.id]} pack={resource.pack}
@@ -225,6 +261,7 @@
       {/if}
     {/each}
   </article>
+  {/if}
 
   {#each cards as card (card.key)}
     {@const descriptor = card.kind === 'unknown' ? null : card.descriptor}

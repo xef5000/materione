@@ -765,7 +765,8 @@ cannot read, forge, replay, or reorder anything.
   `module` (`EditorMetadata.module/category/icon/summary`, plugin.md §3) — the framework is
   type-agnostic, and types without module fields keep the classic sections. The **display card**
   holds the formatted name, the lore, and the texture/model slots (with the existing
-  Draw/Edit-in-Blockbench actions and the missing-texture repair panel). Each **module** is a
+  Draw/Edit-in-Blockbench actions and the missing-texture repair panel); for items it is the
+  **Appearance component** (issue #173, below). Each **module** is a
   card: schema field modules (base material — required, so its card has no Remove — model style,
   jukebox song), one card per authored mechanic instance (labelled and explained by the mechanic
   registry; unregistered entries stay visible with their settings untouched), and one
@@ -784,6 +785,26 @@ cannot read, forge, replay, or reorder anything.
   Enums with 2–4 values render as segmented controls. The derivation is a pure module pinned by
   vitest; the deterministic `?modules` browser fixture pins add / configure / remove and the
   resulting field edits.
+- *As built (M5 item Appearance component, issue #173):* an item (and a template serving items)
+  draws its look with one **Appearance** component (`ItemAppearance.svelte`, hosted by
+  `ModulesArea`) instead of the display card, the left preview column and the Display name /
+  Lore / 3D model / Texture form rows. There is **one** render (the live model render, the
+  texture, or the vanilla icon, through `ResourceThumbnail`) at roughly 40% of the content width;
+  the 32 px inventory duplicate is gone. Under it, a **Texture** and a **3D model** button open
+  the **asset picker** (`AssetExplorer.svelte`, `asset-choice.ts`): a dialog over the pack's
+  textures or models with search, thumbnails, rows grouped by folder, a *None* row, **Used by**
+  for the current file, and the way to make a new one (texture: *Upload* and *New texture* /
+  *Edit current* in the existing pixel editor; model: *New / Edit in Blockbench* through the
+  existing `ModelWorkbench`). The picker only chooses a reference; the field is written by the
+  studio's draft (`set` / `removeField`), so a save is still one revision-checked
+  `authoring.setFields`. **Name and lore are the tooltip**: two `RichTextEditor`s (`bare`: no
+  frame of their own) inside one Minecraft-style tooltip, with the selection toolbar. Appearance-
+  category field modules (the model style) become the component's `...` menu rather than module
+  cards. Inheritance lines (Inherited from / Overrides / Reset to inherited) sit under the control
+  they concern. Blocks, furniture and the other types keep the display card until a later pass
+  reuses the component. The classic (non-module) item layout keeps its side preview, minus the
+  duplicate slot. Specs: `appearance.pw.ts`, `asset-choice.spec.ts`; QA entries
+  `editor.browser-item-appearance[-visual]`.
 - *As built (M5 per-type modules, issue #153 — blocks and furniture):* blocks and furniture use
   the same display + modules framework, with every module declared in the Java self-description
   (plugin.md §3) and the browser fixture serving those schemas straight from the plugin's golden
@@ -1004,8 +1025,11 @@ hand-written file) are kept as chips and written back as they were. There is del
 tooltip preview) share `dom.ts` and the global `.mc-*` rules in `app.css`: the tooltip panel,
 the client's drop shadow (the text color at 25% brightness), a name's default white and lore's
 default dark purple, non-italic like the plugin's item text. Obfuscated text scrambles in
-previews and flickers while editing (scrambling would fight the caret); both respect
-`prefers-reduced-motion`. Shader effects are marked with a dotted underline, because they only
+previews and in the editor: `RichTextEditor` swaps only the drawn characters of an obfuscated
+run (same character count, so the DOM-to-offset mapping and the model are untouched), and the run
+the caret is in or the selection touches shows its real characters (`data-revealed`, dashed
+underline) until focus or selection leaves it; both respect
+`prefers-reduced-motion` (reduced motion keeps one static scramble). Shader effects are marked with a dotted underline, because they only
 animate in game.
 
 **Font.** Minecraftia 1.0 by Andrew Tyler, licensed CC BY-SA 3.0 (the license is recorded in the

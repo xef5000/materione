@@ -26,12 +26,6 @@
 </script>
 
 <section class="item-preview" aria-label="Item preview">
-  <div class="inventory">
-    <div class="slot" title="32 CSS-pixel inventory slot; actual game size depends on GUI scale.">
-      <ResourceThumbnail {visual} {render} {material} label={plainTitle} size={32} version={version + workspace.visualVersion} />
-    </div>
-    <div><strong>Inventory scale</strong><small>32 px slot</small></div>
-  </div>
   <div class="inspection">
     <ResourceThumbnail {visual} {render} {material} label={plainTitle} size={128} version={version + workspace.visualVersion} />
   </div>
@@ -49,11 +43,8 @@
 
 <style>
   .item-preview { display: grid; gap: var(--space-3); min-width: 0; }
-  .inventory { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; font-size: var(--text-sm); }
   small { font-size: var(--text-xs); color: var(--muted); }
-  .slot { padding: var(--space-1); border: 2px solid var(--border-strong); background: var(--bg-input); }
   .inspection { display: grid; place-items: center; min-height: 150px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-lg); }
-  .inventory small { display: block; }
   .tooltip { min-width: 0; }
   .item-name, .lore { display: block; width: 100%; min-width: 0; background: none; border: 0; text-align: left; padding: 0; cursor: pointer; }
   .item-name { color: var(--legacy-f); }
