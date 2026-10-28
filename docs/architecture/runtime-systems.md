@@ -448,6 +448,11 @@ exception spam); packet failure (player gone) → session torn down cleanly.
 
 ### 8.1 Menus (the GUI builder differentiator)
 
+> **Design detail for M6 lives in [`gui.md`](gui.md)**: the `gui` content type (directory
+> `guis/`) is the MenuDefinition below, built design-first — layers of registered components
+> compiled to raster/text/slot targets; click bindings and pagination plug in later through
+> the same component seam.
+
 ```
 MenuDefinition
  ├─ layout: grid slots (chest semantics) or free-form glyph-canvas
