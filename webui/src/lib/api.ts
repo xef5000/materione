@@ -1,6 +1,8 @@
 /** Typed helpers over the sealed channel — one place that knows the op names. */
 import type { EditorChannel as SealedEditorChannel } from './protocol/session';
-import type { Response } from './protocol/wire';
+import type { AssetUpload, Response } from './protocol/wire';
+
+export type { AssetUpload } from './protocol/wire';
 
 export type RpcChannel = Pick<SealedEditorChannel, 'call'>;
 type EditorChannel = RpcChannel;
@@ -137,6 +139,46 @@ export interface AssetRef {
   path: string;
   bytes: number;
   kind: string;
+}
+
+/** The render targets a GUI component can draw on (gui.md §4). */
+export type GuiRenderTarget = 'raster' | 'text' | 'slot';
+
+/**
+ * One entry of the `gui-components` registry as `authoring.describe` reports it
+ * (`guiComponents`, next to `behavior`). The studio's inspector for a layer is
+ * built from `parameters`, so an addon component needs no editor change.
+ */
+export interface GuiComponentInfo {
+  /** Full registry id: `materione:panel`, or an addon's `example:progress`. */
+  id: string;
+  displayName: string;
+  description: string;
+  parameters: TypeParam[];
+  sinceVersion?: string;
+  /** Present only when the component declared when it acts. */
+  activation?: string;
+  target: GuiRenderTarget;
+  registeredBy: string;
+}
+
+const GUI_TARGETS: readonly GuiRenderTarget[] = ['raster', 'text', 'slot'];
+
+/**
+ * The gui-components entries from an `authoring.describe` payload. Entries
+ * that lack the fields the studio relies on are dropped, never guessed at.
+ */
+export function guiComponentsOf(describe: Record<string, unknown>): GuiComponentInfo[] {
+  const list = describe.guiComponents;
+  if (!Array.isArray(list)) return [];
+  return list.filter((entry): entry is GuiComponentInfo => {
+    if (typeof entry !== 'object' || entry === null) return false;
+    const component = entry as Partial<GuiComponentInfo>;
+    return typeof component.id === 'string'
+      && typeof component.displayName === 'string'
+      && Array.isArray(component.parameters)
+      && GUI_TARGETS.includes(component.target as GuiRenderTarget);
+  });
 }
 
 export function unwrap(response: Response): Record<string, unknown> {
@@ -302,14 +344,21 @@ export const ops = {
       sourcePath?: string;
     },
   ) => c.call('authoring.saveModel', payload),
-  /** One studio save: many fields, one revision, one reload. */
+  /**
+   * One studio save: many fields, one revision, one reload. `assets` are committed in the
+   * same transaction as the edits (a paint layer's PNG): all of them land, or none does.
+   * `edits` may be empty only when `assets` is not (a paint-only save still takes a revision).
+   */
   setFields: (
     c: EditorChannel,
     pack: string,
     path: string,
     rev: number,
     edits: FieldEditPayload[],
-  ) => c.call('authoring.setFields', { pack, path, rev, edits }),
+    assets: AssetUpload[] = [],
+  ) => c.call('authoring.setFields', {
+    pack, path, rev, edits, ...(assets.length > 0 ? { assets } : {}),
+  }),
   /** Where is an asset or resource used? Bounded; the reply carries what it did not read. */
   references: (c: EditorChannel, pack: string, kind: 'asset' | 'resource', target: string) =>
     c.call('authoring.references', { pack, kind, target }),

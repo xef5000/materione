@@ -1,0 +1,134 @@
+{
+  "meta": {
+    "file": "editor-ops-v1.json",
+    "name": "materione editor op frames",
+    "version": 1
+  },
+  "setFields": {
+    "conflict": {
+      "request": {
+        "id": "ops-2",
+        "op": "authoring.setFields",
+        "payload": {
+          "assets": [
+            {
+              "data": "iVBORw0KGgo=",
+              "path": "assets/textures/gui/shop/art.png"
+            }
+          ],
+          "edits": [
+            {
+              "field": [
+                "shop",
+                "title"
+              ],
+              "value": "Market"
+            }
+          ],
+          "pack": "demo",
+          "path": "guis/shop.yml",
+          "rev": 1
+        }
+      },
+      "response": {
+        "error": {
+          "code": "MTR-0034",
+          "hint": "reopen the entry and re-apply your change",
+          "message": "document changed elsewhere: expected rev 1, current rev 2",
+          "resource": "demo/guis/shop.yml"
+        },
+        "id": "ops-2",
+        "ok": false,
+        "op": "authoring.setFields"
+      }
+    },
+    "pixelOnly": {
+      "request": {
+        "id": "ops-3",
+        "op": "authoring.setFields",
+        "payload": {
+          "assets": [
+            {
+              "data": "iVBORw0KGgo=",
+              "path": "assets/textures/gui/shop/art.png"
+            }
+          ],
+          "edits": [],
+          "pack": "demo",
+          "path": "guis/shop.yml",
+          "rev": 2
+        }
+      },
+      "response": {
+        "data": {
+          "parsed": {
+            "shop": {
+              "layers": [
+                {
+                  "height": 168,
+                  "id": "frame",
+                  "type": "panel",
+                  "width": 176
+                }
+              ],
+              "rows": 3,
+              "title": "Market"
+            }
+          },
+          "raw": "shop:\n  title: Market\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
+          "rev": 3
+        },
+        "id": "ops-3",
+        "ok": true,
+        "op": "authoring.setFields"
+      }
+    },
+    "request": {
+      "id": "ops-1",
+      "op": "authoring.setFields",
+      "payload": {
+        "assets": [
+          {
+            "data": "iVBORw0KGgo=",
+            "path": "assets/textures/gui/shop/art.png"
+          }
+        ],
+        "edits": [
+          {
+            "field": [
+              "shop",
+              "title"
+            ],
+            "value": "Market"
+          }
+        ],
+        "pack": "demo",
+        "path": "guis/shop.yml",
+        "rev": 1
+      }
+    },
+    "response": {
+      "data": {
+        "parsed": {
+          "shop": {
+            "layers": [
+              {
+                "height": 168,
+                "id": "frame",
+                "type": "panel",
+                "width": 176
+              }
+            ],
+            "rows": 3,
+            "title": "Market"
+          }
+        },
+        "raw": "shop:\n  title: Market\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
+        "rev": 2
+      },
+      "id": "ops-1",
+      "ok": true,
+      "op": "authoring.setFields"
+    }
+  }
+}

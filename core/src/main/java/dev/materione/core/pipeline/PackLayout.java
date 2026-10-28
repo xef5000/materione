@@ -24,7 +24,7 @@ public final class PackLayout {
     /** Content-type directories under a pack root, in discovery order. */
     public static final List<String> CONTENT_DIRS = List.of(
             "templates", "items", "recipes", "blocks", "furnitures", "glyphs", "sounds", "paintings",
-            "effects", "menus", "dialogs", "huds");
+            "effects", "guis", "menus", "dialogs", "huds");
 
     /** The manifest file at a pack root. */
     public static final String MANIFEST_FILE = "pack.yml";

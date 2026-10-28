@@ -130,7 +130,10 @@ public interface AuthoringApi {
     /** Lossless single-field or scalar-list patch preserving comments and formatting ({@code edit.setScalar}). */
     ApiResult<DocumentView> setScalar(ActorContext actor, SetScalarRequest request);
 
-    /** Atomic batch of field patches — 1 revision, 1 audit, 1 reload ({@code authoring.setFields}). */
+    /**
+     * Atomic batch of field patches — 1 revision, 1 audit, 1 reload ({@code authoring.setFields}),
+     * optionally with binaries committed in the same transaction ({@link SetFieldsRequest#assets()}).
+     */
     ApiResult<DocumentView> setFields(ActorContext actor, SetFieldsRequest request);
 
     /** Rename/move a document across folders with truthful {@code move-from} lineage ({@code edit.move}). */
@@ -370,9 +373,24 @@ public interface AuthoringApi {
         }
     }
 
-    /** {@link #setFields}: atomic batch of scalar/structured patches — one revision, one audit, one reload. */
+    /**
+     * {@link #setFields}: atomic batch of scalar/structured patches — one revision, one audit, one reload.
+     * {@code assets} are binaries committed in the same transaction (a GUI's paint PNG, say):
+     * they follow the asset store's {@code assets/} path rules, and any failure keeps neither
+     * the edits nor the binaries.
+     */
     record SetFieldsRequest(
-            String pack, String path, int expectedRevision, List<FieldEdit> edits) {}
+            String pack, String path, int expectedRevision, List<FieldEdit> edits, List<ModelAsset> assets) {
+
+        public SetFieldsRequest {
+            assets = assets == null ? List.of() : List.copyOf(assets);
+        }
+
+        /** Field edits only, the common studio save. */
+        public SetFieldsRequest(String pack, String path, int expectedRevision, List<FieldEdit> edits) {
+            this(pack, path, expectedRevision, edits, List.of());
+        }
+    }
 
     /** {@link #moveDocument}: moves (and re-keys the journal of) one document. */
     record MoveDocumentRequest(String pack, String fromPath, int expectedRevision, String toPath) {}
@@ -380,7 +398,7 @@ public interface AuthoringApi {
     /** {@link #deleteDocument}: revision-guarded; the journal keeps the history. */
     record DeleteDocumentRequest(String pack, String path, int expectedRevision) {}
 
-    /** One binary staged by {@link #saveModelTransaction}: a shipped asset or a thumbnail. */
+    /** One binary staged by {@link #saveModelTransaction} or {@link #setFields}: a shipped asset (or, for models, a thumbnail). */
     record ModelAsset(String path, byte[] bytes) {}
 
     /**

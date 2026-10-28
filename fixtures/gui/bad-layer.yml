@@ -1,0 +1,28 @@
+# One bad layer quarantines alone (gui.md §2): every layer that breaks is skipped with
+# MTR-0052 and the rest of this GUI still parses. Each skipped layer below is deliberate.
+gallery:
+  title: Gallery
+  rows: 3
+  layers:
+    - id: frame
+      type: panel
+      width: 176
+      height: 168
+    - id: broken                 # panel without its required width and height
+      type: panel
+      x: 4
+    - id: ghost                  # no such component is registered
+      type: example:ghost
+    - id: frame                  # duplicate of the first layer's id
+      type: slots
+    - id: wells
+      type: slots
+      region: container
+    - id: lonely_item            # slot 40 lies outside a three-row chest (0..26)
+      type: item
+      slot: 40
+      item: minecraft:diamond_sword
+    - id: bad_text              # opacity is for raster layers, and text is title text
+      type: text
+      text: "Hi"
+      opacity: 50

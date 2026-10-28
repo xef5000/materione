@@ -1,6 +1,8 @@
 package dev.materione.plugin.runtime;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.gui.GuiComponent;
+import dev.materione.content.gui.GuiComponents;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
@@ -137,6 +139,15 @@ public final class PipelineService {
         dev.materione.content.effects.EffectType effects = new dev.materione.content.effects.EffectType();
         registry.register(
                 NamespacedId.of("materione", "effect"), effects, effects.describe(), "materione");
+        // GUI layer kinds through the registry path addons use (gui.md §3), then the gui type
+        // that resolves its layers against them
+        var components = registries.registry(RegistryKeys.GUI_COMPONENTS, GuiComponent.class);
+        for (GuiComponent component : GuiComponents.builtins()) {
+            components.register(NamespacedId.of("materione", component.name()),
+                    component, component.describe(), "materione");
+        }
+        var guis = new dev.materione.content.gui.GuiType(components);
+        registry.register(NamespacedId.of("materione", "gui"), guis, guis.describe(), "materione");
     }
 
     public ContentRuntime runtime() {

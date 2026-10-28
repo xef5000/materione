@@ -376,6 +376,14 @@ Canonical document reads for this projection also stop at the existing 8 MiB
 transaction limit per file. Oversized files remain visible with unavailable read
 metadata; the guard does not quarantine otherwise valid runtime content.
 
+The M6 GUI type adds a per-part quarantine: one bad layer is skipped and the rest of its
+GUI still compiles ([`gui.md`](gui.md) §2). `ContentType.diagnose` carries the skip to the
+bus, once per layer, targeting `layers.<index>` so the editor opens that layer:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0052` | warning | A GUI layer was skipped: unknown or malformed `type:`, a missing or invalid field the component rejects, a duplicate or malformed `id:`, or a component that failed while parsing. The layer is absent from the compiled GUI; the GUI and its other layers are unaffected. Fix the named layer's fields. |
+
 ---
 
 ## 6. Platform isolation layer

@@ -21,6 +21,6 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(51); // MTR-0051: resource-summary read budget.
+        assertThat(DiagnosticCodes.all()).hasSize(52); // MTR-0052: GUI layer skipped.
     }
 }

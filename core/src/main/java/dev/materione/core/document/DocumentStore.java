@@ -623,6 +623,33 @@ public final class DocumentStore {
     }
 
     /**
+     * Records a revision whose YAML bytes do not change: a studio save that only
+     * carries binaries (a paint layer's PNG). It is revision-guarded like every
+     * write, so a stale save still conflicts, and it journals one entry carrying
+     * the document's current hash. The journal's hash rule ({@link #read}) then
+     * sees no external change, so the entry is the only trace.
+     *
+     * @return the document at its new revision, with its unchanged text
+     */
+    public Document recordRevision(String pack, String path, int expectedRevision, String action,
+            String actor) throws IOException {
+        synchronized (lock) {
+            assertExpectedRevision(pack, path, expectedRevision);
+            Path file = resolve(pack, path);
+            if (!Files.isRegularFile(file)) {
+                throw new java.nio.file.NoSuchFileException(path);
+            }
+            byte[] bytes = Files.readAllBytes(file);
+            String hash = Documents.sha256(bytes);
+            appendRevision(pack, path, new Revision(
+                    currentRevision(pack, path) + 1, System.currentTimeMillis(), actor, action, hash));
+            trimJournal(pack, path);
+            return new Document(pack, path, new String(bytes, StandardCharsets.UTF_8),
+                    currentRevision(pack, path), hash);
+        }
+    }
+
+    /**
      * Applies several scalar patches as <em>one</em> write: the studio saves a
      * whole screen of fields and the author gets one revision, one journal
      * entry and one reload — not one per keystroke-completed field. Every edit

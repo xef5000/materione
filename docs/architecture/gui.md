@@ -29,43 +29,44 @@
 ## 2. File format
 
 ```yaml
-# content/packs/<pack>/guis/shop/main.yml
-title: Shop                    # accessibility/fallback title (narration, title-less clients)
-rows: 6                        # 1..6 (chest); other containers are a later extension
-layers:                        # bottom → top
-  - id: frame                  # stable, unique within the GUI; [a-z0-9_]+
-    type: panel                # component name in the gui-components registry
-    name: Frame                # optional display name in the layers panel
-    x: 0
-    y: 0
-    width: 176
-    height: 222
-  - id: wells
-    type: slots
-    region: container          # container | player | all
-  - id: art
-    type: paint                # pixel layer, backed by a canvas-sized PNG asset
-    image: gui/shop/main/art   # textures/ implied, like every other texture reference
-    opacity: 100
-  - id: buy
-    type: button
-    x: 115
-    y: 70
-    width: 52
-    height: 20
-    style: { fill: "#C6C6C6", highlight: "#FFFFFF", shadow: "#555555", outline: "#000000" }
-  - id: heading
-    type: text
-    x: 8
-    y: 6
-    text: "Shop"
-    font: smallcaps            # smallcaps | default
-    color: "#404040"
-  - id: sword
-    type: item
-    slot: 13
-    item: shop:gui/main/sword  # a Materione item or a vanilla material (minecraft:diamond_sword)
-    amount: 1
+# content/packs/<pack>/guis/shop.yml
+shop:                          # one resource per key (master §7.2); the key is the GUI id
+  title: Shop                  # accessibility/fallback title (narration, title-less clients)
+  rows: 6                      # 1..6 (chest); other containers are a later extension
+  layers:                      # bottom → top
+    - id: frame                # stable, unique within the GUI; [a-z0-9_]+
+      type: panel              # component name in the gui-components registry
+      name: Frame              # optional display name in the layers panel
+      x: 0
+      y: 0
+      width: 176
+      height: 222
+    - id: wells
+      type: slots
+      region: container        # container | player | all
+    - id: art
+      type: paint              # pixel layer, backed by a canvas-sized PNG asset
+      image: gui/shop/main/art # textures/ implied, like every other texture reference
+      opacity: 100
+    - id: buy
+      type: button
+      x: 115
+      y: 70
+      width: 52
+      height: 20
+      style: { fill: "#C6C6C6", highlight: "#FFFFFF", shadow: "#555555", outline: "#000000" }
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "Shop"
+      font: smallcaps          # smallcaps | default
+      color: "#404040"
+    - id: sword
+      type: item
+      slot: 13
+      item: shop:gui/main/sword # a Materione item or a vanilla material (minecraft:diamond_sword)
+      amount: 1
 ```
 
 Common layer fields, owned by the gui type and not by components: `id`, `type`, `name`,
@@ -244,6 +245,28 @@ extended with an optional `assets` list committed atomically with the field edit
 One new runtime op opens a GUI for the session's player (§5). Protocol fixtures grow
 accordingly and both sides test them (web.md).
 
+As built (#183): `authoring.setFields` takes an optional `assets: [{path, data}]` (the
+`assets.put` shape: pack-relative path, standard base64 bytes). The core stages every
+binary beside its target, validates the path, then promotes it and patches the document
+under one lock; a stale revision, a refused path, an oversized binary or a failed write
+restores both (the model save-back's rollback, shared as `AssetStaging`). Binaries may
+only land under `assets/`: thumbnails stay the model transaction's. The golden frames are
+`fixtures/protocol/editor-ops-v1.json`, checked by `EditorOpsGoldenTest` (JVM) and
+`ops-golden.spec.ts` (SPA).
+
+A **paint-only save** is a `setFields` with an empty `edits` list and at least one asset (a
+paint layer changed, no field did). It takes a new revision with the YAML bytes unchanged,
+so a stale studio save still conflicts. The revision is recorded as a journal entry
+(`DocumentStore.recordRevision`, action `assets`) that repeats the document's current hash.
+This is the cleanest correct form for the journal model: `syncRevision` infers an external
+edit only when the file's hash differs from the last entry, so a repeated hash is consistent,
+and it avoids rewriting identical bytes. The save keeps the same guarantees as any other:
+the revision check, the all-or-none rollback (the journal is restored with the assets), one
+audit line and one reload. A save with neither edits nor assets is refused (`MTR-0008`),
+on the server and in the demo. `authoring.describe` carries `guiComponents` next to
+`behavior`, one entry per `gui-components` registry entry (`id`, the self-description,
+`target`, `registeredBy`), read on every call like the mechanics vocabulary.
+
 ## 8. Deferred — and how it plugs in
 
 | Later | Seam |
@@ -264,3 +287,38 @@ accordingly and both sides test them (web.md).
    opt-in pack-level lang override (global effect — must be a visible owner choice).
 3. **Maximum background bitmap size** per client version (font provider limits) and whether
    tall canvases need splitting into several glyphs.
+
+## 10. Decisions taken in #183 (content type and component SPI)
+
+These fill gaps the sections above leave open. Each one is reversible by the owner.
+
+1. **Keyed file, not a bare mapping.** §2 now shows the GUI under its id key. The pipeline
+   (`ParseStage`) reads one resource per top-level key with a mapping value, which is the
+   master §7.2 rule for every content type; a bare `title:`/`rows:`/`layers:` file would
+   parse to no resource at all.
+2. **Flat discovery in v1.** A GUI file is `guis/<name>.yml`, not `guis/**/*.yml`. The
+   pipeline lists each content directory non-recursively for every type, so folder content
+   is not compiled anywhere today (the editor can create folders that the pipeline skips).
+   Nested GUI folders wait for a pipeline-wide decision about folders, not a GUI-only special
+   case.
+3. **Per-part diagnostics are a `ContentType` hook.** `ContentType.diagnose(parsed)` (default
+   empty) returns the non-fatal problems of a definition that still compiles. The pack
+   compiler publishes them against the resource. The GUI type uses it for `MTR-0052`, one
+   diagnostic per skipped layer, targeting `layers.<index>`. The skipped layer is absent from
+   `GuiDefinition.layers()`; it is never guessed at.
+4. **Opacity belongs to raster layers, enforced.** A non-raster layer that sets `opacity:` is
+   skipped (`MTR-0052`), rather than silently ignoring the value.
+5. **Unknown layer keys are not errors.** Common fields belong to the gui type; the rest is
+   handed to the component, which reads what it knows. Unknown keys stay in the file
+   (lossless round trip), and a component may reject them only if it chooses to.
+6. **Render methods are declared, not implemented.** `CompiledGuiLayer.paint`, `drawText` and
+   `placeSlots` are default methods that throw `UnsupportedOperationException` with a `#184`
+   reference. Each built-in implements parsing only; nothing calls the render methods until #184.
+7. **Components register like content types.** The plugin's `PipelineService.registerBuiltins`
+   registers the seven built-ins into `gui-components` through `Registry.register`, then the
+   `gui` type. An addon uses the same registry, under the same bootstrap and reload window
+   rules as content types. No `GuiComponentsApi` facade exists yet; if addons need one, it
+   mirrors `MechanicsApi` in its own issue.
+8. **Component configuration carries the geometry.** `GuiComponentConfiguration` includes
+   `rows`, so a component can bound-check its own slots (the `item` component rejects a slot
+   outside the GUI's rows) without the gui type knowing component rules.

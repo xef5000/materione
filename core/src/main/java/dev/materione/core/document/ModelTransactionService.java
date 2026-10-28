@@ -4,9 +4,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +17,8 @@ import java.util.regex.Pattern;
  * the {@code .materione/model-links.json} relationship entry, and patches the
  * owner field — all-or-nothing. Any failure restores every touched file and
  * the owner document's journal checkpoint, so a rejected save leaves no
- * partial model changes behind.
+ * partial model changes behind. The staging and rollback mechanics are shared
+ * with the field save with assets ({@link AssetStaging}).
  *
  * <p>Core owns the filesystem mutation (D1); the host layer queues the
  * pipeline reload and renders the error diagnostics.
@@ -27,8 +26,7 @@ import java.util.regex.Pattern;
 public final class ModelTransactionService {
 
     // Also bounds a single canonical document read by the summary projection.
-    static final int MAX_TRANSACTION_BYTES = 8 * 1024 * 1024;
-    private static final Object MODEL_SAVE_LOCK = new Object();
+    static final int MAX_TRANSACTION_BYTES = AssetStaging.MAX_BYTES;
 
     /** Pack content: everything the compiler ships to clients. */
     private static final Pattern SHIPPED_ASSET =
@@ -70,22 +68,9 @@ public final class ModelTransactionService {
      */
     public DocumentStore.Document save(ModelTransaction spec, Runnable afterAssetPromotion)
             throws IOException {
-        synchronized (MODEL_SAVE_LOCK) {
+        synchronized (AssetStaging.LOCK) {
             String pack = spec.pack();
-            if (pack.isBlank()) {
-                throw new IllegalArgumentException("missing field 'pack'");
-            }
-            if (!pack.matches("[a-z0-9_-]{2,32}")) {
-                throw new IllegalArgumentException("invalid pack id: " + pack);
-            }
-            Path normalizedPacksRoot = packsRoot.normalize();
-            Path packRoot = normalizedPacksRoot.resolve(pack).normalize();
-            if (!packRoot.startsWith(normalizedPacksRoot)) {
-                throw new IllegalArgumentException("pack escapes content root");
-            }
-            if (!Files.isRegularFile(packRoot.resolve("pack.yml"))) {
-                throw new IllegalArgumentException("pack does not exist: " + pack);
-            }
+            Path packRoot = AssetStaging.packRoot(packsRoot, pack);
             String ownerPath = spec.ownerPath();
             boolean createOwner = spec.createOwner();
             boolean attachOwner = createOwner || !ownerPath.isBlank();
@@ -101,7 +86,10 @@ public final class ModelTransactionService {
             if (attachOwner && !createOwner && field.isEmpty()) {
                 throw new IllegalArgumentException("model owner field is required");
             }
-            List<StagedAsset> assets = stage(pack, spec.assets());
+            List<AssetStaging.StagedAsset> assets = AssetStaging.stage(
+                    packRoot, spec.assets(),
+                    relative -> SHIPPED_ASSET.matcher(relative).matches()
+                            || THUMBNAIL_ASSET.matcher(relative).matches());
             if (createOwner) {
                 if (spec.ownerId().isBlank()) {
                     throw new IllegalArgumentException("missing field 'ownerId'");
@@ -149,17 +137,17 @@ public final class ModelTransactionService {
                         modelReference, sourcePath));
             }
 
-            Map<Path, Backup> backups = new LinkedHashMap<>();
+            Map<Path, AssetStaging.Backup> backups = new LinkedHashMap<>();
             DocumentStore.Checkpoint ownerCheckpoint =
                     attachOwner ? documents.checkpoint(pack, ownerPath) : null;
             try {
-                for (StagedAsset asset : assets) {
-                    backups.put(asset.target(), Backup.capture(asset.target()));
+                for (AssetStaging.StagedAsset asset : assets) {
+                    backups.put(asset.target(), AssetStaging.Backup.capture(asset.target()));
                     Files.createDirectories(asset.target().getParent());
                     Files.write(asset.temp(), asset.bytes());
                 }
-                for (StagedAsset asset : assets) {
-                    move(asset.temp(), asset.target());
+                for (AssetStaging.StagedAsset asset : assets) {
+                    AssetStaging.move(asset.temp(), asset.target());
                 }
                 afterAssetPromotion.run();
                 String actor = spec.actor();
@@ -186,13 +174,13 @@ public final class ModelTransactionService {
                                 + " (" + assets.size() + " assets)");
                 return updated;
             } catch (Exception failure) {
-                restore(backups);
+                AssetStaging.restore(backups);
                 if (ownerCheckpoint != null) {
                     documents.restore(ownerCheckpoint);
                 }
                 throw failure;
             } finally {
-                for (StagedAsset asset : assets) {
+                for (AssetStaging.StagedAsset asset : assets) {
                     Files.deleteIfExists(asset.temp());
                 }
             }
@@ -201,66 +189,14 @@ public final class ModelTransactionService {
 
     // ------------------------------------------------------------------
 
-    private List<StagedAsset> stage(String pack, List<ModelTransaction.Asset> values)
-            throws IOException {
-        if (values == null || values.size() > 128) {
-            throw new IllegalArgumentException("model transaction has too many assets");
-        }
-        List<StagedAsset> assets = new ArrayList<>();
-        var targets = new HashSet<Path>();
-        int total = 0;
-        Path packRoot = packsRoot.resolve(pack).normalize();
-        for (ModelTransaction.Asset value : values) {
-            String relative = value.path() == null ? "" : value.path().replace('\\', '/');
-            if (relative.isEmpty()) {
-                throw new IllegalArgumentException("missing field 'path'");
-            }
-            boolean allowed = SHIPPED_ASSET.matcher(relative).matches()
-                    || THUMBNAIL_ASSET.matcher(relative).matches();
-            if (!allowed || relative.contains("..")) {
-                throw new IllegalArgumentException("invalid model asset path: " + relative);
-            }
-            byte[] bytes = value.bytes();
-            total += bytes.length;
-            if (total > MAX_TRANSACTION_BYTES) {
-                throw new IllegalArgumentException("model transaction exceeds 8 MiB");
-            }
-            Path target = packRoot.resolve(relative).normalize();
-            if (!target.startsWith(packRoot)) {
-                throw new IllegalArgumentException("model asset escapes its pack");
-            }
-            if (!targets.add(target)) {
-                throw new IllegalArgumentException("duplicate model asset path: " + relative);
-            }
-            if (Files.exists(target) && !Files.isRegularFile(target)) {
-                throw new IllegalArgumentException("model asset target is not a regular file: " + relative);
-            }
-            rejectSymlinkPath(packRoot, target);
-            Path temp = target.resolveSibling(target.getFileName() + ".model-tmp-" + System.nanoTime());
-            assets.add(new StagedAsset(target, temp, bytes));
-        }
-        return assets;
-    }
-
-    private static void rejectSymlinkPath(Path packRoot, Path target) {
-        for (Path path = target; path != null && path.startsWith(packRoot); path = path.getParent()) {
-            if (Files.isSymbolicLink(path)) {
-                throw new IllegalArgumentException("model asset path crosses a symbolic link");
-            }
-            if (path.equals(packRoot)) {
-                return;
-            }
-        }
-    }
-
-    private StagedAsset relationship(
+    private AssetStaging.StagedAsset relationship(
             Path packRoot,
             String ownerPath,
             String field,
             String modelReference,
             String sourcePath) throws IOException {
         Path target = packRoot.resolve(".materione").resolve("model-links.json");
-        rejectSymlinkPath(packRoot, target);
+        AssetStaging.rejectSymlinkPath(packRoot, target);
         Map<String, Object> manifest = new LinkedHashMap<>();
         Map<String, Object> links = new LinkedHashMap<>();
         if (Files.isRegularFile(target)) {
@@ -285,35 +221,6 @@ public final class ModelTransactionService {
         manifest.put("links", links);
         byte[] bytes = (ModelLinksJson.serialize(manifest) + "\n")
                 .getBytes(StandardCharsets.UTF_8);
-        Path temp = target.resolveSibling(target.getFileName() + ".model-tmp-" + System.nanoTime());
-        return new StagedAsset(target, temp, bytes);
-    }
-
-    private static void restore(Map<Path, Backup> backups) throws IOException {
-        for (var entry : backups.entrySet()) {
-            if (entry.getValue().existed()) {
-                Files.write(entry.getKey(), entry.getValue().bytes());
-            } else {
-                Files.deleteIfExists(entry.getKey());
-            }
-        }
-    }
-
-    private static void move(Path from, Path to) throws IOException {
-        try {
-            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
-        }
-    }
-
-    private record StagedAsset(Path target, Path temp, byte[] bytes) {}
-
-    private record Backup(boolean existed, byte[] bytes) {
-        private static Backup capture(Path path) throws IOException {
-            return Files.isRegularFile(path)
-                    ? new Backup(true, Files.readAllBytes(path))
-                    : new Backup(false, new byte[0]);
-        }
+        return new AssetStaging.StagedAsset(target, AssetStaging.tempFor(target), bytes);
     }
 }
