@@ -554,13 +554,13 @@ the hello — no second connect, no window for the answer to change. After the h
 channel never changes pipe; the next session decides again.
 
 **What the hint is.** `DirectHint` (plugin) puts `direct.url` in the *sealed* blob only when
-asking is worthwhile. `editor_direct_hint` (default `auto`):
+asking is worthwhile. `editor_direct_hint` (default `off`; missing or unrecognized values also read as `off`):
 
 | Mode | Hint emitted when |
 |---|---|
 | `auto` | the command sender is a player connected from a **loopback** address (browser and server share a machine) and the listener answers on loopback; **or** `editor_public_url` pins an `https://` front (reverse proxy). Console, remote and LAN senders get none. |
 | `always` | the listener runs (dev/test, or an owner who knows the browser is co-located) |
-| `off` | never — the listener is not advertised |
+| `off` (default) | never — the listener is not advertised; cloud links never invite a local probe, so no browser local-network prompt can appear |
 
 `editor_local_listener: false` goes further and never opens the port (relay-only, the
 shared-hosting posture). The listener default is unchanged and safe: bound to `127.0.0.1`,

@@ -21,7 +21,7 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- Settings `editor_direct_hint` (`auto`/`always`/`off`), `editor_public_url` (an `https://`
+- Settings `editor_direct_hint` (`off` by default; `auto` or `always` opt in to the local check), `editor_public_url` (an `https://`
   reverse-proxy front for the listener) and `editor_local_listener` (`false` never opens the port).
 - The Server view shows whether the session is on the cloud relay or direct, with a per-browser
   "always use the cloud relay" switch.

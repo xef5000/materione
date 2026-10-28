@@ -382,7 +382,7 @@ first hello; every other outcome — no hint, mixed-content block, timeout, wron
 declined — stays on the relay with no visible error. Plain-HTTP LAN addresses are unreachable from
 the HTTPS cloud page by browser rules and are not attempted. A relay failure no longer falls back to
 a local link on its own (`MTR-0050` now refuses and points at `/materione editor local`, with the
-reachability caveat). New settings: `editor_direct_hint` (`auto`/`always`/`off`),
+reachability caveat). New settings: `editor_direct_hint` (`off` default / `auto` / `always`),
 `editor_public_url`, `editor_local_listener`; per-browser "always use the cloud relay" in the
 Server view; `?mode=relay|direct` now actually works (it was lost to the address-bar scrub). The
 Worker is unchanged — no new endpoint, no cost-model change.

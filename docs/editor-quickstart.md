@@ -43,8 +43,8 @@ the server cannot know whether that port is reachable from your browser.
 Servers can also point `relay_base_url` at their own relay instance
 (self-hosting: `cloud/editor-worker/README.md`).
 
-Optional `settings.yml` keys: `editor_direct_hint` (`auto` default, `always`,
-`off` — whether cloud links invite the local-editor check),
+Optional `settings.yml` keys: `editor_direct_hint` (`off` default, `auto`,
+`always` — whether cloud links invite the local-editor check),
 `editor_public_url` (an `https://` address of a reverse proxy in front of the
 listener, so the cloud page can use it), and `editor_local_listener: false`
 (never open the editor port at all — relay only, the safest choice on shared

@@ -72,7 +72,7 @@ public final class EditorTransportService {
     private dev.materione.core.document.PackWatcher packWatcher;
     private String advertiseHost = "";
     /** {@code editor_direct_hint}: whether/when cloud sessions advertise the local listener (web.md §4.4). */
-    private dev.materione.web.relay.DirectHint.Mode directHintMode = dev.materione.web.relay.DirectHint.Mode.AUTO;
+    private dev.materione.web.relay.DirectHint.Mode directHintMode = dev.materione.web.relay.DirectHint.Mode.OFF;
     /** {@code editor_public_url}: an https:// origin fronting the listener (TLS reverse proxy), or blank. */
     private String publicUrl = "";
     /** Trust prompts awaiting an in-game answer, keyed by nonce prefix. */
@@ -114,7 +114,7 @@ public final class EditorTransportService {
         relayBaseUrl = settings.getString("relay_base_url", "https://editor.materione.com");
         editorMode = settings.getString("editor_mode", "cloud");
         directHintMode = dev.materione.web.relay.DirectHint.Mode.parse(
-                settings.getString("editor_direct_hint", "auto"));
+                settings.getString("editor_direct_hint", "off"));
         publicUrl = settings.getString("editor_public_url", "");
 
         KeyPair identity = new IdentityKeystore(diagnostics, new SecureRandom()).load(storage.storageDir());

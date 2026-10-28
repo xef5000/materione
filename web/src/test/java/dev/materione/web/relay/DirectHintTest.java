@@ -86,9 +86,10 @@ class DirectHintTest {
 
     @Test
     void modeParsingFailsSafe() {
-        assertThat(Mode.parse(null)).isEqualTo(Mode.AUTO);
+        assertThat(Mode.parse(null)).isEqualTo(Mode.OFF);
         assertThat(Mode.parse("auto")).isEqualTo(Mode.AUTO);
-        assertThat(Mode.parse("garbage")).isEqualTo(Mode.AUTO);
+        assertThat(Mode.parse("garbage")).isEqualTo(Mode.OFF);
+        assertThat(Mode.parse(" Auto ")).isEqualTo(Mode.AUTO);
         assertThat(Mode.parse(" OFF ")).isEqualTo(Mode.OFF);
         assertThat(Mode.parse("false")).isEqualTo(Mode.OFF);
         assertThat(Mode.parse("Always")).isEqualTo(Mode.ALWAYS);

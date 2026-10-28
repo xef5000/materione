@@ -15,13 +15,14 @@ import java.util.Locale;
  *
  * <p>Modes ({@code editor_direct_hint}):
  * <ul>
- *   <li>{@code auto} (default) — hint only when the evidence says the admin's
+ *   <li>{@code auto} — hint only when the evidence says the admin's
  *       browser is on this machine (the command sender connected from a
  *       loopback address), or the owner pinned an HTTPS front
  *       ({@code editor_public_url});</li>
  *   <li>{@code always} — hint whenever the listener runs (dev/test, or an
  *       owner who knows the browser is co-located);</li>
- *   <li>{@code off} — never: the direct listener is not advertised.</li>
+ *   <li>{@code off} (default) — never: the direct listener is not advertised;
+ *       cloud links never invite a local probe.</li>
  * </ul>
  */
 public final class DirectHint {
@@ -29,15 +30,16 @@ public final class DirectHint {
     public enum Mode {
         AUTO, ALWAYS, OFF;
 
-        /** Anything unrecognized is {@code AUTO} (the safe middle), never {@code ALWAYS}. */
+        /** Missing or unrecognized is {@code OFF} (the default and safest), never {@code ALWAYS}. */
         public static Mode parse(String text) {
             if (text == null) {
-                return AUTO;
+                return OFF;
             }
             return switch (text.trim().toLowerCase(Locale.ROOT)) {
                 case "off", "false", "never", "no" -> OFF;
                 case "always", "true", "yes" -> ALWAYS;
-                default -> AUTO;
+                case "auto" -> AUTO;
+                default -> OFF;
             };
         }
     }
