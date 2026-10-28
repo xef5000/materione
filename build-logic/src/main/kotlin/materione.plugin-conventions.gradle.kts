@@ -43,6 +43,9 @@ tasks.named<ProcessResources>("processResources") {
     // filesMatching lambda would serialize the script object. Copy the value
     // into a local first so the stored lambda captures only a Map.
     val versionTokens = mapOf("materioneVersion" to pluginVersion)
+    // Filter arguments are not task inputs: declare the version so a
+    // snapshot <-> release (-Prelease) switch re-renders paper-plugin.yml.
+    inputs.property("materioneVersion", pluginVersion)
     filesMatching("paper-plugin.yml") {
         filter<org.apache.tools.ant.filters.ReplaceTokens>(
             "tokens" to versionTokens,

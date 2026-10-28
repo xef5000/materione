@@ -247,6 +247,15 @@ interactively.
 - **windows-canary** (non-blocking): build + integration on Windows. Promote to required
   after it has been green for a few weeks — Windows is a first-class dev platform here
   (path handling, kill-tree semantics, console encoding all differ).
+- **release** (`.github/workflows/release.yml`, `v*` tags only): checks the tag equals
+  `v` + the `gradle.properties` version, runs `./gradlew build -Prelease`, and stages a
+  **draft** GitHub release with `Materione-<version>.jar` and the tag's `CHANGELOG.md`
+  section as notes. Publishing the draft is a manual maintainer step.
+
+**Snapshot vs release versions.** `gradle.properties` holds the bare version (`0.1.0`). The
+root `build.gradle.kts` appends `-SNAPSHOT` to every project unless the build runs with
+`-Prelease`, so local and CI jars are always `Materione-<version>-SNAPSHOT.jar` and only the
+release workflow produces the unsuffixed production jar.
 
 No JDK matrix: the toolchain pins Java 21 everywhere (foojay provisions Temurin on CI;
 locally-resolvable JDKs like `~/.jdks/...` win when present).
@@ -258,6 +267,7 @@ locally-resolvable JDKs like `~/.jdks/...` win when present).
 - Windows shells (Git Bash) work for everything including the harness; the harness writes
   assertions against log files, never console stdout, and kills process trees
   descendants-first.
-- Version bumps happen once, in `gradle.properties` (`version=`) — the jar name, the
-  generated `MaterioneVersion`, `paper-plugin.yml`, and the harness's expected version all
-  derive from it.
+- Version bumps happen once, in `gradle.properties` (`version=`, without `-SNAPSHOT`) —
+  the jar name, the generated `MaterioneVersion`, `paper-plugin.yml`, and the harness's
+  expected version all derive from it (plus the `-SNAPSHOT` suffix unless `-Prelease`, §8).
+  Build a production jar locally with `./gradlew :plugin:shadowJar -Prelease`.
