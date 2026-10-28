@@ -831,6 +831,18 @@ cannot read, forge, replay, or reorder anything.
   its settings in over `--motion-fast`; reduced motion makes it instant. Specs: `item-modules.pw.ts`,
   `block-furniture-modules.pw.ts`, `templates.pw.ts`, `motion.pw.ts`; QA entries
   `editor.browser-item-module-panel` and `editor.browser-item-modules[-visual]`.
+- *As built (M5 studio layout — centered, capped widths):* the module studio (items, blocks,
+  furniture) is one **centered group** instead of tracks that stretch to the window edges. Layout
+  tokens in `app.css` (`--studio-column-max` 800 px, `--studio-panel-width` 320 px, `--studio-gap`,
+  and their sum `--studio-max-width`, plus `--studio-preview-width` 260 px for the classic side
+  preview) cap the list column (Appearance card, module rows, **Add module**) and the settings panel;
+  `Studio.svelte`'s body and `ModulesArea.svelte`'s grid centre those capped tracks, so a wide window
+  leaves empty background on both sides and the panel sits right next to the list. Inside the
+  Appearance card the render is at most 440 px and the tooltip sits beside it at the width of its
+  text, up to 360 px. The studio header stays full width: it is toolbar chrome whose Save sits in a
+  stable corner across every studio kind (glyphs, recipes and the like are not capped), and only the
+  content group is centered. Below 1100 px the panel still stacks under the list, now capped and
+  centered too. Spec: `studio-layout.pw.ts`; QA entry `editor.browser-studio-centered-layout`.
 - *As built (M5 per-type modules, issue #153 — blocks and furniture):* blocks and furniture use
   the same display + modules framework, with every module declared in the Java self-description
   (plugin.md §3) and the browser fixture serving those schemas straight from the plugin's golden

@@ -110,6 +110,18 @@
   --space-8: 32px;
   --space-10: 40px;
 
+  /*
+   * studio layout (docs/architecture/web.md, "Studio layout"): the studio body is one
+   * centered group, never anchored to the window edges. The list column (Appearance,
+   * module rows, Add module) and the settings panel each have a width cap; the group's
+   * cap is their sum, so extra window width becomes empty background on both sides.
+   */
+  --studio-column-max: 800px;
+  --studio-panel-width: 320px;
+  --studio-gap: var(--space-5);
+  --studio-max-width: calc(var(--studio-column-max) + var(--studio-gap) + var(--studio-panel-width));
+  --studio-preview-width: 260px;
+
   /* radius: three steps plus a pill for chips and avatars */
   --radius-sm: 4px;
   --radius: 8px;

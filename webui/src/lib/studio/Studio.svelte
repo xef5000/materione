@@ -603,7 +603,7 @@
     </p>
   {/if}
 
-  <div class="body" class:appearance={itemAppearance}>
+  <div class="body" class:appearance={itemAppearance} class:modules={modulesLayout}>
     {#if !itemAppearance}
     <aside class="preview">
       {#if typeDirectory === 'glyphs'}
@@ -896,9 +896,16 @@
     overflow-x: hidden;
     min-width: 0;
   }
+  /* The module studio is one centered group (--studio-* tokens, app.css): the tracks are capped and
+     centered, so a wide window leaves empty background on both sides instead of stretching the content
+     or pinning the settings panel to the window edge. */
+  .body.modules {
+    grid-template-columns: minmax(0, var(--studio-preview-width)) minmax(0, var(--studio-max-width));
+    justify-content: center;
+  }
   /* The Appearance component is the studio's centre: one column, no side preview (the settings panel sits beside the list). */
   .body.appearance {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, var(--studio-max-width));
   }
   /* The modules layout (issue 174) fills the form: the list and the settings panel each scroll on their own.
      No container-type here: containment makes this box the containing block of the fixed rich-text toolbars. */
