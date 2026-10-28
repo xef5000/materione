@@ -624,6 +624,484 @@
         }
       ]
     },
+    "guiComponents": [
+      {
+        "description": "A raised frame: the chest background, or any large raised area behind other layers",
+        "displayName": "Panel",
+        "id": "materione:panel",
+        "parameters": [
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Left edge in GUI pixels",
+            "example": "0",
+            "id": "x",
+            "label": "X",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 10,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Top edge in GUI pixels",
+            "example": "0",
+            "id": "y",
+            "label": "Y",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 20,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "description": "Width in GUI pixels (a chest is 176)",
+            "example": "176",
+            "id": "width",
+            "label": "Width",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 30,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "description": "Height in GUI pixels (a three-row chest is 168)",
+            "example": "168",
+            "id": "height",
+            "label": "Height",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 40,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Bevel colours: {fill, highlight, shadow, outline} as #RRGGBB or #AARRGGBB",
+            "id": "style",
+            "label": "Bevel colours",
+            "order": 50,
+            "required": false,
+            "section": "appearance",
+            "type": "raw",
+            "uiHint": "advanced"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "raster"
+      },
+      {
+        "description": "Inset wells for the container slots, the player inventory, or both",
+        "displayName": "Slots",
+        "id": "materione:slots",
+        "parameters": [
+          {
+            "advanced": false,
+            "allowedValues": [
+              "container",
+              "player",
+              "all"
+            ],
+            "default": "all",
+            "description": "Which slot area gets wells: container, player or all",
+            "example": "all",
+            "id": "region",
+            "label": "Region",
+            "options": [
+              {
+                "description": "The chest's own slots",
+                "label": "Container",
+                "value": "container"
+              },
+              {
+                "description": "The player's inventory and hotbar",
+                "label": "Player inventory",
+                "value": "player"
+              },
+              {
+                "description": "Container and player inventory",
+                "label": "Both",
+                "value": "all"
+              }
+            ],
+            "order": 10,
+            "required": false,
+            "section": "placement",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
+            "advanced": true,
+            "description": "Well colours: {fill, highlight, shadow} as #RRGGBB or #AARRGGBB",
+            "id": "style",
+            "label": "Well colours",
+            "order": 20,
+            "required": false,
+            "section": "appearance",
+            "type": "raw",
+            "uiHint": "advanced"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "raster"
+      },
+      {
+        "description": "A texture from the pack, placed on the GUI background",
+        "displayName": "Image",
+        "id": "materione:image",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Texture under the pack's textures/ (extension implied)",
+            "example": "gui/heart",
+            "id": "image",
+            "label": "Image",
+            "order": 10,
+            "referenceKind": "texture",
+            "required": true,
+            "section": "appearance",
+            "type": "reference",
+            "uiHint": "texture"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Left edge in GUI pixels",
+            "example": "0",
+            "id": "x",
+            "label": "X",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 20,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Top edge in GUI pixels",
+            "example": "0",
+            "id": "y",
+            "label": "Y",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 30,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Drawn width in GUI pixels; absent keeps the texture's own width",
+            "id": "width",
+            "label": "Width",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 40,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Drawn height in GUI pixels; absent keeps the texture's own height",
+            "id": "height",
+            "label": "Height",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 50,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "raster"
+      },
+      {
+        "description": "A pixel layer painted in the studio, stored as one canvas-sized PNG",
+        "displayName": "Paint",
+        "id": "materione:paint",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Canvas-sized PNG under the pack's textures/ (the studio writes it)",
+            "example": "gui/shop/main/art",
+            "id": "image",
+            "label": "Painting",
+            "order": 10,
+            "referenceKind": "texture",
+            "required": true,
+            "section": "appearance",
+            "type": "reference",
+            "uiHint": "texture"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "raster"
+      },
+      {
+        "description": "A raised control face; in this version it looks clickable and every click is cancelled",
+        "displayName": "Button",
+        "id": "materione:button",
+        "parameters": [
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Left edge in GUI pixels",
+            "example": "115",
+            "id": "x",
+            "label": "X",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 10,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Top edge in GUI pixels",
+            "example": "70",
+            "id": "y",
+            "label": "Y",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 20,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "description": "Width in GUI pixels",
+            "example": "52",
+            "id": "width",
+            "label": "Width",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 30,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "description": "Height in GUI pixels",
+            "example": "20",
+            "id": "height",
+            "label": "Height",
+            "max": 512.0,
+            "min": 1.0,
+            "order": 40,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Bevel colours: {fill, highlight, shadow, outline} as #RRGGBB or #AARRGGBB",
+            "id": "style",
+            "label": "Bevel colours",
+            "order": 50,
+            "required": false,
+            "section": "appearance",
+            "type": "raw",
+            "uiHint": "advanced"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "raster"
+      },
+      {
+        "description": "A line of title text, with a first-party small-caps font or the client's own font",
+        "displayName": "Text",
+        "id": "materione:text",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "The text to show (up to 128 characters)",
+            "example": "Shop",
+            "id": "text",
+            "label": "Text",
+            "order": 10,
+            "required": true,
+            "section": "appearance",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Left edge in GUI pixels",
+            "example": "8",
+            "id": "x",
+            "label": "X",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 20,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Top edge in GUI pixels",
+            "example": "6",
+            "id": "y",
+            "label": "Y",
+            "max": 512.0,
+            "min": 0.0,
+            "order": 30,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "smallcaps",
+              "default"
+            ],
+            "default": "smallcaps",
+            "description": "smallcaps (shipped with the pack) or default (the client's font)",
+            "example": "smallcaps",
+            "id": "font",
+            "label": "Font",
+            "options": [
+              {
+                "description": "First-party font, previewed pixel-exact",
+                "label": "Small caps",
+                "value": "smallcaps"
+              },
+              {
+                "description": "The client's own font; the preview is approximate",
+                "label": "Default",
+                "value": "default"
+              }
+            ],
+            "order": 40,
+            "required": false,
+            "section": "appearance",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
+            "advanced": false,
+            "default": "#404040",
+            "description": "Text colour as #RRGGBB or #AARRGGBB",
+            "example": "#404040",
+            "id": "color",
+            "label": "Colour",
+            "order": 50,
+            "required": false,
+            "section": "appearance",
+            "type": "string",
+            "uiHint": "text"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "text"
+      },
+      {
+        "description": "One item shown in a container slot: a Materione item or a vanilla material",
+        "displayName": "Item",
+        "id": "materione:item",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Chest slot, 0 at the top-left, row by row; must lie inside the GUI's rows",
+            "example": "13",
+            "id": "slot",
+            "label": "Slot",
+            "max": 53.0,
+            "min": 0.0,
+            "order": 10,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
+            "advanced": false,
+            "description": "A Materione item (ns:id) or a vanilla material (minecraft:diamond_sword)",
+            "example": "shop:gui/main/sword",
+            "id": "item",
+            "label": "Item",
+            "order": 20,
+            "referenceKind": "pack-item",
+            "required": true,
+            "section": "appearance",
+            "type": "reference",
+            "uiHint": "item"
+          },
+          {
+            "advanced": false,
+            "default": "1",
+            "description": "How many to show, 1 to 64",
+            "example": "1",
+            "id": "amount",
+            "label": "Amount",
+            "max": 64.0,
+            "min": 1.0,
+            "order": 30,
+            "required": false,
+            "section": "appearance",
+            "type": "integer",
+            "uiHint": "number"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "slot"
+      }
+    ],
     "types": [
       {
         "description": "A custom item: identity, appearance (item model), data components, behavior",
@@ -3331,6 +3809,133 @@
             "section": "appearance",
             "type": "list",
             "uiHint": "list"
+          }
+        ]
+      },
+      {
+        "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
+        "directory": "guis",
+        "displayName": "GUI",
+        "name": "gui",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Accessibility and fallback title (narration, title-less clients)",
+            "example": "Shop",
+            "id": "title",
+            "label": "Title",
+            "order": 0,
+            "required": true,
+            "section": "identity",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "Chest rows, 1 to 6",
+            "example": "3",
+            "id": "rows",
+            "label": "Rows",
+            "max": 6.0,
+            "min": 1.0,
+            "order": 10,
+            "required": true,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "rows"
+          },
+          {
+            "advanced": false,
+            "description": "Ordered layers, bottom to top; each layer is one component instance",
+            "id": "layers",
+            "label": "Layers",
+            "nested": [
+              {
+                "advanced": false,
+                "description": "Stable id, unique in this GUI ([a-z0-9_]+)",
+                "example": "frame",
+                "id": "id",
+                "label": "Id",
+                "order": 0,
+                "required": true,
+                "section": "identity",
+                "type": "string",
+                "uiHint": "text"
+              },
+              {
+                "advanced": false,
+                "description": "The component this layer is: panel, slots, image, paint, button, text or item, or an addon's qualified name",
+                "example": "panel",
+                "id": "type",
+                "label": "Component",
+                "order": 10,
+                "referenceKind": "gui-component",
+                "required": true,
+                "section": "identity",
+                "type": "reference",
+                "uiHint": "reference"
+              },
+              {
+                "advanced": false,
+                "description": "Display name in the layers panel",
+                "example": "Frame",
+                "id": "name",
+                "label": "Name",
+                "order": 20,
+                "required": false,
+                "section": "identity",
+                "type": "string",
+                "uiHint": "text"
+              },
+              {
+                "advanced": false,
+                "default": "true",
+                "description": "Hidden layers stay in the file but are not compiled",
+                "example": "true",
+                "id": "visible",
+                "label": "Visible",
+                "order": 30,
+                "required": false,
+                "section": "identity",
+                "type": "boolean",
+                "uiHint": "toggle"
+              },
+              {
+                "advanced": true,
+                "default": "false",
+                "description": "Editor-only: the studio will not move or edit this layer",
+                "example": "true",
+                "id": "locked",
+                "label": "Locked",
+                "order": 40,
+                "required": false,
+                "section": "identity",
+                "type": "boolean",
+                "uiHint": "toggle"
+              },
+              {
+                "advanced": true,
+                "default": "100",
+                "description": "Raster layers only: 0 is transparent, 100 is opaque",
+                "example": "100",
+                "id": "opacity",
+                "label": "Opacity",
+                "max": 100.0,
+                "min": 0.0,
+                "order": 50,
+                "required": false,
+                "section": "appearance",
+                "type": "integer",
+                "uiHint": "number",
+                "unit": "%"
+              }
+            ],
+            "order": 0,
+            "required": false,
+            "section": "layers",
+            "type": "list",
+            "uiHint": "structured-list"
           }
         ]
       }
@@ -6163,6 +6768,7 @@
     "effects": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  kind: rainbow # rainbow | wave | shake | pulse\n  speed: 3.0\n  # colors:\n  #   - \"#FF0000\"\n  #   - \"#0000FF\"\n  # Compiles into the injected text-shader overlay (runtime-systems §6).\n  # Use in text as <effect:demo_scaffold>…</effect>; test with\n  # /materione dev effect demo_scaffold hello.\n",
     "furnitures": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: block/demo_scaffold\n  display_name: \"Demo Scaffold\"\n  rotation: 90\n  hitboxes:\n    - type: interaction\n      offset: [0, 0, 0]\n      width: 1.0\n      height: 1.0\n  # seats:\n  #   - offset: [0, 0.3, 0]\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
     "glyphs": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: gui/demo_scaffold\n  ascent: 8\n  height: 8\n  # placeholders:\n  #   - \":demo_scaffold:\"\n  # emoji: true — chat interception + tab-completion\n  # The codepoint is allocated by the server and shown in the preview.\n",
+    "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      x: 0\n      y: 0\n      width: 176\n      height: 168\n    - id: wells\n      type: slots\n      region: all\n",
     "items": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  material: STICK\n  display_name: \"Demo Scaffold\"\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n",
     "paintings": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: painting/demo_scaffold # exactly 16 px per block\n  width: 1\n  height: 1\n  # author: \"Unknown\"\n  # title: \"Demo Scaffold\"\n  # placeable: false — join the vanilla random-placement pool\n  # Paintings apply at the next server restart (world datapack).\n",
     "recipes": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  type: shaped # shaped | shapeless | furnace\n  result: demo_scaffold\n  shape:\n    - \" A \"\n    - \" B \"\n    - \" A \"\n  ingredients:\n    A: minecraft:stone\n    B: minecraft:stick\n",
@@ -8901,6 +9507,133 @@
           "section": "appearance",
           "type": "list",
           "uiHint": "list"
+        }
+      ]
+    },
+    {
+      "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
+      "directory": "guis",
+      "displayName": "GUI",
+      "name": "gui",
+      "parameters": [
+        {
+          "advanced": false,
+          "description": "Accessibility and fallback title (narration, title-less clients)",
+          "example": "Shop",
+          "id": "title",
+          "label": "Title",
+          "order": 0,
+          "required": true,
+          "section": "identity",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "description": "Chest rows, 1 to 6",
+          "example": "3",
+          "id": "rows",
+          "label": "Rows",
+          "max": 6.0,
+          "min": 1.0,
+          "order": 10,
+          "required": true,
+          "section": "placement",
+          "type": "integer",
+          "uiHint": "number",
+          "unit": "rows"
+        },
+        {
+          "advanced": false,
+          "description": "Ordered layers, bottom to top; each layer is one component instance",
+          "id": "layers",
+          "label": "Layers",
+          "nested": [
+            {
+              "advanced": false,
+              "description": "Stable id, unique in this GUI ([a-z0-9_]+)",
+              "example": "frame",
+              "id": "id",
+              "label": "Id",
+              "order": 0,
+              "required": true,
+              "section": "identity",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The component this layer is: panel, slots, image, paint, button, text or item, or an addon's qualified name",
+              "example": "panel",
+              "id": "type",
+              "label": "Component",
+              "order": 10,
+              "referenceKind": "gui-component",
+              "required": true,
+              "section": "identity",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": false,
+              "description": "Display name in the layers panel",
+              "example": "Frame",
+              "id": "name",
+              "label": "Name",
+              "order": 20,
+              "required": false,
+              "section": "identity",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Hidden layers stay in the file but are not compiled",
+              "example": "true",
+              "id": "visible",
+              "label": "Visible",
+              "order": 30,
+              "required": false,
+              "section": "identity",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": true,
+              "default": "false",
+              "description": "Editor-only: the studio will not move or edit this layer",
+              "example": "true",
+              "id": "locked",
+              "label": "Locked",
+              "order": 40,
+              "required": false,
+              "section": "identity",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": true,
+              "default": "100",
+              "description": "Raster layers only: 0 is transparent, 100 is opaque",
+              "example": "100",
+              "id": "opacity",
+              "label": "Opacity",
+              "max": 100.0,
+              "min": 0.0,
+              "order": 50,
+              "required": false,
+              "section": "appearance",
+              "type": "integer",
+              "uiHint": "number",
+              "unit": "%"
+            }
+          ],
+          "order": 0,
+          "required": false,
+          "section": "layers",
+          "type": "list",
+          "uiHint": "structured-list"
         }
       ]
     }

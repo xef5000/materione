@@ -6,7 +6,9 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
@@ -52,6 +54,21 @@ public final class EditorContentOps {
             Supplier<List<Diagnostic>> diagnostics,
             Function<String, ActorContext> actorFor,
             Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary) {
+        register(dispatcher, authoring, types, diagnostics, actorFor, vocabulary, List::of);
+    }
+
+    /**
+     * Registers the ops with the GUI component registry as well: {@code guiComponents}
+     * is read from the {@code gui-components} registry entries, on each describe call.
+     */
+    public static void register(
+            RpcDispatcher dispatcher,
+            AuthoringApi authoring,
+            Supplier<List<ContentType>> types,
+            Supplier<List<Diagnostic>> diagnostics,
+            Function<String, ActorContext> actorFor,
+            Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary,
+            Supplier<List<RegistryEntry<?>>> guiComponents) {
         // Capability discovery (web.md §4.2): content types and the behavior
         // vocabulary, each read from where it is registered — never a copy.
         dispatcher.register("authoring.describe", request -> {
@@ -62,6 +79,7 @@ public final class EditorContentOps {
             }
             payload.add("types", array);
             payload.add("behavior", vocabularyJson(vocabulary.get()));
+            payload.add("guiComponents", guiComponentsJson(guiComponents.get()));
             return Wire.Response.success(request, payload);
         });
 
@@ -320,13 +338,15 @@ public final class EditorContentOps {
                     throw new IllegalArgumentException("too many edits in one save");
                 }
                 List<AuthoringApi.FieldEdit> edits = parseEdits(element);
+                List<AuthoringApi.ModelAsset> assets = parseAssets(body.get("assets"));
                 ApiResult<AuthoringApi.DocumentView> result = authoring.setFields(
                         actorFor.apply(actorOf(request)),
                         new AuthoringApi.SetFieldsRequest(
                                 requiredString(body, "pack"),
                                 requiredString(body, "path"),
                                 body.get("rev").getAsInt(),
-                                edits));
+                                edits,
+                                assets));
                 if (!result.ok()) {
                     return error(request, result.diagnostics(), safePath(body),
                             hintFor(result.diagnostics(), "reopen the entry and re-apply your change"));
@@ -988,6 +1008,47 @@ public final class EditorContentOps {
     }
 
     /** Parses a wire {@code edits} array: set edits carry a value, removals {@code remove: true}. */
+    /**
+     * The optional {@code assets} of a studio save: {@code {path, data}} entries with
+     * base64 bytes, the same shape {@code assets.put} takes. Absent means none; the
+     * path rules and the size caps are the core transaction's, not the wire's.
+     */
+    private static List<AuthoringApi.ModelAsset> parseAssets(com.google.gson.JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return List.of();
+        }
+        if (!element.isJsonArray()) {
+            throw new IllegalArgumentException("'assets' must be an array");
+        }
+        List<AuthoringApi.ModelAsset> assets = new java.util.ArrayList<>();
+        for (var entry : element.getAsJsonArray()) {
+            if (!entry.isJsonObject()) {
+                throw new IllegalArgumentException("'assets' entries must be objects with path and data");
+            }
+            JsonObject asset = entry.getAsJsonObject();
+            byte[] bytes = java.util.Base64.getDecoder().decode(requiredString(asset, "data"));
+            assets.add(new AuthoringApi.ModelAsset(requiredString(asset, "path"), bytes));
+        }
+        return assets;
+    }
+
+    /** Registry entries of the {@code gui-components} registry, described like mechanics. */
+    private static com.google.gson.JsonArray guiComponentsJson(List<RegistryEntry<?>> entries) {
+        var array = new com.google.gson.JsonArray();
+        for (RegistryEntry<?> entry : entries) {
+            if (!(entry.entry() instanceof GuiComponent component)) {
+                continue;
+            }
+            JsonObject json = new JsonObject();
+            json.addProperty("id", entry.id().toString());
+            describeInto(json, entry.description());
+            json.addProperty("target", component.target().name().toLowerCase(java.util.Locale.ROOT));
+            json.addProperty("registeredBy", entry.registeredBy());
+            array.add(json);
+        }
+        return array;
+    }
+
     private static List<AuthoringApi.FieldEdit> parseEdits(com.google.gson.JsonElement element) {
         if (element == null || !element.isJsonArray()) {
             throw new IllegalArgumentException("'edits' must be an array");

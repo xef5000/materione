@@ -229,7 +229,16 @@ export class DemoServer implements RpcChannel {
       if (edit.remove === true) yaml.deleteIn(field);
       else yaml.setIn(field, yaml.createNode(edit.value));
     }
+    // binaries ride the same save: every path is checked before anything is written
+    const assets = Array.isArray(p.assets) ? p.assets as Record<string, unknown>[] : [];
+    const assetPaths = assets.map((asset) => text(asset.path).replaceAll('\\', '/'));
+    for (const assetPath of assetPaths) {
+      if (!/^assets\/[A-Za-z0-9_./ -]+$/.test(assetPath) || assetPath.includes('..')) {
+        throw new DemoError('MTR-0008', `invalid asset path: ${assetPath}`);
+      }
+    }
     const document = await this.#store(pack, path, yaml.toString(), 'authoring.setFields');
+    assets.forEach((asset, index) => this.#assetPut(pack, assetPaths[index]!, text(asset.data)));
     return { rev: document.rev, raw: document.raw, parsed: structuredClone(document.parsed) };
   }
 

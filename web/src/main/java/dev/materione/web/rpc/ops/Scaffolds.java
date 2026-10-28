@@ -17,7 +17,8 @@ public final class Scaffolds {
 
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
-            List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects");
+            List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects",
+                    "guis");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -36,6 +37,7 @@ public final class Scaffolds {
             case "sounds" -> sound(name);
             case "paintings" -> painting(name);
             case "effects" -> effect(name);
+            case "guis" -> gui(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
                             + SCAFFOLD_TYPES);
@@ -110,6 +112,24 @@ public final class Scaffolds {
                 + "  #   - \":" + id + ":\"\n"
                 + "  # emoji: true — chat interception + tab-completion\n"
                 + "  # The codepoint is allocated by the server and shown in the preview.\n";
+    }
+
+    /** Mirrors core's New GUI starter; the plugin's scaffold test asserts the two are byte-identical. */
+    private static String gui(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  title: \"" + display(id) + "\"\n"
+                + "  rows: 3\n"
+                + "  layers:\n"
+                + "    - id: frame\n"
+                + "      type: panel\n"
+                + "      x: 0\n"
+                + "      y: 0\n"
+                + "      width: 176\n"
+                + "      height: 168\n"
+                + "    - id: wells\n"
+                + "      type: slots\n"
+                + "      region: all\n";
     }
 
     private static String sound(String id) {

@@ -141,7 +141,7 @@ class ModelTransactionServiceTest {
                         "{}".getBytes(StandardCharsets.UTF_8))),
                 "editor:session-one")))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("invalid model asset path");
+                .hasMessageContaining("invalid asset path");
 
         assertThat(Files.exists(temp.resolve("packs/demo/assets/models/gem.json"))).isFalse();
     }

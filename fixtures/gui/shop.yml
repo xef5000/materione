@@ -1,0 +1,54 @@
+# The seven built-in components in one GUI (gui.md §2). Golden for the lossless round trip:
+# load -> untouched save must be byte-identical, and the unknown field below must survive.
+shop:
+  title: Shop                    # accessibility/fallback title
+  rows: 6
+  layers:                        # bottom -> top
+    - id: frame                  # panel: the raised chest background
+      type: panel
+      name: Frame
+      x: 0
+      y: 0
+      width: 176
+      height: 222
+    - id: wells                  # slots: inset wells for the container
+      type: slots
+      region: container
+    - id: art                    # paint: a canvas-sized pixel layer
+      type: paint
+      image: gui/shop/main/art
+      opacity: 100
+    - id: banner                 # image: a texture placed on the canvas
+      type: image
+      image: gui/banner_strip
+      x: 8
+      y: 18
+      width: 160
+      height: 16
+      opacity: 80
+      future_field: keep me      # unknown to every component, preserved verbatim
+    - id: buy                    # button: a raised control face
+      type: button
+      x: 115
+      y: 70
+      width: 52
+      height: 20
+      style: { fill: "#C6C6C6", highlight: "#FFFFFF", shadow: "#555555", outline: "#000000" }
+    - id: heading                # text: title text, small caps
+      type: text
+      x: 8
+      y: 6
+      text: "Shop"
+      font: smallcaps
+      color: "#404040"
+    - id: sword                  # item: one item in one slot
+      type: item
+      slot: 13
+      item: shop:gui/main/sword
+      amount: 1
+    - id: hidden_note            # kept in the file, not compiled
+      type: text
+      visible: false
+      text: "not shown"
+      x: 8
+      y: 120

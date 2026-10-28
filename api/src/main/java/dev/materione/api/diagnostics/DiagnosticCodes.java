@@ -227,6 +227,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode AUTHORING_SUMMARY_BUDGET_EXCEEDED =
             new DiagnosticCode("MTR-0051", Severity.WARN, "Resource summary exceeds its read budget");
 
+    /**
+     * A GUI layer could not be compiled (unknown component, invalid fields, a
+     * duplicate or malformed id). Only that layer is skipped; the rest of the
+     * GUI still compiles. The diagnostic targets {@code layers.<index>}.
+     */
+    public static final DiagnosticCode GUI_LAYER_SKIPPED =
+            new DiagnosticCode("MTR-0052", Severity.WARN, "GUI layer skipped");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -278,7 +286,8 @@ public final class DiagnosticCodes {
             ITEM_COMPONENTS_NOT_APPLIED,
             EDITOR_RELAY_SESSION_ENDED,
             EDITOR_RELAY_UNREACHABLE,
-            AUTHORING_SUMMARY_BUDGET_EXCEEDED);
+            AUTHORING_SUMMARY_BUDGET_EXCEEDED,
+            GUI_LAYER_SKIPPED);
 
     private DiagnosticCodes() {}
 

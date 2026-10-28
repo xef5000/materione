@@ -248,7 +248,7 @@ public final class EditorTransportService {
                         ownerUuidOfCurrentSession(), node -> true);
         dev.materione.web.rpc.ops.EditorContentOps.register(
                 dispatcher, api.authoring(), this::contentTypes,
-                () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary);
+                () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary, this::guiComponents);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
                 dispatcher, api.authoring(), actorFor);
         dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
@@ -299,6 +299,17 @@ public final class EditorTransportService {
         mechanics.sort(java.util.Comparator.comparing(
                 dev.materione.api.registry.BehaviorVocabulary.Mechanic::id));
         return behaviorVocabulary.get().withMechanics(mechanics);
+    }
+
+    /** The {@code gui-components} registry entries, built-in and addon, read per describe call. */
+    private java.util.List<dev.materione.api.registry.RegistryEntry<?>> guiComponents() {
+        java.util.List<dev.materione.api.registry.RegistryEntry<?>> out = new ArrayList<>();
+        api.registries().byKey(RegistryKeys.GUI_COMPONENTS).ifPresent(view -> {
+            for (var entry : ((Registry<?>) view).entries()) {
+                out.add(entry);
+            }
+        });
+        return out;
     }
 
     /** Registered content types through the api's registry view (D5). */

@@ -21,6 +21,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **GUI content type (`guis/`), first slice.** A GUI is an ordered list of layers in a chest of
+  one to six rows. The seven built-in layer kinds (`panel`, `slots`, `image`, `paint`, `button`,
+  `text`, `item`) are entries in a new `gui-components` registry, the same public path addons use.
+  Parsing, the self-description the studio reads, and the New GUI starter (a three-row panel with
+  both slot regions) ship now. Rendering to a container screen follows in a later slice. A layer
+  that does not parse is skipped alone with `MTR-0052`; the rest of the GUI still parses.
+- **`authoring.setFields` can carry binaries.** An optional `assets` list (path and base64 bytes,
+  like `assets.put`) is committed in the same transaction as the field edits, under the model
+  save-back's rollback: a stale revision or a refused path writes neither.
+- `authoring.describe` lists the registered GUI components (`guiComponents`).
 - Settings `editor_direct_hint` (`off` by default; `auto` or `always` opt in to the local check), `editor_public_url` (an `https://`
   reverse-proxy front for the listener) and `editor_local_listener` (`false` never opens the port).
 - The Server view shows whether the session is on the cloud relay or direct, with a per-browser

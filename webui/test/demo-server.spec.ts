@@ -37,7 +37,7 @@ describe('the demo server replays the recorded real server', () => {
   it('serves every registered content type and the real behaviour vocabulary', async () => {
     const types = (await ok('browse.types')).types as { name: string; parameters: unknown[] }[];
     expect(types.map((type) => type.name).sort())
-      .toEqual(['block', 'effect', 'furniture', 'glyph', 'item', 'painting', 'recipe', 'sound']);
+      .toEqual(['block', 'effect', 'furniture', 'glyph', 'gui', 'item', 'painting', 'recipe', 'sound']);
     expect(types.find((type) => type.name === 'block')!.parameters.length).toBeGreaterThan(5);
     const describe = await ok('authoring.describe');
     expect((describe.behavior as { events: unknown[] }).events.length).toBeGreaterThan(5);
@@ -72,6 +72,27 @@ describe('writes stay in the tab and behave like the server', () => {
     await Promise.resolve();
     expect(pushes.map((push) => push.op)).toEqual(['push.reload']);
     expect((await ok('delivery.status')).candidateSha256).not.toBe('');
+  });
+
+  it('commits a setFields binary with its edit, and refuses a path outside assets/ before writing', async () => {
+    const before = await ok('browse.get', { pack: 'sample', path: 'blocks/amethyst_lamp.yml' });
+    const png = btoa('\u0089PNG\r\n\u001a\n');
+    const saved = await ok('authoring.setFields', {
+      pack: 'sample', path: 'blocks/amethyst_lamp.yml', rev: before.rev,
+      edits: [{ field: ['amethyst_lamp', 'display_name'], value: 'Painted Lamp' }],
+      assets: [{ path: 'assets/textures/gui/painted_lamp.png', data: png }],
+    });
+    expect(saved.rev).toBe(Number(before.rev) + 1);
+    expect((await ok('assets.get', { pack: 'sample', path: 'assets/textures/gui/painted_lamp.png' })).data).toBe(png);
+
+    const refused = await server.call('authoring.setFields', {
+      pack: 'sample', path: 'blocks/amethyst_lamp.yml', rev: saved.rev,
+      edits: [{ field: ['amethyst_lamp', 'display_name'], value: 'Refused' }],
+      assets: [{ path: '.materione/thumbnails/x.png', data: png }],
+    });
+    expect(refused.ok).toBe(false);
+    if (!refused.ok) expect(refused.error.code).toBe('MTR-0008');
+    expect((await ok('browse.get', { pack: 'sample', path: 'blocks/amethyst_lamp.yml' })).rev).toBe(saved.rev);
   });
 
   it('rejects a stale revision with the server conflict code', async () => {

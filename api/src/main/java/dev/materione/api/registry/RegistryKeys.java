@@ -23,5 +23,8 @@ public final class RegistryKeys {
     /** Delivery hosting backends (master §8.4). */
     public static final RegistryKey DELIVERY_BACKENDS = new RegistryKey("delivery-backends");
 
+    /** {@link dev.materione.api.gui.GuiComponent} implementations: the layer kinds of a GUI (gui.md §3). */
+    public static final RegistryKey GUI_COMPONENTS = new RegistryKey("gui-components");
+
     private RegistryKeys() {}
 }

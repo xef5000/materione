@@ -13,6 +13,8 @@ Layout:
 | `tools/` | `GenerateCorpus.java` — the deterministic generator behind `packs/corpus/` (run with `java fixtures/tools/GenerateCorpus.java`; regeneration is for review — the committed bytes are the fixture) | M1 |
 | `importers/` | Real-world ItemsAdder/Oraxen/Nexo pack samples | M7 |
 | `protocol/` | Editor wire-protocol contract fixtures (plugin + Workers tested against the same files) | M5 |
+| `gui/` | Golden GUI YAML: `shop.yml` (all seven built-in components; load → save is byte-identical, unknown fields survive) and `bad-layer.yml` (each broken layer skipped alone with `MTR-0052`). Read by `GuiTypeTest` (gui.md §10) | M6 |
+| `protocol/editor-ops-v1.json` | Op-level frames: `authoring.setFields` with a paint asset, and the same save refused as stale. The JVM regenerates it (`EditorOpsGoldenTest`); the SPA wrapper must send it byte for byte (`ops-golden.spec.ts`) | M6 |
 | `text/` | `rich-text.json`: what each stored rich text string means (master §5.7). The plugin's `MaterioneTextTest` and the editor's `rich-text.spec.ts` both read it, so the two parsers cannot drift | M5 |
 
 Tests reach this directory via the `materione.fixtures.root` system property

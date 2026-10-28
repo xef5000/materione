@@ -12,6 +12,7 @@ import dev.materione.core.document.AssetStore;
 import dev.materione.core.document.DocumentConflictException;
 import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.Documents;
+import dev.materione.core.document.FieldsTransactionService;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.ModelTransaction;
 import dev.materione.core.document.ModelTransactionService;
@@ -51,6 +52,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private final AuditLog audit;
     private final Path packsRoot;
     private final ModelTransactionService modelTransactions;
+    private final FieldsTransactionService fieldTransactions;
     private final DocumentMetadataComputer computedMeta;
     private final Supplier<ContentGraph> graph;
     private final ReloadHook reloadHook;
@@ -98,6 +100,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
         this.audit = Objects.requireNonNull(audit, "audit");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.modelTransactions = Objects.requireNonNull(modelTransactions, "modelTransactions");
+        this.fieldTransactions = new FieldsTransactionService(documents, packsRoot, audit);
         this.computedMeta = computedMeta;
         this.graph = graph == null ? () -> null : graph;
         this.summaryComputer = new ResourceSummaryComputer(
@@ -331,12 +334,24 @@ public final class AuthoringApiImpl implements AuthoringApi {
             if (edits.size() > 256) {
                 throw new IllegalArgumentException("too many edits in one save");
             }
-            DocumentStore.Document updated = documents.setScalars(
-                    request.pack(), request.path(), request.expectedRevision(),
-                    edits, actorId(actor));
-            audit.record(actorId(actor), "authoring.setFields",
-                    request.pack() + "/" + request.path() + " (" + edits.size() + " fields)");
-            reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), request.path()));
+            if (request.assets().isEmpty()) {
+                DocumentStore.Document updated = documents.setScalars(
+                        request.pack(), request.path(), request.expectedRevision(),
+                        edits, actorId(actor));
+                audit.record(actorId(actor), "authoring.setFields",
+                        request.pack() + "/" + request.path() + " (" + edits.size() + " fields)");
+                reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), request.path()));
+                return ApiResult.ok(view(updated));
+            }
+            // Binaries ride the same transaction: all of the edits and assets, or none.
+            List<ModelTransaction.Asset> assets = new ArrayList<>();
+            for (ModelAsset asset : request.assets()) {
+                assets.add(new ModelTransaction.Asset(asset.path(), asset.bytes()));
+            }
+            DocumentStore.Document updated = fieldTransactions.save(
+                    actorId(actor), request.pack(), request.path(), request.expectedRevision(),
+                    edits, assets);
+            reloadHook.afterChange(actor, request.pack(), packsRoot.resolve(request.pack()));
             return ApiResult.ok(view(updated));
         } catch (DocumentConflictException e) {
             return conflict(e, "reopen the entry and re-apply your change");

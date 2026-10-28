@@ -1,7 +1,9 @@
 package dev.materione.api.content;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.registry.SelfDescription;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -39,6 +41,16 @@ public interface ContentType {
      */
     default Optional<ResourcePresentation> presentation(Object parsedDefinition) {
         return Optional.empty();
+    }
+
+    /**
+     * Non-fatal problems inside a definition that still compiles: a per-part
+     * quarantine, such as one bad GUI layer while the rest of the GUI stays.
+     * The compiler publishes these against the resource and keeps the
+     * definition. The default reports none, so existing types are unchanged.
+     */
+    default List<Diagnostic> diagnose(Object parsedDefinition) {
+        return List.of();
     }
 
     /**

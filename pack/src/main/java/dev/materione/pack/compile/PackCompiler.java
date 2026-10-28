@@ -332,6 +332,16 @@ public final class PackCompiler {
                             "check the required fields (the registry self-description documents them)"));
                     continue;
                 }
+                // per-part quarantine: problems inside a definition that still compiles
+                // (one bad GUI layer) are published against the resource, not the pack
+                try {
+                    for (Diagnostic part : type.diagnose(parsed.get())) {
+                        diagnostics.publish(part);
+                    }
+                } catch (RuntimeException e) {
+                    quarantineResource(resource, e, diagnostics, quarantine);
+                    continue;
+                }
                 NamespacedId modelId = NamespacedId.of(
                         resource.id().namespace(),
                         resource.id().value() + "_model");

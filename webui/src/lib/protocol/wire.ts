@@ -86,3 +86,13 @@ export interface WireError {
 export type Response =
   | { op: string; id: string; ok: true; data: unknown }
   | { op: string; id: string; ok: false; error: WireError };
+
+/**
+ * One binary carried by a studio save (`authoring.setFields`' `assets`): standard
+ * base64 bytes at an `assets/` path, the same shape `assets.put` takes. The server
+ * commits it with the field edits or refuses both.
+ */
+export interface AssetUpload {
+  path: string;
+  data: string;
+}
