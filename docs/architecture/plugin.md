@@ -226,13 +226,35 @@ A trigger carries scope: *everything* | a pack | a file set. The stage maps scop
 the **resource dependency graph** (a texture change invalidates items referencing it). Scope
 expansion is logged ("file X changed → resources A, B, C affected").
 
+**Known gap (open follow-up):** the drift check covers every source the pipeline reads (the
+manifest plus content documents, §4.2), but the manifest is never fingerprinted, so every
+targeted run expands to a full run today. Splicing a targeted run is also unsafe as written:
+it rebuilds the touched pack from the in-scope files alone, which drops that pack's other
+resources. Fingerprinting the manifest and fixing the splice must land together.
+
 ### 4.2 Parse
 
+- **Discovery is recursive.** Every `*.yml` under a content directory (`templates/`, `items/`,
+  … — `PackLayout.CONTENT_DIRS`) is a content document at any depth: `items/weapons/sword.yml`
+  is discovered exactly like `items/sword.yml`. Dot-directories (`.materione/`, editor metadata)
+  are excluded at every depth, and symbolic-link directories are never entered. `pack.yml` is
+  read directly at the pack root; nothing outside the content directories is content.
+- **Discovery order is deterministic.** Documents are visited sorted by pack-relative path
+  (forward slashes, natural string order), never in filesystem order.
+- **Identity is the top-level key.** A file holds one content type and any number of keyed
+  resources; its path never names one, so moving a file between folders renames nothing.
+  Two declarations of one id and type, in siblings or across folders, resolve identically: the
+  later document in discovery order owns the id. Such duplicates are **not diagnosed yet** — no
+  diagnostic code exists for them today.
+- **One rule, everywhere.** The scope/fingerprint set (§4.1), the editor's browser and folder
+  list, the file watcher and the boot-time reader all list content through the same
+  `PackLayout` rule. A test pins browser and pipeline to the same document set.
 - YAML/JSON → raw document tree with **per-file error context** (file, line, column) captured
   as diagnostics. No semantic interpretation yet.
 - Assets are **fingerprinted** (hash) here; the fingerprint index in `generated/` drives
   incremental compile — unchanged asset → unchanged pack entry.
-- A parse failure in one file never reads or blocks other files (D6).
+- A parse failure in one file never reads or blocks other files (D6). An unlistable subfolder
+  is reported and skipped; its siblings still parse.
 
 ### 4.3 Validate (levels 1–4, master §5.4)
 

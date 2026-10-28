@@ -1,13 +1,17 @@
 package dev.materione.core.document;
 
+import dev.materione.core.pipeline.PackLayout;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardWatchEventKinds;
 import java.nio.file.WatchEvent;
 import java.nio.file.WatchKey;
 import java.nio.file.WatchService;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -127,20 +131,33 @@ public final class PackWatcher implements AutoCloseable {
         registerAll(root, file -> { });
     }
 
+    /**
+     * Registers every directory under {@code root} that belongs to the content
+     * tree (plugin.md §4.2): dot-directories such as {@code .materione/} are
+     * skipped with their subtrees, symbolic links are never followed.
+     */
     private void registerAll(Path root, Consumer<Path> existingFile) throws IOException {
-        try (var walk = Files.walk(root)) {
-            for (Path path : (Iterable<Path>) walk::iterator) {
-                if (Files.isSymbolicLink(path)) continue;
-                if (Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS)) {
-                    path.register(watchService,
-                            StandardWatchEventKinds.ENTRY_CREATE,
-                            StandardWatchEventKinds.ENTRY_DELETE,
-                            StandardWatchEventKinds.ENTRY_MODIFY);
-                } else if (Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
-                    existingFile.accept(path);
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+                if (!dir.equals(packsRoot) && !PackLayout.isDiscoveredDirectory(dir.getFileName().toString())) {
+                    return FileVisitResult.SKIP_SUBTREE;
                 }
+                dir.register(watchService,
+                        StandardWatchEventKinds.ENTRY_CREATE,
+                        StandardWatchEventKinds.ENTRY_DELETE,
+                        StandardWatchEventKinds.ENTRY_MODIFY);
+                return FileVisitResult.CONTINUE;
             }
-        }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (attrs.isRegularFile()) {
+                    existingFile.accept(file);
+                }
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /** Maps pending paths onto documents and journals/pushes each drifted one. */
@@ -165,6 +182,10 @@ public final class PackWatcher implements AutoCloseable {
             }
             String pack = relative.getName(0).toString();
             String path = relative.subpath(1, relative.getNameCount()).toString().replace('\\', '/');
+            // only what discovery reads is a document: assets, temp files and dot-directories are not
+            if (!path.equals(PackLayout.MANIFEST_FILE) && !PackLayout.isContentDocumentPath(path)) {
+                continue;
+            }
             try {
                 DocumentStore.ExternalSync sync = documents.syncExternal(pack, path);
                 if (sync.changed()) {

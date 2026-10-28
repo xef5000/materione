@@ -7,9 +7,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 /**
- * The M1 exit gate, live on Paper: boot with the fixture corpus (56 items),
- * the full hot-reload sequence (add → 55, broken file → still 55 with
- * MTR-0007, remove → 54), delivery serving, and a clean stop.
+ * The M1 exit gate, live on Paper: boot with the fixture corpus (the boot
+ * count is the scenario's {@code items=} marker), the flat and nested (#191)
+ * hot-reload sequences (add → +1, broken file → unchanged with MTR-0007,
+ * remove → back to boot), delivery serving, and a clean stop.
  */
 @Tag("integration")
 class PaperBootstrapIT {

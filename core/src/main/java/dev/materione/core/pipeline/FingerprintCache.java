@@ -14,11 +14,13 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Per-source-file SHA-256 fingerprints ({@code generated/fingerprints.bin}):
  * the targeted-reload correctness net. A scoped run (OnePack / FileSet)
- * hashes every file under the packs root — if anything <em>outside</em> its
+ * hashes every source document the pipeline reads ({@link PackLayout#sourceDocuments},
+ * the same discovery as a full run) — if anything <em>outside</em> its
  * scope drifted since the last full run, the scope expands to everything
  * (SCOPE_EXPANDED) instead of silently missing an edit. Keys are paths
  * relative to the packs root, so the cache survives workspace moves; a
@@ -75,7 +77,8 @@ public final class FingerprintCache {
      * serve stale resources forever.
      */
     public boolean driftedOutside(Set<String> inScope, Path packsRoot) throws IOException {
-        for (Path file : yamlFiles(packsRoot)) {
+        var unreadable = new AtomicBoolean();
+        for (Path file : sourceFiles(packsRoot, failure -> unreadable.set(true))) {
             String relative = relative(packsRoot, file);
             if (inScope.contains(relative)) {
                 continue;
@@ -84,6 +87,9 @@ public final class FingerprintCache {
             if (!current.equals(byRelativePath.get(relative))) {
                 return true;
             }
+        }
+        if (unreadable.get()) {
+            return true; // a subtree we cannot list cannot be vouched for: the safe direction
         }
         for (String relative : byRelativePath.keySet()) {
             if (!inScope.contains(relative) && !Files.exists(packsRoot.resolve(relative))) {
@@ -119,17 +125,21 @@ public final class FingerprintCache {
 
     // --- helpers -------------------------------------------------------------
 
-    private static java.util.List<Path> yamlFiles(Path packsRoot) throws IOException {
+    /**
+     * The drift set: exactly the sources the pipeline reads (manifest and content
+     * documents, {@link PackLayout#sourceDocuments}), so a file outside discovery
+     * can never trigger or hide a drift.
+     */
+    private static java.util.List<Path> sourceFiles(
+            Path packsRoot, java.util.function.Consumer<IOException> unreadable) throws IOException {
         var out = new java.util.ArrayList<Path>();
         if (!Files.isDirectory(packsRoot)) {
             return out;
         }
         try (var packs = Files.list(packsRoot)) {
             for (Path pack : packs.filter(Files::isDirectory).sorted().toList()) {
-                try (var files = Files.walk(pack)) {
-                    files.filter(f -> f.toString().endsWith(".yml") && Files.isRegularFile(f))
-                            .sorted()
-                            .forEach(out::add);
+                if (PackLayout.isDiscoveredDirectory(pack.getFileName().toString())) {
+                    out.addAll(PackLayout.sourceDocuments(pack, unreadable));
                 }
             }
         }

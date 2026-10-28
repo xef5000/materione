@@ -30,6 +30,14 @@ releases may change file formats, settings and the public API.
 
 - `?mode=relay|direct` on the editor link was silently ignored (the address bar was cleared first).
 - The editor file watcher no longer depends on the local listener being bound.
+- **Content in subfolders goes live.** The pipeline listed each content directory non-recursively,
+  so a resource in `items/weapons/sword.yml`, including one the editor created in a folder, was
+  never parsed. Discovery is now recursive for every content type, sorted by path, and skips
+  dot-directories such as `.materione/`. Resource identity is unchanged (the top-level keys). The
+  browser, the file watcher and the boot-time reader follow the same rule, and hot reload picks up
+  nested edits. (#191)
+- The editor browser lists `.yml` documents only, as the pipeline always required. Its `.yaml`
+  files were never loaded, so they no longer appear as resources. (#191)
 
 ## [0.1.0] - 2026-10-27
 

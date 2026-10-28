@@ -1,0 +1,9 @@
+# The nested fixture pack (issue #191): a resource under a subfolder of a
+# content directory goes live exactly like a sibling file. Valid content only;
+# the fault cases are built per test and by the harness hot-reload scenario.
+id: nested
+version: 1.0.0
+schema_version: 1
+
+# Packs may depend on other packs (resolved at graph build).
+depends: []

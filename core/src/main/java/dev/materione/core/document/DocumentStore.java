@@ -2,6 +2,7 @@ package dev.materione.core.document;
 
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
+import dev.materione.core.pipeline.PackLayout;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -242,7 +243,7 @@ public final class DocumentStore {
         while (!pending.isEmpty()) {
             DirectoryFrame frame = pending.pop();
             try (Stream<Path> children = Files.list(frame.path())) {
-                children.forEach(child -> {
+                children.sorted().forEach(child -> {
                     String segment = child.getFileName().toString();
                     consumeInventoryEntry(readBudget, (long) frame.prefix().length() + segment.length());
                     if (Files.isSymbolicLink(child)) {
@@ -250,9 +251,12 @@ public final class DocumentStore {
                     }
                     String name = frame.prefix() + segment;
                     if (Files.isDirectory(child, LinkOption.NOFOLLOW_LINKS)) {
-                        pending.push(new DirectoryFrame(child, name + "/"));
+                        // discovery rule (PackLayout): dot-directories are never content
+                        if (PackLayout.isDiscoveredDirectory(segment)) {
+                            pending.push(new DirectoryFrame(child, name + "/"));
+                        }
                     } else if (Files.isRegularFile(child, LinkOption.NOFOLLOW_LINKS)
-                            && (name.endsWith(".yml") || name.endsWith(".yaml"))) {
+                            && PackLayout.isContentDocument(segment)) {
                         if (safeSummaryDocumentPath(name)) {
                             addResourceDocument(pack, type, name, child, visitor, readBudget);
                         }
@@ -379,10 +383,13 @@ public final class DocumentStore {
             children.sorted().forEach(child -> {
                 String name = prefix + child.getFileName();
                 if (Files.isDirectory(child)) {
-                    collectRefs(pack, type, child, name + "/", query, out);
+                    // the discovery rule (PackLayout): no dot-directories, no linked directories
+                    if (!Files.isSymbolicLink(child) && PackLayout.isDiscoveredDirectory(child.getFileName().toString())) {
+                        collectRefs(pack, type, child, name + "/", query, out);
+                    }
                     return;
                 }
-                if (!name.endsWith(".yml") && !name.endsWith(".yaml")) {
+                if (!PackLayout.isContentDocument(child.getFileName().toString())) {
                     return;
                 }
                 String relative = type + "/" + name;
@@ -969,7 +976,10 @@ public final class DocumentStore {
 
     private void collectFolders(Path dir, String prefix, List<String> out) {
         try (Stream<Path> children = Files.list(dir)) {
-            for (Path child : children.filter(Files::isDirectory).sorted().toList()) {
+            for (Path child : children.filter(entry -> Files.isDirectory(entry)
+                    && !Files.isSymbolicLink(entry)
+                    && PackLayout.isDiscoveredDirectory(entry.getFileName().toString()))
+                    .sorted().toList()) {
                 String relative = prefix + "/" + child.getFileName();
                 out.add(relative);
                 collectFolders(child, relative, out);
