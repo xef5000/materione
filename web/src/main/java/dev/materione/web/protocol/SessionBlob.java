@@ -38,8 +38,10 @@ public record SessionBlob(
      * feature areas the panel may gate UI on, not RPC op names (ops come and
      * go without changing what the editor does). Content-type names follow
      * the content module's registrations; {@code models}, {@code assets} and
-     * {@code delivery} cover the non-type authoring surface. Keep sorted:
-     * the list rides into the golden fixture byte-for-byte.
+     * {@code delivery} cover the non-type authoring surface, and {@code gui} covers the
+     * preview-in-game ops ({@code runtime.openGui}, {@code runtime.previewTarget}) that an older
+     * release lacks (editor-op-gates.json). Keep sorted: the list rides into the golden fixture
+     * byte-for-byte.
      */
     public static final List<String> CURRENT_CAPABILITIES = List.of(
             "assets",
@@ -47,6 +49,7 @@ public record SessionBlob(
             "delivery",
             "furniture",
             "glyphs",
+            "gui",
             "items",
             "models",
             "paintings",

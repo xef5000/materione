@@ -6,6 +6,7 @@ import {
   extractPlugin,
   extractRelayRoutes,
   findProblems,
+  readGates,
   readManifests,
   sourceAt,
 } from './editor-compat.mjs';
@@ -127,5 +128,14 @@ test('a computed op name is reported as dynamic', () => {
 test('this tree passes against itself and every committed release', () => {
   const targets = [{ version: 'current', ...extractPlugin(sourceAt()) }, ...readManifests()];
   assert.ok(targets.length >= 2, 'at least one released manifest is committed');
-  assert.deepEqual(findProblems({ editor: extractEditor(), targets }), []);
+  // the same gates `check` reads: the self-test judges what CI judges, not a stricter reading of it
+  assert.deepEqual(findProblems({ editor: extractEditor(), targets, gates: readGates() }), []);
+});
+
+test('the preview ops are gated on the capability the editor checks', () => {
+  const gates = readGates();
+  for (const op of ['runtime.openGui', 'runtime.previewTarget']) {
+    assert.equal(gates[op]?.capability, 'gui', `${op} must name the gui capability`);
+  }
+  assert.ok(extractEditor().capabilityChecks.has('gui'), 'the editor must call hasCapability(…, \'gui\')');
 });

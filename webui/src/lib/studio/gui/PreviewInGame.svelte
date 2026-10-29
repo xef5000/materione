@@ -1,13 +1,16 @@
 <script lang="ts">
   /**
    * "Preview in game" (gui.md §5, §7): opens this GUI's applied version in front of the session's
-   * approved player, the one who opened this editor in game. The button is disabled, and says why in
-   * its tooltip, while that player is not online or the session has none. Saving is what applies a
-   * change, so the preview shows the saved version; a dirty studio says so in the tooltip.
+   * approved player, the one who opened this editor in game. It exists only when the connected jar
+   * advertises the `gui` capability (an older release does not register the preview ops), and it is
+   * disabled, with the reason as its tooltip, while that player is not online or the session has none.
+   * Saving is what applies a change, so the preview shows the saved version; a dirty studio says so in
+   * the tooltip.
    */
   import Icon from '../../components/Icon.svelte';
   import { ops, RpcError, unwrap } from '../../api';
   import type { ResourceRef } from '../../api';
+  import { hasCapability } from '../../protocol/session';
   import { session } from '../../state.svelte';
 
   interface Props {
@@ -18,6 +21,8 @@
 
   let { resource, dirty = false }: Props = $props();
 
+  /** Whether the connected jar advertises the preview ops; false until the first answer. */
+  let supported = $state(false);
   /** The approved player's standing: `null` until the first answer. */
   let target = $state<{ online: true; player: string } | { online: false } | null>(null);
   let busy = $state(false);
@@ -26,7 +31,11 @@
 
   async function askTarget(): Promise<void> {
     const channel = session.channel;
-    if (!channel) {
+    // The gate: an older jar never gets a preview op from the studio (editor-op-gates.json). A jar that
+    // sends no capability list predates the list, so it cannot have these ops either: no list, no button.
+    const blob = channel?.blob;
+    supported = blob !== undefined && blob.capabilities !== undefined && hasCapability(blob, 'gui');
+    if (!channel || !supported) {
       target = { online: false };
       return;
     }
@@ -36,7 +45,7 @@
         ? { online: true, player: data.player }
         : { online: false };
     } catch {
-      // a server that predates the op, or a dropped channel: there is no preview to offer
+      // a dropped channel, or a jar that refused the question: there is no preview to offer
       target = { online: false };
     }
   }
@@ -64,7 +73,7 @@
 
   async function preview(): Promise<void> {
     const channel = session.channel;
-    if (!channel || target?.online !== true) return;
+    if (!channel || !supported || target?.online !== true) return;
     const player = target.player;
     busy = true;
     note = '';
@@ -81,20 +90,22 @@
   }
 </script>
 
-<span class="preview">
-  <button
-    type="button"
-    class="ghost"
-    data-preview
-    disabled={!enabled}
-    title={reason}
-    aria-label="Preview in game"
-    onclick={preview}
-  >
-    <Icon name="play" size={14} /> Preview in game
-  </button>
-  {#if note}<span class="note" class:error={noteIsError} role="status">{note}</span>{/if}
-</span>
+{#if supported}
+  <span class="preview">
+    <button
+      type="button"
+      class="ghost"
+      data-preview
+      disabled={!enabled}
+      title={reason}
+      aria-label="Preview in game"
+      onclick={preview}
+    >
+      <Icon name="play" size={14} /> Preview in game
+    </button>
+    {#if note}<span class="note" class:error={noteIsError} role="status">{note}</span>{/if}
+  </span>
+{/if}
 
 <style>
   .preview {

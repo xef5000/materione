@@ -152,6 +152,11 @@ export function extractEditor(source = sourceAt()) {
   };
 }
 
+/** The gated ops (editor-op-gates.json): what `check` and the self-test both judge against. */
+export function readGates(file = GATES_FILE) {
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).gates ?? {} : {};
+}
+
 export function readManifests(dir = RELEASED_DIR) {
   if (!existsSync(dir)) return [];
   return readdirSync(dir).filter((name) => name.endsWith('.json')).sort().map((name) => {
@@ -237,8 +242,7 @@ function main(argv) {
     const editor = extractEditor();
     const released = readManifests();
     const targets = [{ version: 'current', ...extractPlugin(sourceAt()) }, ...released];
-    const gates = existsSync(GATES_FILE) ? JSON.parse(readFileSync(GATES_FILE, 'utf8')).gates ?? {} : {};
-    const problems = findProblems({ editor, targets, gates });
+    const problems = findProblems({ editor, targets, gates: readGates() });
     if (problems.length) {
       console.error(`editor compatibility: ${problems.length} problem(s)\n- ${problems.join('\n- ')}`);
       console.error('\nA released plugin keeps running after the cloud editor redeploys. Either keep the op the release has, '

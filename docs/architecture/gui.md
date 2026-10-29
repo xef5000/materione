@@ -314,9 +314,10 @@ its last run until its advances ship (§9.4).
   GUI. A failing observer is reported (`PIPELINE_STAGE_FAILED`) and never rolls the apply back.
 - *Preview in game.* The editor's `runtime.openGui` and `runtime.previewTarget` ops (`web/rpc/ops/
   RuntimeOps`, §7) open the GUI for the session's owner: the player who opened the session in game.
-  A console session has no owner and is refused (`MTR-0009`); nothing is guessed. The studio's
-  "Preview in game" button is disabled, with the reason as its tooltip, while no owner is online.
-  A dirty studio still previews, and says in the tooltip that it shows the saved version.
+  A console session has no owner and is refused (`MTR-0009`); nothing is guessed. The studio shows
+  the "Preview in game" button only when the connected jar advertises the `gui` capability, and sends
+  neither op otherwise. The button is disabled, with the reason as its tooltip, while no owner is
+  online. A dirty studio still previews, and says in the tooltip that it shows the saved version.
 - *What is not asserted headlessly.* No client joins the harness, so the window itself (its title
   component and its stacks) is covered by the unit tiers (`RuntimeGuisTest`, `GuiTitleTest`) and the
   visual QA entry `gui.runtime-visual`. `GuiRuntimeRunner` (`PaperGuiRuntimeIT`) proves the seams on Paper:
@@ -763,10 +764,14 @@ These fill the gaps §5 leaves open. Each one is reversible by the owner.
    in game, as the trust flow already establishes. The editor's actor keeps the existing `node -> true`
    attribution of every editor op: the session is already trusted with authoring, so opening a GUI
    for its owner adds no authority. A console session has no owner and is refused, never guessed.
-7. **No session capability for the preview ops (yet).** `gui` is not added to the session blob's
-   capabilities (`SessionBlob.CURRENT_CAPABILITIES`), matching the studio ops that shipped without one.
-   An older jar answers `MTR-0033` (unknown op), which the studio shows as the refusal. Adding a
-   capability would change the blob golden; that is a protocol decision for the owner, not this issue.
+7. **The preview ops are gated on a `gui` session capability.** The jar advertises `gui` in
+   `SessionBlob.CURRENT_CAPABILITIES` and the editor's protocol gate reads it: `runtime.openGui` and
+   `runtime.previewTarget` are listed in `fixtures/protocol/editor-op-gates.json` with capability `gui`.
+   The studio calls them, and shows the button, only when the connected blob advertises `gui`
+   (`hasCapability(blob, 'gui')`, and a blob with no capability list counts as having none). A release
+   without the ops therefore never receives them, and `scripts/compat/editor-compat.mjs check` passes
+   against every committed release. The `since` value is `post-0.1.0`: the tree still reads 0.1.0 and
+   the next version is not yet set.
 8. **The title is parsed without the live emoji registry.** `MaterioneText.parseData` keeps glyph and
    emoji markers literal, and the compiler has already laid the text out with its own fonts, so an
    emoji substitution would break the pixel layout. `<shift>`, `<font>` and colour tags still resolve.

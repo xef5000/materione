@@ -93,6 +93,7 @@ export const CURRENT_CAPABILITIES = [
   'delivery',
   'furniture',
   'glyphs',
+  'gui',
   'items',
   'models',
   'paintings',

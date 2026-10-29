@@ -1,4 +1,7 @@
 {
   "$comment": "Editor RPC ops that older plugin releases may lack, each gated on a session-blob capability (web.md §4.1). scripts/compat/editor-compat.mjs accepts an op missing from a release only when the op is listed here, the release advertises a capability list without that capability, and the editor checks it with hasCapability(blob, '<capability>'). Shape: { \"gates\": { \"<op>\": { \"capability\": \"<name>\", \"since\": \"<version>\" } } }",
-  "gates": {}
+  "gates": {
+    "runtime.openGui": { "capability": "gui", "since": "post-0.1.0" },
+    "runtime.previewTarget": { "capability": "gui", "since": "post-0.1.0" }
+  }
 }
