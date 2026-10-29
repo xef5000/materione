@@ -388,18 +388,19 @@ the tools a designer expects.
 | Paint target | `GuiStudioState` | the selected paint layer, else the topmost visible unlocked one, else a new `Paint` layer is created by the first stroke (one more undo step); a locked or hidden target is explained in the status bar, never painted. A paint layer whose canvas no longer matches the rows is grown (overlap kept) |
 | Image layers | `studio/gui/ImageExtras.svelte`, `ImageChooser.svelte` | add by **upload** (file dialog, or drop a file on the canvas) or **from the Assets workspace** (the item studio's explorer). An upload is stored at `textures/gui/<gui-path>/<file>.png` with the file's own bytes (a PNG is never re-encoded; other formats the browser can read are converted) and rides the layout transaction as an `assets` entry; moving and resizing are the canvas's (nearest neighbour), with **Natural size** and 1x-4x scale buttons |
 | Text layers | `gui/font/`, `gui/text.ts`, `gui/compose.ts`, `studio/gui/TextEditOverlay.svelte` | **smallcaps is pixel-exact**: the canvas draws each glyph from the shared font source `fonts/smallcaps/smallcaps.txt` (section 4, *Fonts*, parsed by `font/smallcaps.ts`; `font/render.ts` draws it), at the pen the compiler computes, tinted by the colour; the browser spec compares every ink pixel against glyphs parsed independently from that file. The studio also draws the vanilla **Inventory** label as a faint ghost at (8, height - 94), since the client draws it over the background (section 9.2). **Double-click** (or `Enter`) edits in place: a hidden input takes the keyboard, the canvas keeps drawing the real font, and the overlay draws only caret and selection from the font's own advances; typing previews live without touching the history, `Enter`/leaving commits one undo step, `Escape` takes it back. `default` is drawn with the bundled Minecraftia and says **Approximate preview**; its advances only size the selection box |
-| Compiler rules, shown | `gui/text.ts`, `gui/items.ts` | every skip the compiler would report (`MTR-0052`) is stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, `default` above row 5, and **only the last text run may be `default`** (the default run is told it hides the layers after it; those layers are told why). Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
+| Compiler rules, shown | `gui/validation.ts`, `gui/server.ts` (since #204, §10 #8) | the verdict is the server's: `gui.validate` answers for the document as shown, debounced as you edit, and each diagnostic lands on the layer it names. The studio holds no copy of the rules, so the list below is what the server enforces, stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, `default` above row 5, and **only the last text run may be `default`** (the default run is told it hides the layers after it; those layers are told why). Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
 | Item layers | `studio/gui/ItemExtras.svelte` | the picker is the item studio's (Materione items with their thumbnails, vanilla materials with their icons); a pick is stored `pack:id` or `minecraft:id` (a bare id resolves in the `materione` namespace in game, so it is never written). Items **snap to container slots only**: drags, nudges and typed slots resolve to the chest's own slots (`ItemComponent` rejects the rest). The canvas draws the real item icon (the existing thumbnail pipeline, `ItemIcon` with a `bare` mode) and the stack count |
-| Customize | `gui/customize.ts`, `GuiStudioState.customize`, `GuiItemAppearance.svelte` | see below |
+| Customize | `gui/customize.ts`, `gui/server.ts`, `GuiStudioState.customize`, `GuiItemAppearance.svelte` | see below; `gui.customizeItem` decides the item's id and refusals (§10 #2) |
 
 **Customize is one transaction.** Customize creates an ordinary item at
 `items/gui/<gui-path>/<layer-id>.yml`, points the layer's `item:` at it and opens its appearance
-inline. The item's creation and the layer's new `item:` (together with any other pending layout
-change, exactly as a save would send it) are **one `authoring.bulk` call**: the server plans every
-document before writing any and writes all or none, with the GUI document's revision checked. The
-pointer is an ordinary undoable edit that is taken back if the server refuses the call. Two
-things the existing API shapes: **(1)** `authoring.bulk` cannot carry binaries, so pending pixel
-assets are saved first by a normal save (itself one transaction) and the customization follows;
+inline. Since #204 the server plans it: `gui.customizeItem` (api.md §3.9) makes the item and the
+layer's new `item:` in **one `authoring.bulk` call** underneath, which plans every document before
+writing any and writes all or none, with the GUI document's revision checked. Pending layout
+changes are saved first, as their own transaction, because the server works on the saved file
+(§10 #11). The studio applies the pointer to its own copy only after the server answers, as one
+undoable edit. Two things the API shapes: **(1)** `authoring.bulk` cannot carry binaries, so pending
+pixel assets are saved first by a normal save (itself one transaction) and the customization follows;
 **(2)** the file is named after the item's id (the API fixes that), so the id is the layer id when
 the pack has no resource of that name, else `<gui-name>_<layer-id>`, else numbered, and the path
 is `items/gui/<gui-path>/<id>.yml`. A **vanilla** base becomes a `create` with `material:`. A
@@ -441,6 +442,17 @@ audit line and one reload. A save with neither edits nor assets is refused (`MTR
 on the server and in the demo. `authoring.describe` carries `guiComponents` next to
 `behavior`, one entry per `gui-components` registry entry (`id`, the self-description,
 `target`, `registeredBy`), read on every call like the mechanics vocabulary.
+
+As built (#204): the typed GUI API. Everything the studio does to a GUI is an API operation
+(api.md §3.9), and the editor reaches it through five ops that are all gated on the `gui`
+session capability (`editor-op-gates.json`): `gui.get` (the typed view), `gui.edit` (the five
+structural edits, one revision-checked transaction), `gui.customizeItem`, `gui.render` (background
+PNG, compiled order, diagnostics; a saved file, YAML or a typed draft, with draft PNGs) and
+`gui.validate` (the compile's diagnostics for the same sources). Each handler is a JSON
+translator over `GuiAuthoringApi` (R9). The component descriptors the studio reads come from the
+API (`GuiComponentDescriptor`); `web/` only serializes them. The studio's own save stays on
+`authoring.setFields` with the changed top-level fields, because its layer model is a whole-list
+diff; `gui.edit` is the path for other consumers (§10 #12).
 
 ## 8. Deferred — and how it plugs in
 
@@ -775,3 +787,22 @@ These fill the gaps §5 leaves open. Each one is reversible by the owner.
 8. **The title is parsed without the live emoji registry.** `MaterioneText.parseData` keeps glyph and
    emoji markers literal, and the compiler has already laid the text out with its own fonts, so an
    emoji substitution would break the pixel layout. `<shift>`, `<font>` and colour tags still resolve.
+
+### Decisions taken in #204 (the typed GUI API, and the studio on top of it)
+
+These move the GUI rules from the studio into the API (api.md §3.9). Each decision is reversible by the owner.
+
+1. **The verdict is the server's.** `analyzeText` and `analyzeItems`, and the TypeScript copy of the compiler's rules they carried, are gone. The studio sends the document it shows to `gui.validate`, debounced, and draws each diagnostic on the layer it names (`layers.<index>`, the draft's position). A diagnostic with no layer (a parse failure) is shown for the document. Every compile diagnostic about a layer is a skip, so the severity is `skip` alone; the studio's old `note` (the default run that blocks the runs after it) is no longer a separate message. The skipped runs after it carry their own, from the compiler.
+2. **Customize's naming and refusals moved server-side unchanged** (`GuiItemNaming`, `GuiAuthoringApiImpl.customizeItem`): the layer id when the pack has no resource of that id, else `<gui>_<layer>`, else numbered; a vanilla base is a `create` with `material:` (refused when the server's material list does not know it); a Materione item is a `duplicate`, with a refusal when it is not an item of this pack or the layer already has its own. **The seam for #203** is the one place a Materione base is copied (`GuiAuthoringApiImpl.customizeItem`, the `DUPLICATE` branch): switching it to a template link is a change of that one operation once items can be templates.
+3. **`edit` returns the typed view, not the raw document.** `GuiAuthoringApi.edit` returns `GuiDocumentView` (the view `get` returns, plus the revision) and carries the compiler's warnings as the successful result's diagnostics. The raw `DocumentView` is what `setFields` returns; the view is what a GUI consumer reads.
+4. **Binaries reuse `AuthoringApi.ModelAsset`**, the shape `setFields` takes, rather than a second `AssetUpload` record.
+5. **Layer-list edits rewrite the `layers:` block.** `edit` and `customizeItem` write the whole `layers` list through `setFields`/`bulk`, as the studio's save has since #183. Unknown keys inside a layer survive; comments inside the `layers:` block do not (the lossless writer addresses mapping keys, not list items). A list-item path in `LosslessYamlDocument` would lift this; it is not in this change. An edit that changes nothing writes nothing.
+6. **One GUI per file for the typed API.** `get`, `edit`, `customizeItem`, `render` and `validate` work on a file's single GUI resource and refuse a file that holds several (the typed view has no resource id to choose by). The studio, which opens by resource id, is unaffected.
+7. **Render and validate allocate nothing.** They compile through the pack's own steps with `AllocationTable.preview()`, a view that answers what the table would and binds nothing. The background codepoint does not change a pixel or a diagnostic, so `render` returns the bytes the pack ships; exhaustion (MTR-0053) is still reported exactly.
+8. **Validate and the pack compiler are one set of steps, pinned by a test.** `GuiAuthoringApiImpl.check` mirrors `PackCompiler`'s per-resource sequence (parse, diagnose, compile with a collecting emitter, the crash and rejection diagnostics in the same order). `GuiValidateParityTest` compiles a GUI with every kind of skip through `PackCompiler` and asserts `validate` returns the same diagnostics. The sequence is mirrored, not shared, because `pack` does not depend on `content`; moving it into `core` is the follow-up if the mirror ever drifts.
+9. **Components are described from the API.** `GuiComponentDescriptor` (api) is built from the registry entry; `EditorContentOps` serializes it and nothing else. `GuiComponentsApi` (api §3.10, `MaterioneAPI.guiComponents()`) registers addon components on the bounded path `mechanics()` uses, so a registration works after the registry froze and is removed by its owner's disable.
+10. **The `gui` capability is this change's, with #185's name.** Both PRs advertise `gui` and gate their ops on it. The five ops are listed in `editor-op-gates.json`; an older release that lacks them is judged by the compat check as a gated op, so the studio must check `hasCapability(…, 'gui')` before calling any of them.
+11. **Pending changes are saved before Customize.** Customize is one server transaction at the GUI's revision; the layout and pixels that are pending are saved first as their own transaction, because the server works on the saved file. The earlier single `authoring.bulk` that carried both is gone. Nothing is lost if the customization is refused: the save stands, and the pointer is applied to the studio's copy only after the server answers. Reverting this means sending the pending layout inside `gui.customizeItem`, which needs a list-item path for a per-layer patch (decision 5).
+12. **The studio keeps `authoring.setFields` for saves.** Its layer model is a whole-list diff, so the changed `layers` value is the natural unit; `gui.edit` is the structural path for API consumers. Switching the studio's save would mean deriving the five structural edits from the diff, which loses the one-shot "the layout as it stands" property the studio relies on.
+13. **Without the `gui` capability the studio degrades, and says so.** A connection whose session blob does not advertise `gui` (an older plugin, or the demo, which has no blob) gets no verdict and no Customize: the studio shows an explicit banner, draws no skip flags, and disables Customize with the reason. Layout editing and saves are unchanged, since they use `setFields` as before.
+14. **Demo and browser tests.** The demo server has no compiler, so its studio reports the verdict as unavailable; `gui-studio.pw.ts` asserts that state, and the live Customize flow is pinned by the QA catalog (`gui.studio-item-customize`) on a running server.

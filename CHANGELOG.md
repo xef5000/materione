@@ -9,6 +9,13 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **The GUI studio asks the server, not its own copy of the rules (gui.md §6, §10 #8–#9).** The
+  compiler's verdict on a GUI (which layers the pack will skip, and why) now comes from
+  `gui.validate`, debounced as you edit; the studio draws what the server says and carries no
+  rule of its own. **Customize** is one server transaction (`gui.customizeItem`) with the same
+  naming and refusals as before. Pending layout changes are saved first, as their own transaction.
+  A connection without the `gui` capability (an older plugin, or the demo) shows that the verdict
+  and Customize are unavailable, and says why, instead of drawing a guess.
 - **The cloud editor no longer falls back to the local link on its own.** If the relay cannot be
   reached, `/materione editor` now reports `MTR-0050`, opens nothing, and points at
   `/materione editor local` with a note that the editor port must be reachable from your computer.
@@ -21,6 +28,14 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The GUI builder is part of MaterioneAPI (api.md §3.9, §3.10, gui.md §7).** `AuthoringApi.gui()`
+  edits a GUI's layers (add, patch, remove, reorder, screen) in one revision-checked, all-or-none
+  transaction; `customizeItem` gives a layer its own item; `render` returns the flattened
+  background PNG and the compiled layer order for a saved GUI or an unsaved draft; `validate`
+  returns exactly the diagnostics the compile would emit, without writing. `guiComponents()`
+  registers addon GUI layer kinds the way `mechanics()` registers mechanics. The editor reaches
+  the same surface through `gui.get`, `gui.edit`, `gui.customizeItem`, `gui.render` and
+  `gui.validate`, gated on the `gui` capability.
 - **GUI studio: paint, image, text and item components (gui.md §6).** The studio's text and item
   layers are real renders now, and every component has its tools. Paint layers get a brush and
   eraser (1-8 px, square or round), contiguous fill, an eyedropper that samples what the player
