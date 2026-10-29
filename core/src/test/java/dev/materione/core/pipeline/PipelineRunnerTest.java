@@ -32,8 +32,8 @@ class PipelineRunnerTest {
         Path packsRoot = GoldenFiles.fixturesRoot().resolve("packs");
         var result = runner.request(new ReloadScope.Everything(), packsRoot);
         assertThat(result.completed()).isTrue();
-        // sample + corpus (the 50-item exit-criteria pack) + world (M2) + nested (#191)
-        assertThat(result.packsScanned()).isEqualTo(4);
+        // sample + corpus (the 50-item exit-criteria pack) + world (M2) + nested (#191) + guitext (#198)
+        assertThat(result.packsScanned()).isEqualTo(5);
         assertThat(quarantine.size()).isZero();
         // items + templates + recipes: ruby_sword, obsidian_axe, base_item, ruby_sword(recipe)
         assertThat(result.resourcesValid()).isGreaterThanOrEqualTo(4);

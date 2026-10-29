@@ -174,7 +174,9 @@ the same function, so the pack and the running server cannot disagree):
      ascent: 13−Y, height: 16, chars: 6×16 grid}]`;
    - `<ns>:gui/default_y<Y>` = `[space {" ": 4}, {type: bitmap, file: minecraft:font/ascii.png,
      ascent: 13−Y, height: 8, chars: the vanilla 16×16 ASCII grid, printable cells only}]`.
-   The vanilla ASCII texture is referenced by resource location and never shipped.
+   The vanilla ASCII texture is referenced by resource location and never shipped. Offset fonts
+   never join `minecraft:default` (#198): they map plain ASCII, and the title reaches them only
+   through these styled keys.
 6. **Slot table.** `slot → (item reference, amount)`, sorted by slot. A later `item` layer in
    the same slot replaces an earlier one, and the earlier layer is reported (`MTR-0052`).
    References resolve at apply time like recipe results: a missing item is a diagnostic and an
@@ -459,3 +461,25 @@ These fill the gaps §4 leaves open. Each one is reversible by the owner.
     the shop's pack-output summary and background PNG. The summary is byte-compared and the
     background is compared by pixels as well, so a JDK deflate change shows as a byte-only
     difference, never a pixel one.
+
+### Decisions taken in #198 (GUI fonts stay out of the default font)
+
+These fix a regression from #184: every generated font was referenced from
+`minecraft:default`, so a pack with a GUI text layer replaced unstyled ASCII (chat, item names,
+vanilla labels, toasts) with GUI glyphs. Each decision is reversible by the owner.
+
+1. **Membership is declared per emission.** `PackEmitter.fontProvider(key, json, FontMembership)`
+   takes `JOINS_DEFAULT` for glyph fonts (`GlyphType`) and `STYLED_ONLY` for every GUI font
+   (`GuiType`). The pack compiler references only `JOINS_DEFAULT` fonts from `default.json`. A
+   key emitted with both memberships is `STYLED_ONLY`. The two-argument `fontProvider` remains for
+   addons compiled against older cores and means `JOINS_DEFAULT`, the glyph meaning it always had.
+2. **A server pack's `default.json` merges with vanilla's, so the compiler prepends no vanilla
+   includes.** Replacement would have required `minecraft:include/space`, `include/default`
+   (`filter: {uniform: false}`) and `include/unifont` at the head of the file. The 26.1.2 client
+   bytecode and the probe both show merging; runtime-systems §6 has the evidence.
+3. **The shift font is still referenced from `default.json` whenever any font is generated**,
+   GUI-only packs included, as before.
+4. **Fixture and test.** `fixtures/packs/guitext` (a glyph, plus a GUI with one smallcaps and one
+   default run) is served by the probe. `PackCompilerTest.guiTextNeverJoinsTheDefaultFont` pins the
+   glyph reference, asserts that no GUI font is referenced, and checks the offset fonts are still
+   written. The sample golden is unchanged because the sample pack has no GUI.

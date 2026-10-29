@@ -4,13 +4,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.Registry;
+import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.content.PackEmitter;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
+import dev.materione.core.registry.RegistryService;
 import dev.materione.content.blocks.BlockType;
+import dev.materione.content.glyphs.GlyphType;
+import dev.materione.content.gui.GuiComponents;
+import dev.materione.content.gui.GuiType;
 import dev.materione.core.diagnostics.QuarantineTracker;
 import dev.materione.core.pipeline.PipelineRunner;
 import dev.materione.api.pipeline.ReloadScope;
@@ -544,8 +551,8 @@ class PackCompilerTest {
                             + (char) 42003 + (char) 42004 + (char) 42005 + "\"]")
                     .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
                     .doesNotContain("\"type\":\"space\""); // the shift font is shared, not copied
-            // unstyled text renders only through minecraft:default — every
-            // generated font must be referenced there
+            // unstyled text renders only through minecraft:default — every glyph
+            // font (a font that joins the default font) must be referenced there
             assertThat(entryText(zip, "assets/minecraft/font/default.json"))
                     .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
                     .contains("{\"id\":\"sample:glyphs\",\"type\":\"reference\"}");
@@ -776,6 +783,97 @@ class PackCompilerTest {
                 .as("no errors compiling the fixture pack")
                 .isEmpty();
         return result;
+    }
+
+    /**
+     * #198: a GUI's offset fonts map plain ASCII, so referencing them from
+     * minecraft:default would replace vanilla text. A pack with a glyph and a
+     * GUI keeps the glyph reference and drops every GUI one.
+     */
+    @Test
+    void guiTextNeverJoinsTheDefaultFont(@TempDir Path tempDir) throws IOException {
+        writeGlyphAndGuiPack(tempDir, "mixed");
+        var outcome = compilePack(tempDir, "mixed",
+                AllocationTable.load(tempDir.resolve("storage-mixed/allocation.bin")),
+                List.of(new GlyphType(), new GuiType(guiComponents())));
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            assertThat(entryText(zip, "assets/minecraft/font/default.json"))
+                    .contains("{\"id\":\"mixed:glyphs\",\"type\":\"reference\"}")
+                    .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
+                    .doesNotContain("mixed:gui");
+            // the GUI's offset fonts are still written, styled by their key from the title
+            assertThat(entryNames(zip).toList())
+                    .contains("assets/mixed/font/gui/smallcaps_y6.json",
+                            "assets/mixed/font/gui/default_y18.json",
+                            "assets/mixed/font/glyphs.json");
+        }
+    }
+
+    /** A pack with only GUI text references no GUI font, so its default font keeps only shift. */
+    @Test
+    void aGuiWithoutGlyphsLeavesTheDefaultFontToVanilla(@TempDir Path tempDir) throws IOException {
+        Path pack = tempDir.resolve("packs/styled");
+        writePackSkeleton(pack, "styled");
+        writeFile(pack.resolve("guis/shop.yml"), TEXT_GUI.getBytes());
+        var outcome = compilePack(tempDir, "styled",
+                AllocationTable.load(tempDir.resolve("storage-styled/allocation.bin")),
+                List.of(new GuiType(guiComponents())));
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            assertThat(entryText(zip, "assets/minecraft/font/default.json"))
+                    .contains("{\"id\":\"materione:shift\",\"type\":\"reference\"}")
+                    .doesNotContain("styled:gui");
+            assertThat(entryNames(zip).toList()).contains("assets/styled/font/gui/smallcaps_y6.json");
+        }
+    }
+
+    /** One glyph and the {@link #TEXT_GUI} GUI in a pack under {@code packs/<packId>}. */
+    private static void writeGlyphAndGuiPack(Path tempDir, String packId) throws IOException {
+        Path pack = tempDir.resolve("packs").resolve(packId);
+        writePackSkeleton(pack, packId);
+        Files.createDirectories(pack.resolve("assets/textures/gui"));
+        Files.copy(GoldenFiles.fixturesRoot().resolve("packs/sample/assets/textures/gui/heart.png"),
+                pack.resolve("assets/textures/gui/heart.png"));
+        writeFile(pack.resolve("glyphs/heart.yml"),
+                "heart:\n  texture: gui/heart\n  ascent: 8\n  height: 8\n".getBytes());
+        writeFile(pack.resolve("guis/shop.yml"), TEXT_GUI.getBytes());
+    }
+
+    /** A GUI whose two text runs use the offset fonts: smallcaps on row 6, then default on row 18. */
+    private static final String TEXT_GUI = """
+            shop:
+              title: Shop
+              rows: 3
+              layers:
+                - id: frame
+                  type: panel
+                  x: 0
+                  y: 0
+                  width: 176
+                  height: 168
+                - id: heading
+                  type: text
+                  x: 8
+                  y: 6
+                  text: "SHOP"
+                  font: smallcaps
+                  color: "#404040"
+                - id: hint
+                  type: text
+                  x: 8
+                  y: 18
+                  text: "Buy things"
+                  font: default
+                  color: "#404040"
+            """;
+
+    /** The gui-components registry with the built-ins registered, as bootstrap does. */
+    private static Registry<GuiComponent> guiComponents() {
+        var registry = new RegistryService().registry(RegistryKeys.GUI_COMPONENTS, GuiComponent.class);
+        for (GuiComponent component : GuiComponents.builtins()) {
+            registry.register(NamespacedId.of("materione", component.name()),
+                    component, component.describe(), "materione");
+        }
+        return registry;
     }
 
     /** Compiles one pack from a temp packs root (atlas/merge scenarios). */

@@ -56,6 +56,11 @@ releases may change file formats, settings and the public API.
   nested edits. (#191)
 - The editor browser lists `.yml` documents only, as the pipeline always required. Its `.yaml`
   files were never loaded, so they no longer appear as resources. (#191)
+- **GUI text no longer replaces vanilla text.** A pack with a GUI text layer referenced the GUI's
+  ASCII offset fonts from `minecraft:default`, so unstyled text across the game (chat, item names,
+  vanilla labels, toasts) rendered through GUI glyphs. Only glyph fonts join the default font now;
+  GUI fonts are used through their styled keys. A server pack's `default.json` merges with
+  vanilla's on the client, so nothing vanilla needed restoring. (#198)
 
 ## [0.1.0] - 2026-10-27
 

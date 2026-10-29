@@ -198,13 +198,16 @@ public final class GlyphType implements ContentType {
                     "the private-use range before U+E101 is full; retire unused glyphs "
                             + "(the allocation table never reuses codepoints) or contact the maintainers");
         }
+        // glyphs map private-use codepoints, which unstyled text reaches only through
+        // minecraft:default, so their fonts join it (gui.md §4 keeps GUI text out)
         if (glyph.isAnimated()) {
             for (int frame = 0; frame < glyph.frames().size(); frame++) {
                 emitter.fontProvider(fontKey, provider(
                         glyph.frames().get(frame),
                         glyph.ascent(),
                         glyph.height(),
-                        List.of(charString(first + frame))));
+                        List.of(charString(first + frame))),
+                        PackEmitter.FontMembership.JOINS_DEFAULT);
             }
             return;
         }
@@ -218,7 +221,8 @@ public final class GlyphType implements ContentType {
             chars.add(line.toString());
         }
         emitter.fontProvider(fontKey, provider(
-                glyph.texture(), glyph.ascent(), glyph.height(), chars));
+                glyph.texture(), glyph.ascent(), glyph.height(), chars),
+                PackEmitter.FontMembership.JOINS_DEFAULT);
     }
 
     // --- helpers -------------------------------------------------------------

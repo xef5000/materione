@@ -72,13 +72,39 @@ public interface PackEmitter {
     void vanillaFile(String path, Map<String, Object> json);
 
     /**
-     * Emits one font provider into the named font key ({@code ns:name}) —
-     * the glyph system's output. Providers from all packs merge into one
-     * {@code assets/<ns>/font/<name>.json} deterministically (compile order
-     * within a font, sorted font keys across the pack).
+     * Whether a generated font is referenced from the client's default font
+     * ({@code assets/minecraft/font/default.json}). Unstyled text (chat, item
+     * names, vanilla labels) renders only through the default font, so a font
+     * that joins it also takes over every plain codepoint it maps. Issue #198:
+     * a GUI's ASCII text fonts must not, so the emitting content type declares
+     * this on every call rather than the pack inferring it from a font name.
+     */
+    enum FontMembership {
+        /** Referenced from {@code minecraft:default}: glyph fonts (private-use codepoints). */
+        JOINS_DEFAULT,
+        /** Never referenced from {@code minecraft:default}: used only by text that names its font key. */
+        STYLED_ONLY
+    }
+
+    /**
+     * Emits one font provider into the named font key ({@code ns:name}) and
+     * declares whether that font joins the default font. Providers from all packs
+     * merge into one {@code assets/<ns>/font/<name>.json} deterministically (compile
+     * order within a font, sorted font keys across the pack). A font key has one
+     * membership per pack: if emissions disagree, {@link FontMembership#STYLED_ONLY}
+     * wins, so a disagreement never makes styled text take over unstyled text.
+     */
+    default void fontProvider(String fontKey, Map<String, Object> providerJson, FontMembership membership) {
+        // default no-op so addon content types compiled against older cores link
+    }
+
+    /**
+     * The legacy form of {@link #fontProvider(String, Map, FontMembership)} for addons
+     * compiled against older cores: the glyph system's original meaning, a font that
+     * joins the default font. In-repo content declares its membership explicitly.
      */
     default void fontProvider(String fontKey, Map<String, Object> providerJson) {
-        // default no-op so addon content types compiled against older cores link
+        fontProvider(fontKey, providerJson, FontMembership.JOINS_DEFAULT);
     }
 
     /**

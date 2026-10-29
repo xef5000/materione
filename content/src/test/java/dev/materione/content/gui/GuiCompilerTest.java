@@ -79,6 +79,11 @@ class GuiCompilerTest {
         assertThat(recording.fonts).anySatisfy(line -> assertThat(line).startsWith("shop:gui/smallcaps_y6 "));
         assertThat(recording.fonts).anySatisfy(line -> assertThat(line)
                 .contains("ascent=7").contains("height=16"));
+        // GUI fonts are styled by key and never join minecraft:default (#198): the default font
+        // maps every ASCII codepoint these fonts map, so joining would replace vanilla text
+        assertThat(recording.memberships).containsKeys("shop:gui", "shop:gui/smallcaps_y6");
+        assertThat(recording.memberships.values())
+                .containsOnly(PackEmitter.FontMembership.STYLED_ONLY);
 
         // goldens: the pack output summary, and the background PNG by bytes and by pixels
         Path summary = temp.resolve("summary.txt");
@@ -216,6 +221,7 @@ class GuiCompilerTest {
 
         final TreeMap<String, byte[]> assets = new TreeMap<>();
         final List<String> fonts = new ArrayList<>();
+        final Map<String, PackEmitter.FontMembership> memberships = new TreeMap<>();
         final List<Diagnostic> diagnostics = new ArrayList<>();
         private final TextureSource textures;
 
@@ -244,8 +250,10 @@ class GuiCompilerTest {
         }
 
         @Override
-        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
+        public void fontProvider(String fontKey, Map<String, Object> providerJson,
+                PackEmitter.FontMembership membership) {
             fonts.add(fontKey + " " + providerJson);
+            memberships.put(fontKey, membership);
         }
 
         @Override

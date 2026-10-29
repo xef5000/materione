@@ -206,7 +206,10 @@ public final class GuiType implements ContentType {
                 gui, GuiBackgrounds.codepoint(number), emitter.textures());
         compiled.diagnostics().forEach(emitter::diagnostic);
         compiled.assets().forEach(emitter::generatedAsset);
-        compiled.fonts().forEach(font -> emitter.fontProvider(font.fontKey(), font.provider()));
+        // GUI fonts map plain ASCII (smallcaps, the vanilla grid) and reach the screen only
+        // through the title's styled font keys, so they never join minecraft:default (#198)
+        compiled.fonts().forEach(font -> emitter.fontProvider(
+                font.fontKey(), font.provider(), PackEmitter.FontMembership.STYLED_ONLY));
     }
 
     // ------------------------------------------------------------------

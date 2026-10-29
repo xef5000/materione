@@ -112,6 +112,8 @@ public final class PackCompiler {
         final Map<String, Map<String, Object>> models = new TreeMap<>();
         /** Font key ({@code ns:name}) → providers in compile order (fonts.json §6). */
         final Map<String, List<Map<String, Object>>> fontProviders = new TreeMap<>();
+        /** Font key → whether it joins minecraft:default (declared per emission, #198). */
+        final Map<String, PackEmitter.FontMembership> fontMembership = new TreeMap<>();
         /** Namespace → event name → event json; written as one sounds.json per namespace. */
         final Map<String, Map<String, Map<String, Object>>> soundEvents = new TreeMap<>();
         /** Datapack artifact files ({@code data/...} → json) — paintings, songs, tags. */
@@ -193,12 +195,17 @@ public final class PackCompiler {
         }
 
         @Override
-        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
+        public void fontProvider(String fontKey, Map<String, Object> providerJson, FontMembership membership) {
             // an identical provider from another GUI (the same offset font, the same sheet) is one provider
             List<Map<String, Object>> providers = fontProviders.computeIfAbsent(fontKey, key -> new ArrayList<>());
             if (!providers.contains(providerJson)) {
                 providers.add(providerJson);
             }
+            // one membership per font key: STYLED_ONLY wins a disagreement, so styled text never takes over the default font
+            fontMembership.merge(fontKey, membership, (kept, declared) ->
+                    kept == FontMembership.STYLED_ONLY || declared == FontMembership.STYLED_ONLY
+                            ? FontMembership.STYLED_ONLY
+                            : FontMembership.JOINS_DEFAULT);
         }
 
         @Override
@@ -698,12 +705,15 @@ public final class PackCompiler {
 
     /**
      * Writes one {@code assets/<ns>/font/<name>.json} per font key (the pack
-     * glyph font {@code <ns>:glyphs} included) and wires everything into the
-     * client's default font: {@link #DEFAULT_FONT_PATH} gains one
-     * {@code type:reference} provider per generated font. Unstyled text —
+     * glyph font {@code <ns>:glyphs} included) and wires the fonts that join the
+     * default font into the client's default font: {@link #DEFAULT_FONT_PATH}
+     * gains one {@code type:reference} provider per joining font (glyph fonts,
+     * {@link PackEmitter.FontMembership#JOINS_DEFAULT}). Unstyled text —
      * chat, signs, item names — renders only through the default font, so
-     * without the references codepoints render as missing-glyph boxes. The
-     * shift font's space provider exists once ({@link #SHIFT_FONT_PATH}) and
+     * without the references codepoints render as missing-glyph boxes. A
+     * {@link PackEmitter.FontMembership#STYLED_ONLY} font (GUI text) is never
+     * referenced: it maps plain ASCII and would take over vanilla text (#198).
+     * The shift font's space provider exists once ({@link #SHIFT_FONT_PATH}) and
      * is referenced from the default font and every generated font —
      * references load inside any font file, so {@code <shift:N>} still
      * resolves in styled contexts. A user-shipped default font is absorbed
@@ -720,7 +730,7 @@ public final class PackCompiler {
         pack.unknownFile(SHIFT_FONT_PATH,
                 team.unnamed.creative.base.Writable.stringUtf8(toJson(shiftRoot)));
         var directProviders = new ArrayList<Object>(); // explicit minecraft:default glyphs
-        var references = new ArrayList<Object>(); // one per generated font file, sorted
+        var references = new ArrayList<Object>(); // one per default-joining font file, sorted
         emitter.fontProviders.forEach((fontKey, providers) -> {
             if (fontKey.equals("minecraft:default")) {
                 directProviders.addAll(providers);
@@ -736,10 +746,12 @@ public final class PackCompiler {
             pack.unknownFile(
                     "assets/" + namespace + "/font/" + name + ".json",
                     team.unnamed.creative.base.Writable.stringUtf8(toJson(root)));
-            var reference = new LinkedHashMap<String, Object>();
-            reference.put("type", "reference");
-            reference.put("id", fontKey);
-            references.add(reference);
+            if (emitter.fontMembership.get(fontKey) == PackEmitter.FontMembership.JOINS_DEFAULT) {
+                var reference = new LinkedHashMap<String, Object>();
+                reference.put("type", "reference");
+                reference.put("id", fontKey);
+                references.add(reference);
+            }
         });
         var defaultProviders = new ArrayList<Object>();
         defaultProviders.add(shiftReference());
