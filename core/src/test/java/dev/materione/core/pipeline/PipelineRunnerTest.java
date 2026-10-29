@@ -13,6 +13,7 @@ import dev.materione.testing.golden.GoldenFiles;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -249,6 +250,88 @@ class PipelineRunnerTest {
         assertThat(second.lastGraph().node(NamespacedId.parse("dup-reversed:shared"), "item"))
                 .hasValueSatisfying(node -> assertThat(node.sourceFile())
                         .endsWith(Path.of("items", "a.yml")));
+    }
+
+    /**
+     * Targeted reloads with fingerprints populated (the real boot path, where nothing outside the
+     * scope drifted): an unchanged sibling in a touched pack must survive, and the duplicate winner
+     * must move correctly when the file that owned the id changes.
+     */
+    @Test
+    void targetedReloadKeepsUnchangedSiblingsOfATouchedPack(@TempDir Path packsRoot) throws IOException {
+        Path pack = writeFingerprintedPack(packsRoot, "sib");
+        Files.writeString(pack.resolve("items/a.yml"), "x:\n  material: STICK\n");
+        Files.writeString(pack.resolve("items/b.yml"), "y:\n  material: STICK\n");
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+
+        Files.writeString(pack.resolve("items/a.yml"), "x2:\n  material: STICK\n");
+        assertThat(runner.request(new ReloadScope.FileSet(Set.of(pack.resolve("items/a.yml"))), packsRoot)
+                .completed()).isTrue();
+
+        assertThat(runner.lastGraph().node(NamespacedId.parse("sib:x2"))).isPresent();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("sib:y"))).isPresent();
+    }
+
+    /** Deleting or renaming the winner promotes the loser through a targeted reload. */
+    @Test
+    void targetedReloadPromotesTheLoserWhenTheWinnerLetsTheIdGo(@TempDir Path packsRoot) throws IOException {
+        Path pack = writeFingerprintedPack(packsRoot, "promo");
+        Files.writeString(pack.resolve("items/a.yml"), "foo:\n  material: IRON_SWORD\n");
+        Files.writeString(pack.resolve("items/b.yml"), "foo:\n  material: DIAMOND_SWORD\n");
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        assertThat(winnerSourceName(NamespacedId.parse("promo:foo"))).isEqualTo("a.yml");
+
+        Files.writeString(pack.resolve("items/a.yml"), "renamed:\n  material: IRON_SWORD\n");
+        assertThat(runner.request(new ReloadScope.FileSet(Set.of(pack.resolve("items/a.yml"))), packsRoot)
+                .completed()).isTrue();
+
+        assertThat(winnerSourceName(NamespacedId.parse("promo:foo"))).isEqualTo("b.yml");
+        assertThat(runner.lastGraph().node(NamespacedId.parse("promo:renamed"))).isPresent();
+        assertThat(quarantine.size()).isZero();
+    }
+
+    /** A new lexicographically-earlier declaration wins by targeted reload; the old copy is gone. */
+    @Test
+    void targetedReloadLetsANewEarlierDuplicateWinAndReportsIt(@TempDir Path packsRoot) throws IOException {
+        Path pack = writeFingerprintedPack(packsRoot, "newdup");
+        Files.writeString(pack.resolve("items/b.yml"), "foo:\n  material: DIAMOND_SWORD\n");
+        Files.writeString(pack.resolve("items/c.yml"), "other:\n  material: STICK\n");
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        assertThat(winnerSourceName(NamespacedId.parse("newdup:foo"))).isEqualTo("b.yml");
+
+        Files.writeString(pack.resolve("items/a.yml"), "foo:\n  material: IRON_SWORD\n");
+        assertThat(runner.request(new ReloadScope.FileSet(Set.of(pack.resolve("items/a.yml"))), packsRoot)
+                .completed()).isTrue();
+
+        assertThat(winnerSourceName(NamespacedId.parse("newdup:foo"))).isEqualTo("a.yml");
+        assertThat(runner.lastGraph().node(NamespacedId.parse("newdup:other"))).isPresent();
+        assertThat(runner.lastPacks().stream().flatMap(p -> p.resources().stream())
+                .filter(r -> r.id().equals(NamespacedId.parse("newdup:foo"))).count()).isOne();
+        assertThat(diagnostics.recent(256).stream()
+                .filter(d -> d.code() == DiagnosticCodes.DUPLICATE_RESOURCE_ID)
+                .map(d -> d.message()))
+                .anySatisfy(message -> assertThat(message).contains("items/a.yml and items/b.yml"));
+    }
+
+    /** A pack with fingerprints recorded by a full run, as the boot path leaves it. */
+    private Path writeFingerprintedPack(Path packsRoot, String id) throws IOException {
+        fingerprints = FingerprintCache.empty();
+        runner.replaceFingerprints(fingerprints);
+        Path pack = packsRoot.resolve(id);
+        Files.createDirectories(pack.resolve("items"));
+        Files.writeString(pack.resolve("pack.yml"), "id: " + id + "\nversion: 1.0.0\nschema_version: 1\n");
+        // pack.yml is not a content document, so the parse stage never records it; the drift check
+        // would treat it as drifted and always expand. Record it as the boot path does.
+        fingerprints.record(id + "/pack.yml", FingerprintCache.sha256(pack.resolve("pack.yml")));
+        return pack;
+    }
+
+    private FingerprintCache fingerprints;
+
+    private String winnerSourceName(NamespacedId id) {
+        return runner.lastGraph().node(id, "item")
+                .map(node -> node.sourceFile().getFileName().toString())
+                .orElse(null);
     }
 
     private long published(dev.materione.api.diagnostics.DiagnosticCode code) {
