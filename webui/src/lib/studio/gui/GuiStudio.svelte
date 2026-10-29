@@ -338,6 +338,9 @@
   {:else if studio.checks === 'failed'}
     <p class="banner warn" role="status">The compiler could not check this document: {studio.checkError}</p>
   {/if}
+  {#each studio.documentFlags as message (message)}
+    <p class="banner warn" role="status" data-testid="gui-verdict-document">The compiler says of this GUI: {message}</p>
+  {/each}
   {#if studio.notice && !anyDirty}<p class="banner notice" role="status">{studio.notice}</p>{/if}
 
   <div class="body">
