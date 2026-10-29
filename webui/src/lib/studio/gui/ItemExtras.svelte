@@ -9,11 +9,10 @@
   import ItemPicker from '../ItemPicker.svelte';
   import GuiItemAppearance from './GuiItemAppearance.svelte';
   import { getDocumentDraft } from '../../drafts.svelte';
-  import { isCustomized, planCustomize } from '../../gui/customize';
+  import { isCustomized } from '../../gui/customize';
   import { itemRefOf, storedItemRef } from '../../gui/items';
   import type { GuiLayer } from '../../gui/model';
   import type { GuiStudioState } from '../../gui/studio.svelte';
-  import { vanillaMaterials } from '../../items';
   import { refreshPack, session, workspace } from '../../state.svelte';
 
   let { studio, layer, disabled }: { studio: GuiStudioState; layer: GuiLayer; disabled: boolean } = $props();
@@ -24,18 +23,19 @@
     pack: studio.pack,
     guiPath: studio.path,
     resources: workspace.resources,
-    materials: vanillaMaterials(workspace.types),
   });
   const custom = $derived(reference ? isCustomized(reference, environment) : undefined);
-  const plan = $derived(planCustomize(layer, environment));
-  const problems = $derived(studio.itemIssues.get(layer.id) ?? []);
+  /** The compiler's problems with this layer, from the server (gui.validate). */
+  const problems = $derived(studio.flagsFor(layer.id).map((flag) => flag.message));
+  /** Customize needs the server's GUI API; without it the button says why. */
+  const unavailable = $derived(studio.checks === 'unavailable');
 
   async function customize(): Promise<void> {
     const channel = session.channel;
     if (!channel || busy) return;
     busy = true;
     try {
-      const created = await studio.customize(channel, getDocumentDraft(studio.pack, studio.path), layer.id, environment);
+      const created = await studio.customize(channel, getDocumentDraft(studio.pack, studio.path), layer.id);
       if (created) await refreshPack();
     } finally {
       busy = false;
@@ -70,13 +70,15 @@
     <button
       type="button"
       class="btn"
-      disabled={disabled || busy || studio.saving || !plan.ok}
-      title={plan.ok ? 'Create an item for this layer and edit its appearance here' : plan.reason}
+      disabled={disabled || busy || studio.saving || unavailable}
+      title={unavailable
+        ? 'This server does not offer the GUI API (the gui capability): update the Materione plugin to customize items'
+        : 'Create an item for this layer and edit its appearance here'}
       onclick={customize}
     >
       <Icon name="sparkles" size={14} /> {busy ? 'Customizing…' : 'Customize'}
     </button>
-    {#if !plan.ok && reference}<p class="note"><span>{plan.reason}</span></p>{/if}
+    {#if unavailable}<p class="note"><span>Customize needs a Materione plugin with the GUI API.</span></p>{/if}
   {/if}
 </section>
 

@@ -365,7 +365,10 @@ export default [
         ctx.expect(await page.getByTestId('default-font-hint').innerText()).toContain('Approximate preview');
         await page.getByRole('textbox', { name: 'Y', exact: true }).fill('2');
         await page.keyboard.press('Enter');
+        // the compiler's verdict comes from gui.validate a moment after the edit: wait for it
+        await page.getByTestId('text-issue').first().waitFor({ state: 'visible', timeout: 10_000 });
         ctx.expect(await page.getByTestId('text-issue').first().innerText()).toContain('row 5 or lower');
+        await page.locator('[data-flag]').first().waitFor({ state: 'visible', timeout: 10_000 });
         ctx.expect(await page.locator('[data-flag]').count()).toBeGreaterThan(0);
       } finally {
         removeFixtureFile();

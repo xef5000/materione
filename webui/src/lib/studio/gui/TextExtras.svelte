@@ -14,7 +14,8 @@
   let { studio, layer }: { studio: GuiStudioState; layer: GuiLayer } = $props();
 
   const font = $derived(fontOf(layer));
-  const issues = $derived(studio.textIssues.get(layer.id) ?? []);
+  /** The compiler's verdict on this layer, from the server (gui.validate); empty until it answers. */
+  const issues = $derived(studio.flagsFor(layer.id));
   const width = $derived(font ? advanceOf(textOf(layer), font) : 0);
 </script>
 
@@ -33,7 +34,7 @@
   {#each issues as issue (issue.message)}
     <p class="hint {issue.severity}" role="note" data-testid="text-issue">
       <Icon name="triangle-alert" size={14} />
-      <span>{#if issue.severity === 'skip'}<strong>Skipped in game (MTR-0052):</strong>{:else}<strong>Heads up:</strong>{/if} {issue.message}</span>
+      <span><strong>{issue.code}</strong> {issue.message}</span>
     </p>
   {/each}
 </section>

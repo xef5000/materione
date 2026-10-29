@@ -5,15 +5,13 @@
  * The rules live in the pure modules next to it (commands, scene, snap, ...);
  * this class only wires them to Svelte runes.
  */
-import { assetOps, ops as authoringOps, unwrap, type RpcChannel } from '../api';
+import { assetOps, RpcError, unwrap, type AssetUpload, type RpcChannel } from '../api';
 import { reconcileDocumentDraft, type DocumentDraft } from '../drafts.svelte';
 import { decodeImage, encodePng, readImageFile } from './browser-image';
 import { canvasSize } from './chest';
 import { composeCanvas } from './compose';
 import { addLayer, compose, patchLayers, setDocumentFields, type Command } from './commands';
-import { planCustomize, type CustomizeEnvironment } from './customize';
 import { GuiHistory } from './history';
-import { analyzeItems } from './items';
 import {
   findLayer,
   isLocked,
@@ -51,7 +49,9 @@ import {
 } from './save';
 import type { Guide } from './snap';
 import { compiledOrder, layerBounds, orderBadges, overlays, sceneOf, type Scene } from './scene';
-import { analyzeText } from './text';
+import { customizeItem, draftOf, guiApiAvailable, validateDraft } from './server';
+import type { ServerDiagnostic } from './server';
+import { flagsOf, isSkipped, type LayerFlag } from './validation';
 import { centered, fitView, panBy, stepZoom, zoomTo, type Point, type Size, type View } from './viewport';
 
 export type PaintTool = 'brush' | 'eraser' | 'fill' | 'picker';
@@ -63,6 +63,10 @@ export function isPaintTool(tool: Tool): tool is PaintTool {
 
 const PAINT_STORAGE_KEY = 'materione.gui.paint';
 const DEFAULT_PAINT_COLOR: Argb = 0xff3c8527;
+/** How long editing must pause before the server is asked for the compiler's verdict. */
+const CHECK_PAUSE_MS = 300;
+const NO_GUI_API =
+  'This server does not offer the GUI API (the gui capability), so Customize is unavailable. Update the Materione plugin to customize items here.';
 
 export class GuiStudioState {
   readonly #history = new GuiHistory(starterDocument());
@@ -124,6 +128,17 @@ export class GuiStudioState {
   /** Why the file is read-only here (a layer the model cannot hold faithfully). */
   blocking = $state<string[]>([]);
   issues = $state<string[]>([]);
+  /** The compiler's verdict on the document as shown, by layer id (gui.md §10 #8). */
+  flags = $state.raw<Map<string, LayerFlag[]>>(new Map());
+  /** Verdict problems about the GUI as a whole (a parse failure, say). */
+  documentFlags = $state<string[]>([]);
+  /**
+   * Whether the server can give the verdict and Customize: `off` before a connection, `unavailable`
+   * when it does not advertise the `gui` capability (an older plugin, or the demo), `checking`,
+   * `ready`, or `failed` with `checkError` saying why.
+   */
+  checks = $state<'off' | 'unavailable' | 'checking' | 'ready' | 'failed'>('off');
+  checkError = $state('');
   imageVersion = $state(0);
   saving = $state(false);
   saveError = $state('');
@@ -151,9 +166,8 @@ export class GuiStudioState {
   marks = $derived(overlays(this.shown, this.scene));
   texts = $derived(this.marks.filter((mark) => mark.target === 'text'));
   items = $derived(this.marks.filter((mark) => mark.target === 'slot'));
-  /** What the compiler will do with each text and item layer (gui.md section 4): skipped runs, with why. */
-  textIssues = $derived(analyzeText(this.shown));
-  itemIssues = $derived(analyzeItems(this.shown));
+  /** The ids of the layers the compiler drops, from the server's verdict (empty until it answers). */
+  skippedIds = $derived(new Set([...this.flags].filter(([, flags]) => isSkipped(flags)).map(([id]) => id)));
   /** The canvas as the player sees the background and smallcaps title: the eyedropper samples this. */
   composite = $derived.by<ArgbCanvas>(() => {
     void this.imageVersion;
@@ -162,7 +176,7 @@ export class GuiStudioState {
       height: this.size.height,
       rows: this.shown.rows,
       image: (reference) => this.imageFor(reference),
-    });
+    }, this.skippedIds);
   });
   selected = $derived(this.shown.layers.filter((layer) => this.selection.includes(layer.id)));
 
@@ -757,62 +771,102 @@ export class GuiStudioState {
   }
 
   /**
-   * Customize: gives an item layer its own ordinary item at `items/gui/<gui-path>/<id>.yml` and
-   * points the layer at it. The item's creation and the layer's new `item:` are ONE
-   * `authoring.bulk` call -- the server plans every document first and writes all or none -- carrying
-   * whatever other layout changes are pending, exactly as a save would. Pixel assets cannot ride a
-   * bulk call, so pending ones are saved first (a normal save) and the customization follows.
-   * Returns the new item's pack-relative path, or null (with `saveError` set) when nothing changed.
+   * Customize (gui.md §10 #2): the server gives the layer its own ordinary item and points the layer
+   * at it, in one transaction at the GUI's revision (`gui.customizeItem`). The rules are the server's.
+   * Pending changes are saved first, as their own transaction, because the server works on the saved
+   * file. Returns the new item's pack-relative path, or null (with `saveError` set) when nothing changed.
    */
-  async customize(
-    channel: RpcChannel,
-    draft: DocumentDraft,
-    layerId: string,
-    environment: CustomizeEnvironment,
-  ): Promise<string | null> {
-    const layer = findLayer(this.doc, layerId);
-    if (!layer || this.readOnly || this.saving || !this.#location) return null;
-    const plan = planCustomize(layer, environment);
-    if (!plan.ok) {
-      this.saveError = plan.reason;
+  async customize(channel: RpcChannel, draft: DocumentDraft, layerId: string): Promise<string | null> {
+    if (!findLayer(this.doc, layerId) || this.readOnly || this.saving || !this.#location) return null;
+    if (!guiApiAvailable(channel)) {
+      this.saveError = NO_GUI_API;
       return null;
     }
     this.saveError = '';
-    const pendingAssets = [...this.#dirtyAssets.keys()].some((reference) =>
-      this.doc.layers.some((entry) => entry.image === reference));
-    if (pendingAssets && !(await this.save(channel, draft))) return null;
+    if (this.dirty && !(await this.save(channel, draft))) return null;
     this.saving = true;
-    // The pointer is a normal undoable edit; if the server refuses the bulk call it is taken back.
-    const edit = ops.setField(this.doc, layerId, 'item', plan.reference, 'Customize item');
-    this.run(edit);
     try {
-      const saved = planSave(this.#location.prefix, this.#history.baseline, this.#history.doc, new Map());
-      const operations = [
-        plan.operation,
-        { kind: 'set' as const, path: this.path, rev: draft.rev, edits: saved.edits },
-      ];
-      const response = await authoringOps.bulk(channel, this.pack, operations, false);
-      if (!response.ok) {
-        this.conflict = response.error.code === 'MTR-0034';
-        this.saveError = `${response.error.code}: ${response.error.message}`;
-        this.#history.undo();
-        this.sync();
-        return null;
-      }
+      const created = await customizeItem(channel, this.pack, this.path, draft.rev, layerId);
+      // the layer now names the item the server made: the same edit, on the studio's copy of the file
+      this.run(ops.setField(this.doc, layerId, 'item', created.reference, 'Customize item'));
       this.#history.markSaved();
       this.sync();
       this.notice = 'Created the item and linked this layer to it.';
       await reconcileDocumentDraft(draft, channel);
-      this.seenRev = draft.rev;
-      return plan.path;
+      this.seenRev = created.rev;
+      return created.path;
     } catch (error) {
-      this.saveError = error instanceof Error ? error.message : String(error);
-      this.#history.undo();
-      this.sync();
+      if (error instanceof RpcError) {
+        this.conflict = error.code === 'MTR-0034';
+        this.saveError = error.message; // "CODE: message", as the server reported it
+      } else {
+        this.saveError = error instanceof Error ? error.message : String(error);
+      }
       return null;
     } finally {
       this.saving = false;
     }
+  }
+
+  // ------------------------------------------------------------------ the compiler's verdict
+
+  #checkTimer: ReturnType<typeof setTimeout> | undefined;
+  #checkSeq = 0;
+
+  /**
+   * Asks the server for the compiler's verdict on the document as shown, once editing pauses. Called
+   * on every change; a later question makes an earlier answer stale, so only the newest is drawn.
+   * Without the `gui` capability there is no verdict, and the studio says so instead of drawing none.
+   */
+  scheduleCheck(channel: RpcChannel | null): void {
+    clearTimeout(this.#checkTimer);
+    if (!channel || !this.#location) return;
+    if (!guiApiAvailable(channel)) {
+      this.checks = 'unavailable';
+      this.flags = new Map();
+      this.documentFlags = [];
+      return;
+    }
+    this.#checkTimer = setTimeout(() => void this.#check(channel), CHECK_PAUSE_MS);
+  }
+
+  async #check(channel: RpcChannel): Promise<void> {
+    const seq = ++this.#checkSeq;
+    const doc = this.shown;
+    this.checks = 'checking';
+    try {
+      const assets = await this.#unsavedPixels();
+      const diagnostics: ServerDiagnostic[] = await validateDraft(
+        channel,
+        draftOf(doc, this.rootId, this.pack, this.path),
+        assets,
+      );
+      if (seq !== this.#checkSeq) return;
+      const verdict = flagsOf(diagnostics, doc);
+      this.flags = verdict.byLayer;
+      this.documentFlags = verdict.document;
+      this.checks = 'ready';
+      this.checkError = '';
+    } catch (error) {
+      if (seq !== this.#checkSeq) return;
+      this.checks = 'failed';
+      this.checkError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
+  /** The pixels the draft needs and the saved pack does not have yet: dirty paint and uploads, base64 PNG. */
+  async #unsavedPixels(): Promise<AssetUpload[]> {
+    const out: AssetUpload[] = [];
+    for (const [reference, canvas] of this.#dirtyAssets) {
+      const data = this.#uploads.get(reference) ?? base64Of(await encodePng(canvas));
+      out.push({ path: textureAssetPath(reference), data });
+    }
+    return out;
+  }
+
+  /** The compiler's problems with one layer, as the server reported them (none before the first answer). */
+  flagsFor(id: string): LayerFlag[] {
+    return this.flags.get(id) ?? [];
   }
 
   // ------------------------------------------------------------------ save

@@ -6,19 +6,20 @@
  * items are not pixels the studio owns, so the canvas overlays them (approximate, and the real
  * item icons).
  *
+ * Which text layers the compiler drops is the server's verdict, passed in as the ids to leave out.
+ *
  * Pure: no DOM, no Svelte.
  */
 import { smallcaps } from './font/render';
 import type { GuiDocument } from './model';
 import type { ArgbCanvas } from './raster/canvas';
 import { flattenRaster, isVisible, type RasterScene } from './raster/flatten';
-import { analyzeText, colorOf, fontOf, isSkipped, isTextLayer, textOf } from './text';
+import { colorOf, fontOf, isTextLayer, textOf } from './text';
 
-export function composeCanvas(doc: GuiDocument, scene: RasterScene): ArgbCanvas {
+export function composeCanvas(doc: GuiDocument, scene: RasterScene, skipped: ReadonlySet<string>): ArgbCanvas {
   const canvas = flattenRaster(doc.layers, scene);
-  const issues = analyzeText(doc);
   for (const layer of doc.layers) {
-    if (!isVisible(layer) || !isTextLayer(layer) || isSkipped(issues.get(layer.id))) continue;
+    if (!isVisible(layer) || !isTextLayer(layer) || skipped.has(layer.id)) continue;
     if (fontOf(layer) !== 'smallcaps') continue;
     const x = typeof layer.x === 'number' ? Math.floor(layer.x) : 0;
     const y = typeof layer.y === 'number' ? Math.floor(layer.y) : 0;
