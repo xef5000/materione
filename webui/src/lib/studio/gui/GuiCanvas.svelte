@@ -11,24 +11,30 @@
    * The drag never touches the history while it runs: it draws a preview
    * document, and the pointer release commits one command.
    */
-  import { cssColor, parseColor } from '../../gui/raster/color';
-  import { cellsOf, wellRect, slotCell, itemRect, nearestCell } from '../../gui/chest';
+  import { cssColor } from '../../gui/raster/color';
+  import { cellsOf, wellRect, slotCell, itemRect, nearestContainerCell } from '../../gui/chest';
   import { toImageData } from '../../gui/browser-image';
+  import { BRUSH_CURSOR, BUCKET_CURSOR, DROPPER_CURSOR } from '../../gui/cursors';
   import { isLocked, type GuiLayer } from '../../gui/model';
   import * as ops from '../../gui/ops';
-  import { bareType, flattenRaster, regionOf } from '../../gui/raster/flatten';
+  import { footprint, outlinePath } from '../../gui/paint';
+  import { bareType, regionOf } from '../../gui/raster/flatten';
   import type { Rect } from '../../gui/raster/canvas';
   import { hitTest, layerBounds, layersInRect } from '../../gui/scene';
   import { collectTargets, snapMove, snapResize, snapThreshold } from '../../gui/snap';
-  import type { GuiStudioState } from '../../gui/studio.svelte';
+  import { isPaintTool, type GuiStudioState } from '../../gui/studio.svelte';
   import { transformability } from '../../gui/registry';
+  import { colorOf, fontOf, isTextLayer, isSkipped, textOf } from '../../gui/text';
+  import { amountOf, itemRefOf } from '../../gui/items';
+  import ItemIcon from '../ItemIcon.svelte';
+  import TextEditOverlay from './TextEditOverlay.svelte';
   import {
     HANDLES, HANDLE_ANCHOR, HANDLE_CURSOR, normalizeRect, resizeRect, scaleWithin, unionOf,
     type Handle,
   } from '../../gui/transform';
   import { GRID_ZOOM, pinchZoom, toGui, type Point } from '../../gui/viewport';
 
-  let { studio }: { studio: GuiStudioState } = $props();
+  let { studio, textures = [] }: { studio: GuiStudioState; textures?: string[] } = $props();
 
   let stage = $state<HTMLDivElement>();
   let art = $state<HTMLCanvasElement>();
@@ -49,17 +55,10 @@
   // ---------------------------------------------------------------- drawing
 
   $effect(() => {
-    const doc = studio.shown;
-    void studio.imageVersion;
     const target = art;
     if (!target) return;
-    const raster = flattenRaster(doc.layers, {
-      width: size.width,
-      height: size.height,
-      rows: doc.rows,
-      image: (reference) => studio.imageFor(reference),
-    });
-    target.getContext('2d')!.putImageData(toImageData(raster), 0, 0);
+    // the composited canvas: the shared raster plus the smallcaps title text, exactly as compiled
+    target.getContext('2d')!.putImageData(toImageData(studio.composite), 0, 0);
   });
 
   // ---------------------------------------------------------------- measuring
@@ -152,6 +151,8 @@
 
   type Drag =
     | { kind: 'pan'; x: number; y: number; panX: number; panY: number }
+    | { kind: 'paint' }
+    | { kind: 'pick' }
     | { kind: 'move'; start: Point; origin: Record<string, Rect>; moved: boolean; clickedId: string; wasSelected: boolean }
     | { kind: 'resize'; handle: Handle; start: Point; origin: Record<string, Rect>; box: Rect; moved: boolean }
     | { kind: 'marquee'; start: Point; base: string[]; moved: boolean; clickId?: string };
@@ -176,6 +177,11 @@
     if (event.button !== 0) return;
     const gui = guiAt(event);
     stage!.setPointerCapture(event.pointerId);
+
+    if (isPaintTool(studio.tool)) {
+      paintDown(event, gui);
+      return;
+    }
 
     const handle = handleAt(point);
     if (handle && box) {
@@ -233,6 +239,30 @@
     if (!event.shiftKey) studio.select([]);
   }
 
+  /** A whole GUI pixel from a pointer event (floor, so the pixel under the cursor is the one painted). */
+  function pixelAt(event: { clientX: number; clientY: number }): Point {
+    const gui = guiAt(event);
+    return { x: Math.floor(gui.x), y: Math.floor(gui.y) };
+  }
+
+  const onCanvas = (point: Point): boolean =>
+    point.x >= 0 && point.y >= 0 && point.x < studio.size.width && point.y < studio.size.height;
+
+  function paintDown(event: PointerEvent, gui: Point): void {
+    const point = { x: Math.floor(gui.x), y: Math.floor(gui.y) };
+    // Alt is the eyedropper from any paint tool, like every paint program
+    if (studio.tool === 'picker' || event.altKey) {
+      if (onCanvas(point)) studio.pickAt(point);
+      drag = { kind: 'pick' };
+      return;
+    }
+    if (studio.tool === 'fill') {
+      if (onCanvas(point)) studio.fillAt(point);
+      return;
+    }
+    if (studio.beginStroke(point, studio.tool === 'eraser', event.shiftKey)) drag = { kind: 'paint' };
+  }
+
   function snapTargetsFor(excluded: readonly string[]) {
     return collectTargets({
       width: studio.size.width,
@@ -260,6 +290,18 @@
       return;
     }
     const active = drag;
+    if (active.kind === 'paint') {
+      // coalesced events are the pointer positions the browser merged between frames: joining them keeps strokes smooth
+      const events = event.getCoalescedEvents?.() ?? [];
+      const points = (events.length ? events : [event]).map(pixelAt);
+      studio.strokeTo(points);
+      return;
+    }
+    if (active.kind === 'pick') {
+      const point = pixelAt(event);
+      if (onCanvas(point)) studio.pickAt(point);
+      return;
+    }
     if (active.kind === 'pan') {
       studio.pan(event.clientX - active.x - (studio.view.panX - active.panX), event.clientY - active.y - (studio.view.panY - active.panY));
       return;
@@ -273,6 +315,7 @@
       studio.select([...new Set([...active.base, ...inside])]);
       return;
     }
+    if (active.kind !== 'move' && active.kind !== 'resize') return;
     const dx = Math.round(gui.x - active.start.x);
     const dy = Math.round(gui.y - active.start.y);
     if (!active.moved && Math.hypot(dx, dy) * studio.view.zoom < 3) return;
@@ -299,7 +342,7 @@
       for (const layer of studio.doc.layers) {
         if (ids.includes(layer.id) && transformability(studio.infoOf(layer), layer).slotBound && rects[layer.id]) {
           const r = rects[layer.id]!;
-          studio.dropSlot = nearestCell(studio.doc.rows, r.x + r.w / 2, r.y + r.h / 2).index;
+          studio.dropSlot = nearestContainerCell(studio.doc.rows, r.x + r.w / 2, r.y + r.h / 2).index;
         }
       }
       pending = ops.setRects(studio.doc, studio.scene, rects, ids.length > 1 ? 'Move layers' : 'Move layer');
@@ -335,6 +378,14 @@
     studio.guides = [];
     studio.dropSlot = null;
     if (!active) return;
+    if (active.kind === 'paint') {
+      studio.endStroke();
+      return;
+    }
+    if (active.kind === 'pick') {
+      studio.finishPick();
+      return;
+    }
     if (active.kind === 'marquee' && !active.moved && active.clickId) studio.select([active.clickId]);
     if (active.kind === 'move' && !active.moved && active.wasSelected && studio.selection.length > 1) {
       studio.select([active.clickedId]);
@@ -354,10 +405,60 @@
 
   const cursorStyle = $derived(
     panning ? 'grabbing'
-      : studio.tool === 'hand' || studio.panKey ? 'grab'
-        : hoverHandle ? HANDLE_CURSOR[hoverHandle]
-          : hover ? 'move' : 'default',
+      : studio.panKey || studio.tool === 'hand' ? 'grab'
+        : studio.tool === 'picker' ? DROPPER_CURSOR
+          : studio.tool === 'fill' ? BUCKET_CURSOR
+            : isPaintTool(studio.tool) ? BRUSH_CURSOR
+              : hoverHandle ? HANDLE_CURSOR[hoverHandle]
+                : hover ? 'move' : 'default',
   );
+
+  // ---------------------------------------------------------------- text, files
+
+  function doubleClick(event: MouseEvent): void {
+    if (studio.tool !== 'select' || studio.readOnly) return;
+    const hit = hitTest(studio.doc, studio.scene, guiAt(event), paintAlpha);
+    if (hit && isTextLayer(hit)) {
+      event.preventDefault();
+      studio.beginTextEdit(hit.id);
+    }
+  }
+
+  function imageFiles(event: DragEvent): File[] {
+    return [...(event.dataTransfer?.files ?? [])].filter((file) => file.type.startsWith('image/'));
+  }
+
+  let dropping = $state(false);
+
+  function dragOver(event: DragEvent): void {
+    if (![...(event.dataTransfer?.types ?? [])].includes('Files')) return;
+    event.preventDefault();
+    dropping = !studio.readOnly;
+  }
+
+  async function drop(event: DragEvent): Promise<void> {
+    dropping = false;
+    const files = imageFiles(event);
+    if (!files.length || studio.readOnly) return;
+    event.preventDefault();
+    const at = guiAt(event);
+    for (const file of files) {
+      await studio.addImageFromFile(file, textures, { x: Math.round(at.x), y: Math.round(at.y) });
+    }
+  }
+
+  // ---------------------------------------------------------------- paint ghost
+
+  /** The pixels the next stamp would paint (the brush footprint under the cursor), clipped to the canvas. */
+  const ghost = $derived.by(() => {
+    const at = studio.cursor;
+    if (!at || !isPaintTool(studio.tool) || studio.panKey || panning) return null;
+    if (studio.tool === 'brush' || studio.tool === 'eraser') {
+      const cells = footprint(at.x, at.y, studio.brush).filter((cell) => onCanvas(cell));
+      return cells.length ? { cells, path: outlinePath(cells) } : null;
+    }
+    return onCanvas(at) ? { cells: [at], path: outlinePath([at]) } : null;
+  });
 
   // ---------------------------------------------------------------- overlay helpers
 
@@ -368,7 +469,6 @@
     return bareType(layer) === 'slots' ? cellsOf(studio.doc.rows, regionOf(layer)).map(wellRect) : [rect];
   }
   const showGrid = $derived(zoom >= GRID_ZOOM && studio.showPixelGrid);
-  const placeholders = $derived(studio.marked);
   /** Image layers whose texture is not available get a marked placeholder instead of silence. */
   const missingImages = $derived(
     studio.shown.layers.flatMap((layer) => {
@@ -379,10 +479,20 @@
     }),
   );
 
-  function textFill(color: unknown): string {
-    const parsed = typeof color === 'string' ? parseColor(color) : null;
-    return cssColor(parsed ?? 0xff404040);
-  }
+  /** The layers on top of the art: default-font text (the client's font is not ours to draw: approximate) and skipped text. */
+  const approxTexts = $derived(studio.texts.filter((mark) => !(fontOf(mark.layer) === 'smallcaps' && !isSkipped(studio.textIssues.get(mark.layer.id)))));
+  /** Layers that carry a problem the compiler will report: marked where the author is looking. */
+  const flagged = $derived([
+    ...studio.texts.flatMap((mark) => {
+      const issues = studio.textIssues.get(mark.layer.id) ?? [];
+      return issues.length ? [{ layer: mark.layer, rect: mark.rect, skipped: isSkipped(issues), messages: issues.map((issue) => issue.message) }] : [];
+    }),
+    ...studio.items.flatMap((mark) => {
+      const messages = studio.itemIssues.get(mark.layer.id) ?? [];
+      return messages.length ? [{ layer: mark.layer, rect: mark.rect, skipped: true, messages }] : [];
+    }),
+  ]);
+  const editingLayer = $derived(studio.editingText ? studio.layerById(studio.editingText) : undefined);
 
   const gridStyle = $derived(
     `left:${Math.round(view.panX)}px;top:${Math.round(view.panY)}px;width:${size.width * zoom}px;height:${size.height * zoom}px;background-size:${zoom}px ${zoom}px`,
@@ -396,6 +506,7 @@
   class:panning
   role="application"
   aria-label="GUI canvas"
+  data-testid="gui-stage"
   tabindex="0"
   style:cursor={cursorStyle}
   onpointerdown={down}
@@ -403,7 +514,12 @@
   onpointerup={up}
   onpointercancel={up}
   onpointerleave={leave}
+  ondblclick={doubleClick}
+  ondragover={dragOver}
+  ondragleave={() => (dropping = false)}
+  ondrop={drop}
   oncontextmenu={(event) => event.preventDefault()}
+  class:dropping
 >
   <div class="paper" style={paperStyle}></div>
   <canvas
@@ -415,6 +531,49 @@
     data-testid="gui-art"
   ></canvas>
   {#if showGrid}<div class="pixels" style={gridStyle}></div>{/if}
+
+  <!-- title text the studio cannot draw as pixels: the client's default font (approximate) and runs the compiler will skip -->
+  <svg class="texts" aria-hidden="true">
+    <!-- the client draws its own "Inventory" label over the background (gui.md section 9.2); shown faintly so it is not a surprise -->
+    <text
+      class="mc inventory"
+      data-testid="inventory-label"
+      x={sx(8)}
+      y={sy(size.height - 94) + 7 * zoom}
+      style:font-size="{8 * zoom}px"
+    >Inventory</text>
+    {#each approxTexts as mark (mark.layer.id)}
+      {@const skipped = isSkipped(studio.textIssues.get(mark.layer.id))}
+      {#if !(editingLayer && editingLayer.id === mark.layer.id && fontOf(mark.layer) === 'smallcaps')}
+        <text
+          class="mc"
+          class:ghost={skipped}
+          data-layer={mark.layer.id}
+          data-font={fontOf(mark.layer) ?? 'invalid'}
+          x={sx(mark.rect.x)}
+          y={sy(mark.rect.y) + 7 * zoom}
+          style:font-size="{8 * zoom}px"
+          fill={cssColor(colorOf(mark.layer))}
+        >{textOf(mark.layer)}</text>
+      {/if}
+    {/each}
+  </svg>
+
+  <!-- slot items: the real item icons (thumbnail pipeline), at the size the client draws them -->
+  <div class="items" aria-hidden="true">
+    {#each studio.items as mark (mark.layer.id)}
+      {@const ref = itemRefOf(mark.layer)}
+      {@const amount = amountOf(mark.layer)}
+      <div class="item" data-layer={mark.layer.id} style="left:{Math.round(view.panX + mark.rect.x * zoom)}px;top:{Math.round(view.panY + mark.rect.y * zoom)}px;width:{mark.rect.w * zoom}px;height:{mark.rect.h * zoom}px">
+        {#if ref}<ItemIcon value={ref} pack={studio.pack} size={mark.rect.w * zoom} bare />{/if}
+        {#if amount > 1}
+          <span class="count" style:font-size="{8 * zoom}px" style:right="{-1 * zoom}px" style:bottom="{-1 * zoom}px">{amount}</span>
+        {/if}
+      </div>
+    {/each}
+  </div>
+
+  {#if editingLayer}<TextEditOverlay {studio} layer={editingLayer} />{/if}
 
   <svg class="overlay" aria-hidden="true">
     <rect class="edge" x={sx(0) - 0.5} y={sy(0) - 0.5} width={size.width * zoom + 1} height={size.height * zoom + 1} />
@@ -438,29 +597,26 @@
       <text class="tag" x={sx(entry.rect.x) + 4} y={sy(entry.rect.y) + 14}>no texture</text>
     {/each}
 
-    {#each placeholders as entry (entry.layer.id)}
-      {@const rect = entry.rect}
-      <g class="placeholder" data-layer={entry.layer.id}>
-        <rect x={sx(rect.x)} y={sy(rect.y)} width={rect.w * zoom} height={rect.h * zoom} />
-        {#if entry.target === 'text'}
-          <text
-            class="mc"
-            x={sx(rect.x)}
-            y={sy(rect.y) + 8 * zoom}
-            style:font-size="{8 * zoom}px"
-            fill={textFill(entry.layer.color)}
-          >{typeof entry.layer.text === 'string' ? entry.layer.text : ''}</text>
-        {:else}
-          {@const u = rect.w * zoom}
-          <polygon class="cube top" points="{sx(rect.x) + u / 2},{sy(rect.y) + u * 0.1} {sx(rect.x) + u * 0.9},{sy(rect.y) + u * 0.3} {sx(rect.x) + u / 2},{sy(rect.y) + u * 0.5} {sx(rect.x) + u * 0.1},{sy(rect.y) + u * 0.3}" />
-          <polygon class="cube left" points="{sx(rect.x) + u * 0.1},{sy(rect.y) + u * 0.3} {sx(rect.x) + u / 2},{sy(rect.y) + u * 0.5} {sx(rect.x) + u / 2},{sy(rect.y) + u * 0.92} {sx(rect.x) + u * 0.1},{sy(rect.y) + u * 0.7}" />
-          <polygon class="cube right" points="{sx(rect.x) + u * 0.9},{sy(rect.y) + u * 0.3} {sx(rect.x) + u / 2},{sy(rect.y) + u * 0.5} {sx(rect.x) + u / 2},{sy(rect.y) + u * 0.92} {sx(rect.x) + u * 0.9},{sy(rect.y) + u * 0.7}" />
-          {#if typeof entry.layer.amount === 'number' && entry.layer.amount > 1}
-            <text class="mc count" x={sx(rect.x + rect.w) } y={sy(rect.y + rect.h)} style:font-size="{8 * zoom}px">{entry.layer.amount}</text>
-          {/if}
-        {/if}
+    {#each flagged as mark (mark.layer.id)}
+      <g class="flag" class:skipped={mark.skipped} data-flag={mark.layer.id}>
+        <title>{mark.messages.join('. ')}</title>
+        <rect x={sx(mark.rect.x) - 2} y={sy(mark.rect.y) - 2} width={mark.rect.w * zoom + 4} height={mark.rect.h * zoom + 4} />
+        <circle cx={sx(mark.rect.x + mark.rect.w) + 2} cy={sy(mark.rect.y) - 2} r="7" />
+        <text x={sx(mark.rect.x + mark.rect.w) + 2} y={sy(mark.rect.y) + 1.5}>!</text>
       </g>
     {/each}
+
+    {#if ghost}
+      {#if studio.tool === 'brush'}
+        {#each ghost.cells as cell (`${cell.x},${cell.y}`)}
+          <rect class="ink" x={sx(cell.x)} y={sy(cell.y)} width={zoom} height={zoom} fill={cssColor(studio.color)} />
+        {/each}
+      {/if}
+      <g transform="translate({sx(0)} {sy(0)}) scale({zoom})">
+        <path class="ghost-edge" d={ghost.path} />
+        <path class="ghost-line" d={ghost.path} />
+      </g>
+    {/if}
 
     {#if hover && !studio.selection.includes(hover)}
       {@const hovered = studio.layerById(hover)}
@@ -529,9 +685,23 @@
   .stage:focus-visible {
     box-shadow: inset 0 0 0 1px var(--control-line);
   }
+  .stage.dropping::after {
+    content: 'Drop to add an image layer';
+    position: absolute;
+    inset: 8px;
+    display: grid;
+    place-items: center;
+    border: 2px dashed var(--accent);
+    border-radius: var(--radius-lg);
+    background: var(--gui-marquee);
+    color: var(--fg);
+    font-size: var(--text-md);
+    pointer-events: none;
+  }
   .paper,
   .art,
-  .pixels {
+  .pixels,
+  .items {
     position: absolute;
     pointer-events: none;
   }
@@ -547,6 +717,64 @@
     background-image:
       linear-gradient(to right, var(--gui-pixel-grid) 1px, transparent 1px),
       linear-gradient(to bottom, var(--gui-pixel-grid) 1px, transparent 1px);
+  }
+  .texts {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .texts .inventory {
+    fill: var(--fg);
+    opacity: 0.2;
+  }
+  .texts .ghost {
+    opacity: 0.35;
+  }
+  .items {
+    inset: 0;
+    overflow: hidden;
+  }
+  .item {
+    position: absolute;
+  }
+  .count {
+    position: absolute;
+    font-family: var(--font-minecraft);
+    line-height: 1;
+    color: var(--canvas-mark);
+    text-shadow: 0.125em 0.125em 0 var(--canvas-dim);
+  }
+  .flag rect {
+    fill: none;
+    stroke: var(--warn);
+    stroke-width: 1;
+    stroke-dasharray: 3 2;
+  }
+  .flag circle {
+    fill: var(--warn);
+  }
+  .flag text {
+    fill: var(--bg-app);
+    font: 700 11px var(--font-sans, sans-serif);
+    text-anchor: middle;
+  }
+  .ink {
+    opacity: 0.8;
+  }
+  .ghost-edge {
+    fill: none;
+    stroke: var(--canvas-dim);
+    stroke-width: 3;
+    vector-effect: non-scaling-stroke;
+  }
+  .ghost-line {
+    fill: none;
+    stroke: var(--canvas-mark);
+    stroke-width: 1;
+    vector-effect: non-scaling-stroke;
   }
   .overlay {
     position: absolute;
@@ -579,32 +807,9 @@
     fill: var(--accent-hover);
     font-size: var(--text-xs);
   }
-  .placeholder rect {
-    fill: var(--gui-placeholder);
-    stroke: var(--accent);
-    stroke-width: 1;
-    stroke-dasharray: 4 3;
-  }
   .mc {
     font-family: var(--font-minecraft);
     paint-order: stroke;
-  }
-  .count {
-    fill: var(--fg);
-    text-anchor: end;
-  }
-  .cube {
-    stroke: var(--accent);
-    stroke-width: 1;
-  }
-  .cube.top {
-    fill: var(--accent-hover);
-  }
-  .cube.left {
-    fill: var(--accent);
-  }
-  .cube.right {
-    fill: var(--accent-low);
   }
   .hover {
     fill: none;

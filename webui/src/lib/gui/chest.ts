@@ -113,3 +113,22 @@ export function nearestCell(rows: number, x: number, y: number): SlotCell {
   }
   return best!;
 }
+
+/**
+ * The container slot (never an inventory slot: an `item` layer fills the chest's own slots,
+ * `ItemComponent` rejects the rest) nearest to a GUI-pixel point, by item-area centers.
+ */
+export function nearestContainerCell(rows: number, x: number, y: number): SlotCell {
+  let best = containerCells(rows)[0]!;
+  let bestDistance = Infinity;
+  for (const cell of containerCells(rows)) {
+    const dx = x - (cell.x + ITEM_SIZE / 2);
+    const dy = y - (cell.y + ITEM_SIZE / 2);
+    const distance = dx * dx + dy * dy;
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = cell;
+    }
+  }
+  return best;
+}

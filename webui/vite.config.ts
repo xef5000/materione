@@ -12,8 +12,9 @@ const origin = process.env.EDITOR_ORIGIN ?? 'http://127.0.0.1:8089';
 export default defineConfig({
   plugins: [svelte()],
   server: {
-    // The demo imports its recorded server snapshot from the shared fixture corpus.
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden'] },
+    // The demo imports its recorded server snapshot from the shared fixture corpus; the GUI studio reads the
+    // smallcaps glyph file the Java compiler reads (its single source), so both sides draw the same font.
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden', '../fonts/smallcaps'] },
     proxy: {
       '/s': origin,
       '/editor/ws': { target: origin, ws: true },

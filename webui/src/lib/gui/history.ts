@@ -22,6 +22,9 @@ export class GuiHistory {
   #baseline: GuiDocument;
   #past: Entry[] = [];
   #future: Command[] = [];
+  /** The pixel commands currently applied, oldest first: the top identifies the pixel state. */
+  #pixels: Command[] = [];
+  #savedPixels: Command | null = null;
 
   constructor(doc: GuiDocument) {
     this.#doc = doc;
@@ -54,7 +57,16 @@ export class GuiHistory {
 
   /** Differs structurally from the last saved (or loaded) document. */
   get dirty(): boolean {
-    return !sameDocument(this.#doc, this.#baseline);
+    return !sameDocument(this.#doc, this.#baseline) || this.pixelsDirty;
+  }
+
+  /**
+   * The layer pixels differ from what was last saved. A stroke changes no document field, so this
+   * is tracked by identity of the newest applied pixel command: undoing back to the saved one
+   * (or to the start, when nothing was saved) is clean again, anything else is not.
+   */
+  get pixelsDirty(): boolean {
+    return (this.#pixels[this.#pixels.length - 1] ?? null) !== this.#savedPixels;
   }
 
   /** Runs a command; null commands (no-op edits) are ignored. Clears redo. */
@@ -62,6 +74,7 @@ export class GuiHistory {
     if (!command) return this.#doc;
     this.#doc = command.apply(this.#doc);
     this.#future = [];
+    if (command.pixelAsset) this.#pixels.push(command);
     const last = this.#past[this.#past.length - 1];
     if (last && command.coalesce && last.command.coalesce === command.coalesce &&
         now - last.at <= COALESCE_WINDOW_MS) {
@@ -80,6 +93,7 @@ export class GuiHistory {
     const entry = this.#past.pop();
     if (!entry) return this.#doc;
     this.#doc = entry.command.revert(this.#doc);
+    if (entry.command.pixelAsset) this.#pixels.pop();
     this.#future.push(entry.command);
     return this.#doc;
   }
@@ -88,6 +102,7 @@ export class GuiHistory {
     const command = this.#future.pop();
     if (!command) return this.#doc;
     this.#doc = command.apply(this.#doc);
+    if (command.pixelAsset) this.#pixels.push(command);
     this.#past.push({ command, at: 0 });
     return this.#doc;
   }
@@ -95,6 +110,7 @@ export class GuiHistory {
   /** The current document becomes the clean baseline (after a successful save). */
   markSaved(): void {
     this.#baseline = this.#doc;
+    this.#savedPixels = this.#pixels[this.#pixels.length - 1] ?? null;
     // never fold the next edit into a step made before the save
     this.#past = this.#past.map((entry) => ({ ...entry, at: 0 }));
   }
@@ -105,5 +121,7 @@ export class GuiHistory {
     this.#baseline = doc;
     this.#past = [];
     this.#future = [];
+    this.#pixels = [];
+    this.#savedPixels = null;
   }
 }

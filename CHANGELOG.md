@@ -21,6 +21,18 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **GUI studio: paint, image, text and item components (gui.md §6).** The studio's text and item
+  layers are real renders now, and every component has its tools. Paint layers get a brush and
+  eraser (1-8 px, square or round), contiguous fill, an eyedropper that samples what the player
+  sees, and a palette with recent colours; strokes are smooth at any zoom and each is one undo
+  step. Image layers come from an upload (stored beside the GUI as chosen) or from the Assets
+  workspace, scale with nearest neighbour, and reset to natural size. Text layers edit in place on
+  the canvas, with a pixel-exact `smallcaps` preview drawn from the same font source the compiler
+  ships, an "approximate preview" note for the client's own font, and the compiler's restrictions
+  (reserved characters, `default` only as the last run, rows above 5) shown as warnings instead of
+  being discovered in game. Item layers snap to container slots only, pick from Materione items and
+  vanilla materials with their icons, and **Customize** creates an ordinary item under
+  `items/gui/<gui-path>/` and opens its appearance inline, in one authoring transaction.
 - **GUI compiler: raster, background glyph and title (gui.md §4).** A GUI now compiles into pack
   output: its visible raster layers flatten bottom to top onto one canvas (the shared vectors
   pin the integer pixel rules), the canvas becomes a background glyph in the GUI font, and the

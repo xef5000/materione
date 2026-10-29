@@ -103,6 +103,7 @@
     {#each rows as layer (layer.id)}
       {@const badge = studio.badges.get(layer.id)}
       {@const info = studio.infoOf(layer)}
+      {@const problems = [...(studio.textIssues.get(layer.id) ?? []).map((issue) => issue.message), ...(studio.itemIssues.get(layer.id) ?? [])]}
       <li
         class="row"
         class:selected={studio.selection.includes(layer.id)}
@@ -141,8 +142,11 @@
             <span class="name">{layerLabel(layer)}</span>
           </button>
         {/if}
+        {#if problems.length}
+          <span class="problem" title={problems.join('. ')} role="img" aria-label="Compiler warning: {problems.join('. ')}"><Icon name="triangle-alert" size={14} /></span>
+        {/if}
         {#if badge}
-          <span class="badge" title={badge.label} role="img" aria-label={badge.label}>#{badge.position}</span>
+          <span class="badge"title={badge.label} role="img" aria-label={badge.label}>#{badge.position}</span>
         {/if}
         <button
           class="toggle"
@@ -312,6 +316,12 @@
     padding: var(--space-half) var(--space-1);
     font-size: var(--text-sm);
     outline: none;
+  }
+  .problem {
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    color: var(--warn);
   }
   .badge {
     flex: none;

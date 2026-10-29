@@ -12,19 +12,21 @@
     value: string;
     pack: string;
     size?: number;
+    /** No frame or backdrop (the GUI canvas). */
+    bare?: boolean;
   }
 
-  let { value, pack, size = 24 }: Props = $props();
+  let { value, pack, size = 24, bare = false }: Props = $props();
   const parsed = $derived(parseItemRef(value, pack));
   const summary = $derived(summaryFor(workspace.summaries, value, pack));
   const label = $derived(itemLabel(value, pack) || 'No item');
 </script>
 
 {#if parsed.vanilla}
-  <ResourceThumbnail material={parsed.id} {label} {size} />
+  <ResourceThumbnail material={parsed.id} {label} {size} {bare} />
 {:else if summary}
   <ResourceThumbnail visual={summary.visual} render={summary.render} material={summary.material}
-    {label} {size} version={workspace.visualVersion} />
+    {label} {size} {bare} version={workspace.visualVersion} />
 {:else}
-  <ResourceThumbnail {label} {size} />
+  <ResourceThumbnail {label} {size} {bare} />
 {/if}

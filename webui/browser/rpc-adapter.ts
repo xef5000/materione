@@ -1454,7 +1454,8 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         const type = kind === 'create'
           ? stringValue(entry.type, 'items')
           : stringValue(entry.fromPath).split('/')[0] ?? 'items';
-        path = `${type}/${id}.yml`;
+        const folder = stringValue(entry.folder).replace(/^\/+|\/+$/g, '').replace(new RegExp(`^${type}/?`), '');
+        path = `${type}/${folder ? `${folder}/` : ''}${id}.yml`;
         if (this.#documents.has(`${pack}/${path}`)) {
           return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
         }

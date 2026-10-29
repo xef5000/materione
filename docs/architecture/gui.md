@@ -78,8 +78,8 @@ implementing PR, documented in plugin.md §5) and the rest of the GUI still comp
 
 **Customized items live next to the GUI as ordinary items.** When the studio customizes an
 item layer's appearance, it creates a normal item resource at
-`items/gui/<gui-path>/<layer-id>.yml` (optionally `template:`-linked to the base item) and
-points the layer's `item:` at it. There is no "GUI-local item" concept: the item type, its
+`items/gui/<gui-path>/<layer-id>.yml` (a vanilla base becomes `material:`; a Materione base is
+copied, since items cannot be templates, see section 6) and points the layer's `item:` at it. There is no "GUI-local item" concept: the item type, its
 studio, its compile path and its auto-updater are reused as they are (D1, D5).
 
 **Paint layers own one PNG** at `textures/<image>.png`, canvas-sized, RGBA. The studio
@@ -324,11 +324,44 @@ Content for any `guis/**` file.
 | Registry | `gui/registry.ts` | palette, inspector fields, defaults for a new layer and what may be dragged or resized are all derived from the component descriptions (`guiComponentsOf` over `authoring.describe`; `x`/`y`/`width`/`height` fields mean movable and resizable, `slot` means slot-bound; a layer's `type:` matches the registry id with `materione:` optional); no component list lives in the studio. Cosmetic icons and the bevel style's four colors (a raw map in the schema) are the only studio-side knowledge |
 | Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `rows`, `layers`) and `assets: [{ path, data }]` (base64 PNG, via `ops.setFields`) for pixel assets a layer still refers to; a pixels-only save sends empty `edits` |
 
-Text and item layers are drawn as clearly marked placeholders until the paint, image, text and
-item studio work lands (issue 187); it plugs in by registering painters, not by changing the
-canvas. Shortcuts: `V` select, `H` hand, `Space` (hold) pan, `0` fit, `1` 100%, `+`/`-` zoom,
+Shortcuts: `V` select, `H` hand, `Space` (hold) pan, `0` fit, `1` 100%, `+`/`-` zoom,
 `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo, `Ctrl+D` duplicate, `Del` delete, `Ctrl+A` all, `Ctrl+]`/`[`
-raise/lower, `F2` rename, arrows nudge (`Shift` = 10 px), `Ctrl+S` save.
+raise/lower, `F2` rename, `Enter` edit the selected text in place, arrows nudge (`Shift` = 10 px),
+`Ctrl+S` save, and the paint tools below.
+
+**As built (issue 187: paint, image, text and item components).** Text and item layers are real
+renders now (the placeholders are gone), and the paint, image, text and item components each have
+the tools a designer expects.
+
+| Piece | Where | Notes |
+|---|---|---|
+| Paint tools | `gui/paint.ts`, `gui/pixel-command.ts`, `studio/gui/PaintOptions.svelte` | brush and eraser (1-8 px, square or round), contiguous fill (tolerance 0), eyedropper (samples the **composited** canvas: raster layers and smallcaps text, as the player sees it), palette with recent colours and hex input (persisted in the browser, never in the file). The drawing rules are `pixels.ts`'s (stamp, Bresenham line, exact-match flood fill) run on a working RGBA copy of the layer's `ArgbCanvas`; `Brush` gained an optional `shape` for the round footprint (additive: the texture editor is unchanged). A stroke joins every pointer event, coalesced ones included, with a line, so a fast drag leaves no gaps at any zoom; Shift-click draws a straight line from the last stroke's end; Alt picks a colour from any paint tool |
+| Strokes are commands | `GuiHistory` | a stroke, fill or clear is **one** `PixelCommand` carrying a patch (touched pixels, before and after) rather than a copy of the canvas. The document does not change, so the history tracks the newest applied pixel command by identity: a stroke makes the studio dirty, undoing back to the saved state makes it clean, and undoing past a save, or painting something else after it, never looks clean. Paint-only saves send empty `edits` plus the PNG (section 7) |
+| Paint target | `GuiStudioState` | the selected paint layer, else the topmost visible unlocked one, else a new `Paint` layer is created by the first stroke (one more undo step); a locked or hidden target is explained in the status bar, never painted. A paint layer whose canvas no longer matches the rows is grown (overlap kept) |
+| Image layers | `studio/gui/ImageExtras.svelte`, `ImageChooser.svelte` | add by **upload** (file dialog, or drop a file on the canvas) or **from the Assets workspace** (the item studio's explorer). An upload is stored at `textures/gui/<gui-path>/<file>.png` with the file's own bytes (a PNG is never re-encoded; other formats the browser can read are converted) and rides the layout transaction as an `assets` entry; moving and resizing are the canvas's (nearest neighbour), with **Natural size** and 1x-4x scale buttons |
+| Text layers | `gui/font/`, `gui/text.ts`, `gui/compose.ts`, `studio/gui/TextEditOverlay.svelte` | **smallcaps is pixel-exact**: the canvas draws each glyph from the shared font source `fonts/smallcaps/smallcaps.txt` (section 4, *Fonts*, parsed by `font/smallcaps.ts`; `font/render.ts` draws it), at the pen the compiler computes, tinted by the colour; the browser spec compares every ink pixel against glyphs parsed independently from that file. The studio also draws the vanilla **Inventory** label as a faint ghost at (8, height - 94), since the client draws it over the background (section 9.2). **Double-click** (or `Enter`) edits in place: a hidden input takes the keyboard, the canvas keeps drawing the real font, and the overlay draws only caret and selection from the font's own advances; typing previews live without touching the history, `Enter`/leaving commits one undo step, `Escape` takes it back. `default` is drawn with the bundled Minecraftia and says **Approximate preview**; its advances only size the selection box |
+| Compiler rules, shown | `gui/text.ts`, `gui/items.ts` | every skip the compiler would report (`MTR-0052`) is stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, `default` above row 5, and **only the last text run may be `default`** (the default run is told it hides the layers after it; those layers are told why). Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
+| Item layers | `studio/gui/ItemExtras.svelte` | the picker is the item studio's (Materione items with their thumbnails, vanilla materials with their icons); a pick is stored `pack:id` or `minecraft:id` (a bare id resolves in the `materione` namespace in game, so it is never written). Items **snap to container slots only**: drags, nudges and typed slots resolve to the chest's own slots (`ItemComponent` rejects the rest). The canvas draws the real item icon (the existing thumbnail pipeline, `ItemIcon` with a `bare` mode) and the stack count |
+| Customize | `gui/customize.ts`, `GuiStudioState.customize`, `GuiItemAppearance.svelte` | see below |
+
+**Customize is one transaction.** Customize creates an ordinary item at
+`items/gui/<gui-path>/<layer-id>.yml`, points the layer's `item:` at it and opens its appearance
+inline. The item's creation and the layer's new `item:` (together with any other pending layout
+change, exactly as a save would send it) are **one `authoring.bulk` call**: the server plans every
+document before writing any and writes all or none, with the GUI document's revision checked. The
+pointer is an ordinary undoable edit that is taken back if the server refuses the call. Two
+things the existing API shapes: **(1)** `authoring.bulk` cannot carry binaries, so pending pixel
+assets are saved first by a normal save (itself one transaction) and the customization follows;
+**(2)** the file is named after the item's id (the API fixes that), so the id is the layer id when
+the pack has no resource of that name, else `<gui-name>_<layer-id>`, else numbered, and the path
+is `items/gui/<gui-path>/<id>.yml`. A **vanilla** base becomes a `create` with `material:`. A
+**Materione item** base becomes a `duplicate` of its document: items are not templates
+(`template:` resolves only against `templates/`), so a live link to a base item cannot be
+expressed; the copy starts identical, keeps the base's own `template:`, and is then the layer's
+to change. Blocks and furniture cannot be customized (no item document). The inline appearance
+is the item studio's own `ItemAppearance` on that item's document draft; its edits are drafts of
+that file, and **Save** writes the layout and every customized item's draft (two kinds of
+document, so two transactions, in that order).
 
 ## 7. Wire & API surface
 
@@ -645,3 +678,14 @@ These answer §9. Each one is reversible by the owner.
    here and implemented by the follow-up issue the owner files; #188 implements none of it. The
    default-font "defect" of the first draft was wrong: a pack's `default.json` merges with vanilla's
    (§9.6, #201), so no fix is needed.
+
+### Decisions taken in #187 (studio: paint, image, text and item components)
+
+These fill gaps the sections above leave open. Each one is reversible by the owner.
+
+1. **Customize copies a Materione base item instead of template-linking it, until items can be templates (#203).** The template pool is `templates/` only, so `template: <item>` would quarantine the new item; `authoring.bulk` `duplicate` is the closest faithful operation. If a live link to a base item is wanted, it needs a template-pool decision (items usable as templates), not a studio workaround.
+2. **A customized item's id may differ from the layer id.** The API names the file after the id and ids are unique per pack, so a clash falls back to `<gui-name>_<layer-id>` (the path stays under `items/gui/<gui-path>/`).
+3. **Item layers address container slots only**, matching `ItemComponent` (the player inventory is vanilla and not an item layer target); the studio snaps and flags accordingly instead of writing a layer the compiler would skip.
+4. **Pixel edits are commands outside the document.** The history tracks them by identity of the newest applied pixel command, so dirtiness is exact without copying canvases.
+5. **Uploads keep the original PNG bytes** and are stored under `textures/gui/<gui-path>/`; they ride the layout transaction like a paint layer's PNG, so an undone or deleted layer never leaves a file behind.
+6. **The default-font warning stays until #202 ships.** The studio flags `default` above row 5 and any text after a `default` run today; once the vanilla ASCII widths ship (#202) those restrictions go and so does the warning.
