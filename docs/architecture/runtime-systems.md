@@ -49,6 +49,10 @@ Cross-cutting runtime rules:
 
 ### 2.1 Model
 
+> **M6 upgrade:** [`logic.md`](logic.md) turns `do:` lists into structured flows (`if`/`require`/
+> `choose`/`wait`/`stop`/`call`), replaces `ActionExecutor` with typed `ActionType`/`ConditionType`/
+> `TriggerType` SPIs in `api`, and adds declared persistent variables. Every M2 rule keeps its meaning.
+
 ```
 Rule = { id, on: EventSelector, if: [Conditions], do: [Actions], opts }
 EventSelector = { type, subtypes?, scope? }      // e.g. click:right on item
