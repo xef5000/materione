@@ -360,8 +360,8 @@ definitions participate in the content graph (PLACED_BY_ITEM / FURNITURE_STAGE e
 
 **As built (M4):** glyphs compile to bitmap providers merged per font key into one
 `assets/<ns>/font/<name>.json` (the pack glyph font `<ns>:glyphs` for glyphs without an
-explicit `font:`), and every generated font is wired into the client's default font:
-`assets/minecraft/font/default.json` gains one `type:reference` provider per generated font
+explicit `font:`), and every font that joins the default font is wired into it (#198, below):
+`assets/minecraft/font/default.json` gains one `type:reference` provider per joining font
 (the 1.21.2+ reference provider — the client renders unstyled text only through the default
 font, so without the references codepoints show as tofu boxes). The shift font's `type:space`
 provider (power-of-two advances on U+E10x/E11x — Nexo's technique) exists once at
@@ -369,6 +369,25 @@ provider (power-of-two advances on U+E10x/E11x — Nexo's technique) exists once
 font, so `<glyph:id>`, `<g:id>`, `<shift:N>` and `:placeholder:` compose inside any materione
 font without switching fonts. Default-font glyphs go out unstyled; explicit `font:` glyphs are
 styled with their font key.
+
+**Default-font membership (#198).** The emitting content type declares, on every
+`PackEmitter.fontProvider` call, whether the font joins `minecraft:default` (`FontMembership`).
+It is never inferred from a font's name. Glyph fonts join (`JOINS_DEFAULT`). GUI fonts never do
+(`STYLED_ONLY`): they map plain ASCII (the smallcaps sheet and the vanilla grid), so a reference
+from the default font would replace every unstyled ASCII codepoint, including vanilla labels,
+chat and toasts, with GUI glyphs. A GUI reaches the screen only through its styled font keys
+(gui.md §4). If one font key is emitted with both memberships, `STYLED_ONLY` wins. The shift
+font is still referenced from `default.json` whenever any font is generated.
+
+**A pack's `default.json` merges with vanilla's; it does not replace it (verified on 26.1.2).**
+The client loads `assets/minecraft/font/default.json` as a resource stack, not as the winning
+file. `FontManager.prepare` takes `FileToIdConverter.listMatchingResourceStacks` (every pack's
+copy of the file), and `FontManager.loadResourceStack` parses each copy and adds all of its
+providers to that font's builder bundle. A server pack's `default.json` therefore adds its
+providers next to vanilla's `minecraft:include/space`, `include/default` (with
+`filter: {uniform: false}`) and `include/unifont`. The compiler prepends no vanilla includes.
+Probe check (#198): with a `default.json` that references only the shift font and two glyph
+fonts, the survival inventory's "Crafting" label, the toasts and chat render as vanilla.
 Codepoints are durable consecutive runs from the allocation table (kind `glyph-codepoint`,
 origin 42000, `AllocationTable.range`) — never written back into authoring YAML, unlike the
 incumbents; an explicit `char` field therefore does not exist, and the editor shows the
