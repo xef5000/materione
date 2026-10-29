@@ -242,6 +242,35 @@ Consolidates `AdminOps`, `Doctor`, `SettingsService`, `AuditLog`, and `EditorCom
 - `recentAudit(int limit)` — query `storage/audit.log`.
 - `editorSessions()` — `openSession(ActorContext)`, `status()`, `approve(ActorContext, noncePrefix)`, `deny(ActorContext, noncePrefix)`, `revokeAll(ActorContext)`, `stopListener(ActorContext)`.
 
+### 3.9 `GuiAuthoringApi` (`dev.materione.api.gui`, reached as `authoring().gui()`)
+
+The GUI builder's typed surface (gui.md §7, §10 #8–#9). Everything the studio does to a GUI, with
+one implementation: the studio, the editor RPC and an addon share it. A GUI file holds one GUI
+resource; the API works on that GUI (a file that holds several is refused).
+
+| Method | Description | Built on |
+|---|---|---|
+| `components()` | The `gui-components` registry: id, render target, self-description, owner. Read on each call. | `RegistryView` |
+| `get(pack, path)` | The GUI as a typed view: `title`, `rows`, its mapping layers (id, type, name, visible, locked, opacity, parameters) and the file's `revision`. | `getDocument` |
+| `edit(actor, GuiEditRequest)` | Applies `AddLayer`, `PatchLayer`, `RemoveLayers`, `ReorderLayers` and `SetScreen` in order, all or none, at `expectedRevision`; binaries (paint PNGs) ride in the same transaction. Warnings for layers the compiler will skip come back on the successful result. | `setFields` (one revision, one audit, one reload) |
+| `customizeItem(actor, CustomizeItemRequest)` | Gives an item layer its own item at `items/gui/<gui-path>/<id>.yml` and points the layer's `item:` at it. The naming, collision and refusal rules live here (gui.md §10 #2). | `bulk` (one transaction, the GUI revision checked) |
+| `render(GuiRenderRequest)` | Background PNG (the bytes the pack ships), canvas size, each layer's target, compiled rank and skip reason, and the compile's diagnostics. Source: a saved file, unsaved YAML, or an unsaved typed draft with optional draft PNGs. Pure. | the pack compiler's steps, with a non-persisting allocation view |
+| `validate(GuiValidateRequest)` | The diagnostics the compile would emit for the same source (MTR-0052 per skipped layer, parse failures, background exhaustion). Pure. | the same steps as `render` |
+
+`GuiSource` is `Saved(pack, path)`, `Yaml(pack, text)` or `Typed(GuiDocumentView)`. `GuiEdit` is a
+sealed interface of the five structural edits. `render` and `validate` never allocate: the GUI's
+background codepoint comes from `AllocationTable.preview()`, which answers what a compile would,
+and binds nothing. `validate` and the pack compiler run the same steps (parse, diagnose, compile)
+and a test pins the two to the same diagnostics (`GuiValidateParityTest`).
+
+### 3.10 `GuiComponentsApi` (`MaterioneAPI.guiComponents()`)
+
+Addon GUI layer kinds, registered like mechanics (gui.md §10 #7). `register(owner, id,
+component)` opens a bounded registration in the `gui-components` registry and returns a
+`GuiComponentRegistration`. It works after the registry froze (it takes effect for GUIs on the
+next reload), a duplicate or reserved id fails explicitly, and closing the handle or disabling the
+owner removes the component.
+
 ---
 
 ## 4. Consumer Refactoring & Architectural Enforcement

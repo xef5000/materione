@@ -101,6 +101,16 @@
     if (studio.loaded) void studio.ensureImages(session.channel);
   });
 
+  // The compiler's verdict follows the document: asked again once editing pauses. A stroke changes the
+  // pixels without changing the document, so the pixel counters are read too.
+  $effect(() => {
+    void studio.doc;
+    void studio.preview;
+    void studio.imageVersion;
+    void studio.dirty;
+    if (studio.loaded) studio.scheduleCheck(session.channel);
+  });
+
   $effect(() => registerEditorGuard('studio', () => {
     if (studio.saving) return false;
     return !anyDirty || confirm('Leave the GUI studio without saving? Your layout changes will be lost.');
@@ -320,6 +330,17 @@
   {#if notGui}
     <p class="banner error" role="alert">This file is not a GUI document (no layers).</p>
   {/if}
+  {#if studio.checks === 'unavailable'}
+    <p class="banner notice" role="status" data-testid="gui-api-unavailable">
+      The compiler's checks (skipped layers, flags) and Customize need a Materione plugin with the GUI API.
+      This connection does not advertise it, so layers are not checked here.
+    </p>
+  {:else if studio.checks === 'failed'}
+    <p class="banner warn" role="status">The compiler could not check this document: {studio.checkError}</p>
+  {/if}
+  {#each studio.documentFlags as message (message)}
+    <p class="banner warn" role="status" data-testid="gui-verdict-document">The compiler says of this GUI: {message}</p>
+  {/each}
   {#if studio.notice && !anyDirty}<p class="banner notice" role="status">{studio.notice}</p>{/if}
 
   <div class="body">

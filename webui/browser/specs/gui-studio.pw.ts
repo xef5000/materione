@@ -584,28 +584,18 @@ test.describe('text layers', () => {
     await expect(page.getByRole('textbox', { name: 'Text', exact: true })).toHaveValue('Gold');
   });
 
-  test('the default font says its preview is approximate, and the compiler restrictions are shown, not discovered in game', async ({ page }) => {
+  test('the default font says its preview is approximate; with no GUI API the studio shows no compiler verdict and says so', async ({ page }) => {
     await openShop(page);
     await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Text' }).click();
     await page.keyboard.press('Escape'); // keep the placeholder text; it is listed above the heading
     await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Heading', exact: true }).click();
     await page.getByRole('group', { name: 'Font' }).getByRole('button', { name: 'Default', exact: true }).click();
     await expect(page.getByTestId('default-font-hint')).toContainText('Approximate preview');
-    // the heading is now default-font, so the text layer listed above it is skipped by the compiler
-    await expect(page.getByTestId('text-issue')).toContainText('must be the last text layer');
-    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Text', exact: true }).click();
-    await expect(page.getByTestId('text-issue')).toContainText('Skipped in game (MTR-0052)');
-    await expect(page.getByTestId('text-issue')).toContainText('follows the default-font text');
-    await expect(page.locator('[data-flag]').first()).toBeVisible();
-
-    // rows 0-4 cannot hold default-font text (8 px glyphs, ascent 13 - y)
-    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Heading', exact: true }).click();
-    await page.getByRole('textbox', { name: 'Y', exact: true }).fill('2');
-    await page.keyboard.press('Enter');
-    await expect(page.getByTestId('text-issue').first()).toContainText('row 5 or lower');
-    // characters the font cannot draw
-    await page.getByRole('textbox', { name: 'Text', exact: true }).fill('café');
-    await expect(page.getByTestId('text-issue').first()).toContainText('printable ASCII');
+    // the demo has no compiler: the restrictions the compiler applies come from gui.validate, which it
+    // cannot answer, so the studio does not claim any layer is skipped and says where the verdict comes from
+    await expect(page.getByTestId('gui-api-unavailable')).toBeVisible();
+    await expect(page.getByTestId('text-issue')).toHaveCount(0);
+    await expect(page.locator('[data-flag]')).toHaveCount(0);
   });
 });
 
@@ -618,11 +608,11 @@ test.describe('item layers', () => {
     expect(slot).toBeGreaterThanOrEqual(0);
     expect(slot).toBeLessThan(27);
     await expect(page.locator('[data-flag]')).toHaveCount(0);
-    // an item typed onto an inventory slot is flagged, with the reason
+    // an item typed onto an inventory slot would be flagged by the server's verdict; the demo has none
     await page.getByRole('textbox', { name: 'Slot', exact: true }).fill('30');
     await page.keyboard.press('Enter');
-    await expect(page.locator('[data-flag=sword]')).toHaveCount(1);
-    await expect(page.getByTestId('item-extras')).toContainText('outside the GUI');
+    await expect(page.locator('[data-flag=sword]')).toHaveCount(0);
+    await expect(page.getByTestId('gui-api-unavailable')).toBeVisible();
   });
 
   test('the picker offers vanilla materials; the choice is stored as minecraft:id', async ({ page }) => {
@@ -638,34 +628,22 @@ test.describe('item layers', () => {
     expect((saved!.parsed.main as { layers: { id: string; item?: string }[] }).layers.find((layer) => layer.id === 'sword')?.item).toBe('minecraft:stick');
   });
 
-  test('Customize creates an ordinary item at items/gui/<gui-path>/<layer-id>.yml, points the layer at it in ONE bulk transaction, and opens its appearance inline', async ({ page }) => {
+  test('Customize needs the server\'s GUI API: in the demo it is disabled, says why, and writes nothing', async ({ page }) => {
+    // The live flow (one gui.customizeItem transaction, the item and its pointer, then the inline
+    // appearance) is pinned by the QA catalog on a running server (gui.studio-item-customize); the demo
+    // has no server to plan it, so the studio refuses here instead of planning it in TypeScript.
     await openShop(page, 'gui&modules');
     await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Sword', exact: true }).click();
-    await page.getByRole('button', { name: 'Customize', exact: true }).click();
-    await expect(page.getByTestId('gui-item-appearance')).toBeVisible();
-    await expect(page.getByTestId('item-appearance')).toContainText('items/gui/shop/main/sword.yml');
-
-    // exactly one write: a bulk call holding the create AND the layer pointer, nothing else
-    const all = await writes(page);
-    expect(all.map((entry) => entry.op)).toEqual(['authoring.bulk']);
-    const operations = (all[0]!.payload as { operations: { kind: string; path?: string; type?: string; id?: string; folder?: string; edits?: { field: string[]; value: unknown }[] }[] }).operations;
-    expect(operations.map((operation) => operation.kind)).toEqual(['create', 'set']);
-    expect(operations[0]).toMatchObject({ type: 'items', id: 'sword', folder: 'gui/shop/main', edits: [{ field: ['sword', 'material'], value: 'DIAMOND_SWORD' }] });
-    expect(operations[1]!.path).toBe('guis/shop/main.yml');
-
-    const item = await documentOf(page, 'items/gui/shop/main/sword.yml');
-    expect((item!.parsed.sword as { material: string }).material).toBe('DIAMOND_SWORD');
-    const gui = await documentOf(page, 'guis/shop/main.yml');
-    expect((gui!.parsed.main as { layers: { id: string; item?: string }[] }).layers.find((layer) => layer.id === 'sword')?.item).toBe('fixture_pack:sword');
-    await expect(page.locator('[data-status]')).toHaveText('Saved');
-    await expect(page.getByRole('button', { name: 'Customize', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Customize', exact: true })).toBeDisabled();
+    await expect(page.getByTestId('item-appearance')).toContainText('needs a Materione plugin with the GUI API');
+    await expect(page.getByTestId('gui-api-unavailable')).toBeVisible();
+    expect(await writes(page)).toEqual([]);
   });
 
-  test('Customize is refused with a reason when the server does not know the vanilla material, and nothing is written', async ({ page }) => {
+  test('a vanilla item layer is no different in the demo: Customize waits for the server, and nothing is written', async ({ page }) => {
     await openShop(page, 'gui&modules');
-    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Apple', exact: true }).click(); // golden_apple is not in the fixture's material list
+    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Apple', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Customize', exact: true })).toBeDisabled();
-    await expect(page.getByTestId('item-appearance')).toContainText('not a material this server knows');
     expect(await writes(page)).toEqual([]);
   });
 });

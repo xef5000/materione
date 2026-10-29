@@ -1,73 +1,20 @@
 /**
- * Text layers as the compiler treats them (GuiCompiler.textProblem and the title assembler's pen
- * rule): every restriction the studio surfaces is pinned here against the same wording the compiler
- * uses, and the composed canvas draws smallcaps exactly where the client would.
+ * Text layers as the studio draws them: smallcaps is pixel-exact against the shared font source, and
+ * the composed canvas leaves out what the compiler will skip. Which runs are skipped, and why, is the
+ * server's verdict (`gui.validate`, pinned by the Java compiler tests and gui-validation.spec.ts); here
+ * the studio is only told the ids, and draws accordingly.
  */
 import { describe, expect, it } from 'vitest';
 import type { GuiDocument, GuiLayer } from '../src/lib/gui/model';
 import { composeCanvas } from '../src/lib/gui/compose';
 import { smallcaps } from '../src/lib/gui/font/render';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
-import { analyzeText, colorOf, fontOf, isSkipped, measureTextLayer, offendingCharacter } from '../src/lib/gui/text';
+import { colorOf, measureTextLayer } from '../src/lib/gui/text';
 
 const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: '', rows: 3, layers, rest: {}, order: [] });
 const text = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'text', x: 8, y: 6, text: 'Shop', font: 'smallcaps', ...extra }) as GuiLayer;
-const messages = (d: GuiDocument, id: string): string[] => (analyzeText(d).get(id) ?? []).map((issue) => issue.message);
-
-describe('what the compiler will skip', () => {
-  it('accepts plain smallcaps text', () => {
-    expect(analyzeText(doc(text('a')))).toEqual(new Map());
-  });
-
-  it('rejects the MiniMessage and legacy-code characters and anything outside printable ASCII', () => {
-    for (const bad of ['a<b', 'a\\b', 'a&b', 'a§b']) {
-      expect(messages(doc(text('a', { text: bad })), 'a'), bad).toEqual(['text may not contain <, \\, & or §']);
-    }
-    expect(messages(doc(text('a', { text: 'café' })), 'a')[0]).toContain('printable ASCII only');
-    expect(messages(doc(text('a', { text: 'café', font: 'default', y: 8 })), 'a')[0]).toContain('default font');
-    expect(offendingCharacter('ok', 'smallcaps')).toBeNull();
-    expect(offendingCharacter('a\t', 'smallcaps')).toEqual({ char: '\t', reserved: false });
-  });
-
-  it('skips blank text, over-long text, bad fonts, bad colours and out-of-range positions', () => {
-    expect(messages(doc(text('a', { text: '   ' })), 'a')).toEqual(['empty text is skipped']);
-    expect(messages(doc(text('a', { text: 'x'.repeat(129) })), 'a')[0]).toContain('128');
-    expect(messages(doc(text('a', { font: 'comic' })), 'a')).toEqual(['font must be smallcaps or default']);
-    expect(messages(doc(text('a', { color: 'red' })), 'a')[0]).toContain('colour');
-    expect(messages(doc(text('a', { x: 600 })), 'a')[0]).toContain('x must be');
-    expect(fontOf(text('a', { font: undefined }))).toBe('smallcaps');
-    expect(fontOf(text('a', { font: 'comic' }))).toBeNull();
-  });
-
-  it('default-font text must start on row 5 or lower (its glyph cell is 8 px high)', () => {
-    expect(messages(doc(text('a', { font: 'default', y: 4 })), 'a')[0]).toContain('row 5 or lower');
-    expect(analyzeText(doc(text('a', { font: 'default', y: 5 })))).toEqual(new Map());
-    // smallcaps has no such limit
-    expect(analyzeText(doc(text('a', { y: 0 })))).toEqual(new Map());
-  });
-
-  it('only the LAST text run may be default: every run after one is skipped, and the default run is told so', () => {
-    const d = doc(text('d', { font: 'default', y: 20 }), text('after', { y: 30 }), text('third', { y: 40 }));
-    expect(isSkipped(analyzeText(d).get('d'))).toBe(false);
-    expect(analyzeText(d).get('d')![0]).toMatchObject({ severity: 'note' });
-    expect(analyzeText(d).get('d')![0]!.message).toContain('skipped in game');
-    expect(messages(d, 'after')[0]).toContain('follows the default-font text');
-    expect(isSkipped(analyzeText(d).get('after'))).toBe(true);
-    expect(isSkipped(analyzeText(d).get('third'))).toBe(true);
-    // a default run LAST is fine, and a hidden layer does not count
-    const last = doc(text('s'), text('d', { font: 'default', y: 20 }));
-    expect(analyzeText(last)).toEqual(new Map());
-    const hidden = doc(text('d', { font: 'default', y: 20 }), text('after', { visible: false }));
-    expect(analyzeText(hidden)).toEqual(new Map());
-  });
-
-  it('a run with its own problem is not a run, so it does not trip the layers around it', () => {
-    const d = doc(text('bad', { font: 'default', y: 2 }), text('fine', { y: 30 }));
-    expect(isSkipped(analyzeText(d).get('bad'))).toBe(true);
-    expect(analyzeText(d).has('fine')).toBe(false);
-  });
-});
+const NONE = new Set<string>();
 
 describe('measuring and drawing', () => {
   it('measures smallcaps by its ink extent and the height of its art', () => {
@@ -80,16 +27,23 @@ describe('measuring and drawing', () => {
     expect(colorOf(text('a', { color: '#80FF0000' }))).toBe(0x80ff0000);
   });
 
-  it('composes smallcaps text over the background at its x and y, and skips what the compiler skips', () => {
+  it('composes smallcaps text over the background at its x and y', () => {
     const scene = { width: 64, height: 24, rows: 1, image: () => null };
-    const shown = composeCanvas(doc(text('a', { x: 4, y: 3, color: '#FF0000' })), scene);
+    const shown = composeCanvas(doc(text('a', { x: 4, y: 3, color: '#FF0000' })), scene, NONE);
     const expected = new ArgbCanvas(64, 24);
     smallcaps.draw(expected, 4, 3, 'Shop', 0xffff0000);
     expect(shown.equals(expected)).toBe(true);
-    const skipped = composeCanvas(doc(text('a', { x: 4, y: 3, text: 'a<b' })), scene);
+  });
+
+  it('leaves out a text layer the server says the compiler skips', () => {
+    const scene = { width: 64, height: 24, rows: 1, image: () => null };
+    const skipped = composeCanvas(doc(text('a', { x: 4, y: 3 })), scene, new Set(['a']));
     expect(skipped.equals(new ArgbCanvas(64, 24))).toBe(true);
-    // default-font text is not pixels the studio owns
-    const approx = composeCanvas(doc(text('a', { font: 'default', y: 8 })), scene);
+  });
+
+  it('draws default-font text as nothing the studio owns (the client draws it)', () => {
+    const scene = { width: 64, height: 24, rows: 1, image: () => null };
+    const approx = composeCanvas(doc(text('a', { font: 'default', y: 8 })), scene, NONE);
     expect(approx.equals(new ArgbCanvas(64, 24))).toBe(true);
   });
 });

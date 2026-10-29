@@ -1,0 +1,316 @@
+{
+  "customizeItem": {
+    "request": {
+      "id": "c-1",
+      "op": "gui.customizeItem",
+      "payload": {
+        "layer": "sword",
+        "pack": "demo",
+        "path": "guis/main.yml",
+        "rev": 2
+      }
+    },
+    "response": {
+      "data": {
+        "id": "main_sword",
+        "path": "items/gui/main/main_sword.yml",
+        "reference": "demo:main_sword",
+        "rev": 3
+      },
+      "id": "c-1",
+      "ok": true,
+      "op": "gui.customizeItem"
+    }
+  },
+  "edit": {
+    "request": {
+      "id": "e-1",
+      "op": "gui.edit",
+      "payload": {
+        "assets": [],
+        "edits": [
+          {
+            "id": "backdrop",
+            "index": 0,
+            "op": "addLayer",
+            "params": {
+              "x": 4,
+              "y": 4
+            },
+            "type": "panel"
+          },
+          {
+            "id": "sword",
+            "op": "patchLayer",
+            "set": {
+              "amount": 2
+            }
+          }
+        ],
+        "pack": "demo",
+        "path": "guis/main.yml",
+        "rev": 1
+      }
+    },
+    "response": {
+      "data": {
+        "id": "main",
+        "layers": [
+          {
+            "id": "backdrop",
+            "locked": false,
+            "parameters": {
+              "x": 4,
+              "y": 4
+            },
+            "type": "panel",
+            "visible": true
+          },
+          {
+            "id": "frame",
+            "locked": false,
+            "parameters": {
+              "height": 132,
+              "width": 176,
+              "x": 0,
+              "y": 0
+            },
+            "type": "panel",
+            "visible": true
+          },
+          {
+            "id": "sword",
+            "locked": false,
+            "parameters": {
+              "amount": 2,
+              "item": "demo:sword",
+              "slot": 13
+            },
+            "type": "item",
+            "visible": true
+          }
+        ],
+        "pack": "demo",
+        "path": "guis/main.yml",
+        "rev": 2,
+        "rows": 3,
+        "title": "Shop",
+        "warnings": [
+          {
+            "code": "MTR-0052",
+            "field": [
+              "layers",
+              "0"
+            ],
+            "hint": "fix the layer's fields; the other layers of this GUI still compile",
+            "message": "GUI layer 'backdrop' skipped: layer backdrop: width is required",
+            "resource": "demo:main",
+            "severity": "warn"
+          }
+        ]
+      },
+      "id": "e-1",
+      "ok": true,
+      "op": "gui.edit"
+    }
+  },
+  "editConflict": {
+    "request": {
+      "id": "e-2",
+      "op": "gui.edit",
+      "payload": {
+        "assets": [],
+        "edits": [
+          {
+            "id": "backdrop",
+            "index": 0,
+            "op": "addLayer",
+            "params": {
+              "x": 4,
+              "y": 4
+            },
+            "type": "panel"
+          },
+          {
+            "id": "sword",
+            "op": "patchLayer",
+            "set": {
+              "amount": 2
+            }
+          }
+        ],
+        "pack": "demo",
+        "path": "guis/main.yml",
+        "rev": 1
+      }
+    },
+    "response": {
+      "error": {
+        "code": "MTR-0034",
+        "hint": "re-read the GUI and re-apply your change",
+        "message": "guis/main.yml is at revision 2, not 1",
+        "resource": "demo/guis/main.yml"
+      },
+      "id": "e-2",
+      "ok": false,
+      "op": "gui.edit"
+    }
+  },
+  "get": {
+    "request": {
+      "id": "g-1",
+      "op": "gui.get",
+      "payload": {
+        "pack": "demo",
+        "path": "guis/main.yml"
+      }
+    },
+    "response": {
+      "data": {
+        "id": "main",
+        "layers": [
+          {
+            "id": "frame",
+            "locked": false,
+            "parameters": {
+              "height": 132,
+              "width": 176,
+              "x": 0,
+              "y": 0
+            },
+            "type": "panel",
+            "visible": true
+          },
+          {
+            "id": "sword",
+            "locked": false,
+            "parameters": {
+              "amount": 1,
+              "item": "demo:sword",
+              "slot": 13
+            },
+            "type": "item",
+            "visible": true
+          }
+        ],
+        "pack": "demo",
+        "path": "guis/main.yml",
+        "rev": 1,
+        "rows": 3,
+        "title": "Shop",
+        "warnings": []
+      },
+      "id": "g-1",
+      "ok": true,
+      "op": "gui.get"
+    }
+  },
+  "meta": {
+    "file": "editor-gui-v1.json",
+    "name": "materione GUI op frames",
+    "version": 1
+  },
+  "render": {
+    "request": {
+      "id": "r-1",
+      "op": "gui.render",
+      "payload": {
+        "source": {
+          "kind": "saved",
+          "pack": "demo",
+          "path": "guis/main.yml"
+        }
+      }
+    },
+    "response": {
+      "data": {
+        "diagnostics": [
+          {
+            "code": "MTR-0052",
+            "field": [
+              "layers",
+              "0"
+            ],
+            "hint": "fix the layer's fields; the other layers of this GUI still compile",
+            "message": "GUI layer 'backdrop' skipped: layer backdrop: width is required",
+            "resource": "demo:main",
+            "severity": "warn"
+          }
+        ],
+        "height": 168,
+        "layers": [
+          {
+            "id": "backdrop",
+            "rank": -1,
+            "reason": "layer backdrop: width is required",
+            "skipped": true
+          },
+          {
+            "id": "frame",
+            "rank": 0,
+            "skipped": false,
+            "target": "raster"
+          },
+          {
+            "id": "sword",
+            "rank": 1,
+            "skipped": false,
+            "target": "slot"
+          }
+        ],
+        "width": 176
+      },
+      "id": "r-1",
+      "ok": true,
+      "op": "gui.render"
+    }
+  },
+  "validate": {
+    "request": {
+      "id": "v-1",
+      "op": "gui.validate",
+      "payload": {
+        "source": {
+          "document": {
+            "id": "main",
+            "layers": [
+              {
+                "id": "heading",
+                "parameters": {
+                  "text": "Shop <b>",
+                  "x": 8,
+                  "y": 6
+                },
+                "type": "text"
+              }
+            ],
+            "pack": "demo",
+            "rows": 1,
+            "title": "Shop"
+          },
+          "kind": "draft"
+        }
+      }
+    },
+    "response": {
+      "data": {
+        "diagnostics": [
+          {
+            "code": "MTR-0052",
+            "field": [
+              "layers",
+              "0"
+            ],
+            "hint": "fix the layer's fields or its texture; the other layers of this GUI still compile",
+            "message": "GUI layer 'heading' skipped: text may not contain <, \\, & or §",
+            "resource": "demo:main",
+            "severity": "warn"
+          }
+        ]
+      },
+      "id": "v-1",
+      "ok": true,
+      "op": "gui.validate"
+    }
+  }
+}

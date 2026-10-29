@@ -31,7 +31,8 @@ import java.util.function.BiConsumer;
  * encode it; collect text runs and slot placements from their components; assemble the
  * title around the background glyph; emit the offset fonts actually used; build the slot
  * table. A layer that fails any step is skipped with a {@code MTR-0052} diagnostic and the
- * GUI still compiles.
+ * GUI still compiles. Every skip is also recorded per layer ({@link GuiCompilation#layers()}),
+ * so the studio and the API report the same outcome the pack ships.
  */
 public final class GuiCompiler {
 
@@ -48,7 +49,7 @@ public final class GuiCompiler {
      * @param textures pixel access to the owning pack's textures
      */
     public static GuiCompilation compile(GuiDefinition gui, int backgroundCodepoint, TextureSource textures) {
-        var diagnostics = new ArrayList<Diagnostic>();
+        var report = new Report();
         String namespace = gui.id().namespace();
         int width = CompiledGui.WIDTH;
         int height = CompiledGui.height(gui.rows());
@@ -56,7 +57,7 @@ public final class GuiCompiler {
                 reference.contains(":") ? reference : namespace + ":" + reference);
 
         ArgbCanvas background = flatten(width, height, gui.layers(), bound,
-                (layer, reason) -> diagnostics.add(skipped(gui, layer.id(), reason)));
+                (layer, reason) -> report.skip(gui, layer.id(), reason));
 
         var runs = new ArrayList<TextRun>();
         var slots = new LinkedHashMap<Integer, SlotPlacement>();
@@ -65,9 +66,9 @@ public final class GuiCompiler {
                 continue;
             }
             if (layer.compiled().target() == RenderTarget.TEXT) {
-                collectText(gui, layer.id(), layer.compiled(), runs, diagnostics);
+                collectText(gui, layer.id(), layer.compiled(), runs, report);
             } else if (layer.compiled().target() == RenderTarget.SLOT) {
-                collectSlots(gui, layer.id(), layer.compiled(), slots, diagnostics);
+                collectSlots(gui, layer.id(), layer.compiled(), slots, report);
             }
         }
 
@@ -80,9 +81,9 @@ public final class GuiCompiler {
         for (TextRun run : runs) {
             if (!title.canPlace()) {
                 if (reported.add(run.layerId())) {
-                    diagnostics.add(skipped(gui, run.layerId(),
+                    report.skip(gui, run.layerId(),
                             "its text follows a default-font run, whose width the compiler cannot measure; "
-                                    + "place it before that run, or use smallcaps"));
+                                    + "place it before that run, or use smallcaps");
                 }
                 continue;
             }
@@ -111,14 +112,50 @@ public final class GuiCompiler {
         slots.forEach((slot, placement) -> slotList.add(new CompiledGui.Slot(slot, placement.item(), placement.amount())));
         slotList.sort(Comparator.comparingInt(CompiledGui.Slot::slot));
         var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList);
-        return new GuiCompilation(model, diagnostics, assets, fonts);
+        return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
     }
 
     /**
-     * Flattens the visible raster layers of {@code layers}, bottom to top, onto one
-     * transparent canvas of {@code width × height}. Each layer paints onto its own transparent
-     * canvas and is composited with its opacity (gui.md §4). A layer whose component throws
-     * is reported to {@code skipped} and contributes nothing; the others still draw.
+     * Each layer as the compiler placed it, in list order. {@code rank} is the layer's position in
+     * the compiled order of the visible layers: raster first, then text, then slot items, each in
+     * list order (the studio's {@code TARGET_RANK}, gui.md §6); hidden layers have rank -1.
+     */
+    private static List<GuiCompilation.LayerReport> layerReports(GuiDefinition gui, Map<String, String> reasons) {
+        var visible = new ArrayList<GuiLayer>();
+        for (GuiLayer layer : gui.layers()) {
+            if (layer.visible()) {
+                visible.add(layer);
+            }
+        }
+        // a stable sort keeps list order within a target
+        visible.sort(Comparator.comparingInt(layer -> targetRank(layer.compiled().target())));
+        var ranks = new LinkedHashMap<String, Integer>();
+        for (int index = 0; index < visible.size(); index++) {
+            ranks.put(visible.get(index).id(), index);
+        }
+        var out = new ArrayList<GuiCompilation.LayerReport>();
+        for (GuiLayer layer : gui.layers()) {
+            out.add(new GuiCompilation.LayerReport(
+                    layer.id(), layer.compiled().target(),
+                    layer.visible() ? ranks.get(layer.id()) : -1,
+                    reasons.get(layer.id())));
+        }
+        return out;
+    }
+
+    private static int targetRank(RenderTarget target) {
+        return switch (target) {
+            case RASTER -> 0;
+            case TEXT -> 1;
+            case SLOT -> 2;
+        };
+    }
+
+    /**
+     * Flattens the visible raster layers of {@code layers}, bottom to top, onto one transparent
+     * canvas of {@code width × height}. Each layer paints onto its own transparent canvas and is
+     * composited with its opacity (gui.md §4). A layer whose component throws is reported to
+     * {@code skipped} and contributes nothing; the others still draw.
      *
      * <p>This is the function the shared raster vectors pin: the studio and the compiler
      * render the same layers through it.
@@ -145,18 +182,18 @@ public final class GuiCompiler {
     // --- text ------------------------------------------------------------------
 
     private static void collectText(GuiDefinition gui, String layerId, CompiledGuiLayer compiled,
-            List<TextRun> runs, List<Diagnostic> diagnostics) {
+            List<TextRun> runs, Report report) {
         var collected = new ArrayList<TextRun>();
         try {
             compiled.drawText((x, y, text, font, argb) -> collected.add(new TextRun(layerId, x, y, text, font, argb)));
         } catch (RuntimeException failure) {
-            diagnostics.add(skipped(gui, layerId, String.valueOf(failure.getMessage())));
+            report.skip(gui, layerId, String.valueOf(failure.getMessage()));
             return;
         }
         for (TextRun run : collected) {
             String problem = textProblem(run);
             if (problem != null) {
-                diagnostics.add(skipped(gui, layerId, problem));
+                report.skip(gui, layerId, problem);
                 return;
             }
         }
@@ -188,18 +225,18 @@ public final class GuiCompiler {
     // --- slots -----------------------------------------------------------------
 
     private static void collectSlots(GuiDefinition gui, String layerId, CompiledGuiLayer compiled,
-            Map<Integer, SlotPlacement> slots, List<Diagnostic> diagnostics) {
+            Map<Integer, SlotPlacement> slots, Report report) {
         SlotSink sink = (slot, item, amount) -> {
             SlotPlacement previous = slots.put(slot, new SlotPlacement(layerId, item, amount));
             if (previous != null && !previous.layerId().equals(layerId)) {
-                diagnostics.add(skipped(gui, previous.layerId(),
-                        "slot " + slot + " is filled by the later layer '" + layerId + "'"));
+                report.skip(gui, previous.layerId(),
+                        "slot " + slot + " is filled by the later layer '" + layerId + "'");
             }
         };
         try {
             compiled.placeSlots(sink);
         } catch (RuntimeException failure) {
-            diagnostics.add(skipped(gui, layerId, String.valueOf(failure.getMessage())));
+            report.skip(gui, layerId, String.valueOf(failure.getMessage()));
         }
     }
 
@@ -225,6 +262,21 @@ public final class GuiCompiler {
             }
         }
         return -1;
+    }
+
+    /**
+     * The compile's skips: the diagnostics in the order they are raised, and the first reason
+     * each layer was skipped for.
+     */
+    private static final class Report {
+
+        final List<Diagnostic> diagnostics = new ArrayList<>();
+        final Map<String, String> reasons = new LinkedHashMap<>();
+
+        void skip(GuiDefinition gui, String layerId, String reason) {
+            diagnostics.add(skipped(gui, layerId, reason));
+            reasons.putIfAbsent(layerId, reason);
+        }
     }
 
     /** A text run as the compiler collects it, before title assembly. */

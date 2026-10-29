@@ -2,6 +2,8 @@ package dev.materione.plugin;
 
 import dev.materione.api.MaterioneAPI;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.gui.GuiComponent;
+import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.platform.ProbeResult;
 import dev.materione.api.scheduling.SchedulingGateway;
@@ -78,6 +80,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.core.storage.RestartStaging restartStaging;
     private dev.materione.plugin.runtime.DatapackService datapackService;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
+    private dev.materione.plugin.runtime.gui.GuiComponentsService guiComponents;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
     /** API-first wiring (api.md §5 Phase 2); null before content load. */
     private MaterioneAPI api;
@@ -209,6 +212,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (mechanics != null) {
                 mechanics.close();
             }
+            if (guiComponents != null) {
+                guiComponents.close();
+            }
             if (placements != null) {
                 placements.close();
             }
@@ -276,6 +282,8 @@ public final class MaterionePlugin extends JavaPlugin {
         mechanics = new dev.materione.plugin.runtime.mechanics.MechanicsService(
                 this, diagnostics, scheduling, pipeline.runtime(), registries);
         mechanics.registerNatives(registries);
+        // addon GUI layer kinds through the same registry path the built-ins use (gui.md §10 #7)
+        guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
     }
 
     private void loadContent() {
@@ -396,10 +404,18 @@ public final class MaterionePlugin extends JavaPlugin {
             pipelineApi.reload(actor, new dev.materione.api.pipeline.PipelineApi.ReloadRequest(
                     scope, dev.materione.api.pipeline.PipelineApi.DeliveryMode.CANDIDATE_PREVIEW));
         };
+        // the GUI surface (gui.md §7, §10 #8): one implementation over this authoring API, with the
+        // registry it resolves layers against and the allocation table's non-persisting preview
         authoringApi = new AuthoringApiImpl(
                 documents, audit, packsRoot, modelTransactions, glyphMeta,
                 () -> pipeline.runner().lastGraph(), previewReload, assetStore,
-                pipeline::contentTypes);
+                pipeline::contentTypes,
+                base -> new dev.materione.content.gui.GuiAuthoringApiImpl(
+                        base,
+                        registries.registry(RegistryKeys.GUI_COMPONENTS, GuiComponent.class),
+                        packsRoot,
+                        () -> pipeline.allocation().preview(),
+                        ItemMaterialPalette.supportedItemMaterials()));
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
@@ -418,7 +434,8 @@ public final class MaterionePlugin extends JavaPlugin {
         api = new MaterioneApiImpl(
                 MaterioneVersion.VERSION, registries, diagnostics,
                 this::descriptorOrNull, scheduling,
-                authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi, mechanics);
+                authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi, mechanics,
+                guiComponents);
         // the public surface any addon can look up (api.md §4.1)
         getServer().getServicesManager().register(
                 dev.materione.api.MaterioneAPI.class, api, this,

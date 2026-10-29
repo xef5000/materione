@@ -10,6 +10,7 @@ import dev.materione.api.content.PackEmitter;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
+import dev.materione.core.pipeline.ResourceCompiler;
 import dev.materione.pack.allocation.AllocationTable;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -306,6 +307,7 @@ public final class PackCompiler {
             byDirectory.put(type.directory(), type);
         }
         var emitter = new Emitter(textComponents, diagnostics);
+        ResourceCompiler.Sink sink = ResourceCompiler.Sink.of(diagnostics, quarantine);
         dev.materione.api.content.Allocations allocations = new dev.materione.api.content.Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
@@ -356,44 +358,8 @@ public final class PackCompiler {
                 }
                 @SuppressWarnings("unchecked")
                 var rawDefinition = (Map<String, Object>) mapping;
-                Optional<Object> parsed;
-                try {
-                    parsed = type.parse(resource.id(), rawDefinition, templates);
-                } catch (RuntimeException e) {
-                    quarantineResource(resource, e, diagnostics, quarantine);
-                    continue;
-                }
-                if (parsed.isEmpty()) {
-                    diagnostics.publish(new Diagnostic(
-                            DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
-                            "resource " + resource.id() + " failed to parse as " + type.name(),
-                            resource.id(), null,
-                            "check the required fields (the registry self-description documents them)"));
-                    continue;
-                }
-                // per-part quarantine: problems inside a definition that still compiles
-                // (one bad GUI layer) are published against the resource, not the pack
-                try {
-                    for (Diagnostic part : type.diagnose(parsed.get())) {
-                        diagnostics.publish(part);
-                    }
-                } catch (RuntimeException e) {
-                    quarantineResource(resource, e, diagnostics, quarantine);
-                    continue;
-                }
-                NamespacedId modelId = NamespacedId.of(
-                        resource.id().namespace(),
-                        resource.id().value() + "_model");
-                try {
-                    type.compile(parsed.get(), modelId, emitter, allocations);
-                } catch (dev.materione.api.content.CompileRejectException e) {
-                    Diagnostic rejected = new Diagnostic(
-                            e.code(), Severity.ERROR, e.getMessage(), resource.id(), null, e.hint());
-                    diagnostics.publish(rejected);
-                    quarantine.add(resource.id(), rejected);
-                } catch (RuntimeException e) {
-                    quarantineResource(resource, e, diagnostics, quarantine);
-                }
+                // parse, diagnose, compile: the sequence the GUI API's validate and render run too
+                ResourceCompiler.compile(resource.id(), rawDefinition, templates, type, emitter, allocations, sink);
             }
         }
 
@@ -420,23 +386,6 @@ public final class PackCompiler {
         return writeStaged(emitter, generatedDir, detectedMaxFormat, detectedMaxDataFormat, diagnostics);
     }
 
-    /**
-     * A throwing parse/compile is contained to its resource: diagnostic
-     * MTR-0011, quarantine entry, output skipped — the pack survives (D6).
-     */
-    private static void quarantineResource(
-            ContentResource resource,
-            RuntimeException e,
-            dev.materione.api.diagnostics.DiagnosticsBus diagnostics,
-            dev.materione.core.diagnostics.QuarantineTracker quarantine) {
-        Diagnostic crash = new Diagnostic(
-                DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
-                "content type crashed on " + resource.id() + ": " + e,
-                resource.id(), null,
-                "this resource was skipped; if it worked before, a recent edit is the cause");
-        diagnostics.publish(crash);
-        quarantine.add(resource.id(), crash);
-    }
 
     private static void copyPackAssets(Emitter emitter, ContentPack pack) {
         Path assets = pack.directory().resolve("assets");

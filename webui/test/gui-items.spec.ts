@@ -1,13 +1,14 @@
 /**
- * Item layers and image uploads: container-only slot snapping, the compiler's rules for an item
- * layer, the pack-qualified reference a pick writes, and Customize's plan (one create/duplicate
- * operation at items/gui/<gui-path>/<layer-id>.yml). Pure.
+ * Item layers and image uploads: container-only slot snapping, the pack-qualified reference a pick
+ * writes, the names an upload takes, and how a layer's customized item is recognised. The compiler's
+ * rules for an item layer, and Customize's own rules (the id, the copy or the material), are the
+ * server's (gui.validate, gui.customizeItem; pinned by the Java tests). Pure.
  */
 import { describe, expect, it } from 'vitest';
 import type { ResourceRef } from '../src/lib/api';
 import { nearestContainerCell } from '../src/lib/gui/chest';
-import { chooseItemId, customFolder, customPath, isCustomized, planCustomize, resolveItem } from '../src/lib/gui/customize';
-import { analyzeItems, storedItemRef } from '../src/lib/gui/items';
+import { customFolder, isCustomized, resolveItem } from '../src/lib/gui/customize';
+import { storedItemRef } from '../src/lib/gui/items';
 import type { GuiDocument, GuiLayer } from '../src/lib/gui/model';
 import * as ops from '../src/lib/gui/ops';
 import { uploadReference } from '../src/lib/gui/save';
@@ -17,6 +18,7 @@ import { registry } from './helpers/gui-registry';
 const item = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'item', slot: 13, item: 'minecraft:diamond_sword', ...extra }) as GuiLayer;
 const doc = (rows: number, ...layers: GuiLayer[]): GuiDocument => ({ title: '', rows, layers, rest: {}, order: [] });
+const resource = (id: string, path: string, type = 'items'): ResourceRef => ({ pack: 'sample', type, path, id, name: id } as ResourceRef);
 
 describe('item layers snap to the container only', () => {
   it('the nearest slot is always a chest slot, even over the player inventory', () => {
@@ -47,30 +49,6 @@ describe('item layers snap to the container only', () => {
   });
 });
 
-describe('what the compiler does with an item layer', () => {
-  const problems = (d: GuiDocument, id: string): string[] => analyzeItems(d).get(id) ?? [];
-
-  it('accepts a container slot with an item', () => {
-    expect(analyzeItems(doc(3, item('a')))).toEqual(new Map());
-  });
-
-  it('flags a slot outside the GUI rows (the player inventory is not an item layer target)', () => {
-    expect(problems(doc(3, item('a', { slot: 27 })), 'a')[0]).toContain('outside the GUI');
-    expect(problems(doc(1, item('a', { slot: 9 })), 'a')[0]).toContain('1 row');
-    expect(problems(doc(3, item('a', { slot: 54 })), 'a')[0]).toContain('0 to 53');
-    expect(problems(doc(3, item('a', { slot: 1.5 })), 'a')[0]).toContain('whole number');
-  });
-
-  it('flags a missing item, a bad amount, and a later layer replacing an earlier one in the same slot', () => {
-    expect(problems(doc(3, item('a', { item: ' ' })), 'a')[0]).toContain('choose an item');
-    expect(problems(doc(3, item('a', { amount: 65 })), 'a')[0]).toContain('1 to 64');
-    const clash = doc(3, item('first'), item('second'));
-    expect(problems(clash, 'first')[0]).toContain('later layer "second"');
-    expect(problems(clash, 'second')).toEqual([]);
-    expect(analyzeItems(doc(3, item('first'), item('second', { visible: false })))).toEqual(new Map());
-  });
-});
-
 describe('references', () => {
   it('writes a pack item as pack:id (a bare id would resolve in the materione namespace in game)', () => {
     expect(storedItemRef('ruby', 'sample')).toBe('sample:ruby');
@@ -89,59 +67,15 @@ describe('references', () => {
   });
 });
 
-describe('Customize', () => {
-  const resource = (id: string, path: string, type = 'items'): ResourceRef => ({ pack: 'sample', type, path, id });
-  const env = (resources: ResourceRef[] = [], materials: string[] = ['DIAMOND_SWORD', 'APPLE']) => ({
-    pack: 'sample', guiPath: 'guis/shop/main.yml', resources, materials,
-  });
-
-  it('puts the item at items/gui/<gui-path>/<layer-id>.yml', () => {
-    expect(customFolder('guis/shop/main.yml')).toBe('gui/shop/main');
-    expect(customPath('guis/shop/main.yml', 'sword')).toBe('items/gui/shop/main/sword.yml');
-  });
-
-  it('a vanilla base becomes a create with material:, and the layer will point at pack:id', () => {
-    const plan = planCustomize(item('sword'), env());
-    expect(plan).toMatchObject({
-      ok: true,
-      id: 'sword',
-      path: 'items/gui/shop/main/sword.yml',
-      reference: 'sample:sword',
-      operation: { kind: 'create', type: 'items', id: 'sword', folder: 'gui/shop/main', edits: [{ field: ['sword', 'material'], value: 'DIAMOND_SWORD' }] },
-    });
-  });
-
-  it('a Materione item base becomes a duplicate of the base document (items cannot be templates)', () => {
-    const plan = planCustomize(item('gem', { item: 'sample:ruby' }), env([resource('ruby', 'items/ruby.yml')]));
-    expect(plan).toMatchObject({ ok: true, operation: { kind: 'duplicate', fromPath: 'items/ruby.yml', id: 'gem', folder: 'gui/shop/main' } });
-    // a bare reference resolves in the current pack
-    expect(planCustomize(item('gem', { item: 'ruby' }), env([resource('ruby', 'items/ruby.yml')]))).toMatchObject({ ok: true });
-  });
-
-  it('refuses what it cannot copy and says why', () => {
-    expect(planCustomize(item('a', { item: '' }), env())).toMatchObject({ ok: false, reason: expect.stringContaining('Choose an item') });
-    expect(planCustomize(item('a', { item: 'minecraft:bedrock' }), env())).toMatchObject({ ok: false, reason: expect.stringContaining('material this server knows') });
-    expect(planCustomize(item('a', { item: 'sample:gone' }), env())).toMatchObject({ ok: false, reason: expect.stringContaining('nothing to copy') });
-    expect(planCustomize(item('a', { item: 'sample:crate' }), env([resource('crate', 'blocks/crate.yml', 'blocks')]))).toMatchObject({ ok: false, reason: expect.stringContaining('blocks and furniture') });
-    // with no material list from the server the vanilla name is taken as written
-    expect(planCustomize(item('a', { item: 'minecraft:bedrock' }), env([], []))).toMatchObject({ ok: true });
-  });
-
-  it('keeps the layer id for the file when the pack is free, else prefixes the GUI name, else numbers', () => {
-    expect(chooseItemId('sword', 'guis/shop/main.yml', new Set())).toBe('sword');
-    expect(chooseItemId('sword', 'guis/shop/main.yml', new Set(['sword']))).toBe('shop_main_sword');
-    expect(chooseItemId('sword', 'guis/shop/main.yml', new Set(['sword', 'shop_main_sword']))).toBe('shop_main_sword_2');
-    expect(chooseItemId('a', 'guis/shop/main.yml', new Set())).toBe('shop_main_a'); // ids are 2+ characters
-    const clash = planCustomize(item('sword'), env([resource('sword', 'items/sword.yml')]));
-    expect(clash).toMatchObject({ ok: true, id: 'shop_main_sword', path: 'items/gui/shop/main/shop_main_sword.yml' });
-  });
-
-  it('knows a customized layer: its item lives in the GUI folder and is not customized again', () => {
+describe('a layer that already has its own item', () => {
+  it('is recognised by the folder its item lives in, and only there', () => {
+    const e = { pack: 'sample', guiPath: 'guis/shop/main.yml', resources: [] as ResourceRef[] };
+    expect(customFolder(e.guiPath)).toBe('gui/shop/main');
     const custom = resource('sword', 'items/gui/shop/main/sword.yml');
-    const e = env([custom, resource('ruby', 'items/ruby.yml')]);
-    expect(resolveItem('sample:sword', e)).toBe(custom);
-    expect(isCustomized('sample:sword', e)).toBe(custom);
-    expect(isCustomized('sample:ruby', e)).toBeUndefined();
-    expect(planCustomize(item('sword', { item: 'sample:sword' }), e)).toMatchObject({ ok: false, reason: expect.stringContaining('already') });
+    const withCustom = { ...e, resources: [custom, resource('ruby', 'items/ruby.yml')] };
+    expect(resolveItem('sample:sword', withCustom)).toBe(custom);
+    expect(isCustomized('sample:sword', withCustom)).toBe(custom);
+    expect(isCustomized('sample:ruby', withCustom)).toBeUndefined();
+    expect(isCustomized('minecraft:diamond_sword', withCustom)).toBeUndefined();
   });
 });

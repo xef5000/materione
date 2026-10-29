@@ -24,7 +24,8 @@
   import { collectTargets, snapMove, snapResize, snapThreshold } from '../../gui/snap';
   import { isPaintTool, type GuiStudioState } from '../../gui/studio.svelte';
   import { transformability } from '../../gui/registry';
-  import { colorOf, fontOf, isTextLayer, isSkipped, textOf } from '../../gui/text';
+  import { colorOf, fontOf, isTextLayer, textOf } from '../../gui/text';
+  import { isSkipped } from '../../gui/validation';
   import { amountOf, itemRefOf } from '../../gui/items';
   import ItemIcon from '../ItemIcon.svelte';
   import TextEditOverlay from './TextEditOverlay.svelte';
@@ -480,16 +481,16 @@
   );
 
   /** The layers on top of the art: default-font text (the client's font is not ours to draw: approximate) and skipped text. */
-  const approxTexts = $derived(studio.texts.filter((mark) => !(fontOf(mark.layer) === 'smallcaps' && !isSkipped(studio.textIssues.get(mark.layer.id)))));
+  const approxTexts = $derived(studio.texts.filter((mark) => !(fontOf(mark.layer) === 'smallcaps' && !isSkipped(studio.flagsFor(mark.layer.id)))));
   /** Layers that carry a problem the compiler will report: marked where the author is looking. */
   const flagged = $derived([
     ...studio.texts.flatMap((mark) => {
-      const issues = studio.textIssues.get(mark.layer.id) ?? [];
-      return issues.length ? [{ layer: mark.layer, rect: mark.rect, skipped: isSkipped(issues), messages: issues.map((issue) => issue.message) }] : [];
+      const flags = studio.flagsFor(mark.layer.id);
+      return flags.length ? [{ layer: mark.layer, rect: mark.rect, skipped: isSkipped(flags), messages: flags.map((flag) => flag.message) }] : [];
     }),
     ...studio.items.flatMap((mark) => {
-      const messages = studio.itemIssues.get(mark.layer.id) ?? [];
-      return messages.length ? [{ layer: mark.layer, rect: mark.rect, skipped: true, messages }] : [];
+      const flags = studio.flagsFor(mark.layer.id);
+      return flags.length ? [{ layer: mark.layer, rect: mark.rect, skipped: isSkipped(flags), messages: flags.map((flag) => flag.message) }] : [];
     }),
   ]);
   const editingLayer = $derived(studio.editingText ? studio.layerById(studio.editingText) : undefined);
@@ -543,7 +544,7 @@
       style:font-size="{8 * zoom}px"
     >Inventory</text>
     {#each approxTexts as mark (mark.layer.id)}
-      {@const skipped = isSkipped(studio.textIssues.get(mark.layer.id))}
+      {@const skipped = isSkipped(studio.flagsFor(mark.layer.id))}
       {#if !(editingLayer && editingLayer.id === mark.layer.id && fontOf(mark.layer) === 'smallcaps')}
         <text
           class="mc"

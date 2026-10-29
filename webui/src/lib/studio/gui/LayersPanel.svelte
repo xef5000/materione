@@ -103,7 +103,7 @@
     {#each rows as layer (layer.id)}
       {@const badge = studio.badges.get(layer.id)}
       {@const info = studio.infoOf(layer)}
-      {@const problems = [...(studio.textIssues.get(layer.id) ?? []).map((issue) => issue.message), ...(studio.itemIssues.get(layer.id) ?? [])]}
+      {@const problems = studio.flagsFor(layer.id).map((flag) => flag.message)}
       <li
         class="row"
         class:selected={studio.selection.includes(layer.id)}

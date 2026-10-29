@@ -7,10 +7,10 @@ import com.google.gson.JsonObject;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.gui.CompiledGuiLayer;
+import dev.materione.api.gui.GuiAuthoringApi.GuiComponentDescriptor;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
 import dev.materione.api.gui.RenderTarget;
-import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.core.authoring.AuthoringApiImpl;
 import dev.materione.core.document.AuditLog;
@@ -193,7 +193,7 @@ class EditorFieldAssetsTest {
 
     // ------------------------------------------------------------------
 
-    private static RegistryEntry<?> entry() {
+    private static GuiComponentDescriptor entry() {
         var panel = new GuiComponent() {
             @Override
             public String name() {
@@ -215,7 +215,8 @@ class EditorFieldAssetsTest {
                 throw new UnsupportedOperationException("not parsed in this test");
             }
         };
-        return new RegistryEntry<>(NamespacedId.parse("materione:panel"), panel, panel.describe(), "materione");
+        return new GuiComponentDescriptor(NamespacedId.parse("materione:panel"), panel.target(), panel.describe(),
+                "materione");
     }
 
     /** A studio save with one title edit and one binary at the given path. */

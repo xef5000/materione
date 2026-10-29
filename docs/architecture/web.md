@@ -360,6 +360,13 @@ session capability: the studio sends neither op unless the connected blob advert
 frames are `fixtures/protocol/editor-runtime-v1.json`, checked by `EditorRuntimeGoldenTest` (JVM) and
 `runtime-golden.spec.ts` (SPA); the capability list is pinned by `editor-protocol-v1.json`.
 
+*As built (M6 GUI API, #204):* the GUI builder's ops are `gui.get`, `gui.edit`, `gui.customizeItem`,
+`gui.render` and `gui.validate`, each a translator over `AuthoringApi.gui()` (api.md §3.9) and gated
+on the `gui` session capability (editor-op-gates.json). The studio calls `gui.validate` (its compiler
+verdict) and `gui.customizeItem` (Customize) only when the blob advertises `gui`; it does not compose
+either from `authoring.bulk` any more. Payload shapes live in `GuiAuthoringOps` and the golden
+`fixtures/protocol/editor-gui-v1.json`.
+
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
 (`{pack, operations, dryRun}`, operations `set` / `create` / `duplicate`, ≤ 50) answer from

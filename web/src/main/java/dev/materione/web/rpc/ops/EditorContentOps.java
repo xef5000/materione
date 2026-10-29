@@ -6,9 +6,8 @@ import dev.materione.api.auth.ActorContext;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.content.ContentType;
 import dev.materione.api.diagnostics.Diagnostic;
-import dev.materione.api.gui.GuiComponent;
+import dev.materione.api.gui.GuiAuthoringApi.GuiComponentDescriptor;
 import dev.materione.api.registry.ParameterSchema;
-import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
@@ -58,8 +57,8 @@ public final class EditorContentOps {
     }
 
     /**
-     * Registers the ops with the GUI component registry as well: {@code guiComponents}
-     * is read from the {@code gui-components} registry entries, on each describe call.
+     * Registers the ops with the GUI component descriptors as well: {@code guiComponents}
+     * is read from {@code AuthoringApi.gui().components()} on each describe call.
      */
     public static void register(
             RpcDispatcher dispatcher,
@@ -68,7 +67,7 @@ public final class EditorContentOps {
             Supplier<List<Diagnostic>> diagnostics,
             Function<String, ActorContext> actorFor,
             Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary,
-            Supplier<List<RegistryEntry<?>>> guiComponents) {
+            Supplier<List<GuiComponentDescriptor>> guiComponents) {
         // Capability discovery (web.md §4.2): content types and the behavior
         // vocabulary, each read from where it is registered — never a copy.
         dispatcher.register("authoring.describe", request -> {
@@ -908,7 +907,7 @@ public final class EditorContentOps {
         return object;
     }
 
-    private static void describeInto(JsonObject json, SelfDescription description) {
+    static void describeInto(JsonObject json, SelfDescription description) {
         json.addProperty("displayName", description.displayName());
         json.addProperty("description", description.description());
         if (description.activation() != null) {
@@ -1015,7 +1014,7 @@ public final class EditorContentOps {
      * base64 bytes, the same shape {@code assets.put} takes. Absent means none; the
      * path rules and the size caps are the core transaction's, not the wire's.
      */
-    private static List<AuthoringApi.ModelAsset> parseAssets(com.google.gson.JsonElement element) {
+    static List<AuthoringApi.ModelAsset> parseAssets(com.google.gson.JsonElement element) {
         if (element == null || element.isJsonNull()) {
             return List.of();
         }
@@ -1034,18 +1033,19 @@ public final class EditorContentOps {
         return assets;
     }
 
-    /** Registry entries of the {@code gui-components} registry, described like mechanics. */
-    private static com.google.gson.JsonArray guiComponentsJson(List<RegistryEntry<?>> entries) {
+    /**
+     * The {@code gui-components} registry as the studio reads it (gui.md §7): the descriptors the
+     * API built from the registry, serialized here only (R9: the shape is the wire's, the content
+     * is the API's).
+     */
+    private static com.google.gson.JsonArray guiComponentsJson(List<GuiComponentDescriptor> descriptors) {
         var array = new com.google.gson.JsonArray();
-        for (RegistryEntry<?> entry : entries) {
-            if (!(entry.entry() instanceof GuiComponent component)) {
-                continue;
-            }
+        for (GuiComponentDescriptor descriptor : descriptors) {
             JsonObject json = new JsonObject();
-            json.addProperty("id", entry.id().toString());
-            describeInto(json, entry.description());
-            json.addProperty("target", component.target().name().toLowerCase(java.util.Locale.ROOT));
-            json.addProperty("registeredBy", entry.registeredBy());
+            json.addProperty("id", descriptor.id().toString());
+            describeInto(json, descriptor.description());
+            json.addProperty("target", descriptor.target().name().toLowerCase(java.util.Locale.ROOT));
+            json.addProperty("registeredBy", descriptor.registeredBy());
             array.add(json);
         }
         return array;
@@ -1079,7 +1079,7 @@ public final class EditorContentOps {
         return edits;
     }
 
-    private static List<String> stringList(com.google.gson.JsonElement element) {
+    static List<String> stringList(com.google.gson.JsonElement element) {
         if (element == null || !element.isJsonArray()) {
             throw new IllegalArgumentException("'path' must be an array of field names");
         }
@@ -1130,11 +1130,11 @@ public final class EditorContentOps {
      * the lossless layer renders as block YAML. Depth is bounded so a hostile
      * client cannot blow the stack.
      */
-    private static Object nodeValue(com.google.gson.JsonElement element) {
+    static Object nodeValue(com.google.gson.JsonElement element) {
         return nodeValue(element, 0);
     }
 
-    private static Object nodeValue(com.google.gson.JsonElement element, int depth) {
+    static Object nodeValue(com.google.gson.JsonElement element, int depth) {
         if (depth > 8) {
             throw new IllegalArgumentException("value nests too deeply");
         }
@@ -1162,7 +1162,7 @@ public final class EditorContentOps {
 
     /** Plain maps/lists/scalars (the api's view) → JSON (the wire shape). */
     @SuppressWarnings("unchecked")
-    private static com.google.gson.JsonElement jsonOf(Object value) {
+    static com.google.gson.JsonElement jsonOf(Object value) {
         if (value instanceof java.util.Map<?, ?> map) {
             JsonObject object = new JsonObject();
             for (var entry : ((java.util.Map<Object, Object>) map).entrySet()) {
@@ -1195,7 +1195,7 @@ public final class EditorContentOps {
      * diagnostic's code and message, the op's target, and {@code hintOverride}
      * when the op historically carried its own hint.
      */
-    private static Wire.Response error(
+    static Wire.Response error(
             Wire.Request request, List<Diagnostic> diagnostics,
             String target, String hintOverride) {
         Diagnostic diagnostic = diagnostics.isEmpty()
@@ -1208,7 +1208,7 @@ public final class EditorContentOps {
     }
 
     /** The op's historical hint, applied when the api diagnostic carries a different one. */
-    private static String hintFor(List<Diagnostic> diagnostics, String fallback) {
+    static String hintFor(List<Diagnostic> diagnostics, String fallback) {
         if (diagnostics.isEmpty()) {
             return fallback;
         }
@@ -1216,20 +1216,20 @@ public final class EditorContentOps {
         return hint != null ? hint : fallback;
     }
 
-    private static Wire.Response failure(Wire.Request request, Exception e) {
+    static Wire.Response failure(Wire.Request request, Exception e) {
         return Wire.Response.failure(request,
                 new Wire.Error("MTR-0011", String.valueOf(e.getMessage()), null, null));
     }
 
-    private static Wire.Response badRequest(Wire.Request request, String message) {
+    static Wire.Response badRequest(Wire.Request request, String message) {
         return Wire.Response.failure(request, new Wire.Error("MTR-0008", message, null, null));
     }
 
-    private static String actorOf(Wire.Request request) {
+    static String actorOf(Wire.Request request) {
         return "editor:" + request.id();
     }
 
-    private static String safePath(JsonObject payload) {
+    static String safePath(JsonObject payload) {
         try {
             return requiredString(payload, "pack") + "/" + requiredString(payload, "path");
         } catch (RuntimeException e) {
@@ -1237,7 +1237,7 @@ public final class EditorContentOps {
         }
     }
 
-    private static String requiredString(JsonObject object, String field) {
+    static String requiredString(JsonObject object, String field) {
         var value = object.get(field);
         if (value == null || !value.isJsonPrimitive()) {
             throw new IllegalArgumentException("missing field '" + field + "'");
@@ -1245,12 +1245,12 @@ public final class EditorContentOps {
         return value.getAsString();
     }
 
-    private static String optionalString(JsonObject object, String field) {
+    static String optionalString(JsonObject object, String field) {
         var value = object.get(field);
         return value == null || value.isJsonNull() ? null : value.getAsString();
     }
 
-    private static int optionalInteger(JsonObject object, String field, int fallback) {
+    static int optionalInteger(JsonObject object, String field, int fallback) {
         var value = object.get(field);
         if (value == null || value.isJsonNull()) {
             return fallback;
