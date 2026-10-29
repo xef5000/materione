@@ -738,33 +738,33 @@ code below names the class of problem, and every one carries a step path where o
 
 ## 13. Work breakdown
 
-The epic is #189. Each row is one issue and one PR. Columns: **Model** is the delegation target
+The epic is #189. Each row is one issue and one PR. Columns: **Issue** is the GitHub issue; **Model** is the delegation target
 (Haiku for regular implementation, Sonnet for API, engine or web-UI design); **Needs** lists the
 rows it waits for.
 
-| # | Issue | Model | Needs |
-|---|---|---|---|
-| L1 | `api.logic` SPI (actions, conditions, triggers, functions, `LogicContext`, facets, outcomes) + vocabulary v2 + port the six built-ins | Sonnet | n/a |
-| L2 | Flow compiler and interpreter (steps, resumable runs, budgets, step paths, trace events), with M2 rules migrated | Sonnet | L1 |
-| L3 | Expression function calls + the function registry + the built-in functions | Haiku | L1 |
-| L4 | Built-in conditions (§4.2) | Haiku | L1, L2 |
-| L5 | Variables: the `variables` content type, scopes, stores, `set_var` v2, PlaceholderAPI expansion, `/materione var` | Haiku | L2 |
-| L6 | Built-in player, world and server actions (§1 rows) | Haiku | L1 |
-| L7 | Provider SPIs + Vault, LuckPerms and transfer adapters + economy and permission actions | Haiku | L1 |
-| G1 | GUI sessions, `GuiOpener`, click map, click router, GUI triggers, GUI actions (open, close, back, refresh) | Sonnet | L2 |
-| G2 | Open commands (Brigadier), typed args, requirement and deny, bypass, plus a #96 check | Haiku | G1 |
-| G3 | Dynamic slots: `visible_if`, templated overrides, item sources (heads, `player_slot`, external), `frames`, refresh clock, render diff | Haiku | G1 |
-| G4 | Overlay glyphs for dynamic raster + dynamic title text + `setTitle` research on 1.21.4 and 26.x | Sonnet | G1, #202 |
-| G5 | Input slots, `gui.slot_change`, `player_inventory: locked`, the click-policy rows | Haiku | G1 |
-| G6 | `list` component + `ListSource` SPI + paging actions + `gui.page` | Sonnet | G1, G3 |
-| G7 | `prompt` + `InputMethod` (chat, sign, anvil) + list search | Haiku | L2, G6 |
-| A1 | `AuthoringApi.logic()` (edit, validate, instantiate), `GuiEdit.SetOpen`, web ops, the `logic` capability, gates and goldens | Haiku | L2 |
-| A2 | The recipe registry + the v1 recipes as data | Haiku | A1 |
-| W1 | Logic tab: graph projection, auto layout, canvas, ports and wires, palette from the vocabulary, structural edit rules | Sonnet | A1 |
-| W2 | Node inspector: typed fields, template autocomplete, condition stacks, variable pickers | Sonnet | W1 |
-| W3 | Design ↔ Logic linkage + Script tab + Recipes panel | Sonnet | W1, A2 |
-| W4 | Live trace, end to end (API stream + canvas animation) | Sonnet | W1, L2 |
-| Q1 | Parity showcase GUIs (shop, server selector, paged player list, settings toggles) + QA catalog entries + docs | Haiku | G1–G7 |
+| # | Issue | Work | Model | Needs |
+|---|---|---|---|---|
+| L1 | #207 | `api.logic` SPI (actions, conditions, triggers, functions, `LogicContext`, facets, outcomes) + vocabulary v2 + port the six built-ins | Sonnet | n/a |
+| L2 | #208 | Flow compiler and interpreter (steps, resumable runs, budgets, step paths, trace events), with M2 rules migrated | Sonnet | L1 |
+| L3 | #209 | Expression function calls + the function registry + the built-in functions | Haiku | L1 |
+| L4 | #210 | Built-in conditions (§4.2) | Haiku | L1, L2 |
+| L5 | #211 | Variables: the `variables` content type, scopes, stores, `set_var` v2, PlaceholderAPI expansion, `/materione var` | Haiku | L2 |
+| L6 | #212 | Built-in player, world and server actions (§1 rows) | Haiku | L1 |
+| L7 | #213 | Provider SPIs + Vault, LuckPerms and transfer adapters + economy and permission actions | Haiku | L1 |
+| G1 | #214 | GUI sessions, `GuiOpener`, click map, click router, GUI triggers, GUI actions (open, close, back, refresh) | Sonnet | L2 |
+| G2 | #215 | Open commands (Brigadier), typed args, requirement and deny, bypass, plus a #96 check | Haiku | G1 |
+| G3 | #216 | Dynamic slots: `visible_if`, templated overrides, item sources (heads, `player_slot`, external), `frames`, refresh clock, render diff | Haiku | G1 |
+| G4 | #217 | Overlay glyphs for dynamic raster + dynamic title text + `setTitle` research on 1.21.4 and 26.x | Sonnet | G1, #202 |
+| G5 | #218 | Input slots, `gui.slot_change`, `player_inventory: locked`, the click-policy rows | Haiku | G1 |
+| G6 | #219 | `list` component + `ListSource` SPI + paging actions + `gui.page` | Sonnet | G1, G3 |
+| G7 | #220 | `prompt` + `InputMethod` (chat, sign, anvil) + list search | Haiku | L2, G6 |
+| A1 | #221 | `AuthoringApi.logic()` (edit, validate, instantiate), `GuiEdit.SetOpen`, web ops, the `logic` capability, gates and goldens | Haiku | L2 |
+| A2 | #222 | The recipe registry + the v1 recipes as data | Haiku | A1 |
+| W1 | #223 | Logic tab: graph projection, auto layout, canvas, ports and wires, palette from the vocabulary, structural edit rules | Sonnet | A1 |
+| W2 | #224 | Node inspector: typed fields, template autocomplete, condition stacks, variable pickers | Sonnet | W1 |
+| W3 | #225 | Design ↔ Logic linkage + Script tab + Recipes panel | Sonnet | W1, A2 |
+| W4 | #226 | Live trace, end to end (API stream + canvas animation) | Sonnet | W1, L2 |
+| Q1 | #227 | Parity showcase GUIs (shop, server selector, paged player list, settings toggles) + QA catalog entries + docs | Haiku | G1–G7 |
 
 Rows that can run in parallel once their dependencies land:
 
