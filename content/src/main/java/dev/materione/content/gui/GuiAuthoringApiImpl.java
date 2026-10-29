@@ -16,7 +16,6 @@ import dev.materione.api.authoring.AuthoringApi.ResourceRef;
 import dev.materione.api.authoring.AuthoringApi.SetFieldsRequest;
 import dev.materione.api.authoring.AuthoringApi.TemplateInfo;
 import dev.materione.api.content.Allocations;
-import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
@@ -28,6 +27,7 @@ import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
+import dev.materione.core.pipeline.ResourceCompiler;
 import dev.materione.core.texture.PackTextures;
 import dev.materione.core.texture.PngDecoder;
 import java.nio.file.Path;
@@ -51,7 +51,7 @@ import java.util.function.Supplier;
  * a non-persisting allocation view (so a preview leaves the allocation table untouched).
  *
  * <p>Writes never bypass {@link AuthoringApi}: there is no second write path (D6). The compile
- * steps mirror {@code PackCompiler}'s per-resource sequence; parity with the pack is a test.
+ * steps are the pack compiler's own ({@link ResourceCompiler}, in core), so there is one sequence, not a copy.
  */
 public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
 
@@ -517,58 +517,33 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
     // compile (the pack compiler's per-resource steps, for drafts and saves)
 
     /**
-     * What {@code PackCompiler} does with one GUI resource, in the same order: parse (a failure is
-     * {@code MTR-0007}-class schema invalidity), diagnose the parsed parts, compile through the
-     * type with a collecting emitter and a non-persisting allocation view. Compile diagnostics are
-     * the emitter's, in raised order, then a rejection or crash, exactly as the pack publishes them.
+     * One GUI resource through the pack compiler's own per-resource sequence
+     * ({@link ResourceCompiler}: parse, diagnose, compile), with a collecting emitter and the
+     * non-persisting allocation view. The diagnostics are the ones the pack would publish for the
+     * resource, in the order it raises them. A preview quarantines nothing: the diagnostic is the
+     * answer, and nothing is skipped on disk.
      */
     private Check check(Subject subject, TextureSource textures, Map<String, Map<String, Object>> templates) {
         NamespacedId id = subject.id();
         var diagnostics = new ArrayList<Diagnostic>();
-        java.util.Optional<Object> parsed;
-        try {
-            parsed = type.parse(id, subject.definition(), templates);
-        } catch (RuntimeException failure) {
-            diagnostics.add(crashed(id, failure));
-            return new Check(null, diagnostics, null);
-        }
-        if (parsed.isEmpty()) {
-            diagnostics.add(new Diagnostic(
-                    DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
-                    "resource " + id + " failed to parse as " + type.name(),
-                    id, null, "check the required fields (the registry self-description documents them)"));
-            return new Check(null, diagnostics, null);
-        }
-        GuiDefinition gui = (GuiDefinition) parsed.get();
-        try {
-            diagnostics.addAll(type.diagnose(gui));
-        } catch (RuntimeException failure) {
-            diagnostics.add(crashed(id, failure));
-            return new Check(null, diagnostics, null);
-        }
         var emitter = new CollectingEmitter(textures, diagnostics);
-        NamespacedId modelId = NamespacedId.of(id.namespace(), id.value() + "_model");
-        try {
-            type.compile(gui, modelId, emitter, previewAllocations.get());
-        } catch (CompileRejectException rejected) {
-            diagnostics.add(new Diagnostic(rejected.code(), Severity.ERROR, rejected.getMessage(), id, null,
-                    rejected.hint()));
-            return new Check(gui, diagnostics, null);
-        } catch (RuntimeException failure) {
-            diagnostics.add(crashed(id, failure));
-            return new Check(gui, diagnostics, null);
+        Optional<Object> parsed = ResourceCompiler.compile(id, subject.definition(), templates, type, emitter,
+                previewAllocations.get(), new ResourceCompiler.Sink() {
+                    @Override
+                    public void publish(Diagnostic diagnostic) {
+                        diagnostics.add(diagnostic);
+                    }
+
+                    @Override
+                    public void quarantine(NamespacedId resource, Diagnostic diagnostic) {
+                        // a preview skips nothing on disk; the diagnostic it published is the report
+                    }
+                });
+        if (parsed.isEmpty()) {
+            return new Check(null, diagnostics, null);
         }
         byte[] background = emitter.assets.get(GuiFonts.backgroundAsset(id.namespace(), id.value()));
-        return new Check(gui, diagnostics, background);
-    }
-
-    /** The pack's quarantine diagnostic for a crashing content type ({@code PackCompiler.quarantineResource}). */
-    private static Diagnostic crashed(NamespacedId id, RuntimeException failure) {
-        return new Diagnostic(
-                DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
-                "content type crashed on " + id + ": " + failure,
-                id, null,
-                "this resource was skipped; if it worked before, a recent edit is the cause");
+        return new Check((GuiDefinition) parsed.get(), diagnostics, background);
     }
 
     /** Every template of every pack, by {@code pack:id}, when the GUI inherits from one; empty otherwise. */

@@ -35,8 +35,9 @@ import org.junit.jupiter.api.io.TempDir;
 
 /**
  * Validate parity (gui.md §10 #8): the GUI API's {@code validate} reports exactly the diagnostics the
- * pack compile publishes for the same file. The two run the same parse, diagnose and compile steps;
- * this test is what keeps them the same. The GUI carries every kind of problem the compiler reports:
+ * pack compile publishes for the same file. Both run one sequence (core's ResourceCompiler), so this
+ * is a regression guard on the wiring around it: the pack's emitter and bus on one side, the API's
+ * collecting emitter, draft sources and preview allocations on the other. The GUI carries every kind of problem the compiler reports:
  * an unknown component, a reserved character, a default-font run followed by smallcaps text, and a
  * slot filled twice.
  */
