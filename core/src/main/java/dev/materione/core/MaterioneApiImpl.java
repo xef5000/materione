@@ -7,6 +7,7 @@ import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.delivery.DeliveryApi;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.gui.GuiComponentsApi;
+import dev.materione.api.logic.LogicApi;
 import dev.materione.api.mechanics.MechanicsApi;
 import dev.materione.api.pipeline.PipelineApi;
 import dev.materione.api.platform.PlatformDescriptor;
@@ -41,6 +42,7 @@ public final class MaterioneApiImpl implements MaterioneAPI {
     private final AdminApi admin;
     private final MechanicsApi mechanics;
     private final GuiComponentsApi guiComponents;
+    private final LogicApi logic;
 
     public MaterioneApiImpl(
             String version,
@@ -103,6 +105,25 @@ public final class MaterioneApiImpl implements MaterioneAPI {
             AdminApi admin,
             MechanicsApi mechanics,
             GuiComponentsApi guiComponents) {
+        this(version, registries, diagnostics, platform, scheduling,
+                authoring, assets, pipeline, delivery, runtime, admin, mechanics, guiComponents, null);
+    }
+
+    public MaterioneApiImpl(
+            String version,
+            RegistryService registries,
+            DiagnosticsBus diagnostics,
+            Supplier<PlatformDescriptor> platform,
+            SchedulingGateway scheduling,
+            AuthoringApi authoring,
+            AssetApi assets,
+            PipelineApi pipeline,
+            DeliveryApi delivery,
+            RuntimeApi runtime,
+            AdminApi admin,
+            MechanicsApi mechanics,
+            GuiComponentsApi guiComponents,
+            LogicApi logic) {
         this.version = Objects.requireNonNull(version, "version");
         this.registries = Objects.requireNonNull(registries, "registries");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
@@ -116,6 +137,7 @@ public final class MaterioneApiImpl implements MaterioneAPI {
         this.admin = admin;
         this.mechanics = mechanics;
         this.guiComponents = guiComponents;
+        this.logic = logic;
     }
 
     @Override
@@ -176,6 +198,11 @@ public final class MaterioneApiImpl implements MaterioneAPI {
     @Override
     public MechanicsApi mechanics() {
         return requireWired(mechanics, "mechanics");
+    }
+
+    @Override
+    public LogicApi logic() {
+        return requireWired(logic, "logic");
     }
 
     @Override

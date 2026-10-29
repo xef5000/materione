@@ -280,29 +280,12 @@ public final class EditorTransportService {
         }
     }
 
-    private java.util.function.Supplier<dev.materione.api.registry.BehaviorVocabulary> behaviorVocabulary =
-            dev.materione.api.registry.BehaviorVocabulary::empty;
-
-    /** Wires the behavior engine's vocabulary; mechanics are read from their registry per call. */
-    public void behaviorVocabulary(
-            java.util.function.Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary) {
-        this.behaviorVocabulary = java.util.Objects.requireNonNull(vocabulary, "vocabulary");
-    }
-
-    /** The behavior vocabulary plus every registered mechanic, built-in or addon (D5). */
+    /**
+     * The behavior vocabulary, read from the logic registries and the mechanics registry on every
+     * describe call, built-in and addon alike (D5, logic.md §8).
+     */
     private dev.materione.api.registry.BehaviorVocabulary behaviorVocabulary() {
-        var mechanics = new ArrayList<dev.materione.api.registry.BehaviorVocabulary.Mechanic>();
-        api.registries().byKey(RegistryKeys.MECHANICS).ifPresent(view -> {
-            for (var entry : ((Registry<?>) view).entries()) {
-                boolean repeatable = entry.entry() instanceof dev.materione.api.mechanics.Mechanic mechanic
-                        && mechanic.repeatable();
-                mechanics.add(new dev.materione.api.registry.BehaviorVocabulary.Mechanic(
-                        entry.id().toString(), entry.description(), repeatable, entry.registeredBy()));
-            }
-        });
-        mechanics.sort(java.util.Comparator.comparing(
-                dev.materione.api.registry.BehaviorVocabulary.Mechanic::id));
-        return behaviorVocabulary.get().withMechanics(mechanics);
+        return api.logic().vocabulary();
     }
 
     /** The {@code gui-components} registry, built-in and addon, as the GUI API describes it (read per describe call). */

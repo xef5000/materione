@@ -20,7 +20,6 @@ import dev.materione.plugin.runtime.api.AdminApiImpl;
 import dev.materione.plugin.runtime.api.DeliveryApiImpl;
 import dev.materione.plugin.runtime.api.GlyphMetadataComputer;
 import dev.materione.plugin.runtime.api.PipelineApiImpl;
-import dev.materione.plugin.runtime.behavior.BehaviorService;
 import dev.materione.plugin.runtime.mechanics.MechanicsService;
 import dev.materione.testing.golden.GoldenFiles;
 import dev.materione.web.protocol.Wire;
@@ -112,7 +111,7 @@ class EditorDemoSnapshotTest {
         pipeline.registerBuiltins(itemMaterials());
         var mechanics = new MechanicsService(host, diagnostics, scheduling, pipeline.runtime(), registries);
         mechanics.registerNatives(registries);
-        var behavior = new BehaviorService(host, diagnostics, scheduling, pipeline.runtime());
+        var logic = dev.materione.plugin.logic.LogicTestSupport.withBuiltIns(registries);
 
         var settingsService = new SettingsService();
         var settings = settingsService.load(root.resolve("settings"));
@@ -149,10 +148,9 @@ class EditorDemoSnapshotTest {
                 authoring, assets, pipelineApi, new DeliveryApiImpl(delivery),
                 // the runtime surface is wired but unused here: its constructor touches no server
                 new dev.materione.plugin.runtime.api.RuntimeApiImpl(null, scheduling, pipeline, () -> null, () -> null),
-                admin, mechanics);
+                admin, mechanics, null, logic);
         transport[0] = new EditorTransportService(
                 null, diagnostics, scheduling, pipeline, api, documents, audit, authoring);
-        transport[0].behaviorVocabulary(behavior::vocabulary);
         // A fresh boot publishes its compiled pack (MaterionePlugin#loadContent).
         if (summary.packZip() != null) {
             delivery.publish(summary.packZip(), summary.packSha256());

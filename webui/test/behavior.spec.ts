@@ -138,3 +138,34 @@ describe('behavior rules over the existing on/if/do format', () => {
     expect(blankRule(vocabulary, 'block')).toEqual({ on: 'place', do: [{ message: { text: 'Hello!' } }] });
   });
 });
+
+describe('vocabulary v2 (logic.md §5.4) is additive', () => {
+  const v2: BehaviorVocabulary = {
+    ...vocabulary,
+    version: 2,
+    actions: [{
+      id: 'take_money', displayName: 'Take money', category: 'economy', threading: 'global',
+      available: false, unavailableReason: 'No economy provider is installed', registeredBy: 'Materione',
+    }, ...vocabulary.actions],
+    triggers: [{
+      id: 'click', displayName: 'Click', description: 'The player clicks', details: ['right', 'left'],
+      firedBy: ['item'], filters: [], cancellable: true, registeredBy: 'Materione',
+      context: [{ path: 'item.amount', type: 'integer', description: 'Stack size', hosts: ['item'] }],
+    }],
+    conditions: [{ id: 'has_money', category: 'economy', available: true, registeredBy: 'Materione' }],
+    steps: [{ id: 'if', displayName: 'If', description: 'Branches', parameters: [], supported: false }],
+    categories: [{ id: 'economy', displayName: 'Economy', builtIn: true }],
+    functions: [{ id: 'lower', returns: 'string', variadic: false, minArguments: 1, maxArguments: 1, registeredBy: 'Materione' }],
+  };
+
+  it('leaves every version-1 helper reading a version-2 vocabulary unchanged', () => {
+    const rule = { on: 'click:right', do: [{ message: 'hi' }] };
+    expect(ruleSentence(rule, v2)).toBe(ruleSentence(rule, vocabulary));
+    expect(blankRule(v2, 'item')).toEqual(blankRule(vocabulary, 'item'));
+  });
+
+  it('still reads a version-1 vocabulary that has none of the new sections', () => {
+    expect(vocabulary.triggers).toBeUndefined();
+    expect(vocabulary.version).toBeUndefined();
+  });
+});

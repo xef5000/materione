@@ -867,6 +867,9 @@ public final class EditorContentOps {
     private static JsonObject vocabularyJson(dev.materione.api.registry.BehaviorVocabulary vocabulary) {
         var safe = vocabulary == null ? dev.materione.api.registry.BehaviorVocabulary.empty() : vocabulary;
         JsonObject object = new JsonObject();
+        // v2 is a superset of v1 (logic.md §5.4): every v1 key below is unchanged, so an editor
+        // that predates it keeps working and one that wants more reads the keys added after them
+        object.addProperty("version", dev.materione.api.registry.BehaviorVocabulary.VERSION);
         var events = new com.google.gson.JsonArray();
         for (var event : safe.events()) {
             JsonObject json = new JsonObject();
@@ -889,6 +892,16 @@ public final class EditorContentOps {
                 json.addProperty("shorthand", action.shorthand());
             }
             json.addProperty("deferred", action.deferred());
+            if (action.category() != null) {
+                json.addProperty("category", action.category().id());
+            }
+            if (action.threading() != null) {
+                json.addProperty("threading", action.threading().name().toLowerCase(java.util.Locale.ROOT));
+            }
+            availabilityInto(json, action.availability());
+            if (!action.registeredBy().isBlank()) {
+                json.addProperty("registeredBy", action.registeredBy());
+            }
             actions.add(json);
         }
         object.add("actions", actions);
@@ -904,7 +917,92 @@ public final class EditorContentOps {
             mechanics.add(json);
         }
         object.add("mechanics", mechanics);
+        logicVocabularyInto(object, safe);
         return object;
+    }
+
+    /** The version-2 additions: triggers, conditions, step kinds, categories and expression functions. */
+    private static void logicVocabularyInto(
+            JsonObject object, dev.materione.api.registry.BehaviorVocabulary vocabulary) {
+        var triggers = new com.google.gson.JsonArray();
+        for (var trigger : vocabulary.triggers()) {
+            var description = trigger.description();
+            JsonObject json = new JsonObject();
+            json.addProperty("id", trigger.id());
+            describeInto(json, description.self());
+            json.add("details", strings(description.details()));
+            json.add("firedBy", strings(description.firedBy()));
+            json.add("filters", params(description.filters()));
+            var context = new com.google.gson.JsonArray();
+            for (var variable : description.context()) {
+                JsonObject entry = new JsonObject();
+                entry.addProperty("path", variable.path());
+                entry.addProperty("type", variable.type().name().toLowerCase(java.util.Locale.ROOT));
+                entry.addProperty("description", variable.description());
+                entry.add("hosts", strings(variable.hosts()));
+                context.add(entry);
+            }
+            json.add("context", context);
+            json.addProperty("cancellable", description.cancellable());
+            json.addProperty("registeredBy", trigger.registeredBy());
+            triggers.add(json);
+        }
+        object.add("triggers", triggers);
+        var conditions = new com.google.gson.JsonArray();
+        for (var condition : vocabulary.conditions()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", condition.id());
+            describeInto(json, condition.description().self());
+            json.addProperty("category", condition.description().category().id());
+            if (condition.description().shorthand() != null) {
+                json.addProperty("shorthand", condition.description().shorthand());
+            }
+            availabilityInto(json, condition.availability());
+            json.addProperty("registeredBy", condition.registeredBy());
+            conditions.add(json);
+        }
+        object.add("conditions", conditions);
+        var steps = new com.google.gson.JsonArray();
+        for (var step : vocabulary.steps()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", step.id());
+            json.addProperty("displayName", step.displayName());
+            json.addProperty("description", step.description());
+            json.add("parameters", params(step.parameters()));
+            json.addProperty("supported", step.supported());
+            steps.add(json);
+        }
+        object.add("steps", steps);
+        var categories = new com.google.gson.JsonArray();
+        for (var category : vocabulary.categories()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", category.id());
+            json.addProperty("displayName", category.displayName());
+            json.addProperty("builtIn", category.isBuiltIn());
+            categories.add(json);
+        }
+        object.add("categories", categories);
+        var functions = new com.google.gson.JsonArray();
+        for (var function : vocabulary.functions()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", function.id());
+            describeInto(json, function.description().self());
+            json.addProperty("returns", function.description().returns().name().toLowerCase(java.util.Locale.ROOT));
+            json.addProperty("variadic", function.description().variadic());
+            json.addProperty("minArguments", function.description().minArguments());
+            json.addProperty("maxArguments", function.description().maxArguments());
+            json.addProperty("registeredBy", function.registeredBy());
+            functions.add(json);
+        }
+        object.add("functions", functions);
+    }
+
+    /** {@code available} always; {@code unavailableReason} only when it is false (the editor greys the entry out). */
+    private static void availabilityInto(JsonObject json, dev.materione.api.logic.Availability availability) {
+        json.addProperty("available", availability.available());
+        if (!availability.available()) {
+            json.addProperty("unavailableReason", availability.reason());
+        }
     }
 
     static void describeInto(JsonObject json, SelfDescription description) {

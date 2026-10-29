@@ -1,0 +1,55 @@
+package dev.materione.behavior.logic;
+
+import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.ConditionType;
+import dev.materione.api.logic.TriggerType;
+import dev.materione.api.registry.Registry;
+import dev.materione.api.registry.RegistryKey;
+import dev.materione.api.registry.RegistryKeys;
+import dev.materione.api.registry.RegistryView;
+import java.util.Optional;
+
+/**
+ * The {@link LogicLookup} over the live registries ({@code actions}, {@code conditions},
+ * {@code triggers}). It reads the registries at each call rather than caching them, so a late
+ * addon registration is visible to the next rule load.
+ */
+public final class RegistryLogicLookup implements LogicLookup {
+
+    private final RegistryView registries;
+
+    public RegistryLogicLookup(RegistryView registries) {
+        this.registries = registries;
+    }
+
+    @Override
+    public Optional<ActionType<?>> action(String authoredId) {
+        return find(RegistryKeys.ACTIONS, authoredId, ActionType.class).map(type -> (ActionType<?>) type);
+    }
+
+    @Override
+    public Optional<ConditionType<?>> condition(String authoredId) {
+        return find(RegistryKeys.CONDITIONS, authoredId, ConditionType.class).map(type -> (ConditionType<?>) type);
+    }
+
+    @Override
+    public boolean triggerKnown(String authoredId) {
+        return find(RegistryKeys.TRIGGERS, authoredId, TriggerType.class).isPresent();
+    }
+
+    private <T> Optional<T> find(RegistryKey key, String authoredId, Class<T> type) {
+        Optional<NamespacedId> id = LogicIds.parse(authoredId);
+        if (id.isEmpty()) {
+            return Optional.empty();
+        }
+        return registries.byKey(key)
+                .flatMap(registry -> entryOf(registry, id.get()))
+                .filter(type::isInstance)
+                .map(type::cast);
+    }
+
+    private static Optional<Object> entryOf(Registry<?> registry, NamespacedId id) {
+        return registry.get(id).map(entry -> (Object) entry.entry());
+    }
+}

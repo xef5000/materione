@@ -542,6 +542,86 @@ class EditorContentOpsTest {
     }
 
     @Test
+    void authoringDescribeCarriesTheVersionTwoVocabularyAdditivelyAfterTheVersionOneKeys() {
+        var self = new SelfDescription("Money", "Has money.",
+                List.of(ParameterSchema.of("amount", ParameterType.DECIMAL, true)), "1.0.0", "When tested.");
+        var vocabulary = new BehaviorVocabulary(
+                List.of(new BehaviorVocabulary.Event("click", "Click", "A player clicks.",
+                        List.of("right"), List.of("item"))),
+                List.of(new BehaviorVocabulary.Action("take_money", self, "amount", true,
+                        dev.materione.api.logic.LogicCategory.ECONOMY, dev.materione.api.logic.Threading.GLOBAL,
+                        dev.materione.api.logic.Availability.unavailable("No economy provider is installed"),
+                        "Materione")),
+                List.of(), List.of(), List.of(),
+                List.of(new BehaviorVocabulary.Trigger("click", new dev.materione.api.logic.TriggerDescription(
+                        SelfDescription.of("Click", "A player clicks."), List.of("right"), List.of("item"),
+                        List.of(ParameterSchema.of("layer", ParameterType.STRING, false)),
+                        List.of(dev.materione.api.logic.ContextVariable
+                                .of("item.amount", ParameterType.INTEGER, "Stack size").providedBy("item")),
+                        true), "Materione")),
+                List.of(new BehaviorVocabulary.Condition("has_money",
+                        new dev.materione.api.logic.ConditionDescription(self,
+                                dev.materione.api.logic.LogicCategory.ECONOMY, "amount"),
+                        dev.materione.api.logic.Availability.AVAILABLE, "Materione")),
+                List.of(new BehaviorVocabulary.StepKind("if", "If", "Branches.", List.of(), false)),
+                List.of(dev.materione.api.logic.LogicCategory.ECONOMY, dev.materione.api.logic.LogicCategory.of("weather")),
+                List.of(new BehaviorVocabulary.Function("lower", new dev.materione.api.logic.FunctionDescription(
+                        new SelfDescription("Lower", "Lower-cases.",
+                                List.of(ParameterSchema.of("text", ParameterType.STRING, true)), "1.0.0"),
+                        ParameterType.STRING, false), "Materione")));
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                () -> List.of(typeWith()), List::of, EditorContentOpsTest::actor, () -> vocabulary);
+
+        JsonObject behavior = payload(dispatcher.dispatch(request("authoring.describe", "1")))
+                .getAsJsonObject("behavior");
+
+        assertThat(behavior.get("version").getAsInt()).isEqualTo(2);
+        // version-1 keys keep their shape
+        assertThat(behavior.getAsJsonArray("events").get(0).getAsJsonObject().get("id").getAsString())
+                .isEqualTo("click");
+        JsonObject action = behavior.getAsJsonArray("actions").get(0).getAsJsonObject();
+        assertThat(action.get("deferred").getAsBoolean()).isTrue();
+        assertThat(action.get("shorthand").getAsString()).isEqualTo("amount");
+        // version-2 additions on the action
+        assertThat(action.get("category").getAsString()).isEqualTo("economy");
+        assertThat(action.get("threading").getAsString()).isEqualTo("global");
+        assertThat(action.get("available").getAsBoolean()).isFalse();
+        assertThat(action.get("unavailableReason").getAsString()).isEqualTo("No economy provider is installed");
+        assertThat(action.get("registeredBy").getAsString()).isEqualTo("Materione");
+
+        JsonObject trigger = behavior.getAsJsonArray("triggers").get(0).getAsJsonObject();
+        assertThat(trigger.get("id").getAsString()).isEqualTo("click");
+        assertThat(trigger.get("cancellable").getAsBoolean()).isTrue();
+        assertThat(values(trigger.getAsJsonArray("firedBy"))).containsExactly("item");
+        assertThat(trigger.getAsJsonArray("filters").get(0).getAsJsonObject().get("id").getAsString())
+                .isEqualTo("layer");
+        JsonObject variable = trigger.getAsJsonArray("context").get(0).getAsJsonObject();
+        assertThat(variable.get("path").getAsString()).isEqualTo("item.amount");
+        assertThat(variable.get("type").getAsString()).isEqualTo("integer");
+        assertThat(values(variable.getAsJsonArray("hosts"))).containsExactly("item");
+
+        JsonObject condition = behavior.getAsJsonArray("conditions").get(0).getAsJsonObject();
+        assertThat(condition.get("id").getAsString()).isEqualTo("has_money");
+        assertThat(condition.get("category").getAsString()).isEqualTo("economy");
+        assertThat(condition.get("shorthand").getAsString()).isEqualTo("amount");
+        assertThat(condition.get("available").getAsBoolean()).isTrue();
+        assertThat(condition.has("unavailableReason")).isFalse();
+        assertThat(condition.getAsJsonArray("parameters").get(0).getAsJsonObject().get("id").getAsString())
+                .isEqualTo("amount");
+
+        JsonObject step = behavior.getAsJsonArray("steps").get(0).getAsJsonObject();
+        assertThat(step.get("id").getAsString()).isEqualTo("if");
+        assertThat(step.get("supported").getAsBoolean()).isFalse();
+        assertThat(behavior.getAsJsonArray("categories").get(1).getAsJsonObject().get("builtIn").getAsBoolean())
+                .isFalse();
+        JsonObject function = behavior.getAsJsonArray("functions").get(0).getAsJsonObject();
+        assertThat(function.get("returns").getAsString()).isEqualTo("string");
+        assertThat(function.get("minArguments").getAsInt()).isEqualTo(1);
+        assertThat(function.get("maxArguments").getAsInt()).isEqualTo(1);
+    }
+
+    @Test
     void authoringDescribeWithoutAVocabularySuppliesEmptyBehaviorArrays() {
         RpcDispatcher dispatcher = new RpcDispatcher();
         EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
@@ -552,7 +632,8 @@ class EditorContentOpsTest {
         assertThat(response.ok()).isTrue();
         assertThat(payload(response).getAsJsonArray("types")).isEmpty();
         JsonObject behavior = payload(response).getAsJsonObject("behavior");
-        for (String key : List.of("events", "actions", "ruleOptions", "actionOptions", "mechanics")) {
+        for (String key : List.of("events", "actions", "ruleOptions", "actionOptions", "mechanics",
+                "triggers", "conditions", "steps", "categories", "functions")) {
             assertThat(behavior.getAsJsonArray(key)).as(key).isEmpty();
         }
     }

@@ -16,12 +16,22 @@ import dev.materione.api.mechanics.MechanicRuntime;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.behavior.expr.EvaluationContext;
-import dev.materione.behavior.interp.Template;
-import dev.materione.behavior.rule.ActionSpec;
+import dev.materione.api.logic.ActionDescription;
+import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.LogicCategory;
+import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Threading;
+import dev.materione.api.registry.SelfDescription;
+import dev.materione.behavior.logic.MapLogicContext;
+import dev.materione.behavior.rule.BoundAction;
 import dev.materione.behavior.rule.RuleParser;
-import dev.materione.behavior.runtime.ActionExecutor;
 import dev.materione.behavior.runtime.BehaviorEvent;
+import dev.materione.core.registry.RegistryService;
+import dev.materione.plugin.logic.LogicTestSupport;
+import dev.materione.plugin.logic.action.RunCommandAction;
 import dev.materione.behavior.runtime.CooldownStore;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.platform.items.FoodItemModifier;
@@ -206,7 +216,8 @@ class BuiltinMechanicsTest {
                 "on_right_click", commands, "on_left_click", List.of("help"), "as_player", true)));
         commands.clear();
         var rules = instance.behaviorRules();
-        var compiled = RuleParser.compile(ITEM, rules);
+        var compiled = RuleParser.compile(ITEM, rules,
+                LogicTestSupport.withBuiltIns(new RegistryService()).lookup());
 
         assertThat(compiled.problems()).isEmpty();
         assertThat(compiled.rules()).hasSize(2);
@@ -214,10 +225,13 @@ class BuiltinMechanicsTest {
                 .containsExactly("right", "left");
         assertThat(compiled.rules()).extracting(rule -> rule.id()).doesNotHaveDuplicates()
                 .allSatisfy(id -> assertThat(id).contains(ITEM.toString(), "materione:commands"));
-        assertThat(compiled.rules().getFirst().actions()).extracting(ActionSpec::type)
+        assertThat(compiled.rules().getFirst().actions()).extracting(BoundAction::id)
                 .containsExactly("run_command", "run_command");
         assertThat(compiled.rules().getFirst().actions().getFirst().params())
-                .containsEntry("command", "say ${player.name}").containsEntry("as", "player");
+                .isInstanceOfSatisfying(RunCommandAction.Params.class, params -> {
+                    assertThat(params.command().source()).isEqualTo("say ${player.name}");
+                    assertThat(params.sender()).isEqualTo(RunCommandAction.Sender.PLAYER);
+                });
         assertThat(instance.behaviorRules()).isEqualTo(rules);
         assertThatThrownBy(() -> rules.clear()).isInstanceOf(UnsupportedOperationException.class);
         assertThatThrownBy(() -> rules.getFirst().clear()).isInstanceOf(UnsupportedOperationException.class);
@@ -235,29 +249,19 @@ class BuiltinMechanicsTest {
         var executed = new ArrayList<String>();
         var deferred = new ArrayList<Runnable>();
         var engine = new RuleEngine((anchor, delay, task) -> deferred.add(task), diagnostics::add, new CooldownStore());
-        engine.register(new ActionExecutor() {
-            @Override
-            public String type() {
-                return "run_command";
-            }
-
-            @Override
-            public boolean syncSafe() {
-                return false;
-            }
-
-            @Override
-            public void execute(ActionSpec action, BehaviorEvent event) {
-                executed.add(action.param("as") + ":" + Template.render(
-                        (String) action.param("command"), event.context()));
-            }
-        });
+        // the real triggers, and a recording stand-in for run_command (the real one dispatches to Bukkit)
+        var logic = LogicTestSupport.newService(new RegistryService());
+        LogicTestSupport.registerTriggers(logic);
+        logic.actions().register(LogicTestSupport.owner("materione"),
+                NamespacedId.of("materione", "run_command"), new RecordingCommand(executed));
         for (boolean asPlayer : List.of(false, true)) {
             var instance = new CommandsMechanic().parse(configuration(Map.of(
                     "on_right_click", List.of("say %player%", "spawn"),
                     "on_left_click", List.of("help %player%"), "as_player", asPlayer)));
-            var rules = RuleParser.compile(ITEM, instance.behaviorRules()).rules();
-            var context = new EvaluationContext(Map.of("player", Map.of("name", "Alex", "uuid", "test")));
+            var parsed = RuleParser.compile(ITEM, instance.behaviorRules(), logic.lookup());
+            assertThat(parsed.problems()).isEmpty();
+            var rules = parsed.rules();
+            var context = new MapLogicContext(Map.of("player", Map.of("name", "Alex", "uuid", "test")));
             engine.fire(rules, new BehaviorEvent("click", "right", context, null, null));
             engine.fire(rules, new BehaviorEvent("click", "left", context, null, null));
         }
@@ -466,6 +470,39 @@ class BuiltinMechanicsTest {
         @Override
         public <T extends AutoCloseable> T track(T resource) {
             return resource;
+        }
+    }
+
+    /** A stand-in for the real run_command that records "sender:rendered command" instead of dispatching. */
+    private record RecordingCommand(List<String> executed)
+            implements ActionType<RecordingCommand.Params> {
+        record Params(String as, TemplateText command) {}
+
+        @Override
+        public String id() {
+            return "run_command";
+        }
+
+        @Override
+        public ActionDescription describe() {
+            return new ActionDescription(SelfDescription.of("Run command", "Test double"),
+                    LogicCategory.SERVER, null);
+        }
+
+        @Override
+        public Threading threading() {
+            return Threading.GLOBAL;
+        }
+
+        @Override
+        public Params parse(ParamReader params) {
+            return new Params(params.text("as", "console"), params.template("command"));
+        }
+
+        @Override
+        public ActionOutcome execute(Params params, LogicContext context) {
+            executed.add(params.as() + ":" + params.command().render(context));
+            return ActionOutcome.OK;
         }
     }
 

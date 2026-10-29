@@ -1,13 +1,17 @@
 package dev.materione.behavior.runtime;
 
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.behavior.expr.ExprNode;
+import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.Threading;
 import dev.materione.behavior.expr.EvaluationContext;
+import dev.materione.behavior.expr.ExprNode;
 import dev.materione.behavior.expr.Expressions;
-import dev.materione.behavior.rule.ActionSpec;
+import dev.materione.behavior.rule.BoundAction;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.rule.RuleOptions;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -16,19 +20,26 @@ import java.util.function.Consumer;
  * The ECA engine core (runtime-systems §2, D4): matches fired events against
  * rules, gates on cooldowns/charges, evaluates conditions and runs action
  * chains. Threading: {@link #fire} runs wherever the event arrived (region
- * thread on Folia); actions declare sync-safe vs must-defer, and deferral
- * plus explicit delays route through the {@link DeferredRunner}.
+ * thread on Folia); an action declares its {@link Threading}, and the actions
+ * that must leave the event's thread, plus explicit delays, route through the
+ * {@link DeferredRunner}.
  *
  * <p>Failure honesty: one broken action or evaluation degrades to a
  * rate-limited diagnostic (MTR-0023) and the chain continues — never a
- * crash, never spam (plugin.md §5).
+ * crash, never spam (plugin.md §5). An action that returns
+ * {@code ActionOutcome.failed} is reported the same way an exception is.
+ *
+ * <p><b>Seam for the flow interpreter.</b> This is the M2 engine: a rule's actions run as a flat
+ * list through {@link #runActions}. The flow interpreter (logic.md §5.2, §13 L2) replaces that
+ * method with the resumable step interpreter and real gateway dispatch per {@link Threading};
+ * everything an action sees (the {@link dev.materione.api.logic.LogicContext}) is already the
+ * final shape.
  */
 public final class RuleEngine {
 
     /** Minimum milliseconds between two MTR-0023 diagnostics for the same rule. */
     private static final long FAILURE_LOG_INTERVAL_MS = 1000;
 
-    private final Map<String, ActionExecutor> executors = new ConcurrentHashMap<>();
     private final DeferredRunner deferred;
     private final Consumer<Diagnostic> diagnostics;
     private final CooldownStore cooldowns;
@@ -40,33 +51,6 @@ public final class RuleEngine {
         this.deferred = deferred;
         this.diagnostics = diagnostics;
         this.cooldowns = cooldowns;
-    }
-
-    /** Registers an executor; later registrations of the same type replace earlier ones. */
-    public void register(ActionExecutor executor) {
-        executors.put(executor.type(), executor);
-    }
-
-    public int registeredExecutorCount() {
-        return executors.size();
-    }
-
-    /**
-     * The behavior vocabulary as registered right now: the event taxonomy,
-     * every executor (described or not, sorted by key) and the rule/action
-     * option keys the parser accepts. Mechanics are added by the host, which
-     * owns their registry.
-     */
-    public dev.materione.api.registry.BehaviorVocabulary vocabulary() {
-        var actions = new java.util.ArrayList<dev.materione.api.registry.BehaviorVocabulary.Action>();
-        executors.values().stream()
-                .sorted(java.util.Comparator.comparing(ActionExecutor::type))
-                .forEach(executor -> actions.add(new dev.materione.api.registry.BehaviorVocabulary.Action(
-                        executor.type(), executor.describe(), executor.shorthand(), !executor.syncSafe())));
-        return new dev.materione.api.registry.BehaviorVocabulary(
-                dev.materione.behavior.rule.EventTypes.describe(), actions,
-                dev.materione.behavior.rule.RuleParser.RULE_OPTIONS,
-                dev.materione.behavior.rule.RuleParser.ACTION_OPTIONS, java.util.List.of());
     }
 
     /**
@@ -87,7 +71,7 @@ public final class RuleEngine {
             if (!cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges())) {
                 continue;
             }
-            if (!conditionsMet(rule, event.context(), event)) {
+            if (!conditionsMet(rule, event.evaluation(), event)) {
                 continue;
             }
             runActions(rule.actions(), event);
@@ -109,30 +93,29 @@ public final class RuleEngine {
         return true;
     }
 
-    private void runActions(Iterable<ActionSpec> actions, BehaviorEvent event) {
-        for (ActionSpec action : actions) {
-            ActionExecutor executor = executors.get(action.type());
-            if (executor == null) {
-                reportFailure(event, "unknown action type '" + action.type() + "'");
-                continue;
-            }
+    private void runActions(List<BoundAction<?>> actions, BehaviorEvent event) {
+        for (BoundAction<?> action : actions) {
             if (action.chance() < 1.0
                     && java.util.concurrent.ThreadLocalRandom.current().nextDouble() >= action.chance()) {
                 continue;
             }
-            if (action.delayTicks() > 0 || !executor.syncSafe()) {
-                deferred.defer(event.anchor(), action.delayTicks(), () -> executeSafely(executor, action, event));
+            // M2 dispatch: a GLOBAL action leaves the event's thread (the old "must-defer"); the rest
+            // run where the event arrived, which is the player's own thread for player events
+            if (action.delayTicks() > 0 || action.threading() == Threading.GLOBAL) {
+                deferred.defer(event.anchor(), action.delayTicks(), () -> executeSafely(action, event));
             } else {
-                executeSafely(executor, action, event);
+                executeSafely(action, event);
             }
         }
     }
 
-    private void executeSafely(ActionExecutor executor, ActionSpec action, BehaviorEvent event) {
+    private void executeSafely(BoundAction<?> action, BehaviorEvent event) {
         try {
-            executor.execute(action, event);
+            if (action.execute(event.context()) instanceof ActionOutcome.Failed failed) {
+                reportFailure(event, "action '" + action.id() + "' failed: " + failed.reason());
+            }
         } catch (RuntimeException e) {
-            reportFailure(event, "action '" + action.type() + "' failed: " + e.getMessage());
+            reportFailure(event, "action '" + action.id() + "' failed: " + e.getMessage());
         }
     }
 
@@ -144,8 +127,8 @@ public final class RuleEngine {
         String base = rule.namedId().orElseGet(() -> rule.owner() + "#" + rule.on());
         RuleOptions options = rule.options();
         if (!RuleOptions.PER_GLOBAL.equals(options.scope())
-                && Expressions.truthy(event.context().resolve(java.util.List.of("player", "uuid")))) {
-            Object uuid = event.context().resolve(java.util.List.of("player", "uuid"));
+                && Expressions.truthy(event.evaluation().resolve(List.of("player", "uuid")))) {
+            Object uuid = event.evaluation().resolve(List.of("player", "uuid"));
             return base + "|" + Expressions.stringify(uuid);
         }
         return base;
@@ -164,7 +147,7 @@ public final class RuleEngine {
         }
         lastFailureLog.put(subject, now);
         diagnostics.accept(new Diagnostic(
-                dev.materione.api.diagnostics.DiagnosticCodes.ACTION_FAILED,
+                DiagnosticCodes.ACTION_FAILED,
                 Severity.WARN,
                 subject + ": " + problem,
                 null, null,

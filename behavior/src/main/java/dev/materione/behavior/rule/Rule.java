@@ -9,14 +9,15 @@ import java.util.Optional;
  * One loaded rule: {@code Rule = {id, on: EventSelector, if: [conditions],
  * do: [actions], opts}} (runtime-systems §2.1). Immutable and swapped
  * atomically with the shadow — an in-flight event always completes against
- * the snapshot it started with.
+ * the snapshot it started with. Its actions are already typed ({@link
+ * BoundAction}): parameters were parsed once, at load.
  */
 public record Rule(
         NamespacedId owner,
         String id,
         EventSelector on,
         List<ExprNode> conditions,
-        List<ActionSpec> actions,
+        List<BoundAction<?>> actions,
         RuleOptions options) {
 
     public Rule {

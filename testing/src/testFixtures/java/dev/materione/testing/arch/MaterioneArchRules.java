@@ -5,6 +5,7 @@ import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.lang.ArchRule;
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
 
 /**
  * The Materione boundary rules (plugin architecture §11) — "violations fail
@@ -178,6 +179,55 @@ public final class MaterioneArchRules {
                     "dev.materione.harness..",
                     "dev.materione.testing..")
             .allowEmptyShould(true);
+
+    /**
+     * R11 — one action, one class (logic.md §9 rule 2): classes in
+     * {@code dev.materione.plugin.logic.action..} do not depend on each other. An action shares
+     * nothing with its siblings, so it can be read, tested and replaced alone; shared helpers
+     * belong in the parent package, never in a sibling action. A class's own nested types (its
+     * parameter record) are part of it.
+     *
+     * <p>R10 of the same section (listeners are adapters) has no subjects until the GUI runtime
+     * lands its {@code plugin.gui..} packages, and arrives with them.
+     */
+    public static final ArchRule LOGIC_ACTIONS_ARE_INDEPENDENT =
+            actionsAreIndependentIn("dev.materione.plugin.logic.action");
+
+    /** R11 over any package (its planted-violation test points it at a fixture package). */
+    public static ArchRule actionsAreIndependentIn(String actionPackage) {
+        return ArchRuleDefinition.classes()
+                .that().resideInAPackage(actionPackage + "..")
+                .and(isNotTestClass())
+                .should(new com.tngtech.archunit.lang.ArchCondition<com.tngtech.archunit.core.domain.JavaClass>(
+                        "not depend on another action class") {
+                    @Override
+                    public void check(com.tngtech.archunit.core.domain.JavaClass action,
+                            com.tngtech.archunit.lang.ConditionEvents events) {
+                        var self = outermost(action);
+                        for (var dependency : action.getDirectDependenciesFromSelf()) {
+                            var target = dependency.getTargetClass();
+                            if (target.isArray()) {
+                                target = target.getBaseComponentType(); // an enum's values() array is its own
+                            }
+                            if (target.getPackageName().startsWith(actionPackage)
+                                    && !outermost(target).equals(self)) {
+                                events.add(com.tngtech.archunit.lang.SimpleConditionEvent.violated(action,
+                                        action.getName() + " depends on action class " + target.getName()));
+                            }
+                        }
+                    }
+                })
+                .allowEmptyShould(true);
+    }
+
+    private static com.tngtech.archunit.core.domain.JavaClass outermost(
+            com.tngtech.archunit.core.domain.JavaClass clazz) {
+        var current = clazz;
+        while (current.getEnclosingClass().isPresent()) {
+            current = current.getEnclosingClass().get();
+        }
+        return current;
+    }
 
     /** Product classes only: not a {@code *Test}, not nested inside one. */
     private static DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass> isNotTestClass() {

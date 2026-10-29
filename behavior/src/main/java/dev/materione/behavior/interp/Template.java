@@ -24,6 +24,18 @@ public final class Template {
 
     private Template() {}
 
+    /**
+     * Parses (and memoizes) {@code template} now, so a malformed {@code ${...}} is found when a
+     * rule loads rather than when it first runs.
+     *
+     * @throws IllegalArgumentException on an empty or unparsable {@code ${...}}
+     */
+    public static void validate(String template) {
+        if (template != null && !template.isEmpty()) {
+            CACHE.computeIfAbsent(template, Template::parse);
+        }
+    }
+
     /** Renders {@code template}, evaluating every {@code ${...}} against the context. */
     public static String render(String template, EvaluationContext context) {
         if (template == null || template.isEmpty()) {

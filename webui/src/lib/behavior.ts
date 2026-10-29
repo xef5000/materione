@@ -30,6 +30,72 @@ export interface BehaviorActionInfo extends Described {
   id: string;
   shorthand?: string;
   deferred?: boolean;
+  // Vocabulary v2 (logic.md §5.4), all additive: a plugin that predates it sends none of these.
+  /** Palette category id (`player`, `economy`, …); the node editor colours by it. */
+  category?: string;
+  /** The thread the action runs on: `player_region`, `global` or `any`. */
+  threading?: 'player_region' | 'global' | 'any';
+  /** False when the server cannot run it now (a provider is missing); `unavailableReason` says why. */
+  available?: boolean;
+  unavailableReason?: string;
+  registeredBy?: string;
+}
+
+/** A variable a trigger guarantees to its rules (`player.name`, `gui.args.*`). */
+export interface BehaviorContextVariable {
+  path: string;
+  type: string;
+  description: string;
+  /** Content types that fill it; empty when every host that fires the trigger does. */
+  hosts: string[];
+}
+
+/** Vocabulary v2: the richer form of an event. */
+export interface BehaviorTriggerInfo extends Described {
+  id: string;
+  details: string[];
+  firedBy: string[];
+  /** Extra rule keys this trigger accepts (`layer`, `click`, …). */
+  filters: TypeParam[];
+  context: BehaviorContextVariable[];
+  cancellable: boolean;
+  registeredBy: string;
+}
+
+/** Vocabulary v2: a registered predicate. */
+export interface BehaviorConditionInfo extends Described {
+  id: string;
+  category: string;
+  shorthand?: string;
+  available: boolean;
+  unavailableReason?: string;
+  registeredBy: string;
+}
+
+/** Vocabulary v2: an engine-owned step kind; `supported` is false until the server's engine runs it. */
+export interface BehaviorStepKindInfo {
+  id: string;
+  displayName: string;
+  description: string;
+  parameters: TypeParam[];
+  supported: boolean;
+}
+
+export interface BehaviorCategoryInfo {
+  id: string;
+  displayName: string;
+  builtIn: boolean;
+}
+
+/** Vocabulary v2: a function callable from expressions. */
+export interface BehaviorFunctionInfo extends Described {
+  id: string;
+  returns: string;
+  variadic: boolean;
+  minArguments: number;
+  /** -1 when unbounded. */
+  maxArguments: number;
+  registeredBy: string;
 }
 
 export interface MechanicInfo extends Described {
@@ -46,6 +112,16 @@ export interface BehaviorVocabulary {
   ruleOptions: TypeParam[];
   actionOptions: TypeParam[];
   mechanics: MechanicInfo[];
+  /**
+   * 2 when the plugin sends the sections below (logic.md §5.4); absent from a plugin that predates
+   * them. Every section is optional so the editor works against both.
+   */
+  version?: number;
+  triggers?: BehaviorTriggerInfo[];
+  conditions?: BehaviorConditionInfo[];
+  steps?: BehaviorStepKindInfo[];
+  categories?: BehaviorCategoryInfo[];
+  functions?: BehaviorFunctionInfo[];
 }
 
 export type Json = Record<string, unknown>;

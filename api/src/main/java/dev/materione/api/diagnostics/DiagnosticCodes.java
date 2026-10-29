@@ -257,6 +257,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode PERMISSION_DENIED =
             new DiagnosticCode("MTR-0055", Severity.ERROR, "Permission denied for this operation");
 
+    /**
+     * A logic step was skipped at load (logic.md §10): it names an action or condition that is not
+     * registered, or the registered type rejected its parameters while parsing. Only that step is
+     * skipped; its siblings and the rest of the rule still load.
+     */
+    public static final DiagnosticCode LOGIC_STEP_REJECTED =
+            new DiagnosticCode("MTR-0056", Severity.WARN, "Logic step rejected at load; skipped");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -312,7 +320,8 @@ public final class DiagnosticCodes {
             GUI_LAYER_SKIPPED,
             GUI_BACKGROUND_EXHAUSTED,
             GUI_SLOT_ITEM_UNRESOLVED,
-            PERMISSION_DENIED);
+            PERMISSION_DENIED,
+            LOGIC_STEP_REJECTED);
 
     private DiagnosticCodes() {}
 
