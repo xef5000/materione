@@ -18,8 +18,11 @@ import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.ModelTransaction;
 import dev.materione.core.document.ModelTransactionService;
 import dev.materione.core.document.Scaffolds;
+import dev.materione.core.pipeline.PackLayout;
 import dev.materione.core.pipeline.TemplateResolver;
 import dev.materione.core.pipeline.graph.ContentGraph;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -456,6 +459,10 @@ public final class AuthoringApiImpl implements AuthoringApi {
             // the author is looking at; items stay the default.
             String type = request.type() == null ? "items" : request.type();
             String path = documentPath(type, request.folder(), request.resourceId());
+            String existing = declaredElsewhere(request.pack(), type, path, request.resourceId());
+            if (existing != null) {
+                return duplicateRefused(request.resourceId(), existing);
+            }
             String scaffold = "templates".equals(type) && request.serves() != null
                     ? Scaffolds.templateFor(request.serves(), request.resourceId())
                     : Scaffolds.forPath(path, request.resourceId());
@@ -486,6 +493,10 @@ public final class AuthoringApiImpl implements AuthoringApi {
             String type = request.fromPath().contains("/")
                     ? request.fromPath().substring(0, request.fromPath().indexOf('/')) : "";
             String path = documentPath(type, request.folder(), request.resourceId());
+            String existing = declaredElsewhere(request.pack(), type, path, request.resourceId());
+            if (existing != null) {
+                return duplicateRefused(request.resourceId(), existing);
+            }
             String content = rekeyedCopy(request.pack(), request.fromPath(), request.resourceId());
             int revision = documents.createDocument(request.pack(), path, content, actorId(actor));
             audit.record(actorId(actor), "authoring.duplicateResource",
@@ -1214,6 +1225,40 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return new ApiResult<T>(false, null, List.of(new Diagnostic(
                 DiagnosticCodes.EDITOR_DOCUMENT_CONFLICT, Severity.WARN,
                 e.getMessage(), null, null, hint)));
+    }
+
+    /**
+     * The pack-relative path of a document that already declares {@code id} for this content
+     * directory, or null. It scans the documents the pipeline scans ({@link PackLayout}), so a
+     * refusal here and an MTR-0056 at parse time can never disagree about what is a duplicate.
+     */
+    private String declaredElsewhere(String pack, String contentDir, String path, String id) {
+        Path packDir = packsRoot.resolve(pack);
+        if (id == null || !Files.isDirectory(packDir)) {
+            return null;
+        }
+        if (Files.exists(documentFile(pack, path))) {
+            // the same file is the clash: the store refuses it as an existing document (MTR-0008)
+            return null;
+        }
+        for (Path file : PackLayout.contentDocuments(packDir, contentDir, failure -> { })) {
+            try {
+                var document = LosslessYaml.parse(Files.readString(file));
+                if (document.parseError().isEmpty() && document.data().get(id) instanceof Map<?, ?>) {
+                    return packDir.relativize(file).toString().replace('\\', '/');
+                }
+            } catch (IOException e) {
+                // unreadable: the pipeline reports it; not a duplicate this check can prove
+            }
+        }
+        return null;
+    }
+
+    private static <T> ApiResult<T> duplicateRefused(String id, String existing) {
+        return new ApiResult<T>(false, null, List.of(new Diagnostic(
+                DiagnosticCodes.DUPLICATE_RESOURCE_ID, Severity.ERROR,
+                "resource " + id + " is already declared in " + existing,
+                null, null, "open the existing resource, or choose a different id")));
     }
 
     private static <T> ApiResult<T> badRequest(String message) {

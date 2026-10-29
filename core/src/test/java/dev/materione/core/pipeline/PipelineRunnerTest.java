@@ -209,6 +209,48 @@ class PipelineRunnerTest {
         assertThat(runner.lastGraph().node(NamespacedId.parse("manifestless:thing"))).isEmpty();
     }
 
+    /**
+     * #194: two files in one pack declare one id. The first in path order owns it, the other is
+     * reported with MTR-0056 naming both files, and the result is the same whichever file was
+     * written first (the file system never decides the winner).
+     */
+    @Test
+    void duplicateIdAcrossFilesIsDiagnosedWithTheSameWinnerForEveryWriteOrder(@TempDir Path packsRoot)
+            throws IOException {
+        Path pack = packsRoot.resolve("dup");
+        Files.createDirectories(pack.resolve("items"));
+        Files.writeString(pack.resolve("pack.yml"), "id: dup\nversion: 1.0.0\nschema_version: 1\n");
+        // written later-path first, so creation order differs from path order
+        Files.writeString(pack.resolve("items/b.yml"), "shared:\n  material: DIAMOND_SWORD\n");
+        Files.writeString(pack.resolve("items/a.yml"), "shared:\n  material: IRON_SWORD\n");
+
+        assertThat(runner.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+
+        assertThat(quarantine.size()).isZero();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("dup:shared"), "item"))
+                .hasValueSatisfying(node -> assertThat(node.sourceFile())
+                        .endsWith(Path.of("items", "a.yml")));
+        Diagnostic finding = diagnostics.recent(256).stream()
+                .filter(d -> d.code() == DiagnosticCodes.DUPLICATE_RESOURCE_ID)
+                .findFirst()
+                .orElseThrow();
+        assertThat(finding.severity()).isEqualTo(dev.materione.api.diagnostics.Severity.WARN);
+        assertThat(finding.message()).isEqualTo("resource dup:shared (item) is declared in both"
+                + " items/a.yml and items/b.yml; items/a.yml is used and items/b.yml's declaration is ignored");
+
+        // a second pack, the same two files written in the opposite order, reaches the same winner
+        Path reversed = packsRoot.resolve("dup-reversed");
+        Files.createDirectories(reversed.resolve("items"));
+        Files.writeString(reversed.resolve("pack.yml"), "id: dup-reversed\nversion: 1.0.0\nschema_version: 1\n");
+        Files.writeString(reversed.resolve("items/a.yml"), "shared:\n  material: IRON_SWORD\n");
+        Files.writeString(reversed.resolve("items/b.yml"), "shared:\n  material: DIAMOND_SWORD\n");
+        var second = new PipelineRunner(new DiagnosticsBusService(256), new QuarantineTracker());
+        assertThat(second.request(new ReloadScope.Everything(), packsRoot).completed()).isTrue();
+        assertThat(second.lastGraph().node(NamespacedId.parse("dup-reversed:shared"), "item"))
+                .hasValueSatisfying(node -> assertThat(node.sourceFile())
+                        .endsWith(Path.of("items", "a.yml")));
+    }
+
     private long published(dev.materione.api.diagnostics.DiagnosticCode code) {
         return diagnostics.recent(256).stream().filter(d -> d.code() == code).count();
     }

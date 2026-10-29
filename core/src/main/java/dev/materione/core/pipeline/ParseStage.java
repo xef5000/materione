@@ -35,6 +35,13 @@ public final class ParseStage {
 
     private record CachedDocument(String sha256, LosslessYamlDocument document) {}
 
+    /**
+     * MTR-0056 findings per pack, from the last build of that pack. Kept beside the pack so a
+     * targeted run that rides an untouched pack over still reports its duplicates.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, List<Diagnostic>> duplicateFindings =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private static final java.util.function.Predicate<Path> ALL_FILES = file -> true;
 
     /**
@@ -45,6 +52,16 @@ public final class ParseStage {
             parse(context);
         } finally {
             publishParseFailures(context);
+            publishDuplicateFindings(context);
+        }
+    }
+
+    /** MTR-0056 for every pack in this run, including packs a targeted run rode over. */
+    private void publishDuplicateFindings(PipelineContext context) {
+        for (ContentPack pack : context.packs()) {
+            for (Diagnostic finding : duplicateFindings.getOrDefault(pack.id(), List.of())) {
+                context.diagnostics().publish(finding);
+            }
         }
     }
 
@@ -221,12 +238,26 @@ public final class ParseStage {
                     "no pack.yml in " + packId,
                     null, null, "create pack.yml with at least 'id: <pack-id>'"));
         }
+        // every document of the pack is parsed, not only the in-scope ones: a duplicate is
+        // resolved against the whole pack, so a targeted run reaches the same winner as a full run
         var resources = new ArrayList<ContentResource>();
         for (String dir : PackLayout.CONTENT_DIRS) {
-            parseDir(context, packDir, packId, dir, resources, include);
+            parseDir(context, packDir, packId, dir, resources);
+        }
+        DuplicateResources.Resolution duplicates = DuplicateResources.resolve(packDir, resources);
+        if (duplicates.diagnostics().isEmpty()) {
+            duplicateFindings.remove(packId);
+        } else {
+            duplicateFindings.put(packId, duplicates.diagnostics());
+        }
+        var kept = new ArrayList<ContentResource>();
+        for (ContentResource resource : duplicates.kept()) {
+            if (include.test(resource.sourceFile().toAbsolutePath().normalize())) {
+                kept.add(resource); // out of a targeted scope's reach — rides over from the previous run
+            }
         }
         indexAssets(context, packDir, packId);
-        return new ContentPack(packId, packDir, manifest, resources);
+        return new ContentPack(packId, packDir, manifest, kept);
     }
 
     /**
@@ -334,8 +365,7 @@ public final class ParseStage {
             (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 
     private void parseDir(
-            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out,
-            java.util.function.Predicate<Path> include) {
+            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
         Path dirPath = packDir.resolve(dir);
         String contentType = dir.endsWith("templates") ? "template" : dir.substring(0, dir.length() - 1);
         // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
@@ -346,9 +376,6 @@ public final class ParseStage {
                         "could not list " + dirPath + ": " + failure.getMessage(),
                         null, null, "check file permissions")));
         for (Path file : yamls) {
-            if (!include.test(file.toAbsolutePath().normalize())) {
-                continue; // out of a targeted scope's reach — rides over from the previous run
-            }
             var document = documentOf(context, file);
             if (document.parseError().isPresent()) {
                 continue;
