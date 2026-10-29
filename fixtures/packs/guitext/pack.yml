@@ -1,0 +1,9 @@
+# The guitext fixture pack (#198): a glyph and a GUI whose text uses both
+# offset fonts. The probe loop serves it next to the sample pack; the golden
+# does not include it. Its GUI fonts are styled by key and must never be
+# referenced from minecraft:default (gui.md §4, step 5).
+id: guitext
+version: 1.0.0
+schema_version: 1
+
+depends: []

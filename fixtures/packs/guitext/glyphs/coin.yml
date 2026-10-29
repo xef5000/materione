@@ -1,0 +1,4 @@
+coin:
+  texture: gui/coin
+  ascent: 8
+  height: 8

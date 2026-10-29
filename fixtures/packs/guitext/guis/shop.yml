@@ -1,0 +1,27 @@
+# A GUI with text layers only: one smallcaps heading and one default-font line.
+# Both runs are styled by their offset font keys, so neither font may join
+# minecraft:default (#198). The default run is last, as gui.md §4 requires.
+shop:
+  title: Shop
+  rows: 3
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "SHOP"
+      font: smallcaps
+      color: "#404040"
+    - id: hint
+      type: text
+      x: 8
+      y: 18
+      text: "Buy things"
+      font: default
+      color: "#404040"
