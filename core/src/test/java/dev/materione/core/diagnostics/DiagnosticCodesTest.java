@@ -21,6 +21,8 @@ class DiagnosticCodesTest {
                     .isTrue();
             assertThat(code.summary()).isNotBlank();
         }
-        assertThat(DiagnosticCodes.all()).hasSize(53); // MTR-0053: GUI background codepoint space exhausted.
+        // a deliberate pin: adding a code is an API change, so it moves this number on purpose
+        // (MTR-0054 GUI slot item not live, MTR-0055 permission denied: gui.md §5)
+        assertThat(DiagnosticCodes.all()).hasSize(55);
     }
 }

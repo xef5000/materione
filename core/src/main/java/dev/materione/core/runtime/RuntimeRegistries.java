@@ -80,6 +80,15 @@ public final class RuntimeRegistries {
             return this;
         }
 
+        /**
+         * The item registered so far under {@code id}. Owner modules that resolve references
+         * against the same shadow (GUI slots, gui.md §5) read through this, after every item
+         * of the apply is in.
+         */
+        public Optional<RuntimeItem> findItem(NamespacedId id) {
+            return Optional.ofNullable(items.get(id));
+        }
+
         public Builder recipe(RuntimeRecipe recipe) {
             recipes.put(recipe.id(), recipe);
             return this;

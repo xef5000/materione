@@ -36,18 +36,20 @@ import org.jetbrains.annotations.NotNull;
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS =
-            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor");
+            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor", "gui");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
     private final ContentBrowser browser;
     private final EditorCommands editorCommands;
+    private final GuiCommands guiCommands;
 
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
         this.devCommands = new DevCommands(plugin);
         this.browser = new ContentBrowser(plugin);
         this.editorCommands = new EditorCommands(plugin);
+        this.guiCommands = new GuiCommands(plugin);
     }
 
     @Override
@@ -135,8 +137,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
             }
             case "dev" -> devCommands.handle(sender, args);
             case "editor" -> editorCommands.handle(sender, args);
+            case "gui" -> guiCommands.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev|give|browser|editor>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browser|editor|gui>", NamedTextColor.RED));
         }
         return true;
     }
@@ -413,6 +416,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length >= 2 && "give".equals(args[0].toLowerCase())) {
             return completeGive(args);
+        }
+        if (args.length >= 2 && "gui".equals(args[0].toLowerCase())) {
+            return guiCommands.complete(args);
         }
         return List.of();
     }

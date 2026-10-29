@@ -61,6 +61,11 @@ val integrationTest by tasks.registering(Test::class) {
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
+    // Ports for the boots this run starts. The defaults are the CI pins (25599, 8089, 8090); a local run
+    // whose ports another server holds passes -Pharness.serverPort=… -Pharness.editorPort=… -Pharness.deliveryPort=…
+    for (port in listOf("harness.serverPort", "harness.editorPort", "harness.deliveryPort")) {
+        providers.gradleProperty(port).orNull?.let { systemProperty(port, it) }
+    }
     // The fixture corpus (grow-only, roadmap rule 2): sample packs boot on
     // real Paper with the plugin (M1 exit criterion).
     systemProperty(

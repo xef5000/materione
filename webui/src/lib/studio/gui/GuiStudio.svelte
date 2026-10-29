@@ -10,6 +10,7 @@
    */
   import ComponentPalette from './ComponentPalette.svelte';
   import GuiCanvas from './GuiCanvas.svelte';
+  import PreviewInGame from './PreviewInGame.svelte';
   import InspectorPanel from './InspectorPanel.svelte';
   import ImageChooser from './ImageChooser.svelte';
   import LayersPanel from './LayersPanel.svelte';
@@ -263,6 +264,7 @@
     <span class="status" class:dirty={anyDirty} class:readonly={studio.readOnly} data-status>{status}</span>
     <span class="spacer"></span>
     <button type="button" class="ghost" onclick={() => revealInAdvanced(resource)} title="open this resource in Files">Open in Files</button>
+    <PreviewInGame {resource} dirty={anyDirty} />
     <button type="button" class="save" disabled={!active || !studio.loaded || studio.readOnly || !anyDirty || studio.saving} onclick={save} title="Save (Ctrl+S)">
       <Icon name="save" size={14} /> {studio.saving ? 'Saving…' : 'Save'}
     </button>

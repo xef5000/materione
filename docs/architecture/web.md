@@ -349,6 +349,15 @@ assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
 
+*As built (M6 preview in game, #185):* `runtime.openGui` (`{id}`) opens the live GUI for the session's
+approved player, the player who opened the session in game. It answers `{queued}` (true while the
+window is still opening on that player's thread) or refuses with the api's diagnostic; a session with
+no owner (a console session) is refused with `MTR-0009`, never given a guessed player. `runtime.previewTarget`
+answers `{online, player?}` for that player, and the studio's "Preview in game" button reads it to
+say why it is disabled. Both are served from `api.runtime().gui()` (R9); the golden frames are
+`fixtures/protocol/editor-runtime-v1.json`, checked by `EditorRuntimeGoldenTest` (JVM) and
+`runtime-golden.spec.ts` (SPA).
+
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
 (`{pack, operations, dryRun}`, operations `set` / `create` / `duplicate`, ≤ 50) answer from

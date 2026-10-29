@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "file": "editor-runtime-v1.json",
+    "name": "materione editor runtime op frames",
+    "version": 1
+  },
+  "openGui": {
+    "noPlayer": {
+      "request": {
+        "id": "rt-open-3",
+        "op": "runtime.openGui",
+        "payload": {
+          "id": "demo:shop"
+        }
+      },
+      "response": {
+        "error": {
+          "code": "MTR-0009",
+          "hint": "open the editor in game with /materione editor, then preview from that session",
+          "message": "this editor session has no approved player to preview for"
+        },
+        "id": "rt-open-3",
+        "ok": false,
+        "op": "runtime.openGui"
+      }
+    },
+    "pending": {
+      "request": {
+        "id": "rt-open-1",
+        "op": "runtime.openGui",
+        "payload": {
+          "id": "demo:shop"
+        }
+      },
+      "response": {
+        "data": {
+          "queued": true
+        },
+        "id": "rt-open-1",
+        "ok": true,
+        "op": "runtime.openGui"
+      }
+    },
+    "refused": {
+      "request": {
+        "id": "rt-open-2",
+        "op": "runtime.openGui",
+        "payload": {
+          "id": "demo:shop"
+        }
+      },
+      "response": {
+        "error": {
+          "code": "MTR-0009",
+          "message": "GUI 'demo:shop' is not live: it is unknown, or its last compile quarantined it"
+        },
+        "id": "rt-open-2",
+        "ok": false,
+        "op": "runtime.openGui"
+      }
+    }
+  },
+  "previewTarget": {
+    "offline": {
+      "request": {
+        "id": "rt-target-2",
+        "op": "runtime.previewTarget",
+        "payload": {}
+      },
+      "response": {
+        "data": {
+          "online": false
+        },
+        "id": "rt-target-2",
+        "ok": true,
+        "op": "runtime.previewTarget"
+      }
+    },
+    "online": {
+      "request": {
+        "id": "rt-target-1",
+        "op": "runtime.previewTarget",
+        "payload": {}
+      },
+      "response": {
+        "data": {
+          "online": true,
+          "player": "Probe"
+        },
+        "id": "rt-target-1",
+        "ok": true,
+        "op": "runtime.previewTarget"
+      }
+    }
+  }
+}

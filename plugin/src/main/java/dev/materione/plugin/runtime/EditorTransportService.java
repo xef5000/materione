@@ -256,6 +256,9 @@ public final class EditorTransportService {
                 dispatcher, api.admin(), api.pipeline(), actorFor,
                 (actor, target) -> audit.record(actor, "pipeline.reload", target));
         dev.materione.web.rpc.ops.DeliveryOps.register(dispatcher, api.delivery(), actorFor);
+        // preview in game: the session's approved player is the one who opened it in game (gui.md §5)
+        dev.materione.web.rpc.ops.RuntimeOps.register(
+                dispatcher, api.runtime().gui(), actorFor, this::ownerUuidOfCurrentSession);
     }
 
     /** The session owner bound to the dispatching request, if any. */

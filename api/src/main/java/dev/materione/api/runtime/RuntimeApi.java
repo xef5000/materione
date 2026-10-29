@@ -58,6 +58,38 @@ public interface RuntimeApi {
 
     MediaRuntimeApi media();
 
+    /** Live GUI screens: the catalog and opening one for a player (gui.md §5). */
+    GuiRuntimeApi gui();
+
+    // ------------------------------------------------------------------
+
+    /**
+     * GUI screens (gui.md §5). The catalog reads the last successful apply's compiled GUIs;
+     * opening one hops onto the viewer's region thread and fails soft when the GUI is not
+     * live (unknown, or quarantined by its last compile) or the player is offline.
+     */
+    interface GuiRuntimeApi {
+
+        /** Every live GUI, in registry order. */
+        List<GuiView> guis();
+
+        Optional<GuiView> gui(NamespacedId id);
+
+        /**
+         * Opens a live GUI for one online player, replacing whatever container the player has
+         * open. Every click inside the GUI is cancelled in v1 (gui.md §5). Requires the
+         * {@code materione.gui.open} node. The future completes when the window is open (or
+         * immediately, with the reason, when the request is refused); it never blocks the caller.
+         */
+        CompletableFuture<ApiResult<Void>> open(ActorContext actor, NamespacedId guiId, UUID targetPlayer);
+
+        /** The online player's name, or empty when that player is offline. */
+        Optional<String> onlineName(UUID player);
+    }
+
+    /** One live GUI: its id, chest rows, plain title and how many slots it fills. */
+    record GuiView(NamespacedId id, int rows, String accessibleTitle, int filledSlots) {}
+
     // ------------------------------------------------------------------
 
     /** Item stack operations. */

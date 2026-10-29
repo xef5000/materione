@@ -225,6 +225,13 @@ Exposes live, shadow-swapped content definitions and world interactions (current
   - `formatText(String miniMessageWithGlyphsAndEffects)` — resolves `<glyph:...>` and `<effect:...>` tags into Adventure `Component`.
   - `playSound(ActorContext, UUID player, String soundKey, float volume, float pitch)`
   - `placePainting(ActorContext, UUID player, NamespacedId variantId)`
+- **GUI screens (`GuiRuntimeApi`, gui.md §5, as built in #185):**
+  - `guis()` / `gui(NamespacedId)` — the live catalog: `GuiView(id, rows, accessibleTitle, filledSlots)`
+  - `open(ActorContext, NamespacedId guiId, UUID targetPlayer)` — opens a live GUI for an online player
+    (node `materione.gui.open`); a refusal completes at once with its diagnostic (`MTR-0055` for the
+    node, `MTR-0009` for an offline player or a GUI that is not live), and an open that is still
+    scheduling completes when the window is up, never blocking the caller
+  - `onlineName(UUID)` — the player's name when online, empty otherwise (the editor's preview state)
 
 ### 3.8 `AdminApi` (`dev.materione.api.admin`)
 

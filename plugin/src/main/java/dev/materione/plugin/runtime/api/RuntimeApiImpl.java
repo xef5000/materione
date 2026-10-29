@@ -16,6 +16,7 @@ import dev.materione.core.runtime.RuntimeFurnitures;
 import dev.materione.core.runtime.RuntimeGlyphs;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRegistries;
+import dev.materione.plugin.gui.GuiRuntime;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.items.ItemIdResolver;
 import dev.materione.plugin.runtime.PipelineService;
@@ -51,6 +52,7 @@ public final class RuntimeApiImpl implements RuntimeApi {
     private final PipelineService pipeline;
     private final java.util.function.Supplier<CustomBlockService> customBlocks;
     private final java.util.function.Supplier<FurnitureService> furniture;
+    private final GuiRuntime guis;
 
     /**
      * The block/furniture services arrive as suppliers: they are wired in a
@@ -64,11 +66,28 @@ public final class RuntimeApiImpl implements RuntimeApi {
             PipelineService pipeline,
             java.util.function.Supplier<CustomBlockService> customBlocks,
             java.util.function.Supplier<FurnitureService> furniture) {
+        this(plugin, scheduling, pipeline, customBlocks, furniture,
+                new GuiRuntime(plugin, scheduling,
+                        () -> pipeline == null ? null : pipeline.runtime().registries()));
+    }
+
+    /**
+     * As above, with the GUI runtime the host also hooks to the live swap (gui.md §5): the
+     * same instance must serve the api and the refresh, so the host builds it.
+     */
+    public RuntimeApiImpl(
+            Plugin plugin,
+            SchedulingGateway scheduling,
+            PipelineService pipeline,
+            java.util.function.Supplier<CustomBlockService> customBlocks,
+            java.util.function.Supplier<FurnitureService> furniture,
+            GuiRuntime guis) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.pipeline = pipeline;
         this.customBlocks = customBlocks;
         this.furniture = furniture;
+        this.guis = java.util.Objects.requireNonNull(guis, "guis");
     }
 
     private CustomBlockService blockService() {
@@ -214,6 +233,11 @@ public final class RuntimeApiImpl implements RuntimeApi {
     @Override
     public MediaRuntimeApi media() {
         return new MediaOps();
+    }
+
+    @Override
+    public GuiRuntimeApi gui() {
+        return guis;
     }
 
     // --- item operations ----------------------------------------------------

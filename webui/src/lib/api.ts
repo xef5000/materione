@@ -368,6 +368,13 @@ export const ops = {
    */
   bulk: (c: EditorChannel, pack: string, operations: unknown[], dryRun: boolean) =>
     c.call('authoring.bulk', { pack, operations, dryRun }),
+  /**
+   * Opens the live GUI in front of the session's approved player (gui.md §5, §7). `queued` is true
+   * while the window is still opening on that player's thread; a refusal arrives as an RpcError.
+   */
+  openGui: (c: EditorChannel, id: string) => c.call('runtime.openGui', { id }),
+  /** Whether the session's approved player is online, and their name. */
+  previewTarget: (c: EditorChannel) => c.call('runtime.previewTarget'),
 };
 
 export const assetOps = {

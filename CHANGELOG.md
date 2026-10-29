@@ -33,6 +33,15 @@ releases may change file formats, settings and the public API.
   being discovered in game. Item layers snap to container slots only, pick from Materione items and
   vanilla materials with their icons, and **Customize** creates an ordinary item under
   `items/gui/<gui-path>/` and opens its appearance inline, in one authoring transaction.
+- **GUI runtime: open, live refresh and preview in game (gui.md §5, §7).** A compiled GUI now opens
+  as a real container window with its title and its items, through the same item factory `give`
+  uses. `/materione gui open <id> [player]` (permission `materione.gui.open`) opens one for a player.
+  When you save a GUI in the editor, every player who has it open sees the change at once: the items
+  update in place, and a new title or size re-opens the window with the cursor item kept in hand. A
+  GUI that stops compiling closes for its viewers with a note. Every click inside a GUI is cancelled;
+  your own inventory keeps working. The studio gets a "Preview in game" button, enabled while the
+  player who opened the editor in game is online. A slot that names an item that is not live is
+  reported as `MTR-0054` and left empty; a permission refusal is `MTR-0055`.
 - **GUI compiler: raster, background glyph and title (gui.md §4).** A GUI now compiles into pack
   output: its visible raster layers flatten bottom to top onto one canvas (the shared vectors
   pin the integer pixel rules), the canvas becomes a background glyph in the GUI font, and the
