@@ -3,6 +3,7 @@ package dev.materione.core.authoring;
 import dev.materione.api.ApiResult;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.auth.ActorContext;
+import dev.materione.api.gui.GuiAuthoringApi;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -29,6 +30,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
@@ -57,6 +59,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private final Supplier<ContentGraph> graph;
     private final ReloadHook reloadHook;
     private final ResourceSummaryComputer summaryComputer;
+    private final Function<AuthoringApi, GuiAuthoringApi> guiFactory;
+    private volatile GuiAuthoringApi guiApi;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
 
     public AuthoringApiImpl(
@@ -82,7 +86,27 @@ public final class AuthoringApiImpl implements AuthoringApi {
             AssetStore assets,
             Supplier<List<ContentType>> contentTypes) {
         this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
-                assets, contentTypes, ResourceSummaryComputer.DEFAULT_PROJECTION_BUDGET_BYTES);
+                assets, contentTypes, null);
+    }
+
+    /**
+     * @param gui builds the GUI surface over this implementation (gui.md §10 #8); the
+     *            content module supplies it, and a null factory reports the surface as
+     *            unavailable. Built on first use, so it may reference this instance.
+     */
+    public AuthoringApiImpl(
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ModelTransactionService modelTransactions,
+            DocumentMetadataComputer computedMeta,
+            Supplier<ContentGraph> graph,
+            ReloadHook reloadHook,
+            AssetStore assets,
+            Supplier<List<ContentType>> contentTypes,
+            Function<AuthoringApi, GuiAuthoringApi> gui) {
+        this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
+                assets, contentTypes, ResourceSummaryComputer.DEFAULT_PROJECTION_BUDGET_BYTES, gui);
     }
 
     AuthoringApiImpl(
@@ -96,6 +120,22 @@ public final class AuthoringApiImpl implements AuthoringApi {
             AssetStore assets,
             Supplier<List<ContentType>> contentTypes,
             long summaryProjectionBudgetBytes) {
+        this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
+                assets, contentTypes, summaryProjectionBudgetBytes, null);
+    }
+
+    AuthoringApiImpl(
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ModelTransactionService modelTransactions,
+            DocumentMetadataComputer computedMeta,
+            Supplier<ContentGraph> graph,
+            ReloadHook reloadHook,
+            AssetStore assets,
+            Supplier<List<ContentType>> contentTypes,
+            long summaryProjectionBudgetBytes,
+            Function<AuthoringApi, GuiAuthoringApi> gui) {
         this.documents = Objects.requireNonNull(documents, "documents");
         this.audit = Objects.requireNonNull(audit, "audit");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
@@ -110,6 +150,23 @@ public final class AuthoringApiImpl implements AuthoringApi {
             summaryComputer.invalidate();
             downstream.afterChange(actor, pack, file);
         };
+        this.guiFactory = gui;
+    }
+
+    @Override
+    public GuiAuthoringApi gui() {
+        GuiAuthoringApi current = guiApi;
+        if (current == null) {
+            synchronized (this) {
+                current = guiApi;
+                if (current == null) {
+                    current = guiFactory == null
+                            ? new UnavailableGuiAuthoring() : guiFactory.apply(this);
+                    guiApi = current;
+                }
+            }
+        }
+        return current;
     }
 
     // ------------------------------------------------------------------

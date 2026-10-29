@@ -2,6 +2,7 @@ package dev.materione.pack.allocation;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.content.AllocatedRange;
+import dev.materione.api.content.Allocations;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -146,6 +147,55 @@ public final class AllocationTable {
     public synchronized Optional<String> allocationOf(NamespacedId resource, String kind) {
         Entry entry = live.get(key(resource, kind));
         return Optional.ofNullable(entry).map(Entry::value);
+    }
+
+    /**
+     * A non-persisting view for previews (gui.md §10 #8): it answers what
+     * {@link #allocate} and {@link #range} would answer, with the same values,
+     * but binds nothing, counts nothing and writes nothing. A draft compiled
+     * through it leaves the durable table exactly as it was.
+     */
+    public Allocations preview() {
+        return new Allocations() {
+            @Override
+            public String allocate(NamespacedId resource, String kind) {
+                synchronized (AllocationTable.this) {
+                    String key = key(resource, kind);
+                    Entry liveEntry = live.get(key);
+                    if (liveEntry != null) {
+                        return liveEntry.value();
+                    }
+                    Entry tombstoned = tombstones.get(key);
+                    if (tombstoned != null) {
+                        return tombstoned.value();
+                    }
+                    return Integer.toString(counters.getOrDefault(kind, 0) + 1);
+                }
+            }
+
+            @Override
+            public AllocatedRange range(NamespacedId resource, String kind, int count) {
+                if (count < 1) {
+                    throw new IllegalArgumentException("range count must be >= 1: " + count);
+                }
+                synchronized (AllocationTable.this) {
+                    String key = key(resource, kind);
+                    Entry existing = live.get(key);
+                    if (existing == null) {
+                        existing = tombstones.get(key);
+                    }
+                    if (existing != null && AllocatedRange.parse(existing.value()).count() >= count) {
+                        return AllocatedRange.parse(existing.value());
+                    }
+                    return new AllocatedRange(counters.getOrDefault(kind, 0) + 1, count);
+                }
+            }
+
+            @Override
+            public Optional<String> lookup(NamespacedId resource, String kind) {
+                return allocationOf(resource, kind);
+            }
+        };
     }
 
     /** Records a removal as a tombstone; the value stays bound to its id. */

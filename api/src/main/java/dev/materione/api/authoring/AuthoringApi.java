@@ -180,6 +180,13 @@ public interface AuthoringApi {
      */
     AutoCloseable subscribeChanges(Consumer<DocumentChangeEvent> listener);
 
+    /**
+     * The GUI builder's typed surface (gui.md §7, §10): layer edits, item
+     * customization, render preview and validation, built on this API's own
+     * transactions (api.md §3.9).
+     */
+    dev.materione.api.gui.GuiAuthoringApi gui();
+
     // ------------------------------------------------------------------
 
     /** One pack directory under {@code content/packs/}. */

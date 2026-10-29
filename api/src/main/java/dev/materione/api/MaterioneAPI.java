@@ -45,6 +45,11 @@ public interface MaterioneAPI {
         throw new IllegalStateException("MaterioneAPI sub-api 'mechanics' is not wired yet");
     }
 
+    /** Register GUI layer kinds (addon components) without depending on implementation modules (gui.md §10 #7). */
+    default dev.materione.api.gui.GuiComponentsApi guiComponents() {
+        throw new IllegalStateException("MaterioneAPI sub-api 'guiComponents' is not wired yet");
+    }
+
     /** Content & document authoring on canonical files (D1, master §5.6). */
     AuthoringApi authoring();
 
