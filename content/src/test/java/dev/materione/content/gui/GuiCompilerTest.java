@@ -113,16 +113,27 @@ class GuiCompilerTest {
     }
 
     @Test
-    void aDefaultRunLeavesTheNextRunUnplaceableAndSaysWhy() {
+    void aSmallcapsRunFollowsADefaultRunAtTheDefaultRunsMeasuredAdvance() {
+        // gui.md section 9.4: the vanilla ASCII widths make a default run's end known, so text may follow it
         var layers = GuiTestSupport.definition(1,
                 GuiTestSupport.layer("plain", "text", "text", "Hi", "x", 8, "y", 6, "font", "default"),
                 GuiTestSupport.layer("after", "text", "text", "Yo", "x", 40, "y", 6));
         var compiled = compile(layers, FIRST_BACKGROUND, TextureSource.NONE);
-        assertThat(compiled.model().title()).contains("Hi</font>").doesNotContain("Yo");
-        assertThat(compiled.diagnostics()).singleElement().satisfies(diagnostic -> {
-            assertThat(diagnostic.code()).isEqualTo(DiagnosticCodes.GUI_LAYER_SKIPPED);
-            assertThat(diagnostic.message()).contains("'after'").contains("default-font run");
-        });
+        int hi = VanillaAscii.measure("Hi");
+        assertThat(compiled.diagnostics()).isEmpty();
+        assertThat(compiled.model().title())
+                .contains("Hi</font><shift:" + (32 - hi) + "><font:shop:gui/smallcaps_y6>");
+    }
+
+    @Test
+    void aDefaultRunFollowsADefaultRunAtTheMeasuredAdvance() {
+        var layers = GuiTestSupport.definition(1,
+                GuiTestSupport.layer("first", "text", "text", "Hi", "x", 8, "y", 6, "font", "default"),
+                GuiTestSupport.layer("second", "text", "text", "Yo", "x", 40, "y", 6, "font", "default"));
+        var compiled = compile(layers, FIRST_BACKGROUND, TextureSource.NONE);
+        assertThat(compiled.diagnostics()).isEmpty();
+        assertThat(compiled.model().title())
+                .contains("<shift:" + (32 - VanillaAscii.measure("Hi")) + "><font:shop:gui/default_y6>");
     }
 
     @Test

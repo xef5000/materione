@@ -38,7 +38,7 @@ export function colorOf(layer: GuiLayer): Argb {
   return (typeof layer.color === 'string' ? parseColor(layer.color) : null) ?? DEFAULT_TEXT_COLOR;
 }
 
-/** The advance of the layer's text in its font (smallcaps exact, default approximate). */
+/** The advance of the layer's text in its font: both exact, from the font's own pixels or the vanilla table. */
 export function advanceOf(text: string, font: TextFont): number {
   return font === 'smallcaps' ? smallcaps.measure(text) : measureDefault(text);
 }
