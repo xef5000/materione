@@ -246,16 +246,19 @@ origin; alpha 0 is always stored as `0x00000000`; colors are `#RRGGBB` or `#AARR
 vanilla defaults (`slots` use `#8B8B8B` / `#FFFFFF` / `#373737`). Changing a rule means amending
 that README, `generate-vectors.mjs` and both implementations together.
 
-**Fonts for text layers.** `smallcaps` is a first-party bitmap font authored in this repo
-(original artwork — no Mojang or incumbent glyphs), shipped in the pack, previewed in the
-studio from the same PNG, so text preview is pixel-exact. In #184 it is a **placeholder**: a
-3 × 5 pixel table drawn in code (`SmallcapsFont`), printable ASCII, lowercase drawn with the
-capital shapes, emitted as a grayscale sheet so the client tints it with the text colour. Its
-width table is the client's rule applied to the same pixels, so it cannot drift from the
-artwork; the research issue (#188) replaces the table and nothing else. `default` uses the
-client's own font: offset providers reference the vanilla bitmap textures by resource location
-(nothing redistributed); the studio preview of `default` is approximate and says so. Non-ASCII
-in `default` is a documented v1 limitation.
+**Fonts for text layers.** `smallcaps` is the first-party title font (release artwork, #188):
+original pixel art drawn for this repository, in one text file, `fonts/smallcaps/smallcaps.txt`.
+The Java compiler (`SmallcapsFont`) and the studio both read that file, so the studio preview is
+the compiled sheet. Capitals are 6 px tall, lowercase is a 5 px small capital on the same baseline,
+one row below the baseline holds descenders, and a space advances 3 px. Each advance is the
+client's bitmap rule applied to the glyph's own pixels; the table is pinned by
+`fixtures/gui/smallcaps/advances.txt`, which both implementations test. The sheet is **RGBA**
+(opaque white ink, transparent background): the client tints the ink with the text colour, and a
+grayscale sheet loads as black cells (§9.5). Licence and metrics: `fonts/smallcaps/README.md`.
+`default` uses the client's own font: offset providers reference the vanilla bitmap textures by
+resource location (nothing redistributed); the studio preview of `default` is approximate and
+says so. Non-ASCII in `default` is a documented v1 limitation, and `default` text is restricted to
+its last run until its advances ship (§9.4).
 
 ---
 
@@ -369,15 +372,149 @@ on the server and in the demo. `authoring.describe` carries `guiComponents` next
 | Hopper/dispenser/anvil containers | `container:` field; canvas size per container |
 | Animated layers | frame cycling from issue #9 |
 
-## 9. Open questions (verify, then record the answer here)
+## 9. Open questions — answered (#188)
 
-1. **Draw order of title vs slot items** on 1.21.4 and 26.x (the 1.21.6 GUI render
-   refactor may differ). Verify with the probe loop (`docs/probe.md`) before claiming the
-   target order in the studio.
-2. **The vanilla "Inventory" label** draws over the background. Options: leave it, or an
-   opt-in pack-level lang override (global effect — must be a visible owner choice).
-3. **Maximum background bitmap size** per client version (font provider limits) and whether
-   tall canvases need splitting into several glyphs.
+Each answer states what was verified and how: client bytecode (the 26.1.2 client jar, read with
+`javap`; method names are given) or a probe run (`docs/probe.md`: the 26.1.2 client joined to the
+pinned Paper 26.1.2 server). **There is no 1.21.4 evidence yet.** This machine has no 1.21.4
+client jar, and the probe loop runs 26.x only, so every 1.21.4 statement here is *unverified*.
+
+### 9.1 Draw order of title vs slot items (26.1.2)
+
+Verified order, bottom to top:
+
+| # | Element | Submitted by (client method) |
+|---|---|---|
+| 1 | Screen background, panorama | `Screen.extractRenderStateWithTooltipAndSubtitles`, stratum 1 |
+| 2 | Vanilla chest texture | `ContainerScreen.extractBackground`, stratum 1 |
+| 3 | Title: the compiled background glyph and every text run | `AbstractContainerScreen.extractLabels`, first element of stratum 2 |
+| 4 | Inventory label (`container.inventory`) | `extractLabels`, second text |
+| 5 | Hovered slot, back highlight | `extractSlotHighlightBack` |
+| 6 | Slot items and their count text | `extractSlots` → `extractSlot` |
+| 7 | Hovered slot, front highlight | `extractSlotHighlightFront` |
+| 8 | Carried item and snapback | `extractCarriedItem`, `extractSnapbackItem` |
+| 9 | Tooltip | `extractTooltip`, deferred elements (last) |
+
+*Mechanism* (`GuiRenderState`, `GuiRenderer`). Each element goes into a node. An element whose
+bounds intersect an earlier element is placed in a node above it, so overlapping elements draw in
+submission order. The title's bounds are the union of its glyph quads
+(`Font$PreparedTextBuilder.markSize`), so the 176 × 222 background glyph makes the title span the
+whole canvas and every slot lands above it. Within one node, element blits (item atlas,
+highlights) draw before glyph quads (`GuiRenderState`, `lambda$forEachElement$0`). That is the one
+way the background could cover an item: an item that does not intersect the title's bounds, placed
+in the title's node. The compiled background always spans the canvas, so the design holds.
+
+*Evidence.* A compiled 6-row GUI (`fixtures/gui/shop.yml` and its textures, in a scratch pack)
+with a client-side chest whose title is the compiled background glyph: the four items draw over
+the background art, the carried item draws over it, and the count text draws over its item. The
+hover highlight and the tooltip are not captured (the bridge cannot steer the mouse); their order
+comes from the bytecode above.
+
+*Decision.* The studio's target order (`TARGET_RANK`: raster, text, slot items) is the client's
+order on 26.1.2. Title-under-items holds with no design change. Text runs draw above the
+background and below the items, as designed. **Invariant to keep:** a title carries a full-canvas
+background glyph; a future title without one must show that its bounds cover every slot it places
+items on.
+
+*1.21.4 (unverified).* The 1.21.6+ render-state model above is what 26.x uses. The 1.21.4
+`AbstractContainerScreen.render` calls the background, labels and slots in the same sequence, and
+its batched text and item draws are expected to match. Confirm with the 1.21.4 client jar (§9.7).
+
+### 9.2 The vanilla "Inventory" label
+
+*Fact.* `AbstractContainerScreen` sets `playerInventoryTitle` from `Inventory.getDisplayName()`,
+which is the translatable `container.inventory` (en_us `Inventory`). It draws at
+`(inventoryLabelX, inventoryLabelY) = (8, imageHeight − 94)`: y = 128 on a 6-row chest, 38 on a
+1-row one. It draws in `extractLabels` after the title, colour `0xFF404040`, without shadow. Title
+and label both draw above the background, so no background can cover the label. The probe shows
+it over the compiled background at GUI y 128.
+
+| Option | Effect | Scope |
+|---|---|---|
+| Leave it (vanilla) | designers keep that area clear; the studio shows the label as a ghost | per screen, no config |
+| Pack language override of `container.inventory` | language keys merge per file, so one key can be overridden; every vanilla container's player-inventory label changes, in every locale the pack ships | global, per pack |
+| Per-screen override | no client hook: the label is the `Inventory` object's name, not the menu title | not possible without a client mod |
+
+*Decision (v1): leave it.* The studio (#187) draws the ghost label at `(8, imageHeight − 94)` so
+designers avoid that area; the compiler does not reserve it. The language override is an explicit
+owner choice with a global effect, never something a GUI does silently.
+
+### 9.3 Background bitmap size
+
+*Fact (bytecode).* Glyphs are packed into a `FontTexture` atlas of `SIZE = 256` (× 256).
+`FontTexture$Node.insert` refuses a glyph wider or taller than 256, and `GlyphStitcher.stitch`
+then returns no glyph (it tries each atlas, then a new one). The codepoint renders as the
+missing-glyph box, as the probe shows; the compiler reports nothing.
+
+*Measured (probe, four solid test bitmaps).* 32 × 256 renders; 32 × 257 shows the missing-glyph
+box; 256 × 16 renders; 257 × 16 shows the missing-glyph box. The limit is per glyph, in both
+dimensions, measured on the native image size (not the scaled `height`).
+
+*Consequence.* A canvas is `176 × (114 + 18·rows)`, so the largest chest (6 rows, 176 × 222) fits.
+**No split is needed for v1.** A future canvas over 256 px in either dimension needs bands of at
+most 256 px, each a glyph in its own font `<ns>:gui/band<k>` with `ascent = 13 − t` (t is the band's
+top row; a negative ascent is valid, and `ascent ≤ height` holds), with the title shifting between
+bands under the same pen rules. Not built. Until bands exist, the compiler should refuse a canvas
+over 256 px with a diagnostic (owner to confirm the code and the wording).
+
+*1.21.4 (unverified).* The 256-px atlas is expected, not read from 1.21.4 bytecode.
+
+### 9.4 Default-font advance widths
+
+*Facts (26.1.2 and 26.2 client jars).* `assets/minecraft/textures/font/ascii.png` is byte-identical
+in both versions, and its 95 printable advances (ink width + 1; space 4) are identical in both.
+Histogram of the 95: 2 px × 8, 3 × 2, 4 × 11, 5 × 4, 6 × 68, 7 × 2.
+
+*Answer.* The advances are measurements of ink extent, not expressive content. A table of 95
+integers is a metric table of the same kind as a font's `hmtx`, and it contains no artwork. It can
+ship as numeric data, with its provenance beside it, versioned by the client version it was
+measured from, and under a golden test. It must not carry the texture.
+
+*Decision (owner, 2026-10-29): ship it.* The owner approved shipping the 95 vanilla ASCII advances
+as a numeric table, versioned by the client version it was measured from, under a golden test. The
+texture is never shipped. Two earlier blockers are resolved: a server pack's `default.json` merges
+with vanilla's, so vanilla ASCII renders and its widths matter (§9.6); and the owner has signed off
+on deriving the numbers from the Mojang asset. #188 records the decision and does not implement
+it. The implementation is the follow-up issue the owner files. When it lands, lift the "last
+default-font run only" restriction for printable ASCII.
+
+### 9.5 Smallcaps sheet format (a defect, fixed in #188)
+
+The placeholder sheet was **grayscale**, with no alpha. On 26.1.2 the client loads it as an opaque
+colour texture: every glyph cell is an opaque black box, and the text colour tints only the ink
+(probe: the heading and the alphabet sit on black cells). The fix is an **RGBA** sheet with opaque
+white ink and a transparent background, the convention of the vanilla `ascii.png`. The client
+tints the white ink with the text colour, and the background stays clear. This supersedes the
+grayscale rule of §10 (#184, item 12).
+
+### 9.6 Default-font membership: merge, not replace (settled by #201)
+
+The first draft of this answer said a pack's `default.json` replaces the vanilla file, so vanilla's
+ASCII providers were dropped. **That was wrong, and #201 settled the question as merge.**
+
+- *Bytecode (26.1.2, verified in #188).* `FontManager.prepare` calls
+  `FileToIdConverter.listMatchingResourceStacks`, and `FontManager.loadResourceStack` parses every
+  pack's copy of the font file. Providers from every pack join the font, so a server pack's
+  `default.json` adds to vanilla's `minecraft:include/space`, `include/default` and
+  `include/unifont`.
+- *Probe (#201).* A `default.json` referencing only the shift font and two glyph fonts leaves the
+  survival inventory's "Crafting" label, toasts and chat rendering as vanilla. I did not re-run
+  this probe for the rebase.
+- *What my probe showed.* The black-and-purple glyphs on unstyled text came from the grayscale GUI
+  smallcaps sheet that my scratch pack's `default.json` referenced. That sheet maps all printable
+  ASCII, so it covered vanilla's ASCII providers with opaque black cells (§9.5). The explanation fits
+  every observation. Since #201, GUI fonts never join `minecraft:default` (`STYLED_ONLY`, §4 and
+  the #198 decisions in §10), so this path cannot recur.
+
+So the pack compiler needs no change for the default font. The vanilla includes are not prepended,
+because merging makes them unnecessary.
+
+### 9.7 Gaps this machine cannot close
+
+- **1.21.4:** no 1.21.4 client jar is installed, and the probe loop runs 26.x only. Getting the
+  vanilla 1.21.4 client means a download the repo does not pin. Needed for §9.1 and §9.3 on the
+  floor version.
+- **26.2:** only the texture and the advances were compared (byte-identical). No probe run.
 
 ## 10. Decisions taken in #183 (content type and component SPI)
 
@@ -483,3 +620,28 @@ vanilla labels, toasts) with GUI glyphs. Each decision is reversible by the owne
    default run) is served by the probe. `PackCompilerTest.guiTextNeverJoinsTheDefaultFont` pins the
    glyph reference, asserts that no GUI font is referenced, and checks the offset fonts are still
    written. The sample golden is unchanged because the sample pack has no GUI.
+
+### Decisions taken in #188 (research: draw order, bitmap limits, smallcaps)
+
+These answer §9. Each one is reversible by the owner.
+
+1. **The smallcaps source is one text file.** `fonts/smallcaps/smallcaps.txt` holds the artwork.
+   `SmallcapsFont` loads it from the classpath (the content build copies `fonts/`), and the studio
+   parses the same file. Advances are derived from the pixels, never stored, and
+   `fixtures/gui/smallcaps/advances.txt` pins them for both sides (`SmallcapsFontTest`,
+   `webui/test/gui-font.spec.ts`). The #184 in-code table is gone.
+2. **The sheet is RGBA** (opaque white ink, transparent background). This supersedes the grayscale
+   rule of item 12 above; the grayscale sheet rendered as black cells on 26.1.2 (§9.5).
+3. **Lowercase is a small capital (5 px), capitals are 6 px, space is 3 px.** The #184 placeholder
+   drew lowercase with capital shapes and used a 4 px space. The golden `shop-compiled.txt` changes
+   for the space advance and the sheet hash only; the background golden is unchanged.
+4. **The target order stays title-under-items** (§9.1): raster, title text, slot items, highlights,
+   carried item, tooltip. The title's background glyph must keep its bounds over every slot.
+5. **The Inventory label is left alone in v1** (§9.2). The studio draws it as a ghost (#187). A
+   pack language override of `container.inventory` stays an owner choice.
+6. **No bitmap split in v1** (§9.3). A background is at most 176 × 222, under the 256-px glyph
+   atlas. A canvas over 256 px is a diagnostic until bands exist.
+7. **Vanilla ASCII advances ship as a numeric table (owner decision, §9.4).** The table is recorded
+   here and implemented by the follow-up issue the owner files; #188 implements none of it. The
+   default-font "defect" of the first draft was wrong: a pack's `default.json` merges with vanilla's
+   (§9.6, #201), so no fix is needed.

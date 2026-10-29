@@ -25,10 +25,12 @@ releases may change file formats, settings and the public API.
   output: its visible raster layers flatten bottom to top onto one canvas (the shared vectors
   pin the integer pixel rules), the canvas becomes a background glyph in the GUI font, and the
   title is assembled around it with shift tags and offset fonts. Text runs, slot items and the
-  runtime model (`CompiledGui`) come from the same pure function the pack uses. `smallcaps` is a
-  placeholder font until #188; `default` references the vanilla ASCII texture. A layer that cannot
-  be drawn (a missing texture, text the fonts cannot draw) is skipped with `MTR-0052`; a GUI whose
-  background codepoint block is used up is quarantined with `MTR-0053`.
+  runtime model (`CompiledGui`) come from the same pure function the pack uses. `smallcaps` is the
+  first-party title font (#188): original pixel art in `fonts/smallcaps/smallcaps.txt`, read by the
+  compiler and the studio alike, with an RGBA sheet and 5 px small capitals under 6 px capitals.
+  `default` references the vanilla ASCII texture. A layer that cannot be drawn (a missing texture,
+  text the fonts cannot draw) is skipped with `MTR-0052`; a GUI whose background codepoint block is
+  used up is quarantined with `MTR-0053`.
 - **GUI content type (`guis/`), first slice.** A GUI is an ordered list of layers in a chest of
   one to six rows. The seven built-in layer kinds (`panel`, `slots`, `image`, `paint`, `button`,
   `text`, `item`) are entries in a new `gui-components` registry, the same public path addons use.

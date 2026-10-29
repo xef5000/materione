@@ -485,6 +485,17 @@ already asserts.
   `harness/build/probe/server/plugins/Materione/content/packs/` too.
 - If CI ever needs this, the pattern extends to Linux runners with Xvfb —
   deliberately out of scope for now.
+- **GUI and title captures (26.1.2, #188).** `shot` returns 640×360 from the 1280×720 window.
+  For the full frame, grab on the render thread: `mc.execute({ net.minecraft.client.Screenshot.grab(dir, "name", mc.getMainRenderTarget().@target, 1, { c -> null }) } as Runnable)`,
+  where `dir` is a `java.io.File` for the client directory. The PNG lands in
+  `harness/build/probe/client/screenshots/name` with no extension.
+- **26.1.2 names for title work.** `Style.withFont` takes a
+  `FontDescription.Resource(Identifier.fromNamespaceAndPath(ns, path))`, not an identifier. The
+  screenshot class is `net.minecraft.client.Screenshot`. `ChestMenu.sixRows` needs the unwrapped
+  inventory `mc.player.getInventory().@target`. GUI scale: `mc.getWindow().@target.setGuiScale(n)`.
+- **Default-font text is not legible in probe captures** while the published pack overrides
+  `minecraft:default` without the vanilla providers (gui.md §9.6). Use a styled font, such as
+  `shop:gui/smallcaps_y6`, for readable probe text.
 
 ## Bumping the probe pins
 
