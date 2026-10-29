@@ -219,6 +219,10 @@ within the resource's own pack.
 Every vocabulary item is a registry entry implemented against the public API. The built-ins
 register exactly the way an addon does, as the mechanics registry already proves (mechanics.md).
 
+> **As built (#207).** The signatures below are the design sketch. The shipped contracts are in
+> `dev.materione.api.logic` and the choices that differ in detail (`threading()` as a method on the
+> type, `availability()`, `ExpressionCompiler`, the registry facades) are recorded in §14.
+
 ### 4.1 Actions
 
 ```java
@@ -375,6 +379,9 @@ actions in a run whose session has ended are skipped with outcome `FAILED("no op
 - Item, block and furniture rules run through the interpreter unchanged. The golden behaviour
   tests and the `behavior.*` QA catalog entries are the regression net, and they must pass
   untouched.
+- **Status.** #207 did the first half: `ActionExecutor` and `ActionSpec` are gone, the six built-ins
+  are `ActionType`s in `plugin.logic.action`, the vocabulary is version 2, and the M2 `RuleEngine`
+  runs typed `BoundAction`s. The interpreter itself is #208 (§14 lists the seam).
 
 ---
 
@@ -640,12 +647,15 @@ api/     dev.materione.api.logic           ActionType, ConditionType, TriggerTyp
                                             ItemSource, ListSource, InputMethod, LogicContext,
                                             ContextFacet<T>, ParamReader, ActionOutcome, LogicApi, Recipe
 api/     dev.materione.api.logic.provider  EconomyProvider, PermissionProvider, ServerTransfer
+behavior/ dev.materione.behavior.logic     (#207) LogicLookup, RegistryLogicLookup, MapLogicContext, EngineExpressions,
+                                            BuiltinTriggers, StepKinds, VocabularyBuilder, LogicIds
 behavior/ dev.materione.behavior.flow      Step (sealed), Condition (sealed), FlowCompiler, StepPath
 behavior/ dev.materione.behavior.run       FlowInterpreter, FlowRun, RunBudget, Trace, RunScheduler (port)
 behavior/ dev.materione.behavior.expr      + FunctionCall node, function registry binding
 content/ dev.materione.content.gui.logic   OpenSpec, ClickMap compiler, dynamic-layer analysis, GuiRules
 content/ dev.materione.content.variable    VariablesType (the `variables` content type)
-plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler)
+plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), LogicRegistryImpl,
+                                            BuiltinLogic (the built-ins, registered through the public API)
 plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lines each)
 plugin/  dev.materione.plugin.logic.condition one class per condition
 plugin/  dev.materione.plugin.logic.variable  PdcVariableStore, ServerVariableStore, VarCommand
@@ -771,3 +781,124 @@ Rows that can run in parallel once their dependencies land:
 - L3, L4, L5, L6 and L7, after L1 and L2.
 - G2, G3 and G5, after G1.
 - A1, alongside the G rows.
+
+---
+
+## 14. Decisions taken in #207 (L1: the `api.logic` SPI and vocabulary v2)
+
+#207 shipped the SPI of §4, the registries, the typed port of the six M2 actions and the version-2
+vocabulary. Where §4, §5.4 and §8 left a choice open, these are the choices, with the rationale.
+Each is reversible by the owner. The Java contracts are in `dev.materione.api.logic`; the
+registry facade is [`api.md`](api.md) §3.11.
+
+**The SPI shape**
+
+1. **Registries are facades with an explicit id.** `LogicApi` exposes `actions()`, `conditions()`,
+   `triggers()` and `functions()`, each a `LogicRegistry<T>`: `register(Plugin owner, NamespacedId
+   id, T type)` returns a `LogicRegistration` handle (the `MechanicsApi` precedent), and `get`,
+   `resolve` and `entries` read. A late registration opens one bounded write and takes effect on the
+   next reload. The type's own `id()` is its local name and must equal `id.value()`, so the registry
+   key and the name an author writes cannot drift. `LogicApi.vocabulary()` returns the full version-2
+   vocabulary, mechanics included; the editor transport no longer composes it.
+2. **Authored spelling.** An unqualified id is `materione:<id>`; an addon's types are written
+   qualified (`example:greet`). This is the mechanics rule, and it means an addon can never shadow a
+   built-in by accident.
+3. **Trigger selectors.** `on: click:right` is trigger `click` with detail `right`. An addon
+   trigger is written `example:storm`, with a detail after a second colon (`example:storm:heavy`).
+   A first segment that names a Materione trigger is never read as a namespace, so
+   `click:weird` is always `click` with detail `weird`. A spelled-out `materione:click` collapses to
+   the bare `click` the firing sites use.
+4. **Categories are a value, not an enum.** `LogicCategory(id, displayName)` has the eight
+   built-ins as constants and `LogicCategory.of(id)` for an addon's own. The vocabulary lists the
+   built-ins first, then any addon category in use.
+5. **Availability is read, not stored.** `ActionType` and `ConditionType` have a default
+   `availability()`, read each time the vocabulary is built, so installing Vault later needs no
+   reload (§4.5). An unavailable type still parses and loads; running it fails with the reason. The
+   vocabulary carries availability on the entry it affects. A separate providers list belongs to
+   the provider SPIs (L7).
+6. **Threading is static per type, and `run_command` is `GLOBAL`.** `threading()` is a method on
+   the type, not a field of the description, because the interpreter reads it on every step. The
+   console is `run_command`'s default sender, so it is `GLOBAL`. Its `as: player` and `as: op`
+   senders need the player's thread. **#208 must route those two senders through the player's
+   region** when it dispatches for real, either by adding a parameter-dependent `threading(P)` or by
+   hopping inside the interpreter. Until then the M2 adapter runs every `GLOBAL` action through the
+   existing deferred runner, which is anchored to the player, exactly as the old
+   "must-defer" flag did.
+
+**Context and parameters**
+
+7. **`LogicContext` is four things**: typed facets (`facet`, `has`, `require`), the
+   expression-visible variable tree (`resolve`, `value`), the run-local variables (`locals()`) and
+   placeholder resolution (`applyPlaceholders`, identity by default). There is no Bukkit handle on
+   it. The engine's implementation is `MapLogicContext` in `behavior`, which is also the fake every
+   test uses.
+8. **Facets are keyed by a namespaced id** (`ContextFacet<T>(NamespacedId, Class<T>)`, equal by id
+   alone). `Facets` holds the public ones: `PLAYER` and `CANCELLATION`. `Facets` names a Bukkit
+   type, so the Bukkit-free engine (R7) reads the cancellation facet from `Cancellation.FACET`
+   instead, the same constant. The GUI session, the list entry and any other facet whose type
+   belongs to the plugin are declared in the plugin next to that type, not in `api`.
+9. **`ParamReader` is strict and non-coercing.** `"5"` is not an integer and `1` is not a boolean;
+   a present value of the wrong type is an error, never replaced by the fallback. The engine
+   normalises the scalar form before the type sees it: `message: "hi"` arrives as `{text: "hi"}`
+   through the description's `shorthand`, and a scalar for an action with no shorthand is rejected.
+10. **Templates and expressions cross a port.** The expression engine lives in `behavior`, which
+    `api` cannot see, so `ParamReader.template()` and `.expression()` compile through an
+    `ExpressionCompiler` that the engine supplies. `TemplateText.render(ctx)` evaluates `${...}`
+    first and `%placeholders%` second (the M2 order). `ExpressionCompiler.LITERAL` serves an
+    addon's own unit tests and refuses `${...}` so a test cannot pass a value the engine would
+    evaluate.
+
+**Outcomes and diagnostics**
+
+11. **`FAILED` is reported like an exception in this adapter.** §4.1 says only an exception emits
+    a diagnostic. The M2 engine also reported the failures that its executors threw, and the six
+    ported actions now return `FAILED` for them, so the adapter publishes the rate-limited `MTR-0023`
+    for both and the behaviour is unchanged. #208 decides whether a plain `FAILED` stays a
+    diagnostic or becomes trace-only.
+12. **`MTR-0056`** covers an unknown action or condition id and a step the type rejects while
+    parsing. Only that step is skipped. A rule whose steps all fail to load is skipped with
+    `MTR-0021`. An unknown trigger keeps `MTR-0021`, the code it always had, with the same effect.
+
+**Vocabulary v2**
+
+13. **Additive.** The version-1 keys (`events`, `actions`, `ruleOptions`, `actionOptions`,
+    `mechanics`) keep their shape. The record gains `triggers`, `conditions`, `steps`, `categories`
+    and `functions`, and each action gains `category`, `threading`, `available`,
+    `unavailableReason` and `registeredBy`. `events` is derived from the same trigger
+    registrations, so it cannot disagree with `triggers`. The web payload also carries
+    `"version": 2`. `recipes` waits for the recipe registry (A2).
+14. **A trigger's context schema is listed per firing host.** Every built-in trigger declares the
+    variables the M2 firing sites fill, annotated with the hosts that fill them (an item rule sees
+    `item.*`, a block rule sees `block.*`), filtered to the hosts that fire that trigger. A trigger
+    nothing fires yet promises no variables.
+15. **Step kinds are listed with a `supported` flag.** All seven kinds of §2.2 are in the
+    vocabulary so the studio can draw the grammar; only `action` is `supported` until #208 flips
+    the others, one flag at a time.
+
+**Behaviour that changed on purpose.** Typed parse is the point of the change, so a few malformed
+steps that used to fail at run time are now rejected at load. Well-formed content behaves exactly
+as before.
+
+- `cancel: false` does nothing. It used to cancel anyway.
+- An unknown `run_command` `as:` is rejected. It used to run as the console. `op` is now listed in
+  the schema; it was always accepted.
+- Out-of-range numbers are rejected: `sound` volume and pitch outside 0 to 1000, `potion` duration
+  below 1 and amplifier outside 0 to 255. Non-numeric values used to fall back to the default.
+- A `set_var` value that reads as an expression and does not parse is rejected at load.
+- A bare scalar for an action with no shorthand (`potion: speed`) is rejected at load.
+
+**For #208.**
+
+- The seam is small and named. `BoundAction` stands where `ActionStep` goes, `Rule.actions` holds a
+  flat list where the step tree goes, and `RuleEngine.runActions` is the loop the interpreter
+  replaces. Everything an action sees is already the final shape.
+- `BehaviorService`'s deferred runner ignores its `delayTicks` argument: it hops to the player's
+  scheduler once and runs, so a rule's `delay:` is not honoured today. This is M2 behaviour and is
+  kept. `wait` and `delay:` must schedule for real.
+- The M2 engine reads a rule's `if:` list as expressions only. The condition registry is complete
+  and the lookup resolves conditions, but no rule evaluates a registered predicate before the flow
+  compiler (§5.1) defines the condition tree.
+
+**Build checks.** R11 (one action, one class, §9 rule 2) and the 400-line guard (§9 rule 4) ship
+with this change, each proven against a planted violation. R10 has no subjects until the GUI runtime
+creates the `plugin.gui..` packages, and arrives with them.

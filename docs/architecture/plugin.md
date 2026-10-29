@@ -142,10 +142,12 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   from: display name, description, parameter schema (id/type/range/default/required),
   since-version, and an optional one-sentence `activation` (when the entry acts in game; built-in
   mechanics declare it). One source of truth for editor forms, docs, and tab completion.
-  Hand-written per-mechanic editor forms are forbidden — they drift. *As built (M5):* actions are
-  not yet a registry; each `ActionExecutor` carries its own `describe()`/`shorthand()` and the
-  event taxonomy (`EventTypes.describe()`) records which content types fire each event. The editor
-  reads both, with the mechanics registry, through `authoring.describe` (web.md §4.2).
+  Hand-written per-mechanic editor forms are forbidden — they drift. *As built (M6, #207):*
+  actions, conditions, triggers and expression functions are registries (`actions`, `conditions`,
+  `triggers`, `expression-functions`; [`logic.md`](logic.md) §4, [`api.md`](api.md) §3.11). Each
+  type carries its own description, and the built-in trigger registrations record which content
+  types fire each event. The editor reads them, with the mechanics registry, through
+  `authoring.describe` (web.md §4.2), whose `behavior` section is `LogicApi.vocabulary()`.
 - **Module metadata** (*M5, editor item-studio rework*). `ParameterSchema.EditorMetadata` carries
   additive presentation fields a content type uses to declare that a parameter is a **module** —
   one thing a user wants, an add/remove card in the editor's module studios (issue #152):
@@ -386,6 +388,13 @@ bus, once per layer, targeting `layers.<index>` so the editor opens that layer:
 | `MTR-0053` | error | The GUI background codepoint block (`U+E200`–`U+F8FF`, one durable allocation per GUI) is used up. That GUI is quarantined and the rest of the pack compiles. Retire unused GUIs; the allocation table never reuses codepoints. |
 | `MTR-0054` | warning | A GUI slot names an item that is not live when the shadow is built (an unknown Materione id, or a `minecraft:` id that is no material). The slot stays empty and the rest of the GUI is shown; nothing is guessed. Fix the item id or the pack that defines it (gui.md §5). |
 | `MTR-0055` | error | An actor asked a runtime operation without the permission node it needs (`materione.gui.open`). Nothing happens. |
+
+The M6 logic SPI ([`logic.md`](logic.md) §4, §14) parses every action when its rule loads, so a bad
+step is found at load rather than when a player first triggers it:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0056` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
 
 ---
 

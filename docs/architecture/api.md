@@ -88,6 +88,11 @@ public interface MaterioneAPI {
 
     // 7. Server Health, Settings, Audit & Sessions (plugin.md §5, §7.1)
     AdminApi admin();
+
+    // 8. Executable extensions (added with M2/M6; default methods, so older implementors still link)
+    MechanicsApi mechanics();            // §3.2, mechanics.md
+    GuiComponentsApi guiComponents();    // §3.10
+    LogicApi logic();                    // §3.11, logic.md §4
 }
 ```
 
@@ -106,7 +111,7 @@ Currently, `ContentType` lives in `dev.materione.core.content.ContentType`, whic
 
 - **Promote SPIs to `api/`:**
   - `ContentType`, `PackEmitter`, `Allocations`, `AllocatedRange`, `CompileRejectException` move from `core.content` to `dev.materione.api.content`.
-  - ECA `ActionExecutor` / action & condition registration contracts expose clean SPIs in `dev.materione.api.behavior`.
+  - ECA action, condition, trigger and expression-function contracts are the SPIs in `dev.materione.api.logic` (§3.11), which replaced the M2 `ActionExecutor`.
 - **Typed Registry Keys:** Standard `RegistryKey` constants (`RegistryKeys.CONTENT_TYPES`, `RegistryKeys.MECHANICS`, `RegistryKeys.ACTIONS`, `RegistryKeys.CONDITIONS`, `RegistryKeys.DELIVERY_BACKENDS`) live in `api/`.
 - **Window Management:** `Registry<T>` remains open during bootstrap Phase 4 and reload re-checks; built-in registrations (`ItemType`, `BlockType`, `FurnitureType`, `GlyphType`, `SoundType`, `PaintingType`, `EffectType`, `RecipeType`, `NativeMechanics`) register strictly through `api.registries()`.
 - **Executable mechanics:** `MaterioneAPI.mechanics()` owns bounded mechanic
@@ -270,6 +275,46 @@ component)` opens a bounded registration in the `gui-components` registry and re
 `GuiComponentRegistration`. It works after the registry froze (it takes effect for GUIs on the
 next reload), a duplicate or reserved id fails explicitly, and closing the handle or disabling the
 owner removes the component.
+
+### 3.11 `LogicApi` (`MaterioneAPI.logic()`)
+
+The open vocabulary of the one behavior system (D4), registered like mechanics (logic.md §4, §14).
+Built-ins and addons implement the same interfaces and register through the same calls; the engine,
+the editor palette and the docs read the same registries (D5).
+
+| Member | Description |
+|---|---|
+| `actions()` | `LogicRegistry<ActionType<?>>`: the verbs a rule step runs. `ActionType<P>` has `id()`, `describe()` (a `SelfDescription` plus palette `LogicCategory` and scalar shorthand), `threading()`, `parse(ParamReader)`, `execute(P, LogicContext)` returning `ActionOutcome`, and a default `availability()`. |
+| `conditions()` | `LogicRegistry<ConditionType<?>>`: predicates. Same shape, with `test(P, LogicContext)` as a pure read. |
+| `triggers()` | `LogicRegistry<TriggerType>`: descriptions of the events a rule answers: details, `firedBy`, filters, a context schema of `ContextVariable`s, and `cancellable`. A runtime still fires the event; registering one makes it known to the compiler and the studio. |
+| `functions()` | `LogicRegistry<ExpressionFunction>`: calls available inside expressions. The registry and the vocabulary carry them; binding them into the expression grammar is the expression work (logic.md §13 L3). |
+| `vocabulary()` | The version-2 `BehaviorVocabulary`, rebuilt from the registries (and the mechanics registry) on every call. |
+
+`LogicRegistry<T>` registers with `register(Plugin owner, NamespacedId id, T type)` and returns a
+`LogicRegistration` handle. Registration opens one bounded write on that registry and edits nothing
+else; content that uses the type picks it up on the next reload, so an addon requests a reload
+afterwards, as for mechanics. A duplicate id or the reserved `minecraft` namespace fails with a
+`RegistryException`; the id's value must equal the type's own `id()`; a disabled owner is refused;
+closing the handle or disabling the owner removes the type. `get(id)`, `resolve(authored)` (an
+unqualified spelling means `materione:`) and `entries()` read.
+
+A running step sees the world only through `LogicContext`: typed `ContextFacet`s (`Facets.PLAYER`,
+`Cancellation.FACET`), the expression-visible variable tree, the run-local variables and
+placeholder resolution. `ParamReader` gives a type strict, non-coercing, typed reads of its
+parameters at load, including templates that compile through an `ExpressionCompiler` port.
+
+```java
+MaterioneAPI api = getServer().getServicesManager().load(MaterioneAPI.class);
+api.logic().actions().register(this, NamespacedId.of("example", "greet"), new GreetAction());
+api.logic().conditions().register(this, NamespacedId.of("example", "is_night"), new IsNight());
+api.pipeline().reload(ActorContext.addon(getName()), PipelineApi.ReloadRequest.everything());
+```
+
+`variables()` (logic.md §3.3) and `traces()` (§7.6) are deliberately absent. They arrive as additive
+methods with the variables and live-trace work, so the API never pretends to a behaviour it lacks.
+The web editor reads the vocabulary through `authoring.describe` (`behavior`), which is a
+projection of `LogicApi.vocabulary()`; the dedicated `logic.vocabulary` op belongs to the authoring
+logic API (§13 A1).
 
 ---
 
