@@ -31,6 +31,11 @@ Materione's internals, only these markers.
 | `MATERIONE-DEV-SOUND key=<pack>:<sound>` | `/materione dev sound` dispatched an in-game play (M4) |
 | `MATERIONE-DEV-SOUND-DENIED reason=player-required` | `/materione dev sound` from the console (the client resolves the key, so a player is required) |
 | `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |
+| `MATERIONE-GUI-OPENED id=<id> player=<name> rows=<n> slots=<n>` | a live GUI's window was opened for a player (`/materione gui open`, or the editor's preview) |
+| `MATERIONE-GUI-REFRESH changed=<n> removed=<n> players=<n>` | a swap changed or removed live GUIs; the online players' windows are brought up to date (gui.md §5) |
+| `MATERIONE-GUI-REFRESH-CLOSED id=<id> player=<name>` | a viewer's window was closed because its GUI is no longer live |
+| `MATERIONE-GUI-DENIED reason=player-required` | `/materione gui open` from the console without naming a player |
+| `MATERIONE-GUI-FAILED reason=not-live\|no-such-player\|refused` | `/materione gui open` could not resolve the GUI, the player, or the open was refused |
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 filtered to sample + corpus + nested (4 + 50 items, plus the nested pack's
@@ -64,6 +69,11 @@ inspect, `drifted=1` + targeted resync on sweep).
 ./gradlew :harness:printLatestPaperPin -PpaperVersion=1.21.4   # bump procedure
 ```
 
+The boots use the CI ports (server 25599, editor 8089, delivery 8090). When another server on the
+machine holds them, pass free ones: `-Pharness.serverPort=25611 -Pharness.editorPort=8111
+-Pharness.deliveryPort=8112`. The editor and delivery ports are written into the workspace's
+`settings.yml` only when overridden; the defaults are untouched.
+
 The server jar is pinned by absolute URL + sha256 in
 `gradle/libs.versions.toml` (the old PaperMC v2 download API is dead; the
 harness makes zero API calls at test time). CI caches the Gradle-cache
@@ -89,6 +99,14 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 - `PaperFailSoftIT` — writes a deliberately broken `settings/settings.yml`
   before boot; the server must STILL boot and pass doctor (fail-soft proof,
   master D6), with `MTR-0004` reported in the log.
+- `PaperGuiRuntimeIT` — the M6 runtime gate (gui.md §5, §7, issue 185): a GUI authored into the sample
+  pack goes live at boot; the console's `gui open` refuses correctly (no player to show it to, an
+  unknown player, a GUI that is not live); the editor's `runtime.previewTarget` reports no player and
+  `runtime.openGui` refuses with `MTR-0009` for a console session; then the editor's own saves drive the
+  live refresh — a changed title is `changed=1` within the 2 s live-loop budget, a schema break is
+  `removed=1` and the GUI stops resolving, and a slot naming an item that is not live is `MTR-0054`
+  while the GUI stays live. Headless: no client joins, so the window itself is judged by the unit tiers
+  and the QA catalog (`gui.runtime-*`).
 - `PaperEditorHandshakeIT` — drives the real local handshake and editor mutations,
   including rapid glyph texture/create/save requests. Before comparing allocated glyph
   metadata with the compiled font, a queued console reload acts as a completion barrier:

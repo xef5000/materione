@@ -402,9 +402,13 @@ public final class MaterionePlugin extends JavaPlugin {
                 pipeline::contentTypes);
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
+        // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
+        var guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
+                this, scheduling, () -> pipeline.runtime().registries());
+        pipeline.observeSwaps(guiRuntime::refreshAfterSwap);
         RuntimeApiImpl runtimeApi = new RuntimeApiImpl(
                 this, scheduling, pipeline,
-                () -> customBlocks, () -> furniture);
+                () -> customBlocks, () -> furniture, guiRuntime);
         AdminApiImpl adminApi = new AdminApiImpl(
                 () -> probeResult, registries, diagnostics, quarantine,
                 () -> pipeline, () -> restartStaging, () -> delivery,
@@ -450,7 +454,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // programmatically so the §9.2 taxonomy stays exactly as documented
         for (String permission : List.of(
                 "materione.editor", "materione.pipeline", "materione.dev",
-                "materione.give", "materione.admin")) {
+                "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION)) {
             if (getServer().getPluginManager().getPermission(permission) == null) {
                 getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(
                         permission, org.bukkit.permissions.PermissionDefault.OP));

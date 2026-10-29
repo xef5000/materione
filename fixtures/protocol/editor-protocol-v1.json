@@ -80,7 +80,7 @@
   },
   "sessionBlob": {
     "envelope": {
-      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSMcld4-lmPNbLCfGWj3tGq2wfFLG5rBaAnrQXtJqczNZdqvE8E4rsoA4igCQv6kku60w5bdKP3BLICGbrgKY1bbqR4hUA2tMydTnmJC5nf4jC3vlSSmyQugnnsVowIGwmoGVt_KNjju21cmO-JBOxGsYeaGDPJVwPkNF_hLQlJhd0-ab8KnRcJXRfFvNBg-dYx4vUQIaJTgwn6Y9XQn0h6XEgGMnAuKsX1949WpdJXUKAb8z9GWc5kbH4C4jEJonR68AmqdFp8rWkyDayfgvA0BnG0t7VqnZRV9YrmOdVEXom3qX6H7jFRTslQedprZPI8Ql8PSnlSSsTLzxRDWNWhYWk",
+      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSMcld4-lmPNbLCfGWj3tGq2wfFLG5rBaAnrQXtJqczNZdqvE8E4rsoA4igFwvqr1aV6Q1YWYmQBos8BrrKPfVefY1snkIYyI-1dw6PCbejoRiOwVao0AEqkU_rU5l5PQSQckBjPtPkqEMshKqJFMkfsZOGRTP8aVnMK0TlLzdohtoxXOcI_AwVa2LR4-g_-dY-4dtPGqRLmjaYaNLAmH5AaE0nN3UVANbF970dvLZtJqIanBJGBM0ja0JHgjMyi05R0y-rcGJCrUJKa-Cahd4uASvGrrkzlqlQzuqrQZJeR4rEsXDW_ztSQoQEdstieON3UIej2wViMfi0YA5-AcmTs8PdpShOyz14pQ",
       "nonce": "QEBAQEBAQEBAQEBA",
       "sess": "AAECAwQFBgcICQoLDA0ODw",
       "v": 1
@@ -92,6 +92,7 @@
         "delivery",
         "furniture",
         "glyphs",
+        "gui",
         "items",
         "models",
         "paintings",

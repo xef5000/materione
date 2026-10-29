@@ -2,7 +2,13 @@ package dev.materione.plugin.runtime;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.gui.GuiComponent;
+import dev.materione.content.gui.CompiledGui;
+import dev.materione.content.gui.GuiBackgrounds;
+import dev.materione.content.gui.GuiCompiler;
 import dev.materione.content.gui.GuiComponents;
+import dev.materione.content.gui.GuiDefinition;
+import dev.materione.core.texture.PackTextures;
+import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
@@ -40,8 +46,11 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiConsumer;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -76,6 +85,8 @@ public final class PipelineService {
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
     private CompletableFuture<Void> applyCompletion = CompletableFuture.completedFuture(null);
+    /** Live-view observers: called after each successful swap with (previous, live). */
+    private final List<BiConsumer<RuntimeRegistries, RuntimeRegistries>> swapObservers = new CopyOnWriteArrayList<>();
 
     public PipelineService(
             Plugin plugin,
@@ -152,6 +163,28 @@ public final class PipelineService {
 
     public ContentRuntime runtime() {
         return runtime;
+    }
+
+    /**
+     * Observes every successful live swap as {@code (previous, live)}. The observer runs on the
+     * global thread, after the swap and after recipes are applied, so a live view players can see
+     * (open GUIs, gui.md §5) refreshes against the registries that are actually live. A failing
+     * observer is reported and never rolls the apply back.
+     */
+    public void observeSwaps(BiConsumer<RuntimeRegistries, RuntimeRegistries> observer) {
+        swapObservers.add(Objects.requireNonNull(observer, "observer"));
+    }
+
+    private void notifySwapObservers(RuntimeRegistries previous, RuntimeRegistries live) {
+        for (BiConsumer<RuntimeRegistries, RuntimeRegistries> observer : swapObservers) {
+            try {
+                observer.accept(previous, live);
+            } catch (RuntimeException e) {
+                diagnostics.publish(Diagnostic.warn(
+                        DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                        "live view refresh failed after apply: " + e));
+            }
+        }
     }
 
     /** The last pre-apply report (doctor surface); null before the first apply. */
@@ -250,7 +283,9 @@ public final class PipelineService {
             applyCompletion = applied;
             scheduling.executeGlobal(plugin, () -> {
                 try {
+                    RuntimeRegistries previous = runtime.registries();
                     runtime.apply(shadow, sha);
+                    notifySwapObservers(previous, shadow);
                     applied.complete(null);
                 } catch (RuntimeException e) {
                     applied.completeExceptionally(e);
@@ -322,7 +357,6 @@ public final class PipelineService {
                                 + " ~" + report.changed() + " items, "
                                 + recipes.registered() + " recipe(s)",
                         null, null, null));
-                applied.complete(null);
             } catch (RuntimeException e) {
                 runtime.rollback(previous, previousSha);
                 diagnostics.publish(new Diagnostic(
@@ -330,7 +364,11 @@ public final class PipelineService {
                         "apply failed, rolled back: " + e,
                         null, null, "live content unchanged; fix the reported problem and reload"));
                 applied.completeExceptionally(e);
+                return;
             }
+            // only a swap that stuck reaches the live views: a rolled-back apply shows nothing new
+            notifySwapObservers(previous, shadow);
+            applied.complete(null);
         });
     }
 
@@ -339,6 +377,8 @@ public final class PipelineService {
         var recipeType = contentTypes().stream().filter(t -> t.name().equals("recipe")).findFirst();
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
         var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
+        var guiType = contentTypes().stream().filter(t -> t.name().equals("gui")).findFirst();
+        var guiModels = new LinkedHashMap<NamespacedId, CompiledGui>();
         var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
         var effectType = contentTypes().stream().filter(t -> t.name().equals("effect")).findFirst();
         var builder = RuntimeRegistries.builder();
@@ -361,6 +401,7 @@ public final class PipelineService {
             builder.view(dev.materione.core.runtime.RuntimeFurnitures.KEY, runtimeFurnitures.build());
             builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
                     new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
+            builder.view(RuntimeGuis.KEY, RuntimeGuis.empty());
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -538,6 +579,8 @@ public final class PipelineService {
                                 furniture.displayName(), "PAPER",
                                 parsedItems.keySet(), builder, runtimeFurnitures::placedBy);
                     }
+                } else if ("gui".equals(resource.contentType()) && guiType.isPresent()) {
+                    compileGuiModel(pack, resource, raw, templates, guiType.get(), guiModels);
                 }
             }
         }
@@ -552,7 +595,56 @@ public final class PipelineService {
                 new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
         builder.view(dev.materione.core.runtime.RuntimeEffects.KEY,
                 new dev.materione.core.runtime.RuntimeEffects(effectEntries));
+        // GUI slots resolve against every item of this apply, placement items included (gui.md §5)
+        builder.view(RuntimeGuis.KEY, RuntimeGuis.build(
+                guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish));
         return builder.build();
+    }
+
+    /**
+     * One GUI's compiled model for the live view (gui.md §5), through the same
+     * {@link GuiCompiler} the pack compile ran: the GUI's durable background codepoint and its own
+     * pack's textures. The pack compile has already reported this GUI's diagnostics, so they are
+     * not published a second time here. A GUI with no allocated codepoint is not live.
+     */
+    private void compileGuiModel(
+            ContentPack pack, ContentResource resource, Map<String, Object> raw,
+            Map<String, Map<String, Object>> templates, ContentType guiType,
+            Map<NamespacedId, CompiledGui> out) {
+        Optional<Object> parsed;
+        try {
+            parsed = guiType.parse(resource.id(), raw, templates);
+        } catch (RuntimeException e) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "shadow build skipped " + resource.id() + ": " + e));
+            return;
+        }
+        if (parsed.isEmpty() || !(parsed.get() instanceof GuiDefinition gui)) {
+            return;
+        }
+        Optional<String> allocated = allocation == null
+                ? Optional.empty()
+                : allocation.allocationOf(gui.id(), GuiBackgrounds.ALLOCATION_KIND);
+        if (allocated.isEmpty()) {
+            diagnostics.publish(Diagnostic.warn(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "shadow build skipped " + gui.id() + ": no allocated background codepoint"));
+            return;
+        }
+        int number = dev.materione.api.content.AllocatedRange.parse(allocated.get()).start();
+        if (!GuiBackgrounds.fits(number)) {
+            return; // exhausted: the pack compile quarantined this GUI with MTR-0053
+        }
+        try {
+            out.put(gui.id(), GuiCompiler.compile(
+                    gui, GuiBackgrounds.codepoint(number),
+                    new PackTextures(pack.id(), pack.directory())).model());
+        } catch (RuntimeException e) {
+            diagnostics.publish(Diagnostic.error(
+                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    "shadow build skipped " + gui.id() + ": " + e));
+        }
     }
 
     /**

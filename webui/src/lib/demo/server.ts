@@ -106,6 +106,13 @@ export class DemoServer implements RpcChannel {
       case 'admin.audit.recent': return { entries: [...this.#audit].reverse().slice(0, numberOr(p.limit, 100)) };
       case 'admin.settings.get': return structuredClone(s.settings);
       case 'admin.settings.put': return this.#settingsPut(p);
+      // the demo has no game session, so there is never an approved player to preview for (gui.md §7)
+      case 'runtime.previewTarget': return { online: false };
+      case 'runtime.openGui': throw new DemoError(
+        'MTR-0009',
+        'this editor session has no approved player to preview for',
+        'open the editor in game with /materione editor, then preview from that session',
+      );
       default:
         throw new DemoError('MTR-0033', `unknown op '${op}'`, 'the editor or server may be outdated (protocol 1)');
     }

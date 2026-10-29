@@ -276,6 +276,54 @@ its last run until its advances ship (§9.4).
 - The pack must be accepted for the design to show; without it the player sees the plain
   title on a vanilla chest — degraded, never broken.
 
+**As built (issue 185: open, live refresh, preview in game).**
+
+- *The view.* `RuntimeGuis` (plugin `gui/`) is a shadow-swap view (runtime-systems §1), published with
+  the other registries under its class key. The shadow builder compiles every GUI through the same
+  `GuiCompiler` the pack compile runs, with the GUI's durable background codepoint and its own pack's
+  textures, and resolves each slot against the shadow's items (placement items included) at apply
+  time. An item that is not live is `MTR-0054`: the slot stays empty and the rest of the GUI shows. A
+  GUI that does not parse, or has no codepoint, is absent from the view, which is what "not live"
+  means. The view lives in `plugin/`, not `core/`, because it holds `CompiledGui` (content depends on
+  core) and resolves `minecraft:` ids to materials.
+- *Open.* `GuiRuntime` implements `RuntimeApi.GuiRuntimeApi` on the `PluginGui` kit. The window is a
+  `GuiMenu` (holder identity; the router never routes by title), titled with
+  `MaterioneText.parseData` so the glyph and text tags come through as the compiler laid them out
+  (no emoji replacement). Permission, online player and "GUI is live" are checked on the caller's
+  thread and refuse at once; the window is built and opened on the viewer's region thread. Items come
+  from the item factory (`MaterioneStacks.build`, amount clamped to the stack size).
+- *Clicks.* `GuiListener` routes three targets: the GUI's own slots and the outside of the window are
+  cancelled, and the GUI's handler is empty in v1; the viewer's inventory stays live except the two
+  actions that would move items into or out of the GUI (shift-move, double-click collection). The table
+  is `GuiListener.route`, unit-tested.
+- *Command.* `/materione gui open <id> [player]`, permission `materione.gui.open` (default op). A
+  qualified id must be live; a bare value must match one live GUI. A console sender names a player.
+  Markers: `MATERIONE-GUI-OPENED`, `MATERIONE-GUI-DENIED`, `MATERIONE-GUI-FAILED`.
+- *Live refresh.* After every successful swap, `PipelineService.observeSwaps` runs on the global
+  thread (after recipes; a rolled-back apply notifies nobody). `GuiRefreshPlan` compares the two views:
+  a GUI whose compiled view differs (rows, title, or an item's definition hash in a slot) is CHANGED,
+  and one no longer live is REMOVED. Each online player's region thread then acts on its own window
+  only when it shows a changed or removed GUI:
+  - *items only* (same rows and title): the slots are rewritten in place and the window stays;
+  - *title or rows changed*: a new window is opened. The cursor item is lifted off the old window
+    first and put back on the new one, so closing the old window does not return it to the inventory.
+    The player's own inventory is never touched;
+  - *no longer live*: the window is closed and the viewer gets a chat note.
+
+  `MATERIONE-GUI-REFRESH changed=<n> removed=<n> players=<n>` is logged for every swap that changed a
+  GUI. A failing observer is reported (`PIPELINE_STAGE_FAILED`) and never rolls the apply back.
+- *Preview in game.* The editor's `runtime.openGui` and `runtime.previewTarget` ops (`web/rpc/ops/
+  RuntimeOps`, §7) open the GUI for the session's owner: the player who opened the session in game.
+  A console session has no owner and is refused (`MTR-0009`); nothing is guessed. The studio shows
+  the "Preview in game" button only when the connected jar advertises the `gui` capability, and sends
+  neither op otherwise. The button is disabled, with the reason as its tooltip, while no owner is
+  online. A dirty studio still previews, and says in the tooltip that it shows the saved version.
+- *What is not asserted headlessly.* No client joins the harness, so the window itself (its title
+  component and its stacks) is covered by the unit tiers (`RuntimeGuisTest`, `GuiTitleTest`) and the
+  visual QA entry `gui.runtime-visual`. `GuiRuntimeRunner` (`PaperGuiRuntimeIT`) proves the seams on Paper:
+  boot, the command's refusals, the editor's refusals, the save-to-refresh path within the live-loop
+  budget, retirement, and the missing-item diagnostic.
+
 ---
 
 ## 6. Editor studio — the design experience
@@ -689,3 +737,41 @@ These fill gaps the sections above leave open. Each one is reversible by the own
 4. **Pixel edits are commands outside the document.** The history tracks them by identity of the newest applied pixel command, so dirtiness is exact without copying canvases.
 5. **Uploads keep the original PNG bytes** and are stored under `textures/gui/<gui-path>/`; they ride the layout transaction like a paint layer's PNG, so an undone or deleted layer never leaves a file behind.
 6. **The default-font warning stays until #202 ships.** The studio flags `default` above row 5 and any text after a `default` run today; once the vanilla ASCII widths ship (#202) those restrictions go and so does the warning.
+### Decisions taken in #185 (runtime, live refresh and preview)
+
+These fill the gaps §5 leaves open. Each one is reversible by the owner.
+
+1. **The live view is a plugin-side shadow view.** `RuntimeGuis` lives in `plugin/gui/`, not
+   `core/runtime/` next to `RuntimeGlyphs`: it holds `CompiledGui` (content depends on core, so core
+   cannot name it) and resolves `minecraft:` ids with `Material`. It is still a shadow-swap view,
+   retrieved by class key, so the swap rule of runtime-systems §1 holds.
+2. **Refresh hooks the swap, not the reload event.** `PipelineService.observeSwaps` is called after
+   the swap and the recipes, on the global thread, and never for a rolled-back apply, so the refresh
+   always reads the registries that are live. The reload event (`PipelineApi.subscribeReloads`) is
+   per request, not per swap, and is raised by the reload path for the editor's push; it is the wrong
+   seam for "what did this swap change".
+3. **Viewers are found by holder, not by a tracked set.** A refresh schedules one region task per
+   online player and inspects that player's own top inventory there. Nothing is read off-thread on
+   Folia, and no viewer set can go stale when a window closes some other way.
+4. **A title or size change re-opens; anything else edits in place.** The title and size of a Bukkit
+   window are fixed at creation, so only those force a new window. The cursor item is moved off the
+   old window before it closes and back onto the new one; a closed window (a removed GUI) keeps
+   vanilla's return-to-inventory behaviour, which is the one case the cursor is not preserved.
+5. **Two new diagnostic codes.** `MTR-0054` (a GUI slot's item is not live; warning, the slot stays
+   empty) and `MTR-0055` (a permission node is missing; error). The api had no permission code, and
+   `MTR-0009` describes a reference, not an actor. Both are documented in `plugin.md` §5.
+6. **The editor's preview acts as the session owner.** The owner is the player who opened the session
+   in game, as the trust flow already establishes. The editor's actor keeps the existing `node -> true`
+   attribution of every editor op: the session is already trusted with authoring, so opening a GUI
+   for its owner adds no authority. A console session has no owner and is refused, never guessed.
+7. **The preview ops are gated on a `gui` session capability.** The jar advertises `gui` in
+   `SessionBlob.CURRENT_CAPABILITIES` and the editor's protocol gate reads it: `runtime.openGui` and
+   `runtime.previewTarget` are listed in `fixtures/protocol/editor-op-gates.json` with capability `gui`.
+   The studio calls them, and shows the button, only when the connected blob advertises `gui`
+   (`hasCapability(blob, 'gui')`, and a blob with no capability list counts as having none). A release
+   without the ops therefore never receives them, and `scripts/compat/editor-compat.mjs check` passes
+   against every committed release. The `since` value is `post-0.1.0`: the tree still reads 0.1.0 and
+   the next version is not yet set.
+8. **The title is parsed without the live emoji registry.** `MaterioneText.parseData` keeps glyph and
+   emoji markers literal, and the compiler has already laid the text out with its own fonts, so an
+   emoji substitution would break the pixel layout. `<shift>`, `<font>` and colour tags still resolve.

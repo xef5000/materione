@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import java.util.Collection;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -20,28 +21,53 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  * cursor, and depositing them must work — except the two actions that
  * would move viewer items into the gui or hoover gui display items out:
  * shift-clicks and double-click collection. Drags are cancelled when they
- * touch any gui slot.
+ * touch any gui slot. The decisions live in {@link #route} and
+ * {@link #dragCancelled} so the scoping is testable without a server.
  */
 public final class GuiListener implements Listener {
+
+    /** Where a click landed, relative to the gui's top inventory. */
+    enum Target {
+        /** Outside the window: nothing the gui wants to allow. */
+        OUTSIDE_WINDOW,
+        /** One of the gui's own slots. */
+        GUI_TOP,
+        /** The viewer's own inventory, shown beside the gui. */
+        VIEWER
+    }
+
+    /** What the router does with one click. */
+    enum Route {
+        /** Cancel, then hand the (cancelled) click to the gui's handler. */
+        CANCEL_AND_DELIVER,
+        /** Cancel it; the gui does not see it. */
+        CANCEL,
+        /** Leave it alone. */
+        PASS
+    }
 
     @EventHandler(priority = EventPriority.HIGH)
     public void onClick(InventoryClickEvent event) {
         if (!(event.getView().getTopInventory().getHolder() instanceof PluginGui gui)) {
             return;
         }
+        Target target;
         if (event.getClickedInventory() == null) {
-            event.setCancelled(true); // clicked outside the window: nothing the gui wants to allow
-            return;
+            target = Target.OUTSIDE_WINDOW;
+        } else if (event.getClickedInventory().equals(event.getView().getTopInventory())) {
+            target = Target.GUI_TOP;
+        } else {
+            target = Target.VIEWER;
         }
-        if (event.getClickedInventory().equals(event.getView().getTopInventory())) {
-            event.setCancelled(true);
-            gui.onClick(event);
-            return;
-        }
-        // the viewer's own inventory: depositing a picked item must work
-        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY
-                || event.getAction() == InventoryAction.COLLECT_TO_CURSOR) {
-            event.setCancelled(true);
+        switch (route(target, event.getAction())) {
+            case CANCEL_AND_DELIVER -> {
+                event.setCancelled(true);
+                gui.onClick(event);
+            }
+            case CANCEL -> event.setCancelled(true);
+            case PASS -> {
+                // the viewer's own inventory keeps working
+            }
         }
     }
 
@@ -50,12 +76,34 @@ public final class GuiListener implements Listener {
         if (!(event.getView().getTopInventory().getHolder() instanceof PluginGui)) {
             return;
         }
-        int topSize = event.getView().getTopInventory().getSize();
-        for (int rawSlot : event.getRawSlots()) {
+        if (dragCancelled(event.getView().getTopInventory().getSize(), event.getRawSlots())) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * The router's decision for one click inside a gui window (gui.md §5): every click on the
+     * gui's own slots or outside the window is cancelled; in the viewer's inventory only the
+     * two actions that move items into or out of the gui are cancelled.
+     */
+    static Route route(Target target, InventoryAction action) {
+        return switch (target) {
+            case OUTSIDE_WINDOW -> Route.CANCEL;
+            case GUI_TOP -> Route.CANCEL_AND_DELIVER;
+            case VIEWER -> action == InventoryAction.MOVE_TO_OTHER_INVENTORY
+                    || action == InventoryAction.COLLECT_TO_CURSOR
+                    ? Route.CANCEL
+                    : Route.PASS;
+        };
+    }
+
+    /** A drag is cancelled when any of its raw slots lies inside the gui's top inventory. */
+    static boolean dragCancelled(int topSize, Collection<Integer> rawSlots) {
+        for (int rawSlot : rawSlots) {
             if (rawSlot < topSize) {
-                event.setCancelled(true);
-                return;
+                return true;
             }
         }
+        return false;
     }
 }

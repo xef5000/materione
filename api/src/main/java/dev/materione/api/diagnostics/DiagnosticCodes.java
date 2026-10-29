@@ -242,6 +242,21 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode GUI_BACKGROUND_EXHAUSTED =
             new DiagnosticCode("MTR-0053", Severity.ERROR, "GUI background codepoint space exhausted");
 
+    /**
+     * A GUI slot names an item that is not live at apply time (unknown id, or a vanilla
+     * material that does not exist). The slot stays empty and the rest of the GUI is shown
+     * (gui.md §5); the GUI itself is not quarantined.
+     */
+    public static final DiagnosticCode GUI_SLOT_ITEM_UNRESOLVED =
+            new DiagnosticCode("MTR-0054", Severity.WARN, "GUI slot item is not live; the slot stays empty");
+
+    /**
+     * An actor asked for a runtime operation without the permission node it needs (for example
+     * {@code materione.gui.open}). Nothing happens.
+     */
+    public static final DiagnosticCode PERMISSION_DENIED =
+            new DiagnosticCode("MTR-0055", Severity.ERROR, "Permission denied for this operation");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -295,7 +310,9 @@ public final class DiagnosticCodes {
             EDITOR_RELAY_UNREACHABLE,
             AUTHORING_SUMMARY_BUDGET_EXCEEDED,
             GUI_LAYER_SKIPPED,
-            GUI_BACKGROUND_EXHAUSTED);
+            GUI_BACKGROUND_EXHAUSTED,
+            GUI_SLOT_ITEM_UNRESOLVED,
+            PERMISSION_DENIED);
 
     private DiagnosticCodes() {}
 

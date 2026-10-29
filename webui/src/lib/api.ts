@@ -1,10 +1,14 @@
 /** Typed helpers over the sealed channel — one place that knows the op names. */
-import type { EditorChannel as SealedEditorChannel } from './protocol/session';
+import type { EditorChannel as SealedEditorChannel, SessionBlob } from './protocol/session';
 import type { AssetUpload, Response } from './protocol/wire';
 
 export type { AssetUpload } from './protocol/wire';
 
-export type RpcChannel = Pick<SealedEditorChannel, 'call'>;
+/**
+ * The sealed channel as the studio sees it: its calls, and the session blob the connection was
+ * opened with (the capabilities the connected jar advertises). A demo channel has no blob.
+ */
+export type RpcChannel = Pick<SealedEditorChannel, 'call'> & { readonly blob?: SessionBlob };
 type EditorChannel = RpcChannel;
 
 export class RpcError extends Error {
@@ -368,6 +372,13 @@ export const ops = {
    */
   bulk: (c: EditorChannel, pack: string, operations: unknown[], dryRun: boolean) =>
     c.call('authoring.bulk', { pack, operations, dryRun }),
+  /**
+   * Opens the live GUI in front of the session's approved player (gui.md §5, §7). `queued` is true
+   * while the window is still opening on that player's thread; a refusal arrives as an RpcError.
+   */
+  openGui: (c: EditorChannel, id: string) => c.call('runtime.openGui', { id }),
+  /** Whether the session's approved player is online, and their name. */
+  previewTarget: (c: EditorChannel) => c.call('runtime.previewTarget'),
 };
 
 export const assetOps = {

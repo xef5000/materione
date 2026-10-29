@@ -138,7 +138,10 @@ class EditorDemoSnapshotTest {
                 () -> transport[0], settingsService, () -> settings, () -> storage, () -> null);
         var api = new dev.materione.core.MaterioneApiImpl(
                 "demo", registries, diagnostics, () -> descriptor, scheduling,
-                authoring, assets, pipelineApi, new DeliveryApiImpl(delivery), null, admin, mechanics);
+                authoring, assets, pipelineApi, new DeliveryApiImpl(delivery),
+                // the runtime surface is wired but unused here: its constructor touches no server
+                new dev.materione.plugin.runtime.api.RuntimeApiImpl(null, scheduling, pipeline, () -> null, () -> null),
+                admin, mechanics);
         transport[0] = new EditorTransportService(
                 null, diagnostics, scheduling, pipeline, api, documents, audit, authoring);
         transport[0].behaviorVocabulary(behavior::vocabulary);

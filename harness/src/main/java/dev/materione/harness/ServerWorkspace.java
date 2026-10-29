@@ -57,6 +57,22 @@ public final class ServerWorkspace {
         Files.writeString(bstats.resolve("config.yml"), "enabled: false\n");
 
         ServerWorkspace workspace = new ServerWorkspace(root);
+        // Ports for local runs whose defaults are taken (another server on the machine): the CI pins
+        // stay the defaults; only an explicit override writes a settings file
+        Integer editorPort = Integer.getInteger("harness.editorPort");
+        Integer deliveryPort = Integer.getInteger("harness.deliveryPort");
+        if (editorPort != null || deliveryPort != null) {
+            Path settings = root.resolve("plugins").resolve("Materione").resolve("settings");
+            Files.createDirectories(settings);
+            var yaml = new StringBuilder("version: 1\n");
+            if (editorPort != null) {
+                yaml.append("editor_port: ").append(editorPort).append('\n');
+            }
+            if (deliveryPort != null) {
+                yaml.append("delivery_port: ").append(deliveryPort).append('\n');
+            }
+            Files.writeString(settings.resolve("settings.yml"), yaml.toString());
+        }
         if (options.brokenSettingsYaml() != null) {
             Path settings = root.resolve("plugins").resolve("Materione").resolve("settings");
             Files.createDirectories(settings);
@@ -100,7 +116,7 @@ public final class ServerWorkspace {
      */
     private static String serverProperties() {
         return """
-                server-port=25599
+                server-port=%d
                 online-mode=false
                 level-type=minecraft\\:flat
                 generate-structures=false
@@ -109,7 +125,7 @@ public final class ServerWorkspace {
                 spawn-protection=0
                 max-players=1
                 motd=MaterioneHarness
-                """;
+                """.formatted(Integer.getInteger("harness.serverPort", 25599));
     }
 
     private static void deleteRecursively(Path dir) throws IOException {

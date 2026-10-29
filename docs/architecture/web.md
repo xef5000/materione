@@ -240,7 +240,7 @@ The session blob is the trust root of the whole exchange, so its key transport i
    panel can negotiate and gate before any RPC: `protocolVersions` is the jar's accepted
    hello versions (§4.2); `capabilities` lists named feature areas (`items`, `blocks`,
    `furniture`, `paintings`, `glyphs`, `text-effects`, `sounds`, `recipes`, `models`,
-   `assets`, `delivery` for the v1 surface) that a newer panel hides or annotates UI for
+   `assets`, `delivery`, and `gui` for the preview-in-game ops, which an older release lacks) that a newer panel hides or annotates UI for
    when the connected jar does not advertise them — an absent list means a
    pre-capabilities jar, and the panel assumes full support (never worse than today).
 3. Plugin prints the admin a URL of the form
@@ -348,6 +348,17 @@ different threads — `EditorSession.sendFrame` synchronizes seal+write so seque
 assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
+
+*As built (M6 preview in game, #185):* `runtime.openGui` (`{id}`) opens the live GUI for the session's
+approved player, the player who opened the session in game. It answers `{queued}` (true while the
+window is still opening on that player's thread) or refuses with the api's diagnostic; a session with
+no owner (a console session) is refused with `MTR-0009`, never given a guessed player. `runtime.previewTarget`
+answers `{online, player?}` for that player, and the studio's "Preview in game" button reads it to
+say why it is disabled. Both are served from `api.runtime().gui()` (R9). They are gated on the `gui`
+session capability: the studio sends neither op unless the connected blob advertises `gui`
+(`fixtures/protocol/editor-op-gates.json`, checked by `scripts/compat/editor-compat.mjs`). The golden
+frames are `fixtures/protocol/editor-runtime-v1.json`, checked by `EditorRuntimeGoldenTest` (JVM) and
+`runtime-golden.spec.ts` (SPA); the capability list is pinned by `editor-protocol-v1.json`.
 
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
