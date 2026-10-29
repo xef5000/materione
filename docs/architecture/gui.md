@@ -456,6 +456,9 @@ diff; `gui.edit` is the path for other consumers (§10 #12).
 
 ## 8. Deferred — and how it plugs in
 
+> **Logic is designed in [`logic.md`](logic.md)** (clicks, dynamic slots, lists, prompts, the node
+> editor). The seams below are the ones it uses; where it refines one, logic.md wins.
+
 | Later | Seam |
 |---|---|
 | Click bindings → ECA `menu.click` | a per-layer `on:` block owned by the gui type; `button`/`item` layers declare click regions |
