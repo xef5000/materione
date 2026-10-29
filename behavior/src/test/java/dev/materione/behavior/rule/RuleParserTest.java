@@ -137,7 +137,7 @@ class RuleParserTest {
         assertThat(parsed.rules()).hasSize(1);
         assertThat(parsed.rules().get(0).actions()).extracting(BoundAction::id).containsExactly("message");
         assertThat(parsed.problems()).singleElement().satisfies(problem -> {
-            assertThat(problem.code().code()).isEqualTo("MTR-0056");
+            assertThat(problem.code().code()).isEqualTo("MTR-0057");
             assertThat(problem.message()).contains("unknown action 'mystery'").contains("sample:wand");
         });
     }
@@ -150,7 +150,7 @@ class RuleParserTest {
 
         assertThat(parsed.rules().get(0).actions()).hasSize(1);
         assertThat(parsed.problems()).singleElement().satisfies(problem -> {
-            assertThat(problem.code().code()).isEqualTo("MTR-0056");
+            assertThat(problem.code().code()).isEqualTo("MTR-0057");
             assertThat(problem.message()).contains("action 'message' rejected: value must not be 'reject'");
             assertThat(problem.hint()).isNotBlank();
         });
@@ -162,7 +162,7 @@ class RuleParserTest {
 
         assertThat(parsed.rules()).isEmpty();
         assertThat(parsed.problems()).extracting(problem -> problem.code().code())
-                .containsExactly("MTR-0056", "MTR-0021");
+                .containsExactly("MTR-0057", "MTR-0021");
     }
 
     @Test

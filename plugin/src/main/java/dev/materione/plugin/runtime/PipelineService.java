@@ -868,7 +868,7 @@ public final class PipelineService {
      * (runtime-systems §2). Broken rules are diagnosed (MTR-0021/0022) and
      * skipped — their siblings still load; a single action the registry does
      * not know, or whose type rejects its parameters, is skipped alone
-     * (MTR-0056).
+     * (MTR-0057).
      */
     private void compileBehaviors(
             ItemDefinition item,

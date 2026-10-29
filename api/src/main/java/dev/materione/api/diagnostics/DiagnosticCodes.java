@@ -263,7 +263,7 @@ public final class DiagnosticCodes {
      * skipped; its siblings and the rest of the rule still load.
      */
     public static final DiagnosticCode LOGIC_STEP_REJECTED =
-            new DiagnosticCode("MTR-0056", Severity.WARN, "Logic step rejected at load; skipped");
+            new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
 
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,

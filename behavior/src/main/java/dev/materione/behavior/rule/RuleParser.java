@@ -30,7 +30,7 @@ import java.util.Optional;
  * once, here: a rule holds typed {@link BoundAction}s, not raw maps (logic.md §4.1). A structural
  * problem (not a mapping, no action key, a bad {@code chance}) skips the rule with
  * {@code MTR-0021}; a single step whose action is unknown or rejects its parameters is skipped
- * alone with {@code MTR-0056}, and the rule keeps its other steps.
+ * alone with {@code MTR-0057}, and the rule keeps its other steps.
  */
 public final class RuleParser {
 
@@ -190,7 +190,7 @@ public final class RuleParser {
 
     /**
      * Resolves the action and runs its typed parse. A step the registry does not know, or whose
-     * type rejects the parameters, is diagnosed ({@code MTR-0056}) and dropped on its own.
+     * type rejects the parameters, is diagnosed ({@code MTR-0057}) and dropped on its own.
      */
     private static Optional<BoundAction<?>> bind(
             NamespacedId owner, String ruleId, ActionShape shape, LogicLookup lookup, List<Diagnostic> problems) {

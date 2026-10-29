@@ -694,7 +694,7 @@ Rules:
 
 ## 10. Diagnostics
 
-The implementing PRs assign codes from `MTR-0056` upwards and document them in plugin.md §5. Each
+The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. Each
 code below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -855,7 +855,7 @@ registry facade is [`api.md`](api.md) §3.11.
     ported actions now return `FAILED` for them, so the adapter publishes the rate-limited `MTR-0023`
     for both and the behaviour is unchanged. #208 decides whether a plain `FAILED` stays a
     diagnostic or becomes trace-only.
-12. **`MTR-0056`** covers an unknown action or condition id and a step the type rejects while
+12. **`MTR-0057`** covers an unknown action or condition id and a step the type rejects while
     parsing. Only that step is skipped. A rule whose steps all fail to load is skipped with
     `MTR-0021`. An unknown trigger keeps `MTR-0021`, the code it always had, with the same effect.
 

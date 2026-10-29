@@ -35,7 +35,7 @@ releases may change file formats, settings and the public API.
   triggers (with their filters, variables and whether they can be cancelled), conditions, the flow
   step kinds, palette categories and functions, plus each action's category, thread and
   availability. Existing rules mean the same; a step is now checked when the rule loads, and one
-  bad step is skipped with `MTR-0056` instead of failing when a player first triggers it. `cancel:
+  bad step is skipped with `MTR-0057` instead of failing when a player first triggers it. `cancel:
   false` no longer cancels, and an unknown `run_command` sender or an out-of-range sound, potion
   duration or amplifier is rejected at load.
 - **The GUI builder is part of MaterioneAPI (api.md §3.9, §3.10, gui.md §7).** `AuthoringApi.gui()`
