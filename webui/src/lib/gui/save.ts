@@ -36,6 +36,20 @@ export function paintReference(documentPath: string, layerId: string): string {
 }
 
 /**
+ * The texture reference an uploaded file gets: beside the GUI's other textures
+ * (`gui/<gui-path>/<name>`), the file name reduced to `[a-z0-9_]` and made unique among `taken`.
+ */
+export function uploadReference(documentPath: string, fileName: string, taken: ReadonlySet<string>): string {
+  const withoutRoot = documentPath.replace(/^guis\//, '').replace(/\.ya?ml$/, '');
+  const stem = fileName.replace(/\.[A-Za-z0-9]+$/, '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') || 'image';
+  const base = `gui/${withoutRoot}/${stem}`;
+  if (!taken.has(base)) return base;
+  for (let n = 2; ; n++) {
+    if (!taken.has(`${base}_${n}`)) return `${base}_${n}`;
+  }
+}
+
+/**
  * The changed fields, and the dirty assets that the document still refers to
  * (an asset made for a layer that was since deleted or undone is never sent).
  */

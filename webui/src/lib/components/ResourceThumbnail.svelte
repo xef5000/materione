@@ -16,9 +16,11 @@
     label: string;
     size?: number;
     version?: number;
+    /** No frame, rounding or backdrop: just the image (the GUI canvas draws items this way). */
+    bare?: boolean;
   }
 
-  let { visual, render, material, label, size = 32, version = 0 }: Props = $props();
+  let { visual, render, material, label, size = 32, version = 0, bare = false }: Props = $props();
   let container = $state<HTMLDivElement>();
   let image = $state('');
   let thumbnailState = $state<'empty' | 'loading' | 'ready' | 'error' | 'unavailable'>('empty');
@@ -197,6 +199,7 @@
   class:model={visual?.kind === 'model-thumbnail' || live}
   class:vanilla
   class:live
+  class:bare
   bind:this={container}
   role="img"
   aria-label={accessibleTitle}
@@ -226,6 +229,13 @@
     color: var(--faint);
     font-size: var(--text-lg);
     line-height: 1;
+  }
+
+  .thumbnail.bare {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    overflow: visible;
   }
 
   img {

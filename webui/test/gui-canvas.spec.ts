@@ -8,6 +8,7 @@ import { parse } from 'yaml';
 import { sampleGuiRaw } from '../src/lib/demo/gui';
 import { registry } from './helpers/gui-registry';
 import { parseGui, type GuiDocument, type GuiLayer } from '../src/lib/gui/model';
+import { smallcaps } from '../src/lib/gui/font/render';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
 import {
   compiledOrder,
@@ -15,7 +16,7 @@ import {
   layerBounds,
   layersInRect,
   orderBadges,
-  placeholders,
+  overlays,
   sceneOf,
 } from '../src/lib/gui/scene';
 import { collectTargets, snapMove, snapResize, snapThreshold } from '../src/lib/gui/snap';
@@ -56,8 +57,9 @@ describe('layer bounds', () => {
     expect(layerBounds({ id: 'i', type: 'panel' }, s)).toBeNull();
   });
 
-  it('measures a text layer with a stand-in box until the font lands', () => {
-    expect(layerBounds(layer(doc, 'heading'), s)).toMatchObject({ x: 8, y: 6, h: 9 });
+  it('measures a text layer by its font: the smallcaps ink extent and the height of its art', () => {
+    // the ink extent drops the trailing spacing pixel; the height is the font's glyph rows (cap band + descender row)
+    expect(layerBounds(layer(doc, 'heading'), s)).toEqual({ x: 8, y: 6, w: smallcaps.measure('Shop') - 1, h: smallcaps.artRows });
   });
 });
 
@@ -94,9 +96,9 @@ describe('compiled order and badges (gui.md section 4)', () => {
     expect(orderBadges(ordered, scene(ordered)).size).toBe(0);
   });
 
-  it('lists the text and item layers as placeholders, in compiled order, with rectangles', () => {
+  it('lists the text and item layers drawn over the art, in compiled order, with rectangles', () => {
     const doc = sample();
-    const marked = placeholders(doc, scene(doc));
+    const marked = overlays(doc, scene(doc));
     expect(marked.map((entry) => [entry.layer.id, entry.target])).toEqual(
       [['heading', 'text'], ['sword', 'slot'], ['apple', 'slot']]);
     expect(marked[1]!.rect).toMatchObject({ w: 16, h: 16 });

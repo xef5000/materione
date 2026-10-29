@@ -22,6 +22,11 @@ export interface Command {
   readonly label: string;
   /** Consecutive commands with the same key (within the history's window) become one step. */
   readonly coalesce?: string;
+  /**
+   * Set by commands that change a layer's pixels (a texture reference), not the document: the
+   * history tracks those separately so a stroke makes the studio dirty and undoing it makes it clean.
+   */
+  readonly pixelAsset?: string;
   apply(doc: GuiDocument): GuiDocument;
   revert(doc: GuiDocument): GuiDocument;
   /** Folds a later command of the same kind into this one, or null when it cannot. */

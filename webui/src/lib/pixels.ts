@@ -70,6 +70,20 @@ export interface Brush {
   color: Color;
   size: number;
   mirrorX: boolean;
+  /** `round` trims the corners of the square footprint (the GUI studio's brush); default `square`. */
+  shape?: 'square' | 'round';
+}
+
+/**
+ * Whether the cell (dx, dy) of a `reach`-wide brush footprint is painted. A square covers every
+ * cell; a round brush keeps the cells whose centers lie within the circle inscribed in the
+ * footprint (slightly shrunk, so 3 px is a plus and 4 px is a square without corners).
+ */
+export function brushCovers(reach: number, shape: Brush['shape'], dx: number, dy: number): boolean {
+  if (shape !== 'round' || reach <= 2) return true;
+  const center = (reach - 1) / 2;
+  const radius = reach / 2 - 0.1;
+  return (dx - center) ** 2 + (dy - center) ** 2 <= radius * radius;
 }
 
 export function stamp(bitmap: Bitmap, x: number, y: number, brush: Brush): void {
@@ -77,6 +91,7 @@ export function stamp(bitmap: Bitmap, x: number, y: number, brush: Brush): void 
   const start = Math.floor((reach - 1) / 2);
   for (let dy = 0; dy < reach; dy++) {
     for (let dx = 0; dx < reach; dx++) {
+      if (!brushCovers(reach, brush.shape, dx, dy)) continue;
       const px = x - start + dx;
       const py = y - start + dy;
       setPixel(bitmap, px, py, brush.color);

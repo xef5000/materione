@@ -11,19 +11,28 @@
   import ComponentPalette from './ComponentPalette.svelte';
   import GuiCanvas from './GuiCanvas.svelte';
   import InspectorPanel from './InspectorPanel.svelte';
+  import ImageChooser from './ImageChooser.svelte';
   import LayersPanel from './LayersPanel.svelte';
+  import PaintOptions from './PaintOptions.svelte';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
   import { ops, unwrap } from '../../api';
   import type { ResourceRef } from '../../api';
   import {
+    draftDirty,
+    draftStore,
     ensureDocumentDraft,
     getDocumentDraft,
     reloadDocumentDraft,
     retainDocumentDraft,
+    saveDocumentDraft,
   } from '../../drafts.svelte';
+  import { isCustomized } from '../../gui/customize';
+  import { itemRefOf } from '../../gui/items';
+  import { bareType } from '../../gui/raster/flatten';
   import { readRegistry } from '../../gui/registry';
-  import { GuiStudioState } from '../../gui/studio.svelte';
+  import { GuiStudioState, isPaintTool } from '../../gui/studio.svelte';
+  import { isTextLayer } from '../../gui/text';
   import { zoomLabel } from '../../gui/viewport';
   import { restack } from '../../gui/ops';
   import { rootIdForResource } from '../../studio';
@@ -41,6 +50,7 @@
   // svelte-ignore state_referenced_locally
   const studio = new GuiStudioState(resource.pack, resource.path, rootIdForResource(resource.id));
   const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
+
   const rootId = $derived(rootIdForResource(resource.id));
   let notGui = $state(false);
 
@@ -92,8 +102,8 @@
 
   $effect(() => registerEditorGuard('studio', () => {
     if (studio.saving) return false;
-    return !studio.dirty || confirm('Leave the GUI studio without saving? Your layout changes will be lost.');
-  }, () => studio.dirty || studio.saving));
+    return !anyDirty || confirm('Leave the GUI studio without saving? Your layout changes will be lost.');
+  }, () => anyDirty || studio.saving));
 
   const textures = $derived(
     workspace.assets
@@ -101,10 +111,27 @@
       .map((asset) => asset.path.slice('assets/textures/'.length).replace(/\.png$/, '')),
   );
 
+  /** The ordinary items this GUI's layers were customized into: their appearance edits are drafts of their own. */
+  const customItems = $derived(
+    studio.doc.layers.flatMap((layer) => {
+      if (bareType(layer) !== 'item') return [];
+      const item = isCustomized(itemRefOf(layer), { pack: resource.pack, guiPath: resource.path, resources: workspace.resources });
+      // only drafts that exist: the inline appearance opens (and so creates) one when the layer is selected
+      const draft = item ? draftStore.documents.find((entry) => entry.pack === item.pack && entry.path === item.path) : undefined;
+      return draft ? [draft] : [];
+    }),
+  );
+  const itemsDirty = $derived(customItems.some((draft) => draftDirty(draft)));
+  const anyDirty = $derived(studio.dirty || itemsDirty);
+
+  /** One Save: the layout (and its pixel assets) in one transaction, then each customized item's own draft. */
   async function save(): Promise<void> {
     const channel = session.channel;
     if (!channel || !studio.loaded) return;
     await studio.save(channel, documentDraft);
+    for (const draft of customItems) {
+      if (draftDirty(draft)) await saveDocumentDraft(draft, channel);
+    }
   }
 
   async function reloadFromServer(): Promise<void> {
@@ -155,9 +182,22 @@
       event.preventDefault();
       studio.run(restack(studio.doc, studio.selection, event.key === ']' ? 'forward' : 'backward'));
     } else if (!mod && key === 'v') {
-      studio.tool = 'select';
+      studio.chooseTool('select');
     } else if (!mod && key === 'h') {
-      studio.tool = 'hand';
+      studio.chooseTool('hand');
+    } else if (!mod && key === 'b') {
+      studio.chooseTool('brush');
+    } else if (!mod && key === 'e') {
+      studio.chooseTool('eraser');
+    } else if (!mod && key === 'g') {
+      studio.chooseTool('fill');
+    } else if (!mod && key === 'i') {
+      studio.chooseTool('picker');
+    } else if (!mod && (event.key === '[' || event.key === ']')) {
+      studio.setBrush({ size: studio.brush.size + (event.key === ']' ? 1 : -1) });
+    } else if (!mod && event.key === 'Enter' && studio.selected.length === 1 && isTextLayer(studio.selected[0]!)) {
+      event.preventDefault();
+      studio.beginTextEdit(studio.selection[0]!);
     } else if (!mod && event.key === '0') {
       studio.fit();
     } else if (!mod && event.key === '1') {
@@ -172,7 +212,8 @@
     } else if (event.key === 'F2' && studio.selection.length === 1) {
       studio.renaming = studio.selection[0]!;
     } else if (event.key === 'Escape') {
-      studio.select([]);
+      if (isPaintTool(studio.tool)) studio.chooseTool('select');
+      else studio.select([]);
     } else if (event.key.startsWith('Arrow') && studio.selection.length) {
       event.preventDefault();
       const step = event.shiftKey ? 10 : 1;
@@ -188,7 +229,7 @@
   }
 
   const status = $derived(
-    studio.readOnly ? 'Read-only' : studio.saving ? 'Saving…' : studio.dirty ? 'Unsaved changes' : 'Saved',
+    studio.readOnly ? 'Read-only' : studio.saving ? 'Saving…' : anyDirty ? 'Unsaved changes' : 'Saved',
   );
   const selectionText = $derived.by(() => {
     if (studio.selected.length === 0) return `${studio.size.width} x ${studio.size.height} px, ${studio.doc.rows} row${studio.doc.rows === 1 ? '' : 's'}`;
@@ -219,18 +260,25 @@
       <Icon name="arrow-left" size={16} />
     </button>
     <h2 class="id" title="revision {documentDraft.rev}">{resource.id}</h2>
-    <span class="status" class:dirty={studio.dirty} class:readonly={studio.readOnly} data-status>{status}</span>
+    <span class="status" class:dirty={anyDirty} class:readonly={studio.readOnly} data-status>{status}</span>
     <span class="spacer"></span>
     <button type="button" class="ghost" onclick={() => revealInAdvanced(resource)} title="open this resource in Files">Open in Files</button>
-    <button type="button" class="save" disabled={!active || !studio.loaded || studio.readOnly || !studio.dirty || studio.saving} onclick={save} title="Save (Ctrl+S)">
+    <button type="button" class="save" disabled={!active || !studio.loaded || studio.readOnly || !anyDirty || studio.saving} onclick={save} title="Save (Ctrl+S)">
       <Icon name="save" size={14} /> {studio.saving ? 'Saving…' : 'Save'}
     </button>
   </header>
 
   <div class="tools" role="toolbar" aria-label="Studio tools">
     <div class="cluster">
-      {@render tool('mouse-pointer-2', 'Select', 'V', () => (studio.tool = 'select'), studio.tool === 'select')}
-      {@render tool('hand', 'Hand', 'H', () => (studio.tool = 'hand'), studio.tool === 'hand')}
+      {@render tool('mouse-pointer-2', 'Select', 'V', () => studio.chooseTool('select'), studio.tool === 'select')}
+      {@render tool('hand', 'Hand', 'H', () => studio.chooseTool('hand'), studio.tool === 'hand')}
+    </div>
+    <span class="rule"></span>
+    <div class="cluster">
+      {@render tool('pencil', 'Brush', 'B', () => studio.chooseTool('brush'), studio.tool === 'brush', studio.readOnly)}
+      {@render tool('eraser', 'Eraser', 'E', () => studio.chooseTool('eraser'), studio.tool === 'eraser', studio.readOnly)}
+      {@render tool('paint-bucket', 'Fill', 'G', () => studio.chooseTool('fill'), studio.tool === 'fill', studio.readOnly)}
+      {@render tool('pipette', 'Eyedropper', 'I', () => studio.chooseTool('picker'), studio.tool === 'picker', studio.readOnly)}
     </div>
     <span class="rule"></span>
     <div class="cluster">
@@ -252,6 +300,8 @@
     </div>
   </div>
 
+  {#if isPaintTool(studio.tool)}<PaintOptions {studio} />{/if}
+
   {#if documentDraft.error}<p class="banner error" role="alert">{documentDraft.error}</p>{/if}
   {#if studio.saveError}
     <p class="banner error" role="alert">
@@ -268,7 +318,7 @@
   {#if notGui}
     <p class="banner error" role="alert">This file is not a GUI document (no layers).</p>
   {/if}
-  {#if studio.notice && !studio.dirty}<p class="banner notice" role="status">{studio.notice}</p>{/if}
+  {#if studio.notice && !anyDirty}<p class="banner notice" role="status">{studio.notice}</p>{/if}
 
   <div class="body">
     <aside class="left">
@@ -279,17 +329,18 @@
       {#if documentDraft.loading && !studio.loaded}
         <p class="loading">Opening…</p>
       {:else}
-        <GuiCanvas {studio} />
+        <GuiCanvas {studio} {textures} />
       {/if}
       <footer class="statusbar">
         <span class="cursor" data-cursor>{studio.cursor ? `${studio.cursor.x}, ${studio.cursor.y}` : '–'}</span>
         <span class="sel">{selectionText}</span>
         <span class="spacer"></span>
-        <span class="hintline">Space or middle-drag to pan · wheel to zoom · Shift+click to multi-select</span>
+        <span class="hintline" class:say={!!studio.hint} role="status" data-testid="gui-hint">{studio.hint || (isPaintTool(studio.tool) ? 'Space-drag pans · wheel zooms · [ ] change the brush size' : 'Space or middle-drag to pan · wheel to zoom · Shift+click to multi-select · double-click text to edit')}</span>
       </footer>
     </div>
     <div class="right"><InspectorPanel {studio} {textures} /></div>
   </div>
+  {#if studio.choosing}<ImageChooser {studio} {textures} />{/if}
 </section>
 
 <style>
@@ -523,5 +574,8 @@
   }
   .hintline {
     color: var(--faint);
+  }
+  .hintline.say {
+    color: var(--accent-hover);
   }
 </style>

@@ -18,7 +18,11 @@
   import { formatColor } from '../../gui/raster/color';
   import { RAISED_DEFAULT, SLOT_DEFAULT, bareType } from '../../gui/raster/flatten';
   import ColorField from './ColorField.svelte';
+  import ImageExtras from './ImageExtras.svelte';
+  import ItemExtras from './ItemExtras.svelte';
+  import PaintExtras from './PaintExtras.svelte';
   import ScrubNumber from './ScrubNumber.svelte';
+  import TextExtras from './TextExtras.svelte';
 
   interface Props {
     studio: GuiStudioState;
@@ -49,7 +53,12 @@
   const params = $derived.by<TypeParam[]>(() => {
     if (!layer || !info) return [];
     const geometryShown = can?.movable && !can.slotBound;
+    // fields a bespoke section below owns: the texture of an image or paint layer, an item's reference
+    const owned = new Set<string>(
+      bareType(layer) === 'image' || bareType(layer) === 'paint' ? ['image'] : bareType(layer) === 'item' ? ['item'] : [],
+    );
     return info.parameters
+      .filter((param) => !owned.has(param.id))
       .filter((param) => !(geometryShown && GEOMETRY.includes(param.id)))
       .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
   });
@@ -182,6 +191,12 @@
       </section>
     {/if}
 
+    {#if bareType(layer) === 'image'}
+      <ImageExtras {studio} {layer} {textures} {disabled} />
+    {:else if bareType(layer) === 'paint'}
+      <PaintExtras {studio} {layer} {disabled} />
+    {/if}
+
     {#each params as param (param.id)}
       {@const kind = kindOf(param)}
       {@const raw = layer[param.id]}
@@ -261,6 +276,12 @@
         {/if}
       </section>
     {/each}
+
+    {#if bareType(layer) === 'item'}
+      <ItemExtras {studio} {layer} {disabled} />
+    {:else if bareType(layer) === 'text'}
+      <TextExtras {studio} {layer} />
+    {/if}
 
     {#if target === 'raster'}
       <section class="group">

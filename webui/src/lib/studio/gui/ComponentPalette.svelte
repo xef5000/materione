@@ -24,7 +24,7 @@
             type="button"
             title={component.description}
             disabled={studio.readOnly}
-            onclick={() => studio.addComponent(component)}
+            onclick={() => (component.id.endsWith('image') ? (studio.choosing = true) : studio.addComponent(component))}
           >
             <Icon name={componentIcon(component)} size={16} />
             <span>{component.displayName}</span>

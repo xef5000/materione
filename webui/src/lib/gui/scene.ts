@@ -4,15 +4,19 @@
  * compiled (not list) order, and the badges that say when the two disagree
  * (gui.md section 4: "what you see is what the player gets").
  *
- * Pure: no DOM, no Svelte. Issue 187 plugs the text and item layers in by
- * replacing `measureTextLayer` and by registering real painters; nothing here
- * changes.
+ * Pure: no DOM, no Svelte. Text layers are measured by the font (`text.ts`);
+ * text and item layers are real renders (the canvas draws smallcaps pixels
+ * through `compose.ts` and item icons from the item pipeline), so this module
+ * only says where they are and in what order.
  */
 import { canvasSize, cellsOf, itemRect, slotCell, wellRect } from './chest';
 import { isHidden, isLocked, type GuiDocument, type GuiLayer } from './model';
 import type { ArgbCanvas, Rect } from './raster/canvas';
 import { bareType, regionOf, whole } from './raster/flatten';
 import { componentOf, type GuiRegistry, type RenderTarget } from './registry';
+import { measureTextLayer } from './text';
+
+export { measureTextLayer };
 
 export interface Scene {
   rows: number;
@@ -29,14 +33,6 @@ export function sceneOf(
 ): Scene {
   const { width, height } = canvasSize(doc.rows);
   return { rows: doc.rows, width, height, registry, image };
-}
-
-/** Text layers are measured by issue 187's font; until then a coarse box stands in. */
-export function measureTextLayer(layer: GuiLayer): { w: number; h: number } {
-  const text = typeof layer.text === 'string' ? layer.text : '';
-  const longest = text.split('\n').reduce((n, line) => Math.max(n, line.length), 0);
-  const lines = Math.max(1, text.split('\n').length);
-  return { w: Math.max(6, longest * 6), h: lines * 9 };
 }
 
 export function renderTargetOf(layer: GuiLayer, scene: Pick<Scene, 'registry'>): RenderTarget {
@@ -136,15 +132,15 @@ export function orderBadges(doc: GuiDocument, scene: Pick<Scene, 'registry'>): M
   return badges;
 }
 
-/** A layer the player-visible raster does not contain: drawn as a marked placeholder until issue 187 renders it. */
-export interface Placeholder {
+/** A layer outside the background raster (title text, a slot item): the canvas draws it on top of the art. */
+export interface Overlay {
   layer: GuiLayer;
   target: Exclude<RenderTarget, 'raster'>;
   rect: Rect;
 }
 
-export function placeholders(doc: GuiDocument, scene: Scene): Placeholder[] {
-  const out: Placeholder[] = [];
+export function overlays(doc: GuiDocument, scene: Scene): Overlay[] {
+  const out: Overlay[] = [];
   for (const layer of compiledOrder(doc, scene)) {
     const target = renderTargetOf(layer, scene);
     if (target === 'raster') continue;

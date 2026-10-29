@@ -8,6 +8,6 @@ export default defineConfig({
   },
   publicDir: 'public',
   server: {
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden'] },
+    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden', '../fonts/smallcaps'] },
   },
 });

@@ -4,7 +4,7 @@
  * it will run on and returns an invertible command (or null for a no-op), so
  * the studio's only job is to hand the result to the history.
  */
-import { nearestCell } from './chest';
+import { nearestContainerCell } from './chest';
 import {
   addLayer,
   compose,
@@ -35,7 +35,7 @@ function infoFor(scene: Scene, layer: GuiLayer): GuiComponentInfo | undefined {
 export function patchForRect(layer: GuiLayer, rect: Rect, scene: Scene): LayerPatch | null {
   const can = transformability(infoFor(scene, layer), layer);
   if (can.slotBound) {
-    const cell = nearestCell(scene.rows, rect.x + rect.w / 2, rect.y + rect.h / 2);
+    const cell = nearestContainerCell(scene.rows, rect.x + rect.w / 2, rect.y + rect.h / 2);
     return layer.slot === cell.index ? null : { slot: cell.index };
   }
   if (!can.movable) return null;
