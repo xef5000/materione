@@ -97,6 +97,8 @@ class GlyphTypeTest {
         assertThat(emitter.fonts).hasSize(1);
         var emission = emitter.fonts.get(0);
         assertThat(emission.fontKey()).isEqualTo("sample:glyphs");
+        // glyph fonts join the default font: unstyled text reaches private-use codepoints only through it (#198)
+        assertThat(emission.membership()).isEqualTo(PackEmitter.FontMembership.JOINS_DEFAULT);
         assertThat(emission.provider())
                 .containsEntry("type", "bitmap")
                 // 1.21.2+ font format wants the extension on the texture path
@@ -199,7 +201,8 @@ class GlyphTypeTest {
         return emitter.fonts.get(index);
     }
 
-    private record GlyphDefinitionEmitted(String fontKey, Map<String, Object> provider) {}
+    private record GlyphDefinitionEmitted(
+            String fontKey, Map<String, Object> provider, PackEmitter.FontMembership membership) {}
 
     /** Fake allocation table: {@code runs} maps kind → the ranges it hands out. */
     private static dev.materione.api.content.Allocations allocations(Map<String, String> runs) {
@@ -255,8 +258,9 @@ class GlyphTypeTest {
         final List<GlyphDefinitionEmitted> fonts = new ArrayList<>();
 
         @Override
-        public void fontProvider(String fontKey, Map<String, Object> providerJson) {
-            fonts.add(new GlyphDefinitionEmitted(fontKey, providerJson));
+        public void fontProvider(String fontKey, Map<String, Object> providerJson,
+                PackEmitter.FontMembership membership) {
+            fonts.add(new GlyphDefinitionEmitted(fontKey, providerJson, membership));
         }
 
         @Override
