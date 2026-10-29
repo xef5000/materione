@@ -18,4 +18,7 @@ dependencies {
     implementation(libs.undertow.core)
     // Test fixtures build the real api implementations (core-owned).
     testImplementation(project(":core"))
+    // The GUI ops' golden frames come from the real GUI surface (content-owned). Test-only: the
+    // production classes of web still depend on api alone (R9).
+    testImplementation(project(":content"))
 }

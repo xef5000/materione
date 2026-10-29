@@ -130,7 +130,15 @@ class EditorDemoSnapshotTest {
         var authoring = new dev.materione.core.authoring.AuthoringApiImpl(
                 documents, audit, packsRoot, new ModelTransactionService(documents, packsRoot, audit),
                 new GlyphMetadataComputer(pipeline), () -> pipeline.runner().lastGraph(),
-                (actor, pack, changed) -> { }, assetStore, pipeline::contentTypes);
+                (actor, pack, changed) -> { }, assetStore, pipeline::contentTypes,
+                // the GUI surface as MaterionePlugin wires it
+                base -> new dev.materione.content.gui.GuiAuthoringApiImpl(
+                        base,
+                        registries.registry(dev.materione.api.registry.RegistryKeys.GUI_COMPONENTS,
+                                dev.materione.api.gui.GuiComponent.class),
+                        packsRoot,
+                        () -> pipeline.allocation().preview(),
+                        List.of()));
         var assets = new dev.materione.core.assets.AssetApiImpl(assetStore, packsRoot, (actor, pack, changed) -> { });
         EditorTransportService[] transport = new EditorTransportService[1];
         var admin = new AdminApiImpl(() -> null, registries, diagnostics, quarantine,

@@ -139,3 +139,11 @@ test('the preview ops are gated on the capability the editor checks', () => {
   }
   assert.ok(extractEditor().capabilityChecks.has('gui'), 'the editor must call hasCapability(…, \'gui\')');
 });
+
+test('the GUI builder ops are gated on the capability the editor checks', () => {
+  const gates = readGates();
+  for (const op of ['gui.get', 'gui.edit', 'gui.customizeItem', 'gui.render', 'gui.validate']) {
+    assert.equal(gates[op]?.capability, 'gui', `${op} must name the gui capability`);
+  }
+  assert.ok(extractEditor().capabilityChecks.has('gui'), 'the editor must call hasCapability(…, \'gui\')');
+});
