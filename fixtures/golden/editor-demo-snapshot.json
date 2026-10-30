@@ -137,6 +137,31 @@
           "threading": "any"
         },
         {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Makes the player say a chat message, or run a command as themselves",
+          "displayName": "Chat as player",
+          "id": "chat",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Chat text, or a command with a leading slash",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "text",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
           "available": false,
           "category": "server",
           "deferred": false,
@@ -161,93 +186,6 @@
           "sinceVersion": "2.0.0",
           "threading": "player_region",
           "unavailableReason": "No server transfer is configured (set transfer_host, or install a proxy channel)"
-        },
-        {
-          "available": false,
-          "category": "economy",
-          "deferred": true,
-          "description": "Adds money to the player's balance of a currency (the default currency unless one is named)",
-          "displayName": "Give money",
-          "id": "give_money",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "Amount to give; above 0",
-              "id": "amount",
-              "label": "Amount",
-              "order": 0,
-              "required": true,
-              "section": "general",
-              "type": "decimal",
-              "uiHint": "number"
-            },
-            {
-              "advanced": false,
-              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
-              "id": "currency",
-              "label": "Currency",
-              "order": 0,
-              "required": false,
-              "section": "general",
-              "type": "string",
-              "uiHint": "text"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "amount",
-          "sinceVersion": "2.0.0",
-          "threading": "global",
-          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
-        },
-        {
-          "available": true,
-          "category": "server",
-          "deferred": false,
-          "description": "Grants a permission node to the player through the active permission provider",
-          "displayName": "Give permission",
-          "id": "give_permission",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "Permission node, e.g. example.fly",
-              "id": "permission",
-              "label": "Permission",
-              "order": 0,
-              "required": true,
-              "section": "general",
-              "type": "string",
-              "uiHint": "text"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "permission",
-          "sinceVersion": "2.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": true,
-          "category": "player",
-          "deferred": false,
-          "description": "Makes the player say a chat message, or run a command as themselves",
-          "displayName": "Chat as player",
-          "id": "chat",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "Chat text, or a command with a leading slash",
-              "id": "text",
-              "label": "Text",
-              "order": 0,
-              "required": true,
-              "section": "general",
-              "type": "string",
-              "uiHint": "text"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "text",
-          "sinceVersion": "2.0.0",
-          "threading": "player_region"
         },
         {
           "available": true,
@@ -324,6 +262,68 @@
           ],
           "registeredBy": "materione",
           "shorthand": "item",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Adds money to the player's balance of a currency (the default currency unless one is named)",
+          "displayName": "Give money",
+          "id": "give_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to give; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Grants a permission node to the player through the active permission provider",
+          "displayName": "Give permission",
+          "id": "give_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         },
@@ -698,6 +698,68 @@
           "threading": "player_region"
         },
         {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Removes money from the player's balance of a currency; fails when the balance is too low",
+          "displayName": "Take money",
+          "id": "take_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to take; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Removes a permission node from the player through the active permission provider",
+          "displayName": "Take permission",
+          "id": "take_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
           "available": true,
           "category": "world",
           "deferred": false,
@@ -845,68 +907,6 @@
           ],
           "registeredBy": "materione",
           "shorthand": "title",
-          "sinceVersion": "2.0.0",
-          "threading": "player_region"
-        },
-        {
-          "available": false,
-          "category": "economy",
-          "deferred": true,
-          "description": "Removes money from the player's balance of a currency; fails when the balance is too low",
-          "displayName": "Take money",
-          "id": "take_money",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "Amount to take; above 0",
-              "id": "amount",
-              "label": "Amount",
-              "order": 0,
-              "required": true,
-              "section": "general",
-              "type": "decimal",
-              "uiHint": "number"
-            },
-            {
-              "advanced": false,
-              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
-              "id": "currency",
-              "label": "Currency",
-              "order": 0,
-              "required": false,
-              "section": "general",
-              "type": "string",
-              "uiHint": "text"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "amount",
-          "sinceVersion": "2.0.0",
-          "threading": "global",
-          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
-        },
-        {
-          "available": true,
-          "category": "server",
-          "deferred": false,
-          "description": "Removes a permission node from the player through the active permission provider",
-          "displayName": "Take permission",
-          "id": "take_permission",
-          "parameters": [
-            {
-              "advanced": false,
-              "description": "Permission node, e.g. example.fly",
-              "id": "permission",
-              "label": "Permission",
-              "order": 0,
-              "required": true,
-              "section": "general",
-              "type": "string",
-              "uiHint": "text"
-            }
-          ],
-          "registeredBy": "materione",
-          "shorthand": "permission",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         }
