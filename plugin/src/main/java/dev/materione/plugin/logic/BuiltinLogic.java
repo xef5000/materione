@@ -34,7 +34,17 @@ import dev.materione.plugin.logic.action.TakeExpAction;
 import dev.materione.plugin.logic.action.TakeItemAction;
 import dev.materione.plugin.logic.action.TeleportAction;
 import dev.materione.plugin.logic.action.TitleAction;
+import dev.materione.api.logic.ConditionType;
+import dev.materione.plugin.logic.condition.HasExpCondition;
+import dev.materione.plugin.logic.condition.HasItemCondition;
+import dev.materione.plugin.logic.condition.HasItemSpaceCondition;
+import dev.materione.plugin.logic.condition.HasMoneyCondition;
+import dev.materione.plugin.logic.condition.HasPermissionCondition;
+import dev.materione.plugin.logic.condition.InGuiCondition;
+import dev.materione.plugin.logic.condition.InWorldCondition;
+import dev.materione.plugin.logic.condition.IsNearCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
+import dev.materione.plugin.logic.support.OpenGuis;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
@@ -127,6 +137,14 @@ public final class BuiltinLogic {
      * @param items the live item registries for the item actions (see {@link #actions(ItemCatalog)})
      */
     public static void register(LogicApi api, Plugin owner, ItemCatalog items) {
+        register(api, owner, items, OpenGuis.none());
+    }
+
+    /**
+     * As {@link #register(LogicApi, Plugin, ItemCatalog)}, with the port {@code in_gui} reads. The GUI session
+     * runtime (#214) passes its live port here; until then {@link OpenGuis#none()} is used.
+     */
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items, OpenGuis guis) {
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
@@ -146,6 +164,32 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : currencyFunctions(api.providers())) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
+        // built-in conditions (logic.md §19, #210): their own block, after the rest
+        for (ConditionType<?> condition : conditions(api.providers(), guis, items)) {
+            api.conditions().register(owner, builtIn(condition.id()), condition);
+        }
+    }
+
+    /**
+     * The built-in conditions (logic.md §4.2, §19). Each is one class in {@code plugin.logic.condition}.
+     * None may take a composite name ({@code all}, {@code any}, {@code not}, {@code at_least}): the rule
+     * compiler reads those keys as composites before it looks up a predicate, so such a condition would be
+     * unreachable.
+     *
+     * @param providers the provider slots the money condition reads
+     * @param guis the port {@code in_gui} reads
+     * @param items the live item registries the item conditions resolve against
+     */
+    public static List<ConditionType<?>> conditions(LogicProviders providers, OpenGuis guis, ItemCatalog items) {
+        return List.of(
+                new HasPermissionCondition(),
+                new HasMoneyCondition(providers),
+                new HasExpCondition(),
+                new HasItemCondition(items),
+                new HasItemSpaceCondition(items),
+                new IsNearCondition(),
+                new InWorldCondition(),
+                new InGuiCondition(guis));
     }
 
     /**
