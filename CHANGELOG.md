@@ -7,6 +7,36 @@ releases may change file formats, settings and the public API.
 
 ## [Unreleased]
 
+### Added
+
+- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
+  `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
+  balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
+  available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a
+  command pair with a PlaceholderAPI balance). Addons register more. The integration code is adapted
+  from ItemsAPI's currency system, with the owner's permission; ItemsAPI is not a dependency.
+- **`give_money`, `take_money` with `currency:`, and two functions.** `give_money: 100` and
+  `take_money: 250` use the default currency (the `default_currency` setting, `materione:money` unless
+  changed); `take_money` fails with `insufficient funds` and takes nothing. `balance(currency)` reads a
+  player's balance and `format_currency(amount, currency)` writes it with the currency's symbol and
+  decimals.
+- **Permission and transfer actions.** `give_permission: example.fly`, `take_permission: example.fly`,
+  and `connect: lobby`. Each reports itself unavailable, with the reason, when nothing can run it.
+  Permissions always work: they default to a session-only Bukkit grant.
+- **Vault, LuckPerms and the BungeeCord channel are used when installed.** Vault provides the built-in
+  currency and, when LuckPerms is absent, the permission service; LuckPerms provides permissions with
+  native expiry. Both are optional server dependencies. Installing one then running `/materione reload`
+  (or restarting) is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
+- **Server transfer** sends a player by the 1.20.5+ transfer packet, to the `transfer_host` and
+  `transfer_port` in `settings.yml`, or by the BungeeCord plugin channel (BungeeCord and Velocity)
+  when `transfer_mode: bungeecord` is set. The three keys (`transfer_host`, `transfer_port`,
+  `transfer_mode`) are in the default settings file with defaults that keep the feature off.
+- `MTR-0061`: an optional integration could not install its provider and was skipped (a warning).
+  `MTR-0062`: a currency file was quarantined (a warning).
+- Plugin API: `LogicApi.providers()`, `LogicApi.currencyIntegrations()` and the
+  `dev.materione.api.logic.provider` types, for addons that supply a currency integration, a
+  permission provider or a transfer.
+
 ### Changed
 
 - **The GUI studio asks the server, not its own copy of the rules (gui.md §6, §10 #8–#9).** The
@@ -28,7 +58,7 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **The logic has a typed authoring API and web ops (logic.md §8, §17; api.md §3.12).** `authoring().logic()`
+- **The logic has a typed authoring API and web ops (logic.md §8, §19; api.md §3.12).** `authoring().logic()`
   reads, edits, validates and instantiates the `behavior:` and `flows:` of any item, block, furniture or GUI:
   twelve structural edits (add, remove and reorder rules; insert, patch, move and remove steps; set a node position;
   add, remove and rename flows), each addressed by its step path, all or none, with refusals that name the step. An
@@ -64,6 +94,15 @@ releases may change file formats, settings and the public API.
   is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
   read budget, so a pattern cannot stall the server. Addons register their own functions through
   `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
+- **Ten more built-in actions for player, world and server effects (#212, logic.md §17 "Decisions
+  taken in #212").** `broadcast` (to the server, one world, or a permission), `actionbar`, `title`
+  (title, subtitle and fade timings), `stop_sound`, `chat` (a line the player says, or a command
+  they run with a leading slash), `teleport` (coordinates, optionally another world and facing),
+  `give_item` (a Materione item or `minecraft:` material; overflow drops at the feet), `take_item`
+  (matches by id or material and optionally by name; all or nothing), and `give_exp` and `take_exp`
+  (points or levels; a take fails when there is too little). `sound` gains `scope: player|world|server`.
+  Every text parameter takes `${...}` and `%placeholder%`, and each action reports `FAILED` rather
+  than going negative. `connect` is not here; it arrives with the transfer provider (#213).
 - **Addons can register behavior actions, conditions, triggers and expression functions
   (`MaterioneAPI.logic()`, logic.md §4, api.md §3.11).** The six built-in actions (`run_command`,
   `message`, `sound`, `potion`, `cancel`, `set_var`) are now typed `ActionType`s registered through

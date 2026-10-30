@@ -14,6 +14,10 @@ dependencies {
     api(project(":behavior"))
     api(project(":pack"))
     api(project(":delivery"))
+    // Soft-depend provider adapters (Vault, LuckPerms, the BungeeCord channel). Their classes are
+    // loaded only when the matching plugin is enabled (integrations' Integrations gate); nothing
+    // from them is shaded. logic.md §4.5.
+    api(project(":integrations"))
     // The editor transport facade (phase 10). web/ shades Undertow via this
     // edge; R8 keeps every protocol reference inside dev.materione.web.
     api(project(":web"))

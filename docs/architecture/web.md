@@ -368,7 +368,7 @@ either from `authoring.bulk` any more. Payload shapes live in `GuiAuthoringOps` 
 `fixtures/protocol/editor-gui-v1.json`.
 
 *As built (logic authoring, #221):* the `logic` capability (listed in `SessionBlob.CURRENT_CAPABILITIES`) gates five
-ops, each a translator over `AuthoringApi.logic()` (api.md §3.12, logic.md §17) and listed in editor-op-gates.json:
+ops, each a translator over `AuthoringApi.logic()` (api.md §3.12, logic.md §19) and listed in editor-op-gates.json:
 `logic.vocabulary` (the behavior vocabulary), `logic.get` (`{pack, path}`, the typed rules and flows),
 `logic.edit` (`{pack, path, rev, edits}`, the edits as `{op: addRule|removeRules|reorderRules|patchRule|insertStep|
 patchStep|moveStep|removeStep|setNodePosition|addFlow|removeFlow|renameFlow, …}`), `logic.validate`
@@ -381,7 +381,7 @@ pinned by `fixtures/protocol/editor-logic-v1.json`: `LogicAuthoringOpsTest` (JVM
 ops (`logic.variables.*`) are not here; they wait on #211 and join under the same capability.
 
 *As built (GUI `open:`, #221):* `gui.edit` takes `{op: "setOpen", open}` (the block, or null to remove it), and
-`gui.get`/`gui.edit` return the block as `open` when the GUI has one (gui.md §6.1, logic.md §17). `gui.validate` adds the
+`gui.get`/`gui.edit` return the block as `open` when the GUI has one (gui.md §6.1, logic.md §19). `gui.validate` adds the
 block's shape problems and the logic compiler's problems for the GUI's `behavior:` and `flows:`. These are wire-additive:
 an older studio that ignores the new keys keeps working.
 

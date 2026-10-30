@@ -82,6 +82,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
     private dev.materione.plugin.runtime.gui.GuiComponentsService guiComponents;
     private dev.materione.plugin.logic.LogicService logic;
+    private dev.materione.integrations.Integrations integrations;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
     /** API-first wiring (api.md §5 Phase 2); null before content load. */
     private MaterioneAPI api;
@@ -213,6 +214,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (mechanics != null) {
                 mechanics.close();
             }
+            if (integrations != null) {
+                integrations.close();
+            }
             if (logic != null) {
                 logic.close();
             }
@@ -290,8 +294,68 @@ public final class MaterionePlugin extends JavaPlugin {
         guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
         // the logic vocabulary (triggers, actions) through the public API, before content load:
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
-        logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish);
-        dev.materione.plugin.logic.BuiltinLogic.register(logic, this);
+        logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish,
+                settings == null ? null : settings.getString("default_currency", "materione:money"));
+        // the item actions read the live registries: empty until the first apply, then the current set
+        dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
+                () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()));
+        registerProviders();
+    }
+
+    /**
+     * The provider slots behind the money, permission and connect actions (logic.md §4.5): the
+     * transfer packet when settings name a host, then the soft-depend adapters, which pick Vault and
+     * LuckPerms by enabled state. A bad transfer setting is reported and skipped, never fatal.
+     */
+    private void registerProviders() {
+        boolean proxyTransfer = settings != null && "bungeecord".equalsIgnoreCase(settings.getString("transfer_mode", ""));
+        String transferHost = settings == null ? "" : settings.getString("transfer_host", "");
+        if (!proxyTransfer && !transferHost.isBlank()) {
+            try {
+                logic.providers().setTransfer(this, new dev.materione.plugin.logic.PacketServerTransfer(
+                        transferHost, settings.getInt("transfer_port", 25565)));
+            } catch (IllegalArgumentException e) {
+                diagnostics.publish(dev.materione.api.diagnostics.Diagnostic.warn(
+                        dev.materione.api.diagnostics.DiagnosticCodes.INTEGRATION_SKIPPED,
+                        "transfer packet not configured: " + e.getMessage()));
+            }
+        }
+        // every successful swap refreshes the currency catalog from the same view the rest of content reads
+        pipeline.observeSwaps((previous, live) -> logic.updateCurrencies(live));
+        integrations = new dev.materione.integrations.Integrations(this, logic, diagnostics, proxyTransfer);
+        integrations.start();
+    }
+
+    /**
+     * Re-reads the optional integrations, so a Vault or LuckPerms installed since the last enable is
+     * picked up, then logs the provider state. Runs at boot (through the content load) and on every
+     * {@code /materione reload}.
+     */
+    public void refreshLogicProviders() {
+        if (integrations != null) {
+            integrations.refresh();
+        }
+        if (logic != null) {
+            logLogicProviders();
+        }
+    }
+
+    /**
+     * The provider-state marker (harness and QA marker, plugin.md §5 / build.md §7): the default currency
+     * and whether it can be used, whether a transfer answers, and which provider actions report unavailable.
+     */
+    private void logLogicProviders() {
+        var providers = logic.providers();
+        var defaultCurrency = providers.currencies().defaultCurrency();
+        boolean available = providers.currencies().availability(defaultCurrency).available();
+        String transfer = providers.transfer().filter(dev.materione.api.logic.provider.ServerTransfer::available)
+                .isPresent() ? "yes" : "none";
+        String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers).stream()
+                .filter(action -> !action.availability().available())
+                .map(dev.materione.api.logic.ActionType::id)
+                .collect(java.util.stream.Collectors.joining(","));
+        getLogger().info("MATERIONE-LOGIC-OK currency=" + defaultCurrency.id() + " available=" + available
+                + " transfer=" + transfer + " unavailable=" + (unavailable.isEmpty() ? "none" : unavailable));
     }
 
     private void loadContent() {
@@ -363,6 +427,7 @@ public final class MaterionePlugin extends JavaPlugin {
 
     /** One composed reload: pipeline → compile → apply → deliver (§4). */
     public dev.materione.api.pipeline.ReloadSummary reloadContent() {
+        refreshLogicProviders();
         var summary = pipeline.reload(
                 storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
         if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {

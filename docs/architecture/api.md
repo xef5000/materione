@@ -264,7 +264,7 @@ resource; the API works on that GUI (a file that holds several is refused).
 
 `GuiSource` is `Saved(pack, path)`, `Yaml(pack, text)` or `Typed(GuiDocumentView)`. `GuiEdit` is a
 sealed interface of the structural edits: the five layer and screen edits and `SetOpen` (the `open:` block as an
-`OpenSpec`, or null to remove it; logic.md §17). `GuiDocumentView` carries the block as `open`. `validate` also
+`OpenSpec`, or null to remove it; logic.md §19). `GuiDocumentView` carries the block as `open`. `validate` also
 reports the block's shape and the logic compiler's problems for the GUI's `behavior:` and `flows:` (§3.12). `render` and `validate` never allocate: the GUI's
 background codepoint comes from `AllocationTable.preview()`, which answers what a compile would,
 and binds nothing. `validate` and the pack compiler run the same steps (parse, diagnose, compile)
@@ -290,7 +290,20 @@ the editor palette and the docs read the same registries (D5).
 | `conditions()` | `LogicRegistry<ConditionType<?>>`: predicates. Same shape, with `test(P, LogicContext)` as a pure read. |
 | `triggers()` | `LogicRegistry<TriggerType>`: descriptions of the events a rule answers: details, `firedBy`, filters, a context schema of `ContextVariable`s, and `cancellable`. A runtime still fires the event; registering one makes it known to the compiler and the studio. |
 | `functions()` | `LogicRegistry<ExpressionFunction>`: calls available inside expressions. The registry and the vocabulary carry them; binding them into the expression grammar is the expression work (logic.md §13 L3). |
+| `providers()` | `LogicProviders` (logic.md §4.5, §18, #213): `currencies()` is the catalog of named currencies the money actions read; `permissions()` is always present (the session-only Bukkit default when nothing else is registered); `transfer()` is `Optional`. `setPermissions(owner, PermissionProvider)` and `setTransfer(owner, ServerTransfer)` each replace their slot and return a `ProviderRegistration` whose `close()` restores it; a disabled owner is refused. Read at use, never cached by an action. |
+| `currencyIntegrations()` | `LogicRegistry<CurrencyIntegration>`: how a currency reaches its money (`vault`, `xp`, `custom`, or an addon's own). Registered like actions; a currency file names one by id (logic.md §18). |
 | `vocabulary()` | The version-2 `BehaviorVocabulary`, rebuilt from the registries (and the mechanics registry) on every call. |
+
+The provider SPIs live in `dev.materione.api.logic.provider`, and every method takes a `UUID`, never
+a Bukkit handle, so an addon's provider is testable without a server:
+
+| Type | Shape |
+|---|---|
+| `CurrencyIntegration` | A registry entry: `id()`, `describe()` (the keys it reads, for the studio's form) and `bind(ParamReader config)`, which is pure and returns a `CurrencyBackend` or rejects with `IllegalArgumentException`. |
+| `CurrencyBackend` | `availability()` (with its reason), `threading()` (the thread its money calls need; default `GLOBAL`, and the money actions hop to it through `threading(P)`), and `balance(UUID)`, `has(UUID, double)`, `withdraw(UUID, double)`, `deposit(UUID, double)`, each returning an `EconomyResult`: `Succeeded(balance)`, `InsufficientFunds(balance)` (nothing was taken), or `Failed(reason)`. |
+| `Currency` and `CurrencyCatalog` | A defined currency (`id`, `displayName`, `symbol`, `decimals`, `integration`, the integration's own `config`) and the catalog that resolves names, gives the default, and binds the backend at use (logic.md §18). |
+| `PermissionProvider` | `name()`, `available()`, `grant(UUID, node)`, `revoke(UUID, node)`, and two defaults built on them: `withGrant(UUID, node, Runnable)` (grant, run, revoke even on throw) and `grantFor(UUID, node, Duration)` (native expiry only; the default refuses). Each returns a `ProviderResult` (`OK` or `failed(reason)`). |
+| `ServerTransfer` | `name()`, `available()`, `send(UUID, server)` returning a `ProviderResult`. |
 
 `LogicRegistry<T>` registers with `register(Plugin owner, NamespacedId id, T type)` and returns a
 `LogicRegistration` handle. Registration opens one bounded write on that registry and edits nothing
@@ -320,7 +333,7 @@ projection of `LogicApi.vocabulary()`; the dedicated `logic.vocabulary` op is th
 
 ### 3.12 `LogicAuthoringApi` (`dev.materione.api.logic`, reached as `authoring().logic()`)
 
-The typed authoring surface of the behavior system (logic.md §8, §17): what the node canvas (issue 223) and the Script
+The typed authoring surface of the behavior system (logic.md §8, §19): what the node canvas (issue 223) and the Script
 tab are built on, and what an API consumer uses to change a rule or a flow. Any resource with `behavior:` is addressed:
 gui, item, block and furniture, one resource per file. Paths are step paths (`behavior.2.do.0.then.1`,
 `flows.purchase.1`), and an insertion path names the index it inserts at.

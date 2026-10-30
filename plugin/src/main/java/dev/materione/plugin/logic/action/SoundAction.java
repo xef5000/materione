@@ -13,13 +13,25 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import java.util.List;
+import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
-/** {@code sound: "minecraft:block.note_block.pling"} or {@code sound: {sound, volume, pitch}}: plays a sound at the player. */
+/**
+ * {@code sound: "minecraft:block.note_block.pling"} or {@code sound: {sound, volume, pitch, scope}}:
+ * plays a sound. {@code scope: player} (the default) plays it to the player; {@code world} plays it
+ * at the player's location to everyone in their world; {@code server} plays it to everyone online.
+ *
+ * <p>Threading follows the scope ({@link #threading(Params)}, logic.md §16): {@code player} runs in
+ * the player's region; {@code world} and {@code server} touch other players and run on the global
+ * thread. The type's headline {@link #threading()} is the stricter of the two.
+ */
 public final class SoundAction implements ActionType<SoundAction.Params> {
 
+    /** Who hears the sound. */
+    public enum Scope { PLAYER, WORLD, SERVER }
+
     /** The parsed step. */
-    public record Params(TemplateText sound, float volume, float pitch) {}
+    public record Params(TemplateText sound, float volume, float pitch, Scope scope) {}
 
     @Override
     public String id() {
@@ -28,18 +40,25 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
 
     @Override
     public ActionDescription describe() {
-        return new ActionDescription(new SelfDescription("Play sound", "Plays a sound at the player",
+        return new ActionDescription(new SelfDescription("Play sound", "Plays a sound to the player, their world or the server",
                 List.of(
                         new ParameterSchema("sound", ParameterType.STRING, true, null,
                                 "Sound key, e.g. minecraft:block.note_block.pling", null, null),
                         new ParameterSchema("volume", ParameterType.DECIMAL, false, "1", "Volume", null, null),
-                        new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1", "Pitch", null, null)),
+                        new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1", "Pitch", null, null),
+                        new ParameterSchema("scope", ParameterType.ENUM, false, "player",
+                                "Who hears it", List.of("player", "world", "server"), null)),
                 "2.0.0"), LogicCategory.PLAYER, "sound");
     }
 
     @Override
     public Threading threading() {
-        return Threading.PLAYER_REGION;
+        return Threading.GLOBAL;
+    }
+
+    @Override
+    public Threading threading(Params params) {
+        return params.scope() == Scope.PLAYER ? Threading.PLAYER_REGION : Threading.GLOBAL;
     }
 
     @Override
@@ -47,16 +66,31 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
         return new Params(
                 params.template("sound"),
                 (float) params.decimal("volume", 1d, 0d, 1_000d),
-                (float) params.decimal("pitch", 1d, 0d, 1_000d));
+                (float) params.decimal("pitch", 1d, 0d, 1_000d),
+                params.enumValue("scope", Scope.class, Scope.PLAYER));
     }
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
         Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (params.scope() == Scope.SERVER) {
+            String key = params.sound().render(context);
+            for (Player listener : Bukkit.getOnlinePlayers()) {
+                listener.playSound(listener.getLocation(), key, params.volume(), params.pitch());
+            }
+            return ActionOutcome.OK;
+        }
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
-        player.playSound(player.getLocation(), params.sound().render(context), params.volume(), params.pitch());
+        String key = params.sound().render(context);
+        if (params.scope() == Scope.WORLD) {
+            for (Player listener : player.getWorld().getPlayers()) {
+                listener.playSound(player.getLocation(), key, params.volume(), params.pitch());
+            }
+            return ActionOutcome.OK;
+        }
+        player.playSound(player.getLocation(), key, params.volume(), params.pitch());
         return ActionOutcome.OK;
     }
 }
