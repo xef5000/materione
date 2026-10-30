@@ -4,6 +4,7 @@ import dev.materione.api.ApiResult;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.gui.GuiAuthoringApi;
+import dev.materione.api.logic.LogicAuthoringApi;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -64,6 +65,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private final ResourceSummaryComputer summaryComputer;
     private final Function<AuthoringApi, GuiAuthoringApi> guiFactory;
     private volatile GuiAuthoringApi guiApi;
+    private final Function<AuthoringApi, LogicAuthoringApi> logicFactory;
+    private volatile LogicAuthoringApi logicApi;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
 
     public AuthoringApiImpl(
@@ -109,7 +112,28 @@ public final class AuthoringApiImpl implements AuthoringApi {
             Supplier<List<ContentType>> contentTypes,
             Function<AuthoringApi, GuiAuthoringApi> gui) {
         this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
-                assets, contentTypes, ResourceSummaryComputer.DEFAULT_PROJECTION_BUDGET_BYTES, gui);
+                assets, contentTypes, gui, null);
+    }
+
+    /**
+     * @param gui builds the GUI surface (see the constructor above)
+     * @param logic builds the logic surface (logic.md §8) over this implementation; the behavior
+     *              engine supplies it, and a null factory reports the surface as unavailable
+     */
+    public AuthoringApiImpl(
+            DocumentStore documents,
+            AuditLog audit,
+            Path packsRoot,
+            ModelTransactionService modelTransactions,
+            DocumentMetadataComputer computedMeta,
+            Supplier<ContentGraph> graph,
+            ReloadHook reloadHook,
+            AssetStore assets,
+            Supplier<List<ContentType>> contentTypes,
+            Function<AuthoringApi, GuiAuthoringApi> gui,
+            Function<AuthoringApi, LogicAuthoringApi> logic) {
+        this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
+                assets, contentTypes, ResourceSummaryComputer.DEFAULT_PROJECTION_BUDGET_BYTES, gui, logic);
     }
 
     AuthoringApiImpl(
@@ -124,7 +148,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
             Supplier<List<ContentType>> contentTypes,
             long summaryProjectionBudgetBytes) {
         this(documents, audit, packsRoot, modelTransactions, computedMeta, graph, reloadHook,
-                assets, contentTypes, summaryProjectionBudgetBytes, null);
+                assets, contentTypes, summaryProjectionBudgetBytes, null, null);
     }
 
     AuthoringApiImpl(
@@ -138,7 +162,9 @@ public final class AuthoringApiImpl implements AuthoringApi {
             AssetStore assets,
             Supplier<List<ContentType>> contentTypes,
             long summaryProjectionBudgetBytes,
-            Function<AuthoringApi, GuiAuthoringApi> gui) {
+            Function<AuthoringApi, GuiAuthoringApi> gui,
+            Function<AuthoringApi, LogicAuthoringApi> logic) {
+        this.logicFactory = logic;
         this.documents = Objects.requireNonNull(documents, "documents");
         this.audit = Objects.requireNonNull(audit, "audit");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
@@ -166,6 +192,22 @@ public final class AuthoringApiImpl implements AuthoringApi {
                     current = guiFactory == null
                             ? new UnavailableGuiAuthoring() : guiFactory.apply(this);
                     guiApi = current;
+                }
+            }
+        }
+        return current;
+    }
+
+    @Override
+    public LogicAuthoringApi logic() {
+        LogicAuthoringApi current = logicApi;
+        if (current == null) {
+            synchronized (this) {
+                current = logicApi;
+                if (current == null) {
+                    current = logicFactory == null
+                            ? new UnavailableLogicAuthoring() : logicFactory.apply(this);
+                    logicApi = current;
                 }
             }
         }

@@ -42,6 +42,8 @@ public record SessionBlob(
      * builder's typed ops ({@code gui.get}, {@code gui.edit}, {@code gui.customizeItem},
      * {@code gui.render}, {@code gui.validate}) and the preview-in-game ops
      * ({@code runtime.openGui}, {@code runtime.previewTarget}), all gated in editor-op-gates.json.
+     * {@code logic} covers the logic authoring ops ({@code logic.vocabulary}, {@code logic.get},
+     * {@code logic.edit}, {@code logic.validate}, {@code logic.instantiate}), gated the same way (logic.md §8).
      * Keep sorted: the list rides into the golden fixture byte-for-byte.
      */
     public static final List<String> CURRENT_CAPABILITIES = List.of(
@@ -52,6 +54,7 @@ public record SessionBlob(
             "glyphs",
             "gui",
             "items",
+            "logic",
             "models",
             "paintings",
             "recipes",

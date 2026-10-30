@@ -86,6 +86,8 @@ describe('block modules derive from the registry self-description', () => {
 
   it('every block field is renderable, so no key is silently unreachable', () => {
     for (const param of block.parameters) {
+      // `flows` is a map of step lists, edited on the logic Script tab (issue 225), not in the inspector
+      if (param.id === 'flows') continue;
       expect(isRenderable(param), `${param.id} (${param.uiHint})`).toBe(true);
     }
   });
@@ -121,6 +123,8 @@ describe('furniture modules derive from the registry self-description', () => {
 
   it('is fully renderable too', () => {
     for (const param of furniture.parameters) {
+      // `flows` is a map of step lists, edited on the logic Script tab (issue 225), not in the inspector
+      if (param.id === 'flows') continue;
       expect(isRenderable(param), `${param.id} (${param.uiHint})`).toBe(true);
     }
   });

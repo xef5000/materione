@@ -124,7 +124,10 @@ public final class GuiType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Rows", "placement", 10, false, "number", "", "3")
                                         .withRange(1.0, (double) MAX_ROWS, "rows")),
-                        layers),
+                        layers,
+                        dev.materione.content.logic.LogicSchemas.behavior(),
+                        dev.materione.content.logic.LogicSchemas.flows(),
+                        dev.materione.content.logic.LogicSchemas.open()),
                 "1.0.0");
     }
 

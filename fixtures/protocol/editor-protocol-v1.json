@@ -80,7 +80,7 @@
   },
   "sessionBlob": {
     "envelope": {
-      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSMcld4-lmPNbLCfGWj3tGq2wfFLG5rBaAnrQXtJqczNZdqvE8E4rsoA4igFwvqr1aV6Q1YWYmQBos8BrrKPfVefY1snkIYyI-1dw6PCbejoRiOwVao0AEqkU_rU5l5PQSQckBjPtPkqEMshKqJFMkfsZOGRTP8aVnMK0TlLzdohtoxXOcI_AwVa2LR4-g_-dY-4dtPGqRLmjaYaNLAmH5AaE0nN3UVANbF970dvLZtJqIanBJGBM0ja0JHgjMyi05R0y-rcGJCrUJKa-Cahd4uASvGrrkzlqlQzuqrQZJeR4rEsXDW_ztSQoQEdstieON3UIej2wViMfi0YA5-AcmTs8PdpShOyz14pQ",
+      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSMcld4-lmPNbLCfGWj3tGq2wfFLG5rBaAnrQXtJqczNZdqvE8E4rsoA4igFwvqr1aV6Q1YWYmQBos8BrrKPbxeffhWh2gI9pWeTnWMMrfu6zCwg1Go7g4puk_zT6ImNQmDQ3pjEf34uEBHkLOwJc0FtL6CAw3zNALjBVv7PDRsgNsxQPoK-CERUnLn4tF038cnkP1WGoFxgQ3-H7f4pG5ZbElbb2kxFOnHk4MbuYtqCpYKkChEf_xkaVAgpzAynG5R8DvmRVtosGlBDOaahvQ6MV7G4osBlrZq8Zn5T_V7eaPT3SW5zTJMQ990bZorKeRnT4ysg0t-Nqm6ZYVQrzv9aytdKC6Q0vX8LN_Y-lDL_k7nZ7U",
       "nonce": "QEBAQEBAQEBAQEBA",
       "sess": "AAECAwQFBgcICQoLDA0ODw",
       "v": 1
@@ -94,6 +94,7 @@
         "glyphs",
         "gui",
         "items",
+        "logic",
         "models",
         "paintings",
         "recipes",

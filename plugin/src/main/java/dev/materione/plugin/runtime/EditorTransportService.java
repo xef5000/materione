@@ -250,6 +250,8 @@ public final class EditorTransportService {
                 dispatcher, api.authoring(), this::contentTypes,
                 () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary, this::guiComponents);
         dev.materione.web.rpc.ops.GuiAuthoringOps.register(dispatcher, api.authoring().gui(), actorFor);
+        dev.materione.web.rpc.ops.LogicAuthoringOps.register(
+                dispatcher, api.authoring().logic(), actorFor, this::behaviorVocabulary);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
                 dispatcher, api.authoring(), actorFor);
         dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
