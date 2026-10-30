@@ -123,13 +123,14 @@ class VocabularyBuilderTest {
     }
 
     @Test
-    void theStepKindsAreTheClosedGrammarAndOnlyActionRunsToday() {
+    void theStepKindsAreTheClosedGrammarAndTheInterpreterRunsAllOfIt() {
         List<BehaviorVocabulary.StepKind> steps = build().steps();
 
         assertThat(steps).extracting(BehaviorVocabulary.StepKind::id)
                 .containsExactly("action", "if", "require", "wait", "stop", "call", "choose");
         assertThat(steps).filteredOn(BehaviorVocabulary.StepKind::supported)
-                .extracting(BehaviorVocabulary.StepKind::id).containsExactly("action");
+                .extracting(BehaviorVocabulary.StepKind::id)
+                .containsExactly("action", "if", "require", "wait", "stop", "call", "choose");
     }
 
     @Test

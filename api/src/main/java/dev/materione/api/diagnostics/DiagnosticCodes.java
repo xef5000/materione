@@ -273,6 +273,30 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode LOGIC_STEP_REJECTED =
             new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
 
+    /**
+     * A {@code call} step cannot be linked at load (logic.md §2.4, §10): it names a flow the
+     * resource does not declare, the flows call each other in a cycle, the chain of calls is deeper
+     * than the call depth limit, or the callee failed to load. The rule holding the call is skipped.
+     */
+    public static final DiagnosticCode FLOW_CALL_INVALID =
+            new DiagnosticCode("MTR-0058", Severity.ERROR, "Flow call cannot be linked; rule skipped");
+
+    /**
+     * A running flow was stopped by its run budget (logic.md §5.3): it executed more steps than a
+     * run may, nested calls deeper than the limit, or the player already had too many parked runs.
+     * Rate-limited per rule; the run ends and the server is unaffected.
+     */
+    public static final DiagnosticCode FLOW_RUN_ABORTED =
+            new DiagnosticCode("MTR-0059", Severity.WARN, "Flow run aborted by its budget");
+
+    /**
+     * A {@code ${root}} in a flow names a variable root the rule's trigger does not provide
+     * (logic.md §2.6). The step still loads and the value reads as empty at run time; the warning
+     * catches typos such as {@code ${plyer.name}}.
+     */
+    public static final DiagnosticCode FLOW_UNKNOWN_CONTEXT_ROOT =
+            new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -330,7 +354,10 @@ public final class DiagnosticCodes {
             GUI_SLOT_ITEM_UNRESOLVED,
             PERMISSION_DENIED,
             DUPLICATE_RESOURCE_ID,
-            LOGIC_STEP_REJECTED);
+            LOGIC_STEP_REJECTED,
+            FLOW_CALL_INVALID,
+            FLOW_RUN_ABORTED,
+            FLOW_UNKNOWN_CONTEXT_ROOT);
 
     private DiagnosticCodes() {}
 

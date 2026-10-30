@@ -26,8 +26,11 @@ import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.logic.MapLogicContext;
-import dev.materione.behavior.rule.BoundAction;
-import dev.materione.behavior.rule.RuleParser;
+import dev.materione.behavior.flow.ActionStep;
+import dev.materione.behavior.flow.FlowCompiler;
+import dev.materione.behavior.run.FlowInterpreter;
+import dev.materione.behavior.run.RunBudget;
+import dev.materione.behavior.run.RunScheduler;
 import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.LogicTestSupport;
@@ -216,7 +219,7 @@ class BuiltinMechanicsTest {
                 "on_right_click", commands, "on_left_click", List.of("help"), "as_player", true)));
         commands.clear();
         var rules = instance.behaviorRules();
-        var compiled = RuleParser.compile(ITEM, rules,
+        var compiled = FlowCompiler.compile(ITEM, rules,
                 LogicTestSupport.withBuiltIns(new RegistryService()).lookup());
 
         assertThat(compiled.problems()).isEmpty();
@@ -225,9 +228,9 @@ class BuiltinMechanicsTest {
                 .containsExactly("right", "left");
         assertThat(compiled.rules()).extracting(rule -> rule.id()).doesNotHaveDuplicates()
                 .allSatisfy(id -> assertThat(id).contains(ITEM.toString(), "materione:commands"));
-        assertThat(compiled.rules().getFirst().actions()).extracting(BoundAction::id)
+        assertThat(compiled.rules().getFirst().steps()).extracting(step -> ((ActionStep<?>) step).id())
                 .containsExactly("run_command", "run_command");
-        assertThat(compiled.rules().getFirst().actions().getFirst().params())
+        assertThat(((ActionStep<?>) compiled.rules().getFirst().steps().getFirst()).params())
                 .isInstanceOfSatisfying(RunCommandAction.Params.class, params -> {
                     assertThat(params.command().source()).isEqualTo("say ${player.name}");
                     assertThat(params.sender()).isEqualTo(RunCommandAction.Sender.PLAYER);
@@ -248,7 +251,27 @@ class BuiltinMechanicsTest {
         var diagnostics = new ArrayList<Diagnostic>();
         var executed = new ArrayList<String>();
         var deferred = new ArrayList<Runnable>();
-        var engine = new RuleEngine((anchor, delay, task) -> deferred.add(task), diagnostics::add, new CooldownStore());
+        // a run starts on the player's thread; console commands need the global thread, so they hop
+        var onGlobal = new boolean[] {false};
+        var engine = new RuleEngine(new FlowInterpreter(new RunScheduler() {
+            @Override
+            public boolean canRunInline(Object anchor, Threading thread) {
+                return thread != Threading.GLOBAL || onGlobal[0];
+            }
+
+            @Override
+            public Handle schedule(Object anchor, Threading thread, long delayTicks, Runnable task, Runnable dropped) {
+                deferred.add(() -> {
+                    onGlobal[0] = thread == Threading.GLOBAL;
+                    try {
+                        task.run();
+                    } finally {
+                        onGlobal[0] = false;
+                    }
+                });
+                return Handle.NONE;
+            }
+        }, RunBudget.DEFAULT, diagnostics::add), new CooldownStore());
         // the real triggers, and a recording stand-in for run_command (the real one dispatches to Bukkit)
         var logic = LogicTestSupport.newService(new RegistryService());
         LogicTestSupport.registerTriggers(logic);
@@ -258,19 +281,27 @@ class BuiltinMechanicsTest {
             var instance = new CommandsMechanic().parse(configuration(Map.of(
                     "on_right_click", List.of("say %player%", "spawn"),
                     "on_left_click", List.of("help %player%"), "as_player", asPlayer)));
-            var parsed = RuleParser.compile(ITEM, instance.behaviorRules(), logic.lookup());
+            var parsed = FlowCompiler.compile(ITEM, instance.behaviorRules(), logic.lookup());
             assertThat(parsed.problems()).isEmpty();
             var rules = parsed.rules();
             var context = new MapLogicContext(Map.of("player", Map.of("name", "Alex", "uuid", "test")));
             engine.fire(rules, new BehaviorEvent("click", "right", context, null, null));
             engine.fire(rules, new BehaviorEvent("click", "left", context, null, null));
+            if (!asPlayer) {
+                // the console may touch any region: both rules parked for the global thread, one hop per command
+                assertThat(executed).isEmpty();
+                assertThat(deferred).hasSize(2);
+                while (!deferred.isEmpty()) {
+                    deferred.remove(0).run();
+                }
+                assertThat(executed).containsExactly("console:say Alex", "console:spawn", "console:help Alex");
+                executed.clear();
+            } else {
+                // as: player runs in the player's own region, which is where the event arrived: no hop
+                assertThat(deferred).isEmpty();
+                assertThat(executed).containsExactly("player:say Alex", "player:spawn", "player:help Alex");
+            }
         }
-        assertThat(executed).isEmpty();
-        assertThat(deferred).hasSize(6);
-        deferred.forEach(Runnable::run);
-        assertThat(executed).containsExactly(
-                "console:say Alex", "console:spawn", "console:help Alex",
-                "player:say Alex", "player:spawn", "player:help Alex");
         assertThat(diagnostics).isEmpty();
     }
 
@@ -492,6 +523,11 @@ class BuiltinMechanicsTest {
         @Override
         public Threading threading() {
             return Threading.GLOBAL;
+        }
+
+        @Override
+        public Threading threading(Params params) {
+            return params.as().equals("console") ? Threading.GLOBAL : Threading.PLAYER_REGION;
         }
 
         @Override

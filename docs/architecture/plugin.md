@@ -97,7 +97,9 @@ Rules (enforced in review + by an ArchUnit-style ban test):
 
 - **All world/entity mutation goes through one gateway** (in `core`): `sync(location, task)` /
   `entity(entity, task)` — on Folia this routes to the region/entity scheduler, on Paper to the
-  main-thread scheduler. Code outside `platform/` never touches Bukkit scheduler APIs directly.
+  main-thread scheduler. *As built (M6, #208):* the gateway also schedules ahead
+  (`executeEntityLater`, `executeGlobalLater`, each returning a cancellable `ScheduledHandle`), which is
+  how a parked behavior run comes back; `GatewayRunScheduler` is its only user in the logic engine. Code outside `platform/` never touches Bukkit scheduler APIs directly.
 - **Every event listener/handler declares its thread class** at registration; the registration
   API rejects mismatches (an async handler that would mutate the world is caught at
   registration, not in production).
@@ -409,6 +411,19 @@ step is found at load rather than when a player first triggers it:
 |---|---|---|
 | `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
 
+The M6 flow compiler and interpreter ([`logic.md`](logic.md) §5, §16) add three codes. Every one carries
+the step path of what it is about (`behavior.2.do.0.then.1`) as its target:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0058` | error | A `call` step cannot be linked at load: it names a flow the resource does not declare, the flows call each other in a cycle (the message names the chain, `a -> b -> a`), the chain of nested calls is deeper than 16, or the flow it calls did not load. The rule that holds the call is skipped; flows are shared within one resource only. Declare the flow under `flows:`, break the cycle, or fix the flow's own problems reported beside it. |
+| `MTR-0059` | warning | A running flow was ended by its budget (logic.md §5.3): more than 1,000 steps in one run, calls nested deeper than 16, the player already had 64 runs parked on a `wait` or `delay:`, or the platform could not schedule the run. The run ends; the server and other runs are unaffected. Reported at most once per second per rule. Simplify the flow, or find what floods the trigger. |
+| `MTR-0060` | warning | A `${root}` in a template, expression or call argument is not a variable the rule's trigger provides (`${plyer.name}`). The step still loads and the value reads as empty at run time. The hint lists the known roots. A trigger that declares no variables is not checked. |
+
+A step that fails while a flow runs is still `MTR-0023`: an action that returns `FAILED` outside a `require`,
+an action that throws (always), and a condition that cannot be evaluated (the condition then counts as
+false). A `FAILED` inside a `require` is control flow and appears only in the run trace.
+
 ---
 
 ## 6. Platform isolation layer
@@ -570,6 +585,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Custom block place/break handling | < 200 µs on region thread | event handler + PDC write |
 | Pack build (5k assets, warm) | < 30 s, cache-hit no-op < 100 ms | deterministic hashing |
 | Editor save round-trip | < 2 s end-to-end | save → validate → targeted apply → confirm |
+| Flow dispatch (rule gate + interpreter, a 10-step flow, actions excluded) | ≤ 0.5 ms p99 | `FlowDispatchPerfTest`; logic.md §5.3 |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read
 (~10–50 µs, NBT decode). The updater's inventory scans are the real cost center — they are

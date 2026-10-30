@@ -21,8 +21,9 @@ import org.bukkit.entity.Player;
  * plays a sound. {@code scope: player} (the default) plays it to the player; {@code world} plays it
  * at the player's location to everyone in their world; {@code server} plays it to everyone online.
  *
- * <p>Declared {@link Threading#GLOBAL}: the world and server scopes touch other players, and the
- * type's threading is static (logic.md §14, decision 6), so it takes the stricter choice.
+ * <p>Threading follows the scope ({@link #threading(Params)}, logic.md §16): {@code player} runs in
+ * the player's region; {@code world} and {@code server} touch other players and run on the global
+ * thread. The type's headline {@link #threading()} is the stricter of the two.
  */
 public final class SoundAction implements ActionType<SoundAction.Params> {
 
@@ -53,6 +54,11 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
     @Override
     public Threading threading() {
         return Threading.GLOBAL;
+    }
+
+    @Override
+    public Threading threading(Params params) {
+        return params.scope() == Scope.PLAYER ? Threading.PLAYER_REGION : Threading.GLOBAL;
     }
 
     @Override

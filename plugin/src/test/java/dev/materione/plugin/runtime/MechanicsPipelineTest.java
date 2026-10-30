@@ -87,8 +87,9 @@ class MechanicsPipelineTest {
         var rules = shadow.view(ItemBehaviors.KEY).forItem(bladeId).orElseThrow();
         assertThat(rules).hasSize(1);
         assertThat(rules.getFirst().on().matches("click", "right")).isTrue();
-        assertThat(rules.getFirst().actions()).singleElement()
-                .satisfies(action -> {
+        assertThat(rules.getFirst().steps()).singleElement()
+                .satisfies(step -> {
+                    var action = (dev.materione.behavior.flow.ActionStep<?>) step;
                     assertThat(action.id()).isEqualTo("message");
                     assertThat(((dev.materione.plugin.logic.action.MessageAction.Params) action.params()).text().source())
                             .isEqualTo("blade-wear ${item.durability_used}/${item.durability_max}");
@@ -115,6 +116,36 @@ class MechanicsPipelineTest {
                 .contains(new Binding(9));
         assertThat(shadow(fixture()).item(ITEM).orElseThrow().definitionHash())
                 .isEqualTo(original.item(ITEM).orElseThrow().definitionHash());
+    }
+
+    @Test
+    void anItemsNamedFlowsAreLinkedToItsRulesAndTheirProblemsPointAtTheFile() {
+        pipeline.registerBuiltins();
+        var shadow = shadow("""
+                wand:
+                  material: BLAZE_ROD
+                  behavior:
+                    - on: click:left
+                      do:
+                        - call: greet
+                        - call: ghost
+                    - on: click:right
+                      do:
+                        - message: hi
+                        - call: greet
+                  flows:
+                    greet:
+                      - message: hello
+                      - nope: 1
+                """);
+
+        var rules = shadow.view(ItemBehaviors.KEY).forItem(ITEM).orElseThrow();
+        assertThat(rules).hasSize(1); // the rule calling an undeclared flow is skipped, its sibling loads
+        assertThat(rules.getFirst().path()).hasToString("behavior.1");
+        var call = (dev.materione.behavior.flow.CallStep) rules.getFirst().steps().get(1);
+        assertThat(call.flow().steps()).hasSize(1);
+        assertThat(diagnostics.recent(64)).extracting(d -> d.code().code() + "@" + d.target().field())
+                .containsExactly("MTR-0057@[flows, greet, 1]", "MTR-0058@[behavior, 0, do, 1]");
     }
 
     @Test
@@ -146,9 +177,9 @@ class MechanicsPipelineTest {
 
         assertThat(rules).hasSize(2);
         assertThat(rules).extracting(rule -> rule.id()).doesNotHaveDuplicates();
-        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) rule.actions().getFirst().params()).sender().name().toLowerCase())
+        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) ((dev.materione.behavior.flow.ActionStep<?>) rule.steps().getFirst()).params()).sender().name().toLowerCase())
                 .containsExactly("console", "player");
-        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) rule.actions().getFirst().params()).command().source())
+        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) ((dev.materione.behavior.flow.ActionStep<?>) rule.steps().getFirst()).params()).command().source())
                 .containsExactly("say console", "materione version");
         assertThat(shadow.view(ItemMechanics.KEY).forItem(ITEM)).hasSize(2);
         assertThat(diagnostics.recent(64)).isEmpty();

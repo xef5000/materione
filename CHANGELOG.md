@@ -28,6 +28,23 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Behavior rules are flows: `if`, `require`, `choose`, `wait`, `stop` and `call` (logic.md §2, §5, §16).**
+  A rule's `do:` list can now branch (`if`/`then`/`else`, `choose`), guard (`require` runs steps until
+  one fails, then runs its `else` and ends the run, the shape of a paywall), pause (`wait: <ticks>`),
+  stop (`stop`, `stop: {cancel: true}`) and reuse named flows (`flows:` beside `behavior:` on an item,
+  block or furniture, called with `call: name` or `call: {flow, with: {...}}` and read as `args.*`).
+  Conditions can be an expression, a registered predicate, or `all`/`any`/`not`/`at_least`, evaluated
+  lazily. A run is a resumable state machine, not a thread: a wait never blocks, a step that needs
+  another thread (a console command, a player action) hops there and back in the order written, and a
+  run is bounded (1,000 steps, 64 parked runs per player, 16 nested calls). Every problem the compiler
+  finds carries the path of the step it is about (`behavior.2.do.0.then.1`), so the studio can point at
+  a node; `${root}` names are checked against the trigger's variables (`MTR-0060`, a warning), and an
+  unknown flow, a call cycle or a chain of calls deeper than 16 skips the rule with `MTR-0058`. A step
+  that guards others never gets weaker by losing a step: a `require` with an unloadable step fails
+  every time, and a `choose` with a bad condition is dropped whole. A run that exceeds its budget is
+  aborted with `MTR-0059`. `node: {x, y}` on a rule or a step is accepted and kept in the file. Every
+  rule that loaded before means the same; two edge cases changed on purpose, listed under Fixed.
+
 - **Expressions can call functions, and there are twenty built-in ones (logic.md §4.2, §15).**
   `contains(text, part)`, `matches(text, pattern)`, `length`, `lower`, `upper`, `trim`,
   `starts_with`, `ends_with`, `equals_ignore_case`, `is_number`, `is_player`, `number`, `round`,
@@ -38,7 +55,7 @@ releases may change file formats, settings and the public API.
   is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
   read budget, so a pattern cannot stall the server. Addons register their own functions through
   `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
-- **Ten more built-in actions for player, world and server effects (#212, logic.md §16 "Decisions
+- **Ten more built-in actions for player, world and server effects (#212, logic.md §17 "Decisions
   taken in #212").** `broadcast` (to the server, one world, or a permission), `actionbar`, `title`
   (title, subtitle and fade timings), `stop_sound`, `chat` (a line the player says, or a command
   they run with a leading slash), `teleport` (coordinates, optionally another world and facing),
@@ -113,6 +130,11 @@ releases may change file formats, settings and the public API.
 
 ### Fixed
 
+- **A rule action's `delay:` now delays.** It was parsed and ignored, so the action ran at once; it now
+  parks the rule's flow for that many ticks and the steps after it wait with it. Steps also now run
+  in the order written when one of them needs another thread: a `run_command` as the console, which
+  used to run a scheduler hop after the steps that followed it, runs first, and `as: player|op`
+  commands run in the player's own region.
 - `?mode=relay|direct` on the editor link was silently ignored (the address bar was cleared first).
 - The editor file watcher no longer depends on the local listener being bound.
 - **Content in subfolders goes live.** The pipeline listed each content directory non-recursively,

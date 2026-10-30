@@ -113,8 +113,37 @@ class BuiltinActionsTest {
     }
 
     @Nested
+    class SoundThreading {
+        private final SoundAction action = new SoundAction();
+
+        @Test
+        void theThreadFollowsTheScopePlayerIsRegionalWorldAndServerAreGlobal() {
+            assertThat(action.threading()).isEqualTo(Threading.GLOBAL); // the vocabulary's headline value
+            assertThat(action.threading(action.parse(reader(params("sound", "minecraft:block.note_block.pling")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+            assertThat(action.threading(action.parse(reader(params("sound", "minecraft:block.note_block.pling",
+                    "scope", "world"))))).isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(action.parse(reader(params("sound", "minecraft:block.note_block.pling",
+                    "scope", "server"))))).isEqualTo(Threading.GLOBAL);
+        }
+    }
+
+    @Nested
     class RunCommand {
         private final RunCommandAction action = new RunCommandAction();
+
+        @Test
+        void theThreadFollowsTheSenderTheConsoleIsGlobalAndPlayerAndOpRunInThePlayersRegion() {
+            assertThat(action.threading()).isEqualTo(Threading.GLOBAL); // the vocabulary's headline value
+            assertThat(action.threading(action.parse(reader(params("command", "say hi")))))
+                    .isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "console")))))
+                    .isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "player")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "op")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+        }
 
         @Test
         void parsesTheScalarFormAndEveryDocumentedSender() {

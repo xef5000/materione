@@ -5,6 +5,8 @@ import dev.materione.api.logic.ActionDescription;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.Cancellation;
+import dev.materione.api.logic.ConditionDescription;
+import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
@@ -47,6 +49,71 @@ public final class LogicFixture {
         registries.registry(RegistryKeys.ACTIONS, ActionType.class).register(
                 NamespacedId.of(namespace, action.id()), action, action.describe().self(), "test");
         return this;
+    }
+
+    /** Registers {@code condition} under {@code namespace:<its id>}. */
+    @SuppressWarnings("rawtypes")
+    public LogicFixture condition(String namespace, ConditionType<?> condition) {
+        registries.registry(RegistryKeys.CONDITIONS, ConditionType.class).register(
+                NamespacedId.of(namespace, condition.id()), condition, condition.describe().self(), "test");
+        return this;
+    }
+
+    /** Registers {@code condition} under {@code materione:<its id>}. */
+    public LogicFixture condition(ConditionType<?> condition) {
+        return condition("materione", condition);
+    }
+
+    /**
+     * A predicate that answers {@code result} and records {@code id:<label>} each time it is asked,
+     * so a test can prove laziness. Its scalar {@code value} is the label; the label {@code reject}
+     * is refused at parse and {@code boom} throws when tested.
+     */
+    public static Predicate predicate(String id, boolean result, List<String> asked) {
+        return new Predicate(id, result, asked);
+    }
+
+    /** The fake registered condition. */
+    public static final class Predicate implements ConditionType<String> {
+        private final String id;
+        private final boolean result;
+        private final List<String> asked;
+
+        private Predicate(String id, boolean result, List<String> asked) {
+            this.id = id;
+            this.result = result;
+            this.asked = asked;
+        }
+
+        @Override
+        public String id() {
+            return id;
+        }
+
+        @Override
+        public ConditionDescription describe() {
+            return new ConditionDescription(new SelfDescription(id, "A test predicate",
+                    List.of(ParameterSchema.of("value", ParameterType.STRING, false)), "1.0.0"),
+                    LogicCategory.DATA, "value");
+        }
+
+        @Override
+        public String parse(ParamReader params) {
+            String value = params.raw("value").map(String::valueOf).orElse("");
+            if (value.equals("reject")) {
+                throw new IllegalArgumentException("value must not be 'reject'");
+            }
+            return value;
+        }
+
+        @Override
+        public boolean test(String params, LogicContext context) {
+            asked.add(id + ":" + params);
+            if (params.equals("boom")) {
+                throw new IllegalStateException("predicate exploded");
+            }
+            return result;
+        }
     }
 
     /** Registers {@code action} under {@code materione:<its id>}. */

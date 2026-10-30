@@ -35,6 +35,11 @@ public final class Template {
             this.segments = segments;
         }
 
+        /** The parsed {@code ${...}} expressions, in order (the flow compiler reads the variable roots they touch). */
+        public List<Expression> expressions() {
+            return segments.stream().map(Segment::expression).filter(java.util.Objects::nonNull).toList();
+        }
+
         /** Renders the template against {@code context}. */
         public String render(EvaluationContext context) {
             var out = new StringBuilder();

@@ -16,7 +16,7 @@ import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.rule.ParsedRules;
-import dev.materione.behavior.rule.RuleParser;
+import dev.materione.behavior.flow.FlowCompiler;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -125,14 +125,14 @@ class FunctionBindingTest {
                 .register(NamespacedId.of("materione", "twice"), TWICE, TWICE.describe().self(), "test");
         var owner = NamespacedId.of("sample", "wand");
 
-        ParsedRules parsed = RuleParser.compile(owner, List.of(Map.of(
+        ParsedRules parsed = FlowCompiler.compile(owner, List.of(Map.of(
                 "on", "click",
                 "if", List.of("twice(player.level) == 8"),
                 "do", List.of(Map.of("run_command", "say hi")))), fixture.lookup());
 
         assertThat(parsed.problems()).isEmpty();
         assertThat(parsed.rules()).hasSize(1);
-        assertThat(parsed.rules().get(0).conditions()).hasSize(1);
+        assertThat(((dev.materione.behavior.flow.AllCond) parsed.rules().get(0).condition()).of()).hasSize(1);
     }
 
     @Test
@@ -140,7 +140,7 @@ class FunctionBindingTest {
         var fixture = new LogicFixture();
         var owner = NamespacedId.of("sample", "wand");
 
-        ParsedRules parsed = RuleParser.compile(owner, List.of(Map.of(
+        ParsedRules parsed = FlowCompiler.compile(owner, List.of(Map.of(
                 "on", "click",
                 "if", List.of("nosuch(player.level)"),
                 "do", List.of(Map.of("run_command", "say hi")))), fixture.lookup());
