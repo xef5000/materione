@@ -274,6 +274,22 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
 
     /**
+     * An optional integration (Vault, LuckPerms, the BungeeCord channel) could not install its
+     * provider: its classes failed to link against the installed version, or the call failed. The
+     * server runs with the default provider or none, and the actions say so (logic.md §4.5).
+     */
+    public static final DiagnosticCode INTEGRATION_SKIPPED =
+            new DiagnosticCode("MTR-0061", Severity.WARN, "Integration provider could not be installed; skipped");
+
+    /**
+     * A currency file was quarantined (logic.md §18): it names an integration that does not accept its
+     * keys, or it names no integration, or its id is in the reserved {@code materione} namespace. The
+     * currency is left out of the catalog; the rest of the pack loads.
+     */
+    public static final DiagnosticCode CURRENCY_REJECTED =
+            new DiagnosticCode("MTR-0062", Severity.WARN, "Currency definition rejected; quarantined");
+
+    /**
      * A {@code call} step cannot be linked at load (logic.md §2.4, §10): it names a flow the
      * resource does not declare, the flows call each other in a cycle, the chain of calls is deeper
      * than the call depth limit, or the callee failed to load. The rule holding the call is skipped.
@@ -355,6 +371,8 @@ public final class DiagnosticCodes {
             PERMISSION_DENIED,
             DUPLICATE_RESOURCE_ID,
             LOGIC_STEP_REJECTED,
+            INTEGRATION_SKIPPED,
+            CURRENCY_REJECTED,
             FLOW_CALL_INVALID,
             FLOW_RUN_ABORTED,
             FLOW_UNKNOWN_CONTEXT_ROOT);

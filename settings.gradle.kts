@@ -44,6 +44,14 @@ dependencyResolutionManagement {
                 includeGroup("net.md-5")
             }
         }
+        // Vault's provider API (integrations, compileOnly). Published on JitPack only; the
+        // filter admits the one group, so nothing else resolves from here.
+        maven("https://jitpack.io") {
+            name = "jitpack"
+            content {
+                includeGroup("com.github.MilkBowl")
+            }
+        }
         maven("https://repo.nexomc.com/releases/") {
             name = "nexomc"
             // The Nexo-maintained creative fork keeps upstream's coordinates

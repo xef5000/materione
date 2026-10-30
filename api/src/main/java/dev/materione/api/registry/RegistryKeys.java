@@ -26,6 +26,9 @@ public final class RegistryKeys {
     /** {@link dev.materione.api.logic.ExpressionFunction} implementations callable from expressions (logic.md §4.2). */
     public static final RegistryKey EXPRESSION_FUNCTIONS = new RegistryKey("expression-functions");
 
+    /** {@link dev.materione.api.logic.provider.CurrencyIntegration} entries: how a currency reaches its money (logic.md §4.5). */
+    public static final RegistryKey CURRENCY_INTEGRATIONS = new RegistryKey("currency-integrations");
+
     /** Delivery hosting backends (master §8.4). */
     public static final RegistryKey DELIVERY_BACKENDS = new RegistryKey("delivery-backends");
 

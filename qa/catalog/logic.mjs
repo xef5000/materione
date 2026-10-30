@@ -1,4 +1,4 @@
-// Logic suite: the L6 player, world and server actions (#212) on a real server and client. Each
+// Logic suite: the L6 player, world and server actions (#212) and the L7 provider state (#213) on a real server and client. Each
 // scenario is a probe item in fixtures/packs/probe/items/probe_*.yml whose right-click rule runs
 // the actions; the run reads the result back from chat, the inventory, the experience bar or the
 // sound engine. Auto mode unless a human has to see the screen (title, action bar).
@@ -201,6 +201,23 @@ export default [
         stopped = !String(await ctx.exec(ACTIVE_SOUNDS, 15_000)).includes('beacon');
       }
       ctx.expect(stopped).toBe(true);
+    },
+  }),
+  test({
+    id: 'logic.providers-unavailable-without-vault',
+    title: 'with no Vault and no transfer host, reload reports materione:money and the money and connect actions unavailable',
+    mode: 'auto',
+    covers: [
+      'api/src/main/java/dev/materione/api/logic/provider/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'plugin/src/main/java/dev/materione/plugin/MaterionePlugin.java',
+      'integrations/src/main/java/dev/materione/integrations/**',
+    ],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione reload');
+      await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
+      await ctx.waitForServerLog(/MATERIONE-LOGIC-OK currency=materione:money available=false transfer=none unavailable=give_money,take_money,connect/);
     },
   }),
 ];

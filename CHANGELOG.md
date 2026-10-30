@@ -7,6 +7,36 @@ releases may change file formats, settings and the public API.
 
 ## [Unreleased]
 
+### Added
+
+- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
+  `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
+  balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
+  available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a
+  command pair with a PlaceholderAPI balance). Addons register more. The integration code is adapted
+  from ItemsAPI's currency system, with the owner's permission; ItemsAPI is not a dependency.
+- **`give_money`, `take_money` with `currency:`, and two functions.** `give_money: 100` and
+  `take_money: 250` use the default currency (the `default_currency` setting, `materione:money` unless
+  changed); `take_money` fails with `insufficient funds` and takes nothing. `balance(currency)` reads a
+  player's balance and `format_currency(amount, currency)` writes it with the currency's symbol and
+  decimals.
+- **Permission and transfer actions.** `give_permission: example.fly`, `take_permission: example.fly`,
+  and `connect: lobby`. Each reports itself unavailable, with the reason, when nothing can run it.
+  Permissions always work: they default to a session-only Bukkit grant.
+- **Vault, LuckPerms and the BungeeCord channel are used when installed.** Vault provides the built-in
+  currency and, when LuckPerms is absent, the permission service; LuckPerms provides permissions with
+  native expiry. Both are optional server dependencies. Installing one then running `/materione reload`
+  (or restarting) is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
+- **Server transfer** sends a player by the 1.20.5+ transfer packet, to the `transfer_host` and
+  `transfer_port` in `settings.yml`, or by the BungeeCord plugin channel (BungeeCord and Velocity)
+  when `transfer_mode: bungeecord` is set. The three keys (`transfer_host`, `transfer_port`,
+  `transfer_mode`) are in the default settings file with defaults that keep the feature off.
+- `MTR-0061`: an optional integration could not install its provider and was skipped (a warning).
+  `MTR-0062`: a currency file was quarantined (a warning).
+- Plugin API: `LogicApi.providers()`, `LogicApi.currencyIntegrations()` and the
+  `dev.materione.api.logic.provider` types, for addons that supply a currency integration, a
+  permission provider or a transfer.
+
 ### Changed
 
 - **The GUI studio asks the server, not its own copy of the rules (gui.md §6, §10 #8–#9).** The
