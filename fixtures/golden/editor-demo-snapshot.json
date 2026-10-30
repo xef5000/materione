@@ -7020,7 +7020,7 @@
     },
     {
       "code": "MTR-0012",
-      "message": "pre-apply: items: +32 ~0 -0 (removed stay keep-flagged); blocks: +6 -0; furniture: +10 -0; recipes: 5 enabled, 0 disabled",
+      "message": "pre-apply: items: +26 ~0 -0 (removed stay keep-flagged); blocks: +6 -0; furniture: +10 -0; recipes: 5 enabled, 0 disabled",
       "severity": "info"
     }
   ],
@@ -9242,194 +9242,6 @@
           "rev": 0,
           "sha256": "397393759ae42c9faac2c54dc4b2f27896af6b21716f362e443405c41ff4a8a0"
         },
-        "items/probe_exp.yml": {
-          "parsed": {
-            "probe_exp": {
-              "material": "ARROW",
-              "display_name": "Experience Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "give_exp": {
-                        "amount": 5,
-                        "unit": "levels"
-                      }
-                    },
-                    {
-                      "take_exp": {
-                        "amount": 2,
-                        "unit": "levels"
-                      }
-                    },
-                    {
-                      "take_exp": {
-                        "amount": 500,
-                        "unit": "levels"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 experience probe (qa logic.exp-give-take): grants five levels, takes two, then tries to\n# take five hundred. The last take must fail and remove nothing, so the net is three levels.\nprobe_exp:\n  material: ARROW\n  display_name: \"Experience Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - give_exp: {amount: 5, unit: levels}\n        - take_exp: {amount: 2, unit: levels}\n        - take_exp: {amount: 500, unit: levels}\n",
-          "rev": 0,
-          "sha256": "320fcc2d0e4f3eadfbe8feb4afaf51752afa9552af5b50871d58abf71ffd93ac"
-        },
-        "items/probe_items.yml": {
-          "parsed": {
-            "probe_items": {
-              "material": "BONE",
-              "display_name": "Item Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "take_item": {
-                        "item": "minecraft:diamond",
-                        "amount": 5
-                      }
-                    },
-                    {
-                      "take_item": {
-                        "item": "minecraft:diamond",
-                        "amount": 2
-                      }
-                    },
-                    {
-                      "give_item": {
-                        "item": "minecraft:emerald",
-                        "amount": 2
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 item probe (qa logic.items-take-give): take_item is all or nothing. The first take asks\n# for more diamonds than the player holds and must remove nothing; the second takes two; the\n# give adds emeralds. The QA run reads the inventory back after one right-click.\nprobe_items:\n  material: BONE\n  display_name: \"Item Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - take_item: {item: \"minecraft:diamond\", amount: 5}\n        - take_item: {item: \"minecraft:diamond\", amount: 2}\n        - give_item: {item: \"minecraft:emerald\", amount: 2}\n",
-          "rev": 0,
-          "sha256": "552dc59c0ea3e85e323b55d3754e77946c9150fac5c99a5531ae37bf84417920"
-        },
-        "items/probe_messages.yml": {
-          "parsed": {
-            "probe_messages": {
-              "material": "FEATHER",
-              "display_name": "Message Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "broadcast": "Probe server broadcast"
-                    },
-                    {
-                      "broadcast": {
-                        "text": "Probe broadcast from ${player.name}",
-                        "scope": "world"
-                      }
-                    },
-                    {
-                      "chat": "probe chat line"
-                    },
-                    {
-                      "actionbar": "&aProbe action bar"
-                    },
-                    {
-                      "title": {
-                        "title": "&6Probe title",
-                        "subtitle": "probe subtitle",
-                        "fade_in": 2,
-                        "stay": 60,
-                        "fade_out": 4
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 message probe (qa logic.messages-broadcast-chat, logic.title-actionbar): one\n# right-click in the air fires the server and world broadcasts, the player's chat line, the\n# action bar and a title, so each surface can be read back by the QA run.\nprobe_messages:\n  material: FEATHER\n  display_name: \"Message Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - broadcast: \"Probe server broadcast\"\n        - broadcast: {text: \"Probe broadcast from ${player.name}\", scope: world}\n        - chat: \"probe chat line\"\n        - actionbar: \"&aProbe action bar\"\n        - title: {title: \"&6Probe title\", subtitle: \"probe subtitle\", fade_in: 2, stay: 60, fade_out: 4}\n",
-          "rev": 0,
-          "sha256": "adf76529a42f89d4d6d67b61b5033300c241dd3ca3a936bbc46228bfac2f658a"
-        },
-        "items/probe_move.yml": {
-          "parsed": {
-            "probe_move": {
-              "material": "SNOWBALL",
-              "display_name": "Teleport Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "teleport": {
-                        "x": 0.5,
-                        "y": 80,
-                        "z": 0.5,
-                        "yaw": 90,
-                        "pitch": 0
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 teleport probe (qa logic.teleport): one right-click moves the player to fixed coordinates\n# facing east. The QA run checks the horizontal position and the yaw.\nprobe_move:\n  material: SNOWBALL\n  display_name: \"Teleport Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - teleport: {x: 0.5, y: 80, z: 0.5, yaw: 90, pitch: 0}\n",
-          "rev": 0,
-          "sha256": "bb77fee59a64c1a8aaa49e75086d5b5e9d1d50ede95b4d6882687d0aab5a41dc"
-        },
-        "items/probe_sound.yml": {
-          "parsed": {
-            "probe_sound": {
-              "material": "GLOW_INK_SAC",
-              "display_name": "Sound Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "sound": {
-                        "sound": "minecraft:block.beacon.ambient",
-                        "scope": "world"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 sound probe (qa logic.sound-stop): one right-click starts a looping beacon ambience for\n# the whole world (scope: world); probe_stop stops that one sound again.\nprobe_sound:\n  material: GLOW_INK_SAC\n  display_name: \"Sound Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - sound: {sound: \"minecraft:block.beacon.ambient\", scope: world}\n",
-          "rev": 0,
-          "sha256": "96cb1c70edc59d4d4928da62a9f2a6037e93f4a88c009600cb1bb3954f93fcbf"
-        },
-        "items/probe_stop.yml": {
-          "parsed": {
-            "probe_stop": {
-              "material": "ECHO_SHARD",
-              "display_name": "Stop Probe",
-              "behavior": [
-                {
-                  "on": "click:right",
-                  "do": [
-                    {
-                      "stop_sound": {
-                        "sound": "minecraft:block.beacon.ambient"
-                      }
-                    }
-                  ]
-                }
-              ]
-            }
-          },
-          "raw": "# Logic L6 stop probe (qa logic.sound-stop): one right-click stops the beacon ambience that\n# probe_sound started, and nothing else.\nprobe_stop:\n  material: ECHO_SHARD\n  display_name: \"Stop Probe\"\n  behavior:\n    - on: click:right\n      do:\n        - stop_sound: {sound: \"minecraft:block.beacon.ambient\"}\n",
-          "rev": 0,
-          "sha256": "ec66605112206136253fbbb4501585604441af50730e6fbbaf31c29abdb26f91"
-        },
         "items/ration.yml": {
           "parsed": {
             "ration": {
@@ -9640,42 +9452,6 @@
           "id": "light_snack",
           "pack": "world",
           "path": "items/light_snack.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_exp",
-          "pack": "world",
-          "path": "items/probe_exp.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_items",
-          "pack": "world",
-          "path": "items/probe_items.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_messages",
-          "pack": "world",
-          "path": "items/probe_messages.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_move",
-          "pack": "world",
-          "path": "items/probe_move.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_sound",
-          "pack": "world",
-          "path": "items/probe_sound.yml",
-          "type": "items"
-        },
-        {
-          "id": "probe_stop",
-          "pack": "world",
-          "path": "items/probe_stop.yml",
           "type": "items"
         },
         {
@@ -10013,66 +9789,6 @@
         {
           "health": "unknown",
           "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_exp",
-          "material": "ARROW",
-          "name": "Experience Probe",
-          "pack": "world",
-          "path": "items/probe_exp.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_items",
-          "material": "BONE",
-          "name": "Item Probe",
-          "pack": "world",
-          "path": "items/probe_items.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_messages",
-          "material": "FEATHER",
-          "name": "Message Probe",
-          "pack": "world",
-          "path": "items/probe_messages.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_move",
-          "material": "SNOWBALL",
-          "name": "Teleport Probe",
-          "pack": "world",
-          "path": "items/probe_move.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_sound",
-          "material": "GLOW_INK_SAC",
-          "name": "Sound Probe",
-          "pack": "world",
-          "path": "items/probe_sound.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
-          "id": "probe_stop",
-          "material": "ECHO_SHARD",
-          "name": "Stop Probe",
-          "pack": "world",
-          "path": "items/probe_stop.yml",
-          "type": "items"
-        },
-        {
-          "health": "unknown",
-          "healthMessage": "pipeline validation and apply freshness are unknown",
           "id": "ration",
           "material": "COOKED_BEEF",
           "name": "Wayfarer's Ration",
@@ -10114,7 +9830,7 @@
     }
   ],
   "reload": {
-    "itemsLive": 32,
+    "itemsLive": 26,
     "quarantined": 0
   },
   "scaffoldId": "demo_scaffold",

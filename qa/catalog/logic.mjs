@@ -1,5 +1,5 @@
 // Logic suite: the L6 player, world and server actions (#212) on a real server and client. Each
-// scenario is a probe item in fixtures/packs/world/items/probe_*.yml whose right-click rule runs
+// scenario is a probe item in fixtures/packs/probe/items/probe_*.yml whose right-click rule runs
 // the actions; the run reads the result back from chat, the inventory, the experience bar or the
 // sound engine. Auto mode unless a human has to see the screen (title, action bar).
 
@@ -62,17 +62,17 @@ async function holdProbe(ctx, item) {
 export default [
   test({
     id: 'logic.messages-broadcast-chat',
-    title: 'world:probe_messages right-click sends a server broadcast ("Probe server broadcast"), a world-scoped broadcast that names the player ("Probe broadcast from Probe") and a chat line the player says ("probe chat line"); each reaches the chat log exactly as authored, with the template filled in',
+    title: 'probe:probe_messages right-click sends a server broadcast ("Probe server broadcast"), a world-scoped broadcast that names the player ("Probe broadcast from Probe") and a chat line the player says ("probe chat line"); each reaches the chat log exactly as authored, with the template filled in',
     mode: 'auto',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/**',
       'api/src/main/java/dev/materione/api/logic/**',
-      'fixtures/packs/world/items/probe_messages.yml',
+      'fixtures/packs/probe/items/probe_messages.yml',
     ],
     dependsOn: ['commands.give-basic'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_messages');
+      await holdProbe(ctx, 'probe:probe_messages');
       ctx.expect(await useInAir(ctx)).toBe('used-air');
       await ctx.waitForChat(/Probe server broadcast/);
       await ctx.waitForChat(/Probe broadcast from Probe/);
@@ -82,17 +82,17 @@ export default [
 
   test({
     id: 'logic.title-actionbar',
-    title: 'world:probe_messages shows the action bar text "Probe action bar" above the hotbar and a title "Probe title" with subtitle "probe subtitle" on screen after one right-click',
+    title: 'probe:probe_messages shows the action bar text "Probe action bar" above the hotbar and a title "Probe title" with subtitle "probe subtitle" on screen after one right-click',
     mode: 'visual',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/action/ActionbarAction.java',
       'plugin/src/main/java/dev/materione/plugin/logic/action/TitleAction.java',
-      'fixtures/packs/world/items/probe_messages.yml',
+      'fixtures/packs/probe/items/probe_messages.yml',
     ],
     dependsOn: ['logic.messages-broadcast-chat'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_messages');
+      await holdProbe(ctx, 'probe:probe_messages');
       ctx.expect(await useInAir(ctx)).toBe('used-air');
       await ctx.sleep(800); // the title fades in over two ticks; the bar lingers for seconds
       await ctx.shot('title-actionbar');
@@ -102,18 +102,18 @@ export default [
 
   test({
     id: 'logic.items-take-give',
-    title: 'world:probe_items right-click: take_item of five diamonds with three held removes nothing (all or nothing, the player keeps three), a take of two then leaves one diamond, and give_item adds two emeralds to the inventory',
+    title: 'probe:probe_items right-click: take_item of five diamonds with three held removes nothing (all or nothing, the player keeps three), a take of two then leaves one diamond, and give_item adds two emeralds to the inventory',
     mode: 'auto',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/action/TakeItemAction.java',
       'plugin/src/main/java/dev/materione/plugin/logic/action/GiveItemAction.java',
       'plugin/src/main/java/dev/materione/plugin/logic/support/**',
-      'fixtures/packs/world/items/probe_items.yml',
+      'fixtures/packs/probe/items/probe_items.yml',
     ],
     dependsOn: ['commands.give-basic'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_items');
+      await holdProbe(ctx, 'probe:probe_items');
       await ctx.rcon('give Probe minecraft:diamond 3');
       await ctx.sleep(600);
       ctx.expect(String(await ctx.exec(countItems('diamond')))).toBe('3');
@@ -128,17 +128,17 @@ export default [
 
   test({
     id: 'logic.exp-give-take',
-    title: 'world:probe_exp right-click grants five levels and takes two, leaving the player at level 3; a take of five hundred levels afterwards fails and takes nothing, so the level stays at 3 rather than dropping to 0',
+    title: 'probe:probe_exp right-click grants five levels and takes two, leaving the player at level 3; a take of five hundred levels afterwards fails and takes nothing, so the level stays at 3 rather than dropping to 0',
     mode: 'auto',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/action/GiveExpAction.java',
       'plugin/src/main/java/dev/materione/plugin/logic/action/TakeExpAction.java',
-      'fixtures/packs/world/items/probe_exp.yml',
+      'fixtures/packs/probe/items/probe_exp.yml',
     ],
     dependsOn: ['commands.give-basic'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_exp');
+      await holdProbe(ctx, 'probe:probe_exp');
       await ctx.rcon('experience set Probe 0 levels');
       await ctx.sleep(400);
       ctx.expect(String(await ctx.exec('return player.experienceLevel'))).toBe('0');
@@ -151,16 +151,16 @@ export default [
 
   test({
     id: 'logic.teleport',
-    title: 'world:probe_move right-click teleports the player to x 0.5, z 0.5 facing east (yaw 90) in the same world, and the client shows the new position and facing',
+    title: 'probe:probe_move right-click teleports the player to x 0.5, z 0.5 facing east (yaw 90) in the same world, and the client shows the new position and facing',
     mode: 'auto',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/action/TeleportAction.java',
-      'fixtures/packs/world/items/probe_move.yml',
+      'fixtures/packs/probe/items/probe_move.yml',
     ],
     dependsOn: ['commands.give-basic'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_move');
+      await holdProbe(ctx, 'probe:probe_move');
       await ctx.rcon('tp Probe 40.5 90 40.5');
       await ctx.sleep(600);
       ctx.expect(await useInAir(ctx)).toBe('used-air');
@@ -175,23 +175,23 @@ export default [
 
   test({
     id: 'logic.sound-stop',
-    title: 'world:probe_sound right-click starts the looping block.beacon.ambient sound for the whole world (scope world), the sound engine holds it, and world:probe_stop stop_sound removes that sound again while leaving the engine otherwise untouched',
+    title: 'probe:probe_sound right-click starts the looping block.beacon.ambient sound for the whole world (scope world), the sound engine holds it, and probe:probe_stop stop_sound removes that sound again while leaving the engine otherwise untouched',
     mode: 'auto',
     covers: [
       'plugin/src/main/java/dev/materione/plugin/logic/action/SoundAction.java',
       'plugin/src/main/java/dev/materione/plugin/logic/action/StopSoundAction.java',
-      'fixtures/packs/world/items/probe_sound.yml',
-      'fixtures/packs/world/items/probe_stop.yml',
+      'fixtures/packs/probe/items/probe_sound.yml',
+      'fixtures/packs/probe/items/probe_stop.yml',
     ],
     dependsOn: ['commands.give-basic'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await holdProbe(ctx, 'world:probe_sound');
+      await holdProbe(ctx, 'probe:probe_sound');
       ctx.expect(await useInAir(ctx)).toBe('used-air');
       ctx.expect(await waitForActiveSound(ctx, 'beacon', 8_000)).toBe(true);
 
-      await ctx.rcon('materione give world:probe_stop Probe');
-      await ctx.waitForChat(/Given world:probe_stop/);
+      await ctx.rcon('materione give probe:probe_stop Probe');
+      await ctx.waitForChat(/Given probe:probe_stop/);
       await ctx.sleep(400);
       await ctx.exec('player.getInventory().selected = 1');
       ctx.expect(await useInAir(ctx)).toBe('used-air');

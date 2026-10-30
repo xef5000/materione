@@ -978,7 +978,7 @@ tests (`BuiltinActionsTest`, `PlayerActionsTest`, `ItemActionsTest`). Take plann
 exhaustively as a pure function. The Bukkit-only paths (the server broadcast, world lookup by name,
 online-player sound, stack building and inventory mutation, the experience and teleport calls on a
 real player) need a live server and are covered by the `logic` QA suite (`qa/catalog/logic.mjs`) on
-the probe items `world:probe_messages`, `probe_items`, `probe_exp`, `probe_move`, `probe_sound` and
+the probe items `probe:probe_messages`, `probe_items`, `probe_exp`, `probe_move`, `probe_sound` and
 `probe_stop`. The QA entries are authored and their integrity is checked by `qa/runner.mjs check`;
 they have not been run on a probe in this change, so their ledger state is "never" until a main
 swarm records them.
