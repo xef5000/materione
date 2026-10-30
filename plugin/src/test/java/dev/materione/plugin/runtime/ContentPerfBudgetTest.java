@@ -62,7 +62,7 @@ class ContentPerfBudgetTest {
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         // sample + corpus + world + nested (#191: one nested item)
-        assertThat(loaded.shadow.itemCount()).isEqualTo(63);
+        assertThat(loaded.shadow.itemCount()).isEqualTo(69);
         assertThat(elapsedMs)
                 .as("full reload (parse + validate + graph + compile + shadow build) wall time")
                 .isLessThan(FULL_RELOAD_BUDGET_MS);
@@ -176,9 +176,9 @@ class ContentPerfBudgetTest {
         var report = runtime.apply(loaded.shadow, loaded.outcome().sha256());
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
-        assertThat(report.added()).isEqualTo(63);
+        assertThat(report.added()).isEqualTo(69);
         assertThat(elapsedMs)
-                .as("apply swap of 63 items — the main-thread stall proxy (0 stalls > 50 ms)")
+                .as("apply swap of 69 items — the main-thread stall proxy (0 stalls > 50 ms)")
                 .isLessThan(APPLY_SWAP_BUDGET_MS);
     }
 
@@ -199,7 +199,7 @@ class ContentPerfBudgetTest {
         long elapsedMs = Duration.ofNanos(System.nanoTime() - start).toMillis();
 
         assertThat(result.completed()).isTrue();
-        assertThat(shadow.itemCount()).isEqualTo(63);
+        assertThat(shadow.itemCount()).isEqualTo(69);
         assertThat(elapsedMs)
                 .as("targeted single-file reload (scoped parse + compile + shadow + pre-apply diff)")
                 .isLessThan(TARGETED_RELOAD_BUDGET_MS);
