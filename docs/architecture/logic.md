@@ -1210,7 +1210,7 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 **Scopes and the spelling of a reference**
 
 3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
-   so `vars.player` always means the scope. A name written with one of them is `MTR-0061` (a load error).
+   so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error).
 4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
    session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
    and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
@@ -1231,8 +1231,8 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
    or `reset`. The M2 shape `{name, value}` still works and writes a run-local with `set`. `value` is required for
    the four ops that take one, and rejected for `toggle`, `remove` and `reset`.
 8. **Two kinds of error, decided at load.** A name that is not declared, or a scope that does not match, is
-   `MTR-0061`. A literal that does not fit the type (`"lots"` into a number, `true` into a string), or an op the
-   type does not take (`toggle` on a number, `add` on a boolean), is `MTR-0062`. Both skip the step only. The
+   `MTR-0063`. A literal that does not fit the type (`"lots"` into a number, `true` into a string), or an op the
+   type does not take (`toggle` on a number, `add` on a boolean), is `MTR-0064`. Both skip the step only. The
    type chooses the code by throwing `ParseRejection` (a new `api.logic` type, a subclass of
    `IllegalArgumentException` that names its `DiagnosticCode`); `ActionCompiler` reports that code, and any other
    parse failure stays `MTR-0057`. A template or expression is typed only when it runs, so it is checked then.
@@ -1261,14 +1261,14 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     `VariableStore` for their scope and touch nothing else.
 13. **The player store is the persistent data container.** `PdcVariableStore` keeps each value under
     `materione:var.<pack>.<key>` with the type the declaration gives it (`DOUBLE`, `STRING` or `BOOLEAN`). It looks the
-    container up per call, so an offline player (no container) reads absent and refuses writes (`MTR-0063`); the admin
+    container up per call, so an offline player (no container) reads absent and refuses writes (`MTR-0065`); the admin
     command needs an online player. A value stored with a type the declaration no longer has reads as absent.
 14. **The server store is one JSON file, written atomically and debounced.** `storage/variables.json` holds
     `{"<pack:key>": value}`. A write updates memory and marks the store dirty; the service flushes on a 5-second
     debounce (a global-scheduler loop, started with `VariableService.autoFlush`) and on disable. A flush writes a
     temporary sibling and moves it over the file (`ATOMIC_MOVE`, with a plain replace when the filesystem refuses it).
     A file that does not parse is moved aside as `variables.json.corrupt`, a warning is logged and the store starts
-    empty. A failed flush stays dirty and is retried on the next tick (`MTR-0063`).
+    empty. A failed flush stays dirty and is retried on the next tick (`MTR-0065`).
 15. **Recovery is about the file, never about the declarations.** Removing a declaration from a pack leaves its stored
     value in the store; it is unreachable until the declaration returns. Nothing is deleted.
 
@@ -1300,9 +1300,9 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
 
 **Diagnostics and the rest**
 
-21. **New codes.** `MTR-0061` (undeclared or reserved name, error, load), `MTR-0062` (value or op does not fit the type,
-    error, at load for literals and at run time for computed values), `MTR-0063` (a persistent variable could not be read
-    or written, warning, run, rate-limited). The pinned count in `DiagnosticCodesTest` is 63.
+21. **New codes.** `MTR-0063` (undeclared or reserved name, error, load), `MTR-0064` (value or op does not fit the type,
+    error, at load for literals and at run time for computed values), `MTR-0065` (a persistent variable could not be read
+    or written, warning, run, rate-limited). The pinned count in `DiagnosticCodesTest` is 65.
 22. **Fixtures.** `fixtures/packs/corpus/variables/qa.yml` declares two variables for the QA suite. It adds no item, model
     or texture, so no pinned count changes. `fixtures/golden/editor-demo-snapshot.json` is regenerated: the `set_var`
     schema changed, and the `variable` type is listed.

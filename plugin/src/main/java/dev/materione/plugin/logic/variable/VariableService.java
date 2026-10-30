@@ -98,7 +98,7 @@ public final class VariableService implements AutoCloseable {
     }
 
     /**
-     * Flushes the server store now when it has changes. A failed flush is reported (MTR-0063) and
+     * Flushes the server store now when it has changes. A failed flush is reported (MTR-0065) and
      * retried on the next tick, so nothing is lost while the disk recovers.
      */
     public void flushIfDirty() {

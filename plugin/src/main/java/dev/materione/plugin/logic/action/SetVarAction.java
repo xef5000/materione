@@ -40,7 +40,7 @@ import java.util.List;
  *
  * <p>The target and the operation are decided at load. An undeclared persistent name, a reserved
  * name, a literal that does not fit the declared type and an operation the type does not take are
- * rejected with their own codes ({@code MTR-0061}, {@code MTR-0062}) and the step is skipped. A
+ * rejected with their own codes ({@code MTR-0063}, {@code MTR-0064}) and the step is skipped. A
  * computed value that does not fit at run time fails the step.
  *
  * <p>The value is decided once, at load, by how it is written: a string with {@code ${...}} is a

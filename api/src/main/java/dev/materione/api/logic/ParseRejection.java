@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * A parameter the type rejects, with the diagnostic code it should be reported under. A type throws
  * it from {@link ActionType#parse} or {@link ConditionType#parse} when the problem has a code of its
- * own (for example {@code MTR-0061} for an undeclared variable); any other
+ * own (for example {@code MTR-0063} for an undeclared variable); any other
  * {@link IllegalArgumentException} is reported as the generic rejected step ({@code MTR-0057}).
  */
 public final class ParseRejection extends IllegalArgumentException {

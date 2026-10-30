@@ -38,7 +38,7 @@ public interface VariablesApi {
      * default.
      *
      * @return the stored value on success; a failure carries MTR-0055 (no {@code materione.var}),
-     *         MTR-0061 (undeclared), MTR-0062 (the value does not fit the type) or MTR-0063 (no holder,
+     *         MTR-0063 (undeclared), MTR-0064 (the value does not fit the type) or MTR-0065 (no holder,
      *         or the store could not be written)
      */
     ApiResult<Object> set(ActorContext actor, NamespacedId id, UUID player, Object value);
