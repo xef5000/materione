@@ -3,8 +3,10 @@ package dev.materione.behavior.logic;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
+import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryKey;
 import dev.materione.api.registry.RegistryKeys;
@@ -48,6 +50,12 @@ public final class RegistryLogicLookup implements LogicLookup {
                 return Optional.empty(); // a broken description is "unknown", never a failed load
             }
         });
+    }
+
+    /** Functions resolve against the live {@code expression-functions} registry, read at each rule load. */
+    @Override
+    public FunctionResolver functions() {
+        return name -> find(RegistryKeys.EXPRESSION_FUNCTIONS, name, ExpressionFunction.class);
     }
 
     private <T> Optional<T> find(RegistryKey key, String authoredId, Class<T> type) {

@@ -129,7 +129,7 @@ public final class FlowRun {
         RunContext(LogicContext base, FlowRun run) {
             this.base = base;
             this.run = run;
-            this.evaluation = EvaluationContext.of(this::resolve);
+            this.evaluation = EvaluationContext.of(this::resolve).withLogic(this);
         }
 
         @Override

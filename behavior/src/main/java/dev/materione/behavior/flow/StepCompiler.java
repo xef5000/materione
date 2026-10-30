@@ -326,7 +326,7 @@ final class StepCompiler {
         if (!(value instanceof String text) || !(text.contains("${") || text.contains("%"))) {
             return new ArgValue.Literal(Shapes.freeze(value));
         }
-        var recorder = new RecordingExpressions();
+        var recorder = new RecordingExpressions(unit.context.lookup.functions());
         try {
             String inner = singleExpression(text);
             ArgValue compiled;

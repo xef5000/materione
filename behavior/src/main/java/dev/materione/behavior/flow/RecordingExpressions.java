@@ -3,6 +3,7 @@ package dev.materione.behavior.flow;
 import dev.materione.api.logic.ExpressionCompiler;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.ValueExpression;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.logic.EngineExpressions;
 import java.util.ArrayList;
 import java.util.List;
@@ -15,19 +16,25 @@ import java.util.List;
  */
 final class RecordingExpressions implements ExpressionCompiler {
 
+    private final EngineExpressions engine;
     private final List<String> templates = new ArrayList<>();
     private final List<String> expressions = new ArrayList<>();
 
+    /** @param functions the registry calls bind against, the same one the rule's own expressions use */
+    RecordingExpressions(FunctionResolver functions) {
+        this.engine = EngineExpressions.with(functions);
+    }
+
     @Override
     public TemplateText template(String source) {
-        TemplateText compiled = EngineExpressions.INSTANCE.template(source);
+        TemplateText compiled = engine.template(source);
         templates.add(source);
         return compiled;
     }
 
     @Override
     public ValueExpression expression(String source) {
-        ValueExpression compiled = EngineExpressions.INSTANCE.expression(source);
+        ValueExpression compiled = engine.expression(source);
         expressions.add(source);
         return compiled;
     }

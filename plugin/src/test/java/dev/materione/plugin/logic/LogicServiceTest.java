@@ -97,7 +97,8 @@ class LogicServiceTest {
 
         BehaviorVocabulary vocabulary = api.logic().vocabulary();
 
-        assertThat(vocabulary.functions()).extracting(BehaviorVocabulary.Function::id).containsExactly("example:shout");
+        assertThat(vocabulary.functions()).extracting(BehaviorVocabulary.Function::id)
+                .contains("example:shout", "contains", "format_number");
         assertThat(vocabulary.triggers()).extracting(BehaviorVocabulary.Trigger::id).contains("example:storm");
         assertThat(vocabulary.events()).extracting(BehaviorVocabulary.Event::id).contains("example:storm");
     }

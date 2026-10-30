@@ -57,7 +57,7 @@ Cross-cutting runtime rules:
 > built-in trigger registrations, and rules parse their actions at load. The structured flows are
 > the next step ([`logic.md`](logic.md) §14).
 > *As built (#208):* `do:` lists are flows. The compiler (`FlowCompiler`) types and links every step, and a
-> resumable interpreter runs them over the thread gateway ([`logic.md`](logic.md) §15). "Action execution"
+> resumable interpreter runs them over the thread gateway ([`logic.md`](logic.md) §16). "Action execution"
 > below now reads: steps run in the order written, inline while the thread allows, hopping to the player's
 > region or the global thread when an action declares it, and a `wait` or `delay:` parks the run.
 

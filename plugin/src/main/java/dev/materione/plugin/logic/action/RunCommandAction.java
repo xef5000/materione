@@ -20,7 +20,7 @@ import org.bukkit.entity.Player;
  * {@code run_command: "say hi"} or {@code run_command: {command, as: console|player|op}}: runs a
  * server command, with {@code ${...}} and {@code %placeholders%} filled in.
  *
- * <p>The thread depends on the sender (logic.md §15): the console may touch any region, so it runs
+ * <p>The thread depends on the sender (logic.md §16): the console may touch any region, so it runs
  * on the {@link Threading#GLOBAL} thread; {@code as: player|op} executes as the player and so runs
  * in the player's region. The type's headline {@link #threading()} is the console default.
  */

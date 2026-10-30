@@ -61,7 +61,7 @@ final class CompileUnit {
             return;
         }
         var found = new LinkedHashSet<String>();
-        for (Expression expression : Template.expressions(source)) {
+        for (Expression expression : Template.compile(source, context.lookup.functions()).expressions()) {
             ExprRoots.collect(expression.tree(), found);
         }
         warnUnknown(found, path);
@@ -73,7 +73,7 @@ final class CompileUnit {
             return;
         }
         var found = new LinkedHashSet<String>();
-        ExprRoots.collect(ExpressionParser.parse(source).tree(), found);
+        ExprRoots.collect(ExpressionParser.parse(source, context.lookup.functions()).tree(), found);
         warnUnknown(found, path);
     }
 

@@ -28,7 +28,7 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **Behavior rules are flows: `if`, `require`, `choose`, `wait`, `stop` and `call` (logic.md §2, §5, §15).**
+- **Behavior rules are flows: `if`, `require`, `choose`, `wait`, `stop` and `call` (logic.md §2, §5, §16).**
   A rule's `do:` list can now branch (`if`/`then`/`else`, `choose`), guard (`require` runs steps until
   one fails, then runs its `else` and ends the run, the shape of a paywall), pause (`wait: <ticks>`),
   stop (`stop`, `stop: {cancel: true}`) and reuse named flows (`flows:` beside `behavior:` on an item,
@@ -45,6 +45,16 @@ releases may change file formats, settings and the public API.
   aborted with `MTR-0059`. `node: {x, y}` on a rule or a step is accepted and kept in the file. Every
   rule that loaded before means the same; two edge cases changed on purpose, listed under Fixed.
 
+- **Expressions can call functions, and there are twenty built-in ones (logic.md §4.2, §15).**
+  `contains(text, part)`, `matches(text, pattern)`, `length`, `lower`, `upper`, `trim`,
+  `starts_with`, `ends_with`, `equals_ignore_case`, `is_number`, `is_player`, `number`, `round`,
+  `floor`, `ceil`, `abs`, `min`, `max`, `random(min, max)` and `format_number` work in every `if:`
+  condition and in the templates and values of actions. A call is bound when the rule loads
+  against the registry, so an unknown function or a wrong argument count skips that rule with
+  `MTR-0022` and a position. Functions never fail on a bad argument: a predicate is `false`, a value
+  is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
+  read budget, so a pattern cannot stall the server. Addons register their own functions through
+  `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
 - **Addons can register behavior actions, conditions, triggers and expression functions
   (`MaterioneAPI.logic()`, logic.md §4, api.md §3.11).** The six built-in actions (`run_command`,
   `message`, `sound`, `potion`, `cancel`, `set_var`) are now typed `ActionType`s registered through

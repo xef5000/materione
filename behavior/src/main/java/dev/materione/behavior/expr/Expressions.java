@@ -1,5 +1,7 @@
 package dev.materione.behavior.expr;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Objects;
 
 /**
@@ -40,7 +42,35 @@ public final class Expressions {
         if (node instanceof ExprNode.Binary binary) {
             return binary(binary, context);
         }
+        if (node instanceof ExprNode.Call call) {
+            return call(call, context);
+        }
         throw new ExpressionException("unknown expression node " + node.getClass());
+    }
+
+    /**
+     * A function call: the arguments are evaluated left to right, then the bound function runs with
+     * the run's logic context. A function that fails is contained here as an expression failure, so
+     * the caller sees the same diagnostic path as any other type error. Every number a function
+     * returns is normalised to {@code Double}.
+     */
+    private static Object call(ExprNode.Call call, EvaluationContext context) {
+        var values = new ArrayList<Object>(call.arguments().size());
+        for (ExprNode argument : call.arguments()) {
+            values.add(evaluate(argument, context));
+        }
+        Object result;
+        try {
+            result = call.function().call(Collections.unmodifiableList(values), context.logic());
+        } catch (ExpressionException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new ExpressionException("function '" + call.name() + "' failed: " + e.getMessage());
+        }
+        if (result instanceof Number number && !(result instanceof Double)) {
+            return number.doubleValue();
+        }
+        return result;
     }
 
     private static Object unary(ExprNode.Unary unary, EvaluationContext context) {

@@ -74,7 +74,7 @@ final class ActionCompiler {
     /** Captures the type's parameter type so parse and bind agree on it. */
     private <P> Step bind(
             String key, ActionType<P> type, Object payload, double chance, long delayTicks, StepPath path) {
-        var recorder = new RecordingExpressions();
+        var recorder = new RecordingExpressions(unit.context.lookup.functions());
         var reader = Shapes.reader(Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder);
         ActionStep<P> step = ActionStep.bind(path, key, type, reader, chance, delayTicks);
         recorder.check(unit, path);

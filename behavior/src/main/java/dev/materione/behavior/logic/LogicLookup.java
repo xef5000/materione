@@ -3,6 +3,7 @@ package dev.materione.behavior.logic;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.TriggerDescription;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.rule.EventSelector;
 import java.util.Locale;
 import java.util.Optional;
@@ -35,6 +36,14 @@ public interface LogicLookup {
      */
     default Optional<TriggerDescription> trigger(String authoredId) {
         return Optional.empty();
+    }
+
+    /**
+     * The expression functions a rule's expressions may call, bound at parse time (logic.md §4.2).
+     * Empty by default, so a lookup with no function registry rejects every call.
+     */
+    default FunctionResolver functions() {
+        return FunctionResolver.NONE;
     }
 
     /**

@@ -121,7 +121,7 @@ final class ConditionCompiler {
     private Condition expression(String text, StepPath path) {
         String source = unwrap(text.trim());
         try {
-            ExprNode tree = ExpressionParser.parse(source).tree();
+            ExprNode tree = ExpressionParser.parse(source, unit.context.lookup.functions()).tree();
             unit.checkExpression(tree, path);
             return new ExpressionCond(source, tree);
         } catch (ExpressionException e) {
@@ -160,7 +160,7 @@ final class ConditionCompiler {
 
     /** Captures the type's parameter type so parse and bind agree on it. */
     private <P> Condition bind(String key, ConditionType<P> type, Object payload, StepPath path) {
-        var recorder = new RecordingExpressions();
+        var recorder = new RecordingExpressions(unit.context.lookup.functions());
         var reader = Shapes.reader(Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder);
         P params = type.parse(reader);
         if (params == null) {

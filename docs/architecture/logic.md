@@ -264,7 +264,8 @@ public interface ConditionType<P> {
   `starts_with`, `matches`, `length`, `lower`, `upper`, `is_number`, `is_player`, `number`,
   `round`, `min`, `max`, `random` and `format_number` cover DeluxeMenus' string, regex, length and
   is-object requirements, and CommandPanels' `random`. Functions are a registry too
-  (`ExpressionFunction`), so addons can add them.
+  (`ExpressionFunction`), so addons can add them. The calling syntax, the parse-time binding and
+  the full built-in list are in §15 (#209).
 
 ### 4.3 Triggers
 
@@ -383,7 +384,7 @@ actions in a run whose session has ended are skipped with outcome `FAILED("no op
   are `ActionType`s in `plugin.logic.action`, and the vocabulary is version 2. #208 did the second:
   `BoundAction` and the flat action loop are replaced by the sealed step tree and the resumable
   interpreter, `RuleEngine` is now only the rule gate in front of it, and the seven step kinds are all
-  `supported` (§15).
+  `supported` (§16).
 
 ---
 
@@ -911,7 +912,120 @@ creates the `plugin.gui..` packages, and arrives with them.
 
 ---
 
-## 15. Decisions taken in #208 (L2: flows and the resumable interpreter)
+## 15. Decisions taken in #209 (L3: expression function calls and built-in functions)
+
+#209 binds calls into the expression grammar, puts the function registry behind the parser, and
+ships the built-in set of §4.2. Where §4.2 and §9 left a choice open, these are the choices.
+Each is reversible by the owner.
+
+**Calling syntax and binding**
+
+1. **A call is `name(arguments…)`.** Arguments are separated by commas and are full expressions,
+   so a ternary or a nested call is an argument. Zero arguments (`now()`) are allowed. A call is
+   an operand like any other value, so `round(x) >= 2` and `echo(a ? b : c)` both parse.
+2. **Calls bind at parse time, against the live registry.** `ExpressionParser.parse(source,
+   FunctionResolver)` asks the resolver for the function a call names, and the tree holds the
+   resolved `ExpressionFunction`. The engine builds the resolver as `RegistryLogicLookup.functions()`
+   over the `expression-functions` registry, and `RuleParser` hands it to every expression it
+   compiles: each `if:` condition and each parameter the action types read as an expression or a
+   template. `LogicLookup.functions()` defaults to `FunctionResolver.NONE`, so a lookup with no
+   registry rejects every call, and the one-argument `ExpressionParser.parse(source)` keeps its
+   behaviour with no functions. The `behavior` module stays Bukkit-free: the resolver is an
+   interface in `behavior.expr`, and only the plugin supplies the registry.
+3. **An unknown function, or a wrong argument count, is a load error.** Both are reported at
+   parse time with a 1-based character position (`unknown function 'nope' at position 5`) and
+   surface as the existing expression diagnostic, `MTR-0022`. The rule or the template is skipped,
+   and nothing else is. A count outside the description's `minArguments()` to `maxArguments()` is
+   refused; an optional parameter is one whose `required` is false.
+4. **Names.** A bare name is one of Materione's functions: `contains` is `materione:contains`. An
+   addon's function is written with a dot, `example.greet(…)`, because the grammar has no colon,
+   and it resolves as `example:greet`. A dotted name of more than two parts is unknown.
+5. **Templates compile against the registry, and hold the result.** `${…}` in a template is
+   compiled once at rule load into a `Template.Compiled` that the step keeps. The process-wide text
+   cache is not used for a template with calls, so a function that a reload removes cannot be
+   reached through a parse that predates it.
+
+**Evaluation**
+
+6. **A function sees the run.** The evaluator passes the run's `LogicContext` to the function. The
+   `MapLogicContext` attaches itself to its variable tree, so a function reads facets (the player)
+   through the same typed port an action uses. Without a run, the function gets an empty facet view
+   and the same variables.
+7. **Functions are pure, typed and total.** Each returns a value of the kind its description
+   declares. A bad argument never throws: a predicate answers `false`, a value function answers
+   `null`, and the expression goes on. A function that throws anyway is contained as an expression
+   failure (`function 'x' failed`), the same path as a type error. Every number a function returns
+   is a `Double`, whatever the function returned.
+8. **Argument kinds.** Text arguments are a string, or a number or boolean as the engine shows it
+   in an interpolation (`20` is `"20"`). Anything else (null, a list, a map) is not text. Number
+   arguments are a finite number, or text that reads as one (`" 12.5 "`, `"-3e2"`). A boolean is
+   never a number, and neither is null. `number` is the one function that converts text to a
+   number, so the other numeric functions take a value the author has already converted, or a
+   number from the variable tree.
+9. **`random` is the one impure function.** When both bounds are whole numbers (and within 10^15),
+   the result is a whole number in `[min, max]`, both ends included. Otherwise it is a real in
+   `[min, max)`. Reversed bounds are swapped. It is the documented exception to purity in
+   `ExpressionFunction`.
+10. **`matches` is a full match, and it is bounded.** The regular expression must match the whole
+    text (write `.*` at either end for a partial match). The limits are enforced in one place
+    (`RegexGuard`): a pattern longer than **256** characters, a text longer than **1,024**
+    characters, an invalid pattern, and a match that reads more than **1,000,000** characters of
+    the text all answer `false`. The read budget is what stops a catastrophically backtracking
+    pattern: backtracking reads the text again at every step, so a cap on the length of the text
+    alone would not bound the work. A pattern compiles once, and the cache keeps 256 patterns.
+11. **`is_player` reads the run's player and nobody else.** It is plugin-side because its facet
+    (`Facets.PLAYER`) is a Bukkit type. It answers `true` when the argument is the run's player's
+    name (case-insensitive) or UUID. It does not look up other players, so it is a pure read of the
+    run and needs no server call. A run without a player answers `false`.
+12. **Rounding and formatting follow one rule.** `round` and `format_number` round halves away from
+    zero (`round(-2.5)` is `-3`). `round` takes an optional number of places from 0 to 15.
+    `format_number` takes an optional number of decimals from 0 to 10, uses `,` for thousands in the
+    root locale, and shows no decimals by default.
+13. **Text functions count and convert by Unicode.** `length` counts code points, so an emoji is one
+    character. `lower` and `upper` use the root locale, so a result does not depend on the server's
+    language. `equals_ignore_case` compares without locale rules. `trim` removes Unicode whitespace.
+
+**The built-in set**
+
+| Function | Arguments | Returns | Bad input |
+|---|---|---|---|
+| `contains(text, part)` | text, text | boolean | `false` |
+| `equals_ignore_case(a, b)` | text, text | boolean | `false` |
+| `starts_with(text, prefix)` | text, text | boolean | `false` |
+| `ends_with(text, suffix)` | text, text | boolean | `false` |
+| `matches(text, pattern)` | text, regex (full match, bounded, decision 10) | boolean | `false` |
+| `length(text)` | text | number (code points) | `null` |
+| `lower(text)` | text | text | `null` |
+| `upper(text)` | text | text | `null` |
+| `trim(text)` | text | text | `null` |
+| `is_number(value)` | any | boolean | `false` |
+| `is_player(name)` | text (a player name or UUID) | boolean (the run's player only) | `false` |
+| `number(value)` | any | number | `null` |
+| `round(value[, places])` | number, optional places 0–15 | number (halves away from zero) | `null` |
+| `floor(value)` | number | number | `null` |
+| `ceil(value)` | number | number | `null` |
+| `min(a, b, …)` | one or more numbers | number | `null` |
+| `max(a, b, …)` | one or more numbers | number | `null` |
+| `abs(value)` | number | number | `null` |
+| `random(min, max)` | number, number | number (whole when both bounds are whole) | `null` |
+| `format_number(value[, decimals])` | number, optional decimals 0–10 | text (`1,234.50`) | `null` |
+
+**Limits, and what was left out**
+
+14. **No new diagnostic code.** A bad call is an expression error, so it uses `MTR-0022`, and
+    plugin.md §5 is unchanged.
+15. **The vocabulary carries the built-ins.** `api.logic().vocabulary().functions()` lists all
+    twenty, each with its self-description and its registration owner (`materione`). The
+    editor's demo snapshot (`fixtures/golden/editor-demo-snapshot.json`) records editor operations,
+    not the vocabulary, so it does not change.
+16. **No QA catalog entry.** Functions have no player-visible behaviour of their own. Their effect
+    shows only through a rule or a message that uses them, and those are covered by the rule-parser
+    and function tests here. The catalog entry arrives with the first condition or flow that makes
+    a call visible to a player (L4).
+
+---
+
+## 16. Decisions taken in #208 (L2: flows and the resumable interpreter)
 
 #208 shipped §2 and §5: the sealed step and condition trees, `FlowCompiler`, `FlowInterpreter` and the
 `RunScheduler` port, with item, block and furniture rules running through them. Where the design left a

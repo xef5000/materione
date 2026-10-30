@@ -4,8 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.FunctionDescription;
+import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.rule.ParsedRules;
@@ -260,6 +265,50 @@ class FlowCallsAndRootsTest {
             assertThat(problem.code().code()).isEqualTo("MTR-0060");
             assertThat(problem.target().field()).containsExactly("flows", "shared", "0");
         });
+    }
+
+    @Test
+    void functionCallsInExpressionsAndTemplatesAreBoundAndTheirArgumentsAreRootChecked() {
+        ExpressionFunction twice = new ExpressionFunction() {
+            @Override
+            public String id() {
+                return "twice";
+            }
+
+            @Override
+            public FunctionDescription describe() {
+                return FunctionDescription.of(new SelfDescription("Twice", "Doubles a number",
+                        List.of(ParameterSchema.of("n", ParameterType.DECIMAL, true)), "1.0.0"), ParameterType.DECIMAL);
+            }
+
+            @Override
+            public Object call(List<Object> arguments, LogicContext context) {
+                return ((Number) arguments.get(0)).doubleValue() * 2;
+            }
+        };
+        f.logic.registries().registry(RegistryKeys.EXPRESSION_FUNCTIONS, ExpressionFunction.class)
+                .register(NamespacedId.of("materione", "twice"), twice, twice.describe().self(), "test");
+
+        ParsedRules good = f.compile("""
+                - on: click
+                  if: "twice(player.level) > 10"
+                  do:
+                    - say: "double ${twice(player.level)}"
+                """);
+        assertThat(good.problems()).isEmpty();
+        var context = new dev.materione.behavior.logic.MapLogicContext(
+                java.util.Map.of("player", java.util.Map.of("level", 6)));
+        assertThat(good.rules().get(0).condition().test(context)).isTrue();
+
+        ParsedRules typo = f.compile("""
+                - on: click
+                  if: "twice(plyer.level) > 10"
+                  do:
+                    - say: "double ${twice(wrld.time)}"
+                """);
+        assertThat(codes(typo)).containsExactly("MTR-0060", "MTR-0060");
+        assertThat(typo.problems().get(0).message()).contains("'plyer'");
+        assertThat(typo.problems().get(1).message()).contains("'wrld'");
     }
 
     @Test

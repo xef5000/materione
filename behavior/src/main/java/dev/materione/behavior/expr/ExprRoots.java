@@ -25,6 +25,7 @@ public final class ExprRoots {
                 collect(ternary.ifTrue(), roots);
                 collect(ternary.ifFalse(), roots);
             }
+            case ExprNode.Call call -> call.arguments().forEach(argument -> collect(argument, roots));
             case ExprNode.Num ignored -> { }
             case ExprNode.Str ignored -> { }
             case ExprNode.Bool ignored -> { }
