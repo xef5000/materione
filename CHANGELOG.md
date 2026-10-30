@@ -58,6 +58,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The logic has a typed authoring API and web ops (logic.md §8, §19; api.md §3.12).** `authoring().logic()`
+  reads, edits, validates and instantiates the `behavior:` and `flows:` of any item, block, furniture or GUI:
+  twelve structural edits (add, remove and reorder rules; insert, patch, move and remove steps; set a node position;
+  add, remove and rename flows), each addressed by its step path, all or none, with refusals that name the step. An
+  edit that changes nothing writes nothing. The editor reaches the same operations through five `logic.*` ops, gated on
+  the new `logic` capability. A GUI's `open:` block (commands, typed arguments, permission, requirement, deny) is a
+  typed `GuiEdit.SetOpen`, and `gui.validate` now reports the logic compiler's problems for a GUI's rules and flows.
+  Item, block and furniture self-descriptions list `flows:`, and the GUI's list `behavior:`, `flows:` and `open:`.
+  `logic.instantiate` is refused until the recipe registry lands.
 - **Declared persistent variables (logic.md §3, §20).** A `variables/` file declares a `player` or
   `server` variable, typed as `number`, `string` or `boolean`, with a default and a description:
   `coins: {scope: player, type: number, default: 0}`. Player values live in the player's data container;

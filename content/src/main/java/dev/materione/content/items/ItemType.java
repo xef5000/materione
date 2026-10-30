@@ -98,6 +98,7 @@ public final class ItemType implements ContentType {
                                         "When… do…", "behavior", 20, false, "behavior-rules", "", "",
                                         true, "behaviour", "activity",
                                         "React to game events with conditions and actions")),
+                        dev.materione.content.logic.LogicSchemas.flows(),
                         new ParameterSchema("jukebox_song", ParameterType.REFERENCE, false, null,
                                 "Sound (with a jukebox section) this disc plays in jukeboxes", null, null).withEditor(new ParameterSchema.EditorMetadata(
                                         "Jukebox song", "gameplay", 20, false, "reference", "sound", "",

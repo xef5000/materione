@@ -142,7 +142,8 @@ public final class BlockType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "When… do…", "behavior", 10, false,
                                         "behavior-rules", "", "", true, "behaviour", "activity",
-                                        "React to the block being placed, broken or used"))),
+                                        "React to the block being placed, broken or used")),
+                        dev.materione.content.logic.LogicSchemas.flows()),
                 "1.0.0");
     }
 

@@ -864,7 +864,7 @@ public final class EditorContentOps {
         return object;
     }
 
-    private static JsonObject vocabularyJson(dev.materione.api.registry.BehaviorVocabulary vocabulary) {
+    static JsonObject vocabularyJson(dev.materione.api.registry.BehaviorVocabulary vocabulary) {
         var safe = vocabulary == null ? dev.materione.api.registry.BehaviorVocabulary.empty() : vocabulary;
         JsonObject object = new JsonObject();
         // v2 is a superset of v1 (logic.md §5.4): every v1 key below is unchanged, so an editor
