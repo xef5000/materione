@@ -7,9 +7,9 @@ import java.util.List;
  * {@code lower(s)}, {@code random(n)}. Functions are a registry like actions and conditions, so an
  * addon adds one without touching the engine.
  *
- * <p>This is the SPI and its registry. Binding calls into the expression grammar, arity checking
- * and the built-in function set belong to the expression work (logic.md §13 L3); until it lands no
- * expression calls a registered function, but the registry and the vocabulary already carry it.
+ * <p>The expression engine binds a call ({@code name(arguments…)}) against this registry when a
+ * rule loads: an unknown name or a wrong argument count is a load error, and the built-in set
+ * (logic.md §4.2) is registered through this same SPI.
  *
  * <h2>Contract</h2>
  *

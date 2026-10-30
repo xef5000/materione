@@ -11,6 +11,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.behavior.expr.ExprNode;
 import dev.materione.behavior.expr.ExpressionException;
 import dev.materione.behavior.expr.ExpressionParser;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.LogicLookup;
 import java.util.ArrayList;
@@ -113,7 +114,7 @@ public final class RuleParser {
                 continue;
             }
             try {
-                conditions.add(parseCondition(source));
+                conditions.add(parseCondition(source, lookup.functions()));
             } catch (ExpressionException e) {
                 problems.add(new Diagnostic(
                         DiagnosticCodes.EXPRESSION_INVALID,
@@ -201,7 +202,7 @@ public final class RuleParser {
             return Optional.empty();
         }
         try {
-            return Optional.of(bindTyped(resolved.get(), shape));
+            return Optional.of(bindTyped(resolved.get(), shape, lookup.functions()));
         } catch (RuntimeException e) {
             problems.add(stepProblem(owner, ruleId, "action '" + shape.type() + "' rejected: " + e.getMessage(),
                     "fix this action's parameters; only this action was skipped"));
@@ -210,8 +211,8 @@ public final class RuleParser {
     }
 
     /** Captures the type's parameter type so parse and bind agree on it. */
-    private static <P> BoundAction<P> bindTyped(ActionType<P> type, ActionShape shape) {
-        ParamReader reader = ParamReader.of(paramsOf(type, shape), EngineExpressions.INSTANCE);
+    private static <P> BoundAction<P> bindTyped(ActionType<P> type, ActionShape shape, FunctionResolver functions) {
+        ParamReader reader = ParamReader.of(paramsOf(type, shape), EngineExpressions.with(functions));
         return BoundAction.bind(shape.type(), type, reader, shape.chance(), shape.delayTicks());
     }
 
@@ -257,9 +258,9 @@ public final class RuleParser {
 
     // --- helpers -------------------------------------------------------------
 
-    static ExprNode parseCondition(String source) {
-        // conditions are expressions whose result is truth-tested
-        return ExpressionParser.parse(source).tree();
+    /** A condition is an expression whose result is truth-tested; its calls bind against {@code functions}. */
+    static ExprNode parseCondition(String source, FunctionResolver functions) {
+        return ExpressionParser.parse(source, functions).tree();
     }
 
     private static String typeOf(String selectorText) {

@@ -8,47 +8,58 @@ import dev.materione.behavior.expr.EvaluationContext;
 import dev.materione.behavior.expr.Expression;
 import dev.materione.behavior.expr.ExpressionException;
 import dev.materione.behavior.expr.ExpressionParser;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.interp.Template;
 
 /**
  * The {@link ExpressionCompiler} the engine hands to {@code ParamReader}: templates and bare
  * expressions compiled by the one expression engine (runtime-systems §2.1). Parsing happens here,
- * at rule load; rendering and evaluation are tree walks against the run's context.
+ * at rule load, and binds the calls it finds against its {@link FunctionResolver}; rendering and
+ * evaluation are tree walks against the run's context.
  */
 public final class EngineExpressions implements ExpressionCompiler {
 
-    /** Stateless; the template cache is process-wide and keyed by source text. */
-    public static final EngineExpressions INSTANCE = new EngineExpressions();
+    /** No function calls: a compiler for a caller with no registry. Calls in its input are unknown-function errors. */
+    public static final EngineExpressions INSTANCE = new EngineExpressions(FunctionResolver.NONE);
 
-    private EngineExpressions() {}
+    private final FunctionResolver functions;
+
+    private EngineExpressions(FunctionResolver functions) {
+        this.functions = functions;
+    }
+
+    /** A compiler whose calls resolve against {@code functions}; the rule parser passes the live registry. */
+    public static EngineExpressions with(FunctionResolver functions) {
+        return new EngineExpressions(functions == null ? FunctionResolver.NONE : functions);
+    }
 
     @Override
     public TemplateText template(String source) {
-        Template.validate(source); // throws IllegalArgumentException on a malformed ${...}
-        return new EngineTemplate(source);
+        // throws IllegalArgumentException on a malformed ${...} or an unknown function
+        return new EngineTemplate(source, Template.compile(source, functions));
     }
 
     @Override
     public ValueExpression expression(String source) {
         try {
-            return new EngineExpression(ExpressionParser.parse(source));
+            return new EngineExpression(ExpressionParser.parse(source, functions));
         } catch (ExpressionException e) {
             throw new IllegalArgumentException(e.getMessage(), e);
         }
     }
 
-    /** The expression engine's view of a run's context. */
+    /** The expression engine's view of a run's context, with the run attached for the functions. */
     static EvaluationContext evaluationOf(LogicContext context) {
         return context instanceof MapLogicContext map
                 ? map.evaluation()
-                : EvaluationContext.of(context::resolve);
+                : EvaluationContext.of(context::resolve).withLogic(context);
     }
 
-    private record EngineTemplate(String source) implements TemplateText {
+    private record EngineTemplate(String source, Template.Compiled compiled) implements TemplateText {
         @Override
         public String render(LogicContext context) {
             // ${...} first, then %placeholders%: the order the M2 executors used
-            return context.applyPlaceholders(Template.render(source, evaluationOf(context)));
+            return context.applyPlaceholders(compiled.render(evaluationOf(context)));
         }
     }
 

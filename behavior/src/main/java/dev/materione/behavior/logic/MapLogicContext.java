@@ -30,7 +30,7 @@ public final class MapLogicContext implements LogicContext {
     /** A context over {@code root}: {@code player}, {@code item}, … each a nested map. */
     public MapLogicContext(Map<String, Object> root) {
         this.root = new LinkedHashMap<>(root);
-        this.evaluation = new EvaluationContext(this.root);
+        this.evaluation = new EvaluationContext(this.root).withLogic(this);
     }
 
     /** Adds (or replaces) the value held for {@code facet}; a null value removes it. */

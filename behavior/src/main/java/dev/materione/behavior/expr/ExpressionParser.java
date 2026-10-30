@@ -1,5 +1,7 @@
 package dev.materione.behavior.expr;
 
+import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.FunctionDescription;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,9 +19,14 @@ import java.util.List;
  * additive    := multiplicative (('+' | '-') multiplicative)*
  * multiplicative := unary (('*' | '/' | '%') unary)*
  * unary       := '!' unary | '-' unary | primary
- * primary     := NUMBER | STRING | true | false | null | path | '(' expr ')'
+ * primary     := NUMBER | STRING | true | false | null | path | call | '(' expr ')'
  * path        := IDENT ('.' IDENT)*
+ * call        := path '(' (expr (',' expr)*)? ')'
  * </pre>
+ *
+ * <p>A call names a function in the {@link FunctionResolver}: a bare name is a Materione function
+ * ({@code contains(…)}), a two-part dotted name is an addon's ({@code example.greet(…)}, looked up
+ * as {@code example:greet}). The name is resolved and the argument count checked here, at load.
  *
  * <p>Parse errors throw {@link ExpressionException} at load — a broken rule
  * never reaches the runtime.
@@ -27,20 +34,30 @@ import java.util.List;
 public final class ExpressionParser {
 
     private final String source;
+    private final FunctionResolver functions;
     private final List<Token> tokens;
     private int position;
 
-    private ExpressionParser(String source) {
+    private ExpressionParser(String source, FunctionResolver functions) {
         this.source = source;
+        this.functions = functions;
         this.tokens = lex(source);
     }
 
-    /** Parses one expression; throws {@link ExpressionException} on bad syntax. */
+    /** Parses one expression with no functions; a call in it is an unknown-function error. */
     public static Expression parse(String source) {
+        return parse(source, FunctionResolver.NONE);
+    }
+
+    /**
+     * Parses one expression, binding its calls against {@code functions}; throws
+     * {@link ExpressionException} on bad syntax, an unknown function or a wrong argument count.
+     */
+    public static Expression parse(String source, FunctionResolver functions) {
         if (source == null || source.isBlank()) {
             throw new ExpressionException("empty expression");
         }
-        var parser = new ExpressionParser(source);
+        var parser = new ExpressionParser(source, functions == null ? FunctionResolver.NONE : functions);
         ExprNode tree = parser.ternary();
         if (!parser.atEnd()) {
             throw parser.error("unexpected trailing input '" + parser.peek().text() + "'");
@@ -131,21 +148,9 @@ public final class ExpressionParser {
                 return new ExprNode.Str(token.value());
             }
             case IDENT -> {
-                if (token.text().equals("true")) {
-                    advance();
-                    return new ExprNode.Bool(true);
-                }
-                if (token.text().equals("false")) {
-                    advance();
-                    return new ExprNode.Bool(false);
-                }
-                if (token.text().equals("null")) {
-                    advance();
-                    return new ExprNode.Null();
-                }
+                advance();
                 var segments = new ArrayList<String>();
                 segments.add(token.text());
-                advance();
                 while (match(".")) {
                     Token next = peek();
                     if (next.type() != TokenType.IDENT) {
@@ -153,6 +158,25 @@ public final class ExpressionParser {
                     }
                     segments.add(next.text());
                     advance();
+                }
+                if (match("(")) {
+                    return call(segments, token.start());
+                }
+                if (segments.size() == 1) {
+                    switch (token.text()) {
+                        case "true" -> {
+                            return new ExprNode.Bool(true);
+                        }
+                        case "false" -> {
+                            return new ExprNode.Bool(false);
+                        }
+                        case "null" -> {
+                            return new ExprNode.Null();
+                        }
+                        default -> {
+                            // a variable
+                        }
+                    }
                 }
                 return new ExprNode.Path(List.copyOf(segments));
             }
@@ -168,11 +192,47 @@ public final class ExpressionParser {
         throw error("unexpected end of expression");
     }
 
+    /** A call; the opening parenthesis is already consumed. Resolves the name and checks the arity. */
+    private ExprNode call(List<String> segments, int start) {
+        String spelled = String.join(".", segments);
+        String authored = segments.size() == 1
+                ? segments.get(0)
+                : segments.size() == 2 ? segments.get(0) + ":" + segments.get(1) : spelled;
+        ExpressionFunction function = functions.resolve(authored)
+                .orElseThrow(() -> at(start, "unknown function '" + spelled + "'"));
+        var arguments = new ArrayList<ExprNode>();
+        if (!match(")")) {
+            do {
+                arguments.add(ternary());
+            } while (match(","));
+            expect(")");
+        }
+        checkArity(function, spelled, arguments.size(), start);
+        return new ExprNode.Call(spelled, function, arguments);
+    }
+
+    private void checkArity(ExpressionFunction function, String spelled, int count, int start) {
+        FunctionDescription description;
+        try {
+            description = function.describe();
+        } catch (RuntimeException e) {
+            throw at(start, "function '" + spelled + "' has no usable description");
+        }
+        int min = description.minArguments();
+        int max = description.maxArguments();
+        if (count < min || (max >= 0 && count > max)) {
+            String expected = max < 0 ? "at least " + min
+                    : min == max ? String.valueOf(min) : min + " to " + max;
+            throw at(start, "function '" + spelled + "' takes " + expected + " argument(s), got " + count);
+        }
+    }
+
     // --- tokens ----------------------------------------------------------------
 
     private enum TokenType { NUMBER, STRING, IDENT, OPERATOR }
 
-    private record Token(TokenType type, String text, String value) {}
+    /** One lexeme; {@code start} is its character offset in the source, for error positions. */
+    private record Token(TokenType type, String text, String value, int start) {}
 
     private static List<Token> lex(String source) {
         var tokens = new ArrayList<Token>();
@@ -197,7 +257,7 @@ public final class ExpressionParser {
                     throw new ExpressionException("unterminated string literal in: " + source);
                 }
                 at++; // closing quote
-                tokens.add(new Token(TokenType.STRING, source.substring(start, at), text.toString()));
+                tokens.add(new Token(TokenType.STRING, source.substring(start, at), text.toString(), start));
                 continue;
             }
             if (Character.isDigit(c)
@@ -207,7 +267,7 @@ public final class ExpressionParser {
                         && (Character.isDigit(source.charAt(at)) || source.charAt(at) == '.')) {
                     at++;
                 }
-                tokens.add(new Token(TokenType.NUMBER, source.substring(start, at), null));
+                tokens.add(new Token(TokenType.NUMBER, source.substring(start, at), null, start));
                 continue;
             }
             if (Character.isJavaIdentifierStart(c)) {
@@ -215,19 +275,19 @@ public final class ExpressionParser {
                 while (at < source.length() && Character.isJavaIdentifierPart(source.charAt(at))) {
                     at++;
                 }
-                tokens.add(new Token(TokenType.IDENT, source.substring(start, at), null));
+                tokens.add(new Token(TokenType.IDENT, source.substring(start, at), null, start));
                 continue;
             }
             // two-char operators first
             String twoChar = source.length() - at >= 2 ? source.substring(at, at + 2) : "";
             if (twoChar.equals("==") || twoChar.equals("!=") || twoChar.equals("<=")
                     || twoChar.equals(">=") || twoChar.equals("&&") || twoChar.equals("||")) {
-                tokens.add(new Token(TokenType.OPERATOR, twoChar, null));
+                tokens.add(new Token(TokenType.OPERATOR, twoChar, null, at));
                 at += 2;
                 continue;
             }
-            if ("+-*/%<>!?:.()".indexOf(c) >= 0) {
-                tokens.add(new Token(TokenType.OPERATOR, String.valueOf(c), null));
+            if ("+-*/%<>!?:.(),".indexOf(c) >= 0) {
+                tokens.add(new Token(TokenType.OPERATOR, String.valueOf(c), null, at));
                 at++;
                 continue;
             }
@@ -271,5 +331,10 @@ public final class ExpressionParser {
 
     private ExpressionException error(String message) {
         return new ExpressionException(message + " in expression: " + source);
+    }
+
+    /** An error at a character offset: 1-based, as an author counts characters. */
+    private ExpressionException at(int offset, String message) {
+        return new ExpressionException(message + " at position " + (offset + 1) + " in expression: " + source);
     }
 }
