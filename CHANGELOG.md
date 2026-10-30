@@ -28,6 +28,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Ten more built-in actions for player, world and server effects (#212, logic.md §15 "Decisions
+  taken in #212").** `broadcast` (to the server, one world, or a permission), `actionbar`, `title`
+  (title, subtitle and fade timings), `stop_sound`, `chat` (a line the player says, or a command
+  they run with a leading slash), `teleport` (coordinates, optionally another world and facing),
+  `give_item` (a Materione item or `minecraft:` material; overflow drops at the feet), `take_item`
+  (matches by id or material and optionally by name; all or nothing), and `give_exp` and `take_exp`
+  (points or levels; a take fails when there is too little). `sound` gains `scope: player|world|server`.
+  Every text parameter takes `${...}` and `%placeholder%`, and each action reports `FAILED` rather
+  than going negative. `connect` is not here; it arrives with the transfer provider (#213).
 - **Addons can register behavior actions, conditions, triggers and expression functions
   (`MaterioneAPI.logic()`, logic.md §4, api.md §3.11).** The six built-in actions (`run_command`,
   `message`, `sound`, `potion`, `cancel`, `set_var`) are now typed `ActionType`s registered through

@@ -657,6 +657,7 @@ content/ dev.materione.content.variable    VariablesType (the `variables` conten
 plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), LogicRegistryImpl,
                                             BuiltinLogic (the built-ins, registered through the public API)
 plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lines each)
+plugin/  dev.materione.plugin.logic.support   shared action helpers (Quantity, ItemRef, InventoryPlan, Stacks); not actions (§15)
 plugin/  dev.materione.plugin.logic.condition one class per condition
 plugin/  dev.materione.plugin.logic.variable  PdcVariableStore, ServerVariableStore, VarCommand
 plugin/  dev.materione.plugin.gui.session  GuiSession, GuiSessions, SessionHistory (back stack)
@@ -902,3 +903,87 @@ as before.
 **Build checks.** R11 (one action, one class, §9 rule 2) and the 400-line guard (§9 rule 4) ship
 with this change, each proven against a planted violation. R10 has no subjects until the GUI runtime
 creates the `plugin.gui..` packages, and arrives with them.
+
+---
+
+## 15. Decisions taken in #212 (L6: built-in player, world and server actions)
+
+#212 adds the player, world and server verbs of §1 that the M2 vocabulary lacked, each as one
+`ActionType` in `plugin.logic.action`, registered in `BuiltinLogic` through the public API like the
+six before them. `connect` is not here: it needs the `ServerTransfer` provider of #213.
+
+**As built**
+
+| Action | Category | Threading | Parameters (shorthand in bold) | Fails (returns `FAILED`) |
+|---|---|---|---|---|
+| `broadcast` | server | GLOBAL | **`text`**, `scope` (server, world, permission), `target` (world name, or permission node) | unknown world; empty target at run time; no player for the default world |
+| `actionbar` | player | PLAYER_REGION | **`text`** | no player |
+| `title` | player | PLAYER_REGION | **`title`**, `subtitle`, `fade_in` (10), `stay` (70), `fade_out` (20), in ticks | no player |
+| `sound` | player | GLOBAL | **`sound`**, `volume`, `pitch`, `scope` (player, world, server) | no player for player or world scope |
+| `stop_sound` | player | PLAYER_REGION | **`sound`**, `category` (a sound category) | no player |
+| `chat` | player | PLAYER_REGION | **`text`** (a leading `/` runs a command as the player) | no player; empty text; no such command |
+| `teleport` | world | PLAYER_REGION | `x`, `y`, `z`, `world`, `yaw`, `pitch` | no player; unknown world; coordinates that do not render; refused by the server |
+| `give_item` | player | PLAYER_REGION | **`item`**, `amount` (1 to 2304) | no player; unknown or ambiguous item; no content loaded |
+| `take_item` | player | PLAYER_REGION | **`item`**, `amount` (required), `name_contains` | no player; unknown item; fewer held than `amount` (takes nothing) |
+| `give_exp` | player | PLAYER_REGION | **`amount`** (1 to 1,000,000), `unit` (points, levels) | no player |
+| `take_exp` | player | PLAYER_REGION | **`amount`** (1 to 1,000,000), `unit` (points, levels) | no player; fewer held than `amount` (takes nothing) |
+
+`message`, `run_command`, `potion`, `cancel` and `set_var` are unchanged. `sound` gains `scope`, and
+its declared threading moves from PLAYER_REGION to GLOBAL (see decision 3 below). Every text
+parameter is a template (`${...}` and `%placeholder%`); every number may be a template that renders
+to one.
+
+**Decisions**
+
+1. **Take actions are all or nothing, decided before anything moves.** `InventoryPlan` computes the
+   removals from a snapshot of the whole inventory (main, armour and offhand) and returns no plan
+   when the held amount is short. Only a complete plan is applied, so a failed take changes nothing,
+   and a `require` step (#208) can rely on it. Experience takes check the same way: points against
+   the total, levels against the level.
+2. **One item matcher, shared with `has_item`.** An `item` value is either `minecraft:<material>` or
+   a Materione id, resolved through the same `ItemIdResolver` that `/materione give` uses (so a bare
+   name means the same in both). A vanilla reference matches only stacks that carry no Materione
+   identity, so a custom item shaped like paper is not "paper" for a take. `name_contains` is a
+   case-insensitive match on the plain display name. The matcher lives in `plugin.logic.support`,
+   where `has_item` (#209) can reuse it.
+3. **Threading is static per type, so the stricter choice wins.** `sound` and `broadcast` declare
+   GLOBAL, because their world and server scopes touch other players. The `scope: player` sound
+   therefore takes the same one-hop path as `run_command`'s console default (decision 6 of #207).
+   Everything else touches only the acting player and declares PLAYER_REGION.
+4. **Item actions read the live registries through a supplier, not the pipeline.** `ItemCatalog` is
+   a one-method interface that `MaterionePlugin` wires to the current runtime registries; it is empty
+   before the first content load, and a Materione item then fails with "no content is loaded yet".
+   `BuiltinLogic.actions(ItemCatalog)` takes it, so no action reaches the plugin.
+5. **Shared helpers live outside the action package.** `plugin.logic.support` holds `Quantity`,
+   `ItemRef`, `ItemView`, `InventoryPlan`, `Stacks` (the Bukkit edge), `ItemCatalog` and
+   `ExperienceUnit`. R11 forbids one action depending on another, so a shared constant such as the
+   experience ceiling lives in `ExperienceUnit`, not on `GiveExpAction`.
+6. **Counts are whole numbers at load; coordinates are not.** An `amount` literal that is fractional
+   is rejected when the step loads. A template that renders fractional fails the step at run time.
+   Coordinates and angles stay decimal, and an out-of-range angle is rejected at load.
+7. **`chat` says text as the player, and runs a leading slash as a command.** A plain line goes
+   through `Player.chat`, which is not rich text (chat is plain). A `/` line uses `performCommand`
+   and fails when the server has no such command, which matches `run_command as: player`.
+8. **`broadcast` world scope defaults to the event player's world.** A `permission` scope needs a
+   `target` at load, because a permission broadcast without a node would be a server broadcast by
+   accident.
+9. **`teleport` keeps the player's facing unless `yaw` or `pitch` is written,** and a server that
+   refuses the move fails the step rather than reporting success.
+10. **`stop_sound` is player-scoped in v1.** It stops a sound for the player who ran the step, by
+    key, by category, both, or everything. Stopping a world- or server-wide sound needs the scope
+    vocabulary that `sound` has and `stop_sound` does not yet; that is left to a later milestone.
+
+**Verification.** Parse accept and reject, and execute on the paths that need no server, are unit
+tests (`BuiltinActionsTest`, `PlayerActionsTest`, `ItemActionsTest`). Take planning is tested
+exhaustively as a pure function. The Bukkit-only paths (the server broadcast, world lookup by name,
+online-player sound, stack building and inventory mutation, the experience and teleport calls on a
+real player) need a live server and are covered by the `logic` QA suite (`qa/catalog/logic.mjs`) on
+the probe items `world:probe_messages`, `probe_items`, `probe_exp`, `probe_move`, `probe_sound` and
+`probe_stop`. The QA entries are authored and their integrity is checked by `qa/runner.mjs check`;
+they have not been run on a probe in this change, so their ledger state is "never" until a main
+swarm records them.
+
+**Not covered by a test in this change.** `broadcast` with `scope: permission` and `sound` with
+`scope: server` have no QA entry (they need a permission-holding second player and a second client).
+Their parse is a unit test; their execution calls static server state and is not run by any test
+yet.

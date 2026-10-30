@@ -12,6 +12,7 @@ import dev.materione.api.logic.Threading;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.BuiltinLogic;
+import dev.materione.plugin.logic.support.ItemCatalog;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
@@ -82,19 +83,29 @@ class BuiltinActionsTest {
     }
 
     @Test
-    void theSixBuiltInsDescribeThemselvesWithCategoryThreadingAndShorthand() {
-        var actions = BuiltinLogic.actions();
+    void theBuiltInsDescribeThemselvesWithCategoryThreadingAndShorthand() {
+        var actions = BuiltinLogic.actions(ItemCatalog.none());
 
-        assertThat(actions).extracting(action -> action.id())
-                .containsExactly("run_command", "message", "sound", "potion", "cancel", "set_var");
+        assertThat(actions).extracting(action -> action.id()).containsExactly(
+                "run_command", "message", "sound", "potion", "cancel", "set_var",
+                "broadcast", "actionbar", "title", "stop_sound", "chat", "teleport",
+                "give_item", "take_item", "give_exp", "take_exp");
         assertThat(actions).extracting(action -> action.describe().category()).containsExactly(
                 LogicCategory.SERVER, LogicCategory.PLAYER, LogicCategory.PLAYER, LogicCategory.PLAYER,
-                LogicCategory.FLOW, LogicCategory.DATA);
+                LogicCategory.FLOW, LogicCategory.DATA,
+                LogicCategory.SERVER, LogicCategory.PLAYER, LogicCategory.PLAYER, LogicCategory.PLAYER,
+                LogicCategory.PLAYER, LogicCategory.WORLD,
+                LogicCategory.PLAYER, LogicCategory.PLAYER, LogicCategory.PLAYER, LogicCategory.PLAYER);
         assertThat(actions).extracting(action -> action.threading()).containsExactly(
+                Threading.GLOBAL, Threading.PLAYER_REGION, Threading.GLOBAL, Threading.PLAYER_REGION,
+                Threading.ANY, Threading.ANY,
                 Threading.GLOBAL, Threading.PLAYER_REGION, Threading.PLAYER_REGION, Threading.PLAYER_REGION,
-                Threading.ANY, Threading.ANY);
+                Threading.PLAYER_REGION, Threading.PLAYER_REGION,
+                Threading.PLAYER_REGION, Threading.PLAYER_REGION, Threading.PLAYER_REGION, Threading.PLAYER_REGION);
         assertThat(actions).extracting(action -> action.describe().shorthand())
-                .containsExactly("command", "text", "sound", null, "value", null);
+                .containsExactly("command", "text", "sound", null, "value", null,
+                        "text", "text", "title", "sound", "text", null,
+                        "item", "item", "amount", "amount");
         assertThat(actions).allSatisfy(action -> {
             assertThat(action.describe().self().parameters()).isNotEmpty();
             assertThat(action.availability().available()).isTrue();
