@@ -1,5 +1,6 @@
 version: 1
 debug: false
+default_currency: materione:money
 delivery_host: 0.0.0.0
 delivery_port: 8090
 delivery_public_host: ''

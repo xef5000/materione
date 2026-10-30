@@ -88,7 +88,7 @@
           "available": false,
           "category": "economy",
           "deferred": true,
-          "description": "Adds money to the player's economy balance",
+          "description": "Adds money to the player's balance of a currency (the default currency unless one is named)",
           "displayName": "Give money",
           "id": "give_money",
           "parameters": [
@@ -102,13 +102,24 @@
               "section": "general",
               "type": "decimal",
               "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "amount",
           "sinceVersion": "2.0.0",
           "threading": "global",
-          "unavailableReason": "No economy provider is installed (Vault with an economy plugin)"
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
         },
         {
           "available": true,
@@ -355,7 +366,7 @@
           "available": false,
           "category": "economy",
           "deferred": true,
-          "description": "Removes money from the player's economy balance; fails when the balance is too low",
+          "description": "Removes money from the player's balance of a currency; fails when the balance is too low",
           "displayName": "Take money",
           "id": "take_money",
           "parameters": [
@@ -369,13 +380,24 @@
               "section": "general",
               "type": "decimal",
               "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "amount",
           "sinceVersion": "2.0.0",
           "threading": "global",
-          "unavailableReason": "No economy provider is installed (Vault with an economy plugin)"
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
         },
         {
           "available": true,
@@ -598,7 +620,637 @@
           "id": "custom"
         }
       ],
-      "functions": [],
+      "functions": [
+        {
+          "description": "The value without its sign. Null for a non-number.",
+          "displayName": "Absolute value",
+          "id": "abs",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The number",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The player's balance of a currency, read now; null without a player or when the currency cannot answer. It reads live state, so the same call can give a different answer later.",
+          "displayName": "Balance",
+          "id": "balance",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. money or shop:gems",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The smallest whole number not less than the value. Null for a non-number.",
+          "displayName": "Ceiling",
+          "id": "ceil",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The number",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when the text contains the part, case-sensitively. A non-text argument makes it false.",
+          "displayName": "Contains",
+          "id": "contains",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to search",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The part to look for",
+              "id": "part",
+              "label": "Part",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when the text ends with the suffix, case-sensitively. A non-text argument makes it false.",
+          "displayName": "Ends with",
+          "id": "ends_with",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to test",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The suffix to look for",
+              "id": "suffix",
+              "label": "Suffix",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when both texts are equal, ignoring case. A non-text argument makes it false.",
+          "displayName": "Equals ignoring case",
+          "id": "equals_ignore_case",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The first text",
+              "id": "a",
+              "label": "A",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The second text",
+              "id": "b",
+              "label": "B",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The largest whole number not greater than the value. Null for a non-number.",
+          "displayName": "Floor",
+          "id": "floor",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The number",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "An amount in a currency's own notation: its symbol, thousands separators and decimals",
+          "displayName": "Format currency",
+          "id": "format_currency",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The amount to format",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. money or shop:gems",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "Formats the number with thousands separators and a fixed number of decimal places (0 to 10), for example 1234.5 with 2 places is 1,234.50.",
+          "displayName": "Format number",
+          "id": "format_number",
+          "maxArguments": 2,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The number to format",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "Decimal places to show",
+              "id": "decimals",
+              "label": "Decimals",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True for a number, or for text that reads as a finite number such as \" 12.5 \" or \"-3e2\". Booleans and null are not numbers.",
+          "displayName": "Is number",
+          "id": "is_number",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The value to test",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when the name or UUID is the player this run belongs to. It does not look up other players, and a run without a player is false.",
+          "displayName": "Is this player",
+          "id": "is_player",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "A player name or UUID",
+              "id": "name",
+              "label": "Name",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The number of characters in the text (Unicode code points). Null for a non-text argument.",
+          "displayName": "Length",
+          "id": "length",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to measure",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The text in lower case, using the root locale so the result never depends on the server's language. Null for a non-text argument.",
+          "displayName": "Lower case",
+          "id": "lower",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to convert",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when the whole text matches the regular expression (Java syntax). Use .* at either end for a partial match. Patterns up to 256 characters and texts up to 1024 characters; anything beyond those limits, or an invalid pattern, is false.",
+          "displayName": "Matches pattern",
+          "id": "matches",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to test",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The regular expression",
+              "id": "pattern",
+              "label": "Pattern",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The largest of the given numbers. Null when any argument is not a number.",
+          "displayName": "Maximum",
+          "id": "max",
+          "maxArguments": -1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Two or more numbers",
+              "id": "values",
+              "label": "Values",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": true
+        },
+        {
+          "description": "The smallest of the given numbers. Null when any argument is not a number.",
+          "displayName": "Minimum",
+          "id": "min",
+          "maxArguments": -1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Two or more numbers",
+              "id": "values",
+              "label": "Values",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": true
+        },
+        {
+          "description": "The value as a number: a number as is, or text that reads as one. Null otherwise, including for booleans and for infinity.",
+          "displayName": "Number",
+          "id": "number",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The value to convert",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "A random number between the bounds: a whole number from min to max inclusive when both bounds are whole, otherwise a real from min up to max. Reversed bounds are swapped. This is the one function that is not pure: the same call can give different results.",
+          "displayName": "Random",
+          "id": "random",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The lower bound",
+              "id": "min",
+              "label": "Min",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "The upper bound",
+              "id": "max",
+              "label": "Max",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "Rounds to the nearest whole number, or to the given number of decimal places (0 to 15). Halves round away from zero.",
+          "displayName": "Round",
+          "id": "round",
+          "maxArguments": 2,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The number to round",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "Decimal places to keep",
+              "id": "places",
+              "label": "Places",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "True when the text begins with the prefix, case-sensitively. A non-text argument makes it false.",
+          "displayName": "Starts with",
+          "id": "starts_with",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to test",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The prefix to look for",
+              "id": "prefix",
+              "label": "Prefix",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The text without leading and trailing whitespace. Null for a non-text argument.",
+          "displayName": "Trim",
+          "id": "trim",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to trim",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The text in upper case, using the root locale so the result never depends on the server's language. Null for a non-text argument.",
+          "displayName": "Upper case",
+          "id": "upper",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The text to convert",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        }
+      ],
       "mechanics": [
         {
           "activation": "Right-clicking with the item opens its storage; contents save when the inventory closes",
@@ -6651,6 +7303,100 @@
             "uiHint": "structured-list"
           }
         ]
+      },
+      {
+        "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
+        "directory": "currencies",
+        "displayName": "Currency",
+        "name": "currency",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Integration that answers for this currency: vault, xp, custom, or an addon's id",
+            "example": "custom",
+            "id": "integration",
+            "label": "Integration",
+            "order": 10,
+            "required": true,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "Name shown to players (defaults to the id's name)",
+            "example": "Gems",
+            "id": "display_name",
+            "label": "Display name",
+            "order": 20,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "default": "",
+            "description": "Prefix formatting puts before the amount",
+            "example": "G$",
+            "id": "symbol",
+            "label": "Symbol",
+            "order": 30,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "default": "2",
+            "description": "Digits after the point when formatting, 0 to 6",
+            "example": "2",
+            "id": "decimals",
+            "label": "Decimals",
+            "order": 40,
+            "required": false,
+            "section": "economy",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
+            "advanced": true,
+            "description": "custom: console command that gives money; {player} and {amount} are filled in",
+            "example": "gems give {player} {amount}",
+            "id": "deposit-command",
+            "label": "Deposit command",
+            "order": 50,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "custom: console command that takes money; {player} and {amount} are filled in",
+            "example": "gems take {player} {amount}",
+            "id": "withdraw-command",
+            "label": "Withdraw command",
+            "order": 60,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "custom: PlaceholderAPI token that reads the balance as a number",
+            "example": "%coinsengine_balance_raw_gems%",
+            "id": "balance-placeholder",
+            "label": "Balance placeholder",
+            "order": 70,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          }
+        ]
       }
     ]
   },
@@ -9498,6 +10244,7 @@
   "settings": {
     "parsed": {
       "debug": false,
+      "default_currency": "materione:money",
       "delivery_host": "0.0.0.0",
       "delivery_port": 8090,
       "delivery_public_host": "",
@@ -9512,8 +10259,8 @@
       "transfer_port": 25565,
       "version": 1
     },
-    "raw": "version: 1\ndebug: false\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\ntransfer_host: ''\ntransfer_mode: packet\ntransfer_port: 25565\n",
-    "sha256": "d94eb34df7617663c06a93337e4190a45c351231c1c1dbd2c83a2661f0f4039a"
+    "raw": "version: 1\ndebug: false\ndefault_currency: materione:money\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\ntransfer_host: ''\ntransfer_mode: packet\ntransfer_port: 25565\n",
+    "sha256": "384c39ac9025c7d5c455b94f3f40046d90df1e9f18ba82541954fdd014ee372b"
   },
   "source": "Recorded from the real editor ops over fixtures/packs/sample + world by EditorDemoSnapshotTest; regenerate with -Dmaterione.golden.regen=true.",
   "types": [
@@ -12350,6 +13097,100 @@
           "section": "layers",
           "type": "list",
           "uiHint": "structured-list"
+        }
+      ]
+    },
+    {
+      "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
+      "directory": "currencies",
+      "displayName": "Currency",
+      "name": "currency",
+      "parameters": [
+        {
+          "advanced": false,
+          "description": "Integration that answers for this currency: vault, xp, custom, or an addon's id",
+          "example": "custom",
+          "id": "integration",
+          "label": "Integration",
+          "order": 10,
+          "required": true,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "description": "Name shown to players (defaults to the id's name)",
+          "example": "Gems",
+          "id": "display_name",
+          "label": "Display name",
+          "order": 20,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "default": "",
+          "description": "Prefix formatting puts before the amount",
+          "example": "G$",
+          "id": "symbol",
+          "label": "Symbol",
+          "order": 30,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "default": "2",
+          "description": "Digits after the point when formatting, 0 to 6",
+          "example": "2",
+          "id": "decimals",
+          "label": "Decimals",
+          "order": 40,
+          "required": false,
+          "section": "economy",
+          "type": "integer",
+          "uiHint": "number"
+        },
+        {
+          "advanced": true,
+          "description": "custom: console command that gives money; {player} and {amount} are filled in",
+          "example": "gems give {player} {amount}",
+          "id": "deposit-command",
+          "label": "Deposit command",
+          "order": 50,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "custom: console command that takes money; {player} and {amount} are filled in",
+          "example": "gems take {player} {amount}",
+          "id": "withdraw-command",
+          "label": "Withdraw command",
+          "order": 60,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "custom: PlaceholderAPI token that reads the balance as a number",
+          "example": "%coinsengine_balance_raw_gems%",
+          "id": "balance-placeholder",
+          "label": "Balance placeholder",
+          "order": 70,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
         }
       ]
     }

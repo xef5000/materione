@@ -9,7 +9,9 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.Threading;
-import dev.materione.api.logic.provider.EconomyProvider;
+import dev.materione.api.logic.provider.Currency;
+import dev.materione.api.logic.provider.CurrencyBackend;
+import dev.materione.api.logic.provider.CurrencyCatalog;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.registry.ParameterSchema;
@@ -21,15 +23,15 @@ import java.util.Objects;
 import org.bukkit.entity.Player;
 
 /**
- * {@code take_money: 100}: withdraws money from the run's player. A balance that cannot cover the
- * amount fails the step with {@code insufficient funds} and takes nothing, so a flow can branch on
- * the refusal with {@code require} (logic.md §2.2). Like {@code give_money} it runs against the
- * economy provider resolved at use, and it is {@link Threading#GLOBAL}.
+ * {@code take_money: 250} or {@code take_money: {amount: 250, currency: gems}}: withdraws money from
+ * the run's player (logic.md §16). A balance that cannot cover the amount fails the step with
+ * {@code insufficient funds} and takes nothing, so a flow can branch on the refusal with {@code require}
+ * (logic.md §2.2). Currency resolution and {@link Threading#GLOBAL} are as for {@code give_money}.
  */
 public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params> {
 
-    /** The parsed step. */
-    public record Params(double amount) {}
+    /** The parsed step; {@code currency} is the authored name, or null for the default. */
+    public record Params(double amount, String currency) {}
 
     private final LogicProviders providers;
 
@@ -46,9 +48,12 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
     @Override
     public ActionDescription describe() {
         return new ActionDescription(new SelfDescription("Take money",
-                "Removes money from the player's economy balance; fails when the balance is too low",
-                List.of(new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
-                        "Amount to take; above 0", null, null)),
+                "Removes money from the player's balance of a currency; fails when the balance is too low",
+                List.of(
+                        new ParameterSchema("amount", ParameterType.DECIMAL, true, null,
+                                "Amount to take; above 0", null, null),
+                        new ParameterSchema("currency", ParameterType.STRING, false, null,
+                                "Currency id, e.g. gems or shop:gems; the default currency when omitted", null, null)),
                 "2.0.0"), LogicCategory.ECONOMY, "amount");
     }
 
@@ -59,7 +64,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
 
     @Override
     public Params parse(ParamReader params) {
-        return new Params(ProviderParams.amount(params));
+        return new Params(ProviderParams.amount(params), ProviderParams.currency(params));
     }
 
     @Override
@@ -68,11 +73,16 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
-        EconomyProvider economy = providers.economy().filter(EconomyProvider::available).orElse(null);
-        if (economy == null) {
-            return ActionOutcome.failed("no economy provider");
+        CurrencyCatalog catalog = providers.currencies();
+        Currency currency = ProviderParams.resolve(catalog, params.currency());
+        if (currency == null) {
+            return ActionOutcome.failed("unknown currency " + params.currency());
         }
-        return switch (economy.withdraw(player.getUniqueId(), params.amount())) {
+        CurrencyBackend backend = catalog.backend(currency).orElse(null);
+        if (backend == null) {
+            return ActionOutcome.failed(catalog.availability(currency).reason());
+        }
+        return switch (backend.withdraw(player.getUniqueId(), params.amount())) {
             case EconomyResult.Succeeded ignored -> ActionOutcome.OK;
             case EconomyResult.InsufficientFunds funds -> ActionOutcome.failed(
                     "insufficient funds: balance " + funds.balance() + ", needs " + params.amount());
@@ -80,10 +90,11 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         };
     }
 
+    /** Available when the default currency can be used; the reason names what is missing otherwise. */
     @Override
     public Availability availability() {
-        return providers.economy().filter(EconomyProvider::available).isPresent()
-                ? Availability.AVAILABLE
-                : Availability.unavailable("No economy provider is installed (Vault with an economy plugin)");
+        CurrencyCatalog catalog = providers.currencies();
+        Availability own = catalog.availability(catalog.defaultCurrency());
+        return own.available() ? Availability.AVAILABLE : own;
     }
 }

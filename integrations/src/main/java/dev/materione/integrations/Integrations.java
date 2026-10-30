@@ -1,13 +1,13 @@
 package dev.materione.integrations;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.api.logic.provider.LogicProviders;
-import dev.materione.api.logic.provider.LogicProviders.ProviderRegistration;
+import dev.materione.api.logic.LogicApi;
 import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
 import dev.materione.integrations.proxy.BungeeCordTransfer;
-import dev.materione.integrations.vault.VaultEconomyProvider;
+import dev.materione.integrations.vault.VaultCurrencyIntegration;
 import dev.materione.integrations.vault.VaultPermissionProvider;
 import java.util.ArrayList;
 import java.util.List;
@@ -20,23 +20,21 @@ import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The soft-depend gate for the provider adapters (logic.md §4.5, build.md §3). It decides, from
- * which optional plugins are enabled, which providers to register, and it is the only class that
- * names the adapters' types outside their own packages.
+ * The soft-depend gate for the optional adapters (logic.md §4.5, §16, build.md §3). It decides, from
+ * which optional plugins are enabled, what to register, and it is the only class that names the
+ * adapters' types outside their own packages.
  *
- * <p><b>Guard.</b> A plugin that is absent is never checked for classes: each adapter is constructed
- * inside the branch that tested {@code isPluginEnabled} for its plugin, so the JVM loads Vault or
- * LuckPerms types only when those plugins run. An adapter that still fails to link (a version the
- * adapter was not built against) is caught, reported as {@code MTR-0058}, and skipped; the server
- * keeps the default provider.
+ * <p><b>Guard.</b> An absent plugin is never checked for classes: each adapter is constructed inside the
+ * branch that tested {@code isPluginEnabled} for its plugin, so the JVM loads Vault or LuckPerms types
+ * only when those plugins run. An adapter that still fails to link is caught, reported as
+ * {@code MTR-0061}, and skipped.
  *
- * <p><b>Selection.</b> Economy: Vault, when enabled. Permissions: LuckPerms when enabled, else
- * Vault's permission service when Vault is enabled, else the session default (not registered here).
- * Transfer: the BungeeCord plugin channel when {@code proxyTransfer} is set; the transfer packet is
- * the plugin's own provider and is not here.
+ * <p><b>Selection.</b> Vault, when enabled, registers the {@code vault} currency integration
+ * ({@code materione:vault}). Permissions: LuckPerms when enabled, else Vault's permission service when
+ * Vault is enabled, else the session default (not registered here). Transfer: the BungeeCord plugin
+ * channel when {@code proxyTransfer} is set; the transfer packet is the plugin's own provider.
  *
- * <p>{@link #refresh} runs at start, on reload, and whenever Vault or LuckPerms enables or disables,
- * so a plugin installed while the server runs is picked up by the next enable or reload.
+ * <p>{@link #refresh} runs at start, on reload, and whenever Vault or LuckPerms enables or disables.
  */
 public final class Integrations implements Listener, AutoCloseable {
 
@@ -47,20 +45,20 @@ public final class Integrations implements Listener, AutoCloseable {
     public static final String LUCKPERMS = "LuckPerms";
 
     private final Plugin host;
-    private final LogicProviders providers;
+    private final LogicApi logic;
     private final DiagnosticsBus diagnostics;
     private final boolean proxyTransfer;
-    private final List<ProviderRegistration> installed = new ArrayList<>();
+    private final List<AutoCloseable> installed = new ArrayList<>();
 
     /**
      * @param host the plugin that owns the registrations (its plugin manager delivers the enable and disable events)
-     * @param providers the provider slots the adapters register into
+     * @param logic the logic API whose registries and provider slots the adapters register into
      * @param diagnostics where a skipped adapter is reported
      * @param proxyTransfer whether {@code transfer_mode} selected the BungeeCord channel
      */
-    public Integrations(Plugin host, LogicProviders providers, DiagnosticsBus diagnostics, boolean proxyTransfer) {
+    public Integrations(Plugin host, LogicApi logic, DiagnosticsBus diagnostics, boolean proxyTransfer) {
         this.host = Objects.requireNonNull(host, "host");
-        this.providers = Objects.requireNonNull(providers, "providers");
+        this.logic = Objects.requireNonNull(logic, "logic");
         this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
         this.proxyTransfer = proxyTransfer;
     }
@@ -79,18 +77,20 @@ public final class Integrations implements Listener, AutoCloseable {
         uninstall();
         var manager = host.getServer().getPluginManager();
         if (manager.isPluginEnabled(VAULT)) {
-            attempt("Vault economy", () -> installed.add(providers.setEconomy(host, new VaultEconomyProvider())));
+            attempt("Vault currency integration", () -> installed.add(logic.currencyIntegrations().register(
+                    host, NamespacedId.of("materione", "vault"),
+                    new VaultCurrencyIntegration())));
         }
         if (manager.isPluginEnabled(LUCKPERMS)) {
             attempt("LuckPerms permissions", () -> installed.add(
-                    providers.setPermissions(host, new LuckPermsPermissionProvider(host.getLogger()))));
+                    logic.providers().setPermissions(host, new LuckPermsPermissionProvider(host.getLogger()))));
         } else if (manager.isPluginEnabled(VAULT)) {
             attempt("Vault permissions", () -> installed.add(
-                    providers.setPermissions(host, new VaultPermissionProvider())));
+                    logic.providers().setPermissions(host, new VaultPermissionProvider())));
         }
         if (proxyTransfer) {
             attempt("BungeeCord transfer", () -> installed.add(
-                    providers.setTransfer(host, new BungeeCordTransfer(host))));
+                    logic.providers().setTransfer(host, new BungeeCordTransfer(host))));
         }
     }
 
@@ -102,7 +102,7 @@ public final class Integrations implements Listener, AutoCloseable {
         }
     }
 
-    /** Vault or LuckPerms disabled: its provider leaves, and the fallback answers. */
+    /** Vault or LuckPerms disabled: its registrations leave, and the fallback answers instead. */
     @EventHandler
     public void onPluginDisable(PluginDisableEvent event) {
         if (isWatched(event.getPlugin().getName())) {
@@ -110,7 +110,7 @@ public final class Integrations implements Listener, AutoCloseable {
         }
     }
 
-    /** Removes every provider this gate installed and stops listening. Idempotent. */
+    /** Removes every registration this gate installed and stops listening. Idempotent. */
     @Override
     public synchronized void close() {
         uninstall();
@@ -122,7 +122,13 @@ public final class Integrations implements Listener, AutoCloseable {
     }
 
     private void uninstall() {
-        installed.forEach(ProviderRegistration::close);
+        for (AutoCloseable registration : installed) {
+            try {
+                registration.close();
+            } catch (Exception e) {
+                host.getLogger().warning("an integration registration did not close cleanly: " + e);
+            }
+        }
         installed.clear();
     }
 
@@ -136,11 +142,11 @@ public final class Integrations implements Listener, AutoCloseable {
         } catch (LinkageError | RuntimeException e) {
             host.getLogger().warning(label + " could not be installed: " + e);
             diagnostics.publish(Diagnostic.warn(DiagnosticCodes.INTEGRATION_SKIPPED,
-                    label + " could not be installed (" + e + "); the default provider is used"));
+                    label + " could not be installed (" + e + "); the default is used"));
         }
     }
 
-    /** One installation step; kept as a type so the adapters are referenced only inside the guarded branches. */
+    /** One installation step; a type so the adapters are referenced only inside the guarded branches. */
     @FunctionalInterface
     private interface Installation {
         void run();

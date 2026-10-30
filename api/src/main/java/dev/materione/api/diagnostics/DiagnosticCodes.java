@@ -279,7 +279,15 @@ public final class DiagnosticCodes {
      * server runs with the default provider or none, and the actions say so (logic.md §4.5).
      */
     public static final DiagnosticCode INTEGRATION_SKIPPED =
-            new DiagnosticCode("MTR-0058", Severity.WARN, "Integration provider could not be installed; skipped");
+            new DiagnosticCode("MTR-0061", Severity.WARN, "Integration provider could not be installed; skipped");
+
+    /**
+     * A currency file was quarantined (logic.md §16): it names an integration that does not accept its
+     * keys, or it names no integration, or its id is in the reserved {@code materione} namespace. The
+     * currency is left out of the catalog; the rest of the pack loads.
+     */
+    public static final DiagnosticCode CURRENCY_REJECTED =
+            new DiagnosticCode("MTR-0062", Severity.WARN, "Currency definition rejected; quarantined");
 
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
@@ -339,7 +347,8 @@ public final class DiagnosticCodes {
             PERMISSION_DENIED,
             DUPLICATE_RESOURCE_ID,
             LOGIC_STEP_REJECTED,
-            INTEGRATION_SKIPPED);
+            INTEGRATION_SKIPPED,
+            CURRENCY_REJECTED);
 
     private DiagnosticCodes() {}
 

@@ -3,18 +3,20 @@ package dev.materione.plugin.logic;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.materione.api.logic.provider.EconomyProvider;
-import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.PermissionProvider;
 import dev.materione.api.logic.provider.ProviderResult;
 import dev.materione.api.logic.provider.ServerTransfer;
+import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * The provider slots (logic.md §4.5): a registration replaces, closing restores what it replaced,
- * a stale handle never clears a newer registration, and an owner that disables takes its
- * providers with it. The permission slot always answers, falling back to the session default.
+ * The provider slots (logic.md §4.5): a registration replaces, closing restores what it replaced, a
+ * stale handle never clears a newer registration, and an owner that disables takes its providers with
+ * it. The permission slot always answers, falling back to the session default. Currencies are a catalog
+ * rather than a slot, so they are not covered here.
  */
 class LogicProvidersTest {
 
@@ -35,76 +37,11 @@ class LogicProvidersTest {
         }
     };
 
-    private static EconomyProvider economy(String name) {
-        return new EconomyProvider() {
+    private static PermissionProvider permissions(String name) {
+        return new PermissionProvider() {
             @Override
             public String name() {
                 return name;
-            }
-
-            @Override
-            public EconomyResult balance(UUID player) {
-                return new EconomyResult.Succeeded(0);
-            }
-
-            @Override
-            public EconomyResult has(UUID player, double amount) {
-                return new EconomyResult.Succeeded(0);
-            }
-
-            @Override
-            public EconomyResult withdraw(UUID player, double amount) {
-                return new EconomyResult.Succeeded(0);
-            }
-
-            @Override
-            public EconomyResult deposit(UUID player, double amount) {
-                return new EconomyResult.Succeeded(0);
-            }
-        };
-    }
-
-    @Test
-    void theSlotsStartEmptyExceptForThePermissionDefault() {
-        var providers = new LogicProvidersImpl(DEFAULT);
-
-        assertThat(providers.economy()).isEmpty();
-        assertThat(providers.transfer()).isEmpty();
-        assertThat(providers.permissions()).isSameAs(DEFAULT);
-    }
-
-    @Test
-    void aRegistrationReplacesAndClosingRestoresTheSlot() {
-        var providers = new LogicProvidersImpl(DEFAULT);
-        var owner = LogicTestSupport.owner("vault");
-
-        var handle = providers.setEconomy(owner, economy("first"));
-        assertThat(providers.economy()).map(EconomyProvider::name).contains("first");
-
-        handle.close();
-        handle.close(); // idempotent
-        assertThat(providers.economy()).isEmpty();
-    }
-
-    @Test
-    void aStaleHandleNeverClearsANewerRegistration() {
-        var providers = new LogicProvidersImpl(DEFAULT);
-        var owner = LogicTestSupport.owner("vault");
-
-        var first = providers.setEconomy(owner, economy("first"));
-        providers.setEconomy(owner, economy("second"));
-        first.close();
-
-        assertThat(providers.economy()).map(EconomyProvider::name).contains("second");
-    }
-
-    @Test
-    void aPermissionRegistrationFallsBackToTheDefaultWhenClosed() {
-        var providers = new LogicProvidersImpl(DEFAULT);
-        PermissionProvider luckPerms = new PermissionProvider() {
-            @Override
-            public String name() {
-                return "luckperms";
             }
 
             @Override
@@ -117,20 +54,75 @@ class LogicProvidersTest {
                 return ProviderResult.OK;
             }
         };
+    }
+
+    private static LogicProvidersImpl providers() {
+        return new LogicProvidersImpl(DEFAULT, new MaterioneCurrencyCatalog(authored -> Optional.empty(), null));
+    }
+
+    @Test
+    void theSlotsStartEmptyExceptForThePermissionDefaultAndTheCatalogHasTheBuiltInMoney() {
+        var providers = providers();
+
+        assertThat(providers.transfer()).isEmpty();
+        assertThat(providers.permissions()).isSameAs(DEFAULT);
+        assertThat(providers.currencies().all()).extracting(c -> c.id().toString()).containsExactly("materione:money");
+    }
+
+    @Test
+    void aPermissionRegistrationFallsBackToTheDefaultWhenClosed() {
+        var providers = providers();
+        var luckPerms = permissions("luckperms");
 
         var handle = providers.setPermissions(LogicTestSupport.owner("luckperms"), luckPerms);
         assertThat(providers.permissions()).isSameAs(luckPerms);
 
         handle.close();
+        handle.close(); // idempotent
         assertThat(providers.permissions()).isSameAs(DEFAULT);
     }
 
     @Test
+    void aStaleHandleNeverClearsANewerRegistration() {
+        var providers = providers();
+        var owner = LogicTestSupport.owner("luckperms");
+        var first = permissions("first");
+        var second = permissions("second");
+
+        var handle = providers.setPermissions(owner, first);
+        providers.setPermissions(owner, second);
+        handle.close();
+
+        assertThat(providers.permissions()).isSameAs(second);
+    }
+
+    @Test
+    void theTransferSlotIsEmptyWhenItsRegistrationCloses() {
+        var providers = providers();
+        ServerTransfer transfer = new ServerTransfer() {
+            @Override
+            public String name() {
+                return "proxy";
+            }
+
+            @Override
+            public ProviderResult send(UUID player, String server) {
+                return ProviderResult.OK;
+            }
+        };
+
+        var handle = providers.setTransfer(LogicTestSupport.owner("proxy"), transfer);
+        assertThat(providers.transfer()).contains(transfer);
+        handle.close();
+        assertThat(providers.transfer()).isEmpty();
+    }
+
+    @Test
     void disablingTheOwnerRemovesOnlyItsProviders() {
-        var providers = new LogicProvidersImpl(DEFAULT);
-        var vault = LogicTestSupport.owner("vault");
+        var providers = providers();
+        var owner = LogicTestSupport.owner("luckperms");
         var other = LogicTestSupport.owner("other");
-        providers.setEconomy(vault, economy("vault-economy"));
+        providers.setPermissions(owner, permissions("luckperms"));
         ServerTransfer transfer = new ServerTransfer() {
             @Override
             public String name() {
@@ -144,17 +136,18 @@ class LogicProvidersTest {
         };
         providers.setTransfer(other, transfer);
 
-        providers.ownerDisabled(vault);
+        providers.ownerDisabled(owner);
 
-        assertThat(providers.economy()).isEmpty();
+        assertThat(providers.permissions()).isSameAs(DEFAULT);
         assertThat(providers.transfer()).contains(transfer);
     }
 
     @Test
     void aDisabledOwnerCannotRegisterAProvider() {
-        var providers = new LogicProvidersImpl(DEFAULT);
+        var providers = providers();
 
-        assertThatThrownBy(() -> providers.setEconomy(LogicTestSupport.disabledOwner("gone"), economy("x")))
+        assertThatThrownBy(() -> providers.setPermissions(LogicTestSupport.disabledOwner("gone"), permissions("x")))
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("disabled");
+        assertThat(List.of(providers.permissions())).containsExactly(DEFAULT);
     }
 }

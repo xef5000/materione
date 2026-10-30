@@ -3,6 +3,7 @@ package dev.materione.plugin.logic.action;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionOutcome;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.Availability;
@@ -10,7 +11,9 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.Threading;
-import dev.materione.api.logic.provider.EconomyProvider;
+import dev.materione.api.logic.provider.Currency;
+import dev.materione.api.logic.provider.CurrencyBackend;
+import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.logic.provider.PermissionProvider;
@@ -19,6 +22,7 @@ import dev.materione.api.logic.provider.ServerTransfer;
 import dev.materione.behavior.logic.EngineExpressions;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.BuiltinLogic;
+import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -35,10 +39,10 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * The five provider actions (logic.md §4.5, §9 rule 6): each parses and rejects like the rest, runs
- * against fake providers (ok, insufficient, refused, no provider), and reports availability from
- * the provider that is installed at the moment it is asked. No server: the player is a stand-in with
- * a fixed UUID, and the providers are in-memory.
+ * The provider actions (logic.md §4.5, §16): each parses and rejects like the rest, runs against an
+ * in-memory currency backend and fake permission and transfer providers (ok, insufficient, refused, not
+ * installed), and reports availability from what is installed at the moment it is asked. No server: the
+ * player is a stand-in with a fixed UUID.
  */
 class ProviderActionsTest {
 
@@ -71,14 +75,15 @@ class ProviderActionsTest {
         return new MapLogicContext(Map.of()).with(Facets.PLAYER, player(ALEX));
     }
 
-    /** An in-memory economy: balances per player; a withdrawal the balance cannot cover takes nothing. */
-    static final class FakeEconomy implements EconomyProvider {
+    /** In-memory money: balances per player; a withdrawal the balance cannot cover takes nothing. */
+    static final class FakeBackend implements CurrencyBackend {
         final Map<UUID, Double> balances = new HashMap<>();
         String refusal;
+        boolean up = true;
 
         @Override
-        public String name() {
-            return "fake economy";
+        public Availability availability() {
+            return up ? Availability.AVAILABLE : Availability.unavailable("the fake economy is down");
         }
 
         @Override
@@ -89,7 +94,8 @@ class ProviderActionsTest {
         @Override
         public EconomyResult has(UUID player, double amount) {
             double balance = balances.getOrDefault(player, 0d);
-            return balance >= amount ? new EconomyResult.Succeeded(balance) : new EconomyResult.InsufficientFunds(balance);
+            return balance >= amount
+                    ? new EconomyResult.Succeeded(balance) : new EconomyResult.InsufficientFunds(balance);
         }
 
         @Override
@@ -114,6 +120,33 @@ class ProviderActionsTest {
             double after = balances.getOrDefault(player, 0d) + amount;
             balances.put(player, after);
             return new EconomyResult.Succeeded(after);
+        }
+    }
+
+    /** A fake integration: binds to the one backend the test holds, and rejects a config without {@code mode}. */
+    static final class FakeIntegration implements CurrencyIntegration {
+        final FakeBackend backend;
+
+        FakeIntegration(FakeBackend backend) {
+            this.backend = backend;
+        }
+
+        @Override
+        public String id() {
+            return "vault";
+        }
+
+        @Override
+        public dev.materione.api.registry.SelfDescription describe() {
+            return new dev.materione.api.registry.SelfDescription("fake", "fake", List.of(), "2.0.0");
+        }
+
+        @Override
+        public CurrencyBackend bind(ParamReader config) {
+            if (config.has("mode") && !"good".equals(config.text("mode"))) {
+                throw new IllegalArgumentException("mode must be good");
+            }
+            return backend;
         }
     }
 
@@ -172,17 +205,25 @@ class ProviderActionsTest {
 
     /** Providers the test installs and removes at will; the actions read them at each use. */
     static final class FakeProviders implements LogicProviders {
-        Optional<EconomyProvider> economy = Optional.empty();
+        final FakeBackend backend = new FakeBackend();
+        final MaterioneCurrencyCatalog currencies;
         Optional<ServerTransfer> transfer = Optional.empty();
         final PermissionProvider permissions;
+        /** Whether the vault integration is registered; toggled to model Vault arriving or leaving. */
+        boolean vaultInstalled = true;
 
         FakeProviders(PermissionProvider permissions) {
             this.permissions = permissions;
+            this.currencies = new MaterioneCurrencyCatalog(
+                    authored -> vaultInstalled && "vault".equals(authored)
+                            ? Optional.of(new FakeIntegration(backend))
+                            : Optional.empty(),
+                    "materione:money");
         }
 
         @Override
-        public Optional<EconomyProvider> economy() {
-            return economy;
+        public MaterioneCurrencyCatalog currencies() {
+            return currencies;
         }
 
         @Override
@@ -193,12 +234,6 @@ class ProviderActionsTest {
         @Override
         public Optional<ServerTransfer> transfer() {
             return transfer;
-        }
-
-        @Override
-        public ProviderRegistration setEconomy(org.bukkit.plugin.Plugin owner, EconomyProvider provider) {
-            economy = Optional.of(provider);
-            return () -> economy = Optional.empty();
         }
 
         @Override
@@ -213,8 +248,12 @@ class ProviderActionsTest {
         }
     }
 
+    private static Currency gems() {
+        return new Currency(NamespacedId.of("shop", "gems"), "Gems", "G$", 0, "vault", Map.of());
+    }
+
     @Test
-    void theFiveProviderActionsDescribeThemselvesWithCategoryThreadingAndShorthand() {
+    void theProviderActionsDescribeThemselvesWithCategoryThreadingAndShorthand() {
         var actions = BuiltinLogic.providerActions(new FakeProviders(new FakePermissions()));
 
         assertThat(actions).extracting(ActionType::id)
@@ -234,13 +273,15 @@ class ProviderActionsTest {
     class Money {
 
         @Test
-        void giveAndTakeAcceptPositiveAmountsAndRejectTheRest() {
-            var give = new GiveMoneyAction(new FakeProviders(new FakePermissions()));
-            var take = new TakeMoneyAction(new FakeProviders(new FakePermissions()));
-            for (ActionType<?> action : List.of(give, take)) {
-                assertThat(parseOf(action, params("amount", 100))).isNotNull();
-                assertThat(parseOf(action, params("amount", 2.5))).isNotNull();
-            }
+        void giveAndTakeAcceptPositiveAmountsAndAnOptionalCurrencyAndRejectTheRest() {
+            var providers = new FakeProviders(new FakePermissions());
+            var give = new GiveMoneyAction(providers);
+            var take = new TakeMoneyAction(providers);
+
+            assertThat(give.parse(reader(params("amount", 100))).currency()).isNull();
+            assertThat(give.parse(reader(params("amount", 2.5, "currency", "gems")))).isEqualTo(
+                    new GiveMoneyAction.Params(2.5, "gems"));
+            assertThat(take.parse(reader(params("amount", 100)))).isEqualTo(new TakeMoneyAction.Params(100, null));
             assertThatThrownBy(() -> give.parse(reader(params()))).hasMessage("amount is required");
             assertThatThrownBy(() -> give.parse(reader(params("amount", 0)))).hasMessage("amount must be above 0");
             assertThatThrownBy(() -> give.parse(reader(params("amount", "100"))))
@@ -252,48 +293,54 @@ class ProviderActionsTest {
         }
 
         @Test
-        void giveAddsToTheBalanceAndSucceeds() {
-            var economy = new FakeEconomy();
+        void giveAddsToTheDefaultCurrencyAndTakeRemovesFromIt() {
             var providers = new FakeProviders(new FakePermissions());
-            providers.economy = Optional.of(economy);
             var give = new GiveMoneyAction(providers);
+            var take = new TakeMoneyAction(providers);
 
             assertThat(give.execute(give.parse(reader(params("amount", 150))), withPlayer())).isEqualTo(ActionOutcome.OK);
-            assertThat(economy.balances).containsEntry(ALEX, 150d);
+            assertThat(providers.backend.balances).containsEntry(ALEX, 150d);
+            assertThat(take.execute(take.parse(reader(params("amount", 75))), withPlayer())).isEqualTo(ActionOutcome.OK);
+            assertThat(providers.backend.balances).containsEntry(ALEX, 75d);
         }
 
         @Test
-        void takeSucceedsWhenTheBalanceCoversTheAmount() {
-            var economy = new FakeEconomy();
-            economy.balances.put(ALEX, 200d);
+        void aNamedCurrencyIsUsedWhenTheStepNamesIt() {
             var providers = new FakeProviders(new FakePermissions());
-            providers.economy = Optional.of(economy);
+            providers.currencies.define(List.of(gems()));
+            providers.backend.balances.put(ALEX, 10d);
             var take = new TakeMoneyAction(providers);
 
-            assertThat(take.execute(take.parse(reader(params("amount", 75))), withPlayer())).isEqualTo(ActionOutcome.OK);
-            assertThat(economy.balances).containsEntry(ALEX, 125d);
+            assertThat(take.execute(take.parse(reader(params("amount", 4, "currency", "gems"))), withPlayer()))
+                    .isEqualTo(ActionOutcome.OK);
+            assertThat(providers.backend.balances).containsEntry(ALEX, 6d);
         }
 
         @Test
         void takeFailsWithInsufficientFundsAndTakesNothing() {
-            var economy = new FakeEconomy();
-            economy.balances.put(ALEX, 5d);
             var providers = new FakeProviders(new FakePermissions());
-            providers.economy = Optional.of(economy);
+            providers.backend.balances.put(ALEX, 5d);
             var take = new TakeMoneyAction(providers);
 
             ActionOutcome outcome = take.execute(take.parse(reader(params("amount", 10))), withPlayer());
 
             assertThat(outcome).isEqualTo(ActionOutcome.failed("insufficient funds: balance 5.0, needs 10.0"));
-            assertThat(economy.balances).containsEntry(ALEX, 5d);
+            assertThat(providers.backend.balances).containsEntry(ALEX, 5d);
+        }
+
+        @Test
+        void anUnknownCurrencyFailsTheStepByName() {
+            var providers = new FakeProviders(new FakePermissions());
+            var give = new GiveMoneyAction(providers);
+
+            assertThat(give.execute(give.parse(reader(params("amount", 1, "currency", "nope"))), withPlayer()))
+                    .isEqualTo(ActionOutcome.failed("unknown currency nope"));
         }
 
         @Test
         void aProviderFailureSurfacesItsReason() {
-            var economy = new FakeEconomy();
-            economy.refusal = "the bank is closed";
             var providers = new FakeProviders(new FakePermissions());
-            providers.economy = Optional.of(economy);
+            providers.backend.refusal = "the bank is closed";
             var give = new GiveMoneyAction(providers);
 
             assertThat(give.execute(give.parse(reader(params("amount", 1))), withPlayer()))
@@ -301,35 +348,36 @@ class ProviderActionsTest {
         }
 
         @Test
-        void withNoEconomyTheActionsAreUnavailableAndFailWithTheSentence() {
+        void withoutTheIntegrationTheDefaultCurrencyIsUnavailableAndTheActionsSayWhy() {
             var providers = new FakeProviders(new FakePermissions());
+            providers.vaultInstalled = false;
             var give = new GiveMoneyAction(providers);
             var take = new TakeMoneyAction(providers);
 
             assertThat(give.availability().available()).isFalse();
-            assertThat(give.availability().reason()).contains("economy provider");
+            assertThat(give.availability().reason()).contains("vault").contains("not installed");
             assertThat(take.availability().available()).isFalse();
             assertThat(give.execute(give.parse(reader(params("amount", 1))), withPlayer()))
-                    .isEqualTo(ActionOutcome.failed("no economy provider"));
-            assertThat(take.execute(take.parse(reader(params("amount", 1))), withPlayer()))
-                    .isEqualTo(ActionOutcome.failed("no economy provider"));
+                    .isEqualTo(ActionOutcome.failed(give.availability().reason()));
         }
 
         @Test
-        void availabilityFollowsTheProviderInstalledAtTheMomentItIsAsked() {
+        void availabilityFollowsTheIntegrationInstalledAtTheMomentItIsAsked() {
             var providers = new FakeProviders(new FakePermissions());
             var give = new GiveMoneyAction(providers);
-            assertThat(give.availability()).isNotEqualTo(Availability.AVAILABLE);
+            providers.vaultInstalled = false;
+            assertThat(give.availability().available()).isFalse();
 
-            providers.economy = Optional.of(new FakeEconomy());
+            providers.vaultInstalled = true;
             assertThat(give.availability()).isEqualTo(Availability.AVAILABLE);
+
+            providers.backend.up = false;
+            assertThat(give.availability().reason()).contains("down");
         }
 
         @Test
         void aRunWithoutAPlayerFailsInsteadOfThrowing() {
-            var providers = new FakeProviders(new FakePermissions());
-            providers.economy = Optional.of(new FakeEconomy());
-            var take = new TakeMoneyAction(providers);
+            var take = new TakeMoneyAction(new FakeProviders(new FakePermissions()));
 
             assertThat(take.execute(take.parse(reader(params("amount", 1))), new MapLogicContext(Map.of())))
                     .isEqualTo(ActionOutcome.failed("event has no player"));
@@ -423,13 +471,5 @@ class ProviderActionsTest {
             assertThat(connect.execute(connect.parse(reader(params("server", "lobby"))), withPlayer()))
                     .isEqualTo(ActionOutcome.failed("no server transfer"));
         }
-    }
-
-    private static Object parseOf(ActionType<?> action, Map<String, Object> params) {
-        return switch (action) {
-            case GiveMoneyAction give -> give.parse(reader(params));
-            case TakeMoneyAction take -> take.parse(reader(params));
-            default -> throw new IllegalArgumentException(action.id());
-        };
     }
 }

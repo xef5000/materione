@@ -6,7 +6,9 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.api.logic.provider.EconomyProvider;
+import dev.materione.api.logic.LogicApi;
+import dev.materione.api.logic.LogicRegistry;
+import dev.materione.api.logic.provider.CurrencyCatalog;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.logic.provider.PermissionProvider;
 import dev.materione.api.logic.provider.ProviderResult;
@@ -28,7 +30,7 @@ import org.junit.jupiter.api.Test;
 /**
  * The soft-depend gate (logic.md §4.5, build.md §3). The test JVM has no Vault or LuckPerms on its
  * classpath, which is the server-without-the-plugin case: an absent plugin registers nothing, and a
- * plugin that is reported enabled but whose API cannot load is reported as {@code MTR-0058} and
+ * plugin that is reported enabled but whose API cannot load is reported as {@code MTR-0061} and
  * skipped, never a failed enable.
  */
 class IntegrationsGuardTest {
@@ -38,8 +40,8 @@ class IntegrationsGuardTest {
         final List<String> set = new ArrayList<>();
 
         @Override
-        public Optional<EconomyProvider> economy() {
-            return Optional.empty();
+        public CurrencyCatalog currencies() {
+            throw new UnsupportedOperationException();
         }
 
         @Override
@@ -53,12 +55,6 @@ class IntegrationsGuardTest {
         }
 
         @Override
-        public ProviderRegistration setEconomy(Plugin owner, EconomyProvider provider) {
-            set.add("economy");
-            return () -> { };
-        }
-
-        @Override
         public ProviderRegistration setPermissions(Plugin owner, PermissionProvider provider) {
             set.add("permissions:" + provider.name());
             return () -> { };
@@ -69,6 +65,18 @@ class IntegrationsGuardTest {
             set.add("transfer:" + provider.name());
             return () -> { };
         }
+    }
+
+    /** A LogicApi whose provider slots are the recording providers; the registry is not used by these tests. */
+    private static LogicApi logicOf(RecordingProviders providers) {
+        return proxy(LogicApi.class, (method, args) -> switch (method.getName()) {
+            case "providers" -> providers;
+            // a registry that would accept the Vault integration; the guard must fail before it is asked
+            case "currencyIntegrations" -> proxy(LogicRegistry.class, (inner, more) -> {
+                throw new UnsupportedOperationException(inner.getName());
+            });
+            default -> throw new UnsupportedOperationException(method.getName());
+        });
     }
 
     /** A host whose plugin manager reports exactly {@code enabled} as enabled, and which records messenger calls. */
@@ -140,7 +148,7 @@ class IntegrationsGuardTest {
         var providers = new RecordingProviders();
         var diagnostics = new Diagnostics();
 
-        new Integrations(host.plugin, providers, diagnostics, false).refresh();
+        new Integrations(host.plugin, logicOf(providers), diagnostics, false).refresh();
 
         assertThat(providers.set).isEmpty();
         assertThat(diagnostics.published).isEmpty();
@@ -153,7 +161,7 @@ class IntegrationsGuardTest {
         var providers = new RecordingProviders();
         var diagnostics = new Diagnostics();
 
-        new Integrations(host.plugin, providers, diagnostics, false).refresh();
+        new Integrations(host.plugin, logicOf(providers), diagnostics, false).refresh();
 
         assertThat(providers.set).isEmpty();
         assertThat(diagnostics.published).isNotEmpty()
@@ -166,7 +174,7 @@ class IntegrationsGuardTest {
         var providers = new RecordingProviders();
         var diagnostics = new Diagnostics();
 
-        new Integrations(host.plugin, providers, diagnostics, false).refresh();
+        new Integrations(host.plugin, logicOf(providers), diagnostics, false).refresh();
 
         assertThat(providers.set).isEmpty();
         assertThat(diagnostics.published).hasSize(1);
@@ -178,7 +186,7 @@ class IntegrationsGuardTest {
         var host = new Host(Set.of());
         var providers = new RecordingProviders();
 
-        new Integrations(host.plugin, providers, new Diagnostics(), true).refresh();
+        new Integrations(host.plugin, logicOf(providers), new Diagnostics(), true).refresh();
 
         assertThat(providers.set).containsExactly("transfer:BungeeCord plugin channel");
         assertThat(host.channels).containsExactly("BungeeCord");

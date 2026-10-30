@@ -1,6 +1,7 @@
 package dev.materione.integrations.vault;
 
-import dev.materione.api.logic.provider.EconomyProvider;
+import dev.materione.api.logic.Availability;
+import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.EconomyResult;
 import java.util.UUID;
 import net.milkbowl.vault.economy.Economy;
@@ -9,38 +10,28 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 /**
- * The economy Vault exposes, through Vault's own service registry (logic.md §4.5). Looked up at
- * each call, so an economy plugin that registers after Vault is picked up without a reload.
+ * The Vault economy as one currency's money (logic.md §16). Looked up at each call through Vault's
+ * service registry, so an economy plugin that registers after Vault is picked up without a reload.
  *
  * <p>Vault cannot say "insufficient funds" as a type, only as a failed response, so a withdrawal
- * checks the balance first and refuses before touching it. Loaded only after Vault is confirmed
- * enabled ({@link dev.materione.integrations.Integrations}).
+ * checks the balance first and refuses before touching it.
  */
-public final class VaultEconomyProvider implements EconomyProvider {
+final class VaultCurrencyBackend implements CurrencyBackend {
 
-    /**
-     * Loads Vault's {@code Economy} type now. An absent or unloadable Vault fails here, inside the
-     * {@code Integrations} guard that reports it, instead of later inside an action.
-     */
-    public VaultEconomyProvider() {
-        Economy.class.getName();
-    }
+    private static final String NO_ECONOMY = "no economy is registered with Vault";
 
     @Override
-    public String name() {
-        return "Vault";
-    }
-
-    @Override
-    public boolean available() {
-        return Bukkit.getServicesManager().load(Economy.class) != null;
+    public Availability availability() {
+        return Bukkit.getServicesManager().load(Economy.class) != null
+                ? Availability.AVAILABLE
+                : Availability.unavailable(NO_ECONOMY + " (install an economy plugin such as EssentialsX)");
     }
 
     @Override
     public EconomyResult balance(UUID player) {
         Economy economy = economy();
         if (economy == null) {
-            return new EconomyResult.Failed("no economy registered with Vault");
+            return new EconomyResult.Failed(NO_ECONOMY);
         }
         return new EconomyResult.Succeeded(economy.getBalance(offline(player)));
     }
@@ -49,7 +40,7 @@ public final class VaultEconomyProvider implements EconomyProvider {
     public EconomyResult has(UUID player, double amount) {
         Economy economy = economy();
         if (economy == null) {
-            return new EconomyResult.Failed("no economy registered with Vault");
+            return new EconomyResult.Failed(NO_ECONOMY);
         }
         OfflinePlayer account = offline(player);
         double balance = economy.getBalance(account);
@@ -62,7 +53,7 @@ public final class VaultEconomyProvider implements EconomyProvider {
     public EconomyResult withdraw(UUID player, double amount) {
         Economy economy = economy();
         if (economy == null) {
-            return new EconomyResult.Failed("no economy registered with Vault");
+            return new EconomyResult.Failed(NO_ECONOMY);
         }
         OfflinePlayer account = offline(player);
         if (!economy.has(account, amount)) {
@@ -75,7 +66,7 @@ public final class VaultEconomyProvider implements EconomyProvider {
     public EconomyResult deposit(UUID player, double amount) {
         Economy economy = economy();
         if (economy == null) {
-            return new EconomyResult.Failed("no economy registered with Vault");
+            return new EconomyResult.Failed(NO_ECONOMY);
         }
         return response(economy.depositPlayer(offline(player), amount), "the economy refused the deposit");
     }

@@ -25,7 +25,9 @@ class DiagnosticCodesTest {
         // (MTR-0054 GUI slot item not live, MTR-0055 permission denied: gui.md §5;
         // MTR-0056 duplicate resource id across files: plugin.md §5, #194;
         // MTR-0057 logic step rejected at load: logic.md §10, §14;
-        // MTR-0058 optional integration provider skipped: logic.md §15, #213)
-        assertThat(DiagnosticCodes.all()).hasSize(58);
+        // MTR-0058..0060 land with #234 (flows);
+        // MTR-0061 optional integration provider skipped: logic.md §16, #213;
+        // MTR-0062 currency definition rejected: logic.md §16)
+        assertThat(DiagnosticCodes.all()).hasSize(62);
     }
 }

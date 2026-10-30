@@ -288,7 +288,8 @@ the editor palette and the docs read the same registries (D5).
 | `conditions()` | `LogicRegistry<ConditionType<?>>`: predicates. Same shape, with `test(P, LogicContext)` as a pure read. |
 | `triggers()` | `LogicRegistry<TriggerType>`: descriptions of the events a rule answers: details, `firedBy`, filters, a context schema of `ContextVariable`s, and `cancellable`. A runtime still fires the event; registering one makes it known to the compiler and the studio. |
 | `functions()` | `LogicRegistry<ExpressionFunction>`: calls available inside expressions. The registry and the vocabulary carry them; binding them into the expression grammar is the expression work (logic.md §13 L3). |
-| `providers()` | `LogicProviders` (§4.5 of logic.md, #213): the three provider slots the money, permission and `connect` actions run against. `economy()` and `transfer()` are `Optional`; `permissions()` is always present (the session-only Bukkit default when nothing else is registered). `setEconomy(owner, EconomyProvider)`, `setPermissions(owner, PermissionProvider)` and `setTransfer(owner, ServerTransfer)` each replace the slot and return a `ProviderRegistration` whose `close()` restores the slot, and a disabled owner is refused. Read at use, never cached by an action. |
+| `providers()` | `LogicProviders` (logic.md §4.5, §16, #213): `currencies()` is the catalog of named currencies the money actions read; `permissions()` is always present (the session-only Bukkit default when nothing else is registered); `transfer()` is `Optional`. `setPermissions(owner, PermissionProvider)` and `setTransfer(owner, ServerTransfer)` each replace their slot and return a `ProviderRegistration` whose `close()` restores it; a disabled owner is refused. Read at use, never cached by an action. |
+| `currencyIntegrations()` | `LogicRegistry<CurrencyIntegration>`: how a currency reaches its money (`vault`, `xp`, `custom`, or an addon's own). Registered like actions; a currency file names one by id (logic.md §16). |
 | `vocabulary()` | The version-2 `BehaviorVocabulary`, rebuilt from the registries (and the mechanics registry) on every call. |
 
 The provider SPIs live in `dev.materione.api.logic.provider`, and every method takes a `UUID`, never
@@ -296,7 +297,9 @@ a Bukkit handle, so an addon's provider is testable without a server:
 
 | Type | Shape |
 |---|---|
-| `EconomyProvider` | `name()`, `available()`, `balance(UUID)`, `has(UUID, double)`, `withdraw(UUID, double)`, `deposit(UUID, double)`. Each returns an `EconomyResult`: `Succeeded(balance)`, `InsufficientFunds(balance)` (nothing was taken), or `Failed(reason)`. |
+| `CurrencyIntegration` | A registry entry: `id()`, `describe()` (the keys it reads, for the studio's form) and `bind(ParamReader config)`, which is pure and returns a `CurrencyBackend` or rejects with `IllegalArgumentException`. |
+| `CurrencyBackend` | `availability()` (with its reason), and `balance(UUID)`, `has(UUID, double)`, `withdraw(UUID, double)`, `deposit(UUID, double)`, each returning an `EconomyResult`: `Succeeded(balance)`, `InsufficientFunds(balance)` (nothing was taken), or `Failed(reason)`. |
+| `Currency` and `CurrencyCatalog` | A defined currency (`id`, `displayName`, `symbol`, `decimals`, `integration`, the integration's own `config`) and the catalog that resolves names, gives the default, and binds the backend at use (logic.md §16). |
 | `PermissionProvider` | `name()`, `available()`, `grant(UUID, node)`, `revoke(UUID, node)`, and two defaults built on them: `withGrant(UUID, node, Runnable)` (grant, run, revoke even on throw) and `grantFor(UUID, node, Duration)` (native expiry only; the default refuses). Each returns a `ProviderResult` (`OK` or `failed(reason)`). |
 | `ServerTransfer` | `name()`, `available()`, `send(UUID, server)` returning a `ProviderResult`. |
 

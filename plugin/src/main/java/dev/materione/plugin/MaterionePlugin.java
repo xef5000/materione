@@ -294,7 +294,8 @@ public final class MaterionePlugin extends JavaPlugin {
         guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
         // the logic vocabulary (triggers, actions) through the public API, before content load:
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
-        logic = new dev.materione.plugin.logic.LogicService(this, registries);
+        logic = new dev.materione.plugin.logic.LogicService(this, registries,
+                settings == null ? null : settings.getString("default_currency", "materione:money"));
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this);
         registerProviders();
     }
@@ -317,7 +318,9 @@ public final class MaterionePlugin extends JavaPlugin {
                         "transfer packet not configured: " + e.getMessage()));
             }
         }
-        integrations = new dev.materione.integrations.Integrations(this, logic.providers(), diagnostics, proxyTransfer);
+        // every successful swap refreshes the currency catalog from the same view the rest of content reads
+        pipeline.observeSwaps((previous, live) -> logic.updateCurrencies(live));
+        integrations = new dev.materione.integrations.Integrations(this, logic, diagnostics, proxyTransfer);
         integrations.start();
     }
 
@@ -336,21 +339,21 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     /**
-     * The provider-state marker (harness and QA marker, plugin.md §5 / build.md §7): which economy and
-     * transfer answer, and which provider actions report unavailable.
+     * The provider-state marker (harness and QA marker, plugin.md §5 / build.md §7): the default currency
+     * and whether it can be used, whether a transfer answers, and which provider actions report unavailable.
      */
     private void logLogicProviders() {
         var providers = logic.providers();
-        String economy = providers.economy().filter(dev.materione.api.logic.provider.EconomyProvider::available)
-                .map(dev.materione.api.logic.provider.EconomyProvider::name).orElse("none");
+        var defaultCurrency = providers.currencies().defaultCurrency();
+        boolean available = providers.currencies().availability(defaultCurrency).available();
         String transfer = providers.transfer().filter(dev.materione.api.logic.provider.ServerTransfer::available)
                 .isPresent() ? "yes" : "none";
         String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers).stream()
                 .filter(action -> !action.availability().available())
                 .map(dev.materione.api.logic.ActionType::id)
                 .collect(java.util.stream.Collectors.joining(","));
-        getLogger().info("MATERIONE-LOGIC-OK economy=" + economy + " transfer=" + transfer
-                + " unavailable=" + (unavailable.isEmpty() ? "none" : unavailable));
+        getLogger().info("MATERIONE-LOGIC-OK currency=" + defaultCurrency.id() + " available=" + available
+                + " transfer=" + transfer + " unavailable=" + (unavailable.isEmpty() ? "none" : unavailable));
     }
 
     private void loadContent() {

@@ -103,7 +103,7 @@ from the server at runtime).
 
 **#213 amendment (soft-depend adapters):** Vault and LuckPerms are **not shaded**. They are `compileOnly` in
 `integrations` and supplied by the server; the adapters load only when their plugin is enabled
-(`Integrations`, logic.md §15). `paper-plugin.yml` declares both as optional server dependencies with
+(`Integrations`, logic.md §16). `paper-plugin.yml` declares both as optional server dependencies with
 `join-classpath: true`. The shaded jar gains no classes from either API.
 
 **bStats amendment:** the third shaded set is **bStats 3.2.1** (`bstats-bukkit` + `bstats-base`, MIT), relocated under `materione.libs.org.bstats` by `materione.plugin-conventions`. Only `MaterionePlugin` references it, and it starts after the bootstrap phases in `onEnable`, behind a fail-soft wrapper: a failure is a warning and enable continues. The bStats jars carry no license file, so the shaded jar carries no MIT notice for it; creative and Undertow are in the same position. Bundling third-party notices is an open item, not decided here. No ban rule (§5) names bStats: the rules govern `dev.materione` code, and its only call site is `MaterionePlugin`.
@@ -189,13 +189,14 @@ and asserts the stable log markers:
 MATERIONE-BOOT-OK <version>          MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12|noop>
 MATERIONE-VERSION <version>          MATERIONE-DELIVERY-OK <url>
 MATERIONE-DOCTOR-OK                  MATERIONE-RELOAD-OK items=<n>
-MATERIONE-LOGIC-OK economy=<name|none> transfer=<yes|none> unavailable=<action ids|none>
+MATERIONE-LOGIC-OK currency=<default id> available=<true|false> transfer=<yes|none> unavailable=<action ids|none>
 MATERIONE-BYE
 ```
 
 `MATERIONE-LOGIC-OK` (#213) is logged at boot and on every content reload. The harness asserts it on
-a workspace with no Vault and no transfer host: `economy=none transfer=none
-unavailable=give_money,take_money,connect`, so the money and connect actions are proven unavailable.
+a workspace with no Vault and no transfer host: `currency=materione:money available=false transfer=none
+unavailable=give_money,take_money,connect`. The built-in money is unavailable without Vault, and the money
+and connect actions report it.
 
 These markers are test API — treat changes to them like changes to `MTR-####` codes
 (plugin.md §5). The standard scenario (`PaperBootstrapIT`) is the M1 exit gate: boot with

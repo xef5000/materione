@@ -6,7 +6,7 @@ import { test } from './_lib.mjs';
 export default [
   test({
     id: 'logic.providers-unavailable-without-vault',
-    title: 'with no Vault and no transfer host, reload reports the economy and connect actions unavailable',
+    title: 'with no Vault and no transfer host, reload reports materione:money and the money and connect actions unavailable',
     mode: 'auto',
     covers: [
       'api/src/main/java/dev/materione/api/logic/provider/**',
@@ -18,7 +18,7 @@ export default [
       await ctx.reset();
       await ctx.rcon('materione reload');
       await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
-      await ctx.waitForServerLog(/MATERIONE-LOGIC-OK economy=none transfer=none unavailable=give_money,take_money,connect/);
+      await ctx.waitForServerLog(/MATERIONE-LOGIC-OK currency=materione:money available=false transfer=none unavailable=give_money,take_money,connect/);
     },
   }),
 ];

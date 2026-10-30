@@ -54,7 +54,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Actions: messages | `[message]`, `[minimessage]`, `[broadcast]`, `[json]` … | `[msg]` | `message`, `broadcast` (scoped), `actionbar` and `title`, all in Materione rich text. |
 | Actions: sound | `[sound]`, `[broadcastsound]`, `[broadcastsoundworld]` | `[sound]`, `[stopsound]` | `sound` (scope: player, world or server) and `stop_sound`. |
 | Actions: GUI | `[openguimenu]`, `[close]`, `[refresh]` | `[open]`, `[close]`, `[refresh]`, `[previous]`, `[itemaction]` | `gui.open`, `gui.close`, `gui.refresh`, `gui.back`, `gui.set_slot` and `gui.slot_item` (§4.1). |
-| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money`, `give_exp`/`take_exp` and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
+| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money` against a named currency (`currencies/`, §16: Vault, the XP integration, or a command pair), `give_exp`/`take_exp` (an XP currency), and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
 | Actions: world | `[connect]` | `[server]`, `[teleport]`, `[give]` | `connect`, `teleport`, `give_item`, `take_item` and `potion`. |
 | Delay and chance | `<delay=>`, `<chance=>` | `[delay]` (nested block) | Kept as action options (`delay:` and `chance:`), plus the `wait` step (§2.2). |
 | Per-player data | meta (PDC, typed), set/add/subtract/switch/remove | session data, persistent `data.yml` (set/add/math/del/clear) | Declared **variables** with local, session, player and server scopes (§3). |
@@ -264,7 +264,8 @@ public interface ConditionType<P> {
   `starts_with`, `matches`, `length`, `lower`, `upper`, `is_number`, `is_player`, `number`,
   `round`, `min`, `max`, `random` and `format_number` cover DeluxeMenus' string, regex, length and
   is-object requirements, and CommandPanels' `random`. Functions are a registry too
-  (`ExpressionFunction`), so addons can add them.
+  (`ExpressionFunction`), so addons can add them. The calling syntax, the parse-time binding and
+  the full built-in list are in §15 (#209).
 
 ### 4.3 Triggers
 
@@ -302,13 +303,15 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 
 | SPI | Used by | Default | Integration |
 |---|---|---|---|
-| `EconomyProvider` (balance, has, withdraw, deposit) | `has_money`, `give_money`, `take_money` | none (the actions fail with "no economy provider", and the editor shows the action as unavailable) | Vault |
+| `CurrencyCatalog` (named currencies, §16: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
 | `InputMethod` | `prompt` (§6.6) | chat, sign, anvil | dialogs (#6) |
 | `ListSource` | the `list` component (§6.7) | online players, a pack's items, a variable list, static `entries:` | addon sources |
 
-Providers are resolved at use, not cached at load, so installing Vault later only needs a reload.
+Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
+is the one provider kind that is content rather than a slot: a currency file names its integration, and
+the integrations are a registry (§16).
 Availability is part of the self-description (`available: false, reason`), which lets the studio
 grey out what the server cannot run.
 
@@ -722,6 +725,8 @@ code below names the class of problem, and every one carries a step path where o
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |
 | Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. |
 | Item and block rules in the node editor | The canvas is resource-agnostic (§8, `AuthoringApi.logic()`). The item studio's rule editor can switch to it. |
+| Currency integrations beyond Vault, XP and the command pair (#213, §16) | An addon registers a `CurrencyIntegration` in its own namespace (`example:coinsengine`, `example:playerpoints`), and a currency file names it. No core change. |
+| The `variable` and `item` currency integrations (§16) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |
 
 ---
 
@@ -905,127 +910,264 @@ creates the `plugin.gui..` packages, and arrives with them.
 
 ---
 
-## 15. Decisions taken in #213 (L7: provider SPIs, adapters, and the money, permission and connect actions)
+## 15. Decisions taken in #209 (L3: expression function calls and built-in functions)
 
-#213 shipped the three provider SPIs of §4.5, the Bukkit default permission provider, the transfer
-packet, the Vault, LuckPerms and BungeeCord-channel adapters, and five actions: `give_money`,
-`take_money`, `give_permission`, `take_permission` and `connect`. Where §4.5 left a choice open, these
-are the choices. The SPI shapes are in [`api.md`](api.md) §3.11.
+#209 binds calls into the expression grammar, puts the function registry behind the parser, and
+ships the built-in set of §4.2. Where §4.2 and §9 left a choice open, these are the choices.
+Each is reversible by the owner.
 
-**The SPI shape**
+**Calling syntax and binding**
 
-1. **Providers take a `UUID`, never a Bukkit handle.** The contracts are `EconomyProvider`,
-   `PermissionProvider` and `ServerTransfer` in `dev.materione.api.logic.provider`. An action resolves
-   the `Player` facet to its UUID and the provider does the rest, so a provider is unit-tested against
-   an in-memory fake, and an adapter is the only code that touches Vault's `OfflinePlayer`.
-2. **Results distinguish the three answers an economy can give.** `EconomyResult` is sealed:
-   `Succeeded(balance)`, `InsufficientFunds(balance)` (the provider must have taken nothing), or
-   `Failed(reason)` (the economy could not answer). `take_money` maps the middle one to a `FAILED`
-   outcome (`insufficient funds: balance X, needs Y`) that `require` (§2.2) can branch on, and the
-   third to its reason verbatim. Permissions and transfer return `ProviderResult`, which is either OK
-   or refused with a reason.
-3. **`available()` is a default method on each SPI, read at use.** Vault answers from its own service
-   registry each time it is asked, so an economy plugin that registers after Vault is picked up without
-   a reload. §14.5's availability rule holds: the action's `availability()` asks the slot, and the
-   vocabulary reads it on each build.
-4. **Temporary grants are two methods, and only one needs expiry.** `grantFor(UUID, node, Duration)`
-   is refused by default and implemented by LuckPerms through its native expiry node. `withGrant(UUID,
-   node, Runnable)` is a default built from `grant` and `revoke`, so every provider gets the scoped form.
-   No action exposes a duration yet; the SPI carries it for the API and for the `run_command as: op`
-   work (below).
+1. **A call is `name(arguments…)`.** Arguments are separated by commas and are full expressions,
+   so a ternary or a nested call is an argument. Zero arguments (`now()`) are allowed. A call is
+   an operand like any other value, so `round(x) >= 2` and `echo(a ? b : c)` both parse.
+2. **Calls bind at parse time, against the live registry.** `ExpressionParser.parse(source,
+   FunctionResolver)` asks the resolver for the function a call names, and the tree holds the
+   resolved `ExpressionFunction`. The engine builds the resolver as `RegistryLogicLookup.functions()`
+   over the `expression-functions` registry, and `RuleParser` hands it to every expression it
+   compiles: each `if:` condition and each parameter the action types read as an expression or a
+   template. `LogicLookup.functions()` defaults to `FunctionResolver.NONE`, so a lookup with no
+   registry rejects every call, and the one-argument `ExpressionParser.parse(source)` keeps its
+   behaviour with no functions. The `behavior` module stays Bukkit-free: the resolver is an
+   interface in `behavior.expr`, and only the plugin supplies the registry.
+3. **An unknown function, or a wrong argument count, is a load error.** Both are reported at
+   parse time with a 1-based character position (`unknown function 'nope' at position 5`) and
+   surface as the existing expression diagnostic, `MTR-0022`. The rule or the template is skipped,
+   and nothing else is. A count outside the description's `minArguments()` to `maxArguments()` is
+   refused; an optional parameter is one whose `required` is false.
+4. **Names.** A bare name is one of Materione's functions: `contains` is `materione:contains`. An
+   addon's function is written with a dot, `example.greet(…)`, because the grammar has no colon,
+   and it resolves as `example:greet`. A dotted name of more than two parts is unknown.
+5. **Templates compile against the registry, and hold the result.** `${…}` in a template is
+   compiled once at rule load into a `Template.Compiled` that the step keeps. The process-wide text
+   cache is not used for a template with calls, so a function that a reload removes cannot be
+   reached through a parse that predates it.
 
-**Slots and registration**
+**Evaluation**
 
-5. **One slot per provider kind, behind `LogicApi.providers()`.** `LogicProviders` holds the economy,
-   the permission provider and the transfer, each as a slot. A new registration replaces the slot and
-   returns a `ProviderRegistration`; closing the handle restores what it replaced, and a handle that
-   has been replaced does not clear its successor. The permission slot falls back to the session
-   default and so is never empty. An owner that disables takes its registrations with it, as the
-   registries do (§14.1).
-6. **Providers are looked up at use, never cached.** An action holds the `LogicProviders` object, not
-   the provider, and asks for the economy each time it runs or reports availability. A late
-   registration therefore needs no reload of the action set; the integration that makes it is the only
-   thing re-run (decision 9).
+6. **A function sees the run.** The evaluator passes the run's `LogicContext` to the function. The
+   `MapLogicContext` attaches itself to its variable tree, so a function reads facets (the player)
+   through the same typed port an action uses. Without a run, the function gets an empty facet view
+   and the same variables.
+7. **Functions are pure, typed and total.** Each returns a value of the kind its description
+   declares. A bad argument never throws: a predicate answers `false`, a value function answers
+   `null`, and the expression goes on. A function that throws anyway is contained as an expression
+   failure (`function 'x' failed`), the same path as a type error. Every number a function returns
+   is a `Double`, whatever the function returned.
+8. **Argument kinds.** Text arguments are a string, or a number or boolean as the engine shows it
+   in an interpolation (`20` is `"20"`). Anything else (null, a list, a map) is not text. Number
+   arguments are a finite number, or text that reads as one (`" 12.5 "`, `"-3e2"`). A boolean is
+   never a number, and neither is null. `number` is the one function that converts text to a
+   number, so the other numeric functions take a value the author has already converted, or a
+   number from the variable tree.
+9. **`random` is the one impure function.** When both bounds are whole numbers (and within 10^15),
+   the result is a whole number in `[min, max]`, both ends included. Otherwise it is a real in
+   `[min, max)`. Reversed bounds are swapped. It is the documented exception to purity in
+   `ExpressionFunction`.
+10. **`matches` is a full match, and it is bounded.** The regular expression must match the whole
+    text (write `.*` at either end for a partial match). The limits are enforced in one place
+    (`RegexGuard`): a pattern longer than **256** characters, a text longer than **1,024**
+    characters, an invalid pattern, and a match that reads more than **1,000,000** characters of
+    the text all answer `false`. The read budget is what stops a catastrophically backtracking
+    pattern: backtracking reads the text again at every step, so a cap on the length of the text
+    alone would not bound the work. A pattern compiles once, and the cache keeps 256 patterns.
+11. **`is_player` reads the run's player and nobody else.** It is plugin-side because its facet
+    (`Facets.PLAYER`) is a Bukkit type. It answers `true` when the argument is the run's player's
+    name (case-insensitive) or UUID. It does not look up other players, so it is a pure read of the
+    run and needs no server call. A run without a player answers `false`.
+12. **Rounding and formatting follow one rule.** `round` and `format_number` round halves away from
+    zero (`round(-2.5)` is `-3`). `round` takes an optional number of places from 0 to 15.
+    `format_number` takes an optional number of decimals from 0 to 10, uses `,` for thousands in the
+    root locale, and shows no decimals by default.
+13. **Text functions count and convert by Unicode.** `length` counts code points, so an emoji is one
+    character. `lower` and `upper` use the root locale, so a result does not depend on the server's
+    language. `equals_ignore_case` compares without locale rules. `trim` removes Unicode whitespace.
 
-**Defaults**
+**The built-in set**
 
-7. **Permissions default to Bukkit attachments, session-only.** `BukkitPermissions` attaches a
-   permission to the player through a plugin-owned `PermissionAttachment`, and drops the attachment map
-   entry when the player quits. `revoke` removes only the grant this provider made. It cannot take a node
-   a permission plugin gives, because only that plugin can change its own data, and the action's
-   outcome is `OK` in that case. The docs of `take_permission` say so.
-8. **Transfer defaults to the 1.20.5+ packet, when a host is configured.** Settings name the target:
-   `transfer_host` (blank by default, so the packet is off), `transfer_port` (`25565`) and
-   `transfer_mode` (`packet`). All three are in the default settings file and in the settings key table
-   of [`plugin.md`](plugin.md) §7.1, with defaults that keep the feature off. With the host blank,
-   `connect` is unavailable, with the reason. The settings golden is regenerated with them.
-   An out-of-range port or a blank host is reported as `MTR-0058` and skipped, never a failed enable.
-   The `connect` step's `server:` argument is the proxy's name for a proxy; the packet goes to the
-   configured host and ignores it. This is the one place an author's argument is informational, and it
-   is in the action's own description.
+| Function | Arguments | Returns | Bad input |
+|---|---|---|---|
+| `contains(text, part)` | text, text | boolean | `false` |
+| `equals_ignore_case(a, b)` | text, text | boolean | `false` |
+| `starts_with(text, prefix)` | text, text | boolean | `false` |
+| `ends_with(text, suffix)` | text, text | boolean | `false` |
+| `matches(text, pattern)` | text, regex (full match, bounded, decision 10) | boolean | `false` |
+| `length(text)` | text | number (code points) | `null` |
+| `lower(text)` | text | text | `null` |
+| `upper(text)` | text | text | `null` |
+| `trim(text)` | text | text | `null` |
+| `is_number(value)` | any | boolean | `false` |
+| `is_player(name)` | text (a player name or UUID) | boolean (the run's player only) | `false` |
+| `number(value)` | any | number | `null` |
+| `round(value[, places])` | number, optional places 0–15 | number (halves away from zero) | `null` |
+| `floor(value)` | number | number | `null` |
+| `ceil(value)` | number | number | `null` |
+| `min(a, b, …)` | one or more numbers | number | `null` |
+| `max(a, b, …)` | one or more numbers | number | `null` |
+| `abs(value)` | number | number | `null` |
+| `random(min, max)` | number, number | number (whole when both bounds are whole) | `null` |
+| `format_number(value[, decimals])` | number, optional decimals 0–10 | text (`1,234.50`) | `null` |
 
-**Adapters and the soft-depend gate**
+**Limits, and what was left out**
 
-9. **`Integrations` is the only guarded entry point, and it decides from the enabled state.** Vault
-   provides the economy when it is enabled, and the permission provider when LuckPerms is not enabled
-   (LuckPerms wins when both are). The BungeeCord channel is chosen by setting, `transfer_mode:
-   bungeecord`, not by detecting a plugin, because the channel is a contract the proxy answers, not a
-   plugin the server has. `Integrations` refreshes at start, on every `/materione reload` and content
-   reload, and whenever Vault or LuckPerms enables or disables.
-10. **An absent plugin loads nothing; a present but unusable one is reported and skipped.** Each adapter
-    is constructed only inside the branch that checked `isPluginEnabled` for its plugin, so the JVM does
-    not load Vault or LuckPerms classes when they are absent. Each adapter's constructor also loads its
-    optional API type (`Economy.class.getName()`), so an incompatible or half-installed plugin fails
-    inside the gate's `try`, not later inside an action. That failure is `MTR-0058` (plugin.md §5),
-    a warning, and the server keeps the default provider. The `IntegrationsGuardTest` proves both the
-    absent case (nothing registered, no diagnostic) and the enabled-but-unloadable case.
-11. **`paper-plugin.yml` declares both as soft dependencies with `join-classpath: true`.** Without
-    `join-classpath` Paper would not expose Vault's or LuckPerms' classes to Materione's classloader,
-    so an installed plugin would still look absent to the adapters. `required: false` keeps the server
-    bootable without either.
+14. **No new diagnostic code.** A bad call is an expression error, so it uses `MTR-0022`, and
+    plugin.md §5 is unchanged.
+15. **The vocabulary carries the built-ins.** `api.logic().vocabulary().functions()` lists all
+    twenty, each with its self-description and its registration owner (`materione`). The
+    editor's demo snapshot (`fixtures/golden/editor-demo-snapshot.json`) records editor operations,
+    not the vocabulary, so it does not change.
+16. **No QA catalog entry.** Functions have no player-visible behaviour of their own. Their effect
+    shows only through a rule or a message that uses them, and those are covered by the rule-parser
+    and function tests here. The catalog entry arrives with the first condition or flow that makes
+    a call visible to a player (L4).
 
-**Threading and categories**
+---
 
-12. **Money runs `GLOBAL`; permissions and `connect` run `PLAYER_REGION`.** Vault and the economies behind
-    it are not region-safe, so they run on the global thread (the main thread on Paper). The Bukkit
-    default attachment and the transfer both act on the player, so they run on the player's thread.
-    LuckPerms writes asynchronously and does not care, which is why one declared threading serves all
-    providers.
-13. **Categories follow the issue: `economy` for the money actions, `server` for the permission and
-    `connect` actions.** Permission nodes are server state (who may do what), and the connect step moves
-    the player between servers, so neither is `player`.
+## 16. Decisions taken in #213 (L7: provider SPIs, named currencies, the money, permission and connect actions)
 
-**Parameters and outcomes**
+#213 ships the provider SPIs of §4.5, the **named-currency** content type, three built-in currency
+integrations, the Vault, LuckPerms and BungeeCord adapters, the Bukkit default permission provider, the
+transfer packet, five actions, and two expression functions. The currency model follows the owner's
+ItemsAPI currency system; the XP, command-pair and Vault integrations are adapted from that code with
+the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in [`api.md`](api.md) §3.11.
 
-14. **Amounts and nodes are checked at load.** `amount` is required, finite, above 0 and at most
-    `1.0E12`, which is a guard against a typo, not a provider limit. `permission` must match dot-separated
-    segments of letters, digits, dashes, underscores and `*`. Both are shared in `plugin.logic`
-    (`ProviderParams`), because one action class may not depend on another (R11).
-15. **The failure reasons an author sees are fixed strings.** `no economy provider`, `no server
-    transfer`, `event has no player`, and `insufficient funds: balance …, needs …`. The unavailable
-    reasons are sentences the editor shows. Tests pin them, because the trace (§7.6) and the QA catalog
-    read them.
+**Currencies are content**
 
-**Deferred, and why**
+1. **A currency is a file in `currencies/`, under its pack's namespace.** The `currency` content type
+   (`dev.materione.content.currency.CurrencyType`) parses `shop:gems` from `currencies/gems.yml`. Its own
+   keys are `integration` (required), `display_name` (defaults to the id's name), `symbol` (blank by
+   default) and `decimals` (0 to 6, default 2). Every other key belongs to the integration and is kept as
+   authored, so the file round-trips losslessly and the integration reads its own keys at bind time.
+2. **Money is runtime state, so nothing is emitted to the pack.** The type's `compile` is a no-op. The
+   defined currencies travel as a runtime view (`RuntimeCurrencies`) built by the same apply that builds
+   items and sounds, and they swap with it (D6). The catalog never stores a balance.
+3. **Quarantine is `MTR-0062`** (plugin.md §5): a file that does not parse (no integration, a bad
+   `decimals`), a currency in the reserved `materione` namespace, or an integration that rejects the
+   currency's keys when bound at apply. The rest of the pack loads. An integration that is **not
+   installed** keeps the currency, which then reports unavailable at use, with the reason; no reload is
+   needed once the plugin arrives.
+4. **The built-in `materione:money` always exists**, bound to `vault`, with no file. The
+   `default_currency` setting (default `materione:money`) names the currency the money actions use when
+   they name none. A value that names nothing defined falls back to `materione:money`.
 
-16. **`run_command as: op` still uses the operator flag, not the permission provider.** §4.5 names it as a
-    user of `PermissionProvider`. Changing it touches the `GLOBAL` runner and the console path that
-    #208 owns, so it moves there. The SPI is ready for it.
-17. **No `has_money` condition, no per-player target, and no duration on the permission actions.** The
-    issue scopes the actions to give and take. `has_money` is a condition (L4, #210). A target other than
-    the run's player and a `duration:` parameter are additive and can be added without changing the SPI.
-18. **In-game money and permission flows are not in the QA catalog yet.** The catalog entry
-    `logic.providers-unavailable-without-vault` proves the boot-time state on a server without Vault.
-    A catalog entry that pays a player through Vault needs a probe server with Vault and an economy, which
-    the probe does not provision. The fake-provider and harness tests carry the logic until then.
+**The SPI**
 
-**Dependencies (compileOnly, not shaded).** Vault API `com.github.MilkBowl:VaultAPI:1.7.1`, resolved from
-JitPack through a repository filtered to that group (settings). Its pom declares no license and its
-Bukkit dependency is `provided`, so nothing transitive comes in. LuckPerms API `net.luckperms:api:5.4`,
-MIT, from Maven Central; its pom has no runtime dependencies. Both are supplied by the server at runtime
-and never appear in the shaded jar. [`build.md`](build.md) §1 and §4 carry the same facts.
+5. **`CurrencyIntegration` is a registry entry.** It lives in the `currency-integrations` registry
+   (`RegistryKeys.CURRENCY_INTEGRATIONS`), registered through `LogicApi.currencyIntegrations()` like
+   actions. `bind(ParamReader config)` is pure over the currency's mapping: it returns a `CurrencyBackend`
+   or rejects with `IllegalArgumentException`. It runs at apply (for quarantine) and at each use (so an
+   integration that arrives later answers without a reload).
+6. **`CurrencyBackend` answers for one bound currency.** It reports `availability()` with its reason, and
+   `balance`, `has`, `withdraw` and `deposit` return the sealed `EconomyResult` (Succeeded, InsufficientFunds,
+   Failed). **A withdrawal the balance cannot cover takes nothing**; that is a contract, and it is stronger
+   than ItemsAPI's void withdraw, which could not say so.
+7. **`CurrencyCatalog` is what the actions read** (`LogicProviders.currencies()`): `all`, `get`, `resolve`,
+   `defaultCurrency`, `backend` and `availability`. The live implementation,
+   `MaterioneCurrencyCatalog`, is replaced after every successful swap (`observeSwaps`), so a removed
+   currency leaves with the reload that removed it.
+8. **Name resolution.** A qualified id (`shop:gems`) matches exactly. A bare name (`gems`) matches
+   `materione:` first, and otherwise the one currency of that name in any pack; two packs defining the same
+   bare name make it ambiguous and it resolves to nothing. **Deviation from the design note:** the spec
+   asked for a bare name to resolve in the *resource's own pack* first. The rule parser binds an action's
+   parameters without the rule's owner, so the action cannot know its pack at load. Threading the owner
+   through `RuleParser`'s bind is the follow-up; until then a bare name is matched by name across packs, and
+   a clash must be qualified.
+9. **Unknown names fail at run time, not at load.** **Deviation from the design note:** the spec asked for
+   an unknown currency to be rejected at load as `MTR-0057`. The currencies a reload defines are published
+   by the same apply that binds the rules, after the rules bind, so a load-time check would reject a rule
+   that names a currency defined in the same reload. The step fails with `unknown currency <name>` instead,
+   and the load-time check is the follow-up: publish the currency view before the rule bind, then validate.
 
-**For #212 and #208.** `BuiltinLogic.providerActions(LogicProviders)` is a separate block from the six
-M2 actions and from #212's additions. Its registrations are appended in `BuiltinLogic.register`, so the
-two streams touch different lines. Actions in `plugin.logic.action` depend only on the API and on
-`ProviderParams`.
+**The built-in integrations**
+
+10. **`xp`** (`unit: points | levels`, default `points`). Ported from ItemsAPI's XP integration. Points are
+    the player's total experience: the server keeps that total, so the port reads `getTotalExperience()`
+    instead of recomputing it from the level and the progress bar, which gives the same value. Amounts are
+    whole units. **Folia:** the XP and command integrations touch the player from the global thread, which
+    is correct on Paper; on Folia they need the player's region. That is a follow-up before Folia is claimed
+    for money.
+11. **`custom`** (`deposit-command`, `withdraw-command`, `balance-placeholder`, all required). Ported from
+    ItemsAPI's custom integration. The balance is read through PlaceholderAPI, which the integration reaches
+    by **reflection**, so Materione takes no compile dependency on it. Without PlaceholderAPI the currency
+    is unavailable, with that reason. A leading `/` is stripped; `{player}` and `{amount}` are filled in; the
+    command runs as the console. A withdrawal checks the balance first. A command that does not dispatch is
+    `Failed`. A deposit reports the expected balance (the placeholder is authoritative on the next read).
+12. **`vault`** is registered as `materione:vault` **only while Vault is enabled**, by `Integrations`, so a
+    server without Vault never loads its classes. It takes no keys: the economy Vault exposes is the currency.
+    Ported from ItemsAPI's Vault integration, with one change: ItemsAPI cached the `Economy` at construction,
+    and this resolves it through Vault's service registry at each call, so an economy registered after Vault
+    is picked up without a reload.
+13. **Reserved seams, not implemented.** `variable` (a declared player number variable, #211) and `item` (a
+    count of an item in the inventory) are reserved integration names. CoinsEngine, PlayerPoints and other
+    shop plugins are addon integrations (§11), not built in.
+
+**Actions and functions**
+
+14. **`give_money` and `take_money`** take `amount` (the shorthand, above 0, at most 1e12) and an optional
+    `currency:`. Threading is `GLOBAL` and the category is `economy`. `take_money` fails with `insufficient
+    funds: balance X, needs Y` and takes nothing, so a flow branches on it with `require` (§2.2). Each
+    fails with the catalog's reason when its currency cannot be used. Availability is that of the default
+    currency.
+15. **`balance(currency)`** reads the run's player's balance now, and is null without a player or when the
+    currency cannot answer. It is **not pure** (it reads live state, as `random` draws), so it is documented
+    as such. **`format_currency(amount, currency)`** is pure over the currency's definition: the symbol before
+    the number, thousands separators, the currency's decimals, and a sign before the symbol (`-G$3`). Both are
+    registered like the #209 functions, through the same function registry.
+
+**Settings, markers and diagnostics**
+
+16. **Settings.** `default_currency` (default `materione:money`), `transfer_host` (blank: the packet is off),
+    `transfer_port` (`25565`) and `transfer_mode` (`packet`, or `bungeecord`). All four are in the default
+    settings file and the key table of [`plugin.md`](plugin.md) §7.1, with defaults that keep the feature
+    off, and the settings golden is regenerated with them.
+17. **The boot marker** is `MATERIONE-LOGIC-OK currency=<default id> available=<bool> transfer=<yes|none>
+    unavailable=<action ids|none>` (build.md §7). The harness asserts it on a workspace with no Vault:
+    `materione:money` is unavailable, and `give_money`, `take_money` and `connect` report unavailable. The
+    server boots clean.
+
+**Adapters and the gate**
+
+18. **Permissions and transfer are single slots** (`LogicProviders.permissions()`, `transfer()`), unchanged
+    from the first #213 design: the session-only Bukkit default; LuckPerms when enabled (native expiry),
+    else Vault's permission service when Vault runs; the transfer packet when `transfer_host` is set, else the
+    BungeeCord plugin channel when `transfer_mode: bungeecord`.
+19. **`Integrations` is the only guarded entry point.** It takes the `LogicApi`, so it can register the Vault
+    currency integration as well as the provider slots. An absent plugin loads no class. An enabled plugin
+    whose API cannot load is reported as `MTR-0061` and skipped. The gate refreshes on start, on every
+    reload, and when Vault or LuckPerms enables or disables.
+20. **`paper-plugin.yml`** declares Vault and LuckPerms as optional server dependencies with
+    `join-classpath: true`, so Materione's classloader can see them when present.
+
+**Dependencies and licences (compileOnly, never shaded)**
+
+21. **Vault API** `com.github.MilkBowl:VaultAPI:1.7.1`, resolved from JitPack through a settings repository
+    filtered to that group. The upstream repository's licence is **LGPL-3.0** (as the reviewer stated; the
+    pom itself declares none, so verify before any shaded use). Compile-only and not shaded, so Materione
+    takes on no distribution obligation.
+22. **LuckPerms API** `net.luckperms:api:5.4`, MIT, Maven Central, no runtime dependencies.
+23. **PlaceholderAPI** is **not** a dependency at all: the custom integration reaches it by reflection.
+24. **ItemsAPI** is not a dependency. Code adapted from it is attributed in the file headers, under the
+    owner's grant of rights.
+
+**Threading**
+
+25. Money actions run `GLOBAL`, permissions and `connect` run `PLAYER_REGION`, as in the first design. The
+    XP and command integrations are `GLOBAL`-safe on Paper, see item 10 for Folia.
+
+**Deferred**
+
+26. Pack-first bare-name resolution and load-time currency validation (items 8 and 9); the Folia region hop for
+    XP and command currencies (item 10); the `variable` and `item` integrations (item 13); `has_money` (#210,
+    which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
+    as: op` still uses the operator flag, not the permission provider (#208).
+27. **For #211:** the PlaceholderAPI expansion must expose `%materione_balance_<pack>_<id>%` (the raw balance)
+    and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). The expansion is #211's work.
+28. **For #210:** `has_money` takes `currency:` with the same resolution as the actions, and reads through the
+    catalog like `take_money` does.
+29. **In-game money flows are not in the QA catalog.** `logic.providers-unavailable-without-vault` proves the
+    boot-time state without Vault. A catalog entry that pays through Vault needs a probe server with Vault and
+    an economy, which the probe does not provision.
+
+**For #208 and #212.** `BuiltinLogic.providerActions`, `BuiltinLogic.currencyIntegrations` and
+`BuiltinLogic.currencyFunctions` are separate blocks in `BuiltinLogic`, appended beside the six M2 actions and
+#212's additions, so the streams touch different lines.

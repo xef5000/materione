@@ -41,11 +41,18 @@ public interface LogicApi {
     LogicRegistry<ExpressionFunction> functions();
 
     /**
-     * The provider slots the economy, permission and transfer actions run against (logic.md §4.5):
-     * the active economy, permission provider and server transfer, each replaceable by an integration
-     * or an addon. Resolved at use, never cached by an action.
+     * The provider slots the money, permission and transfer actions run against (logic.md §4.5, §16):
+     * the currency catalog, the permission provider and the server transfer. Resolved at use, never
+     * cached by an action.
      */
     LogicProviders providers();
+
+    /**
+     * The {@code currency-integrations} registry: how a currency reaches its money (Vault, XP, a command
+     * pair, or an addon's own) (logic.md §16). Register here to make a new integration name available to
+     * currency files.
+     */
+    LogicRegistry<dev.materione.api.logic.provider.CurrencyIntegration> currencyIntegrations();
 
     /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the

@@ -9,23 +9,33 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **Economy, permission and server-transfer actions, backed by provider SPIs (logic.md §4.5, #213).**
-  Five new actions: `give_money: 100` and `take_money: 100` (the latter fails with `insufficient
-  funds` and takes nothing), `give_permission: example.fly` and `take_permission: example.fly`, and
-  `connect: lobby`. Each reports itself unavailable, with the reason, when nothing can run it: the
-  money actions without an economy, `connect` without a transfer. Permissions always work: they
-  default to a session-only Bukkit grant.
-- **Vault and LuckPerms are used when installed.** Vault provides the economy and, when LuckPerms
-  is absent, the permission service; LuckPerms provides permissions with native expiry. Both are
-  optional server dependencies. Installing either then running `/materione reload` (or restarting)
-  is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
+- **Named currencies (logic.md §16, #213).** A currency is a file in `currencies/`, for example
+  `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
+  balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
+  available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a
+  command pair with a PlaceholderAPI balance). Addons register more. The integration code is adapted
+  from ItemsAPI's currency system, with the owner's permission; ItemsAPI is not a dependency.
+- **`give_money`, `take_money` with `currency:`, and two functions.** `give_money: 100` and
+  `take_money: 250` use the default currency (the `default_currency` setting, `materione:money` unless
+  changed); `take_money` fails with `insufficient funds` and takes nothing. `balance(currency)` reads a
+  player's balance and `format_currency(amount, currency)` writes it with the currency's symbol and
+  decimals.
+- **Permission and transfer actions.** `give_permission: example.fly`, `take_permission: example.fly`,
+  and `connect: lobby`. Each reports itself unavailable, with the reason, when nothing can run it.
+  Permissions always work: they default to a session-only Bukkit grant.
+- **Vault, LuckPerms and the BungeeCord channel are used when installed.** Vault provides the built-in
+  currency and, when LuckPerms is absent, the permission service; LuckPerms provides permissions with
+  native expiry. Both are optional server dependencies. Installing one then running `/materione reload`
+  (or restarting) is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
 - **Server transfer** sends a player by the 1.20.5+ transfer packet, to the `transfer_host` and
   `transfer_port` in `settings.yml`, or by the BungeeCord plugin channel (BungeeCord and Velocity)
   when `transfer_mode: bungeecord` is set. The three keys (`transfer_host`, `transfer_port`,
   `transfer_mode`) are in the default settings file with defaults that keep the feature off.
-- `MTR-0058`: an optional integration could not install its provider and was skipped (a warning).
-- Plugin API: `LogicApi.providers()` and the `dev.materione.api.logic.provider` types, for addons
-  that supply an economy, a permission provider or a transfer.
+- `MTR-0061`: an optional integration could not install its provider and was skipped (a warning).
+  `MTR-0062`: a currency file was quarantined (a warning).
+- Plugin API: `LogicApi.providers()`, `LogicApi.currencyIntegrations()` and the
+  `dev.materione.api.logic.provider` types, for addons that supply a currency integration, a
+  permission provider or a transfer.
 
 ### Changed
 
@@ -48,6 +58,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Expressions can call functions, and there are twenty built-in ones (logic.md §4.2, §15).**
+  `contains(text, part)`, `matches(text, pattern)`, `length`, `lower`, `upper`, `trim`,
+  `starts_with`, `ends_with`, `equals_ignore_case`, `is_number`, `is_player`, `number`, `round`,
+  `floor`, `ceil`, `abs`, `min`, `max`, `random(min, max)` and `format_number` work in every `if:`
+  condition and in the templates and values of actions. A call is bound when the rule loads
+  against the registry, so an unknown function or a wrong argument count skips that rule with
+  `MTR-0022` and a position. Functions never fail on a bad argument: a predicate is `false`, a value
+  is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
+  read budget, so a pattern cannot stall the server. Addons register their own functions through
+  `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
 - **Addons can register behavior actions, conditions, triggers and expression functions
   (`MaterioneAPI.logic()`, logic.md §4, api.md §3.11).** The six built-in actions (`run_command`,
   `message`, `sound`, `potion`, `cancel`, `set_var`) are now typed `ActionType`s registered through

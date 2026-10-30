@@ -1,6 +1,8 @@
 package dev.materione.plugin.logic;
 
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.provider.Currency;
+import dev.materione.api.logic.provider.CurrencyCatalog;
 import java.util.regex.Pattern;
 
 /**
@@ -32,6 +34,24 @@ public final class ProviderParams {
             throw new IllegalArgumentException("amount must be above 0");
         }
         return value;
+    }
+
+    /**
+     * The optional {@code currency} of a money step: the authored name, or null when omitted (the default
+     * currency). Shape only; whether the name is defined is answered when the step runs, because the
+     * currencies a pack defines are live state (logic.md §16, the ordering note there).
+     */
+    public static String currency(ParamReader params) {
+        return params.optionalText("currency").orElse(null);
+    }
+
+    /**
+     * The currency a step means: the one named, or the default when {@code authored} is null.
+     *
+     * @return the currency, or null when the name matches nothing defined
+     */
+    public static Currency resolve(CurrencyCatalog catalog, String authored) {
+        return authored == null ? catalog.defaultCurrency() : catalog.resolve(authored).orElse(null);
     }
 
     /**
