@@ -1542,6 +1542,136 @@ side). The surface is [`api.md`](api.md) §3.12, the wire is [`web.md`](web.md) 
     split into `LogicAuthoringApiImpl` (reads and writes), `LogicEditor` (the edits), `LogicTree` (paths), `StepShape` (the kind
     checks), `LogicViews` (the typed view) and `LogicRefusal` (the refusal).
 
+## 20. Decisions taken in #211 (L5: declared variables, stores and `set_var` v2)
+
+#211 shipped §3: the `variable` content type, the two stores behind a port, the scoped reads of
+`vars.*`, `set_var` v2, the PlaceholderAPI expansion, `/materione var` and `LogicApi.variables()`. Where §3
+left a choice open, these are the choices. Each is reversible by the owner. The API is
+`dev.materione.api.logic.variable`; the engine's reads are in `MapLogicContext`; the stores and the command
+are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.VarCommand`.
+
+**The declaration**
+
+1. **The content type is `variable`, read from `variables/`.** It follows the other content types (singular
+   name, plural directory), so the registry id is `materione:variable`. One file may declare several variables,
+   one per top-level key, as every content type does. It compiles to no pack output: the declaration is runtime
+   state in the shadow, published as the `RuntimeVariables` view (swapped with the other registries), and the
+   value lives in the store. A definition with an unknown scope or type, or a `default:` of the wrong type, is
+   quarantined like any other malformed resource.
+2. **A declaration is `{id, scope, type, default, description}`.** `scope` is `player` or `server`, `type` is
+   `number` (always a finite `double`), `string` or `boolean`. An omitted `default:` is `0`, empty text or `false`.
+   The default is coerced to the type when the declaration is built, so every read of a never-written variable
+   returns a value of the declared type. Unknown keys stay in the authored file (lossless, §9 rule 6).
+
+**Scopes and the spelling of a reference**
+
+3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
+   so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error).
+4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
+   session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
+   and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
+   stored. A scope that does not match the declaration, or an undeclared name, reads as absent (`null`).
+5. **Writes.** A `set_var` names its target with the same path as the read, without the `vars.` root: `count`
+   (a local, always), `local.count`, `session.page`, `player.coins` (pack = the resource's own pack),
+   `player.shop.coins`, `server.shop.season`, or `shop:coins` (scope from the declaration). A bare name is always
+   local, so a typo never creates a stored key; only a qualified spelling can reach a persistent variable.
+6. **A deliberate narrowing of §3.2.** §3.2 says a bare name resolves within the resource's own pack. That holds
+   for `set_var` (`player.coins`; the parse knows the pack, see decision 9) and for declarations, but **not for
+   expression reads**: an expression is parsed without its resource, so `vars.player.coins` is absent and the
+   read spells the pack (`vars.player.shop.coins`). Making reads pack-relative would need the compile environment
+   in the expression compiler; it is a reversible follow-up, not a change of the spelling of a stored key.
+
+**`set_var` v2**
+
+7. **Shape.** `{var, op, value}`; `op` is `set` (the default), `add`, `subtract`, `multiply`, `toggle`, `remove`
+   or `reset`. The M2 shape `{name, value}` still works and writes a run-local with `set`. `value` is required for
+   the four ops that take one, and rejected for `toggle`, `remove` and `reset`.
+8. **Two kinds of error, decided at load.** A name that is not declared, or a scope that does not match, is
+   `MTR-0063`. A literal that does not fit the type (`"lots"` into a number, `true` into a string), or an op the
+   type does not take (`toggle` on a number, `add` on a boolean), is `MTR-0064`. Both skip the step only. The
+   type chooses the code by throwing `ParseRejection` (a new `api.logic` type, a subclass of
+   `IllegalArgumentException` that names its `DiagnosticCode`); `ActionCompiler` reports that code, and any other
+   parse failure stays `MTR-0057`. A template or expression is typed only when it runs, so it is checked then.
+9. **The parse reads the resource's pack and declarations through `CompileEnvironment`.** `ParamReader` carries it
+   (`ParamReader.environment()`), and the flow compiler supplies it from the owner's pack and the lookup's
+   `variable(id)`. The pipeline's shadow build parses every `variable` resource in a pre-pass, before items, rules and
+   flows, so a rule may name a variable declared in a file that sorts after it. `LogicLookup.variable(id)` defaults
+   to empty, so a lookup with no declarations rejects every qualified persistent name.
+10. **Runtime semantics.** `set` coerces the value to the declared type (a template's text becomes a number when
+    it reads as one), and a value that does not fit fails the step with a reason. Arithmetic works on numbers and
+    coerces text the same way; a run-local that was never set counts as `0` (and `false` for `toggle`); a result
+    that is not finite fails. `remove` and `reset` both clear the stored value, so a persistent read returns the
+    default again (a local is removed). The step's effect is visible to the rest of the same run at once, because
+    the run's reads go to the same store.
+11. **Threading.** `threading()` stays `ANY` (the headline value the vocabulary lists). `threading(P)` returns
+    `PLAYER_REGION` for a player-scope target, so a write to a player's container runs on that player's thread, and
+    `ANY` for locals, sessions and server variables (the server store is synchronised).
+
+**The stores**
+
+12. **One port per scope.** `VariableStore` (api) is `read(declaration, player)` and `write(declaration, player, value)`
+    (null clears), with the scope on the port. `VariableBinding` (api) is the run's view: the declarations, the stored
+    value and the write, for the run's player (player scope) and the server (server scope).
+    `LogicContext.variables()` hands it out, defaulting to `VariableBinding.NONE`, which declares nothing and refuses
+    every write, so a fake context in a test sees absent variables. The cross-server adapters (#25) implement
+    `VariableStore` for their scope and touch nothing else.
+13. **The player store is the persistent data container.** `PdcVariableStore` keeps each value under
+    `materione:var.<pack>.<key>` with the type the declaration gives it (`DOUBLE`, `STRING` or `BOOLEAN`). It looks the
+    container up per call, so an offline player (no container) reads absent and refuses writes (`MTR-0065`); the admin
+    command needs an online player. A value stored with a type the declaration no longer has reads as absent.
+14. **The server store is one JSON file, written atomically and debounced.** `storage/variables.json` holds
+    `{"<pack:key>": value}`. A write updates memory and marks the store dirty; the service flushes on a 5-second
+    debounce (a global-scheduler loop, started with `VariableService.autoFlush`) and on disable. A flush writes a
+    temporary sibling and moves it over the file (`ATOMIC_MOVE`, with a plain replace when the filesystem refuses it).
+    A file that does not parse is moved aside as `variables.json.corrupt`, a warning is logged and the store starts
+    empty. A failed flush stays dirty and is retried on the next tick (`MTR-0065`).
+15. **Recovery is about the file, never about the declarations.** Removing a declaration from a pack leaves its stored
+    value in the store; it is unreachable until the declaration returns. Nothing is deleted.
+
+**Read and write APIs**
+
+16. **`LogicApi.variables()` (`VariablesApi`).** `declarations()`, `declaration(id)`, `get(id, player)` and
+    `set(actor, id, player, value)`. A write checks `materione.var` first (`MTR-0055`), then the id and the type,
+    then the holder, and returns `ApiResult<Object>` carrying the effective value. Reads never check the actor.
+    `get` for an offline player reads the default (the holder is not reachable, and the read does not claim otherwise).
+17. **`/materione var get|set|list <player> [<var>] [<value>]`, permission `materione.var`.** `<var>` is `pack:key`,
+    or a bare key when exactly one declaration has it. A server variable ignores `<player>`, so write `-`. `list`
+    takes an optional player. The command calls the API, so it uses the same checks as a flow.
+
+**PlaceholderAPI**
+
+18. **The expansion grammar is in `integrations`, the class is in `plugin`.** `VariablePlaceholders` (pure, unit-tested)
+    resolves `var_<pack>_<key>`, `var_<pack>_<key>_<player>`, `gui_open` and `gui_last`. The `PlaceholderExpansion`
+    subclass must extend PlaceholderAPI's class, so it lives in `plugin` (`MaterionePlaceholders`), and is installed only
+    when PlaceholderAPI is enabled (`installIfPresent`). `paper-plugin.yml` declares PlaceholderAPI as an optional
+    dependency loaded before Materione. The compile dependency is `me.clip:placeholderapi` (compile only, not transitive),
+    pinned in the version catalog and fetched from the extendedclip repository through a content filter.
+19. **Declared ids split the placeholder.** `<pack>_<key>` may contain underscores on either side, so the resolver takes
+    the longest declared prefix; what follows is the player name. A name no player is known by, and an undeclared id,
+    resolve to null, which leaves the token as PlaceholderAPI found it.
+20. **Seams left open.** `GuiSessionPort` (api) answers `%materione_gui_open%` and `%materione_gui_last%`; it is empty
+    until the GUI runtime (#214) registers one with `VariableService.guiSessions`. The `balance` placeholders for
+    currencies (#233) are reserved and resolve to null; #233 adds its branch beside `var_` and does not touch the
+    resolver's grammar.
+
+**Diagnostics and the rest**
+
+21. **New codes.** `MTR-0063` (undeclared or reserved name, error, load), `MTR-0064` (value or op does not fit the type,
+    error, at load for literals and at run time for computed values), `MTR-0065` (a persistent variable could not be read
+    or written, warning, run, rate-limited). The pinned count in `DiagnosticCodesTest` is 65.
+22. **Fixtures.** `fixtures/packs/corpus/variables/qa.yml` declares two variables for the QA suite. It adds no item, model
+    or texture, so no pinned count changes. `fixtures/golden/editor-demo-snapshot.json` is regenerated: the `set_var`
+    schema changed, and the `variable` type is listed.
+
+**Not in this PR (by design).** Cross-server adapters (#25), the GUI session that fills `VariableFacets.SESSION` and the
+GUI port (#214), currencies and their placeholders (#233), and the QA rule that sets a variable from a click (it needs the
+GUI or a QA rule fixture; the catalog suite drives the command and the store instead).
+
+**Open question for review.** On Folia, a player's container may only be read on that player's region thread. Writes are
+placed there by `threading(P)`. A pure read in an expression, or a placeholder request, reads the container from the
+thread that evaluates it. On Paper this is one thread and is safe. On Folia it is a hazard that needs either a hop for
+reads or a per-run cache of the values a run reads. Left open here; the decision belongs with the Folia pass.
+
 ## 21. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
 
 #214 shipped the GUI runtime's core (§6.1 stages 1, 2, 5 to 8, §6.2, §5.2 for GUIs). Every later GUI issue

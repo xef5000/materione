@@ -313,6 +313,28 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode FLOW_UNKNOWN_CONTEXT_ROOT =
             new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
 
+    /**
+     * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a
+     * scope (logic.md §3.2, §20). The step is skipped at load, so a typo never creates a key.
+     */
+    public static final DiagnosticCode VARIABLE_UNDECLARED =
+            new DiagnosticCode("MTR-0063", Severity.ERROR, "Undeclared or reserved variable name");
+
+    /**
+     * A value or operation does not fit the declared type of its variable (a string into a number,
+     * {@code toggle} on a number). Reported at load when the value is a literal; at run time the step
+     * fails when a computed value does not fit.
+     */
+    public static final DiagnosticCode VARIABLE_TYPE_MISMATCH =
+            new DiagnosticCode("MTR-0064", Severity.ERROR, "Value does not fit the variable's declared type");
+
+    /**
+     * A persistent variable could not be read or written at run time: the player holding it is gone,
+     * or the server store could not be written. Rate-limited; the action fails and nothing else changes.
+     */
+    public static final DiagnosticCode VARIABLE_STORE_FAILED =
+            new DiagnosticCode("MTR-0065", Severity.WARN, "Variable store could not be read or written");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -375,7 +397,10 @@ public final class DiagnosticCodes {
             CURRENCY_REJECTED,
             FLOW_CALL_INVALID,
             FLOW_RUN_ABORTED,
-            FLOW_UNKNOWN_CONTEXT_ROOT);
+            FLOW_UNKNOWN_CONTEXT_ROOT,
+            VARIABLE_UNDECLARED,
+            VARIABLE_TYPE_MISMATCH,
+            VARIABLE_STORE_FAILED);
 
     private DiagnosticCodes() {}
 

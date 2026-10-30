@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import dev.materione.api.logic.variable.CompileEnvironment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -33,10 +34,12 @@ public final class ParamReader {
 
     private final Map<String, Object> params;
     private final ExpressionCompiler compiler;
+    private final CompileEnvironment environment;
 
-    private ParamReader(Map<String, Object> params, ExpressionCompiler compiler) {
+    private ParamReader(Map<String, Object> params, ExpressionCompiler compiler, CompileEnvironment environment) {
         this.params = params;
         this.compiler = compiler;
+        this.environment = environment;
     }
 
     /**
@@ -47,9 +50,24 @@ public final class ParamReader {
      * @throws IllegalArgumentException when a value has an unsupported type
      */
     public static ParamReader of(Map<String, ?> params, ExpressionCompiler compiler) {
+        return of(params, compiler, CompileEnvironment.NONE);
+    }
+
+    /**
+     * A reader over {@code params} that also knows the resource the step belongs to (its pack and
+     * declared variables, logic.md §3.2). The engine passes its own; a type reads it through
+     * {@link #environment()} to check a reference at load.
+     */
+    public static ParamReader of(Map<String, ?> params, ExpressionCompiler compiler, CompileEnvironment environment) {
         Objects.requireNonNull(params, "params");
         Objects.requireNonNull(compiler, "compiler");
-        return new ParamReader(immutableMap(params), compiler);
+        Objects.requireNonNull(environment, "environment");
+        return new ParamReader(immutableMap(params), compiler, environment);
+    }
+
+    /** The resource the step belongs to: its pack and the variables it can see; never null. */
+    public CompileEnvironment environment() {
+        return environment;
     }
 
     /** A reader with literal-only templates ({@link ExpressionCompiler#LITERAL}); for unit tests. */
@@ -217,7 +235,7 @@ public final class ParamReader {
             throw missing(key);
         }
         if (params.get(key) instanceof Map<?, ?> map) {
-            return new ParamReader(stringKeys(map), compiler);
+            return new ParamReader(stringKeys(map), compiler, environment);
         }
         throw new IllegalArgumentException(key + " must be a mapping");
     }
@@ -235,7 +253,7 @@ public final class ParamReader {
             if (!(entry instanceof Map<?, ?> map)) {
                 throw new IllegalArgumentException(key + " must contain mappings");
             }
-            result.add(new ParamReader(stringKeys(map), compiler));
+            result.add(new ParamReader(stringKeys(map), compiler, environment));
         }
         return List.copyOf(result);
     }

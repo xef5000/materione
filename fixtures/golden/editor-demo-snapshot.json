@@ -535,24 +535,56 @@
           "available": true,
           "category": "data",
           "deferred": false,
-          "description": "Stores a value for the rest of this event chain",
+          "description": "Stores a value in a run-local, session or declared player or server variable",
           "displayName": "Set variable",
           "id": "set_var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable name",
-              "id": "name",
-              "label": "Name",
+              "description": "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+              "id": "var",
+              "label": "Var",
               "order": 0,
-              "required": true,
+              "required": false,
               "section": "general",
               "type": "string",
               "uiHint": "text"
             },
             {
               "advanced": false,
-              "description": "Value or ${expression}",
+              "description": "Run-local variable name (the M2 spelling of var:)",
+              "id": "name",
+              "label": "Name",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "set",
+                "add",
+                "subtract",
+                "multiply",
+                "toggle",
+                "remove",
+                "reset"
+              ],
+              "default": "set",
+              "description": "What to do with the value",
+              "id": "op",
+              "label": "Op",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Value or ${expression}; not used by toggle, remove and reset",
               "id": "value",
               "label": "Value",
               "order": 0,
@@ -8569,6 +8601,67 @@
         ]
       },
       {
+        "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
+        "directory": "variables",
+        "displayName": "Variable",
+        "name": "variable",
+        "parameters": [
+          {
+            "advanced": false,
+            "allowedValues": [
+              "player",
+              "server"
+            ],
+            "description": "Where the value is stored: player (per player) or server (one for the server)",
+            "id": "scope",
+            "label": "Scope",
+            "order": 0,
+            "required": true,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "number",
+              "string",
+              "boolean"
+            ],
+            "description": "The value's type: number, string or boolean",
+            "id": "type",
+            "label": "Type",
+            "order": 0,
+            "required": true,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "Value read while nothing is stored (of the declared type; 0, empty text or false when omitted)",
+            "id": "default",
+            "label": "Default",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "raw",
+            "uiHint": "advanced"
+          },
+          {
+            "advanced": false,
+            "description": "Note shown in the studio and by /materione var list",
+            "id": "description",
+            "label": "Description",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          }
+        ]
+      },
+      {
         "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
         "directory": "guis",
         "displayName": "GUI",
@@ -14499,6 +14592,67 @@
           "section": "appearance",
           "type": "list",
           "uiHint": "list"
+        }
+      ]
+    },
+    {
+      "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
+      "directory": "variables",
+      "displayName": "Variable",
+      "name": "variable",
+      "parameters": [
+        {
+          "advanced": false,
+          "allowedValues": [
+            "player",
+            "server"
+          ],
+          "description": "Where the value is stored: player (per player) or server (one for the server)",
+          "id": "scope",
+          "label": "Scope",
+          "order": 0,
+          "required": true,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "allowedValues": [
+            "number",
+            "string",
+            "boolean"
+          ],
+          "description": "The value's type: number, string or boolean",
+          "id": "type",
+          "label": "Type",
+          "order": 0,
+          "required": true,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "Value read while nothing is stored (of the declared type; 0, empty text or false when omitted)",
+          "id": "default",
+          "label": "Default",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced"
+        },
+        {
+          "advanced": false,
+          "description": "Note shown in the studio and by /materione var list",
+          "id": "description",
+          "label": "Description",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
         }
       ]
     },

@@ -1,0 +1,12 @@
+# Declared persistent variables the QA suite reads and writes (logic.md §3.2, #211). Declarations only:
+# a variable produces no pack output, so this file adds no items, models or textures to the corpus.
+qa_coins:
+  scope: player
+  type: number
+  default: 0
+  description: "QA probe coins"
+qa_season:
+  scope: server
+  type: string
+  default: "spring"
+  description: "QA server season"

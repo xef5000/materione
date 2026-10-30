@@ -298,6 +298,7 @@ the editor palette and the docs read the same registries (D5).
 | `providers()` | `LogicProviders` (logic.md §4.5, §18, #213): `currencies()` is the catalog of named currencies the money actions read; `permissions()` is always present (the session-only Bukkit default when nothing else is registered); `transfer()` is `Optional`. `setPermissions(owner, PermissionProvider)` and `setTransfer(owner, ServerTransfer)` each replace their slot and return a `ProviderRegistration` whose `close()` restores it; a disabled owner is refused. Read at use, never cached by an action. |
 | `currencyIntegrations()` | `LogicRegistry<CurrencyIntegration>`: how a currency reaches its money (`vault`, `xp`, `custom`, or an addon's own). Registered like actions; a currency file names one by id (logic.md §18). |
 | `vocabulary()` | The version-2 `BehaviorVocabulary`, rebuilt from the registries (and the mechanics registry) on every call. |
+| `variables()` | `VariablesApi` (logic.md §3.3, #211): `declarations()`, `declaration(id)`, `get(id, player)` (the stored value, or the declared default; empty only when undeclared) and `set(actor, id, player, value)`, which returns `ApiResult<Object>`. A write checks the actor's `materione.var` node first (MTR-0055), then the declared type (MTR-0064), and fails with MTR-0063 for an undeclared id or MTR-0065 when the holder is offline or the store refused. `null` clears the stored value, so the next read returns the default. |
 
 The provider SPIs live in `dev.materione.api.logic.provider`, and every method takes a `UUID`, never
 a Bukkit handle, so an addon's provider is testable without a server:
@@ -330,8 +331,8 @@ api.logic().conditions().register(this, NamespacedId.of("example", "is_night"), 
 api.pipeline().reload(ActorContext.addon(getName()), PipelineApi.ReloadRequest.everything());
 ```
 
-`variables()` (logic.md §3.3) and `traces()` (§7.6) are deliberately absent. They arrive as additive
-methods with the variables and live-trace work, so the API never pretends to a behaviour it lacks.
+`traces()` (§7.6) is deliberately absent. It arrives as an additive method with the live-trace work, so
+the API never pretends to a behaviour it lacks. `variables()` is present since #211.
 The web editor reads the vocabulary through `authoring.describe` (`behavior`), which is a
 projection of `LogicApi.vocabulary()`; the dedicated `logic.vocabulary` op is the authoring logic API's
 (§3.12), which reads the same registries.

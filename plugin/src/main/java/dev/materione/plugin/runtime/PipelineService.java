@@ -38,6 +38,7 @@ import dev.materione.core.runtime.ContentRuntime;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRecipe;
 import dev.materione.core.runtime.RuntimeRegistries;
+import dev.materione.core.runtime.RuntimeVariables;
 import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.pack.compile.PackCompiler;
 import dev.materione.pack.compile.PackFormats;
@@ -150,6 +151,9 @@ public final class PipelineService {
         dev.materione.content.effects.EffectType effects = new dev.materione.content.effects.EffectType();
         registry.register(
                 NamespacedId.of("materione", "effect"), effects, effects.describe(), "materione");
+        var variables = new dev.materione.content.variable.VariablesType();
+        registry.register(
+                NamespacedId.of("materione", "variable"), variables, variables.describe(), "materione");
         // GUI layer kinds through the registry path addons use (gui.md §3), then the gui type
         // that resolves its layers against them
         var components = registries.registry(RegistryKeys.GUI_COMPONENTS, GuiComponent.class);
@@ -409,6 +413,7 @@ public final class PipelineService {
             builder.view(dev.materione.core.runtime.RuntimeGlyphs.KEY,
                     new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
             builder.view(RuntimeGuis.KEY, RuntimeGuis.empty());
+            builder.view(RuntimeVariables.KEY, RuntimeVariables.empty());
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -424,6 +429,11 @@ public final class PipelineService {
                 }
             }
         }
+        // pre-pass: the declared variables first, so a set_var in any rule or flow compiles against
+        // the whole shadow whatever order the resources iterate in (logic.md §3.2)
+        var declaredVariables = parseVariables(packs, templates);
+        this.declaredVariables = declaredVariables;
+        builder.view(RuntimeVariables.KEY, new RuntimeVariables(declaredVariables));
         // pre-pass: parse every item once — the block/furniture branches need
         // the live item ids to decide implicit vs synthetic placement links,
         // whatever order the resources iterate in
@@ -917,8 +927,55 @@ public final class PipelineService {
      * The registries rules resolve their actions and triggers against, read at each compile so an
      * addon registration is seen by the next reload (logic.md §4).
      */
+    /** The declarations of the shadow under construction, read by the rule compiler (logic.md §3.2). */
+    private volatile Map<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration> declaredVariables =
+            Map.of();
+
+    /**
+     * Parses every {@code variable} resource of the packs into its declaration. A definition that does
+     * not parse is skipped here and quarantined by the pipeline like any other resource.
+     */
+    private Map<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration> parseVariables(
+            List<ContentPack> packs, Map<String, Map<String, Object>> templates) {
+        var declared = new LinkedHashMap<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration>();
+        var variableType = contentTypes().stream().filter(t -> t.name().equals("variable")).findFirst();
+        if (variableType.isEmpty()) {
+            return declared;
+        }
+        for (ContentPack pack : packs) {
+            if (pack.manifest() == null) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                if (!"variable".equals(resource.contentType())) {
+                    continue;
+                }
+                Object definition = resource.document().data().get(resource.id().value());
+                if (!(definition instanceof Map<?, ?> mapping)) {
+                    continue;
+                }
+                @SuppressWarnings("unchecked")
+                var raw = (Map<String, Object>) mapping;
+                try {
+                    Optional<Object> parsed = variableType.get().parse(resource.id(), raw, templates);
+                    if (parsed.isPresent() && parsed.get()
+                            instanceof dev.materione.api.logic.variable.VariableDeclaration declaration) {
+                        declared.putIfAbsent(declaration.id(), declaration);
+                    }
+                } catch (RuntimeException e) {
+                    diagnostics.publish(Diagnostic.error(
+                            DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                            "shadow build skipped " + resource.id() + ": " + e));
+                }
+            }
+        }
+        return declared;
+    }
+
     private dev.materione.behavior.logic.LogicLookup logicLookup() {
-        return new dev.materione.behavior.logic.RegistryLogicLookup(registries);
+        // the declarations of the shadow being built (set by the pre-pass); a flow compiled outside a build sees none
+        Map<NamespacedId, dev.materione.api.logic.variable.VariableDeclaration> declared = declaredVariables;
+        return new dev.materione.behavior.logic.RegistryLogicLookup(registries, id -> Optional.ofNullable(declared.get(id)));
     }
 
     /** The GUI type's rule checker: the flow compiler plus the checks only a GUI can make (logic.md §10). */
