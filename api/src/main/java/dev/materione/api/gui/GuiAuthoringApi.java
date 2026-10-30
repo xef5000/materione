@@ -94,17 +94,59 @@ public interface GuiAuthoringApi {
             String title,
             Integer rows,
             int revision,
-            List<Layer> layers) {
+            List<Layer> layers,
+            OpenSpec open) {
 
         public GuiDocumentView {
             Objects.requireNonNull(pack, "pack");
             Objects.requireNonNull(id, "id");
             layers = layers == null ? List.of() : List.copyOf(layers);
         }
+
+        /** A view with no {@code open:} block. */
+        public GuiDocumentView(
+                String pack, String path, String id, String title, Integer rows, int revision, List<Layer> layers) {
+            this(pack, path, id, title, rows, revision, layers, null);
+        }
     }
 
-    /** One structural edit to a GUI's layers, or to its screen. Applied in list order. */
-    sealed interface GuiEdit permits AddLayer, PatchLayer, RemoveLayers, ReorderLayers, SetScreen {}
+    /**
+     * The {@code open:} block (gui.md §6.1, logic.md §6.1): the commands that open the GUI, its
+     * typed arguments, the permission that opens it regardless of the requirement, the
+     * requirement, and the steps that run when the requirement fails. The runtime (#215) reads it;
+     * the authoring API checks its shape. {@code requirement} is the condition as authored (an
+     * expression, a predicate, or a composite), and {@code deny} is a list of steps as authored.
+     */
+    record OpenSpec(
+            List<String> commands,
+            List<OpenArg> args,
+            String permission,
+            Object requirement,
+            List<Object> deny) {
+
+        public OpenSpec {
+            commands = commands == null ? List.of() : List.copyOf(commands);
+            args = args == null ? List.of() : List.copyOf(args);
+            deny = deny == null ? List.of() : List.copyOf(deny);
+        }
+    }
+
+    /**
+     * One argument of {@code open.args}. {@code type} is one of {@code string}, {@code int},
+     * {@code number}, {@code player}, {@code boolean} or {@code choice}; {@code suggest} lists the
+     * tab-completions the command offers.
+     */
+    record OpenArg(String name, String type, boolean optional, Object defaultValue, List<String> suggest) {
+        public OpenArg {
+            suggest = suggest == null ? List.of() : List.copyOf(suggest);
+        }
+    }
+
+    /** One structural edit to a GUI's layers, its screen or its open block. Applied in list order. */
+    sealed interface GuiEdit permits AddLayer, PatchLayer, RemoveLayers, ReorderLayers, SetScreen, SetOpen {}
+
+    /** Replaces the {@code open:} block; a null spec removes it. The spec's shape is checked before any write. */
+    record SetOpen(OpenSpec open) implements GuiEdit {}
 
     /**
      * Inserts a layer at {@code index} (0 is the bottom). {@code id} may be null: a unique id is

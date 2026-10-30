@@ -2,6 +2,7 @@ package dev.materione.content.gui;
 
 import dev.materione.api.gui.GuiAuthoringApi.AddLayer;
 import dev.materione.api.gui.GuiAuthoringApi.GuiEdit;
+import dev.materione.api.gui.GuiAuthoringApi.SetOpen;
 import dev.materione.api.gui.GuiAuthoringApi.PatchLayer;
 import dev.materione.api.gui.GuiAuthoringApi.RemoveLayers;
 import dev.materione.api.gui.GuiAuthoringApi.ReorderLayers;
@@ -68,6 +69,9 @@ final class GuiLayerEdits {
                 case PatchLayer patch -> patch(working, patch);
                 case RemoveLayers remove -> remove(working, remove);
                 case ReorderLayers reorder -> reorder(working, reorder);
+                case SetOpen ignored -> {
+                    // the open: block is not a layer; GuiAuthoringApiImpl writes it as its own field
+                }
                 case SetScreen screen -> {
                     if (screen.title() != null) {
                         if (screen.title().isBlank()) {

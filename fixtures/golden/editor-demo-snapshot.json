@@ -6492,6 +6492,17 @@
             "uiHint": "behavior-rules"
           },
           {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
+          },
+          {
             "advanced": false,
             "category": "gameplay",
             "description": "Sound (with a jukebox section) this disc plays in jukeboxes",
@@ -6842,6 +6853,17 @@
             "summary": "React to the block being placed, broken or used",
             "type": "list",
             "uiHint": "behavior-rules"
+          },
+          {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
           }
         ]
       },
@@ -7171,6 +7193,17 @@
             "summary": "React to the furniture being placed or clicked",
             "type": "list",
             "uiHint": "behavior-rules"
+          },
+          {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
           }
         ]
       },
@@ -7797,6 +7830,43 @@
             "section": "layers",
             "type": "list",
             "uiHint": "structured-list"
+          },
+          {
+            "advanced": false,
+            "category": "behaviour",
+            "description": "ECA rules fired by this GUI's clicks and opens",
+            "icon": "activity",
+            "id": "behavior",
+            "label": "When… do…",
+            "module": true,
+            "order": 10,
+            "required": false,
+            "section": "behavior",
+            "summary": "React to clicks and opens with conditions and actions",
+            "type": "list",
+            "uiHint": "behavior-rules"
+          },
+          {
+            "advanced": true,
+            "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+            "id": "flows",
+            "label": "Flows",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
+          },
+          {
+            "advanced": true,
+            "description": "How the GUI opens: commands, typed arguments, permission, requirement and deny steps",
+            "id": "open",
+            "label": "Open",
+            "order": 40,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
           }
         ]
       },
@@ -12356,6 +12426,17 @@
           "uiHint": "behavior-rules"
         },
         {
+          "advanced": true,
+          "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+          "id": "flows",
+          "label": "Flows",
+          "order": 30,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
+        },
+        {
           "advanced": false,
           "category": "gameplay",
           "description": "Sound (with a jukebox section) this disc plays in jukeboxes",
@@ -12706,6 +12787,17 @@
           "summary": "React to the block being placed, broken or used",
           "type": "list",
           "uiHint": "behavior-rules"
+        },
+        {
+          "advanced": true,
+          "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+          "id": "flows",
+          "label": "Flows",
+          "order": 30,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
         }
       ]
     },
@@ -13035,6 +13127,17 @@
           "summary": "React to the furniture being placed or clicked",
           "type": "list",
           "uiHint": "behavior-rules"
+        },
+        {
+          "advanced": true,
+          "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+          "id": "flows",
+          "label": "Flows",
+          "order": 30,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
         }
       ]
     },
@@ -13661,6 +13764,43 @@
           "section": "layers",
           "type": "list",
           "uiHint": "structured-list"
+        },
+        {
+          "advanced": false,
+          "category": "behaviour",
+          "description": "ECA rules fired by this GUI's clicks and opens",
+          "icon": "activity",
+          "id": "behavior",
+          "label": "When… do…",
+          "module": true,
+          "order": 10,
+          "required": false,
+          "section": "behavior",
+          "summary": "React to clicks and opens with conditions and actions",
+          "type": "list",
+          "uiHint": "behavior-rules"
+        },
+        {
+          "advanced": true,
+          "description": "Named flows (id to steps), run from this resource's rules with call: <id>",
+          "id": "flows",
+          "label": "Flows",
+          "order": 30,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
+        },
+        {
+          "advanced": true,
+          "description": "How the GUI opens: commands, typed arguments, permission, requirement and deny steps",
+          "id": "open",
+          "label": "Open",
+          "order": 40,
+          "required": false,
+          "section": "behavior",
+          "type": "raw",
+          "uiHint": "advanced"
         }
       ]
     },
