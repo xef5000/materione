@@ -29,7 +29,8 @@ import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.behavior.logic.MapLogicContext;
-import dev.materione.behavior.rule.RuleParser;
+import dev.materione.behavior.flow.ActionStep;
+import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.core.MaterioneApiImpl;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.registry.RegistryService;
@@ -81,11 +82,11 @@ class LogicServiceTest {
     void anAddonActionIsResolvableByTheRuleParserOnceRegistered() {
         api.logic().actions().register(LogicTestSupport.owner("example"),
                 NamespacedId.of("example", "greet"), new GreetAction());
-        var parsed = RuleParser.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
+        var parsed = FlowCompiler.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
                 "on", "click", "do", List.of(Map.of("example:greet", "hi")))), service.lookup());
 
         assertThat(parsed.problems()).isEmpty();
-        assertThat(parsed.rules().getFirst().actions().getFirst().params()).isEqualTo("hi");
+        assertThat(((ActionStep<?>) parsed.rules().getFirst().steps().getFirst()).params()).isEqualTo("hi");
     }
 
     @Test

@@ -381,8 +381,10 @@ actions in a run whose session has ended are skipped with outcome `FAILED("no op
   tests and the `behavior.*` QA catalog entries are the regression net, and they must pass
   untouched.
 - **Status.** #207 did the first half: `ActionExecutor` and `ActionSpec` are gone, the six built-ins
-  are `ActionType`s in `plugin.logic.action`, the vocabulary is version 2, and the M2 `RuleEngine`
-  runs typed `BoundAction`s. The interpreter itself is #208 (§14 lists the seam).
+  are `ActionType`s in `plugin.logic.action`, and the vocabulary is version 2. #208 did the second:
+  `BoundAction` and the flat action loop are replaced by the sealed step tree and the resumable
+  interpreter, `RuleEngine` is now only the rule gate in front of it, and the seven step kinds are all
+  `supported` (§16).
 
 ---
 
@@ -650,12 +652,14 @@ api/     dev.materione.api.logic           ActionType, ConditionType, TriggerTyp
 api/     dev.materione.api.logic.provider  EconomyProvider, PermissionProvider, ServerTransfer
 behavior/ dev.materione.behavior.logic     (#207) LogicLookup, RegistryLogicLookup, MapLogicContext, EngineExpressions,
                                             BuiltinTriggers, StepKinds, VocabularyBuilder, LogicIds
-behavior/ dev.materione.behavior.flow      Step (sealed), Condition (sealed), FlowCompiler, StepPath
-behavior/ dev.materione.behavior.run       FlowInterpreter, FlowRun, RunBudget, Trace, RunScheduler (port)
+behavior/ dev.materione.behavior.flow      (#208) Step (sealed), Condition (sealed), FlowCompiler, StepPath, one record per
+                                            step and condition kind; RuleCompiler, StepCompiler, ConditionCompiler, FlowSet
+behavior/ dev.materione.behavior.run       (#208) FlowInterpreter (+ ControlSteps), FlowRun, Frame, RunBudget, TraceEvent,
+                                            TraceSink, RunScheduler (port), RunRegistry, RunReporter
 behavior/ dev.materione.behavior.expr      + FunctionCall node, function registry binding
 content/ dev.materione.content.gui.logic   OpenSpec, ClickMap compiler, dynamic-layer analysis, GuiRules
 content/ dev.materione.content.variable    VariablesType (the `variables` content type)
-plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), LogicRegistryImpl,
+plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), GatewayRunScheduler, LogicRegistryImpl,
                                             BuiltinLogic (the built-ins, registered through the public API)
 plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lines each)
 plugin/  dev.materione.plugin.logic.condition one class per condition
@@ -695,8 +699,10 @@ Rules:
 
 ## 10. Diagnostics
 
-The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. Each
-code below names the class of problem, and every one carries a step path where one applies.
+The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. #207
+took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
+linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); the next free code is `MTR-0061`.
+Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
 |---|---|---|
@@ -1016,3 +1022,164 @@ Each is reversible by the owner.
     shows only through a rule or a message that uses them, and those are covered by the rule-parser
     and function tests here. The catalog entry arrives with the first condition or flow that makes
     a call visible to a player (L4).
+
+---
+
+## 16. Decisions taken in #208 (L2: flows and the resumable interpreter)
+
+#208 shipped §2 and §5: the sealed step and condition trees, `FlowCompiler`, `FlowInterpreter` and the
+`RunScheduler` port, with item, block and furniture rules running through them. Where the design left a
+choice open, these are the choices. Each is reversible by the owner. The code is in
+`dev.materione.behavior.flow` (compile) and `dev.materione.behavior.run` (execute).
+
+**The model**
+
+1. **Everything is sealed, one class per kind.** `Step` permits `ActionStep`, `IfStep`, `RequireStep`,
+   `ChooseStep`, `WaitStep`, `StopStep` and `CallStep`. `Condition` permits `ExpressionCond`,
+   `PredicateCond`, `AllCond`, `AnyCond`, `NotCond` and `AtLeastCond`. A `Rule` is `{owner, id, on,
+   condition, steps, options, path}`; the rule-level `if:` list is an `AllCond`. `BoundAction`,
+   `DeferredRunner` and the flat `Rule.actions` are gone. `RuleEngine` stays as the rule *gate*
+   (matching, cooldown, charges, the rule-level condition) and hands the run to the interpreter;
+   `RuleParser` keeps only the self-description of the rule and action option keys.
+2. **Step paths.** A path is the list of keys and indexes that reaches the node in the YAML, and it is the
+   diagnostic target. A rule is `behavior.<i>`, its steps `behavior.<i>.do.<j>`, an `if` branch
+   `...then.<k>` / `...else.<k>`, a `require` body `...require.<k>` (else `...else.<k>`), a `choose`
+   case `...choose.<c>` with its steps under `...choose.<c>.then.<k>`, a rule-level condition
+   `behavior.<i>.if` (`.if.<n>` when it is a list), a step condition `<step>.if`, a flow
+   `flows.<id>` with steps `flows.<id>.<j>`, and a `call` argument `<step>.with.<name>`. Rules that a mechanic
+   generates are not in the file, so their diagnostics name the rule and carry no target.
+3. **Two scopes of "skipped".** A problem that makes the author's intent *unreadable* skips the whole rule
+   or flow with `MTR-0021` at the step's path: a step that is not a mapping or a name, a step that mixes
+   kinds or carries keys that do not belong to it, a bad `chance:`, `delay:` or `wait:` value, a
+   condition that is not a condition. A problem the compiler *understood* skips only the step that
+   holds it: an unknown action or condition and rejected parameters (`MTR-0057`), a malformed expression
+   (`MTR-0022`). Siblings load either way.
+4. **A skipped step never weakens the steps that guard others.** A `require` that lost any step in its body
+   (at any depth) compiles with `blocked`: it fails every time, so its `else` runs and the run ends, instead of
+   running the survivors unprotected (a skipped `take_money` must not turn a paywall into a gift). A `choose`
+   with a condition that does not load is dropped whole, so no later branch inherits the missing branch's
+   turn. An `if` whose condition does not load is dropped whole (nothing runs). A rule-level `if:` that
+   does not load skips the rule.
+5. **Condition spellings.** A string is an expression, bare or wrapped as `"${...}"` when the whole string is
+   one template; a boolean is a constant; a list is `all`; a one-entry mapping is `all`, `any`, `not`,
+   `at_least: {count, of}` or a registered predicate (`has_money: 250`). The four composite names are reserved:
+   a registered condition with one of those ids would be shadowed. A leaf that throws makes the *whole*
+   condition false (the interpreter contains it and reports `MTR-0023`), so `not: <broken>` is false, not
+   true: a broken check never grants.
+6. **Step spellings.** A step is a mapping or a bare name (`- gui.refresh`, `- stop`). `stop` is `stop`,
+   `stop: true` or `stop: {cancel, cancel_session_runs}`. `wait` is `wait: n` or `wait: {ticks}` with `0 <= n
+   <= 1,728,000` (24 hours). `call` is `call: id`, `call: {flow, with}` or `call: id` with a sibling `with:`.
+   `node: {x, y}` is accepted on rules and steps, ignored and never stored; the compiler only reads its
+   input, so a load, compile and untouched save is byte-identical.
+7. **Named flows.** `flows: {<id>: [steps]}` sits beside `behavior:`. Item, block and furniture definitions
+   keep their unknown keys in the definition's raw map, so `flows:` is read from there; the schema
+   self-description does not list it yet (the studio gets it with the authoring API, A1/#221). A flow
+   compiles the first time a `call` links to it, so a cycle is found by the compile itself; flows nothing
+   calls are still compiled so their problems are reported. Every call site holds the compiled flow
+   directly. The longest chain of nested calls is computed statically and must be 16 or fewer.
+   An unknown flow, a cycle, a chain past 16 or a callee that did not load is `MTR-0058` (error) and skips the
+   rule that holds the call, as §10 says. A flow whose steps all fail to load is itself broken, for the same
+   reason a rule is.
+8. **Arguments.** `with:` values are templates evaluated in the caller's scope when the call is reached. A
+   string that is exactly one `${expression}` keeps the expression's type (a number stays a number); other
+   strings are rendered; non-strings pass through. They are visible as `args.*` in the callee only: a
+   nested call has its own, and back in the caller they are the caller's again. The run-local `vars` are
+   shared by every frame.
+9. **`${root}` checking.** Every template and expression an action, condition or call argument compiles is
+   noted (the engine's `ExpressionCompiler` keeps a notebook, so no action type has to cooperate) and its
+   variable roots are checked against the roots of the rule's trigger context plus `player`, `server`
+   and `vars`. An unknown root is `MTR-0060` (warning) and changes nothing else. A flow is checked against
+   the union of its resource's triggers plus `args`. A trigger that declares no context is not checked, so
+   "unknown" never turns into a warning on every variable. Per-host precision (a block rule using
+   `item.*`) is not attempted: the schema already merges the hosts of a trigger.
+10. **Diagnostics.** `MTR-0058` flow call cannot be linked (error, load), `MTR-0059` flow run aborted by its
+    budget (warning, runtime, rate-limited per rule), `MTR-0060` unknown variable root (warning, load). All
+    carry the step path as their target; `DiagnosticCodesTest` is pinned at 60.
+
+**The interpreter**
+
+11. **A run is a frame stack.** `FlowRun` holds `Frame`s (a step list and an index; kinds block, require,
+    fail-else, call). There is no recursion in the interpreter; a `call` is a pushed frame, and a parked run is
+    just its stack and its context. A synchronous scheduler (the unit-test one) nests Java calls per
+    suspension; the production scheduler never does.
+12. **`require` semantics.** A failure is an action returning `FAILED` or throwing anywhere in the
+    require's dynamic extent: its own list, a nested branch, or a flow it `call`s. The nearest enclosing
+    require handles it: the stack is unwound to it, its `else` steps run and the *run* ends (a `stop` in a
+    called flow ends the whole run for the same reason). The else frame shields outer requires: a failing step
+    in an `else` does not trigger a guard further out.
+13. **Plain `FAILED`: reported unless handled.** An action's `FAILED` outside any `require` stays the
+    rate-limited `MTR-0023` it was in M2, because nobody handles it and the author wants to know (a missing
+    economy provider shows up once per second, not never). Inside a `require` it is control flow and is only
+    traced. An exception is always reported, handled or not, because it is a bug.
+14. **`delay:` parks the run.** An action's `delay: n` is a `wait: n` placed in front of it, so the steps after
+    it wait too (§5.2). Until now it was parsed and ignored (the M2 deferred runner hopped once and dropped
+    the delay), so no working content depended on it. This is the one deliberate change of M2 behaviour
+    besides ordering (decision 16).
+15. **Threading is parameter-dependent through an additive default.** `ActionType.threading(P params)` defaults
+    to `threading()`; a type whose thread depends on its parameters overrides it. The interpreter calls
+    only this overload; the bare `threading()` stays the headline value the vocabulary lists.
+    `run_command` overrides it (`as: console` is `GLOBAL`, `as: player|op` is `PLAYER_REGION`). `sound`
+    (#232: `scope: player` is player-local, `world|server` touch other players) takes the same
+    override once both PRs land. The rejected alternative was the interpreter hopping inside the action: it
+    would have made the SPI's `threading()` a lie for exactly the types that need the distinction.
+16. **Inline when the thread allows, hop when it does not, in the order written.** Before an action the
+    interpreter asks `RunScheduler.canRunInline(anchor, threading)`. On Paper there is one thread, so the
+    answer is always yes and a flow runs entirely inline, in order, with `cancel` still effective after a
+    command. On Folia the answer is the region/global ownership check; a step for another thread parks the
+    run and `schedule`s the rest there, and consecutive steps for one thread share one hop. This changes two
+    M2 behaviours that were accidents: a `GLOBAL` action used to be deferred one hop *past* the steps after it
+    (so `[run_command, message]` messaged first), and every `GLOBAL` action ran on the player's thread even
+    on Folia. Both now follow the order written and the thread declared. Consequence for `cancel`: the event
+    is over once the run first suspends, so a `cancel` or `stop: {cancel: true}` reached after a thread
+    hop or a wait is recorded and has no effect on the event (on Folia put it first).
+17. **Predicates run on the player's thread.** A condition that contains a registered predicate reads live
+    player and world state, so the interpreter hops to the player's region before evaluating it, as it does
+    for an action. A pure expression reads only the run's own data and evaluates wherever the run is.
+18. **Budgets.** Steps per run: every step *visited* counts, branches and calls included (1,000). Parked runs
+    per player count `wait` and `delay:` parks only (64); a thread hop is not a wait and does not count, so a
+    burst of Folia clicks is not refused. A player at the limit has a *new* run refused at start; a park that
+    would cross it aborts. Call depth is also enforced at run time (16) although the compiler already bounds
+    it. Each breach is `MTR-0059`.
+19. **Cancellation by owner key.** `RunOwner(playerKey, anchor, cancelKey)`. `BehaviorEvent.withCancelKey(key)`
+    marks the runs an event starts; `FlowInterpreter.cancel(key)` cancels them: a parked run's pending
+    resume is cancelled, a running one ends at its next step boundary. A run with a key is tracked from
+    its start (so it is reachable even while running, which `stop: {cancel_session_runs: true}` uses); other
+    runs are tracked only while parked, so the common click costs no bookkeeping. `cancelPlayer` is called
+    on quit; the entity scheduler's `retired` callback also drops the run (`DROPPED`) and releases its
+    count. A key of `null` matches nothing.
+20. **Trace.** `TraceEvent(runId, rule, path, type, detail)` with types `RUN_STARTED`, `STEP_OK`,
+    `STEP_FAILED`, `STEP_SKIPPED`, `BRANCH`, `REQUIRE_FAILED`, `CALLED`, `SUSPENDED`, `RESUMED`, `RUN_ENDED`
+    goes to an optional `TraceSink` installed with `FlowInterpreter.traceTo`. With no sink nothing is built;
+    a sink that throws is contained.
+21. **The gateway grew two methods.** `SchedulingGateway.executeEntityLater(plugin, entity, ticks, task,
+    retired)` and `executeGlobalLater(plugin, ticks, task)` return a `ScheduledHandle`. They are `default`
+    methods that throw, so a test double that never schedules ahead need not implement them and nothing silently
+    drops a delay; `SchedulingGatewayImpl` overrides them. `GatewayRunScheduler` in `plugin.logic` is the
+    `RunScheduler` over the gateway and the server's ownership checks, and `LogicService.engine()` wires
+    the gate, the interpreter and that scheduler for item, block and furniture events.
+
+**Behaviour that changed on purpose.** `delay:` now delays (decision 14). Steps run in the order written and
+on the thread declared (decision 16). A rule that used to skip because one `do:` entry was not a mapping
+still skips, now with the entry's path. A bare name is a valid step (`- cancel`), where it used to skip the
+rule. A `delay:` that is not a whole number of ticks from 0 to 24 hours is rejected at load (it used to
+accept `2.5`).
+
+**For #210 (conditions).** Register `ConditionType`s through `LogicApi.conditions()`; they compile in
+`rule if:` and in `if`/`choose`/`require`-adjacent conditions without any engine change, and
+`BuiltinLogic.register` is where the built-ins join. Parse is typed at load and rejection is `MTR-0057` at
+the condition's path. `test` must be a pure read and may rely on running on the player's thread. Do not
+register `all`, `any`, `not` or `at_least`. A condition that cannot decide returns false; one that throws makes
+the enclosing condition false and a rate-limited `MTR-0023`.
+
+**For #211 (variables).** `vars.*` is a root every trigger has, so `vars.player.coins` already passes the
+root check; the *declared-variable* checks (undeclared write, type mismatch) belong in `set_var`'s parse,
+which gets the same `StepPath` through the diagnostic it throws into. The `${root}` notebook sees any template or
+expression `set_var` compiles through `ParamReader`. `args` is frame-scoped, `vars` is the run's.
+
+**For #214 (GUI sessions).** Compile a GUI's `behavior:` and `flows:` with `FlowCompiler.compile(owner, behavior,
+flows, lookup)`; declare the GUI triggers' context variables in their `TriggerDescription` so the root check
+knows them. Start a click's run with `BehaviorEvent.withCancelKey(session)` and call
+`engine.interpreter().cancel(session)` when the session ends; an author opts into the stricter
+"close ends the waits" with `stop: {cancel_session_runs: true}` and the default stays "runs belong to the
+player". GUI actions in a run whose session ended should return `FAILED("no open gui")` (§5.2). A GUI action
+that must run on the player's thread declares `PLAYER_REGION` (or overrides `threading(P)`).

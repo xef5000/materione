@@ -14,6 +14,8 @@
 # Harness & dev-server scratch (anything under **/build/ is already covered;
 # this catches out-of-place run dirs)
 run/
+# ...but a Java package named run is source (behavior.run, logic.md §9)
+!**/src/**/run/
 logs/
 .cache/
 

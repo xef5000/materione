@@ -724,7 +724,8 @@ public final class PipelineService {
                 block.drops(), block.blastResistant(), block.movePolicy()));
         if (!block.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
-                    dev.materione.behavior.rule.RuleParser.compile(block.id(), block.behavior(), logicLookup());
+                    dev.materione.behavior.flow.FlowCompiler.compile(
+                            block.id(), block.behavior(), block.raw().get("flows"), logicLookup());
             parsedRules.problems().forEach(diagnostics::publish);
             if (!parsedRules.isEmpty()) {
                 blockBehaviors.put(block.id(), parsedRules.rules());
@@ -765,8 +766,8 @@ public final class PipelineService {
                         .toList()));
         if (!furniture.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
-                    dev.materione.behavior.rule.RuleParser.compile(
-                            furniture.id(), furniture.behavior(), logicLookup());
+                    dev.materione.behavior.flow.FlowCompiler.compile(
+                            furniture.id(), furniture.behavior(), furniture.raw().get("flows"), logicLookup());
             parsedRules.problems().forEach(diagnostics::publish);
             if (!parsedRules.isEmpty()) {
                 furnitureBehaviors.put(furniture.id(), parsedRules.rules());
@@ -875,7 +876,22 @@ public final class PipelineService {
             List<dev.materione.plugin.runtime.mechanics.ActiveMechanic> mechanics,
             Map<NamespacedId, List<dev.materione.behavior.rule.Rule>> behaviors,
             Map<String, java.util.function.BooleanSupplier> availability) {
-        var declarations = new ArrayList<Map<String, Object>>(item.behavior());
+        var compiled = new ArrayList<dev.materione.behavior.rule.Rule>();
+        // the rules the author wrote, with the item's own named flows (logic.md §2.4)
+        if (!item.behavior().isEmpty()) {
+            try {
+                var parsed = dev.materione.behavior.flow.FlowCompiler.compile(
+                        item.id(), item.behavior(), item.raw().get("flows"), logicLookup());
+                parsed.problems().forEach(diagnostics::publish);
+                compiled.addAll(parsed.rules());
+            } catch (RuntimeException failure) {
+                diagnostics.publish(new Diagnostic(
+                        DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
+                        item.id() + " behavior: " + failure,
+                        item.id(), null, "fix the behavior section; its rules were skipped"));
+            }
+        }
+        // then the rules its mechanics generate: not in the file, so no field target
         int bindingIndex = 0;
         for (var mechanic : mechanics) {
             int index = 0;
@@ -884,30 +900,19 @@ public final class PipelineService {
                 String ruleId = item.id() + "/mechanic/" + mechanic.id() + "/" + bindingIndex + "/" + index++;
                 scoped.put("id", ruleId);
                 availability.put(ruleId, mechanic::isAvailable);
-                declarations.add(scoped);
+                try {
+                    var parsed = dev.materione.behavior.flow.FlowCompiler.compileGenerated(
+                            item.id(), List.of(scoped), logicLookup());
+                    parsed.problems().forEach(diagnostics::publish);
+                    compiled.addAll(parsed.rules());
+                } catch (RuntimeException failure) {
+                    diagnostics.publish(new Diagnostic(
+                            DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
+                            item.id() + " rule '" + ruleId + "': " + failure,
+                            item.id(), null, "fix the rule parameters; only this rule was skipped"));
+                }
             }
             bindingIndex++;
-        }
-        if (declarations.isEmpty()) {
-            return;
-        }
-        var compiled = new ArrayList<dev.materione.behavior.rule.Rule>();
-        for (int index = 0; index < declarations.size(); index++) {
-            var declaration = new LinkedHashMap<>(declarations.get(index));
-            if (!(declaration.get("id") instanceof String named) || named.isBlank()) {
-                declaration.put("id", item.id() + "#" + index);
-            }
-            try {
-                var parsed = dev.materione.behavior.rule.RuleParser.compile(
-                        item.id(), List.of(declaration), logicLookup());
-                parsed.problems().forEach(diagnostics::publish);
-                compiled.addAll(parsed.rules());
-            } catch (RuntimeException failure) {
-                diagnostics.publish(new Diagnostic(
-                        DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
-                        item.id() + " rule '" + declaration.get("id") + "': " + failure,
-                        item.id(), null, "fix the rule parameters; only this rule was skipped"));
-            }
         }
         if (!compiled.isEmpty()) {
             behaviors.put(item.id(), List.copyOf(compiled));

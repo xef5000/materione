@@ -10,7 +10,10 @@ import dev.materione.behavior.logic.LogicFixture;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.behavior.rule.Rule;
-import dev.materione.behavior.rule.RuleParser;
+import dev.materione.behavior.flow.FlowCompiler;
+import dev.materione.behavior.run.FlowInterpreter;
+import dev.materione.behavior.run.ManualScheduler;
+import dev.materione.behavior.run.RunBudget;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,7 +26,7 @@ class RuleEngineTest {
     private static final NamespacedId OWNER = NamespacedId.of("sample", "item");
 
     private final List<Diagnostic> diagnostics = new ArrayList<>();
-    private final List<String> deferred = new ArrayList<>();
+    private final ManualScheduler scheduler = new ManualScheduler();
     private final List<String> ran = new ArrayList<>();
     private final CooldownStore cooldowns = new CooldownStore();
     private final LogicFixture logic = new LogicFixture()
@@ -37,12 +40,7 @@ class RuleEngineTest {
             .action(LogicFixture.recording("fails", Threading.PLAYER_REGION, ran))
             .action(new LogicFixture.CancelFake());
     private final RuleEngine engine = new RuleEngine(
-            (anchor, delayTicks, task) -> {
-                deferred.add(delayTicks + ":" + (anchor == null ? "-" : anchor));
-                task.run(); // synchronous continuation keeps tests deterministic
-            },
-            diagnostics::add,
-            cooldowns);
+            new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add), cooldowns);
 
     private BehaviorEvent event(String type, String detail, Map<String, Object> root) {
         return new BehaviorEvent(type, detail, new MapLogicContext(root), null, "player-1");
@@ -50,7 +48,7 @@ class RuleEngineTest {
 
     /** Parses one rule through the real parser, so the engine runs exactly what the pipeline would hand it. */
     private List<Rule> rules(Object... declarations) {
-        ParsedRules parsed = RuleParser.compile(OWNER, List.of(declarations), logic.lookup());
+        ParsedRules parsed = FlowCompiler.compile(OWNER, List.of(declarations), logic.lookup());
         assertThat(parsed.problems()).isEmpty();
         return parsed.rules();
     }
@@ -126,28 +124,37 @@ class RuleEngineTest {
     }
 
     @Test
-    void globalActionsRouteThroughTheDeferredRunnerWithTheAnchorAndOthersRunInline() {
+    void aGlobalActionHopsToTheGlobalThreadAndTheFlowKeepsItsWrittenOrder() {
         List<Rule> rules = rules(rule("place", List.of(), List.of(
                 action("worldly", "w"), action("a", "p"), action("pure", "q"))));
 
         engine.fire(rules, event("place", "", Map.of()));
+        assertThat(ran).isEmpty(); // the first step needs the global thread, so the run parked there
 
-        // only the GLOBAL action leaves the event's thread: anchor kept, no delay
-        assertThat(deferred).containsExactly("0:player-1");
+        scheduler.runPending();
+
+        // strict order: global step, back to the player's thread for the next, then the pure one inline
         assertThat(ran).containsExactly("worldly:w", "a:p", "pure:q");
+        assertThat(scheduler.history).extracting(ManualScheduler.Scheduled::thread)
+                .containsExactly(Threading.GLOBAL, Threading.PLAYER_REGION);
+        assertThat(scheduler.history).extracting(ManualScheduler.Scheduled::anchor)
+                .containsOnly("player-1");
     }
 
     @Test
-    void delayedActionsCarryTheirTickCount() {
+    void delayedActionsReallyWaitTheirTicksAndTheFlowWaitsWithThem() {
         Map<String, Object> delayed = new LinkedHashMap<>();
         delayed.put("later", "x");
         delayed.put("delay", 40);
-        List<Rule> rules = rules(rule("click", List.of(), List.of(delayed)));
+        List<Rule> rules = rules(rule("click", List.of(), List.of(delayed, action("a", "after"))));
 
         engine.fire(rules, event("click", "", Map.of()));
+        assertThat(ran).isEmpty();
 
-        assertThat(deferred).containsExactly("40:player-1");
-        assertThat(ran).containsExactly("later:x");
+        scheduler.advance(39);
+        assertThat(ran).isEmpty();
+        scheduler.advance(1);
+        assertThat(ran).containsExactly("later:x", "a:after");
     }
 
     @Test

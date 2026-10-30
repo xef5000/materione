@@ -290,7 +290,7 @@ public final class MaterionePlugin extends JavaPlugin {
         guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
         // the logic vocabulary (triggers, actions) through the public API, before content load:
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
-        logic = new dev.materione.plugin.logic.LogicService(this, registries);
+        logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish);
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this);
     }
 
@@ -490,7 +490,7 @@ public final class MaterionePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new GuiListener(), this);
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
-        behavior = new BehaviorService(this, diagnostics, scheduling, pipeline.runtime());
+        behavior = new BehaviorService(logic.engine(), pipeline.runtime());
         getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
         // custom-block world runtime (runtime-systems §4): placement index is
         // disposable generated state — rebuilt from chunk scans if lost

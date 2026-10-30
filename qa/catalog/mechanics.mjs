@@ -170,6 +170,45 @@ return count.toString()`);
   }),
 
   test({
+    id: 'mechanics.flow-wait-and-require',
+    title: 'world:flow_wand runs a flow on left-click: the first message at once, the second after a 20-tick wait, then a called flow whose failed require shows its else message and never the step after it',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
+      'api/src/main/java/dev/materione/api/scheduling/**',
+      'core/src/main/java/dev/materione/core/scheduling/**',
+      'behavior/src/main/java/dev/materione/behavior/**',
+      'fixtures/packs/world/items/flow_wand.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione give world:flow_wand Probe');
+      await ctx.waitForChat(/Given world:flow_wand/);
+      await ctx.exec('player.getInventory().selected = 0');
+      const held = await ctx.exec(
+        'return player.getInventory().items.get(0).getHoverName().getString()');
+      ctx.expect(String(held)).toBe('Flow Wand');
+
+      await groundSwing(ctx);
+
+      // the run starts on the click and parks on the wait: the first line is immediate, the
+      // second arrives only after the wait resumes the run on the player's thread
+      await ctx.waitForChat(/flow: start/, { timeoutMs: 5000 });
+      await ctx.waitForChat(/flow: after wait/, { timeoutMs: 5000 });
+      // then the called flow: its require fails, the else runs, and the run ends
+      await ctx.waitForChat(/flow: guard refused/, { timeoutMs: 5000 });
+      await ctx.sleep(1500);
+      const lines = await ctx.chat(80);
+      ctx.expect(lines.filter((l) => l.includes('flow: never shown')).length).toBe(0);
+      ctx.expect(lines.filter((l) => l.includes('flow: guard refused')).length).toBe(1);
+    },
+  }),
+
+  test({
     id: 'mechanics.custom-durability',
     title: 'crucible_blade counts vanilla uses in stack PDC while the vanilla damage bar stays at zero, the wear counter survives materione reload, and the third use breaks the blade',
     mode: 'auto',

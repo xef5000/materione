@@ -284,7 +284,7 @@ the editor palette and the docs read the same registries (D5).
 
 | Member | Description |
 |---|---|
-| `actions()` | `LogicRegistry<ActionType<?>>`: the verbs a rule step runs. `ActionType<P>` has `id()`, `describe()` (a `SelfDescription` plus palette `LogicCategory` and scalar shorthand), `threading()`, `parse(ParamReader)`, `execute(P, LogicContext)` returning `ActionOutcome`, and a default `availability()`. |
+| `actions()` | `LogicRegistry<ActionType<?>>`: the verbs a rule step runs. `ActionType<P>` has `id()`, `describe()` (a `SelfDescription` plus palette `LogicCategory` and scalar shorthand), `threading()` (plus a default `threading(P)` a type overrides when its thread depends on its parameters, as `run_command` does), `parse(ParamReader)`, `execute(P, LogicContext)` returning `ActionOutcome`, and a default `availability()`. |
 | `conditions()` | `LogicRegistry<ConditionType<?>>`: predicates. Same shape, with `test(P, LogicContext)` as a pure read. |
 | `triggers()` | `LogicRegistry<TriggerType>`: descriptions of the events a rule answers: details, `firedBy`, filters, a context schema of `ContextVariable`s, and `cancellable`. A runtime still fires the event; registering one makes it known to the compiler and the studio. |
 | `functions()` | `LogicRegistry<ExpressionFunction>`: calls available inside expressions. The registry and the vocabulary carry them; binding them into the expression grammar is the expression work (logic.md §13 L3). |

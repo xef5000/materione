@@ -1,0 +1,21 @@
+# Flow showcase (logic.md §2, qa mechanics.flow-wait-and-require): one left-click starts a flow that
+# messages at once, waits a second without blocking the server, messages again, then calls a named
+# flow whose `require` fails (a player command that does not exist) so its else runs and the run
+# ends before the step after it.
+flow_wand:
+  material: STICK
+  display_name: "Flow Wand"
+  behavior:
+    - on: click:left
+      do:
+        - message: "flow: start"
+        - wait: 20
+        - message: "flow: after wait"
+        - call: gate
+  flows:
+    gate:
+      - require:
+          - run_command: { command: "flowwand_missing_command", as: player }
+        else:
+          - message: "flow: guard refused"
+      - message: "flow: never shown"

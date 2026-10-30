@@ -2,6 +2,7 @@ package dev.materione.behavior.logic;
 
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
+import dev.materione.api.logic.TriggerDescription;
 import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.rule.EventSelector;
 import java.util.Locale;
@@ -27,6 +28,15 @@ public interface LogicLookup {
 
     /** True when {@code authoredId} names a registered trigger. */
     boolean triggerKnown(String authoredId);
+
+    /**
+     * The self-description of the trigger {@code authoredId} names (its context schema is what
+     * {@code ${root}} paths are checked against, logic.md §2.6). Empty when the trigger is unknown
+     * or the lookup cannot say; the compiler then skips the check rather than guess.
+     */
+    default Optional<TriggerDescription> trigger(String authoredId) {
+        return Optional.empty();
+    }
 
     /**
      * The expression functions a rule's expressions may call, bound at parse time (logic.md §4.2).

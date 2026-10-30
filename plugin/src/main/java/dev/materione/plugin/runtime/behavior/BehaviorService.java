@@ -1,13 +1,9 @@
 package dev.materione.plugin.runtime.behavior;
 
 import dev.materione.api.NamespacedId;
-import dev.materione.api.diagnostics.DiagnosticsBus;
-import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.api.logic.Facets;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.runtime.BehaviorEvent;
-import dev.materione.behavior.runtime.CooldownStore;
-import dev.materione.behavior.runtime.DeferredRunner;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.platform.items.MaterioneStacks;
@@ -18,11 +14,9 @@ import java.util.Optional;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.World;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.Cancellable;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.plugin.Plugin;
 
 /**
  * The platform bridge over the ECA engine: resolves a fired Bukkit event to
@@ -34,23 +28,17 @@ import org.bukkit.plugin.Plugin;
  */
 public final class BehaviorService {
 
-    private final Plugin plugin;
-    private final DiagnosticsBus diagnostics;
-    private final SchedulingGateway scheduling;
     private final java.util.function.Supplier<RuntimeRegistries> registries;
     private final RuleEngine engine;
 
-    public BehaviorService(
-            Plugin plugin,
-            DiagnosticsBus diagnostics,
-            SchedulingGateway scheduling,
-            dev.materione.core.runtime.ContentRuntime runtime) {
-        this.plugin = plugin;
-        this.diagnostics = diagnostics;
-        this.scheduling = scheduling;
+    /**
+     * @param engine the rule engine of the logic service: gating, the resumable interpreter and the
+     *        thread gateway behind it (logic.md §5)
+     */
+    public BehaviorService(RuleEngine engine, dev.materione.core.runtime.ContentRuntime runtime) {
         // resolved per event, never captured: reloads swap the reference
         this.registries = runtime::registries;
-        this.engine = new RuleEngine(deferredRunner(), diagnostics::publish, new CooldownStore());
+        this.engine = engine;
     }
 
     /**
@@ -289,17 +277,6 @@ public final class BehaviorService {
 
         root.put("vars", new LinkedHashMap<String, Object>());
         return logicContext(root, player);
-    }
-
-    /** Deferral through the gateway: entity-anchored when possible, global otherwise. */
-    private DeferredRunner deferredRunner() {
-        return (Object anchor, long delayTicks, Runnable continuation) -> {
-            if (anchor instanceof Entity entity) {
-                scheduling.executeEntity(plugin, entity, continuation);
-            } else {
-                scheduling.executeGlobal(plugin, continuation);
-            }
-        };
     }
 
     private static double round(double value) {

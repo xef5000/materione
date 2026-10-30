@@ -4,6 +4,7 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.api.registry.Registry;
@@ -38,6 +39,17 @@ public final class RegistryLogicLookup implements LogicLookup {
     @Override
     public boolean triggerKnown(String authoredId) {
         return find(RegistryKeys.TRIGGERS, authoredId, TriggerType.class).isPresent();
+    }
+
+    @Override
+    public Optional<TriggerDescription> trigger(String authoredId) {
+        return find(RegistryKeys.TRIGGERS, authoredId, TriggerType.class).flatMap(trigger -> {
+            try {
+                return Optional.ofNullable(trigger.describe());
+            } catch (RuntimeException e) {
+                return Optional.empty(); // a broken description is "unknown", never a failed load
+            }
+        });
     }
 
     /** Functions resolve against the live {@code expression-functions} registry, read at each rule load. */

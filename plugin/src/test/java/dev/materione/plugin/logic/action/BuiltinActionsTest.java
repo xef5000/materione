@@ -106,6 +106,19 @@ class BuiltinActionsTest {
         private final RunCommandAction action = new RunCommandAction();
 
         @Test
+        void theThreadFollowsTheSenderTheConsoleIsGlobalAndPlayerAndOpRunInThePlayersRegion() {
+            assertThat(action.threading()).isEqualTo(Threading.GLOBAL); // the vocabulary's headline value
+            assertThat(action.threading(action.parse(reader(params("command", "say hi")))))
+                    .isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "console")))))
+                    .isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "player")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+            assertThat(action.threading(action.parse(reader(params("command", "spawn", "as", "op")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+        }
+
+        @Test
         void parsesTheScalarFormAndEveryDocumentedSender() {
             var plain = action.parse(reader(params("command", "say hi")));
             assertThat(plain.command().source()).isEqualTo("say hi");
