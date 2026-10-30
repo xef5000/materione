@@ -1,5 +1,6 @@
 package dev.materione.behavior.expr;
 
+import dev.materione.api.logic.ExpressionFunction;
 import java.util.List;
 
 /**
@@ -31,4 +32,15 @@ public sealed interface ExprNode {
 
     /** {@code condition ? then : else}. */
     record Ternary(ExprNode condition, ExprNode ifTrue, ExprNode ifFalse) implements ExprNode {}
+
+    /**
+     * {@code name(arguments…)}: a call to a registered function, bound at parse time. {@code name} is
+     * the authored spelling (for error text); {@code function} is the resolved type, and the argument
+     * count has already been checked against its description.
+     */
+    record Call(String name, ExpressionFunction function, List<ExprNode> arguments) implements ExprNode {
+        public Call {
+            arguments = List.copyOf(arguments);
+        }
+    }
 }

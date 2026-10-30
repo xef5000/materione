@@ -28,7 +28,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **Ten more built-in actions for player, world and server effects (#212, logic.md §15 "Decisions
+- **Expressions can call functions, and there are twenty built-in ones (logic.md §4.2, §15).**
+  `contains(text, part)`, `matches(text, pattern)`, `length`, `lower`, `upper`, `trim`,
+  `starts_with`, `ends_with`, `equals_ignore_case`, `is_number`, `is_player`, `number`, `round`,
+  `floor`, `ceil`, `abs`, `min`, `max`, `random(min, max)` and `format_number` work in every `if:`
+  condition and in the templates and values of actions. A call is bound when the rule loads
+  against the registry, so an unknown function or a wrong argument count skips that rule with
+  `MTR-0022` and a position. Functions never fail on a bad argument: a predicate is `false`, a value
+  is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
+  read budget, so a pattern cannot stall the server. Addons register their own functions through
+  `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
+- **Ten more built-in actions for player, world and server effects (#212, logic.md §16 "Decisions
   taken in #212").** `broadcast` (to the server, one world, or a permission), `actionbar`, `title`
   (title, subtitle and fade timings), `stop_sound`, `chat` (a line the player says, or a command
   they run with a leading slash), `teleport` (coordinates, optionally another world and facing),
