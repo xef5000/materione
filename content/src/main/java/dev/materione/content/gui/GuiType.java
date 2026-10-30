@@ -138,19 +138,9 @@ public final class GuiType implements ContentType {
                                         "Rows", "placement", 10, false, "number", "", "3")
                                         .withRange(1.0, (double) MAX_ROWS, "rows")),
                         layers,
-                        new ParameterSchema("behavior", ParameterType.LIST, false, null,
-                                "Rules fired by the GUI: gui.opening, gui.open, gui.close, gui.click, "
-                                        + "gui.click_outside and gui.tick, each a flow of steps (logic.md §6)",
-                                null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata(
-                                        "When… do…", "behavior", 10, false,
-                                        "behavior-rules", "", "", true, "behaviour", "activity",
-                                        "React to the GUI opening, closing, ticking or being clicked")),
-                        new ParameterSchema("flows", ParameterType.RAW, false, null,
-                                "Named flows the rules can call: a mapping of flow name to steps",
-                                null, null)
-                                .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Named flows", "behavior", 20, true, "advanced", "", ""))),
+                        dev.materione.content.logic.LogicSchemas.behavior(),
+                        dev.materione.content.logic.LogicSchemas.flows(),
+                        dev.materione.content.logic.LogicSchemas.open()),
                 "1.0.0");
     }
 

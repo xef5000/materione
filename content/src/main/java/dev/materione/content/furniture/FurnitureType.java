@@ -145,7 +145,8 @@ public final class FurnitureType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "When… do…", "behavior", 10, false,
                                         "behavior-rules", "", "", true, "behaviour", "activity",
-                                        "React to the furniture being placed or clicked"))),
+                                        "React to the furniture being placed or clicked")),
+                        dev.materione.content.logic.LogicSchemas.flows()),
                 "1.0.0");
     }
 

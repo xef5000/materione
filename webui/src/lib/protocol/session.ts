@@ -95,6 +95,7 @@ export const CURRENT_CAPABILITIES = [
   'glyphs',
   'gui',
   'items',
+  'logic',
   'models',
   'paintings',
   'recipes',

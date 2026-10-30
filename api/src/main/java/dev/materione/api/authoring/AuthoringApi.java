@@ -187,6 +187,13 @@ public interface AuthoringApi {
      */
     dev.materione.api.gui.GuiAuthoringApi gui();
 
+    /**
+     * The logic surface (logic.md §8, api.md §3.3): edit, read, validate and instantiate the
+     * {@code behavior:} and {@code flows:} of any resource that has them, built on this API's own
+     * transactions. A build without the behavior engine reports the surface as unavailable.
+     */
+    dev.materione.api.logic.LogicAuthoringApi logic();
+
     // ------------------------------------------------------------------
 
     /** One pack directory under {@code content/packs/}. */

@@ -21,4 +21,6 @@ dependencies {
     // The GUI ops' golden frames come from the real GUI surface (content-owned). Test-only: the
     // production classes of web still depend on api alone (R9).
     testImplementation(project(":content"))
+    // The logic ops' golden frames come from the real logic authoring surface (behavior-owned). Test-only, as above.
+    testImplementation(project(":behavior"))
 }

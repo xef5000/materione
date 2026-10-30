@@ -268,7 +268,9 @@ resource; the API works on that GUI (a file that holds several is refused).
 | `validate(GuiValidateRequest)` | The diagnostics the compile would emit for the same source (MTR-0052 per skipped layer, parse failures, background exhaustion). Pure. | the same steps as `render` |
 
 `GuiSource` is `Saved(pack, path)`, `Yaml(pack, text)` or `Typed(GuiDocumentView)`. `GuiEdit` is a
-sealed interface of the five structural edits. `render` and `validate` never allocate: the GUI's
+sealed interface of the structural edits: the five layer and screen edits and `SetOpen` (the `open:` block as an
+`OpenSpec`, or null to remove it; logic.md §19). `GuiDocumentView` carries the block as `open`. `validate` also
+reports the block's shape and the logic compiler's problems for the GUI's `behavior:` and `flows:` (§3.12). `render` and `validate` never allocate: the GUI's
 background codepoint comes from `AllocationTable.preview()`, which answers what a compile would,
 and binds nothing. `validate` and the pack compiler run the same steps (parse, diagnose, compile)
 and a test pins the two to the same diagnostics (`GuiValidateParityTest`).
@@ -331,8 +333,33 @@ api.pipeline().reload(ActorContext.addon(getName()), PipelineApi.ReloadRequest.e
 `variables()` (logic.md §3.3) and `traces()` (§7.6) are deliberately absent. They arrive as additive
 methods with the variables and live-trace work, so the API never pretends to a behaviour it lacks.
 The web editor reads the vocabulary through `authoring.describe` (`behavior`), which is a
-projection of `LogicApi.vocabulary()`; the dedicated `logic.vocabulary` op belongs to the authoring
-logic API (§13 A1).
+projection of `LogicApi.vocabulary()`; the dedicated `logic.vocabulary` op is the authoring logic API's
+(§3.12), which reads the same registries.
+
+### 3.12 `LogicAuthoringApi` (`dev.materione.api.logic`, reached as `authoring().logic()`)
+
+The typed authoring surface of the behavior system (logic.md §8, §19): what the node canvas (issue 223) and the Script
+tab are built on, and what an API consumer uses to change a rule or a flow. Any resource with `behavior:` is addressed:
+gui, item, block and furniture, one resource per file. Paths are step paths (`behavior.2.do.0.then.1`,
+`flows.purchase.1`), and an insertion path names the index it inserts at.
+
+| Method | Description | Built on |
+|---|---|---|
+| `get(pack, path)` | The resource's rules and named flows as a `LogicView`: each rule's `on:`, options, `if:`, node position and steps; each step's `kind`, `value`, `options`, node and `branches`. Never writes. | `getDocument` |
+| `edit(actor, LogicEditRequest)` | Applies a list of `LogicEdit`s in order, all or none, at `expectedRevision`. Returns the view after the edits, with the compiler's problems as warnings. An edit that changes nothing writes nothing. | `setFields` (one revision, one audit, one reload) |
+| `validate(LogicDraft)` | The step-path diagnostics the real `FlowCompiler` reports for an unsaved draft, with an optional `trigger` that stands in for a rule's missing `on:`. Never writes. | the compiler and the registries' lookup |
+| `instantiate(InstantiateRequest)` | Expands a recipe into steps. The recipe registry arrives with issue 222; until then every recipe is refused as unknown. Never writes. | none yet |
+
+`LogicEdit` is a sealed interface of twelve structural edits: `AddRule`, `RemoveRules`, `ReorderRules`, `PatchRule`,
+`InsertStep`, `PatchStep`, `MoveStep`, `RemoveStep`, `SetNodePosition`, `AddFlow`, `RemoveFlow` and `RenameFlow`. An edit
+refuses, with its step path as the diagnostic's target, a path that leads nowhere, an unknown step kind (an action no
+registry knows, a step naming two kinds or none), a move into the moved step's own subtree, a patch of a branch key,
+and a rule whose `on:` names no trigger. Unknown keys inside rules and steps survive every edit; comments inside the
+`behavior:` and `flows:` blocks do not (the blocks are rewritten whole, as `gui.edit` rewrites `layers:`). The `open:`
+block of a GUI is edited through `GuiEdit.SetOpen` (§3.9), not here.
+
+The implementation is `dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl`, built by the plugin over the same
+`LogicLookup` the pipeline compiles rules with. A build without the behavior engine answers every call with `MTR-0011`.
 
 ---
 

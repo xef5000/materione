@@ -58,6 +58,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The logic has a typed authoring API and web ops (logic.md §8, §19; api.md §3.12).** `authoring().logic()`
+  reads, edits, validates and instantiates the `behavior:` and `flows:` of any item, block, furniture or GUI:
+  twelve structural edits (add, remove and reorder rules; insert, patch, move and remove steps; set a node position;
+  add, remove and rename flows), each addressed by its step path, all or none, with refusals that name the step. An
+  edit that changes nothing writes nothing. The editor reaches the same operations through five `logic.*` ops, gated on
+  the new `logic` capability. A GUI's `open:` block (commands, typed arguments, permission, requirement, deny) is a
+  typed `GuiEdit.SetOpen`, and `gui.validate` now reports the logic compiler's problems for a GUI's rules and flows.
+  Item, block and furniture self-descriptions list `flows:`, and the GUI's list `behavior:`, `flows:` and `open:`.
+  `logic.instantiate` is refused until the recipe registry lands.
 - **GUIs have logic: sessions, click rules, GUI triggers and the `gui.*` actions (logic.md §6, §21).**
   A GUI file can now carry `behavior:` and `flows:` like an item does. A rule on `gui.click` names the
   `layer:` that was clicked (and optionally `click:` and `slot:`), and runs a flow: the topmost showing layer

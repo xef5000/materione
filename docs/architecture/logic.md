@@ -1450,6 +1450,98 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
 
 ---
 
+## 19. Decisions taken in #221 (A1: the logic authoring API, the GUI `open:` block and the web ops)
+
+#221 shipped §8 (the authoring surface behind the node canvas) and the `open:` shape from §6.1. The
+canvas (#223) and the Script tab (#225) are built on these operations alone. Each decision is
+reversible by the owner. The Java contracts are in `dev.materione.api.logic` (`LogicAuthoringApi`,
+`LogicEdit`) and `dev.materione.api.gui` (`GuiAuthoringApi.SetOpen`, `OpenSpec`); the implementation is in
+`dev.materione.behavior.logic.authoring` (logic) and `dev.materione.content.gui` (`GuiOpen`, the GUI
+side). The surface is [`api.md`](api.md) §3.12, the wire is [`web.md`](web.md) (*As built, #221*).
+
+**The edit model**
+
+1. **Edits are a closed sealed set, addressed by step path.** `LogicEdit` permits `AddRule`, `RemoveRules`,
+   `ReorderRules`, `PatchRule`, `InsertStep`, `PatchStep`, `MoveStep`, `RemoveStep`, `SetNodePosition`, `AddFlow`,
+   `RemoveFlow` and `RenameFlow`. Paths are the §5.1 step paths (`behavior.2.do.0.then.1`, `flows.purchase.1`). An
+   **insertion** path names the index it inserts at, so `InsertStep("behavior.0.do.1", …)` is the second step.
+2. **One resource, one transaction, the whole value.** The resource's working copy is edited in memory and the
+   changed values of `behavior` and `flows` are written through one `setFields` (one revision check, one audit, one
+   reload). Edits apply in order; a refused edit refuses the request and writes nothing. An edit that changes nothing
+   writes nothing, and an empty request returns the view with no revision.
+3. **Refusals are structural, and carry the step path.** A refusal (`MTR-0057` for a step, `MTR-0021` for a rule) names
+   the path it is about as the diagnostic's target. The refusals are: a path that leads nowhere or past the end of a
+   list; an insertion into a list that holds rules, cases or a value; a step with no kind, with two kinds, or with an
+   action no registry knows; an `if` without its `then:`, a `require` without its list; a move into the moved step's
+   own subtree; a branch key (`then`, `else`, `require`, `choose`, `do`) patched through `PatchStep` or `PatchRule`; a
+   rule whose `on:` names no registered trigger; a position that is not finite; a flow id outside `[A-Za-z0-9_.-]+`, a
+   duplicate flow, or a missing one. An **unknown action is a refusal** on the edit (the author asked for it
+   directly), and an unknown action *in a draft* is the compiler's warning (`validate`), which is what the spec of §10
+   says.
+4. **A move is remove, then insert, and `to` is read after the removal.** `MoveStep(from, to)` takes the step out and
+   then resolves `to` against the tree without it. A refused move puts the step back before the refusal is returned.
+5. **Renaming a flow rewrites its calls.** `RenameFlow` keeps the flow's position in `flows:` and rewrites every `call:`
+   (the bare and the `{flow: …}` spelling) in the resource. Removing a flow does not: the dangling `call:` is the
+   compiler's `MTR-0058` on the accepted edit, and the write stands, so the author sees the broken call instead of a
+   silent loss.
+6. **Unknown keys survive; comments inside the blocks do not.** The rule and step maps are copied with their keys, so
+   an unknown key and a `node:` hint round-trip through every other edit (tested). The `behavior:` and `flows:` values are
+   rewritten whole, as the GUI's `layers:` is (gui.md, decisions taken in #204, decision 5), so a comment inside those blocks is lost. A
+   list-item path in `LosslessYamlDocument` would lift this; it is still not in this change.
+7. **Node positions are edited, not computed.** `SetNodePosition` writes `node: {x, y}` on a rule or a step; both
+   coordinates null removes it. A named flow has no position of its own and is refused.
+
+**The read model**
+
+8. **The view is the tree, typed.** `LogicView` lists the rules (index, path, `on:`, the other keys as `options`, the
+   rule-level `if:` as authored, the node position, and the steps) and the flows. A `StepView` has its path, its `kind`
+   (an action's id as written, or `if`, `require`, `choose`, `wait`, `stop`, `call`), its `value` (the kind's key, as
+   authored), its `options` (`chance`, `delay`, `with`, …), its position and its `branches`, keyed by the path segments
+   that reach them: `then`, `else`, `require`, and `choose.<c>.then` for a switch case. The view reads what the author
+   wrote even when the compiler would refuse it, so the canvas can show a broken step. Only the compiler decides validity.
+9. **Validation is the compiler's, on a draft.** `validate(LogicDraft)` runs `FlowCompiler` over the draft's
+   `behavior:` and `flows:` with the registries' lookup, and returns its problems with their step paths. With a
+   `trigger`, a rule that names no `on:` takes it, so a draft can be checked against the trigger it will be bound to.
+   A draft with no rules has no trigger schema to check roots against, so its `${root}`s are not checked.
+10. **The GUI's `gui.validate` includes the logic compiler.** `GuiAuthoringApiImpl` takes a `LogicCheck` seam (the content
+    module does not depend on `behavior`); the plugin supplies `LogicDiagnostics.of`. The GUI's `behavior:` and `flows:`
+    problems join its compile diagnostics, both in `validate` and in the warnings of `edit`.
+
+**The `open:` block (§6.1)**
+
+11. **`open:` is a typed record, and `GuiEdit.SetOpen` replaces it whole.** `OpenSpec` has `commands` (a list of names),
+    `args` (`OpenArg`: name, type, optional, default, suggest), `permission`, `requirement` and `deny`. `SetOpen(null)`
+    removes the block. The typed `GuiDocumentView` carries it as `open`, so `gui.get` and `gui.edit` return it.
+12. **The shape is checked, the meaning is not.** `GuiOpen` refuses a command name outside `[a-z0-9_-]+` or named twice, an
+    argument name outside `[a-z][a-z0-9_]*` or declared twice, an argument type other than `string`, `int`, `number`,
+    `player`, `boolean` or `choice`, a blank permission, and an `open:` key the block does not have (on read). A
+    `requirement` is a condition's outer shape (a string, a mapping, a list or a boolean); a `deny` is a list of steps.
+    Their compile is the logic compiler's, reached through the GUI's logic check. The runtime that acts on the block is #215.
+13. **`SetOpen` is a field, not a layer.** `GuiLayerEdits` ignores it, and `edit` writes `open:` as its own field in the same
+    `setFields` transaction as the layers. A block equal to the one on disk writes nothing.
+14. **The GUI's self-description lists the logic keys.** `behavior`, `flows` and `open` are declared in `GuiType` and
+    `flows` in the item, block and furniture types (`content.logic.LogicSchemas`), so the editor learns the keys from the
+    schema (D5), not from a list in the studio.
+
+**The API and the ops**
+
+15. **`AuthoringApi.logic()` is built like `gui()`.** `AuthoringApiImpl` takes a logic factory; a build without the behavior
+    engine answers every call with `MTR-0011` (`UnavailableLogicAuthoring`), so the rest of the API keeps working.
+16. **`instantiate` is defined and refused.** It takes a recipe id and parameters and returns the steps it expands to. The
+    recipe registry and the v1 recipes are #222, so every recipe is refused as unknown (`MTR-0008`). It never writes.
+17. **The variables ops are not here.** `logic.variables.get/set` depend on #211 and are not added; the seam is the
+    `logic` capability, which they will join under the same gate.
+18. **Five ops, one capability.** `logic.vocabulary`, `logic.get`, `logic.edit`, `logic.validate` and `logic.instantiate` are
+    translators over `AuthoringApi.logic()` (R9), gated on the `logic` capability in `editor-op-gates.json`. The
+    capability is advertised in `SessionBlob.CURRENT_CAPABILITIES`, and the SPA checks it with `hasCapability` before it
+    calls any of them (`webui/src/lib/logic/server.ts`). A refused edit's wire error carries the step path in its
+    `resource` field, so the canvas can point at the node.
+19. **No new diagnostic codes.** Every refusal reuses `MTR-0057`, `MTR-0021`, `MTR-0008` or `MTR-0034`, and the compiler's
+    problems keep their codes (`MTR-0057`, `MTR-0058`, `MTR-0060`). The next free code stays `MTR-0061`.
+20. **The file-size rule holds.** Every main class of the new packages is under the §9 limit of 400 lines; the logic surface is
+    split into `LogicAuthoringApiImpl` (reads and writes), `LogicEditor` (the edits), `LogicTree` (paths), `StepShape` (the kind
+    checks), `LogicViews` (the typed view) and `LogicRefusal` (the refusal).
+
 ## 21. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
 
 #214 shipped the GUI runtime's core (§6.1 stages 1, 2, 5 to 8, §6.2, §5.2 for GUIs). Every later GUI issue
@@ -1622,3 +1714,9 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 **Build checks.** R10 (§9 rule 1) ships with this change, proven against a planted violation
 (`LogicCodeOrganisationTest`) and applied whole-jar in `AllModulesArchitectureTest`; the 400-line guard now
 covers `plugin.gui` and `content.gui.logic` as well.
+
+**Reconciled with #221 at merge.** #221 added a `GuiAuthoringApiImpl.LogicCheck` that ran the logic
+compiler over a GUI's `behavior:` in `validate` and `edit`. This PR's `GuiRuleChecker` already runs in
+the diagnose stage, so `validate`, `edit` and the pack compile all carry the same rule diagnostics
+(plus the GUI-only layer checks). The two would have reported every problem twice, so `LogicCheck`
+was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the logic authoring API's own check.

@@ -485,6 +485,7 @@ public final class MaterionePlugin extends JavaPlugin {
         };
         // the GUI surface (gui.md §7, §10 #8): one implementation over this authoring API, with the
         // registry it resolves layers against and the allocation table's non-persisting preview
+        var logicLookup = new dev.materione.behavior.logic.RegistryLogicLookup(registries);
         authoringApi = new AuthoringApiImpl(
                 documents, audit, packsRoot, modelTransactions, glyphMeta,
                 () -> pipeline.runner().lastGraph(), previewReload, assetStore,
@@ -496,6 +497,8 @@ public final class MaterionePlugin extends JavaPlugin {
                         () -> pipeline.allocation().preview(),
                         ItemMaterialPalette.supportedItemMaterials(),
                         pipeline.guiRuleChecker()));
+                // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
+                base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);

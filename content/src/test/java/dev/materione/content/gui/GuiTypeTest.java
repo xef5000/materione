@@ -222,7 +222,7 @@ class GuiTypeTest {
     void describeDeclaresTheCommonLayerFieldsForTheStudio() {
         SelfDescription description = new GuiType(components()).describe();
         assertThat(description.parameters()).extracting(ParameterSchema::id)
-                .containsExactly("title", "rows", "layers", "behavior", "flows");
+                .containsExactly("title", "rows", "layers", "behavior", "flows", "open");
         ParameterSchema layers = description.parameters().get(2);
         assertThat(layers.nested()).extracting(ParameterSchema::id)
                 .containsExactly("id", "type", "name", "visible", "locked", "opacity");

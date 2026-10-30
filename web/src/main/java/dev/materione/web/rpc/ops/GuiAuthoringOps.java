@@ -14,6 +14,9 @@ import dev.materione.api.gui.GuiAuthoringApi.CustomizeItemResult;
 import dev.materione.api.gui.GuiAuthoringApi.GuiDocumentView;
 import dev.materione.api.gui.GuiAuthoringApi.GuiEdit;
 import dev.materione.api.gui.GuiAuthoringApi.GuiEditRequest;
+import dev.materione.api.gui.GuiAuthoringApi.OpenArg;
+import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
+import dev.materione.api.gui.GuiAuthoringApi.SetOpen;
 import dev.materione.api.gui.GuiAuthoringApi.GuiRender;
 import dev.materione.api.gui.GuiAuthoringApi.GuiRenderRequest;
 import dev.materione.api.gui.GuiAuthoringApi.GuiSource;
@@ -182,8 +185,66 @@ public final class GuiAuthoringOps {
                     EditorContentOps.optionalString(edit, "title"),
                     edit.has("rows") && !edit.get("rows").isJsonNull()
                             ? requiredInteger(edit, "rows") : null);
+            case "setOpen" -> new SetOpen(openOf(edit.get("open")));
             default -> throw new IllegalArgumentException("unknown GUI edit '" + op + "'");
         };
+    }
+
+    /** The {@code open:} block as the wire carries it; null (or JSON null) removes it. */
+    private static OpenSpec openOf(JsonElement element) {
+        if (element == null || element.isJsonNull()) {
+            return null;
+        }
+        JsonObject block = objectOf(element, "the open block");
+        var args = new ArrayList<OpenArg>();
+        for (JsonElement entry : arrayOf(block, "args")) {
+            JsonObject arg = objectOf(entry, "an open argument");
+            args.add(new OpenArg(
+                    EditorContentOps.requiredString(arg, "name"),
+                    EditorContentOps.requiredString(arg, "type"),
+                    arg.has("optional") && arg.get("optional").getAsBoolean(),
+                    arg.has("default") && !arg.get("default").isJsonNull()
+                            ? EditorContentOps.nodeValue(arg.get("default")) : null,
+                    stringsOf(arg.get("suggest"))));
+        }
+        var deny = new ArrayList<Object>();
+        for (JsonElement step : arrayOf(block, "deny")) {
+            deny.add(EditorContentOps.nodeValue(step));
+        }
+        return new OpenSpec(
+                stringsOf(block.get("commands")),
+                args,
+                EditorContentOps.optionalString(block, "permission"),
+                block.has("requirement") && !block.get("requirement").isJsonNull()
+                        ? EditorContentOps.nodeValue(block.get("requirement")) : null,
+                deny);
+    }
+
+    /** The {@code open:} block as the typed view writes it for {@code gui.get} and {@code gui.edit}. */
+    private static JsonObject openJson(OpenSpec open) {
+        JsonObject json = new JsonObject();
+        json.add("commands", EditorContentOps.jsonOf(open.commands()));
+        var args = new JsonArray();
+        for (OpenArg arg : open.args()) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("name", arg.name());
+            entry.addProperty("type", arg.type());
+            entry.addProperty("optional", arg.optional());
+            if (arg.defaultValue() != null) {
+                entry.add("default", EditorContentOps.jsonOf(arg.defaultValue()));
+            }
+            entry.add("suggest", EditorContentOps.jsonOf(arg.suggest()));
+            args.add(entry);
+        }
+        json.add("args", args);
+        if (open.permission() != null) {
+            json.addProperty("permission", open.permission());
+        }
+        if (open.requirement() != null) {
+            json.add("requirement", EditorContentOps.jsonOf(open.requirement()));
+        }
+        json.add("deny", EditorContentOps.jsonOf(open.deny()));
+        return json;
     }
 
     /** A source: {@code {kind: saved, pack, path}}, {@code {kind: yaml, pack, text}} or {@code {kind: draft, document}}. */
@@ -223,7 +284,8 @@ public final class GuiAuthoringOps {
                 EditorContentOps.optionalString(document, "title"),
                 document.has("rows") && !document.get("rows").isJsonNull() ? requiredInteger(document, "rows") : null,
                 0,
-                layers);
+                layers,
+                openOf(document.get("open")));
     }
 
     // ------------------------------------------------------------------
@@ -259,6 +321,9 @@ public final class GuiAuthoringOps {
             layers.add(json);
         }
         payload.add("layers", layers);
+        if (view.open() != null) {
+            payload.add("open", openJson(view.open()));
+        }
         payload.add("warnings", diagnosticsJson(warnings));
         return payload;
     }

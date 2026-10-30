@@ -1,0 +1,284 @@
+{
+  "meta": {
+    "file": "editor-logic-v1.json",
+    "name": "materione logic op frames",
+    "version": 1
+  },
+  "vocabulary": {
+    "request": {
+      "op": "logic.vocabulary",
+      "id": "l-0",
+      "payload": {}
+    },
+    "response": {
+      "op": "logic.vocabulary",
+      "id": "l-0",
+      "ok": true,
+      "data": {
+        "version": 2,
+        "events": [],
+        "actions": [],
+        "ruleOptions": [],
+        "actionOptions": [],
+        "mechanics": [],
+        "triggers": [],
+        "conditions": [],
+        "steps": [],
+        "categories": [],
+        "functions": []
+      }
+    }
+  },
+  "get": {
+    "request": {
+      "op": "logic.get",
+      "id": "l-1",
+      "payload": {
+        "pack": "demo",
+        "path": "items/sword.yml"
+      }
+    },
+    "response": {
+      "op": "logic.get",
+      "id": "l-1",
+      "ok": true,
+      "data": {
+        "pack": "demo",
+        "path": "items/sword.yml",
+        "id": "sword",
+        "rev": 1,
+        "rules": [
+          {
+            "index": 0,
+            "path": "behavior.0",
+            "on": "click:right",
+            "options": {},
+            "steps": [
+              {
+                "path": "behavior.0.do.0",
+                "kind": "give",
+                "value": "one",
+                "options": {},
+                "branches": {}
+              },
+              {
+                "path": "behavior.0.do.1",
+                "kind": "stop",
+                "options": {},
+                "branches": {}
+              }
+            ]
+          }
+        ],
+        "flows": [],
+        "warnings": []
+      }
+    }
+  },
+  "edit": {
+    "request": {
+      "op": "logic.edit",
+      "id": "l-2",
+      "payload": {
+        "pack": "demo",
+        "path": "items/sword.yml",
+        "rev": 1,
+        "edits": [
+          {
+            "op": "setNodePosition",
+            "path": "behavior.0",
+            "x": 30,
+            "y": 40
+          },
+          {
+            "op": "insertStep",
+            "path": "behavior.0.do.0",
+            "step": {
+              "give": "front"
+            }
+          }
+        ]
+      }
+    },
+    "response": {
+      "op": "logic.edit",
+      "id": "l-2",
+      "ok": true,
+      "data": {
+        "pack": "demo",
+        "path": "items/sword.yml",
+        "id": "sword",
+        "rev": 2,
+        "rules": [
+          {
+            "index": 0,
+            "path": "behavior.0",
+            "on": "click:right",
+            "options": {},
+            "node": {
+              "x": 30.0,
+              "y": 40.0
+            },
+            "steps": [
+              {
+                "path": "behavior.0.do.0",
+                "kind": "give",
+                "value": "front",
+                "options": {},
+                "branches": {}
+              },
+              {
+                "path": "behavior.0.do.1",
+                "kind": "give",
+                "value": "one",
+                "options": {},
+                "branches": {}
+              },
+              {
+                "path": "behavior.0.do.2",
+                "kind": "stop",
+                "options": {},
+                "branches": {}
+              }
+            ]
+          }
+        ],
+        "flows": [],
+        "warnings": []
+      }
+    }
+  },
+  "editConflict": {
+    "request": {
+      "op": "logic.edit",
+      "id": "l-3",
+      "payload": {
+        "pack": "demo",
+        "path": "items/sword.yml",
+        "rev": 1,
+        "edits": [
+          {
+            "op": "setNodePosition",
+            "path": "behavior.0",
+            "x": 30,
+            "y": 40
+          },
+          {
+            "op": "insertStep",
+            "path": "behavior.0.do.0",
+            "step": {
+              "give": "front"
+            }
+          }
+        ]
+      }
+    },
+    "response": {
+      "op": "logic.edit",
+      "id": "l-3",
+      "ok": false,
+      "error": {
+        "code": "MTR-0034",
+        "message": "items/sword.yml is at revision 2, not 1",
+        "resource": "demo/items/sword.yml",
+        "hint": "re-read the logic and re-apply your change"
+      }
+    }
+  },
+  "editRefused": {
+    "request": {
+      "op": "logic.edit",
+      "id": "l-4",
+      "payload": {
+        "pack": "demo",
+        "path": "items/sword.yml",
+        "rev": 2,
+        "edits": [
+          {
+            "op": "insertStep",
+            "path": "behavior.0.do.0",
+            "step": {
+              "nosuch": 1
+            }
+          }
+        ]
+      }
+    },
+    "response": {
+      "op": "logic.edit",
+      "id": "l-4",
+      "ok": false,
+      "error": {
+        "code": "MTR-0057",
+        "message": "unknown step kind 'nosuch': it is neither a control step nor a registered action",
+        "resource": "behavior.0.do.0",
+        "hint": "the edit was refused and nothing was written"
+      }
+    }
+  },
+  "validate": {
+    "request": {
+      "op": "logic.validate",
+      "id": "l-5",
+      "payload": {
+        "pack": "demo",
+        "resource": "draft",
+        "behavior": [
+          {
+            "on": "click",
+            "do": [
+              {
+                "give": "ok"
+              },
+              {
+                "nosuch": 1
+              }
+            ]
+          }
+        ],
+        "flows": {}
+      }
+    },
+    "response": {
+      "op": "logic.validate",
+      "id": "l-5",
+      "ok": true,
+      "data": {
+        "diagnostics": [
+          {
+            "code": "MTR-0057",
+            "severity": "warn",
+            "message": "demo:draft rule 'demo:draft#0' at behavior.0.do.1: unknown action 'nosuch'",
+            "resource": "demo:draft",
+            "field": [
+              "behavior",
+              "0",
+              "do",
+              "1"
+            ],
+            "hint": "check the spelling or install the addon that provides it; only this action was skipped"
+          }
+        ]
+      }
+    }
+  },
+  "instantiate": {
+    "request": {
+      "op": "logic.instantiate",
+      "id": "l-6",
+      "payload": {
+        "recipe": "pay_to_receive",
+        "params": {}
+      }
+    },
+    "response": {
+      "op": "logic.instantiate",
+      "id": "l-6",
+      "ok": false,
+      "error": {
+        "code": "MTR-0008",
+        "message": "unknown recipe 'pay_to_receive': the recipe registry arrives with #222"
+      }
+    }
+  }
+}
