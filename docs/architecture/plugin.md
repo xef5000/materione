@@ -243,9 +243,16 @@ resources. Fingerprinting the manifest and fixing the splice must land together.
   (forward slashes, natural string order), never in filesystem order.
 - **Identity is the top-level key.** A file holds one content type and any number of keyed
   resources; its path never names one, so moving a file between folders renames nothing.
-  Two declarations of one id and type, in siblings or across folders, resolve identically: the
-  later document in discovery order owns the id. Such duplicates are **not diagnosed yet** — no
-  diagnostic code exists for them today.
+  Two declarations of one id and content type in the same pack, in siblings or across folders,
+  resolve identically and are never order-dependent: the **first** document in discovery order
+  keeps the id; every later declaration is excluded before validation, the graph and compile (it is
+  not a resource at all), and reported once with `MTR-0056` naming both files. The loser is not put
+  in the quarantine tracker, which is keyed by id and would also hide the winner. The same id in two
+  content types is not a duplicate (the graph keys nodes by type and id), and the same id in two packs
+  is two namespaced resources. A targeted reload parses the whole pack for this check, so it reaches
+  the same winner as a full run. Authoring refuses to create or duplicate a declaration that
+  already exists in the pack (`MTR-0056`, error), so the editor cannot make the duplicate in the
+  first place.
 - **One rule, everywhere.** The scope/fingerprint set (§4.1), the editor's browser and folder
   list, the file watcher and the boot-time reader all list content through the same
   `PackLayout` rule. A test pins browser and pipeline to the same document set.
@@ -386,6 +393,12 @@ bus, once per layer, targeting `layers.<index>` so the editor opens that layer:
 | `MTR-0053` | error | The GUI background codepoint block (`U+E200`–`U+F8FF`, one durable allocation per GUI) is used up. That GUI is quarantined and the rest of the pack compiles. Retire unused GUIs; the allocation table never reuses codepoints. |
 | `MTR-0054` | warning | A GUI slot names an item that is not live when the shadow is built (an unknown Materione id, or a `minecraft:` id that is no material). The slot stays empty and the rest of the GUI is shown; nothing is guessed. Fix the item id or the pack that defines it (gui.md §5). |
 | `MTR-0055` | error | An actor asked a runtime operation without the permission node it needs (`materione.gui.open`). Nothing happens. |
+
+The pipeline's duplicate-id rule (plugin.md §4.2, #194) adds one code:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0056` | warning | Two documents in one pack declare the same resource id for the same content type. Discovery order decides the winner (the first path, plain string order, keeps the id); the other declaration is ignored, is not a resource, and is reported with its file. Rename one declaration or move it to another pack. The same code is an **error** from the authoring API: creating or duplicating a resource whose id a file in the pack already declares is refused and nothing is written. |
 
 ---
 
