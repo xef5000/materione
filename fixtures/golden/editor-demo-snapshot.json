@@ -162,6 +162,32 @@
           "threading": "player_region"
         },
         {
+          "available": false,
+          "category": "server",
+          "deferred": false,
+          "description": "Sends the player to another server; a proxy takes the name, the transfer packet uses its configured host",
+          "displayName": "Connect to server",
+          "id": "connect",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Target server name as the proxy knows it",
+              "id": "server",
+              "label": "Server",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "server",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region",
+          "unavailableReason": "No server transfer is configured (set transfer_host, or install a proxy channel)"
+        },
+        {
           "available": true,
           "category": "player",
           "deferred": false,
@@ -236,6 +262,68 @@
           ],
           "registeredBy": "materione",
           "shorthand": "item",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Adds money to the player's balance of a currency (the default currency unless one is named)",
+          "displayName": "Give money",
+          "id": "give_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to give; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Grants a permission node to the player through the active permission provider",
+          "displayName": "Give permission",
+          "id": "give_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         },
@@ -682,6 +770,68 @@
           "threading": "player_region"
         },
         {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Removes money from the player's balance of a currency; fails when the balance is too low",
+          "displayName": "Take money",
+          "id": "take_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to take; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Removes a permission node from the player through the active permission provider",
+          "displayName": "Take permission",
+          "id": "take_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
           "available": true,
           "category": "world",
           "deferred": false,
@@ -1108,6 +1258,30 @@
           "variadic": false
         },
         {
+          "description": "The player's balance of a currency, read now; null without a player or when the currency cannot answer. It reads live state, so the same call can give a different answer later.",
+          "displayName": "Balance",
+          "id": "balance",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. money or shop:gems",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
           "description": "The smallest whole number not less than the value. Null for a non-number.",
           "displayName": "Ceiling",
           "id": "ceil",
@@ -1257,6 +1431,41 @@
           ],
           "registeredBy": "materione",
           "returns": "decimal",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "An amount in a currency's own notation: its symbol, thousands separators and decimals",
+          "displayName": "Format currency",
+          "id": "format_currency",
+          "maxArguments": 2,
+          "minArguments": 2,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The amount to format",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. money or shop:gems",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
           "sinceVersion": "2.0.0",
           "variadic": false
         },
@@ -8478,6 +8687,100 @@
             "uiHint": "advanced"
           }
         ]
+      },
+      {
+        "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
+        "directory": "currencies",
+        "displayName": "Currency",
+        "name": "currency",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "Integration that answers for this currency: vault, xp, custom, or an addon's id",
+            "example": "custom",
+            "id": "integration",
+            "label": "Integration",
+            "order": 10,
+            "required": true,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "Name shown to players (defaults to the id's name)",
+            "example": "Gems",
+            "id": "display_name",
+            "label": "Display name",
+            "order": 20,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "default": "",
+            "description": "Prefix formatting puts before the amount",
+            "example": "G$",
+            "id": "symbol",
+            "label": "Symbol",
+            "order": 30,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "default": "2",
+            "description": "Digits after the point when formatting, 0 to 6",
+            "example": "2",
+            "id": "decimals",
+            "label": "Decimals",
+            "order": 40,
+            "required": false,
+            "section": "economy",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
+            "advanced": true,
+            "description": "custom: console command that gives money; {player} and {amount} are filled in",
+            "example": "gems give {player} {amount}",
+            "id": "deposit-command",
+            "label": "Deposit command",
+            "order": 50,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "custom: console command that takes money; {player} and {amount} are filled in",
+            "example": "gems take {player} {amount}",
+            "id": "withdraw-command",
+            "label": "Withdraw command",
+            "order": 60,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "custom: PlaceholderAPI token that reads the balance as a number",
+            "example": "%coinsengine_balance_raw_gems%",
+            "id": "balance-placeholder",
+            "label": "Balance placeholder",
+            "order": 70,
+            "required": false,
+            "section": "economy",
+            "type": "string",
+            "uiHint": "text"
+          }
+        ]
       }
     ]
   },
@@ -11393,6 +11696,7 @@
   "settings": {
     "parsed": {
       "debug": false,
+      "default_currency": "materione:money",
       "delivery_host": "0.0.0.0",
       "delivery_port": 8090,
       "delivery_public_host": "",
@@ -11402,10 +11706,13 @@
       "editor_mode": "cloud",
       "editor_port": 8089,
       "relay_base_url": "https://editor.materione.com",
+      "transfer_host": "",
+      "transfer_mode": "packet",
+      "transfer_port": 25565,
       "version": 1
     },
-    "raw": "version: 1\ndebug: false\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\n",
-    "sha256": "b77d8e0cced4537395357d2642432ecb0c361fb00d356e95a394a09e7d389de9"
+    "raw": "version: 1\ndebug: false\ndefault_currency: materione:money\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\ntransfer_host: ''\ntransfer_mode: packet\ntransfer_port: 25565\n",
+    "sha256": "384c39ac9025c7d5c455b94f3f40046d90df1e9f18ba82541954fdd014ee372b"
   },
   "source": "Recorded from the real editor ops over fixtures/packs/sample + world by EditorDemoSnapshotTest; regenerate with -Dmaterione.golden.regen=true.",
   "types": [
@@ -14268,6 +14575,100 @@
           "section": "behavior",
           "type": "raw",
           "uiHint": "advanced"
+        }
+      ]
+    },
+    {
+      "description": "A named currency (gems, coins) that give_money, take_money and the balance function use. The integration key chooses how its money is read and changed; the other keys belong to that integration.",
+      "directory": "currencies",
+      "displayName": "Currency",
+      "name": "currency",
+      "parameters": [
+        {
+          "advanced": false,
+          "description": "Integration that answers for this currency: vault, xp, custom, or an addon's id",
+          "example": "custom",
+          "id": "integration",
+          "label": "Integration",
+          "order": 10,
+          "required": true,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "description": "Name shown to players (defaults to the id's name)",
+          "example": "Gems",
+          "id": "display_name",
+          "label": "Display name",
+          "order": 20,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "default": "",
+          "description": "Prefix formatting puts before the amount",
+          "example": "G$",
+          "id": "symbol",
+          "label": "Symbol",
+          "order": 30,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "default": "2",
+          "description": "Digits after the point when formatting, 0 to 6",
+          "example": "2",
+          "id": "decimals",
+          "label": "Decimals",
+          "order": 40,
+          "required": false,
+          "section": "economy",
+          "type": "integer",
+          "uiHint": "number"
+        },
+        {
+          "advanced": true,
+          "description": "custom: console command that gives money; {player} and {amount} are filled in",
+          "example": "gems give {player} {amount}",
+          "id": "deposit-command",
+          "label": "Deposit command",
+          "order": 50,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "custom: console command that takes money; {player} and {amount} are filled in",
+          "example": "gems take {player} {amount}",
+          "id": "withdraw-command",
+          "label": "Withdraw command",
+          "order": 60,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "custom: PlaceholderAPI token that reads the balance as a number",
+          "example": "%coinsengine_balance_raw_gems%",
+          "id": "balance-placeholder",
+          "label": "Balance placeholder",
+          "order": 70,
+          "required": false,
+          "section": "economy",
+          "type": "string",
+          "uiHint": "text"
         }
       ]
     }

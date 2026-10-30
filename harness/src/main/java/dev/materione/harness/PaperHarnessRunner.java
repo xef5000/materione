@@ -76,6 +76,17 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
             }
+            // logic providers (logic.md §4.5, §18, #213): this workspace has no Vault and no transfer host, so
+            // the default currency materione:money (Vault) is unavailable, and the money and connect actions
+            // report unavailable at boot, through the same availability the editor reads. The permission
+            // actions stay available on the session default.
+            if (log.readAll() == null || !log.readAll().contains(
+                    "MATERIONE-LOGIC-OK currency=materione:money available=false transfer=none "
+                            + "unavailable=give_money,take_money,connect")) {
+                problems.add("MATERIONE-LOGIC-OK currency=materione:money available=false transfer=none "
+                        + "unavailable=give_money,take_money,connect missing after boot (no Vault and no transfer "
+                        + "host: materione:money must be unavailable and the money and connect actions must report it)");
+            }
             // pack-format detection reads the server jar's version.json — the
             // pinned 1.21.4 server reports 46, the advertised range stays 46..88
             if (log.readAll() == null

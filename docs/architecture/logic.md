@@ -54,7 +54,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Actions: messages | `[message]`, `[minimessage]`, `[broadcast]`, `[json]` … | `[msg]` | `message`, `broadcast` (scoped), `actionbar` and `title`, all in Materione rich text. |
 | Actions: sound | `[sound]`, `[broadcastsound]`, `[broadcastsoundworld]` | `[sound]`, `[stopsound]` | `sound` (scope: player, world or server) and `stop_sound`. |
 | Actions: GUI | `[openguimenu]`, `[close]`, `[refresh]` | `[open]`, `[close]`, `[refresh]`, `[previous]`, `[itemaction]` | `gui.open`, `gui.close`, `gui.refresh`, `gui.back`, `gui.set_slot` and `gui.slot_item` (§4.1). |
-| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money`, `give_exp`/`take_exp` and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
+| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money` against a named currency (`currencies/`, §18: Vault, the XP integration, or a command pair), `give_exp`/`take_exp` (an XP currency), and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
 | Actions: world | `[connect]` | `[server]`, `[teleport]`, `[give]` | `connect`, `teleport`, `give_item`, `take_item` and `potion`. |
 | Delay and chance | `<delay=>`, `<chance=>` | `[delay]` (nested block) | Kept as action options (`delay:` and `chance:`), plus the `wait` step (§2.2). |
 | Per-player data | meta (PDC, typed), set/add/subtract/switch/remove | session data, persistent `data.yml` (set/add/math/del/clear) | Declared **variables** with local, session, player and server scopes (§3). |
@@ -303,13 +303,15 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 
 | SPI | Used by | Default | Integration |
 |---|---|---|---|
-| `EconomyProvider` (balance, has, withdraw, deposit) | `has_money`, `give_money`, `take_money` | none (the actions fail with "no economy provider", and the editor shows the action as unavailable) | Vault |
+| `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
 | `InputMethod` | `prompt` (§6.6) | chat, sign, anvil | dialogs (#6) |
 | `ListSource` | the `list` component (§6.7) | online players, a pack's items, a variable list, static `entries:` | addon sources |
 
-Providers are resolved at use, not cached at load, so installing Vault later only needs a reload.
+Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
+is the one provider kind that is content rather than a slot: a currency file names its integration, and
+the integrations are a registry (§18).
 Availability is part of the self-description (`available: false, reason`), which lets the studio
 grey out what the server cannot run.
 
@@ -451,7 +453,7 @@ layers whose footprint covers it. A layer covers a slot when the slot's 16×16 i
 falls inside the layer's rectangle (buttons, text, images), or when the slot is in its slot set
 (item, slots, list). At click time the router takes the topmost **visible** layer that has a
 `gui.click` rule matching the click kind. One map lookup per click, no geometry at runtime. As built
-(#214, §18): a rule with no `layer:` filter answers a click that no layer's rule claimed.
+(#214, §21): a rule with no `layer:` filter answers a click that no layer's rule claimed.
 
 ### 6.3 Dynamic content
 
@@ -716,7 +718,7 @@ Rules:
 
 The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. #207
 took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
-linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§18);
+linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 the next free code is `MTR-0061`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
@@ -745,6 +747,8 @@ Each row below names the class of problem, and every one carries a step path whe
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |
 | Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. |
 | Item and block rules in the node editor | The canvas is resource-agnostic (§8, `AuthoringApi.logic()`). The item studio's rule editor can switch to it. |
+| Currency integrations beyond Vault, XP and the command pair (#213, §18) | An addon registers a `CurrencyIntegration` in its own namespace (`example:coinsengine`, `example:playerpoints`), and a currency file names it. No core change. |
+| The `variable` and `item` currency integrations (§18) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |
 
 ---
 
@@ -924,7 +928,7 @@ as before.
 
 **Build checks.** R11 (one action, one class, §9 rule 2) and the 400-line guard (§9 rule 4) ship
 with this change, each proven against a planted violation. R10 had no subjects until the GUI runtime
-created the `plugin.gui..` packages, and arrived with it (#214, §18).
+created the `plugin.gui..` packages, and arrived with it (#214, §21).
 
 ---
 
@@ -1283,9 +1287,170 @@ swarm records them.
 Their parse is a unit test; their execution calls static server state and is not run by any test
 yet.
 
+## 18. Decisions taken in #213 (L7: provider SPIs, named currencies, the money, permission and connect actions)
+
+#213 ships the provider SPIs of §4.5, the **named-currency** content type, three built-in currency
+integrations, the Vault, LuckPerms and BungeeCord adapters, the Bukkit default permission provider, the
+transfer packet, five actions, and two expression functions. The currency model follows the owner's
+ItemsAPI currency system; the XP, command-pair and Vault integrations are adapted from that code with
+the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in [`api.md`](api.md) §3.11.
+
+**Currencies are content**
+
+1. **A currency is a file in `currencies/`, under its pack's namespace.** The `currency` content type
+   (`dev.materione.content.currency.CurrencyType`) parses `shop:gems` from `currencies/gems.yml`. Its own
+   keys are `integration` (required), `display_name` (defaults to the id's name), `symbol` (blank by
+   default) and `decimals` (0 to 6, default 2). Every other key belongs to the integration and is kept as
+   authored, so the file round-trips losslessly and the integration reads its own keys at bind time.
+2. **Money is runtime state, so nothing is emitted to the pack.** The type's `compile` is a no-op. The
+   defined currencies travel as a runtime view (`RuntimeCurrencies`) built by the same apply that builds
+   items and sounds, and they swap with it (D6). The catalog never stores a balance.
+3. **Quarantine is `MTR-0062`** (plugin.md §5): a file that does not parse (no integration, a bad
+   `decimals`), a currency in the reserved `materione` namespace, or an integration that rejects the
+   currency's keys when bound at apply. The rest of the pack loads. An integration that is **not
+   installed** keeps the currency, which then reports unavailable at use, with the reason; no reload is
+   needed once the plugin arrives.
+4. **The built-in `materione:money` always exists**, bound to `vault`, with no file. The
+   `default_currency` setting (default `materione:money`) names the currency the money actions use when
+   they name none. A value that names nothing defined falls back to `materione:money`.
+
+**The SPI**
+
+5. **`CurrencyIntegration` is a registry entry.** It lives in the `currency-integrations` registry
+   (`RegistryKeys.CURRENCY_INTEGRATIONS`), registered through `LogicApi.currencyIntegrations()` like
+   actions. `bind(ParamReader config)` is pure over the currency's mapping: it returns a `CurrencyBackend`
+   or rejects with `IllegalArgumentException`. It runs at apply (for quarantine) and at each use (so an
+   integration that arrives later answers without a reload).
+6. **`CurrencyBackend` answers for one bound currency.** It reports `availability()` with its reason, and
+   `balance`, `has`, `withdraw` and `deposit` return the sealed `EconomyResult` (Succeeded, InsufficientFunds,
+   Failed). **A withdrawal the balance cannot cover takes nothing**; that is a contract, and it is stronger
+   than ItemsAPI's void withdraw, which could not say so.
+7. **`CurrencyCatalog` is what the actions read** (`LogicProviders.currencies()`): `all`, `get`, `resolve`,
+   `defaultCurrency`, `backend` and `availability`. The live implementation,
+   `MaterioneCurrencyCatalog`, is replaced after every successful swap (`observeSwaps`), so a removed
+   currency leaves with the reload that removed it.
+8. **Name resolution.** A qualified id (`shop:gems`) matches exactly. A bare name (`gems`) matches
+   `materione:` first, and otherwise the one currency of that name in any pack; two packs defining the same
+   bare name make it ambiguous and it resolves to nothing. **Deviation from the design note:** the spec
+   asked for a bare name to resolve in the *resource's own pack* first. The rule parser binds an action's
+   parameters without the rule's owner, so the action cannot know its pack at load. Threading the owner
+   through `RuleParser`'s bind is the follow-up; until then a bare name is matched by name across packs, and
+   a clash must be qualified.
+9. **Unknown names fail at run time, not at load.** **Deviation from the design note:** the spec asked for
+   an unknown currency to be rejected at load as `MTR-0057`. The currencies a reload defines are published
+   by the same apply that binds the rules, after the rules bind, so a load-time check would reject a rule
+   that names a currency defined in the same reload. The step fails with `unknown currency <name>` instead,
+   and the load-time check is the follow-up: publish the currency view before the rule bind, then validate.
+
+**The built-in integrations**
+
+10. **`xp`** (`unit: points | levels`, default `points`). Ported from ItemsAPI's XP integration. Points are
+    the player's total experience: the server keeps that total, so the port reads `getTotalExperience()`
+    instead of recomputing it from the level and the progress bar, which gives the same value. Amounts are
+    whole units. **Threading:** the XP backend declares `PLAYER_REGION`, so a step that pays XP runs on the
+    player's region (see item 25).
+11. **`custom`** (`deposit-command`, `withdraw-command`, `balance-placeholder`, all required). Ported from
+    ItemsAPI's custom integration. The balance is read through PlaceholderAPI, which the integration reaches
+    by **reflection**, so Materione takes no compile dependency on it. Without PlaceholderAPI the currency
+    is unavailable, with that reason. A leading `/` is stripped; `{player}` and `{amount}` are filled in; the
+    command runs as the console. A withdrawal checks the balance first. A command that does not dispatch is
+    `Failed`. A deposit reports the expected balance (the placeholder is authoritative on the next read).
+12. **`vault`** is registered as `materione:vault` **only while Vault is enabled**, by `Integrations`, so a
+    server without Vault never loads its classes. It takes no keys: the economy Vault exposes is the currency.
+    Ported from ItemsAPI's Vault integration, with one change: ItemsAPI cached the `Economy` at construction,
+    and this resolves it through Vault's service registry at each call, so an economy registered after Vault
+    is picked up without a reload.
+13. **Reserved seams, not implemented.** `variable` (a declared player number variable, #211) and `item` (a
+    count of an item in the inventory) are reserved integration names. CoinsEngine, PlayerPoints and other
+    shop plugins are addon integrations (§11), not built in.
+
+**Actions and functions**
+
+14. **`give_money` and `take_money`** take `amount` (the shorthand, above 0, at most 1e12) and an optional
+    `currency:`. Threading is `GLOBAL` and the category is `economy`. `take_money` fails with `insufficient
+    funds: balance X, needs Y` and takes nothing, so a flow branches on it with `require` (§2.2). Each
+    fails with the catalog's reason when its currency cannot be used. Availability is that of the default
+    currency.
+15. **`balance(currency)`** reads the run's player's balance now, and is null without a player or when the
+    currency cannot answer. It is **not pure** (it reads live state, as `random` draws), so it is documented
+    as such. **`format_currency(amount, currency)`** is pure over the currency's definition: the symbol before
+    the number, thousands separators, the currency's decimals, and a sign before the symbol (`-G$3`). Both are
+    registered like the #209 functions, through the same function registry.
+
+**Settings, markers and diagnostics**
+
+16. **Settings.** `default_currency` (default `materione:money`), `transfer_host` (blank: the packet is off),
+    `transfer_port` (`25565`) and `transfer_mode` (`packet`, or `bungeecord`). All four are in the default
+    settings file and the key table of [`plugin.md`](plugin.md) §7.1, with defaults that keep the feature
+    off, and the settings golden is regenerated with them.
+17. **The boot marker** is `MATERIONE-LOGIC-OK currency=<default id> available=<bool> transfer=<yes|none>
+    unavailable=<action ids|none>` (build.md §7). The harness asserts it on a workspace with no Vault:
+    `materione:money` is unavailable, and `give_money`, `take_money` and `connect` report unavailable. The
+    server boots clean.
+
+**Adapters and the gate**
+
+18. **Permissions and transfer are single slots** (`LogicProviders.permissions()`, `transfer()`), unchanged
+    from the first #213 design: the session-only Bukkit default; LuckPerms when enabled (native expiry),
+    else Vault's permission service when Vault runs; the transfer packet when `transfer_host` is set, else the
+    BungeeCord plugin channel when `transfer_mode: bungeecord`.
+19. **`Integrations` is the only guarded entry point.** It takes the `LogicApi`, so it can register the Vault
+    currency integration as well as the provider slots. An absent plugin loads no class. An enabled plugin
+    whose API cannot load is reported as `MTR-0061` and skipped. The gate refreshes on start, on every
+    reload, and when Vault or LuckPerms enables or disables.
+20. **`paper-plugin.yml`** declares Vault and LuckPerms as optional server dependencies with
+    `join-classpath: true`, so Materione's classloader can see them when present.
+
+**Dependencies and licences (compileOnly, never shaded)**
+
+21. **Vault API** `com.github.MilkBowl:VaultAPI:1.7.1`, resolved from JitPack through a settings repository
+    filtered to that group. The upstream repository's licence is **LGPL-3.0** (as the reviewer stated; the
+    pom itself declares none, so verify before any shaded use). Compile-only and not shaded, so Materione
+    takes on no distribution obligation.
+22. **LuckPerms API** `net.luckperms:api:5.4`, MIT, Maven Central, no runtime dependencies.
+23. **PlaceholderAPI** is **not** a dependency at all: the custom integration reaches it by reflection.
+24. **ItemsAPI** is not a dependency. Code adapted from it is attributed in the file headers, under the
+    owner's grant of rights.
+
+**Threading**
+
+25. **Threading follows the currency, not a fixed value.** Each `CurrencyBackend` declares `threading()`
+    (default `GLOBAL`, the conservative choice): `vault` is `GLOBAL` (economies are written for the main thread),
+    `xp` is `PLAYER_REGION` (experience belongs to the player), and `custom` is `GLOBAL` (its take and give are
+    console commands, which may touch any region). `give_money` and `take_money` override `threading(P)` (§4.1,
+    #208): the engine hops to the thread of the currency the step names, resolved at dispatch because currencies
+    are live state. An unknown currency, or one whose integration is not bound, reports `PLAYER_REGION`; the
+    step then fails with its reason. The headline `threading()` stays `GLOBAL`, the common case, for the
+    vocabulary. Permission actions and `connect` stay `PLAYER_REGION`.
+    **The `balance()` function cannot declare a thread:** an expression function has no threading hook, so a
+    balance read is evaluated on the thread of the step that evaluates it. For an XP currency that is the
+    player's region (correct); for a Vault or command currency the read is safe on Paper and needs the global
+    thread on Folia. Adding a threading hook to `ExpressionFunction` is the follow-up that closes this.
+    **Folia gap:** a `custom` balance read through PlaceholderAPI reads player data on the global thread. That is
+    correct on Paper and a known gap on Folia.
+
+**Deferred**
+
+26. Pack-first bare-name resolution and load-time currency validation (items 8 and 9); a threading hook for
+    `balance()` and the PlaceholderAPI player-data read on Folia (item 25); the `variable` and `item`
+    integrations (item 13); `has_money` (#210,
+    which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
+    as: op` still uses the operator flag, not the permission provider (#208).
+27. **For #211:** the PlaceholderAPI expansion must expose `%materione_balance_<pack>_<id>%` (the raw balance)
+    and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). The expansion is #211's work.
+28. **For #210:** `has_money` takes `currency:` with the same resolution as the actions, and reads through the
+    catalog like `take_money` does.
+29. **In-game money flows are not in the QA catalog.** `logic.providers-unavailable-without-vault` proves the
+    boot-time state without Vault. A catalog entry that pays through Vault needs a probe server with Vault and
+    an economy, which the probe does not provision.
+
+**For #208 and #212.** `BuiltinLogic.providerActions`, `BuiltinLogic.currencyIntegrations` and
+`BuiltinLogic.currencyFunctions` are separate blocks in `BuiltinLogic`, appended beside the six M2 actions and
+#212's additions, so the streams touch different lines.
+
 ---
 
-## 18. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
+## 21. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
 
 #214 shipped the GUI runtime's core (§6.1 stages 1, 2, 5 to 8, §6.2, §5.2 for GUIs). Every later GUI issue
 builds on its seams, so the seams are named here. Where the design left a choice open, these are the choices.

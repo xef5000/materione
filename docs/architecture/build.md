@@ -28,6 +28,8 @@ exit remains separate; anything else marked *M-later* is reserved, not built.
 | bStats | 3.2.1 | MIT. `org.bstats:bstats-bukkit` (+ its `bstats-base` runtime): anonymous usage metrics, plugin id 34981. Shaded + relocated under `materione.libs.org.bstats` (§4). Referenced only by `MaterionePlugin`, behind a fail-soft wrapper; the data and the opt-out are described in [plugin.md](plugin.md) §7.2. |
 | Node / npm | node 22.17.0 | **M3**: provisions hermetically via `com.github.node-gradle.node` 7.1.0 for `:webui` (the SPA build). No local Node required; CI included. The Node distribution resolves through an Ivy repo declared in settings (`org.nodejs:node`). SPA deps pin via committed `package-lock.json`. |
 | Playwright | `@playwright/test` 1.64.1 | Dev-only browser regression tier for `webui/`; Chromium is installed separately and is not shipped in the SPA or plugin jar. |
+| Vault API | 1.7.1 (`com.github.MilkBowl:VaultAPI`) | **#213**: `compileOnly` in `integrations`, for the economy and permission adapters. Resolved from JitPack through a settings repository filtered to that group. Its pom declares no license; verify the upstream license before publishing a shaded adapter (none is shaded). Its Bukkit dependency is `provided`, so nothing transitive joins the build. |
+| LuckPerms API | 5.4 (`net.luckperms:api`, MIT) | **#213**: `compileOnly` in `integrations`, for the LuckPerms permission adapter. Maven Central; its pom has no runtime dependencies. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins
@@ -44,9 +46,11 @@ under `build-logic/` (named `build-logic`, not `build` — `build/` is Gradle's 
    │          │     │        content ──► api, core          (item + recipe content types)
    └──────────┴─────┴─────► pack ──► api, core, (creative, SnakeYAML-testOnly)
                              delivery ──► api, core + creative-server
-                             behavior, web, importers, integrations — skeletons until their
-                             milestones; they may depend on api + core, never on each other's
-                             internals, never on platform internals (master §10 rules)
+                             integrations ──► api, core + paper-api, Vault API, LuckPerms API
+                                                    (compileOnly: the soft-depend adapters, #213)
+                             behavior, web, importers — skeletons until their milestones; they may
+                             depend on api + core, never on each other's internals, never on
+                             platform internals (master §10 rules)
 
   testing ──► testFixtures consumed by every module's tests (build infrastructure, not shipped)
   harness  ──► standalone: boots the real server, copies the shaded jar in (no product deps)
@@ -71,7 +75,7 @@ assembled by `plugin/` via Shadow; **nothing depends on `plugin`** (the leaf, ru
 |---|---|---|
 | `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, `fixtures/` declared as a test **input** (a corpus change invalidates test tasks — path references are invisible to Gradle otherwise), `materione.golden.regen` passthrough, integration-tag exclusion on unit `Test` tasks. |
 | `materione.library-conventions` | library modules | Test bundle (JUnit, AssertJ, ArchUnit) + `testing` testFixtures. |
-| `materione.paper-conventions` | api, core, platform, plugin | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. |
+| `materione.paper-conventions` | api, core, platform, plugin, integrations | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. (`integrations` joined in #213, for the Bukkit types its adapters name.) |
 | `materione.plugin-conventions` | plugin only | Shadow wiring (relocations for creative, Gson, Undertow + its runtime, bStats), `paper-plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
 
 Custom tasks in `build-logic/src/main/kotlin`: `GenerateVersionSourceTask` (version class
@@ -96,6 +100,11 @@ stays `compileOnly` (the server provides it; the lossless YAML layer loads it re
 from the server at runtime).
 
 **M3 amendment:** the second shaded dependency set is **Undertow 2.3.26.Final** (+ XNIO/JBoss transitive runtime) for the editor listener — relocated under `materione.libs.io.undertow` / `.org.xnio` / `.org.jboss` / `.org.wildfly` by `materione.plugin-conventions`. Referenced only from `dev.materione.web` (ban rule R8), so relocation is invisible to every other module. Gson stays server-provided for our own code; the SPA build toolchain (Node/npm) never ships — only its static output rides in the jar under `webui/`. The settings repository list gains one Ivy entry (nodejs.org dist) so the strict repositories policy survives the node plugin.
+
+**#213 amendment (soft-depend adapters):** Vault and LuckPerms are **not shaded**. They are `compileOnly` in
+`integrations` and supplied by the server; the adapters load only when their plugin is enabled
+(`Integrations`, logic.md §18). `paper-plugin.yml` declares both as optional server dependencies with
+`join-classpath: true`. The shaded jar gains no classes from either API.
 
 **bStats amendment:** the third shaded set is **bStats 3.2.1** (`bstats-bukkit` + `bstats-base`, MIT), relocated under `materione.libs.org.bstats` by `materione.plugin-conventions`. Only `MaterionePlugin` references it, and it starts after the bootstrap phases in `onEnable`, behind a fail-soft wrapper: a failure is a warning and enable continues. The bStats jars carry no license file, so the shaded jar carries no MIT notice for it; creative and Undertow are in the same position. Bundling third-party notices is an open item, not decided here. No ban rule (§5) names bStats: the rules govern `dev.materione` code, and its only call site is `MaterionePlugin`.
 
@@ -125,7 +134,7 @@ is applied two ways: per-module `ArchitectureTest` classes, plus a whole-jar
 | R8 | The editor wire protocol lives only in `web/`. | M3. Everything under `dev.materione.web.protocol..` is reachable from nowhere else; hosts use facade types (`EditorListener`, `SessionPush`). Teeth note: constant reads (`Wire.VERSION`) fold away at compile time — the planted violation was a method call. Harness/testing exempt (build infrastructure: the harness plays the browser against the live listener). |
 | R9 | The web editor consumes only the public API (`dev.materione.web..` may not depend on `core..`, `plugin..`, `content..`, `pack..`, `delivery..`, …). | M5 (API-first, [`api.md`](api.md) §4.2): every editor action must be a typed `MaterioneAPI` operation — the rule mechanically guarantees the editor cannot bypass the API. Two enforcement layers: `web/build.gradle.kts` depends only on `:api` (a core import does not compile), and ArchUnit over the shaded jar (proven by planted violation: a web-package class referencing `DocumentStore` is named in the failure). Fixture classes nested in `*Test` files are exempt like their enclosing tests. Registered in web's `ArchitectureTest` and the whole-jar `AllModulesArchitectureTest`. |
 | R11 | One action, one class: classes in `dev.materione.plugin.logic.action..` do not depend on each other. | M6 ([`logic.md`](logic.md) §9 rule 2). A class's own nested types (its parameter record) are part of it; shared helpers go in the parent package. Proven by a planted violation (`LogicCodeOrganisationTest`) and applied whole-jar in `AllModulesArchitectureTest`. |
-| R10 | Listeners are adapters: a class in `dev.materione.plugin.gui..` or `dev.materione.plugin.logic..` that has an `@EventHandler` method does not depend on `plugin.logic.action..` or `plugin.gui.render..` directly. | M6 ([`logic.md`](logic.md) §9 rule 1, §18). Matched by annotation name, so the testing fixtures need no Bukkit class; the policy reaches actions and rendering through a collaborator. Proven by a planted violation (a listener that calls a class it must not, next to a well-behaved one) in `LogicCodeOrganisationTest` and applied whole-jar in `AllModulesArchitectureTest`. |
+| R10 | Listeners are adapters: a class in `dev.materione.plugin.gui..` or `dev.materione.plugin.logic..` that has an `@EventHandler` method does not depend on `plugin.logic.action..` or `plugin.gui.render..` directly. | M6 ([`logic.md`](logic.md) §9 rule 1, §21). Matched by annotation name, so the testing fixtures need no Bukkit class; the policy reaches actions and rendering through a collaborator. Proven by a planted violation (a listener that calls a class it must not, next to a well-behaved one) in `LogicCodeOrganisationTest` and applied whole-jar in `AllModulesArchitectureTest`. |
 | — | Size guard: no main-source class over 400 lines in the logic packages (`api.logic`, `behavior.logic`, `behavior.flow`, `behavior.run`, `plugin.logic`, and since #214 `plugin.gui` and `content.gui.logic`). | M6 (`logic.md` §9 rule 4). A source-line test, `LogicCodeOrganisationTest`, proven against a planted oversized file. New logic packages are added to its list as they appear. |
 | — | `MTR-####` codes: format + uniqueness + declared only in `DiagnosticCodes` (now `api.diagnostics` — codes are API, CLAUDE.md). | Unit tests over `DiagnosticCodes`, not ArchUnit. |
 
@@ -181,8 +190,14 @@ and asserts the stable log markers:
 MATERIONE-BOOT-OK <version>          MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12|noop>
 MATERIONE-VERSION <version>          MATERIONE-DELIVERY-OK <url>
 MATERIONE-DOCTOR-OK                  MATERIONE-RELOAD-OK items=<n>
+MATERIONE-LOGIC-OK currency=<default id> available=<true|false> transfer=<yes|none> unavailable=<action ids|none>
 MATERIONE-BYE
 ```
+
+`MATERIONE-LOGIC-OK` (#213) is logged at boot and on every content reload. The harness asserts it on
+a workspace with no Vault and no transfer host: `currency=materione:money available=false transfer=none
+unavailable=give_money,take_money,connect`. The built-in money is unavailable without Vault, and the money
+and connect actions report it.
 
 These markers are test API — treat changes to them like changes to `MTR-####` codes
 (plugin.md §5). The standard scenario (`PaperBootstrapIT`) is the M1 exit gate: boot with

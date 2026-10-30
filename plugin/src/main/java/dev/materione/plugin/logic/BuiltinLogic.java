@@ -5,13 +5,22 @@ import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.provider.CurrencyIntegration;
+import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.behavior.logic.BuiltinTriggers;
+import dev.materione.plugin.logic.currency.CustomCurrencyIntegration;
+import dev.materione.plugin.logic.currency.XpCurrencyIntegration;
+import dev.materione.plugin.logic.function.BalanceFunction;
+import dev.materione.plugin.logic.function.FormatCurrencyFunction;
 import dev.materione.behavior.logic.LogicIds;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.trigger.GuiTriggers;
 import dev.materione.plugin.logic.action.ActionbarAction;
 import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
+import dev.materione.plugin.logic.action.ConnectAction;
+import dev.materione.plugin.logic.action.GiveMoneyAction;
+import dev.materione.plugin.logic.action.GivePermissionAction;
 import dev.materione.plugin.logic.action.ChatAction;
 import dev.materione.plugin.logic.action.GiveExpAction;
 import dev.materione.plugin.logic.action.GiveItemAction;
@@ -20,6 +29,8 @@ import dev.materione.plugin.logic.action.PotionAction;
 import dev.materione.plugin.logic.action.RunCommandAction;
 import dev.materione.plugin.logic.action.SetVarAction;
 import dev.materione.plugin.logic.action.SoundAction;
+import dev.materione.plugin.logic.action.TakeMoneyAction;
+import dev.materione.plugin.logic.action.TakePermissionAction;
 import dev.materione.plugin.logic.action.StopSoundAction;
 import dev.materione.plugin.logic.action.TakeExpAction;
 import dev.materione.plugin.logic.action.TakeItemAction;
@@ -155,6 +166,43 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : functions()) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
+        for (ActionType<?> action : providerActions(api.providers())) {
+            api.actions().register(owner, builtIn(action.id()), action);
+        }
+        // currency integrations and the money functions (logic.md §18): the built-in block
+        for (CurrencyIntegration integration : currencyIntegrations()) {
+            api.currencyIntegrations().register(owner, builtIn(integration.id()), integration);
+        }
+        for (ExpressionFunction function : currencyFunctions(api.providers())) {
+            api.functions().register(owner, builtIn(function.id()), function);
+        }
+    }
+
+    /**
+     * The built-in currency integrations (logic.md §18): {@code xp} and {@code custom}. Vault is not
+     * here: it is a soft-depend adapter in {@code integrations}, registered only while Vault runs.
+     */
+    public static List<CurrencyIntegration> currencyIntegrations() {
+        return List.of(new XpCurrencyIntegration(), new CustomCurrencyIntegration());
+    }
+
+    /** The money expression functions, which read the currency catalog (logic.md §18). */
+    public static List<ExpressionFunction> currencyFunctions(LogicProviders providers) {
+        return List.of(new BalanceFunction(providers), new FormatCurrencyFunction(providers));
+    }
+
+    /**
+     * The provider-backed actions (logic.md §4.5): money, permissions and server transfer. They
+     * read the provider slots on every run, so they are built once against the live
+     * {@link LogicProviders}, never against a snapshot of what is installed.
+     */
+    public static List<ActionType<?>> providerActions(LogicProviders providers) {
+        return List.of(
+                new GiveMoneyAction(providers),
+                new TakeMoneyAction(providers),
+                new GivePermissionAction(providers),
+                new TakePermissionAction(providers),
+                new ConnectAction(providers));
     }
 
     private static NamespacedId builtIn(String id) {

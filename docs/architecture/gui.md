@@ -89,7 +89,7 @@ writes it through the asset store; the compiler reads it like any other texture.
 `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside` and `gui.tick`) and `flows:`
 (named flows the rules call), exactly as an item does. They are part of the gui type's
 self-description and are preserved losslessly; the layer editor never rewrites them. The model is
-[`logic.md`](logic.md) §6 and §18.
+[`logic.md`](logic.md) §6 and §21.
 
 ---
 
@@ -299,13 +299,13 @@ only (§9.4).
   thread and refuse at once; the window is built and opened on the viewer's region thread. Items come
   from the item factory (`MaterioneStacks.build`, amount clamped to the stack size). Since #214 the window
   is opened by `GuiOpener`, the one open path, which creates the player's `GuiSession` (arguments, session
-  variables, back stack) and fires `gui.opening` and `gui.open` (logic.md §6.1, §18); `GuiRuntime` is the
+  variables, back stack) and fires `gui.opening` and `gui.open` (logic.md §6.1, §21); `GuiRuntime` is the
   API facade in front of it, and `GuiMenu` is the window holder that knows its session.
 - *Clicks.* `GuiListener` routes three targets: the GUI's own slots and the outside of the window are
   cancelled, and the viewer's inventory stays live except the two actions that would move items into or
   out of the GUI (shift-move, double-click collection). The table is `GuiListener.route`, unit-tested.
   The GUI's handler was empty in v1; since #214 it hands the click to the click router, and a click
-  outside the window is offered to the GUI as `gui.click_outside` (logic.md §18 decision 11). The table
+  outside the window is offered to the GUI as `gui.click_outside` (logic.md §21 decision 11). The table
   itself is unchanged.
 - *Command.* `/materione gui open <id> [player]`, permission `materione.gui.open` (default op). A
   qualified id must be live; a bare value must match one live GUI. A console sender names a player.
@@ -316,7 +316,7 @@ only (§9.4).
   and one no longer live is REMOVED. Each viewer's region thread then acts on its own window
   only when it shows a changed or removed GUI (since #214 the viewers are the open sessions, and the
   session carries on through a rewrite or a re-open: arguments, variables and the back stack survive,
-  logic.md §18 decision 17):
+  logic.md §21 decision 17):
   - *items only* (same rows and title): the slots are rewritten in place and the window stays;
   - *title or rows changed*: a new window is opened. The cursor item is lifted off the old window
     first and put back on the new one, so closing the old window does not return it to the inventory.
@@ -474,7 +474,7 @@ diff; `gui.edit` is the path for other consumers (§10 #12).
 
 | Later | Seam |
 |---|---|
-| Click bindings → ECA `menu.click` | **Done in #214** (logic.md §18): the gui type's `behavior:` holds `gui.click` rules with a `layer:` filter, and components declare click regions through `CompiledGuiLayer.clickArea` |
+| Click bindings → ECA `menu.click` | **Done in #214** (logic.md §21): the gui type's `behavior:` holds `gui.click` rules with a `layer:` filter, and components declare click regions through `CompiledGuiLayer.clickArea` |
 | Pagination, search, dynamic fill | new components with target `SLOT` (+ runtime state) |
 | Placeholders in text | `TEXT` runs are already title text, not baked pixels |
 | Groups/folders of layers | a `group` component with children; flattening already recursive-ready |
