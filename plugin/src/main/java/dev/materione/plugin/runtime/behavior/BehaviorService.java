@@ -36,10 +36,23 @@ public final class BehaviorService {
      *        thread gateway behind it (logic.md §5)
      */
     public BehaviorService(RuleEngine engine, dev.materione.core.runtime.ContentRuntime runtime) {
+        this(engine, runtime, null);
+    }
+
+    /**
+     * @param variables the persistent variables each run reads and writes through; null for none
+     */
+    public BehaviorService(
+            RuleEngine engine,
+            dev.materione.core.runtime.ContentRuntime runtime,
+            dev.materione.plugin.logic.variable.VariableService variables) {
         // resolved per event, never captured: reloads swap the reference
         this.registries = runtime::registries;
         this.engine = engine;
+        this.variables = variables;
     }
+
+    private final dev.materione.plugin.logic.variable.VariableService variables;
 
     /**
      * Fires {@code eventType}/{@code detail} for the given player and held
@@ -204,10 +217,13 @@ public final class BehaviorService {
      * The run's context: the variable tree plus what only the platform can supply, the player
      * facet and PlaceholderAPI resolution for that player.
      */
-    private static MapLogicContext logicContext(Map<String, Object> root, Player player) {
+    private MapLogicContext logicContext(Map<String, Object> root, Player player) {
         return new MapLogicContext(root)
                 .with(Facets.PLAYER, player)
-                .withPlaceholders(text -> PlaceholderResolver.apply(player, text));
+                .withPlaceholders(text -> PlaceholderResolver.apply(player, text))
+                .withVariables(variables == null
+                        ? dev.materione.api.logic.variable.VariableBinding.NONE
+                        : variables.bind(player == null ? null : player.getUniqueId()));
     }
 
     private static Map<String, Object> itemContext(ItemStack stack) {

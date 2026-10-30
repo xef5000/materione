@@ -36,13 +36,14 @@ import org.jetbrains.annotations.NotNull;
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS =
-            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor", "gui");
+            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor", "gui", "var");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
     private final ContentBrowser browser;
     private final EditorCommands editorCommands;
     private final GuiCommands guiCommands;
+    private final VarCommand varCommand;
 
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
@@ -50,6 +51,7 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         this.browser = new ContentBrowser(plugin);
         this.editorCommands = new EditorCommands(plugin);
         this.guiCommands = new GuiCommands(plugin);
+        this.varCommand = new VarCommand(plugin);
     }
 
     @Override
@@ -138,8 +140,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
             case "dev" -> devCommands.handle(sender, args);
             case "editor" -> editorCommands.handle(sender, args);
             case "gui" -> guiCommands.handle(sender, args);
+            case "var" -> varCommand.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev|give|browser|editor|gui>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browser|editor|gui|var>", NamedTextColor.RED));
         }
         return true;
     }
@@ -419,6 +422,9 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         }
         if (args.length >= 2 && "gui".equals(args[0].toLowerCase())) {
             return guiCommands.complete(args);
+        }
+        if (args.length >= 2 && "var".equals(args[0].toLowerCase())) {
+            return varCommand.complete(args, plugin.variableService());
         }
         return List.of();
     }

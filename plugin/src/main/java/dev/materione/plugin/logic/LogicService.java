@@ -6,7 +6,9 @@ import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.plugin.logic.variable.VariableService;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.api.registry.BehaviorVocabulary;
 import dev.materione.api.registry.RegistryKeys;
@@ -44,14 +46,15 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<TriggerType> triggers;
     private final LogicRegistryImpl<ExpressionFunction> functions;
     private final RuleEngine engine;
+    private final VariableService variables;
     private boolean closed;
 
     /**
-     * A service for the registries alone, with no way to run flows ({@link #engine()} throws). The
-     * vocabulary and registration tests use it; the plugin uses the full constructor.
+     * A service for the registries alone, with no way to run flows ({@link #engine()} throws) and no
+     * variables. The vocabulary and registration tests use it; the plugin uses the full constructor.
      */
     public LogicService(Plugin host, RegistryService registries) {
-        this(host, registries, null, null);
+        this(host, registries, null, null, null);
     }
 
     /**
@@ -62,7 +65,21 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
      */
     public LogicService(
             Plugin host, RegistryService registries, SchedulingGateway scheduling, Consumer<Diagnostic> diagnostics) {
+        this(host, registries, scheduling, diagnostics, null);
+    }
+
+    /**
+     * @param variables the persistent variables the flows and {@code api.logic().variables()} use; null
+     *        for a service without them (a test), and {@link #variables()} then throws
+     */
+    public LogicService(
+            Plugin host,
+            RegistryService registries,
+            SchedulingGateway scheduling,
+            Consumer<Diagnostic> diagnostics,
+            VariableService variables) {
         this.registries = Objects.requireNonNull(registries, "registries");
+        this.variables = variables;
         this.engine = scheduling == null || diagnostics == null
                 ? null
                 : new RuleEngine(
@@ -110,9 +127,23 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         return VocabularyBuilder.build(registries);
     }
 
+    @Override
+    public VariablesApi variables() {
+        if (variables == null) {
+            throw new IllegalStateException("this LogicService was built without variables");
+        }
+        return variables.api();
+    }
+
+    /** The variable service behind {@link #variables()}, or null when this service has none. */
+    public VariableService variableService() {
+        return variables;
+    }
+
     /** What the rule parser resolves actions and triggers through: the live registries. */
     public RegistryLogicLookup lookup() {
-        return new RegistryLogicLookup(registries);
+        return new RegistryLogicLookup(registries,
+                id -> variables == null ? java.util.Optional.empty() : variables.declaration(id));
     }
 
     /**

@@ -44,6 +44,14 @@ dependencyResolutionManagement {
                 includeGroup("net.md-5")
             }
         }
+        maven("https://repo.extendedclip.com/releases/") {
+            name = "extendedclip"
+            // PlaceholderAPI (compileOnly in :plugin for the %materione_*% expansion, logic.md §3.3); the
+            // server provides the jar at runtime, so nothing here is shaded.
+            content {
+                includeGroup("me.clip")
+            }
+        }
         maven("https://repo.nexomc.com/releases/") {
             name = "nexomc"
             // The Nexo-maintained creative fork keeps upstream's coordinates

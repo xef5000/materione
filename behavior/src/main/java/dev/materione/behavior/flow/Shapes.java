@@ -1,6 +1,7 @@
 package dev.materione.behavior.flow;
 
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.variable.CompileEnvironment;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,8 +54,8 @@ final class Shapes {
     }
 
     /** A reader over {@code params} that notes every template it compiles. */
-    static ParamReader reader(Map<String, Object> params, RecordingExpressions recorder) {
-        return ParamReader.of(params, recorder);
+    static ParamReader reader(Map<String, Object> params, RecordingExpressions recorder, CompileEnvironment env) {
+        return ParamReader.of(params, recorder, env);
     }
 
     /** A deeply immutable copy of a YAML value (lists and maps copied, scalars shared). */

@@ -20,6 +20,9 @@ snakeyaml = "2.2"
 # Gson is the exact major Paper ships at runtime (version.json parsing);
 # compileOnly like the rest of the server-provided surface.
 gson = "2.11.0"
+# PlaceholderAPI: compileOnly in :plugin for the %materione_*% expansion class, which loads only behind a
+# soft-depend check; the server provides the jar at runtime (logic.md §3.3, #211).
+placeholderapi = "2.11.7"
 # Resource-pack output emitter (MIT). The Nexo-maintained fork of
 # team.unnamed/creative — same coordinates, actively tracked against new
 # Minecraft versions (1.14.4 emits pack.mcmeta min_format/max_format, the
@@ -70,6 +73,7 @@ paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper-api" }
 paper-api-modern = { module = "io.papermc.paper:paper-api", version.ref = "paper-api-modern" }
 snakeyaml = { module = "org.yaml:snakeyaml", version.ref = "snakeyaml" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+placeholderapi = { module = "me.clip:placeholderapi", version.ref = "placeholderapi" }
 creative-api = { module = "team.unnamed:creative-api", version.ref = "creative" }
 creative-serializer-minecraft = { module = "team.unnamed:creative-serializer-minecraft", version.ref = "creative" }
 creative-server = { module = "team.unnamed:creative-server", version.ref = "creative" }

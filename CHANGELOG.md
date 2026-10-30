@@ -28,6 +28,20 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Declared persistent variables (logic.md §3, §17).** A `variables/` file declares a `player` or
+  `server` variable, typed as `number`, `string` or `boolean`, with a default and a description:
+  `coins: {scope: player, type: number, default: 0}`. Player values live in the player's data container;
+  server values in `storage/variables.json`, written atomically on a debounce and on disable.
+  - `set_var` takes `{var, op, value}` with `set`, `add`, `subtract`, `multiply`, `toggle`, `remove` and
+    `reset`. The M2 `{name, value}` shape still writes a run-local. An undeclared name (`MTR-0061`) or a
+    value of the wrong type (`MTR-0062`) is refused at load and the step is skipped.
+  - Expressions read `vars.player.<pack>.<key>`, `vars.server.<pack>.<key>`, `vars.session.<name>` and
+    `vars.local.<name>`. A declared variable never written reads its default.
+  - PlaceholderAPI: `%materione_var_<pack>_<key>%`, `%materione_var_<pack>_<key>_<player>%`,
+    `%materione_gui_open%` and `%materione_gui_last%` (the GUI ones are empty until the GUI runtime lands).
+  - `/materione var get|set|list` (permission `materione.var`) and `api.logic().variables()`.
+  - Diagnostics `MTR-0061` to `MTR-0063`.
+
 - **Behavior rules are flows: `if`, `require`, `choose`, `wait`, `stop` and `call` (logic.md §2, §5, §16).**
   A rule's `do:` list can now branch (`if`/`then`/`else`, `choose`), guard (`require` runs steps until
   one fails, then runs its `else` and ends the run, the shape of a paywall), pause (`wait: <ticks>`),

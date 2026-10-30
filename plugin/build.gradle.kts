@@ -14,6 +14,8 @@ dependencies {
     api(project(":behavior"))
     api(project(":pack"))
     api(project(":delivery"))
+    // the %materione_…% placeholder grammar (logic.md §3.3); the PlaceholderAPI class itself is in plugin
+    api(project(":integrations"))
     // The editor transport facade (phase 10). web/ shades Undertow via this
     // edge; R8 keeps every protocol reference inside dev.materione.web.
     api(project(":web"))
@@ -21,6 +23,11 @@ dependencies {
     // materione.libs.org.bstats; MaterionePlugin is the only reference, behind
     // a fail-soft wrapper (plugin.md §7.2).
     implementation(libs.bstats.bukkit)
+    // PlaceholderAPI, compile-only: the %materione_*% expansion class (logic.md §3.3) is loaded only when
+    // the server has PlaceholderAPI enabled. Not transitive: its own dependency tree is the server's.
+    compileOnly(libs.placeholderapi) {
+        isTransitive = false
+    }
 }
 
 tasks.named<org.gradle.api.tasks.testing.Test>("test") {

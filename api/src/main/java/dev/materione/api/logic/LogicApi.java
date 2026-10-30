@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.registry.BehaviorVocabulary;
 
 /**
@@ -20,10 +21,9 @@ import dev.materione.api.registry.BehaviorVocabulary;
  *
  * <h2>Planned additions</h2>
  *
- * <p>Two accessors are deliberately absent and arrive as additive methods when their subsystem
- * exists, never as placeholders: {@code variables()} (read and write player and server variables,
- * logic.md §3.3, §13 L5) and {@code traces()} (subscribe to run traces, §7.6, §13 W4). Recipes
- * and the authoring edit/validate surface (§8) live on {@code AuthoringApi.logic()} (§13 A1).
+ * <p>{@code traces()} (subscribe to run traces, logic.md §7.6, §13 W4) is deliberately absent and
+ * arrives as an additive method when its subsystem exists, never as a placeholder. Recipes and the
+ * authoring edit/validate surface (§8) live on {@code AuthoringApi.logic()} (§13 A1).
  */
 public interface LogicApi {
 
@@ -38,6 +38,13 @@ public interface LogicApi {
 
     /** The {@code expression-functions} registry: calls available inside expressions. */
     LogicRegistry<ExpressionFunction> functions();
+
+    /**
+     * Declared persistent variables (logic.md §3): read the effective value for a player or the
+     * server, and write one with an actor check. Reads and writes go through the same stores the
+     * flows use.
+     */
+    VariablesApi variables();
 
     /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the

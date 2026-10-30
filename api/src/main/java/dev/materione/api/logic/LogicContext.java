@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import dev.materione.api.logic.variable.VariableBinding;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -60,6 +61,15 @@ public interface LogicContext {
      * context hands out.
      */
     Map<String, Object> locals();
+
+    /**
+     * The declared persistent variables this run can read and write: the run's player and the
+     * server (logic.md §3.3). The default has none, so a context without a platform (a unit test's
+     * fake) refuses every persistent write and reads every declared variable as its absence.
+     */
+    default VariableBinding variables() {
+        return VariableBinding.NONE;
+    }
 
     /**
      * Resolves PlaceholderAPI-style {@code %token%}s in already-rendered text for this run's

@@ -334,7 +334,8 @@ class BuiltinActionsTest {
 
         @Test
         void rejectsAMissingNameAndAnExpressionThatDoesNotParse() {
-            assertThatThrownBy(() -> action.parse(reader(params("value", 1)))).hasMessage("name is required");
+            assertThatThrownBy(() -> action.parse(reader(params("value", 1))))
+                    .hasMessage("var is required (name is the M2 spelling of a run-local)");
             assertThatThrownBy(() -> action.parse(reader(params("name", "x", "value", "1 +"))))
                     .hasMessageStartingWith("value:");
         }
