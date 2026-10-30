@@ -25,7 +25,7 @@ import org.bukkit.entity.Player;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code format_currency} and {@code balance} (logic.md §16). Formatting is pure over the currency's own
+ * {@code format_currency} and {@code balance} (logic.md §17). Formatting is pure over the currency's own
  * definition; balance reads the run's player through the currency's backend and answers null when it
  * cannot.
  */

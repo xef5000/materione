@@ -109,7 +109,7 @@ public final class BuiltinLogic {
         for (ActionType<?> action : providerActions(api.providers())) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
-        // currency integrations and the money functions (logic.md §16): the built-in block
+        // currency integrations and the money functions (logic.md §17): the built-in block
         for (CurrencyIntegration integration : currencyIntegrations()) {
             api.currencyIntegrations().register(owner, builtIn(integration.id()), integration);
         }
@@ -119,14 +119,14 @@ public final class BuiltinLogic {
     }
 
     /**
-     * The built-in currency integrations (logic.md §16): {@code xp} and {@code custom}. Vault is not
+     * The built-in currency integrations (logic.md §17): {@code xp} and {@code custom}. Vault is not
      * here: it is a soft-depend adapter in {@code integrations}, registered only while Vault runs.
      */
     public static List<CurrencyIntegration> currencyIntegrations() {
         return List.of(new XpCurrencyIntegration(), new CustomCurrencyIntegration());
     }
 
-    /** The money expression functions, which read the currency catalog (logic.md §16). */
+    /** The money expression functions, which read the currency catalog (logic.md §17). */
     public static List<ExpressionFunction> currencyFunctions(LogicProviders providers) {
         return List.of(new BalanceFunction(providers), new FormatCurrencyFunction(providers));
     }

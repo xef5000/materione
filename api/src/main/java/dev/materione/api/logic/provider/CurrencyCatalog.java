@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The defined currencies and the way to reach their money (logic.md §16). Read at use: an action asks
+ * The defined currencies and the way to reach their money (logic.md §17). Read at use: an action asks
  * for the currency and its backend each time it runs, so a currency file changed by a reload, or an
  * integration installed later, takes effect without restarting the action set.
  *

@@ -2,6 +2,7 @@ package dev.materione.plugin.logic.currency;
 
 import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.EconomyResult;
@@ -14,7 +15,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 /**
- * The {@code xp} integration (logic.md §16): the player's experience as the currency. {@code unit:
+ * The {@code xp} integration (logic.md §17): the player's experience as the currency. {@code unit:
  * points} (the default) counts total experience points; {@code unit: levels} counts levels.
  *
  * <p>Ported from ItemsAPI's XP integration, which computed the same total from the level and the
@@ -56,6 +57,15 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
         @Override
         public Availability availability() {
             return Availability.AVAILABLE;
+        }
+
+        /**
+         * Experience belongs to the player, so it is read and changed on the player's own region, which is
+         * the thread the step is dispatched to. On Paper that is the main thread; on Folia the region.
+         */
+        @Override
+        public Threading threading() {
+            return Threading.PLAYER_REGION;
         }
 
         @Override

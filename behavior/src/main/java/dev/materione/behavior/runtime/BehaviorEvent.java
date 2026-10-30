@@ -21,6 +21,7 @@ public final class BehaviorEvent implements Cancellation {
     private final MapLogicContext context;
     private final Object payload;
     private final Object anchor;
+    private Object cancelKey;
     private boolean cancelRequested;
 
     /**
@@ -62,6 +63,22 @@ public final class BehaviorEvent implements Cancellation {
     /** Thread-locality hint for deferred work (typically the player), or null. */
     public Object anchor() {
         return anchor;
+    }
+
+    /**
+     * Marks the runs this event starts as cancellable by {@code key} through
+     * {@code FlowInterpreter.cancel(key)}: a GUI session passes its own identity so closing the
+     * window can end the runs it started (logic.md §5.2). Events without a key start runs that only
+     * their player's departure ends.
+     */
+    public BehaviorEvent withCancelKey(Object key) {
+        this.cancelKey = key;
+        return this;
+    }
+
+    /** The cancellation key set by {@link #withCancelKey}, or null. */
+    public Object cancelKey() {
+        return cancelKey;
     }
 
     /** Requests cancellation of the underlying event (applied by the bridge after the chain). */

@@ -97,7 +97,9 @@ Rules (enforced in review + by an ArchUnit-style ban test):
 
 - **All world/entity mutation goes through one gateway** (in `core`): `sync(location, task)` /
   `entity(entity, task)` — on Folia this routes to the region/entity scheduler, on Paper to the
-  main-thread scheduler. Code outside `platform/` never touches Bukkit scheduler APIs directly.
+  main-thread scheduler. *As built (M6, #208):* the gateway also schedules ahead
+  (`executeEntityLater`, `executeGlobalLater`, each returning a cancellable `ScheduledHandle`), which is
+  how a parked behavior run comes back; `GatewayRunScheduler` is its only user in the logic engine. Code outside `platform/` never touches Bukkit scheduler APIs directly.
 - **Every event listener/handler declares its thread class** at registration; the registration
   API rejects mismatches (an async handler that would mutate the world is caught at
   registration, not in production).
@@ -409,7 +411,20 @@ step is found at load rather than when a player first triggers it:
 |---|---|---|
 | `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
 | `MTR-0061` | warning | An optional integration (Vault economy or permissions, LuckPerms, the BungeeCord plugin channel) could not install its provider: the adapter failed to link against the installed version, or its setup call threw. The server keeps the default provider or none, and the economy, permission and `connect` actions report themselves unavailable (logic.md §4.5). Install a supported version of the plugin, then reload. |
-| `MTR-0062` | warning | A currency file (`currencies/*.yml`, logic.md §16) was quarantined: it does not parse (no `integration`, a bad `decimals`), it is in the reserved `materione` namespace, or its integration rejected its keys when bound at apply. The rest of the pack loads. Fix the file, then reload. |
+| `MTR-0062` | warning | A currency file (`currencies/*.yml`, logic.md §17) was quarantined: it does not parse (no `integration`, a bad `decimals`), it is in the reserved `materione` namespace, or its integration rejected its keys when bound at apply. The rest of the pack loads. Fix the file, then reload. |
+
+The M6 flow compiler and interpreter ([`logic.md`](logic.md) §5, §16) add three codes. Every one carries
+the step path of what it is about (`behavior.2.do.0.then.1`) as its target:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0058` | error | A `call` step cannot be linked at load: it names a flow the resource does not declare, the flows call each other in a cycle (the message names the chain, `a -> b -> a`), the chain of nested calls is deeper than 16, or the flow it calls did not load. The rule that holds the call is skipped; flows are shared within one resource only. Declare the flow under `flows:`, break the cycle, or fix the flow's own problems reported beside it. |
+| `MTR-0059` | warning | A running flow was ended by its budget (logic.md §5.3): more than 1,000 steps in one run, calls nested deeper than 16, the player already had 64 runs parked on a `wait` or `delay:`, or the platform could not schedule the run. The run ends; the server and other runs are unaffected. Reported at most once per second per rule. Simplify the flow, or find what floods the trigger. |
+| `MTR-0060` | warning | A `${root}` in a template, expression or call argument is not a variable the rule's trigger provides (`${plyer.name}`). The step still loads and the value reads as empty at run time. The hint lists the known roots. A trigger that declares no variables is not checked. |
+
+A step that fails while a flow runs is still `MTR-0023`: an action that returns `FAILED` outside a `require`,
+an action that throws (always), and a condition that cannot be evaluated (the condition then counts as
+false). A `FAILED` inside a `require` is control flow and appears only in the run trace.
 
 ---
 
@@ -524,13 +539,13 @@ produced by the YAML dumper, so it carries no comments; this table is the refere
 | Key | Default | Meaning |
 |---|---|---|
 | `debug` | `false` | Verbose diagnostics. |
-| `default_currency` | `materione:money` | The currency the money actions use when a step names none (logic.md §16). An id that names nothing defined falls back to `materione:money`. |
+| `default_currency` | `materione:money` | The currency the money actions use when a step names none (logic.md §17). An id that names nothing defined falls back to `materione:money`. |
 | `delivery_host` / `delivery_port` | `0.0.0.0` / `8090` | Bind address of the self-hosted pack server. |
 | `delivery_public_host` | blank | Host written into pack URLs (set it for remote players). |
 | `editor_enabled` / `editor_mode` | `true` / `cloud` | Editor on or off; cloud relay or `local`. |
 | `editor_host` / `editor_port` / `editor_file_watcher` | `127.0.0.1` / `8089` / `true` | Local editor listener. |
 | `relay_base_url` | `https://editor.materione.com` | Cloud editor relay. |
-| `transfer_host` | blank | Target host of the 1.20.5+ transfer packet used by `connect`. Blank means the packet is off and `connect` is unavailable (logic.md §16). |
+| `transfer_host` | blank | Target host of the 1.20.5+ transfer packet used by `connect`. Blank means the packet is off and `connect` is unavailable (logic.md §17). |
 | `transfer_port` | `25565` | Target port of the transfer packet. Must be 1 to 65535. |
 | `transfer_mode` | `packet` | `bungeecord` selects the BungeeCord/Velocity plugin channel for `connect` instead of the packet. |
 
@@ -588,6 +603,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Custom block place/break handling | < 200 µs on region thread | event handler + PDC write |
 | Pack build (5k assets, warm) | < 30 s, cache-hit no-op < 100 ms | deterministic hashing |
 | Editor save round-trip | < 2 s end-to-end | save → validate → targeted apply → confirm |
+| Flow dispatch (rule gate + interpreter, a 10-step flow, actions excluded) | ≤ 0.5 ms p99 | `FlowDispatchPerfTest`; logic.md §5.3 |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read
 (~10–50 µs, NBT decode). The updater's inventory scans are the real cost center — they are

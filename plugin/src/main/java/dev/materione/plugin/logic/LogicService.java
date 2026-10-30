@@ -6,25 +6,36 @@ import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.LogicProviders;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.api.registry.BehaviorVocabulary;
 import dev.materione.api.registry.RegistryKeys;
 import dev.materione.behavior.logic.RegistryLogicLookup;
 import dev.materione.behavior.logic.VocabularyBuilder;
-import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
+import dev.materione.behavior.run.FlowInterpreter;
+import dev.materione.behavior.run.RunBudget;
+import dev.materione.behavior.runtime.CooldownStore;
+import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.registry.RegistryService;
+import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The {@link LogicApi}: the four logic registries (actions, conditions, triggers, expression
- * functions) as addon-registrable facades over the {@code RegistryService}, plus the vocabulary
- * built from them (logic.md §4, §8). Wires registries to the engine; it holds no policy of its own.
+ * The {@link LogicApi}: the logic registries (actions, conditions, triggers, expression functions,
+ * currency integrations) as addon-registrable facades over the {@code RegistryService}, the provider
+ * slots and currency catalog the money, permission and transfer actions read (logic.md §4.5, §17), plus
+ * the vocabulary built from them (logic.md §4, §8). Wires registries to the engine; it holds no policy of
+ * its own.
  *
  * <p>Built-ins register through this service exactly like an addon does
  * ({@link BuiltinLogic#register}); the engine resolves rule steps through {@link #lookup()}. A
@@ -38,29 +49,43 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<ConditionType<?>> conditions;
     private final LogicRegistryImpl<TriggerType> triggers;
     private final LogicRegistryImpl<ExpressionFunction> functions;
-    private final LogicRegistryImpl<dev.materione.api.logic.provider.CurrencyIntegration> currencyIntegrations;
+    private final LogicRegistryImpl<CurrencyIntegration> currencyIntegrations;
     private final MaterioneCurrencyCatalog currencies;
     private final LogicProvidersImpl providers;
+    private final RuleEngine engine;
     private boolean closed;
 
     /**
-     * @param host the plugin that hosts the API; its plugin manager delivers owner-disable events
-     * @param registries the service that owns the logic registries
+     * A service for the registries alone, with no way to run flows ({@link #engine()} throws). The
+     * vocabulary and registration tests use it; the plugin uses the full constructor.
      */
     public LogicService(Plugin host, RegistryService registries) {
-        this(host, registries, null);
+        this(host, registries, null, null, null);
+    }
+
+    /**
+     * @param host the plugin that hosts the API; its plugin manager delivers owner-disable and quit events
+     * @param registries the service that owns the logic registries
+     * @param scheduling the thread gateway parked runs resume through
+     * @param diagnostics where run-time diagnostics go
+     */
+    public LogicService(
+            Plugin host, RegistryService registries, SchedulingGateway scheduling, Consumer<Diagnostic> diagnostics) {
+        this(host, registries, scheduling, diagnostics, null);
     }
 
     /**
      * @param defaultCurrency the {@code default_currency} setting; blank or null means {@code materione:money}
      */
-    public LogicService(Plugin host, RegistryService registries, String defaultCurrency) {
+    public LogicService(
+            Plugin host, RegistryService registries, SchedulingGateway scheduling, Consumer<Diagnostic> diagnostics,
+            String defaultCurrency) {
         this.registries = Objects.requireNonNull(registries, "registries");
-        this.currencyIntegrations = new LogicRegistryImpl<>(registries, RegistryKeys.CURRENCY_INTEGRATIONS,
-                dev.materione.api.logic.provider.CurrencyIntegration.class, "currency integration",
-                dev.materione.api.logic.provider.CurrencyIntegration::id,
-                integration -> integration.describe());
-        this.currencies = new MaterioneCurrencyCatalog(currencyIntegrations::resolve, defaultCurrency);
+        this.engine = scheduling == null || diagnostics == null
+                ? null
+                : new RuleEngine(
+                        new FlowInterpreter(new GatewayRunScheduler(host, scheduling), RunBudget.DEFAULT, diagnostics),
+                        new CooldownStore());
         this.actions = new LogicRegistryImpl<>(registries, RegistryKeys.ACTIONS, erased(ActionType.class),
                 "action", ActionType::id, type -> type.describe().self());
         this.conditions = new LogicRegistryImpl<>(registries, RegistryKeys.CONDITIONS, erased(ConditionType.class),
@@ -69,24 +94,13 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
                 "trigger", TriggerType::id, type -> type.describe().self());
         this.functions = new LogicRegistryImpl<>(registries, RegistryKeys.EXPRESSION_FUNCTIONS,
                 ExpressionFunction.class, "function", ExpressionFunction::id, type -> type.describe().self());
+        this.currencyIntegrations = new LogicRegistryImpl<>(registries, RegistryKeys.CURRENCY_INTEGRATIONS,
+                CurrencyIntegration.class, "currency integration", CurrencyIntegration::id,
+                integration -> integration.describe());
+        this.currencies = new MaterioneCurrencyCatalog(currencyIntegrations::resolve, defaultCurrency);
         Objects.requireNonNull(host, "host").getServer().getPluginManager().registerEvents(this, host);
         // the session-only Bukkit permission provider is the default (logic.md §4.5)
         this.providers = new LogicProvidersImpl(new BukkitPermissions(host), currencies);
-    }
-
-    /** The {@code currency-integrations} registry (logic.md §16). */
-    @Override
-    public LogicRegistry<dev.materione.api.logic.provider.CurrencyIntegration> currencyIntegrations() {
-        return currencyIntegrations;
-    }
-
-    /**
-     * Makes the currencies of the live view the catalog's current list (logic.md §16). Called after
-     * every successful swap, and with an empty view when nothing is live, so a removed currency leaves.
-     */
-    public void updateCurrencies(dev.materione.core.runtime.RuntimeRegistries live) {
-        var view = live == null ? null : live.view(dev.materione.core.runtime.RuntimeCurrencies.KEY);
-        currencies.define(view == null ? List.of() : view.currencies());
     }
 
     /** The generic registry entry types are wildcards ({@code ActionType<?>}); the registry stores the erasure. */
@@ -115,9 +129,25 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         return functions;
     }
 
+    /** The {@code currency-integrations} registry (logic.md §17). */
+    @Override
+    public LogicRegistry<CurrencyIntegration> currencyIntegrations() {
+        return currencyIntegrations;
+    }
+
+    /** The provider slots and the currency catalog (logic.md §4.5, §17). */
     @Override
     public LogicProviders providers() {
         return providers;
+    }
+
+    /**
+     * Makes the currencies of the live view the catalog's current list (logic.md §17). Called after
+     * every successful swap, and with an empty view when nothing is live, so a removed currency leaves.
+     */
+    public void updateCurrencies(dev.materione.core.runtime.RuntimeRegistries live) {
+        var view = live == null ? null : live.view(dev.materione.core.runtime.RuntimeCurrencies.KEY);
+        currencies.define(view == null ? List.of() : view.currencies());
     }
 
     @Override
@@ -128,6 +158,26 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     /** What the rule parser resolves actions and triggers through: the live registries. */
     public RegistryLogicLookup lookup() {
         return new RegistryLogicLookup(registries);
+    }
+
+    /**
+     * The rule engine every item, block and furniture event goes through (logic.md §5): rule gating,
+     * then the resumable interpreter over the thread gateway. The GUI runtime (G1) starts its own
+     * runs through it, with a cancellation key, so a closed window can end what it started.
+     */
+    public RuleEngine engine() {
+        if (engine == null) {
+            throw new IllegalStateException("this LogicService was built without a scheduling gateway");
+        }
+        return engine;
+    }
+
+    /** A player left: their parked runs end (the entity scheduler would drop them anyway). */
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        if (engine != null) {
+            engine.interpreter().cancelPlayer(event.getPlayer().getUniqueId().toString());
+        }
     }
 
     /** Owner disabled: every type it registered leaves its registry. */

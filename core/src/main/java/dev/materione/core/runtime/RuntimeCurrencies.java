@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * The currencies one apply defined (logic.md §16): the pack files that parsed and bound, as the live
+ * The currencies one apply defined (logic.md §17): the pack files that parsed and bound, as the live
  * view the currency catalog reads after each swap. Currencies are content, so they follow the same
  * build, validate and swap path as items and sounds (D6); money itself is never stored here.
  *

@@ -2,6 +2,7 @@ package dev.materione.plugin.logic.currency;
 
 import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.EconomyResult;
@@ -15,7 +16,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 /**
- * The {@code custom} integration (logic.md §16): a currency a plugin of the server runs, driven by a
+ * The {@code custom} integration (logic.md §17): a currency a plugin of the server runs, driven by a
  * console command to give, a command to take, and a PlaceholderAPI token that reads the balance. It
  * is ported from ItemsAPI's custom integration.
  *
@@ -66,6 +67,17 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
             this.depositCommand = stripSlash(depositCommand);
             this.withdrawCommand = stripSlash(withdrawCommand);
             this.placeholder = placeholder;
+        }
+
+        /**
+         * The take and give commands are dispatched to the console, which may touch any region, so the
+         * backend is {@code GLOBAL}. The balance read (a PlaceholderAPI token) happens on that same thread,
+         * which is correct on Paper; on Folia a placeholder that reads player data from another region is
+         * a known gap (logic.md §17).
+         */
+        @Override
+        public Threading threading() {
+            return Threading.GLOBAL;
         }
 
         @Override

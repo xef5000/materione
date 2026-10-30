@@ -282,12 +282,36 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0061", Severity.WARN, "Integration provider could not be installed; skipped");
 
     /**
-     * A currency file was quarantined (logic.md §16): it names an integration that does not accept its
+     * A currency file was quarantined (logic.md §17): it names an integration that does not accept its
      * keys, or it names no integration, or its id is in the reserved {@code materione} namespace. The
      * currency is left out of the catalog; the rest of the pack loads.
      */
     public static final DiagnosticCode CURRENCY_REJECTED =
             new DiagnosticCode("MTR-0062", Severity.WARN, "Currency definition rejected; quarantined");
+
+    /**
+     * A {@code call} step cannot be linked at load (logic.md §2.4, §10): it names a flow the
+     * resource does not declare, the flows call each other in a cycle, the chain of calls is deeper
+     * than the call depth limit, or the callee failed to load. The rule holding the call is skipped.
+     */
+    public static final DiagnosticCode FLOW_CALL_INVALID =
+            new DiagnosticCode("MTR-0058", Severity.ERROR, "Flow call cannot be linked; rule skipped");
+
+    /**
+     * A running flow was stopped by its run budget (logic.md §5.3): it executed more steps than a
+     * run may, nested calls deeper than the limit, or the player already had too many parked runs.
+     * Rate-limited per rule; the run ends and the server is unaffected.
+     */
+    public static final DiagnosticCode FLOW_RUN_ABORTED =
+            new DiagnosticCode("MTR-0059", Severity.WARN, "Flow run aborted by its budget");
+
+    /**
+     * A {@code ${root}} in a flow names a variable root the rule's trigger does not provide
+     * (logic.md §2.6). The step still loads and the value reads as empty at run time; the warning
+     * catches typos such as {@code ${plyer.name}}.
+     */
+    public static final DiagnosticCode FLOW_UNKNOWN_CONTEXT_ROOT =
+            new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
 
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
@@ -348,7 +372,10 @@ public final class DiagnosticCodes {
             DUPLICATE_RESOURCE_ID,
             LOGIC_STEP_REJECTED,
             INTEGRATION_SKIPPED,
-            CURRENCY_REJECTED);
+            CURRENCY_REJECTED,
+            FLOW_CALL_INVALID,
+            FLOW_RUN_ABORTED,
+            FLOW_UNKNOWN_CONTEXT_ROOT);
 
     private DiagnosticCodes() {}
 

@@ -15,7 +15,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The currency catalog and the built-in integrations (logic.md §16): names resolve as the rules say,
+ * The currency catalog and the built-in integrations (logic.md §17): names resolve as the rules say,
  * the built-in money is always there, an integration that is not installed makes its currency
  * unavailable with the reason, and each built-in integration accepts its keys and rejects the rest.
  */

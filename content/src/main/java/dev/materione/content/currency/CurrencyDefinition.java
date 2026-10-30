@@ -3,7 +3,7 @@ package dev.materione.content.currency;
 import dev.materione.api.logic.provider.Currency;
 
 /**
- * One parsed currency file (logic.md §16). A thin wrapper so the pipeline can tell a currency apart
+ * One parsed currency file (logic.md §17). A thin wrapper so the pipeline can tell a currency apart
  * from every other parsed definition without a second schema.
  *
  * @param currency the currency as the content defines it

@@ -1,4 +1,4 @@
-package dev.materione.behavior.rule;
+package dev.materione.behavior.flow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -6,13 +6,17 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.Threading;
 import dev.materione.behavior.logic.LogicFixture;
+import dev.materione.behavior.rule.EventSelector;
+import dev.materione.behavior.rule.ParsedRules;
+import dev.materione.behavior.rule.Rule;
+import dev.materione.behavior.rule.RuleOptions;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
-/** Rule parsing is pure and fail-soft: broken rules become problems, siblings load. */
-class RuleParserTest {
+/** Rule compilation is pure and fail-soft: broken rules become problems, siblings load. */
+class FlowCompilerTest {
 
     private final NamespacedId owner = NamespacedId.of("sample", "wand");
     private final List<String> ran = new ArrayList<>();
@@ -24,7 +28,7 @@ class RuleParserTest {
             .action("example", LogicFixture.recording("greet", Threading.PLAYER_REGION, ran));
 
     private ParsedRules compile(Object section) {
-        return RuleParser.compile(owner, section, logic.lookup());
+        return FlowCompiler.compile(owner, section, logic.lookup());
     }
 
     @Test
@@ -46,17 +50,18 @@ class RuleParserTest {
         assertThat(rule.id()).isEqualTo("boom");
         assertThat(rule.on().type()).isEqualTo("click");
         assertThat(rule.on().detail()).contains("right");
-        assertThat(rule.conditions()).hasSize(1);
-        assertThat(rule.actions()).hasSize(2);
+        assertThat(rule.condition()).isInstanceOf(AllCond.class);
+        assertThat(((AllCond) rule.condition()).of()).hasSize(1);
+        assertThat(rule.steps()).hasSize(2);
 
-        BoundAction<?> first = rule.actions().get(0);
+        ActionStep<?> first = (ActionStep<?>) rule.steps().get(0);
         assertThat(first.id()).isEqualTo("run_command");
         assertThat(first.params()).isEqualTo("say hi"); // the scalar landed on the shorthand parameter
         assertThat(first.chance()).isEqualTo(0.5);
         assertThat(first.delayTicks()).isEqualTo(10);
         assertThat(first.threading()).isEqualTo(Threading.GLOBAL);
 
-        BoundAction<?> second = rule.actions().get(1);
+        ActionStep<?> second = (ActionStep<?>) rule.steps().get(1);
         assertThat(second.id()).isEqualTo("message");
         assertThat(second.params()).isEqualTo("&aDone");
 
@@ -74,7 +79,7 @@ class RuleParserTest {
         Rule rule = parsed.rules().get(0);
         assertThat(rule.id()).contains("#"); // fallback identity <owner>#<index>
         assertThat(rule.on().detail()).isEmpty();
-        assertThat(rule.actions().get(0).chance()).isEqualTo(1.0);
+        assertThat(((ActionStep<?>) rule.steps().get(0)).chance()).isEqualTo(1.0);
         assertThat(rule.options()).isEqualTo(RuleOptions.none());
     }
 
@@ -85,7 +90,7 @@ class RuleParserTest {
                 "if", "item.amount > 1",
                 "do", List.of(Map.of("cancel", true)))));
         assertThat(parsed.problems()).isEmpty();
-        assertThat(parsed.rules().get(0).conditions()).hasSize(1);
+        assertThat(((AllCond) parsed.rules().get(0).condition()).of()).hasSize(1);
     }
 
     @Test
@@ -129,13 +134,14 @@ class RuleParserTest {
     // --- typed parse (logic.md §4.1) ---------------------------------------------
 
     @Test
-    void anUnknownActionSkipsOnlyThatStepWithMtr0056() {
+    void anUnknownActionSkipsOnlyThatStepWithMtr0057() {
         ParsedRules parsed = compile(List.of(Map.of(
                 "on", "click",
                 "do", List.of(Map.of("mystery", "x"), Map.of("message", "kept")))));
 
         assertThat(parsed.rules()).hasSize(1);
-        assertThat(parsed.rules().get(0).actions()).extracting(BoundAction::id).containsExactly("message");
+        assertThat(parsed.rules().get(0).steps()).extracting(Step::kind).containsExactly("action");
+        assertThat(ids(parsed.rules().get(0))).containsExactly("message");
         assertThat(parsed.problems()).singleElement().satisfies(problem -> {
             assertThat(problem.code().code()).isEqualTo("MTR-0057");
             assertThat(problem.message()).contains("unknown action 'mystery'").contains("sample:wand");
@@ -148,7 +154,7 @@ class RuleParserTest {
                 "on", "click",
                 "do", List.of(Map.of("message", "reject"), Map.of("message", "kept")))));
 
-        assertThat(parsed.rules().get(0).actions()).hasSize(1);
+        assertThat(parsed.rules().get(0).steps()).hasSize(1);
         assertThat(parsed.problems()).singleElement().satisfies(problem -> {
             assertThat(problem.code().code()).isEqualTo("MTR-0057");
             assertThat(problem.message()).contains("action 'message' rejected: value must not be 'reject'");
@@ -180,7 +186,7 @@ class RuleParserTest {
                 "on", "click",
                 "do", List.of(Map.of("example:greet", "hi"), Map.of("greet", "bare")))));
 
-        assertThat(parsed.rules().get(0).actions()).extracting(BoundAction::id).containsExactly("example:greet");
+        assertThat(ids(parsed.rules().get(0))).containsExactly("example:greet");
         assertThat(parsed.problems()).singleElement()
                 .satisfies(problem -> assertThat(problem.message()).contains("unknown action 'greet'"));
     }
@@ -217,7 +223,11 @@ class RuleParserTest {
         ParsedRules parsed = compile(List.of(declaration));
 
         assertThat(parsed.problems()).isEmpty();
-        assertThat(parsed.rules().get(0).actions().get(0).params()).isEqualTo(true);
+        assertThat(((ActionStep<?>) parsed.rules().get(0).steps().get(0)).params()).isEqualTo(true);
+    }
+
+    private static List<String> ids(Rule rule) {
+        return rule.steps().stream().map(step -> ((ActionStep<?>) step).id()).toList();
     }
 
     /** An action that only takes a mapping. */

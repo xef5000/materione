@@ -76,7 +76,7 @@ public final class PaperHarnessRunner {
             if (log.readAll() == null || !log.readAll().contains("MATERIONE-DELIVERY-OK")) {
                 problems.add("MATERIONE-DELIVERY-OK missing after boot (self-host pack server)");
             }
-            // logic providers (logic.md §4.5, §16, #213): this workspace has no Vault and no transfer host, so
+            // logic providers (logic.md §4.5, §17, #213): this workspace has no Vault and no transfer host, so
             // the default currency materione:money (Vault) is unavailable, and the money and connect actions
             // report unavailable at boot, through the same availability the editor reads. The permission
             // actions stay available on the session default.

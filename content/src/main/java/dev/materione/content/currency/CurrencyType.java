@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The named-currency content type (logic.md §16): {@code currencies/*.yml}, each file one currency
+ * The named-currency content type (logic.md §17): {@code currencies/*.yml}, each file one currency
  * under its pack's namespace ({@code shop:gems}). A currency has a display name, a symbol, a number of
  * decimals, and the integration that answers for its money; the rest of the mapping belongs to that
  * integration and is kept as authored, so a currency round-trips losslessly and the integration reads
@@ -120,7 +120,7 @@ public final class CurrencyType implements ContentType {
         }
     }
 
-    /** Currencies emit nothing into the pack: money is runtime state (logic.md §16). */
+    /** Currencies emit nothing into the pack: money is runtime state (logic.md §17). */
     @Override
     public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {
         // intentionally empty

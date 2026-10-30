@@ -7,7 +7,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * A named currency as the content defines it (logic.md §16): how it is called, written, and which
+ * A named currency as the content defines it (logic.md §17): how it is called, written, and which
  * integration answers for it. The money itself lives behind {@link CurrencyBackend}, bound from
  * {@link #config} when used.
  *

@@ -1,6 +1,7 @@
 package dev.materione.integrations.vault;
 
 import dev.materione.api.logic.Availability;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.EconomyResult;
 import java.util.UUID;
@@ -10,7 +11,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 /**
- * The Vault economy as one currency's money (logic.md §16). Looked up at each call through Vault's
+ * The Vault economy as one currency's money (logic.md §17). Looked up at each call through Vault's
  * service registry, so an economy plugin that registers after Vault is picked up without a reload.
  *
  * <p>Vault cannot say "insufficient funds" as a type, only as a failed response, so a withdrawal
@@ -25,6 +26,16 @@ final class VaultCurrencyBackend implements CurrencyBackend {
         return Bukkit.getServicesManager().load(Economy.class) != null
                 ? Availability.AVAILABLE
                 : Availability.unavailable(NO_ECONOMY + " (install an economy plugin such as EssentialsX)");
+    }
+
+    /**
+     * Economies behind Vault (EssentialsX and the like) are written for the main thread and touch
+     * shared data, so they are {@code GLOBAL}. On Folia that means the global region, which is the
+     * correct place for them.
+     */
+    @Override
+    public Threading threading() {
+        return Threading.GLOBAL;
     }
 
     @Override

@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * The provider actions (logic.md §4.5, §16): each parses and rejects like the rest, runs against an
+ * The provider actions (logic.md §4.5, §17): each parses and rejects like the rest, runs against an
  * in-memory currency backend and fake permission and transfer providers (ok, insufficient, refused, not
  * installed), and reports availability from what is installed at the moment it is asked. No server: the
  * player is a stand-in with a fixed UUID.
@@ -80,10 +80,16 @@ class ProviderActionsTest {
         final Map<UUID, Double> balances = new HashMap<>();
         String refusal;
         boolean up = true;
+        Threading threading = Threading.GLOBAL;
 
         @Override
         public Availability availability() {
             return up ? Availability.AVAILABLE : Availability.unavailable("the fake economy is down");
+        }
+
+        @Override
+        public Threading threading() {
+            return threading;
         }
 
         @Override
@@ -314,6 +320,29 @@ class ProviderActionsTest {
             assertThat(take.execute(take.parse(reader(params("amount", 4, "currency", "gems"))), withPlayer()))
                     .isEqualTo(ActionOutcome.OK);
             assertThat(providers.backend.balances).containsEntry(ALEX, 6d);
+        }
+
+        @Test
+        void theStepRunsOnTheThreadOfTheCurrencyItNamesAndFallsBackToTheRegionForAnUnknownOne() {
+            var providers = new FakeProviders(new FakePermissions());
+            providers.currencies.define(List.of(gems()));
+            var give = new GiveMoneyAction(providers);
+            var take = new TakeMoneyAction(providers);
+
+            // the default currency is Vault's (GLOBAL); a backend that touches one player's state is PLAYER_REGION
+            assertThat(give.threading(give.parse(reader(params("amount", 1))))).isEqualTo(Threading.GLOBAL);
+            providers.backend.threading = Threading.PLAYER_REGION;
+            assertThat(give.threading(give.parse(reader(params("amount", 1))))).isEqualTo(Threading.PLAYER_REGION);
+            assertThat(take.threading(take.parse(reader(params("amount", 1, "currency", "gems")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+
+            // an unknown currency, or one whose integration is not installed, hops to the region
+            assertThat(give.threading(give.parse(reader(params("amount", 1, "currency", "nope")))))
+                    .isEqualTo(Threading.PLAYER_REGION);
+            providers.vaultInstalled = false;
+            assertThat(give.threading(give.parse(reader(params("amount", 1))))).isEqualTo(Threading.PLAYER_REGION);
+            // the headline stays the common case, for the vocabulary
+            assertThat(give.threading()).isEqualTo(Threading.GLOBAL);
         }
 
         @Test

@@ -4,7 +4,7 @@ import java.util.Optional;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The provider slots behind the logic actions (logic.md §4.5, §16), reached through
+ * The provider slots behind the logic actions (logic.md §4.5, §17), reached through
  * {@link dev.materione.api.logic.LogicApi#providers()}. Money is a catalog of named currencies
  * ({@link #currencies()}), defined by content and reached through the {@code currency-integrations}
  * registry. Permissions and server transfer are single slots: a new registration replaces the slot,

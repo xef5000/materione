@@ -20,7 +20,7 @@ import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The soft-depend gate for the optional adapters (logic.md §4.5, §16, build.md §3). It decides, from
+ * The soft-depend gate for the optional adapters (logic.md §4.5, §17, build.md §3). It decides, from
  * which optional plugins are enabled, what to register, and it is the only class that names the
  * adapters' types outside their own packages.
  *

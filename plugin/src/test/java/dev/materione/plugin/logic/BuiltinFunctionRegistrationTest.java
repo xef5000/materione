@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.registry.BehaviorVocabulary;
 import dev.materione.behavior.rule.ParsedRules;
-import dev.materione.behavior.rule.RuleParser;
+import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.core.registry.RegistryService;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +27,7 @@ class BuiltinFunctionRegistrationTest {
 
         assertThat(functions.stream().map(BehaviorVocabulary.Function::id).toList())
                 .contains("contains", "matches", "is_player", "format_number", "balance", "format_currency")
-                // the built-in functions plus the two money functions (logic.md §16), which read the catalog
+                // the built-in functions plus the two money functions (logic.md §17), which read the catalog
                 .hasSize(BuiltinLogic.functions().size() + 2);
         assertThat(functions.stream().filter(f -> f.id().equals("random")).findFirst())
                 .hasValueSatisfying(random -> {
@@ -41,7 +41,7 @@ class BuiltinFunctionRegistrationTest {
 
     @Test
     void aRuleConditionCallsABuiltInFunctionAndLoads() {
-        ParsedRules parsed = RuleParser.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
+        ParsedRules parsed = FlowCompiler.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
                 "on", "click",
                 "if", List.of("contains(player.name, 'Alex') && round(player.level / 2) >= 1"),
                 "do", List.of(Map.of("message", "hi")))), service.lookup());
@@ -52,7 +52,7 @@ class BuiltinFunctionRegistrationTest {
 
     @Test
     void aRuleCallingAnUnregisteredFunctionIsSkippedAtLoad() {
-        ParsedRules parsed = RuleParser.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
+        ParsedRules parsed = FlowCompiler.compile(NamespacedId.of("sample", "wand"), List.of(Map.of(
                 "on", "click",
                 "if", List.of("sqrt(player.level) > 2"),
                 "do", List.of(Map.of("message", "hi")))), service.lookup());
