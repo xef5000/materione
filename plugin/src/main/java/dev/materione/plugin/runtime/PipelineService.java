@@ -159,7 +159,7 @@ public final class PipelineService {
         }
         var guis = new dev.materione.content.gui.GuiType(components);
         registry.register(NamespacedId.of("materione", "gui"), guis, guis.describe(), "materione");
-        // named currencies (logic.md §17): content whose money is read at use, not emitted to the pack
+        // named currencies (logic.md §18): content whose money is read at use, not emitted to the pack
         var currencies = new dev.materione.content.currency.CurrencyType();
         registry.register(NamespacedId.of("materione", "currency"), currencies, currencies.describe(), "materione");
     }
@@ -617,7 +617,7 @@ public final class PipelineService {
      * not published a second time here. A GUI with no allocated codepoint is not live.
      */
     /**
-     * One currency file (logic.md §17): parsed, then bound to its integration when that integration is
+     * One currency file (logic.md §18): parsed, then bound to its integration when that integration is
      * installed. A file that does not parse, or whose integration rejects its keys, is quarantined with
      * {@code MTR-0062} and left out; the rest of the pack loads. An integration that is not installed
      * keeps the currency: it reports unavailable at use, which is the honest answer, and it needs no

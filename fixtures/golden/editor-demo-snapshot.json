@@ -34,6 +34,84 @@
       "actions": [
         {
           "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Shows text above the player's hotbar",
+          "displayName": "Action bar",
+          "id": "actionbar",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Message text; formatting and & colour codes allowed",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "text",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": true,
+          "description": "Sends a message to the whole server, one world, or the holders of a permission",
+          "displayName": "Broadcast",
+          "id": "broadcast",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Message text; formatting and & colour codes allowed",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "server",
+                "world",
+                "permission"
+              ],
+              "default": "server",
+              "description": "Who receives it",
+              "id": "scope",
+              "label": "Scope",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            },
+            {
+              "advanced": false,
+              "description": "World name (world scope; default the player's world) or permission node (permission scope, required)",
+              "id": "target",
+              "label": "Target",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "text",
+          "sinceVersion": "2.0.0",
+          "threading": "global"
+        },
+        {
+          "available": true,
           "category": "flow",
           "deferred": false,
           "description": "Cancels the underlying game event after the actions run",
@@ -143,6 +221,109 @@
           ],
           "registeredBy": "materione",
           "shorthand": "permission",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Makes the player say a chat message, or run a command as themselves",
+          "displayName": "Chat as player",
+          "id": "chat",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Chat text, or a command with a leading slash",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "text",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Grants the player experience points or levels",
+          "displayName": "Give experience",
+          "id": "give_exp",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "How many points or levels",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "points",
+                "levels"
+              ],
+              "default": "points",
+              "description": "What the amount counts",
+              "id": "unit",
+              "label": "Unit",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Gives the player a Materione item or a vanilla item; overflow drops at their feet",
+          "displayName": "Give item",
+          "id": "give_item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "item",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         },
@@ -316,8 +497,8 @@
         {
           "available": true,
           "category": "player",
-          "deferred": false,
-          "description": "Plays a sound at the player",
+          "deferred": true,
+          "description": "Plays a sound to the player, their world or the server",
           "displayName": "Play sound",
           "id": "sound",
           "parameters": [
@@ -355,10 +536,315 @@
               "section": "general",
               "type": "decimal",
               "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "player",
+                "world",
+                "server"
+              ],
+              "default": "player",
+              "description": "Who hears it",
+              "id": "scope",
+              "label": "Scope",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
             }
           ],
           "registeredBy": "materione",
           "shorthand": "sound",
+          "sinceVersion": "2.0.0",
+          "threading": "global"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Stops a sound, a sound category, or everything playing for the player",
+          "displayName": "Stop sound",
+          "id": "stop_sound",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Sound key to stop, e.g. minecraft:music.game",
+              "id": "sound",
+              "label": "Sound",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "master",
+                "music",
+                "records",
+                "weather",
+                "blocks",
+                "hostile",
+                "neutral",
+                "players",
+                "ambient",
+                "voice"
+              ],
+              "description": "Sound category to stop",
+              "id": "category",
+              "label": "Category",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "sound",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Removes experience points or levels; fails and takes nothing when the player has too few",
+          "displayName": "Take experience",
+          "id": "take_exp",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "How many points or levels",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "points",
+                "levels"
+              ],
+              "default": "points",
+              "description": "What the amount counts",
+              "id": "unit",
+              "label": "Unit",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Removes items from the player; fails and takes nothing when they hold too few",
+          "displayName": "Take item",
+          "id": "take_item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many to take",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Only items whose display name contains this text",
+              "id": "name_contains",
+              "label": "Name Contains",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "item",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "deferred": false,
+          "description": "Moves the player to coordinates, optionally in another world",
+          "displayName": "Teleport",
+          "id": "teleport",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "X coordinate",
+              "id": "x",
+              "label": "X",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Y coordinate",
+              "id": "y",
+              "label": "Y",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Z coordinate",
+              "id": "z",
+              "label": "Z",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "World name; default the player's world",
+              "id": "world",
+              "label": "World",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Facing, degrees; default keeps the current facing",
+              "id": "yaw",
+              "label": "Yaw",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Look up or down, degrees; default keeps the current pitch",
+              "id": "pitch",
+              "label": "Pitch",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
+          "description": "Shows a title and optional subtitle on the player's screen",
+          "displayName": "Title",
+          "id": "title",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Main line; formatting and & colour codes allowed",
+              "id": "title",
+              "label": "Title",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Second line",
+              "id": "subtitle",
+              "label": "Subtitle",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "10",
+              "description": "Fade-in in ticks",
+              "id": "fade_in",
+              "label": "Fade In",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "70",
+              "description": "Time fully shown, in ticks",
+              "id": "stay",
+              "label": "Stay",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "20",
+              "description": "Fade-out in ticks",
+              "id": "fade_out",
+              "label": "Fade Out",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "title",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         },

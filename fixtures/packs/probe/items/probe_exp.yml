@@ -1,0 +1,11 @@
+# Logic L6 experience probe (qa logic.exp-give-take): grants five levels, takes two, then tries to
+# take five hundred. The last take must fail and remove nothing, so the net is three levels.
+probe_exp:
+  material: ARROW
+  display_name: "Experience Probe"
+  behavior:
+    - on: click:right
+      do:
+        - give_exp: {amount: 5, unit: levels}
+        - take_exp: {amount: 2, unit: levels}
+        - take_exp: {amount: 500, unit: levels}

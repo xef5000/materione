@@ -15,7 +15,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
 /**
- * The {@code xp} integration (logic.md §17): the player's experience as the currency. {@code unit:
+ * The {@code xp} integration (logic.md §18): the player's experience as the currency. {@code unit:
  * points} (the default) counts total experience points; {@code unit: levels} counts levels.
  *
  * <p>Ported from ItemsAPI's XP integration, which computed the same total from the level and the

@@ -17,7 +17,7 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code balance(currency)}: the run's player's balance of a named currency, or null when there is no
- * player, the currency is not defined, or its integration cannot answer now (logic.md §17).
+ * player, the currency is not defined, or its integration cannot answer now (logic.md §18).
  *
  * <p><b>Not pure.</b> It reads the player's money through the currency's backend, so it is a read of
  * live state, like {@code random} is a draw: the same call can answer differently later. It is the

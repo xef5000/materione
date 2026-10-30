@@ -10,7 +10,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The {@code currencies/} content type (logic.md §17): a currency parses under its pack's namespace,
+ * The {@code currencies/} content type (logic.md §18): a currency parses under its pack's namespace,
  * its own keys are read, the integration's keys are kept as authored, and a malformed file parses to
  * nothing so the pipeline quarantines it.
  */

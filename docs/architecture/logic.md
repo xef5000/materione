@@ -54,7 +54,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Actions: messages | `[message]`, `[minimessage]`, `[broadcast]`, `[json]` … | `[msg]` | `message`, `broadcast` (scoped), `actionbar` and `title`, all in Materione rich text. |
 | Actions: sound | `[sound]`, `[broadcastsound]`, `[broadcastsoundworld]` | `[sound]`, `[stopsound]` | `sound` (scope: player, world or server) and `stop_sound`. |
 | Actions: GUI | `[openguimenu]`, `[close]`, `[refresh]` | `[open]`, `[close]`, `[refresh]`, `[previous]`, `[itemaction]` | `gui.open`, `gui.close`, `gui.refresh`, `gui.back`, `gui.set_slot` and `gui.slot_item` (§4.1). |
-| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money` against a named currency (`currencies/`, §17: Vault, the XP integration, or a command pair), `give_exp`/`take_exp` (an XP currency), and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
+| Actions: economy, exp, permissions | `[give/takemoney]`, `[give/takeexp]`, `[give/takepermission]` | `[vault]`, `[xp]`, `[grant]` | `give_money`/`take_money` against a named currency (`currencies/`, §18: Vault, the XP integration, or a command pair), `give_exp`/`take_exp` (an XP currency), and `give_permission`/`take_permission`, through provider SPIs (§4.5). |
 | Actions: world | `[connect]` | `[server]`, `[teleport]`, `[give]` | `connect`, `teleport`, `give_item`, `take_item` and `potion`. |
 | Delay and chance | `<delay=>`, `<chance=>` | `[delay]` (nested block) | Kept as action options (`delay:` and `chance:`), plus the `wait` step (§2.2). |
 | Per-player data | meta (PDC, typed), set/add/subtract/switch/remove | session data, persistent `data.yml` (set/add/math/del/clear) | Declared **variables** with local, session, player and server scopes (§3). |
@@ -303,7 +303,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 
 | SPI | Used by | Default | Integration |
 |---|---|---|---|
-| `CurrencyCatalog` (named currencies, §17: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
+| `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
 | `InputMethod` | `prompt` (§6.6) | chat, sign, anvil | dialogs (#6) |
@@ -311,7 +311,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 
 Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
 is the one provider kind that is content rather than a slot: a currency file names its integration, and
-the integrations are a registry (§17).
+the integrations are a registry (§18).
 Availability is part of the self-description (`available: false, reason`), which lets the studio
 grey out what the server cannot run.
 
@@ -664,6 +664,7 @@ content/ dev.materione.content.variable    VariablesType (the `variables` conten
 plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), GatewayRunScheduler, LogicRegistryImpl,
                                             BuiltinLogic (the built-ins, registered through the public API)
 plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lines each)
+plugin/  dev.materione.plugin.logic.support   shared action helpers (Quantity, ItemRef, InventoryPlan, Stacks); not actions (§17)
 plugin/  dev.materione.plugin.logic.condition one class per condition
 plugin/  dev.materione.plugin.logic.variable  PdcVariableStore, ServerVariableStore, VarCommand
 plugin/  dev.materione.plugin.gui.session  GuiSession, GuiSessions, SessionHistory (back stack)
@@ -731,8 +732,8 @@ Each row below names the class of problem, and every one carries a step path whe
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |
 | Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. |
 | Item and block rules in the node editor | The canvas is resource-agnostic (§8, `AuthoringApi.logic()`). The item studio's rule editor can switch to it. |
-| Currency integrations beyond Vault, XP and the command pair (#213, §17) | An addon registers a `CurrencyIntegration` in its own namespace (`example:coinsengine`, `example:playerpoints`), and a currency file names it. No core change. |
-| The `variable` and `item` currency integrations (§17) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |
+| Currency integrations beyond Vault, XP and the command pair (#213, §18) | An addon registers a `CurrencyIntegration` in its own namespace (`example:coinsengine`, `example:playerpoints`), and a currency file names it. No core change. |
+| The `variable` and `item` currency integrations (§18) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |
 
 ---
 
@@ -1187,7 +1188,91 @@ knows them. Start a click's run with `BehaviorEvent.withCancelKey(session)` and 
 "close ends the waits" with `stop: {cancel_session_runs: true}` and the default stays "runs belong to the
 player". GUI actions in a run whose session ended should return `FAILED("no open gui")` (§5.2). A GUI action
 that must run on the player's thread declares `PLAYER_REGION` (or overrides `threading(P)`).
-## 17. Decisions taken in #213 (L7: provider SPIs, named currencies, the money, permission and connect actions)
+
+## 17. Decisions taken in #212 (L6: built-in player, world and server actions)
+
+#212 adds the player, world and server verbs of §1 that the M2 vocabulary lacked, each as one
+`ActionType` in `plugin.logic.action`, registered in `BuiltinLogic` through the public API like the
+six before them. `connect` is not here: it needs the `ServerTransfer` provider of #213.
+
+**As built**
+
+| Action | Category | Threading | Parameters (shorthand in bold) | Fails (returns `FAILED`) |
+|---|---|---|---|---|
+| `broadcast` | server | GLOBAL | **`text`**, `scope` (server, world, permission), `target` (world name, or permission node) | unknown world; empty target at run time; no player for the default world |
+| `actionbar` | player | PLAYER_REGION | **`text`** | no player |
+| `title` | player | PLAYER_REGION | **`title`**, `subtitle`, `fade_in` (10), `stay` (70), `fade_out` (20), in ticks | no player |
+| `sound` | player | PLAYER_REGION (player scope), GLOBAL (world, server) | **`sound`**, `volume`, `pitch`, `scope` (player, world, server) | no player for player or world scope |
+| `stop_sound` | player | PLAYER_REGION | **`sound`**, `category` (a sound category) | no player |
+| `chat` | player | PLAYER_REGION | **`text`** (a leading `/` runs a command as the player) | no player; empty text; no such command |
+| `teleport` | world | PLAYER_REGION | `x`, `y`, `z`, `world`, `yaw`, `pitch` | no player; unknown world; coordinates that do not render; refused by the server |
+| `give_item` | player | PLAYER_REGION | **`item`**, `amount` (1 to 2304) | no player; unknown or ambiguous item; no content loaded |
+| `take_item` | player | PLAYER_REGION | **`item`**, `amount` (required), `name_contains` | no player; unknown item; fewer held than `amount` (takes nothing) |
+| `give_exp` | player | PLAYER_REGION | **`amount`** (1 to 1,000,000), `unit` (points, levels) | no player |
+| `take_exp` | player | PLAYER_REGION | **`amount`** (1 to 1,000,000), `unit` (points, levels) | no player; fewer held than `amount` (takes nothing) |
+
+`message`, `run_command`, `potion`, `cancel` and `set_var` are unchanged. `sound` gains `scope`, and
+its declared threading moves from PLAYER_REGION to GLOBAL (see decision 3 below). Every text
+parameter is a template (`${...}` and `%placeholder%`); every number may be a template that renders
+to one.
+
+**Decisions**
+
+1. **Take actions are all or nothing, decided before anything moves.** `InventoryPlan` computes the
+   removals from a snapshot of the whole inventory (main, armour and offhand) and returns no plan
+   when the held amount is short. Only a complete plan is applied, so a failed take changes nothing,
+   and a `require` step (#208) can rely on it. Experience takes check the same way: points against
+   the total, levels against the level.
+2. **One item matcher, shared with `has_item`.** An `item` value is either `minecraft:<material>` or
+   a Materione id, resolved through the same `ItemIdResolver` that `/materione give` uses (so a bare
+   name means the same in both). A vanilla reference matches only stacks that carry no Materione
+   identity, so a custom item shaped like paper is not "paper" for a take. `name_contains` is a
+   case-insensitive match on the plain display name. The matcher lives in `plugin.logic.support`,
+   where `has_item` (#210) can reuse it.
+3. **Threading follows the scope where it can.** `broadcast` declares GLOBAL, because every scope
+   reaches other players. `sound` overrides `threading(P)` (added by #208, §16): `scope: player`
+   runs in the player's region, `world` and `server` run on the global thread, and the headline
+   `threading()` stays GLOBAL. Everything else touches only the acting player and declares
+   PLAYER_REGION.
+4. **Item actions read the live registries through a supplier, not the pipeline.** `ItemCatalog` is
+   a one-method interface that `MaterionePlugin` wires to the current runtime registries; it is empty
+   before the first content load, and a Materione item then fails with "no content is loaded yet".
+   `BuiltinLogic.actions(ItemCatalog)` takes it, so no action reaches the plugin.
+5. **Shared helpers live outside the action package.** `plugin.logic.support` holds `Quantity`,
+   `ItemRef`, `ItemView`, `InventoryPlan`, `Stacks` (the Bukkit edge), `ItemCatalog` and
+   `ExperienceUnit`. R11 forbids one action depending on another, so a shared constant such as the
+   experience ceiling lives in `ExperienceUnit`, not on `GiveExpAction`.
+6. **Counts are whole numbers at load; coordinates are not.** An `amount` literal that is fractional
+   is rejected when the step loads. A template that renders fractional fails the step at run time.
+   Coordinates and angles stay decimal, and an out-of-range angle is rejected at load.
+7. **`chat` says text as the player, and runs a leading slash as a command.** A plain line goes
+   through `Player.chat`, which is not rich text (chat is plain). A `/` line uses `performCommand`
+   and fails when the server has no such command, which matches `run_command as: player`.
+8. **`broadcast` world scope defaults to the event player's world.** A `permission` scope needs a
+   `target` at load, because a permission broadcast without a node would be a server broadcast by
+   accident.
+9. **`teleport` keeps the player's facing unless `yaw` or `pitch` is written,** and a server that
+   refuses the move fails the step rather than reporting success.
+10. **`stop_sound` is player-scoped in v1.** It stops a sound for the player who ran the step, by
+    key, by category, both, or everything. Stopping a world- or server-wide sound needs the scope
+    vocabulary that `sound` has and `stop_sound` does not yet; that is left to a later milestone.
+
+**Verification.** Parse accept and reject, and execute on the paths that need no server, are unit
+tests (`BuiltinActionsTest`, `PlayerActionsTest`, `ItemActionsTest`). Take planning is tested
+exhaustively as a pure function. The Bukkit-only paths (the server broadcast, world lookup by name,
+online-player sound, stack building and inventory mutation, the experience and teleport calls on a
+real player) need a live server and are covered by the `logic` QA suite (`qa/catalog/logic.mjs`) on
+the probe items `probe:probe_messages`, `probe_items`, `probe_exp`, `probe_move`, `probe_sound` and
+`probe_stop`. The QA entries are authored and their integrity is checked by `qa/runner.mjs check`;
+they have not been run on a probe in this change, so their ledger state is "never" until a main
+swarm records them.
+
+**Not covered by a test in this change.** `broadcast` with `scope: permission` and `sound` with
+`scope: server` have no QA entry (they need a permission-holding second player and a second client).
+Their parse is a unit test; their execution calls static server state and is not run by any test
+yet.
+
+## 18. Decisions taken in #213 (L7: provider SPIs, named currencies, the money, permission and connect actions)
 
 #213 ships the provider SPIs of §4.5, the **named-currency** content type, three built-in currency
 integrations, the Vault, LuckPerms and BungeeCord adapters, the Bukkit default permission provider, the

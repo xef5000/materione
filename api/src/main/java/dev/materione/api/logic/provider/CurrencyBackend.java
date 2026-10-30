@@ -5,7 +5,7 @@ import dev.materione.api.logic.Threading;
 import java.util.UUID;
 
 /**
- * The money of one bound currency for any player (logic.md §4.5, §17). Returned by
+ * The money of one bound currency for any player (logic.md §4.5, §18). Returned by
  * {@link CurrencyIntegration#bind}; an action never holds one across runs, it asks the catalog again.
  *
  * <p><b>Contract.</b> A withdrawal the balance cannot cover returns
@@ -20,7 +20,7 @@ public interface CurrencyBackend {
     }
 
     /**
-     * The thread this backend's money calls must run on (logic.md §4.1, §17). A money action reports this
+     * The thread this backend's money calls must run on (logic.md §4.1, §18). A money action reports this
      * for the currency its step names, so the engine hops to the right thread before it calls the backend.
      * The default is {@link Threading#GLOBAL}, the conservative choice: a backend that touches only one
      * player's own state overrides it with {@link Threading#PLAYER_REGION}.

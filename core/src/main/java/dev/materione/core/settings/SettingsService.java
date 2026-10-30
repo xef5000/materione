@@ -66,7 +66,7 @@ public final class SettingsService {
         Map<String, Object> defaults = new LinkedHashMap<>();
         defaults.put("version", CURRENT_VERSION);
         defaults.put("debug", false);
-        // the currency the money actions use when they name none (logic.md §17)
+        // the currency the money actions use when they name none (logic.md §18)
         defaults.put("default_currency", "materione:money");
         defaults.put("delivery_host", "0.0.0.0");
         defaults.put("delivery_port", 8090);
@@ -77,7 +77,7 @@ public final class SettingsService {
         defaults.put("editor_port", 8089);
         defaults.put("editor_mode", "cloud");
         defaults.put("relay_base_url", "https://editor.materione.com");
-        // server transfer for the connect action (logic.md §17): blank host = no transfer packet,
+        // server transfer for the connect action (logic.md §18): blank host = no transfer packet,
         // and the default mode is the packet; "bungeecord" selects the proxy plugin channel instead
         defaults.put("transfer_host", "");
         defaults.put("transfer_mode", "packet");

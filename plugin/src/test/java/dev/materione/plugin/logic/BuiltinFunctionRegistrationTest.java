@@ -27,7 +27,7 @@ class BuiltinFunctionRegistrationTest {
 
         assertThat(functions.stream().map(BehaviorVocabulary.Function::id).toList())
                 .contains("contains", "matches", "is_player", "format_number", "balance", "format_currency")
-                // the built-in functions plus the two money functions (logic.md §17), which read the catalog
+                // the built-in functions plus the two money functions (logic.md §18), which read the catalog
                 .hasSize(BuiltinLogic.functions().size() + 2);
         assertThat(functions.stream().filter(f -> f.id().equals("random")).findFirst())
                 .hasValueSatisfying(random -> {

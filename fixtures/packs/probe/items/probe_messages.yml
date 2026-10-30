@@ -1,0 +1,14 @@
+# Logic L6 message probe (qa logic.messages-broadcast-chat, logic.title-actionbar): one
+# right-click in the air fires the server and world broadcasts, the player's chat line, the
+# action bar and a title, so each surface can be read back by the QA run.
+probe_messages:
+  material: FEATHER
+  display_name: "Message Probe"
+  behavior:
+    - on: click:right
+      do:
+        - broadcast: "Probe server broadcast"
+        - broadcast: {text: "Probe broadcast from ${player.name}", scope: world}
+        - chat: "probe chat line"
+        - actionbar: "&aProbe action bar"
+        - title: {title: "&6Probe title", subtitle: "probe subtitle", fade_in: 2, stay: 60, fade_out: 4}

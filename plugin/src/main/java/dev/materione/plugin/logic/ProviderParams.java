@@ -39,7 +39,7 @@ public final class ProviderParams {
     /**
      * The optional {@code currency} of a money step: the authored name, or null when omitted (the default
      * currency). Shape only; whether the name is defined is answered when the step runs, because the
-     * currencies a pack defines are live state (logic.md §17, the ordering note there).
+     * currencies a pack defines are live state (logic.md §18, the ordering note there).
      */
     public static String currency(ParamReader params) {
         return params.optionalText("currency").orElse(null);

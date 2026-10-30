@@ -9,7 +9,7 @@ import java.util.Optional;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The provider slots (logic.md §4.5, §17). Currencies are a catalog that the live runtime keeps
+ * The provider slots (logic.md §4.5, §18). Currencies are a catalog that the live runtime keeps
  * current, so the money slot is not a registration. The permission and transfer slots each hold the
  * latest registration; closing a registration clears the slot only if it still holds that registration,
  * so a replacement is never undone by the handle it replaced. The permission slot falls back to the

@@ -103,7 +103,7 @@ from the server at runtime).
 
 **#213 amendment (soft-depend adapters):** Vault and LuckPerms are **not shaded**. They are `compileOnly` in
 `integrations` and supplied by the server; the adapters load only when their plugin is enabled
-(`Integrations`, logic.md §17). `paper-plugin.yml` declares both as optional server dependencies with
+(`Integrations`, logic.md §18). `paper-plugin.yml` declares both as optional server dependencies with
 `join-classpath: true`. The shaded jar gains no classes from either API.
 
 **bStats amendment:** the third shaded set is **bStats 3.2.1** (`bstats-bukkit` + `bstats-base`, MIT), relocated under `materione.libs.org.bstats` by `materione.plugin-conventions`. Only `MaterionePlugin` references it, and it starts after the bootstrap phases in `onEnable`, behind a fail-soft wrapper: a failure is a warning and enable continues. The bStats jars carry no license file, so the shaded jar carries no MIT notice for it; creative and Undertow are in the same position. Bundling third-party notices is an open item, not decided here. No ban rule (§5) names bStats: the rules govern `dev.materione` code, and its only call site is `MaterionePlugin`.

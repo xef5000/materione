@@ -11,7 +11,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 /**
- * The Vault economy as one currency's money (logic.md §17). Looked up at each call through Vault's
+ * The Vault economy as one currency's money (logic.md §18). Looked up at each call through Vault's
  * service registry, so an economy plugin that registers after Vault is picked up without a reload.
  *
  * <p>Vault cannot say "insufficient funds" as a type, only as a failed response, so a withdrawal

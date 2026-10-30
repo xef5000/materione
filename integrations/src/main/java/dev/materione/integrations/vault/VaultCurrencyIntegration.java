@@ -9,7 +9,7 @@ import java.util.List;
 import net.milkbowl.vault.economy.Economy;
 
 /**
- * The {@code vault} currency integration (logic.md §17): the economy Vault exposes, through Vault's own
+ * The {@code vault} currency integration (logic.md §18): the economy Vault exposes, through Vault's own
  * service registry. It registers under {@code materione:vault} only while Vault is enabled
  * ({@link dev.materione.integrations.Integrations}), so a server without Vault never loads these classes.
  *

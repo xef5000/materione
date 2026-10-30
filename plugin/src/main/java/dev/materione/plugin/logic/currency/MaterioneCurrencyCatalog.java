@@ -16,7 +16,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * The live currency catalog (logic.md §17): the built-in {@code materione:money} plus the currencies
+ * The live currency catalog (logic.md §18): the built-in {@code materione:money} plus the currencies
  * the last apply defined. It resolves names, and it binds each currency's integration at use, so an
  * integration installed after the currency was defined answers without a reload.
  *

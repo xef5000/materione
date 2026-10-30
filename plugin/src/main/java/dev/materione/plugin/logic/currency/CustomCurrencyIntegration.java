@@ -16,7 +16,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 
 /**
- * The {@code custom} integration (logic.md §17): a currency a plugin of the server runs, driven by a
+ * The {@code custom} integration (logic.md §18): a currency a plugin of the server runs, driven by a
  * console command to give, a command to take, and a PlaceholderAPI token that reads the balance. It
  * is ported from ItemsAPI's custom integration.
  *
@@ -73,7 +73,7 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
          * The take and give commands are dispatched to the console, which may touch any region, so the
          * backend is {@code GLOBAL}. The balance read (a PlaceholderAPI token) happens on that same thread,
          * which is correct on Paper; on Folia a placeholder that reads player data from another region is
-         * a known gap (logic.md §17).
+         * a known gap (logic.md §18).
          */
         @Override
         public Threading threading() {

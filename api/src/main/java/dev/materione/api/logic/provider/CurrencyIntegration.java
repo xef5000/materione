@@ -4,7 +4,7 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.registry.SelfDescription;
 
 /**
- * How a named currency reaches its money (logic.md §4.5, §17): Vault's economy, the player's
+ * How a named currency reaches its money (logic.md §4.5, §18): Vault's economy, the player's
  * experience, a command pair with a PlaceholderAPI balance, or a provider an addon registers. One
  * entry per kind, in the {@code currency-integrations} registry; a currency file names one by id and
  * carries that integration's own keys.

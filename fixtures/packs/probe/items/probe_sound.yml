@@ -1,0 +1,9 @@
+# Logic L6 sound probe (qa logic.sound-stop): one right-click starts a looping beacon ambience for
+# the whole world (scope: world); probe_stop stops that one sound again.
+probe_sound:
+  material: GLOW_INK_SAC
+  display_name: "Sound Probe"
+  behavior:
+    - on: click:right
+      do:
+        - sound: {sound: "minecraft:block.beacon.ambient", scope: world}

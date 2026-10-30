@@ -9,7 +9,7 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **Named currencies (logic.md §17, #213).** A currency is a file in `currencies/`, for example
+- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
   available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a
@@ -85,6 +85,15 @@ releases may change file formats, settings and the public API.
   is `null`. `matches` is a full match, bounded to 256 characters of pattern, 1,024 of text and a
   read budget, so a pattern cannot stall the server. Addons register their own functions through
   `MaterioneAPI.logic().functions()`, called as `example.name(…)`.
+- **Ten more built-in actions for player, world and server effects (#212, logic.md §17 "Decisions
+  taken in #212").** `broadcast` (to the server, one world, or a permission), `actionbar`, `title`
+  (title, subtitle and fade timings), `stop_sound`, `chat` (a line the player says, or a command
+  they run with a leading slash), `teleport` (coordinates, optionally another world and facing),
+  `give_item` (a Materione item or `minecraft:` material; overflow drops at the feet), `take_item`
+  (matches by id or material and optionally by name; all or nothing), and `give_exp` and `take_exp`
+  (points or levels; a take fails when there is too little). `sound` gains `scope: player|world|server`.
+  Every text parameter takes `${...}` and `%placeholder%`, and each action reports `FAILED` rather
+  than going negative. `connect` is not here; it arrives with the transfer provider (#213).
 - **Addons can register behavior actions, conditions, triggers and expression functions
   (`MaterioneAPI.logic()`, logic.md §4, api.md §3.11).** The six built-in actions (`run_command`,
   `message`, `sound`, `potion`, `cancel`, `set_var`) are now typed `ActionType`s registered through

@@ -39,7 +39,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 /**
- * The provider actions (logic.md §4.5, §17): each parses and rejects like the rest, runs against an
+ * The provider actions (logic.md §4.5, §18): each parses and rejects like the rest, runs against an
  * in-memory currency backend and fake permission and transfer providers (ok, insufficient, refused, not
  * installed), and reports availability from what is installed at the moment it is asked. No server: the
  * player is a stand-in with a fixed UUID.

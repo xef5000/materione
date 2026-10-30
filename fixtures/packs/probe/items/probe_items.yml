@@ -1,0 +1,12 @@
+# Logic L6 item probe (qa logic.items-take-give): take_item is all or nothing. The first take asks
+# for more diamonds than the player holds and must remove nothing; the second takes two; the
+# give adds emeralds. The QA run reads the inventory back after one right-click.
+probe_items:
+  material: BONE
+  display_name: "Item Probe"
+  behavior:
+    - on: click:right
+      do:
+        - take_item: {item: "minecraft:diamond", amount: 5}
+        - take_item: {item: "minecraft:diamond", amount: 2}
+        - give_item: {item: "minecraft:emerald", amount: 2}

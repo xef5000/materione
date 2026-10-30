@@ -282,7 +282,7 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0061", Severity.WARN, "Integration provider could not be installed; skipped");
 
     /**
-     * A currency file was quarantined (logic.md §17): it names an integration that does not accept its
+     * A currency file was quarantined (logic.md §18): it names an integration that does not accept its
      * keys, or it names no integration, or its id is in the reserved {@code materione} namespace. The
      * currency is left out of the catalog; the rest of the pack loads.
      */

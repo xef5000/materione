@@ -33,7 +33,7 @@ import org.bukkit.plugin.Plugin;
 /**
  * The {@link LogicApi}: the logic registries (actions, conditions, triggers, expression functions,
  * currency integrations) as addon-registrable facades over the {@code RegistryService}, the provider
- * slots and currency catalog the money, permission and transfer actions read (logic.md §4.5, §17), plus
+ * slots and currency catalog the money, permission and transfer actions read (logic.md §4.5, §18), plus
  * the vocabulary built from them (logic.md §4, §8). Wires registries to the engine; it holds no policy of
  * its own.
  *
@@ -129,20 +129,20 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         return functions;
     }
 
-    /** The {@code currency-integrations} registry (logic.md §17). */
+    /** The {@code currency-integrations} registry (logic.md §18). */
     @Override
     public LogicRegistry<CurrencyIntegration> currencyIntegrations() {
         return currencyIntegrations;
     }
 
-    /** The provider slots and the currency catalog (logic.md §4.5, §17). */
+    /** The provider slots and the currency catalog (logic.md §4.5, §18). */
     @Override
     public LogicProviders providers() {
         return providers;
     }
 
     /**
-     * Makes the currencies of the live view the catalog's current list (logic.md §17). Called after
+     * Makes the currencies of the live view the catalog's current list (logic.md §18). Called after
      * every successful swap, and with an empty view when nothing is live, so a removed currency leaves.
      */
     public void updateCurrencies(dev.materione.core.runtime.RuntimeRegistries live) {

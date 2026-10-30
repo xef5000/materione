@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code give_money: 100} or {@code give_money: {amount: 100, currency: gems}}: deposits money into the
- * run's player's balance of a named currency (logic.md §17). With no {@code currency:} it uses the
+ * run's player's balance of a named currency (logic.md §18). With no {@code currency:} it uses the
  * {@code default_currency} setting, which is {@code materione:money} (Vault) unless changed.
  *
  * <p>An unknown currency fails the step with {@code unknown currency}; a currency whose integration is
@@ -66,7 +66,7 @@ public final class GiveMoneyAction implements ActionType<GiveMoneyAction.Params>
     }
 
     /**
-     * The thread of the currency this step names (logic.md §17): the backend's own thread, so an XP currency
+     * The thread of the currency this step names (logic.md §18): the backend's own thread, so an XP currency
      * runs on the player's region and a Vault economy on the global thread. A currency that is unknown or
      * not bound right now reports {@code PLAYER_REGION}; the step then fails with its reason, so the hop
      * costs nothing that matters. Currencies are live state, which is why this is resolved per step and not

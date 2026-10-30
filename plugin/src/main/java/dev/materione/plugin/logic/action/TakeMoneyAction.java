@@ -24,7 +24,7 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code take_money: 250} or {@code take_money: {amount: 250, currency: gems}}: withdraws money from
- * the run's player (logic.md §17). A balance that cannot cover the amount fails the step with
+ * the run's player (logic.md §18). A balance that cannot cover the amount fails the step with
  * {@code insufficient funds} and takes nothing, so a flow can branch on the refusal with {@code require}
  * (logic.md §2.2). Currency resolution and the per-currency thread are as for {@code give_money}.
  */
@@ -62,7 +62,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
         return Threading.GLOBAL;
     }
 
-    /** The thread of the currency this step names (logic.md §17); as for {@code give_money}. */
+    /** The thread of the currency this step names (logic.md §18); as for {@code give_money}. */
     @Override
     public Threading threading(Params params) {
         CurrencyCatalog catalog = providers.currencies();
