@@ -1,5 +1,8 @@
 package dev.materione.content.gui;
 
+import java.util.Set;
+import dev.materione.api.gui.TextureSource;
+import dev.materione.api.gui.ClickArea;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
@@ -79,6 +82,11 @@ public final class ItemComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.SLOT;
+        }
+
+        @Override
+        public ClickArea clickArea(TextureSource textures) {
+            return new ClickArea.Slots(Set.of(slot));
         }
 
         @Override

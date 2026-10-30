@@ -329,6 +329,78 @@
         },
         {
           "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Returns to the GUI the player came from, with its arguments and session variables",
+          "displayName": "Back",
+          "id": "gui.back",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Closes the GUI this flow belongs to",
+          "displayName": "Close GUI",
+          "id": "gui.close",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Opens a GUI for the player, replacing the window they have; the old one goes on the back stack",
+          "displayName": "Open GUI",
+          "id": "gui.open",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The GUI to open: pack:id, or a name in this GUI's pack",
+              "id": "gui",
+              "label": "Gui",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "reference",
+              "uiHint": "reference"
+            },
+            {
+              "advanced": true,
+              "description": "Arguments the GUI opens with, name to text; templates allowed",
+              "id": "args",
+              "label": "Args",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "gui",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Re-renders the open GUI in place",
+          "displayName": "Refresh GUI",
+          "id": "gui.refresh",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
           "category": "player",
           "deferred": false,
           "description": "Shows text to the player, on the action bar, or to everyone",
@@ -1136,6 +1208,60 @@
           "displayName": "Custom",
           "firedBy": [],
           "id": "custom"
+        },
+        {
+          "description": "A GUI is about to open for a player; a rule can cancel the open",
+          "details": [],
+          "displayName": "GUI opening",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.opening"
+        },
+        {
+          "description": "A GUI's window has opened for a player",
+          "details": [],
+          "displayName": "GUI opened",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.open"
+        },
+        {
+          "description": "A GUI's session ended: the player closed it, a flow closed it, another GUI replaced it, or the player left",
+          "details": [],
+          "displayName": "GUI closed",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.close"
+        },
+        {
+          "description": "The player clicks a slot of the GUI. The click is always cancelled; the topmost showing layer with a matching rule runs it",
+          "details": [],
+          "displayName": "GUI click",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click"
+        },
+        {
+          "description": "The player clicks outside the GUI's window",
+          "details": [],
+          "displayName": "GUI outside click",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click_outside"
+        },
+        {
+          "description": "Every so many ticks while the GUI is open; nothing runs when the GUI has no tick rule",
+          "details": [],
+          "displayName": "GUI tick",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.tick"
         }
       ],
       "functions": [
@@ -4513,6 +4639,742 @@
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A GUI is about to open for a player; a rule can cancel the open",
+          "details": [],
+          "displayName": "GUI opening",
+          "filters": [],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.opening",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "A GUI's window has opened for a player",
+          "details": [],
+          "displayName": "GUI opened",
+          "filters": [],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.open",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "Why it ended: player, action, replaced, quit",
+              "hosts": [],
+              "path": "close.reason",
+              "type": "string"
+            }
+          ],
+          "description": "A GUI's session ended: the player closed it, a flow closed it, another GUI replaced it, or the player left",
+          "details": [],
+          "displayName": "GUI closed",
+          "filters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "player",
+                "action",
+                "replaced",
+                "quit"
+              ],
+              "description": "Only for this reason: player, action, replaced, quit",
+              "id": "reason",
+              "label": "Reason",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.close",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The click kind: left, right, shift_left, shift_right, middle, double, drop, ctrl_drop, number_key, swap_offhand",
+              "hosts": [],
+              "path": "click.type",
+              "type": "string"
+            },
+            {
+              "description": "The clicked slot, from 0",
+              "hosts": [],
+              "path": "click.slot",
+              "type": "integer"
+            },
+            {
+              "description": "The hotbar key 1 to 9 of a number_key click, else 0",
+              "hosts": [],
+              "path": "click.key",
+              "type": "integer"
+            },
+            {
+              "description": "The layer that took the click, blank for a rule with no layer filter",
+              "hosts": [],
+              "path": "layer.id",
+              "type": "string"
+            }
+          ],
+          "description": "The player clicks a slot of the GUI. The click is always cancelled; the topmost showing layer with a matching rule runs it",
+          "details": [],
+          "displayName": "GUI click",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Only clicks on this layer (an id, or a list of ids)",
+              "id": "layer",
+              "label": "Layer",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Only clicks on this container slot (a number, or a list)",
+              "id": "slot",
+              "label": "Slot",
+              "min": 0.0,
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "left",
+                "right",
+                "shift_left",
+                "shift_right",
+                "middle",
+                "double",
+                "drop",
+                "ctrl_drop",
+                "number_key",
+                "swap_offhand"
+              ],
+              "description": "Only this kind of click (a kind, or a list)",
+              "id": "click",
+              "label": "Click",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "left or right",
+              "hosts": [],
+              "path": "click.type",
+              "type": "string"
+            },
+            {
+              "description": "Always -1",
+              "hosts": [],
+              "path": "click.slot",
+              "type": "integer"
+            }
+          ],
+          "description": "The player clicks outside the GUI's window",
+          "details": [],
+          "displayName": "GUI outside click",
+          "filters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "left",
+                "right"
+              ],
+              "description": "Only this side's click",
+              "id": "click",
+              "label": "Click",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click_outside",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "Every so many ticks while the GUI is open; nothing runs when the GUI has no tick rule",
+          "details": [],
+          "displayName": "GUI tick",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Run every this many ticks (20 is a second); at least 1",
+              "id": "every",
+              "label": "Every",
+              "min": 1.0,
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.tick",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
         }
       ],
       "version": 2
@@ -4764,7 +5626,7 @@
         "target": "raster"
       },
       {
-        "description": "A raised control face; in this version it looks clickable and every click is cancelled",
+        "description": "A raised control face; a gui.click rule that names its layer runs when it is clicked",
         "displayName": "Button",
         "id": "materione:button",
         "parameters": [

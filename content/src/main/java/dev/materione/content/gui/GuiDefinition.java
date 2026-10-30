@@ -1,6 +1,7 @@
 package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.content.gui.logic.GuiRules;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ import java.util.Map;
  * @param rows chest rows, 1 to 6
  * @param layers accepted layers, bottom to top, including hidden ones
  * @param skipped layers that were quarantined, in authored order
+ * @param rules the GUI's {@code behavior:} and {@code flows:} as authored (logic.md §6)
  * @param raw the merged authored mapping, kept for lossless reads
  */
 public record GuiDefinition(
@@ -24,11 +26,13 @@ public record GuiDefinition(
         int rows,
         List<GuiLayer> layers,
         List<SkippedLayer> skipped,
+        GuiRules rules,
         Map<String, Object> raw) {
 
     public GuiDefinition {
         layers = List.copyOf(layers);
         skipped = List.copyOf(skipped);
+        rules = rules == null ? GuiRules.EMPTY : rules;
         raw = Collections.unmodifiableMap(new LinkedHashMap<>(raw));
     }
 

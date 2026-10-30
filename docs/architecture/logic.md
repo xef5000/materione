@@ -435,7 +435,7 @@ rejecting typed arguments), and §13 assigns that check explicitly.
 |---|---|---|---|
 | `gui.opening` | n/a | `gui.*` | yes (the open does not happen) |
 | `gui.open` | n/a | `gui.*` | no |
-| `gui.close` | `reason: player\|action\|replaced\|quit` | `gui.*` | no |
+| `gui.close` | `reason: player\|action\|replaced\|quit` | `gui.*`, `close.reason` | no |
 | `gui.click` | `layer`, `slot`, `click` | `gui.*`, `click.type`, `click.slot`, `layer.id`, `entry.*` (lists) | the click is always cancelled except on input slots |
 | `gui.click_outside` | `click` | `gui.*`, `click.type` | n/a |
 | `gui.click_inventory` | `click` | `gui.*`, `click.*`, `slot.item` (the player's item) | yes |
@@ -452,7 +452,8 @@ incumbents plus everything Bukkit reports.
 layers whose footprint covers it. A layer covers a slot when the slot's 16×16 interior centre
 falls inside the layer's rectangle (buttons, text, images), or when the slot is in its slot set
 (item, slots, list). At click time the router takes the topmost **visible** layer that has a
-`gui.click` rule matching the click kind. One map lookup per click, no geometry at runtime.
+`gui.click` rule matching the click kind. One map lookup per click, no geometry at runtime. As built
+(#214, §21): a rule with no `layer:` filter answers a click that no layer's rule claimed.
 
 ### 6.3 Dynamic content
 
@@ -659,7 +660,8 @@ behavior/ dev.materione.behavior.flow      (#208) Step (sealed), Condition (seal
 behavior/ dev.materione.behavior.run       (#208) FlowInterpreter (+ ControlSteps), FlowRun, Frame, RunBudget, TraceEvent,
                                             TraceSink, RunScheduler (port), RunRegistry, RunReporter
 behavior/ dev.materione.behavior.expr      + FunctionCall node, function registry binding
-content/ dev.materione.content.gui.logic   OpenSpec, ClickMap compiler, dynamic-layer analysis, GuiRules
+content/ dev.materione.content.gui.logic   (#214) ClickMap, ClickMapCompiler, GuiRules, GuiRuleChecker; (#215) OpenSpec;
+                                            (#216) dynamic-layer analysis
 content/ dev.materione.content.variable    VariablesType (the `variables` content type)
 plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), GatewayRunScheduler, LogicRegistryImpl,
                                             BuiltinLogic (the built-ins, registered through the public API)
@@ -667,10 +669,22 @@ plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lin
 plugin/  dev.materione.plugin.logic.support   shared action helpers (Quantity, ItemRef, InventoryPlan, Stacks); not actions (§17)
 plugin/  dev.materione.plugin.logic.condition one class per condition
 plugin/  dev.materione.plugin.logic.variable  PdcVariableStore, ServerVariableStore, VarCommand
-plugin/  dev.materione.plugin.gui.session  GuiSession, GuiSessions, SessionHistory (back stack)
-plugin/  dev.materione.plugin.gui.open     GuiOpener, OpenCommandRegistrar, ArgParser
-plugin/  dev.materione.plugin.gui.render   SlotRenderer, TitleRenderer, RenderDiff, RefreshClock
-plugin/  dev.materione.plugin.gui.input    ClickClassifier, ClickRouter, SlotPolicy, InputSlots
+plugin/  dev.materione.plugin.logic.action.gui (#214) OpenGuiAction, CloseGuiAction, BackGuiAction, RefreshGuiAction
+plugin/  dev.materione.plugin.gui          (#214) GuiStack (the wiring), GuiBridge (how the actions reach it), GuiRun, Viewer,
+                                            GuiLookup, GuiMenu, GuiRuntime (the API facade), RuntimeGuis, GuiListener
+                                            (the click policy table)
+plugin/  dev.materione.plugin.gui.session  (#214) GuiSession, GuiSessions, SessionHistory (back stack), CloseReason
+plugin/  dev.materione.plugin.gui.open     (#214) GuiOpener, GuiLifecycle, OpenRequest, OpenResult, OpenGate;
+                                            (#215) OpenCommandRegistrar, ArgParser
+plugin/  dev.materione.plugin.gui.render   (#214) WindowRenderer; (#216) SlotRenderer, TitleRenderer, RenderDiff, RefreshClock
+plugin/  dev.materione.plugin.gui.input    (#214) ClickKind, ClickClassifier, ClickRouter, GuiClick, GuiInput, InventoryInput,
+                                            InputGuard, LayerVisibility, GuiWindowListener; (#218) SlotPolicy, InputSlots
+plugin/  dev.materione.plugin.gui.event    (#214) GuiEvents, GuiContexts, RuleDispatcher
+plugin/  dev.materione.plugin.gui.window   (#214) WindowHost, BukkitWindowHost
+plugin/  dev.materione.plugin.gui.rules    (#214) GuiRuleSet, GuiRuleDiagnoser
+plugin/  dev.materione.plugin.gui.live     (#214) GuiLiveRefresh
+plugin/  dev.materione.plugin.gui.tick     (#214) GuiTicker
+plugin/  dev.materione.plugin.gui.trigger  (#214) GuiTriggers
 plugin/  dev.materione.plugin.gui.list     ListPager, built-in ListSources
 plugin/  dev.materione.plugin.gui.prompt   ChatInput, SignInput, AnvilInput
 integrations/ vault, luckperms, placeholderapi (expansion), headdatabase, …  (soft-depend adapters)
@@ -682,9 +696,9 @@ Rules:
 
 1. **Listeners are adapters.** A Bukkit listener converts the event into a normalized interaction
    (`GuiClick`, `GuiSlotChange` and so on), hands it to one collaborator, and returns. No
-   listener holds policy, rendering or action logic. **Build check:** ban-test rule R10: classes
-   annotated `@EventHandler`-bearing in `plugin.gui..` and `plugin.logic..` may not depend on
-   `plugin.logic.action..` or `plugin.gui.render..` directly.
+   listener holds policy, rendering or action logic. **Build check:** ban-test rule R10 (shipped with
+   #214): classes in `plugin.gui..` and `plugin.logic..` that have an `@EventHandler` method may not
+   depend on `plugin.logic.action..` or `plugin.gui.render..` directly.
 2. **One action, one class; one condition, one class.** Each registers through the public API.
    Actions do not depend on each other. **Build check:** R11 forbids dependencies between classes
    in `plugin.logic.action..`.
@@ -704,7 +718,8 @@ Rules:
 
 The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. #207
 took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
-linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); the next free code is `MTR-0061`.
+linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
+the next free code is `MTR-0061`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -912,8 +927,8 @@ as before.
   compiler (§5.1) defines the condition tree.
 
 **Build checks.** R11 (one action, one class, §9 rule 2) and the 400-line guard (§9 rule 4) ship
-with this change, each proven against a planted violation. R10 has no subjects until the GUI runtime
-creates the `plugin.gui..` packages, and arrives with them.
+with this change, each proven against a planted violation. R10 had no subjects until the GUI runtime
+created the `plugin.gui..` packages, and arrived with it (#214, §21).
 
 ---
 
@@ -1656,3 +1671,182 @@ GUI or a QA rule fixture; the catalog suite drives the command and the store ins
 placed there by `threading(P)`. A pure read in an expression, or a placeholder request, reads the container from the
 thread that evaluates it. On Paper this is one thread and is safe. On Folia it is a hazard that needs either a hop for
 reads or a per-run cache of the values a run reads. Left open here; the decision belongs with the Folia pass.
+
+## 21. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
+
+#214 shipped the GUI runtime's core (§6.1 stages 1, 2, 5 to 8, §6.2, §5.2 for GUIs). Every later GUI issue
+builds on its seams, so the seams are named here. Where the design left a choice open, these are the choices.
+Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.action.gui` and
+`content.gui.logic` (§9).
+
+**Sessions and the back stack**
+
+1. **A session is one open GUI for one player.** `GuiSession` holds the GUI id, the arguments (a read-only
+   name-to-text map), the session variables (`vars()`, read as `gui.session.*`), the per-list page state
+   (`pages()`, the seam for the list component) and the identity that keys the runs its clicks start.
+   `GuiSessions` holds at most one per player. It lives while the window is open; a live reload keeps it
+   (decision 17). It is thread-confined to its player's thread, and its maps are concurrent so the quit and
+   refresh paths can read them safely.
+2. **Back means "the GUI I left by opening another".** `SessionHistory` is a per-player stack, 16 deep, oldest
+   dropped. A replaced window keeps it and pushes a snapshot (arguments, variables, page state), every way of
+   opening included (command, API, `gui.open`); any other end (`player`, `action`, `quit`, a removed GUI)
+   drops it. `gui.back` pops and re-opens the snapshot's GUI with its arguments and variables, and does not
+   push the window it leaves, so two backs go two menus back. The issue text said "open, close, back"; a
+   close ends the conversation, so the stack is dropped there and the exit criterion is "open, open another,
+   back". Reversing this means keeping the stack across `action` and `player` closes.
+3. **Close reasons.** `CloseReason` is `player`, `action`, `replaced`, `quit`, plus the runtime's own
+   `removed`, which fires nothing because the GUI's rules are gone with the GUI. A window that closes without
+   a flow asking is `quit` when the server says it was a disconnect and `player` otherwise (Esc, death, a
+   teleport, another plugin's window). `gui.close` exposes the reason as `close.reason` as well as the
+   `reason:` filter. A session ends once (`GuiSession.end` is a compare-and-set), so a close that races a
+   replace or a quit fires its trigger exactly once.
+4. **A window is its session's window only while the host says so.** `GuiMenu` points at the session, and
+   the session records which window currently shows it (`attach`). A close event for any other window (the
+   old one when the host re-opens, or when one GUI replaces another) is not the player closing. The listener
+   compares and ignores. This is what lets a title change re-open a window without ending the session.
+
+**The opener**
+
+5. **`GuiOpener` is the one path.** Stages: resolve the live GUI; ask the `OpenGate`; fire the cancellable
+   `gui.opening`; create the session and replace the previous one; render and open through the
+   `WindowHost`; fire `gui.open` and start the ticker once the window is up. The command, the runtime API
+   (and with it the editor's preview) and the actions all build an `OpenRequest` and call it. A refusal
+   (`NOT_LIVE`, `DENIED`, `CANCELLED`, `FAILED`) leaves the player's windows and sessions as they were.
+6. **The gate is the seam for the open specification.** `OpenGate.admit(viewer, gui, args)` answers with the
+   arguments the session opens with, or a refusal. The default admits everything with the arguments as given.
+   #215 implements `open.permission`, the typed `open.args` (so a bad argument is a usage message), the
+   `open.requirement` and its `deny` flow and the bypass node behind it, and installs itself with
+   `GuiOpener.gate(...)`. Until then the only permission is the API-level `materione.gui.open` that
+   `GuiRuntime` checks for an actor. `gui.open` runs as the player with no extra check, because the flow
+   is the author's. Arguments are plain text everywhere in this issue.
+7. **A `gui.close` rule that opens something else wins.** The previous GUI's close rules run while the new
+   open is in progress. If one of them opens a third GUI, that open is the player's current one and the
+   open in progress ends `CANCELLED` ("another GUI opened while this one was opening"). The alternative, two
+   windows racing, is worse.
+8. **A window is never changed in the middle of the player's own click.** Opening or closing from inside the
+   click being handled desyncs the client's cursor and slots for a tick, so `InputGuard` marks a player
+   mid-click and `BukkitWindowHost` runs the open or close on the player's next tick through the scheduling
+   gateway. The session switches at once, and a click that arrives on the old window in between finds a
+   stale session and is ignored. A flow resumed from a `wait`, a command, a tick and the API are never
+   mid-click and change the window at once.
+
+**The click map and the router**
+
+9. **Components declare where they are clicked.** `CompiledGuiLayer.clickArea(TextureSource)` is a new
+   default method returning `ClickArea.NONE`, so an addon component opts in with a `Rect` (GUI pixels) or
+   `Slots`. Built-ins: `button`, `text` and `image` are rectangles, `item` is its slot, `slots` is the
+   container's slots when its wells cover them (the player-inventory wells are not part of a GUI's map;
+   `gui.click_inventory` is #218). `panel` and `paint` are not clickable. An `image` without an authored size
+   is as big as its texture, and a missing texture means no area. A `text` layer's box is its measured
+   advance wide and one glyph cell high.
+10. **The rectangle rule is arithmetic.** A slot is covered when the centre of its 16 x 16 interior,
+    `(16 + 18·col, 26 + 18·row)`, lies in the half-open rectangle `[x, x + width) x [y, y + height)`. A
+    rectangle that only grazes a slot's edge does not take it. The map lists layers per slot **topmost first**.
+    A hidden layer, and a layer the compiler skipped, are not in the map. `ClickMap` is compiled with the GUI
+    (`CompiledGui.clicks()`), so a click is one lookup.
+11. **The router.** For each layer over the slot, topmost first, that is showing (`LayerVisibility`, always
+    true until `visible_if`, #216), it takes that layer's `gui.click` rules whose other filters match; the
+    first layer with a match runs them and the layers under it never see the click. **Rules with no `layer:`
+    filter are the fallback**: they answer a click no layer claimed, so one rule can catch "any other slot"
+    without competing with the layers above it. The click is dispatched with the session as cancellation key.
+    The window policy table (`GuiListener.route`) is unchanged: every click is cancelled. The one extension is
+    that a click outside the window, still cancelled, is offered to the GUI (`PluginGui.onOutsideClick`).
+12. **Click kinds.** `ClickClassifier` is a pure table from Bukkit's `ClickType`: left, right, shift_left,
+    shift_right, middle, double, drop, ctrl_drop, number_key, swap_offhand. A number-key click carries
+    `click.key`, **1 to 9** as pressed (Bukkit counts the hotbar from 0). The creative clone and unknown
+    types classify to nothing: the click is cancelled and no rule runs. A click outside the window is `left`
+    or `right` only.
+
+**Triggers and filters**
+
+13. **Filters are the engine's.** `Rule` gained `filters`: the keys the trigger's description declares
+    (`TriggerDescription.filters()`), read by the compiler and typed by that schema: enum values lower-cased
+    and checked, integers whole and at least the schema's minimum, a required filter must be present, a single
+    value or a list. A filter that is written and wrong skips the rule with `MTR-0021` at the key's path
+    (`behavior.1.click`). `BehaviorEvent.withFilterFacts` supplies what the event says about itself
+    (`layer`, `slot`, `click`, `reason`), `RuleEngine` compares, and a rule that names a filter the event
+    carries no fact for does not match. Items, blocks and furniture are unaffected (their triggers declare no
+    filters).
+14. **The six triggers**, registered through the public logic API, with their context schemas:
+    `gui.opening` (cancellable), `gui.open`, `gui.close` (`reason`, `close.reason`), `gui.click` (`layer`,
+    `slot`, `click`; `click.type`, `click.slot`, `click.key`, `layer.id`), `gui.click_outside` (`click`:
+    left or right; `click.type`; `click.slot` is -1) and `gui.tick` (`every`, required, at least 1). All
+    carry `player.*`, `server.*`, `gui.id`, `gui.args.*`, `gui.session.*`, `gui.page.*` and `vars.*`.
+    `gui.args` and `gui.session` are the session's own maps, not copies. `GuiContexts` builds the tree in one
+    place, so the schema and the runtime cannot drift. `entry.*` is #219's.
+15. **`gui.tick` is a chain of one-shots.** One timer per open session, started only if the GUI has a tick
+    rule, waking every gcd of the rules' `every`; each wake counts elapsed ticks and runs the rules whose
+    `every` divides them. Each link re-reads the live GUI, so a reload that adds or removes tick rules is
+    followed, and it stops when the session ends or the rules are gone: closing needs no cancel call. A due
+    rule is dispatched alone with its own `every` as the fact its filter compares with.
+
+**Actions and runs**
+
+16. **The four actions** are `gui.open` (a GUI and optional `args`, templated), `gui.close`, `gui.back` and
+    `gui.refresh`, one class each in `plugin.logic.action.gui`, all `PLAYER_REGION`, and they reach the
+    runtime through a `GuiBridge` the runtime binds into (the actions register at boot, before the runtime
+    exists; unbound they fail soft). `gui.open` needs only a player, so it works from an item or a block rule
+    and from a run whose window already closed; a bare name means the GUI of that name in the running GUI's
+    pack, else the only live GUI of that name. The other three need the run's own session, still open and still
+    the player's current one, and fail with `"no open gui"` otherwise (§5.2). `gui.back` with nothing behind
+    fails with "nothing to go back to"; `gui.refresh` rewrites the open window in place, and is where the
+    dynamic-slot work re-renders. A click's runs belong to the player and survive the close; only
+    `stop: {cancel_session_runs: true}` ends them.
+17. **A reload keeps the session.** `GuiLiveRefresh` (the refresh of gui.md §5, now session-aware) rewrites a
+    changed GUI's window in place, or re-opens it when the title or size changed, for the same session:
+    arguments, variables, page state and the back stack carry on. Every click reads the live view at the moment
+    it happens, so the next click runs the reloaded rules. A reload that changes only rules is not a
+    "changed" GUI (the window is identical). A GUI that is gone ends its sessions (`removed`), closes the
+    window and tells the viewer; a session whose window is not the GUI's any more is left alone.
+
+**Rules in the content type, and diagnostics**
+
+18. **The gui type carries `behavior:` and `flows:`.** `GuiRules` reads the two sections as authored (an
+    entry that is not a mapping keeps its index, so a diagnostic names the right `behavior.<i>`), and they
+    are in the type's self-description. The flow compiler lives in `behavior`, which `content` cannot see,
+    so the type takes a `GuiRuleChecker` (the host's compile) and runs it in `diagnose`: the pack compile and
+    `gui.validate` report the same problems with the same step paths. The runtime compiles the rules again
+    when it builds the live view and does not republish what the diagnose stage reported. A section of the
+    wrong shape is `MTR-0021` at `behavior` or `flows`. `gui.validate` shows rule problems for the `saved`
+    and `yaml` sources; the `draft` source is the typed layers alone and carries no rules, so a draft is
+    validated for rules by the Logic tab's own call (#221).
+19. **No new diagnostic code.** What the compiler cannot read is `MTR-0021`, a step the registry rejects is
+    `MTR-0057`, an unknown `${root}` is `MTR-0060`. Three checks only a GUI can make are `MTR-0021` warnings
+    on a rule that loads and never runs: a `layer:` that names no layer of the GUI (or a hidden one), a
+    `slot:` outside the container, and a trigger no GUI fires. The next free code is still `MTR-0061`.
+
+**Surfaces**
+
+20. **Arguments are plain text on every surface.** `RuntimeApi.GuiRuntimeApi.open(actor, id, player, args)`
+    is a default method (an implementation that predates it ignores the arguments), `runtime.openGui`
+    takes an optional flat `args` object (numbers and booleans become their text; anything nested is a
+    bad request), and `/materione gui open <id> [player] [name=value...]` takes `name=value` tokens. The
+    editor's capability gate is unchanged, since the field is optional and a release without it ignores it.
+21. **Tests.** A headless server has no player, so the click, back and refresh paths are covered by unit tests
+    over a recording `WindowHost` and the real registries and engine, and by the QA catalog's `guilogic`
+    suite against a real client (`qa/catalog/guilogic.mjs`, the `guilogic` fixture pack). The Paper
+    harness proves what a server can: the fixture's rules compile at boot with no diagnostic, the console and
+    command surfaces resolve the GUIs, `gui.validate` reports rule problems at their step paths, and a save
+    that breaks a rule is diagnosed at the apply.
+
+**Seams for the later issues.**
+
+| Issue | Where it plugs in |
+|---|---|
+| #215 open commands | `GuiOpener.gate(OpenGate)` for permission, typed args, requirement, deny and bypass; `OpenSpec` beside `GuiRules` in `content.gui.logic`; `GuiRuntime` and the command already pass the arguments through. |
+| #216 dynamic slots | `LayerVisibility` (the router already asks it); `WindowRenderer` becomes the per-session renderer, and `gui.refresh` re-renders through it; the click map keeps conditional layers in and asks per click. |
+| #217 overlays | The title is assembled per GUI by the compiler; `WindowHost.reopen` is the title-change path. |
+| #218 input slots | The `GuiListener.route` policy table gains its rows; `GuiInput.click` is where `gui.slot_change` and `gui.click_inventory` fire from; `GuiEvents` fires them. |
+| #211 variables | `GuiSession.vars()` is a live, concurrent map the session scope can write through and back a session facet with, and `GuiSessions.current(player)` / `SessionHistory` are what `%materione_gui_open%` and `%materione_gui_last%` read; nothing here depends on the variables work. |
+| #219 lists | `GuiSession.pages()`; `ClickArea.Slots` for a list's slots; `GuiEvents.click` takes extra context for `entry.*`. |
+| #220 prompts | `GuiLifecycle` and `GuiSession` for closing for a prompt; re-open through `GuiOpener` with an `OpenRequest.back`-style restore. |
+
+**Build checks.** R10 (§9 rule 1) ships with this change, proven against a planted violation
+(`LogicCodeOrganisationTest`) and applied whole-jar in `AllModulesArchitectureTest`; the 400-line guard now
+covers `plugin.gui` and `content.gui.logic` as well.
+
+**Reconciled with #221 at merge.** #221 added a `GuiAuthoringApiImpl.LogicCheck` that ran the logic
+compiler over a GUI's `behavior:` in `validate` and `edit`. This PR's `GuiRuleChecker` already runs in
+the diagnose stage, so `validate`, `edit` and the pack compile all carry the same rule diagnostics
+(plus the GUI-only layer checks). The two would have reported every problem twice, so `LogicCheck`
+was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the logic authoring API's own check.

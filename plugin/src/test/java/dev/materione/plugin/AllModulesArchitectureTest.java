@@ -42,4 +42,8 @@ class AllModulesArchitectureTest {
     /** Logic (R11, logic.md §9): one action, one class; action classes do not depend on each other. */
     @ArchTest
     static final ArchRule logicActionsAreIndependent = MaterioneArchRules.LOGIC_ACTIONS_ARE_INDEPENDENT;
+
+    /** Logic (R10, logic.md §9): listeners are adapters; they do not reach the actions or the renderer directly. */
+    @ArchTest
+    static final ArchRule listenersAreAdapters = MaterioneArchRules.LISTENERS_ARE_ADAPTERS;
 }

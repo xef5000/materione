@@ -16,7 +16,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  * routing.
  *
  * <p>Clicks in the gui itself are cancelled and handed to the gui (its
- * handlers see an already-cancelled event, on the viewer's region thread).
+ * handlers see an already-cancelled event, on the viewer's region thread). A click outside the window
+ * is cancelled and offered to the gui as an outside click.
  * The viewer's own inventory stays live — the browser hands items onto the
  * cursor, and depositing them must work — except the two actions that
  * would move viewer items into the gui or hoover gui display items out:
@@ -64,7 +65,12 @@ public final class GuiListener implements Listener {
                 event.setCancelled(true);
                 gui.onClick(event);
             }
-            case CANCEL -> event.setCancelled(true);
+            case CANCEL -> {
+                event.setCancelled(true);
+                if (target == Target.OUTSIDE_WINDOW) {
+                    gui.onOutsideClick(event); // the click is cancelled; the gui may still react to it
+                }
+            }
             case PASS -> {
                 // the viewer's own inventory keeps working
             }

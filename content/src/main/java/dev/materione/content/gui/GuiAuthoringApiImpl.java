@@ -28,6 +28,7 @@ import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
+import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
 import dev.materione.core.pipeline.ResourceCompiler;
@@ -62,23 +63,12 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
     private static final String ITEM_FOLDER_PREFIX = "items/";
     private static final String MINECRAFT = "minecraft:";
 
-    /**
-     * The logic compiler's verdict on a GUI's {@code behavior:} and {@code flows:} (logic.md §10).
-     * The content module does not depend on the behavior engine, so the host supplies it; null means
-     * no logic diagnostics.
-     */
-    @FunctionalInterface
-    public interface LogicCheck {
-        List<Diagnostic> check(NamespacedId owner, Map<String, Object> definition);
-    }
-
     private final AuthoringApi authoring;
     private final Registry<GuiComponent> components;
     private final GuiType type;
     private final Path packsRoot;
     private final Supplier<Allocations> previewAllocations;
     private final List<String> materials;
-    private final LogicCheck logic;
 
     /**
      * @param authoring the authoring API the writes and the reads go through
@@ -93,12 +83,12 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             Path packsRoot,
             Supplier<Allocations> previewAllocations,
             List<String> materials) {
-        this(authoring, components, packsRoot, previewAllocations, materials, null);
+        this(authoring, components, packsRoot, previewAllocations, materials, GuiRuleChecker.NONE);
     }
 
     /**
-     * @param logic the logic compiler's check, folded into {@link #validate} and the warnings of
-     *              {@link #edit}; null when the host has no behavior engine
+     * As above, with the rule checker {@code validate} runs the GUI's {@code behavior:} through, the
+     * one the pack compile uses (logic.md §10): a bad rule is reported with its step path.
      */
     public GuiAuthoringApiImpl(
             AuthoringApi authoring,
@@ -106,14 +96,13 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             Path packsRoot,
             Supplier<Allocations> previewAllocations,
             List<String> materials,
-            LogicCheck logic) {
+            GuiRuleChecker ruleChecker) {
         this.authoring = Objects.requireNonNull(authoring, "authoring");
         this.components = Objects.requireNonNull(components, "components");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.previewAllocations = Objects.requireNonNull(previewAllocations, "previewAllocations");
         this.materials = materials == null ? List.of() : List.copyOf(materials);
-        this.type = new GuiType(components);
-        this.logic = logic;
+        this.type = new GuiType(components, ruleChecker);
     }
 
     // ------------------------------------------------------------------
@@ -196,7 +185,10 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         return ApiResult.ok(withLogicAndOpen(subject, check(subject, textures.value(), pool.value()).diagnostics()));
     }
 
-    /** The compile's diagnostics, then the open: block's shape problems and the logic compiler's, for one GUI. */
+    /**
+     * The compile's diagnostics (which carry the rule checker's, logic.md §10), then the open: block's
+     * shape problems, for one GUI.
+     */
     private List<Diagnostic> withLogicAndOpen(Subject subject, List<Diagnostic> compiled) {
         var all = new ArrayList<Diagnostic>(compiled);
         if (subject.definition().containsKey("open")) {
@@ -205,9 +197,6 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             if (parsed.spec() != null) {
                 all.addAll(GuiOpen.check(parsed.spec()));
             }
-        }
-        if (logic != null) {
-            all.addAll(logic.check(subject.id(), subject.definition()));
         }
         return all;
     }

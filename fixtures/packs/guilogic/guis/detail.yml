@@ -1,0 +1,39 @@
+# The detail GUI the menu opens with arguments. Its single button goes back to the menu, which comes
+# back with the arguments it was opened with.
+detail:
+  title: Detail
+  rows: 1
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: wells
+      type: slots
+      region: container
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "DETAIL"
+      font: smallcaps
+      color: "#404040"
+    - id: up
+      type: button
+      x: 80
+      y: 18
+      width: 16
+      height: 16
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id} item=${gui.args.item} from=${gui.args.from}"
+            as: console
+        - message: "<aqua>Detail of ${gui.args.item}"
+    - on: gui.click
+      layer: up
+      do:
+        - gui.back

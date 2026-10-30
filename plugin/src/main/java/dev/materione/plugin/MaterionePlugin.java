@@ -83,6 +83,10 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.gui.GuiComponentsService guiComponents;
     private dev.materione.plugin.logic.LogicService logic;
     private dev.materione.plugin.logic.variable.VariableService variables;
+    /** How the GUI actions reach the GUI runtime; bound when {@link #guiStack} is built. */
+    private final dev.materione.plugin.gui.GuiBridge guiBridge = new dev.materione.plugin.gui.GuiBridge();
+    /** The GUI runtime (sessions, opener, click routing); null before content load. */
+    private dev.materione.plugin.gui.GuiStack guiStack;
     private dev.materione.integrations.Integrations integrations;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
     /** API-first wiring (api.md §5 Phase 2); null before content load. */
@@ -310,9 +314,11 @@ public final class MaterionePlugin extends JavaPlugin {
         logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish,
                 settings == null ? null : settings.getString("default_currency", "materione:money"),
                 variables);
-        // the item actions read the live registries: empty until the first apply, then the current set
+        // the item actions read the live registries: empty until the first apply, then the current set;
+        // the GUI actions reach the GUI runtime through the bridge it binds into once it is built
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
-                () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()));
+                () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
+                guiBridge);
         registerProviders();
         // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
         dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
@@ -522,15 +528,20 @@ public final class MaterionePlugin extends JavaPlugin {
                         packsRoot,
                         () -> pipeline.allocation().preview(),
                         ItemMaterialPalette.supportedItemMaterials(),
-                        (owner, definition) -> dev.materione.behavior.logic.authoring.LogicDiagnostics.of(
-                                owner, definition, logicLookup)),
+                        pipeline.guiRuleChecker()),
                 // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
                 base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
+        // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);
+        // its services bind into the bridge the GUI actions hold
+        guiStack = new dev.materione.plugin.gui.GuiStack(
+                this, scheduling, () -> pipeline.runtime().registries(), logic.engine()::fire,
+                dev.materione.plugin.gui.input.LayerVisibility.ALL);
+        guiBridge.bind(guiStack.services());
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
         var guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
-                this, scheduling, () -> pipeline.runtime().registries());
+                this, scheduling, () -> pipeline.runtime().registries(), guiStack);
         pipeline.observeSwaps(guiRuntime::refreshAfterSwap);
         RuntimeApiImpl runtimeApi = new RuntimeApiImpl(
                 this, scheduling, pipeline,
@@ -590,6 +601,10 @@ public final class MaterionePlugin extends JavaPlugin {
         // gui click router (holder identity — no title matching): one
         // listener for every Materione menu, admin browser today, M6 menus later
         getServer().getPluginManager().registerEvents(new GuiListener(), this);
+        if (guiStack != null) {
+            // the GUI sessions' own events: a window closing and a player leaving
+            guiStack.listeners().forEach(listener -> getServer().getPluginManager().registerEvents(listener, this));
+        }
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);

@@ -450,6 +450,33 @@ class GuiAuthoringApiTest {
     }
 
     @Test
+    void validateRunsTheRuleCheckerOnYamlAndSavedGuisAndTheFindingsKeepTheirStepPath() {
+        Path packsRoot = temp.resolve("packs");
+        var seen = new java.util.ArrayList<String>();
+        GuiAuthoringApi checked = new AuthoringApiImpl(store, new AuditLog(temp.resolve("audit2.log")), packsRoot,
+                new ModelTransactionService(store, packsRoot, new AuditLog(temp.resolve("audit3.log"))), null,
+                () -> null, (actor, pack, changed) -> { }, null, List::of,
+                base -> new GuiAuthoringApiImpl(base, GuiTestSupport.components(), packsRoot,
+                        MemoryAllocations::new, List.of(), definition -> {
+                            seen.add(definition.id() + " rules=" + definition.rules().behavior().size());
+                            return List.of(new Diagnostic(DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
+                                    "rule 'r' broke", definition.id(), null, "fix it",
+                                    dev.materione.api.diagnostics.DiagnosticTarget.field("behavior", "0", "do", "1")));
+                        })).gui();
+        String withRules = SHOP + "  behavior:\n    - on: gui.click\n      do:\n        - gui.close\n";
+
+        ApiResult<List<Diagnostic>> fromYaml = checked.validate(new GuiValidateRequest(
+                new Yaml(PACK, withRules), List.of()));
+        ApiResult<List<Diagnostic>> fromTheFile = checked.validate(new GuiValidateRequest(
+                new Saved(PACK, GUI), List.of()));
+
+        assertThat(fromYaml.value()).singleElement().satisfies(diagnostic ->
+                assertThat(diagnostic.target().field()).containsExactly("behavior", "0", "do", "1"));
+        assertThat(seen).containsExactly("shop:main rules=1");
+        assertThat(fromTheFile.value()).as("the saved file has no rules, so nothing is checked").isEmpty();
+    }
+
+    @Test
     void validateOfUnparseableYamlIsAParseFailure() {
         ApiResult<List<Diagnostic>> result = gui.validate(new GuiValidateRequest(
                 new Yaml(PACK, "main: [unclosed"), List.of()));

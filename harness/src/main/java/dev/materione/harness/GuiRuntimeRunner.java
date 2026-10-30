@@ -32,6 +32,7 @@ public final class GuiRuntimeRunner {
 
     static final String GUI_ID = "sample:runtime_shop";
     private static final String GUI_PATH = "guis/runtime_shop.yml";
+    private static final String MENU_PATH = "guis/menu.yml";
 
     /**
      * The GUI as the scenario authors it: a panel, the container wells, a heading drawn on the window and
@@ -69,7 +70,7 @@ public final class GuiRuntimeRunner {
     public HarnessResult run(HarnessOptions options) {
         ServerWorkspace workspace;
         try {
-            workspace = ServerWorkspace.create(options, "gui", Set.of("sample", "corpus"));
+            workspace = ServerWorkspace.create(options, "gui", Set.of("sample", "corpus", "guilogic"));
             Path guis = workspace.root.resolve("plugins/Materione/content/packs/sample/guis");
             Files.createDirectories(guis);
             Files.writeString(guis.resolve("runtime_shop.yml"), guiYaml("Shop", 3, "corpus:gem_red"));
@@ -106,6 +107,9 @@ public final class GuiRuntimeRunner {
                 problems.add("MATERIONE-BOOT-OK missing");
             }
 
+            // 0. the GUI logic fixture (#214) compiled its rules at boot without a single diagnostic
+            problems.addAll(guilogicIsClean(log));
+
             // 1. the console surface: a GUI that resolves is live (the boot apply made it), and the
             // console has no window to open, so it names a player or is refused
             problems.addAll(expect(console, log, options,
@@ -117,6 +121,13 @@ public final class GuiRuntimeRunner {
             problems.addAll(expect(console, log, options,
                     "materione gui open runtime_missing Nobody",
                     "MATERIONE-GUI-FAILED reason=not-live"));
+            // the fixture's GUIs (with rules) are live too, and name=value arguments after the id parse
+            problems.addAll(expect(console, log, options,
+                    "materione gui open guilogic:menu page=2",
+                    "MATERIONE-GUI-DENIED reason=player-required"));
+            problems.addAll(expect(console, log, options,
+                    "materione gui open guilogic:detail Nobody item=sword",
+                    "MATERIONE-GUI-FAILED reason=no-such-player"));
 
             // 2. the editor: this console session has no approved player, so there is nothing to preview for
             EditorBrowser.BrowserClient browser = EditorBrowser.connect(console, log, options, problems);
@@ -159,10 +170,22 @@ public final class GuiRuntimeRunner {
                     "materione gui open runtime_shop Nobody",
                     "MATERIONE-GUI-FAILED reason=no-such-player"));
 
-            // 6. the good copy again, then the teardown
+            // 6. the good copy again
             problems.addAll(saveAndExpect(browser, log, options,
                     guiYaml("Shop", 3, "corpus:gem_red"),
                     "MATERIONE-GUI-REFRESH changed=1 removed=0"));
+
+            // 7. a GUI's rules are checked like its layers: gui.validate names the broken step by its path
+            problems.addAll(validateRulesThroughTheEditor(browser));
+
+            // 8. a save that breaks a rule is diagnosed at the apply (the step is skipped, the GUI stays live)
+            String menu = Files.readString(
+                    workspace.root.resolve("plugins/Materione/content/packs/guilogic").resolve(MENU_PATH));
+            problems.addAll(saveAndExpect(browser, log, options, "guilogic", MENU_PATH,
+                    menu.replace("- gui.close", "- gui.teleport_cow"), "MTR-0057"));
+            problems.addAll(expect(console, log, options,
+                    "materione gui open guilogic:menu Nobody",
+                    "MATERIONE-GUI-FAILED reason=no-such-player"));
             browser.close();
 
             console.send("stop");
@@ -185,29 +208,95 @@ public final class GuiRuntimeRunner {
      */
     private static List<String> saveAndExpect(EditorBrowser.BrowserClient browser, LogWatcher log,
             HarnessOptions options, String content, String marker) throws Exception {
+        return saveAndExpect(browser, log, options, "sample", GUI_PATH, content, marker);
+    }
+
+    private static List<String> saveAndExpect(EditorBrowser.BrowserClient browser, LogWatcher log,
+            HarnessOptions options, String pack, String path, String content, String marker) throws Exception {
         List<String> problems = new ArrayList<>();
-        Wire.Response current = browser.call("browse.get", object("pack", "sample", "path", GUI_PATH));
+        Wire.Response current = browser.call("browse.get", object("pack", pack, "path", path));
         if (!current.ok()) {
-            problems.add("browse.get " + GUI_PATH + " failed: " + current.toJson());
+            problems.add("browse.get " + path + " failed: " + current.toJson());
             return problems;
         }
         String rev = current.data().getAsJsonObject().get("rev").getAsString();
         int cursor = log.mark();
         long started = System.currentTimeMillis();
         Wire.Response put = browser.call("edit.put", object(
-                "pack", "sample", "path", GUI_PATH, "rev", rev, "content", content));
+                "pack", pack, "path", path, "rev", rev, "content", content));
         if (!put.ok()) {
-            problems.add("edit.put " + GUI_PATH + " failed: " + put.toJson());
+            problems.add("edit.put " + path + " failed: " + put.toJson());
             return problems;
         }
         if (log.awaitLine(marker, options.commandTimeout(), cursor) == null) {
-            problems.add("'" + marker + "' missing after the editor saved " + GUI_PATH);
+            problems.add("'" + marker + "' missing after the editor saved " + path);
             return problems;
         }
         long elapsed = System.currentTimeMillis() - started;
         if (marker.startsWith("MATERIONE-GUI-REFRESH") && elapsed > LIVE_LOOP_BUDGET.toMillis()) {
             problems.add("GUI save reached the live view in " + elapsed + " ms — exceeds the "
                     + LIVE_LOOP_BUDGET.toSeconds() + " s live-loop budget (plugin.md §9)");
+        }
+        return problems;
+    }
+
+    /**
+     * The fixture pack's rules compile at boot: any diagnostic the boot logged about a {@code guilogic:}
+     * resource is a rule that did not load.
+     */
+    private static List<String> guilogicIsClean(LogWatcher log) {
+        List<String> problems = new ArrayList<>();
+        for (String line : log.readAll().split("\\R")) {
+            if (line.contains("guilogic:") && line.contains("MTR-")) {
+                problems.add("the guilogic fixture was diagnosed at boot: " + line);
+            }
+        }
+        return problems;
+    }
+
+    /**
+     * {@code gui.validate} over a GUI whose first rule names a layer it does not have and whose second
+     * rule has an action that does not exist: both come back with the path of the node, so the studio can
+     * point at it.
+     */
+    private static List<String> validateRulesThroughTheEditor(EditorBrowser.BrowserClient browser)
+            throws Exception {
+        String text = """
+                menu:
+                  title: Menu
+                  rows: 3
+                  layers:
+                    - id: b
+                      type: button
+                      x: 8
+                      y: 18
+                      width: 16
+                      height: 16
+                  behavior:
+                    - on: gui.click
+                      layer: nope
+                      do:
+                        - gui.close
+                    - on: gui.click
+                      layer: b
+                      do:
+                        - gui.close
+                        - gui.teleport_cow: now
+                """;
+        JsonObject payload = new JsonObject();
+        payload.add("source", object("kind", "yaml", "pack", "guilogic", "text", text));
+        Wire.Response response = browser.call("gui.validate", payload);
+        if (!response.ok()) {
+            return List.of("gui.validate of a GUI with rules failed: " + response.toJson());
+        }
+        List<String> problems = new ArrayList<>();
+        String diagnostics = response.data().getAsJsonObject().getAsJsonArray("diagnostics").toString();
+        if (!diagnostics.contains("\"MTR-0057\"") || !diagnostics.contains("[\"behavior\",\"1\",\"do\",\"1\"]")) {
+            problems.add("gui.validate should report the unknown action at behavior.1.do.1 (MTR-0057): "
+                    + diagnostics);
+        }
+        if (!diagnostics.contains("[\"behavior\",\"0\",\"layer\"]")) {
+            problems.add("gui.validate should report the unknown layer at behavior.0.layer: " + diagnostics);
         }
         return problems;
     }

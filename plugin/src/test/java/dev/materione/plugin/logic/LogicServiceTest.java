@@ -73,7 +73,7 @@ class LogicServiceTest {
         // the built-ins are there beside them, registered the same way
         assertThat(vocabulary.actions()).extracting(BehaviorVocabulary.Action::id)
                 .contains("run_command", "message", "sound", "potion", "cancel", "set_var");
-        assertThat(vocabulary.triggers()).hasSize(17);
+        assertThat(vocabulary.triggers()).hasSize(23);
         assertThat(action.id()).isEqualTo(NamespacedId.of("example", "greet"));
         assertThat(condition.id()).isEqualTo(NamespacedId.of("example", "is_night"));
     }
