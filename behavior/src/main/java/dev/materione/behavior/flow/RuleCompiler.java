@@ -6,6 +6,7 @@ import dev.materione.api.logic.TriggerDescription;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.EventSelector;
 import dev.materione.behavior.rule.Rule;
+import dev.materione.behavior.rule.RuleFilters;
 import dev.materione.behavior.rule.RuleOptions;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -72,7 +73,8 @@ final class RuleCompiler {
                 throw Skip.unit();
             }
             RuleOptions options = options(rule, unit, path);
-            return Optional.of(new Rule(context.owner, id, selector.get(), condition, body, options, path));
+            RuleFilters filters = TriggerFilters.read(rule, context.lookup.trigger(selector.get().type()), unit, path);
+            return Optional.of(new Rule(context.owner, id, selector.get(), condition, body, options, filters, path));
         } catch (Skip skip) {
             return Optional.empty();
         }

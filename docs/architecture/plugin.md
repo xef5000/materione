@@ -424,6 +424,14 @@ A step that fails while a flow runs is still `MTR-0023`: an action that returns 
 an action that throws (always), and a condition that cannot be evaluated (the condition then counts as
 false). A `FAILED` inside a `require` is control flow and appears only in the run trace.
 
+The GUI runtime ([`logic.md`](logic.md) §18, #214) takes no new code. A GUI's `behavior:` is compiled in the
+GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
+meaning and step paths as for items (`gui.validate` returns them for a `saved` or `yaml` source). `MTR-0021`
+(a rule that cannot be read, warning) also covers a trigger filter the trigger's schema rejects (an unknown
+`click:` kind, a `slot:` that is not a whole number, a `gui.tick` with no `every:`), a `behavior:` or `flows:`
+section of the wrong shape, and three warnings on a rule that loads and never runs: a `layer:` that names no
+layer of the GUI or a hidden one, a `slot:` outside the container, and a trigger no GUI fires.
+
 ---
 
 ## 6. Platform isolation layer

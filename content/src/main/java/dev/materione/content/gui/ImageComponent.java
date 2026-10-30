@@ -1,5 +1,6 @@
 package dev.materione.content.gui;
 
+import dev.materione.api.gui.ClickArea;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
@@ -84,6 +85,16 @@ public final class ImageComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.RASTER;
+        }
+
+        @Override
+        public ClickArea clickArea(TextureSource textures) {
+            if (sized) {
+                return new ClickArea.Rect(x, y, width, height);
+            }
+            return textures.texture(texture)
+                    .<ClickArea>map(pixels -> new ClickArea.Rect(x, y, pixels.width(), pixels.height()))
+                    .orElse(ClickArea.NONE);
         }
 
         @Override

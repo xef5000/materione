@@ -9,6 +9,8 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.runtime.RuntimeApi;
 import dev.materione.web.protocol.Wire;
 import dev.materione.web.rpc.RpcDispatcher;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -20,7 +22,8 @@ import java.util.function.Supplier;
  * itself: the host supplies the session's owner, and a session without one (a console session)
  * is refused rather than guessed at.
  *
- * <p>Ops: {@code runtime.openGui} {@code {id}} opens the live GUI for that player and answers
+ * <p>Ops: {@code runtime.openGui} {@code {id, args?}} (the optional {@code args} object is the
+ * arguments the GUI opens with) opens the live GUI for that player and answers
  * {@code {queued}} (true while the window is still opening on the player's thread); and
  * {@code runtime.previewTarget} answers whether that player is online, and their name, so the
  * studio can disable its preview button with a reason.
@@ -50,7 +53,7 @@ public final class RuntimeOps {
                             null,
                             "open the editor in game with /materione editor, then preview from that session"));
                 }
-                var future = guis.open(actorFor.apply(actorOf(request)), id, player.get());
+                var future = guis.open(actorFor.apply(actorOf(request)), id, player.get(), argsOf(request.payload()));
                 // refusals (not live, offline, no permission) complete at once; a window that is
                 // opening on the player's thread is still pending, and the reply says so
                 boolean settled = future.isDone();
@@ -90,6 +93,29 @@ public final class RuntimeOps {
                 diagnostic == null ? "the GUI could not be opened" : diagnostic.message(),
                 null,
                 diagnostic == null ? null : diagnostic.hint()));
+    }
+
+    /**
+     * The optional {@code args} of {@code runtime.openGui}: a flat object of name to text the GUI
+     * opens with (logic.md §6.1). A number or boolean is sent as its text; anything nested is a bad
+     * request. Absent means no arguments, which is what every earlier client sends.
+     */
+    private static Map<String, String> argsOf(JsonObject payload) {
+        var args = payload.get("args");
+        if (args == null || args.isJsonNull()) {
+            return Map.of();
+        }
+        if (!args.isJsonObject()) {
+            throw new IllegalArgumentException("'args' must be an object of name to value");
+        }
+        var out = new LinkedHashMap<String, String>();
+        for (var entry : args.getAsJsonObject().entrySet()) {
+            if (!entry.getValue().isJsonPrimitive()) {
+                throw new IllegalArgumentException("argument '" + entry.getKey() + "' must be text, a number or a boolean");
+            }
+            out.put(entry.getKey(), entry.getValue().getAsString());
+        }
+        return out;
     }
 
     private static String actorOf(Wire.Request request) {

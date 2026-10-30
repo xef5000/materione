@@ -236,6 +236,11 @@ Exposes live, shadow-swapped content definitions and world interactions (current
     (node `materione.gui.open`); a refusal completes at once with its diagnostic (`MTR-0055` for the
     node, `MTR-0009` for an offline player or a GUI that is not live), and an open that is still
     scheduling completes when the window is up, never blocking the caller
+  - `open(ActorContext, NamespacedId guiId, UUID targetPlayer, Map<String, String> args)` (#214) — the same
+    with the arguments the GUI opens with, read by its rules as `gui.args.<name>`; plain text here, typed by
+    the GUI's open specification (logic.md §6.1). A `default` method: an implementation that predates it ignores
+    the arguments. Every open, with or without arguments, goes through the GUI runtime's one open path
+    (logic.md §18), which also creates the player's session
   - `onlineName(UUID)` — the player's name when online, empty otherwise (the editor's preview state)
 
 ### 3.8 `AdminApi` (`dev.materione.api.admin`)

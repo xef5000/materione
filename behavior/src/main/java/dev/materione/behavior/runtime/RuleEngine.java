@@ -44,7 +44,8 @@ public final class RuleEngine {
     public void fire(Iterable<Rule> rules, BehaviorEvent event) {
         long now = System.currentTimeMillis();
         for (Rule rule : rules) {
-            if (!rule.on().matches(event.eventType(), event.detail())) {
+            if (!rule.on().matches(event.eventType(), event.detail())
+                    || !rule.filters().matches(event.filterFacts())) {
                 continue;
             }
             String throttleKey = throttleKey(rule, event);

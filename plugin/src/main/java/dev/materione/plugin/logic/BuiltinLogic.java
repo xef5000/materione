@@ -7,12 +7,18 @@ import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.behavior.logic.BuiltinTriggers;
 import dev.materione.behavior.logic.LogicIds;
+import dev.materione.plugin.gui.GuiBridge;
+import dev.materione.plugin.gui.trigger.GuiTriggers;
 import dev.materione.plugin.logic.action.CancelAction;
 import dev.materione.plugin.logic.action.MessageAction;
 import dev.materione.plugin.logic.action.PotionAction;
 import dev.materione.plugin.logic.action.RunCommandAction;
 import dev.materione.plugin.logic.action.SetVarAction;
 import dev.materione.plugin.logic.action.SoundAction;
+import dev.materione.plugin.logic.action.gui.BackGuiAction;
+import dev.materione.plugin.logic.action.gui.CloseGuiAction;
+import dev.materione.plugin.logic.action.gui.OpenGuiAction;
+import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
 import dev.materione.plugin.logic.function.ContainsFunction;
@@ -82,14 +88,38 @@ public final class BuiltinLogic {
     }
 
     /**
+     * The GUI actions (logic.md §6): open, close, back and refresh. They reach the GUI runtime through
+     * {@code bridge}, which the runtime binds itself into once it exists.
+     */
+    public static List<ActionType<?>> guiActions(GuiBridge bridge) {
+        return List.of(
+                new OpenGuiAction(bridge),
+                new CloseGuiAction(bridge),
+                new BackGuiAction(bridge),
+                new RefreshGuiAction(bridge));
+    }
+
+    /**
      * Registers the built-in triggers, actions and expression functions under {@code materione:},
-     * owned by {@code owner}.
+     * owned by {@code owner}. The GUI actions are bound to a bridge nothing binds, so they fail soft
+     * ("the GUI runtime is not available"); the plugin uses the overload that passes its own.
      */
     public static void register(LogicApi api, Plugin owner) {
+        register(api, owner, new GuiBridge());
+    }
+
+    /** As above, with the bridge the GUI actions reach the GUI runtime through. */
+    public static void register(LogicApi api, Plugin owner, GuiBridge bridge) {
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
+        for (TriggerType trigger : GuiTriggers.all()) {
+            api.triggers().register(owner, builtIn(trigger.id()), trigger);
+        }
         for (ActionType<?> action : actions()) {
+            api.actions().register(owner, builtIn(action.id()), action);
+        }
+        for (ActionType<?> action : guiActions(bridge)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
         for (ExpressionFunction function : functions()) {

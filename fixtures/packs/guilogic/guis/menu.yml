@@ -1,0 +1,81 @@
+# The main menu of the guilogic fixture. Three buttons in the middle row, at slots 11, 13 and 15:
+# ping answers a left click with a message and a sound, and a right click with another message;
+# open opens guilogic:detail with arguments; close closes the window. Every open and close is
+# announced on the server console (`say MATERIONE-GUILOGIC-...`), which the harness and the QA
+# catalog read as markers.
+menu:
+  title: Menu
+  rows: 3
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: wells
+      type: slots
+      region: container
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "MENU"
+      font: smallcaps
+      color: "#404040"
+    - id: ping
+      type: button
+      x: 44
+      y: 36
+      width: 16
+      height: 16
+    - id: open
+      type: button
+      x: 80
+      y: 36
+      width: 16
+      height: 16
+    - id: close
+      type: button
+      x: 116
+      y: 36
+      width: 16
+      height: 16
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id} page=${gui.args.page}"
+            as: console
+    - on: gui.click
+      layer: ping
+      click: left
+      do:
+        - message: "<green>Pong from ${layer.id} (slot ${click.slot}, ${click.type})"
+        - sound: entity.experience_orb.pickup
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-PONG slot=${click.slot}"
+            as: console
+    - on: gui.click
+      layer: ping
+      click: right
+      do:
+        - message: "<yellow>Right click on ${layer.id}"
+    - on: gui.click
+      layer: open
+      do:
+        - gui.open:
+            gui: detail
+            args:
+              item: sword
+              from: "${player.name}"
+    - on: gui.click
+      layer: close
+      do:
+        - message: "<red>Closing"
+        - gui.close
+    - on: gui.close
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-CLOSE ${gui.id} reason=${close.reason}"
+            as: console

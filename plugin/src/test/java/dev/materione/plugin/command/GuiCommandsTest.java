@@ -54,4 +54,16 @@ class GuiCommandsTest {
         assertThat(GuiCommands.resolve("a:b:c", LIVE).status()).isEqualTo(GuiCommands.Status.UNKNOWN);
         assertThat(GuiCommands.resolve("nothing", LIVE).status()).isEqualTo(GuiCommands.Status.UNKNOWN);
     }
+
+    @Test
+    void nameValueTokensAfterTheIdAreTheOpenArgumentsWhateverTheirPositionAndThePlayerIsNeverOne() {
+        String[] tokens = {"gui", "open", "demo:shop", "category=tools", "Probe", "page=2", "note=a=b", "=x", "plain"};
+
+        assertThat(GuiCommands.argumentsOf(tokens))
+                .containsExactly(
+                        java.util.Map.entry("category", "tools"),
+                        java.util.Map.entry("page", "2"),
+                        java.util.Map.entry("note", "a=b"));
+        assertThat(GuiCommands.argumentsOf(new String[] {"gui", "open", "demo:shop"})).isEmpty();
+    }
 }

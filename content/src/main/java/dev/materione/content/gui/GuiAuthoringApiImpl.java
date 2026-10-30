@@ -25,6 +25,7 @@ import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
+import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
 import dev.materione.core.pipeline.ResourceCompiler;
@@ -79,12 +80,26 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             Path packsRoot,
             Supplier<Allocations> previewAllocations,
             List<String> materials) {
+        this(authoring, components, packsRoot, previewAllocations, materials, GuiRuleChecker.NONE);
+    }
+
+    /**
+     * As above, with the rule checker {@code validate} runs the GUI's {@code behavior:} through, the
+     * one the pack compile uses (logic.md §10): a bad rule is reported with its step path.
+     */
+    public GuiAuthoringApiImpl(
+            AuthoringApi authoring,
+            Registry<GuiComponent> components,
+            Path packsRoot,
+            Supplier<Allocations> previewAllocations,
+            List<String> materials,
+            GuiRuleChecker ruleChecker) {
         this.authoring = Objects.requireNonNull(authoring, "authoring");
         this.components = Objects.requireNonNull(components, "components");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.previewAllocations = Objects.requireNonNull(previewAllocations, "previewAllocations");
         this.materials = materials == null ? List.of() : List.copyOf(materials);
-        this.type = new GuiType(components);
+        this.type = new GuiType(components, ruleChecker);
     }
 
     // ------------------------------------------------------------------

@@ -69,11 +69,11 @@ public final class GuiCommands {
             return;
         }
         NamespacedId id = resolution.id();
-        Player target = resolveTarget(sender, args.length >= 4 ? args[3] : null);
+        Player target = resolveTarget(sender, args.length >= 4 && args[3].indexOf('=') < 0 ? args[3] : null);
         if (target == null) {
             return; // the marker and the message are already out
         }
-        guis.open(actor(sender), id, target.getUniqueId()).thenAccept(result -> {
+        guis.open(actor(sender), id, target.getUniqueId(), argumentsOf(args)).thenAccept(result -> {
             if (!result.ok()) {
                 refused(sender, result);
                 return;
@@ -82,6 +82,23 @@ public final class GuiCommands {
                     .append(Component.text(id.toString(), NamedTextColor.AQUA))
                     .append(Component.text(" for " + target.getName(), NamedTextColor.GREEN)));
         });
+    }
+
+    /**
+     * The {@code name=value} tokens after the id: the arguments the GUI opens with (read by its rules
+     * as {@code gui.args.<name>}). Typed arguments and the open commands that take them are the open
+     * specification's; here they are plain text. A player name never holds {@code =}, so a token with
+     * one is never mistaken for the target.
+     */
+    static java.util.Map<String, String> argumentsOf(String[] args) {
+        var out = new java.util.LinkedHashMap<String, String>();
+        for (int i = 3; i < args.length; i++) {
+            int equals = args[i].indexOf('=');
+            if (equals > 0) {
+                out.put(args[i].substring(0, equals), args[i].substring(equals + 1));
+            }
+        }
+        return out;
     }
 
     /** Tab suggestions: the action, then live GUI ids, then online player names. */
@@ -196,6 +213,6 @@ public final class GuiCommands {
 
     private void usage(CommandSender sender) {
         sender.sendMessage(Component.text(
-                "usage: /materione gui open <guiId> [player]", NamedTextColor.YELLOW));
+                "usage: /materione gui open <guiId> [player] [name=value...]", NamedTextColor.YELLOW));
     }
 }

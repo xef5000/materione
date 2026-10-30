@@ -19,6 +19,8 @@ import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.content.Templates;
+import dev.materione.content.gui.logic.GuiRuleChecker;
+import dev.materione.content.gui.logic.GuiRules;
 import dev.materione.core.document.LosslessYaml;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -58,12 +60,23 @@ public final class GuiType implements ContentType {
             Set.of("id", "type", "name", "visible", "locked", "opacity");
 
     private final Registry<GuiComponent> components;
+    private final GuiRuleChecker ruleChecker;
 
     /**
      * @param components the {@code gui-components} registry layers resolve against
      */
     public GuiType(Registry<GuiComponent> components) {
+        this(components, GuiRuleChecker.NONE);
+    }
+
+    /**
+     * @param components the {@code gui-components} registry layers resolve against
+     * @param ruleChecker checks the GUI's {@code behavior:} and {@code flows:} with the flow engine
+     *        in the diagnose stage (logic.md §10); {@link GuiRuleChecker#NONE} checks nothing
+     */
+    public GuiType(Registry<GuiComponent> components, GuiRuleChecker ruleChecker) {
         this.components = Objects.requireNonNull(components, "components");
+        this.ruleChecker = Objects.requireNonNull(ruleChecker, "ruleChecker");
     }
 
     @Override
@@ -124,7 +137,20 @@ public final class GuiType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Rows", "placement", 10, false, "number", "", "3")
                                         .withRange(1.0, (double) MAX_ROWS, "rows")),
-                        layers),
+                        layers,
+                        new ParameterSchema("behavior", ParameterType.LIST, false, null,
+                                "Rules fired by the GUI: gui.opening, gui.open, gui.close, gui.click, "
+                                        + "gui.click_outside and gui.tick, each a flow of steps (logic.md §6)",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "When… do…", "behavior", 10, false,
+                                        "behavior-rules", "", "", true, "behaviour", "activity",
+                                        "React to the GUI opening, closing, ticking or being clicked")),
+                        new ParameterSchema("flows", ParameterType.RAW, false, null,
+                                "Named flows the rules can call: a mapping of flow name to steps",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Named flows", "behavior", 20, true, "advanced", "", ""))),
                 "1.0.0");
     }
 
@@ -158,7 +184,7 @@ public final class GuiType implements ContentType {
                         index, rejection.layerId, rejection.type, rejection.getMessage()));
             }
         }
-        return Optional.of(new GuiDefinition(id, title, rows, layers, skipped, merged));
+        return Optional.of(new GuiDefinition(id, title, rows, layers, skipped, GuiRules.parse(merged), merged));
     }
 
     /**
@@ -167,10 +193,36 @@ public final class GuiType implements ContentType {
      */
     @Override
     public List<Diagnostic> diagnose(Object parsedDefinition) {
-        if (!(parsedDefinition instanceof GuiDefinition gui) || gui.skipped().isEmpty()) {
+        if (!(parsedDefinition instanceof GuiDefinition gui)) {
             return List.of();
         }
         var out = new ArrayList<Diagnostic>();
+        diagnoseLayers(gui, out);
+        diagnoseRules(gui, out);
+        return List.copyOf(out);
+    }
+
+    /**
+     * The shape problems of {@code behavior:} and {@code flows:} (a section that is not a list or a
+     * mapping), then whatever the rule checker finds in the rules themselves, each targeted at the
+     * step path it is about ({@code behavior.2.do.0}). A rule that does not load is skipped, never
+     * the GUI.
+     */
+    private void diagnoseRules(GuiDefinition gui, List<Diagnostic> out) {
+        for (GuiRules.Problem problem : gui.rules().problems()) {
+            out.add(new Diagnostic(
+                    DiagnosticCodes.BEHAVIOR_RULE_INVALID, Severity.WARN,
+                    gui.id() + ": " + problem.message(),
+                    gui.id(), null,
+                    "the section is ignored; the GUI and its layers still work",
+                    DiagnosticTarget.field(problem.field())));
+        }
+        if (!gui.rules().isEmpty()) {
+            out.addAll(ruleChecker.check(gui));
+        }
+    }
+
+    private static void diagnoseLayers(GuiDefinition gui, List<Diagnostic> out) {
         for (GuiDefinition.SkippedLayer skip : gui.skipped()) {
             String label = skip.layerId() != null ? "'" + skip.layerId() + "'" : "#" + skip.index();
             out.add(new Diagnostic(
@@ -180,7 +232,6 @@ public final class GuiType implements ContentType {
                     "fix the layer's fields; the other layers of this GUI still compile",
                     DiagnosticTarget.field("layers", String.valueOf(skip.index()))));
         }
-        return List.copyOf(out);
     }
 
     /**

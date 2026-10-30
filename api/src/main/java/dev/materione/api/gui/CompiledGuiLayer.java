@@ -18,6 +18,19 @@ public interface CompiledGuiLayer {
     RenderTarget target();
 
     /**
+     * Where this layer can be clicked (logic.md §6.2). The default is {@link ClickArea#NONE}, so a
+     * component that has nothing to click (a decorative panel) declares nothing, and an addon
+     * component opts in by returning its rectangle or slots. The GUI compiler folds every layer's
+     * area into the GUI's click map once, at compile time.
+     *
+     * @param textures decoded pixels of the owning pack's textures, for a layer whose size is its
+     *        texture's (an image without an authored size); a missing texture means no area
+     */
+    default ClickArea clickArea(TextureSource textures) {
+        return ClickArea.NONE;
+    }
+
+    /**
      * Paints this layer into a transparent layer canvas of canvas size. The compiler
      * composites that canvas onto the background with the layer's opacity, in authored
      * order. Called for {@link RenderTarget#RASTER} layers only. A component that cannot
