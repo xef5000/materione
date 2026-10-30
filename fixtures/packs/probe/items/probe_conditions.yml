@@ -1,0 +1,29 @@
+# Logic L4 condition probe (qa logic.conditions-*): one right-click runs built-in conditions inside if: steps
+# and reports each answer as a chat line the QA run reads back. The permission is granted first, so the
+# has_permission check sees it; the item and experience are set by the run; the last if: calls an expression
+# function (contains, lower) on the player's name.
+probe_conditions:
+  material: COMPASS
+  display_name: "Condition Probe"
+  behavior:
+    - on: click:right
+      do:
+        - give_permission: probe.check
+        - if: {has_permission: probe.check}
+          then:
+            - chat: "CHECK perm-granted"
+          else:
+            - chat: "CHECK perm-missing"
+        - if: {has_item: {item: "minecraft:diamond", amount: 3}}
+          then:
+            - chat: "CHECK item-three"
+          else:
+            - chat: "CHECK item-short"
+        - if: {has_exp: {amount: 5, unit: levels}}
+          then:
+            - chat: "CHECK exp-five"
+          else:
+            - chat: "CHECK exp-short"
+        - if: "${contains(lower(player.name), 'pro')}"
+          then:
+            - chat: "CHECK fn-name"

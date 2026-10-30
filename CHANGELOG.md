@@ -9,6 +9,12 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
+  `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
+  it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
+  `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
+  work (#211) and `slot_has` the slot work (#218).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always

@@ -72,10 +72,19 @@ public sealed interface ItemRef permits ItemRef.Vanilla, ItemRef.Materione {
         };
     }
 
-    /** True when {@code view} is this item. */
+    /** True when {@code view} is this item, with the take behaviour (strict vanilla matching). */
     default boolean matches(ItemView view) {
+        return matches(view, true);
+    }
+
+    /**
+     * True when {@code view} is this item. A vanilla reference, when {@code strict}, matches only stacks with
+     * no Materione identity; otherwise any stack of that material (logic.md §22, {@code has_item: {strict}}).
+     */
+    default boolean matches(ItemView view, boolean strict) {
         return switch (this) {
-            case Vanilla vanilla -> view.id().isEmpty() && view.material().equals(vanilla.material());
+            case Vanilla vanilla -> view.material().equals(vanilla.material())
+                    && (!strict || view.id().isEmpty());
             case Materione item -> view.id().filter(item.id()::equals).isPresent();
         };
     }

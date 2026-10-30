@@ -60,7 +60,15 @@ public final class ProviderParams {
      * @throws IllegalArgumentException with an author-facing message
      */
     public static String node(ParamReader params) {
-        String node = params.text("permission");
+        return checkNode(params.text("permission"));
+    }
+
+    /**
+     * A permission node that is shaped like one (logic.md §22 reuses it for {@code has_permission}).
+     *
+     * @throws IllegalArgumentException with an author-facing message
+     */
+    public static String checkNode(String node) {
         if (!NODE.matcher(node).matches()) {
             throw new IllegalArgumentException(
                     "permission must be a node such as example.fly (letters, digits, dots, dashes, underscores)");
