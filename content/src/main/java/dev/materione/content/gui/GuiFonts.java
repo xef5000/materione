@@ -29,9 +29,6 @@ final class GuiFonts {
     /** The vanilla ASCII cell is 8 px high; a larger ascent would scale it. */
     static final int VANILLA_ASCII_HEIGHT = 8;
 
-    /** The advance of a space in the default font: the client's own space width. */
-    static final int DEFAULT_SPACE_ADVANCE = 4;
-
     private GuiFonts() {}
 
     /** The GUI font that carries the background glyph. */
@@ -73,7 +70,7 @@ final class GuiFonts {
     /** The providers of one default offset font: the space advance, then the vanilla ASCII grid at row {@code y}. */
     static List<Map<String, Object>> defaults(int y) {
         var providers = new ArrayList<Map<String, Object>>();
-        providers.add(space(DEFAULT_SPACE_ADVANCE));
+        providers.add(space(VanillaAscii.SPACE_ADVANCE));
         providers.add(bitmap(VANILLA_ASCII, GuiTitle.ascentFor(y), VANILLA_ASCII_HEIGHT, asciiGrid()));
         return providers;
     }
