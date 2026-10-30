@@ -99,7 +99,7 @@ public final class GuiFixture {
         var registries = new RegistryService();
         logic = LogicTestSupport.newService(registries);
         Plugin owner = LogicTestSupport.owner("materione");
-        BuiltinLogic.register(logic, owner, bridge);
+        BuiltinLogic.register(logic, owner, dev.materione.plugin.logic.support.ItemCatalog.none(), bridge);
         logic.actions().register(owner, NamespacedId.of("materione", "mark"), new Mark(ran));
         logic.actions().register(owner, NamespacedId.of("materione", "fail"), new Fail());
 

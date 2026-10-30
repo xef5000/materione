@@ -9,16 +9,28 @@ import dev.materione.behavior.logic.BuiltinTriggers;
 import dev.materione.behavior.logic.LogicIds;
 import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.trigger.GuiTriggers;
+import dev.materione.plugin.logic.action.ActionbarAction;
+import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
+import dev.materione.plugin.logic.action.ChatAction;
+import dev.materione.plugin.logic.action.GiveExpAction;
+import dev.materione.plugin.logic.action.GiveItemAction;
 import dev.materione.plugin.logic.action.MessageAction;
 import dev.materione.plugin.logic.action.PotionAction;
 import dev.materione.plugin.logic.action.RunCommandAction;
 import dev.materione.plugin.logic.action.SetVarAction;
 import dev.materione.plugin.logic.action.SoundAction;
+import dev.materione.plugin.logic.action.StopSoundAction;
+import dev.materione.plugin.logic.action.TakeExpAction;
+import dev.materione.plugin.logic.action.TakeItemAction;
+import dev.materione.plugin.logic.action.TeleportAction;
+import dev.materione.plugin.logic.action.TitleAction;
 import dev.materione.plugin.logic.action.gui.BackGuiAction;
 import dev.materione.plugin.logic.action.gui.CloseGuiAction;
 import dev.materione.plugin.logic.action.gui.OpenGuiAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
+import dev.materione.plugin.logic.support.ItemCatalog;
+import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
 import dev.materione.plugin.logic.function.ContainsFunction;
@@ -51,15 +63,31 @@ public final class BuiltinLogic {
 
     private BuiltinLogic() {}
 
-    /** The built-in actions: the six M2 verbs. */
-    public static List<ActionType<?>> actions() {
-        return List.of(
+    /**
+     * The built-in actions. {@code items} is the live item registry the item actions resolve
+     * Materione ids against; pass {@link ItemCatalog#none()} where no content is loaded.
+     */
+    public static List<ActionType<?>> actions(ItemCatalog items) {
+        var actions = new ArrayList<ActionType<?>>(List.of(
                 new RunCommandAction(),
                 new MessageAction(),
                 new SoundAction(),
                 new PotionAction(),
                 new CancelAction(),
-                new SetVarAction());
+                new SetVarAction()));
+        // #212 (L6): player, world and server actions. One class each; no action depends on another.
+        actions.addAll(List.of(
+                new BroadcastAction(),
+                new ActionbarAction(),
+                new TitleAction(),
+                new StopSoundAction(),
+                new ChatAction(),
+                new TeleportAction(),
+                new GiveItemAction(items),
+                new TakeItemAction(items),
+                new GiveExpAction(),
+                new TakeExpAction()));
+        return List.copyOf(actions);
     }
 
     /** The built-in expression functions (logic.md §4.2): pure, typed, and callable from any expression. */
@@ -103,20 +131,22 @@ public final class BuiltinLogic {
      * Registers the built-in triggers, actions and expression functions under {@code materione:},
      * owned by {@code owner}. The GUI actions are bound to a bridge nothing binds, so they fail soft
      * ("the GUI runtime is not available"); the plugin uses the overload that passes its own.
+     *
+     * @param items the live item registries for the item actions (see {@link #actions(ItemCatalog)})
      */
-    public static void register(LogicApi api, Plugin owner) {
-        register(api, owner, new GuiBridge());
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items) {
+        register(api, owner, items, new GuiBridge());
     }
 
     /** As above, with the bridge the GUI actions reach the GUI runtime through. */
-    public static void register(LogicApi api, Plugin owner, GuiBridge bridge) {
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge) {
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
         for (TriggerType trigger : GuiTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
-        for (ActionType<?> action : actions()) {
+        for (ActionType<?> action : actions(items)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
         for (ActionType<?> action : guiActions(bridge)) {
