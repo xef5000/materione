@@ -41,6 +41,12 @@ undertow = "2.3.26.Final"
 # materione.libs.org.bstats (build.md §4). Server owners opt out with
 # plugins/bStats/config.yml (enabled: false) — plugin.md §7.2.
 bstats = "3.2.1"
+# Soft-depend provider APIs (logic.md §4.5, integrations). compileOnly only: the server's own
+# Vault and LuckPerms jars supply the classes at runtime, and nothing here is shaded.
+# Vault's API is published on JitPack (its pom declares no license; the upstream project is MIT,
+# verify before relying on it); LuckPerms' API is MIT on Maven Central.
+vault-api = "1.7.1"
+luckperms-api = "5.4"
 
 # Harness server pin — single source of truth for CI + integration tests.
 # The old api.papermc.io v2 API is 410 Gone; the absolute URL + sha256 below
@@ -79,6 +85,8 @@ creative-serializer-minecraft = { module = "team.unnamed:creative-serializer-min
 creative-server = { module = "team.unnamed:creative-server", version.ref = "creative" }
 undertow-core = { module = "io.undertow:undertow-core", version.ref = "undertow" }
 bstats-bukkit = { module = "org.bstats:bstats-bukkit", version.ref = "bstats" }
+vault-api = { module = "com.github.MilkBowl:VaultAPI", version.ref = "vault-api" }
+luckperms-api = { module = "net.luckperms:api", version.ref = "luckperms-api" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-launcher" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }

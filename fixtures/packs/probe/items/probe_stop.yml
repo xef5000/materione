@@ -1,0 +1,9 @@
+# Logic L6 stop probe (qa logic.sound-stop): one right-click stops the beacon ambience that
+# probe_sound started, and nothing else.
+probe_stop:
+  material: ECHO_SHARD
+  display_name: "Stop Probe"
+  behavior:
+    - on: click:right
+      do:
+        - stop_sound: {sound: "minecraft:block.beacon.ambient"}

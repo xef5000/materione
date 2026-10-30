@@ -26,9 +26,10 @@ class DiagnosticCodesTest {
         // MTR-0056 duplicate resource id across files: plugin.md §5, #194;
         // MTR-0057 logic step rejected at load: logic.md §10, §14;
         // MTR-0058 flow call cannot be linked, MTR-0059 flow run aborted by its budget,
-        // MTR-0060 unknown variable root for the trigger: logic.md §10, §16, #208;
+        // MTR-0060 unknown variable root for the trigger: logic.md §10, §16 (#208);
+        // MTR-0061 optional integration provider skipped, MTR-0062 currency rejected: logic.md §18 (#213);
         // MTR-0063 undeclared or reserved variable, MTR-0064 type mismatch, MTR-0065 store failed:
-        // logic.md §3, §17, #211)
+        // logic.md §3, §20, #211)
         assertThat(DiagnosticCodes.all()).hasSize(65);
     }
 }

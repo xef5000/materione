@@ -410,6 +410,8 @@ step is found at load rather than when a player first triggers it:
 | Code | Severity | Meaning and recovery |
 |---|---|---|
 | `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
+| `MTR-0061` | warning | An optional integration (Vault economy or permissions, LuckPerms, the BungeeCord plugin channel) could not install its provider: the adapter failed to link against the installed version, or its setup call threw. The server keeps the default provider or none, and the economy, permission and `connect` actions report themselves unavailable (logic.md §4.5). Install a supported version of the plugin, then reload. |
+| `MTR-0062` | warning | A currency file (`currencies/*.yml`, logic.md §18) was quarantined: it does not parse (no `integration`, a bad `decimals`), it is in the reserved `materione` namespace, or its integration rejected its keys when bound at apply. The rest of the pack loads. Fix the file, then reload. |
 
 The M6 flow compiler and interpreter ([`logic.md`](logic.md) §5, §16) add three codes. Every one carries
 the step path of what it is about (`behavior.2.do.0.then.1`) as its target:
@@ -535,6 +537,22 @@ schemas (master §5.5):
 
 World-attachment rule: if data must survive a world copy/restore and die with the world, it
 belongs in chunk PDC — not in a database, not in `generated/`.
+
+**Settings keys.** `settings/settings.yml` is written with these defaults on first boot. The file is
+produced by the YAML dumper, so it carries no comments; this table is the reference.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `debug` | `false` | Verbose diagnostics. |
+| `default_currency` | `materione:money` | The currency the money actions use when a step names none (logic.md §18). An id that names nothing defined falls back to `materione:money`. |
+| `delivery_host` / `delivery_port` | `0.0.0.0` / `8090` | Bind address of the self-hosted pack server. |
+| `delivery_public_host` | blank | Host written into pack URLs (set it for remote players). |
+| `editor_enabled` / `editor_mode` | `true` / `cloud` | Editor on or off; cloud relay or `local`. |
+| `editor_host` / `editor_port` / `editor_file_watcher` | `127.0.0.1` / `8089` / `true` | Local editor listener. |
+| `relay_base_url` | `https://editor.materione.com` | Cloud editor relay. |
+| `transfer_host` | blank | Target host of the 1.20.5+ transfer packet used by `connect`. Blank means the packet is off and `connect` is unavailable (logic.md §18). |
+| `transfer_port` | `25565` | Target port of the transfer packet. Must be 1 to 65535. |
+| `transfer_mode` | `packet` | `bungeecord` selects the BungeeCord/Velocity plugin channel for `connect` instead of the packet. |
 
 ### 7.2 Usage metrics (bStats) and the opt-out
 

@@ -119,6 +119,8 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                                                 + summary.quarantined() + " quarantined" + packText,
                                         NamedTextColor.GREEN));
                             }
+                            // Vault or LuckPerms installed since boot is picked up by the reload (logic.md §4.5)
+                            plugin.refreshLogicProviders();
                             // Stable harness marker: a real reload ran.
                             plugin.getLogger().info("MATERIONE-RELOAD-OK items=" + summary.itemsLive());
                         });

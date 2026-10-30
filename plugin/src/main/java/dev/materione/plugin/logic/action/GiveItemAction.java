@@ -1,0 +1,115 @@
+package dev.materione.plugin.logic.action;
+
+import dev.materione.api.logic.ActionDescription;
+import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.Facets;
+import dev.materione.api.logic.LogicCategory;
+import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.TemplateText;
+import dev.materione.api.logic.Threading;
+import dev.materione.api.registry.ParameterSchema;
+import dev.materione.api.registry.ParameterType;
+import dev.materione.api.registry.SelfDescription;
+import dev.materione.core.runtime.RuntimeRegistries;
+import dev.materione.platform.items.MaterioneStacks;
+import dev.materione.plugin.items.Give;
+import dev.materione.plugin.logic.support.ItemCatalog;
+import dev.materione.plugin.logic.support.ItemRef;
+import dev.materione.plugin.logic.support.Quantity;
+import java.util.List;
+import java.util.Optional;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+/**
+ * {@code give_item: ruby} or {@code give_item: {item, amount}}: gives the player items. {@code item}
+ * is a live Materione item (the {@code /materione give} spelling) or {@code minecraft:<material>}.
+ * What does not fit drops at the player's feet, as {@code /materione give} does.
+ */
+public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
+
+    /** The parsed step. */
+    public record Params(TemplateText item, Optional<Quantity> amount) {}
+
+    private final ItemCatalog catalog;
+
+    /** @param catalog the live item registries, read each time the step runs */
+    public GiveItemAction(ItemCatalog catalog) {
+        this.catalog = catalog;
+    }
+
+    @Override
+    public String id() {
+        return "give_item";
+    }
+
+    @Override
+    public ActionDescription describe() {
+        return new ActionDescription(new SelfDescription("Give item",
+                "Gives the player a Materione item or a vanilla item; overflow drops at their feet",
+                List.of(
+                        new ParameterSchema("item", ParameterType.STRING, true, null,
+                                "Materione item id, or minecraft:<material>", null, null),
+                        new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
+                                "How many", null, null)),
+                "2.0.0"), LogicCategory.PLAYER, "item");
+    }
+
+    @Override
+    public Threading threading() {
+        return Threading.PLAYER_REGION;
+    }
+
+    @Override
+    public Params parse(ParamReader params) {
+        TemplateText item = params.template("item");
+        ItemRef.checkLiteral(item.source());
+        return new Params(item, Quantity.optionalCount(params, "amount", 1, Give.MAX_AMOUNT));
+    }
+
+    @Override
+    public ActionOutcome execute(Params params, LogicContext context) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return ActionOutcome.failed("event has no player");
+        }
+        int amount = 1;
+        if (params.amount().isPresent()) {
+            var whole = params.amount().get().wholeValue(context);
+            if (whole.isEmpty() || whole.getAsInt() < 1 || whole.getAsInt() > Give.MAX_AMOUNT) {
+                return ActionOutcome.failed("amount must be a whole number from 1 to " + Give.MAX_AMOUNT);
+            }
+            amount = whole.getAsInt();
+        }
+        RuntimeRegistries registries = catalog.current().orElse(null);
+        ItemStack template;
+        try {
+            template = templateOf(ItemRef.resolve(params.item().render(context), registries), registries);
+        } catch (IllegalArgumentException e) {
+            return ActionOutcome.failed(e.getMessage());
+        }
+        Give.deliver(player, template, amount);
+        return ActionOutcome.OK;
+    }
+
+    /** One stack of what {@code ref} names, built with the same factory the content browser uses. */
+    private static ItemStack templateOf(ItemRef ref, RuntimeRegistries registries) {
+        return switch (ref) {
+            case ItemRef.Vanilla vanilla -> {
+                Material material = Material.matchMaterial(vanilla.material());
+                if (material == null || !material.isItem()) {
+                    throw new IllegalArgumentException("'minecraft:" + vanilla.material().toLowerCase() + "' is not a vanilla item");
+                }
+                yield new ItemStack(material);
+            }
+            case ItemRef.Materione item -> {
+                var live = registries.item(item.id())
+                        .orElseThrow(() -> new IllegalArgumentException("the item was unloaded while the step ran"));
+                yield MaterioneStacks.build(MaterioneStacks.specOf(live));
+            }
+        };
+    }
+}

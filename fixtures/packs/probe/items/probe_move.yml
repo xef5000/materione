@@ -1,0 +1,9 @@
+# Logic L6 teleport probe (qa logic.teleport): one right-click moves the player to fixed coordinates
+# facing east. The QA run checks the horizontal position and the yaw.
+probe_move:
+  material: SNOWBALL
+  display_name: "Teleport Probe"
+  behavior:
+    - on: click:right
+      do:
+        - teleport: {x: 0.5, y: 80, z: 0.5, yaw: 90, pitch: 0}

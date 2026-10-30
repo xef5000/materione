@@ -1,0 +1,7 @@
+# QA-only probe pack for the logic actions (qa/catalog/logic.mjs). The in-game QA probe copies
+# every fixture pack, so these items reach it; the harness and the content perf budgets load a fixed
+# pack list and never see them, so their pinned counts stay the corpus's own.
+id: probe
+version: 1.0.0
+schema_version: 1
+depends: []

@@ -1,6 +1,7 @@
 package dev.materione.api.logic;
 
 import dev.materione.api.logic.variable.VariablesApi;
+import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.registry.BehaviorVocabulary;
 
 /**
@@ -45,6 +46,20 @@ public interface LogicApi {
      * flows use.
      */
     VariablesApi variables();
+
+    /**
+     * The provider slots the money, permission and transfer actions run against (logic.md §4.5, §18):
+     * the currency catalog, the permission provider and the server transfer. Resolved at use, never
+     * cached by an action.
+     */
+    LogicProviders providers();
+
+    /**
+     * The {@code currency-integrations} registry: how a currency reaches its money (Vault, XP, a command
+     * pair, or an addon's own) (logic.md §18). Register here to make a new integration name available to
+     * currency files.
+     */
+    LogicRegistry<dev.materione.api.logic.provider.CurrencyIntegration> currencyIntegrations();
 
     /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the

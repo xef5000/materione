@@ -163,6 +163,9 @@ public final class PipelineService {
         }
         var guis = new dev.materione.content.gui.GuiType(components);
         registry.register(NamespacedId.of("materione", "gui"), guis, guis.describe(), "materione");
+        // named currencies (logic.md §18): content whose money is read at use, not emitted to the pack
+        var currencies = new dev.materione.content.currency.CurrencyType();
+        registry.register(NamespacedId.of("materione", "currency"), currencies, currencies.describe(), "materione");
     }
 
     public ContentRuntime runtime() {
@@ -382,6 +385,8 @@ public final class PipelineService {
         var blockType = contentTypes().stream().filter(t -> t.name().equals("block")).findFirst();
         var furnitureType = contentTypes().stream().filter(t -> t.name().equals("furniture")).findFirst();
         var guiType = contentTypes().stream().filter(t -> t.name().equals("gui")).findFirst();
+        var currencyType = contentTypes().stream().filter(t -> t.name().equals("currency")).findFirst();
+        var currencies = new java.util.ArrayList<dev.materione.api.logic.provider.Currency>();
         var guiModels = new LinkedHashMap<NamespacedId, CompiledGui>();
         var glyphType = contentTypes().stream().filter(t -> t.name().equals("glyph")).findFirst();
         var effectType = contentTypes().stream().filter(t -> t.name().equals("effect")).findFirst();
@@ -591,9 +596,13 @@ public final class PipelineService {
                     }
                 } else if ("gui".equals(resource.contentType()) && guiType.isPresent()) {
                     compileGuiModel(pack, resource, raw, templates, guiType.get(), guiModels);
+                } else if ("currency".equals(resource.contentType()) && currencyType.isPresent()) {
+                    acceptCurrency(resource, raw, templates, currencyType.get(), currencies);
                 }
             }
         }
+        builder.view(dev.materione.core.runtime.RuntimeCurrencies.KEY,
+                new dev.materione.core.runtime.RuntimeCurrencies(currencies));
         builder.view(ItemBehaviors.KEY, new ItemBehaviors(behaviors, mechanicAvailability));
         builder.view(BlockBehaviors.KEY, new BlockBehaviors(blockBehaviors));
         builder.view(FurnitureBehaviors.KEY, new FurnitureBehaviors(furnitureBehaviors));
@@ -617,6 +626,52 @@ public final class PipelineService {
      * pack's textures. The pack compile has already reported this GUI's diagnostics, so they are
      * not published a second time here. A GUI with no allocated codepoint is not live.
      */
+    /**
+     * One currency file (logic.md §18): parsed, then bound to its integration when that integration is
+     * installed. A file that does not parse, or whose integration rejects its keys, is quarantined with
+     * {@code MTR-0062} and left out; the rest of the pack loads. An integration that is not installed
+     * keeps the currency: it reports unavailable at use, which is the honest answer, and it needs no
+     * reload once the plugin arrives.
+     */
+    private void acceptCurrency(
+            ContentResource resource, Map<String, Object> raw,
+            Map<String, Map<String, Object>> templates, ContentType currencyType,
+            List<dev.materione.api.logic.provider.Currency> out) {
+        Optional<Object> parsed;
+        try {
+            parsed = currencyType.parse(resource.id(), raw, templates);
+        } catch (RuntimeException e) {
+            diagnostics.publish(Diagnostic.warn(DiagnosticCodes.CURRENCY_REJECTED,
+                    "currency " + resource.id() + " quarantined: " + e));
+            return;
+        }
+        if (parsed.isEmpty()
+                || !(parsed.get() instanceof dev.materione.content.currency.CurrencyDefinition definition)) {
+            diagnostics.publish(Diagnostic.warn(DiagnosticCodes.CURRENCY_REJECTED,
+                    "currency " + resource.id() + " is malformed; quarantined"));
+            return;
+        }
+        var currency = definition.currency();
+        if (dev.materione.behavior.logic.LogicIds.BUILT_IN_NAMESPACE.equals(currency.id().namespace())) {
+            diagnostics.publish(Diagnostic.warn(DiagnosticCodes.CURRENCY_REJECTED,
+                    "currency " + currency.id() + " is in the reserved materione namespace; quarantined"));
+            return;
+        }
+        var integration = dev.materione.behavior.logic.LogicIds.parse(currency.integration()).flatMap(id ->
+                registries.registry(RegistryKeys.CURRENCY_INTEGRATIONS,
+                        dev.materione.api.logic.provider.CurrencyIntegration.class).get(id));
+        if (integration.isPresent()) {
+            try {
+                integration.get().entry().bind(dev.materione.api.logic.ParamReader.of(currency.config()));
+            } catch (IllegalArgumentException e) {
+                diagnostics.publish(Diagnostic.warn(DiagnosticCodes.CURRENCY_REJECTED,
+                        "currency " + currency.id() + " quarantined: " + e.getMessage()));
+                return;
+            }
+        }
+        out.add(currency);
+    }
+
     private void compileGuiModel(
             ContentPack pack, ContentResource resource, Map<String, Object> raw,
             Map<String, Map<String, Object>> templates, ContentType guiType,
