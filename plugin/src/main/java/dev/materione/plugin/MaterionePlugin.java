@@ -291,7 +291,9 @@ public final class MaterionePlugin extends JavaPlugin {
         // the logic vocabulary (triggers, actions) through the public API, before content load:
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
         logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish);
-        dev.materione.plugin.logic.BuiltinLogic.register(logic, this);
+        // the item actions read the live registries: empty until the first apply, then the current set
+        dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
+                () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()));
     }
 
     private void loadContent() {

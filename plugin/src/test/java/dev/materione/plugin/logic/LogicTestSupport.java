@@ -22,7 +22,7 @@ public final class LogicTestSupport {
     /** A logic service with Materione's own triggers and actions registered, as the plugin does at boot. */
     public static LogicService withBuiltIns(RegistryService registries) {
         LogicService service = newService(registries);
-        BuiltinLogic.register(service, owner("materione"));
+        BuiltinLogic.register(service, owner("materione"), dev.materione.plugin.logic.support.ItemCatalog.none());
         return service;
     }
 

@@ -7,12 +7,24 @@ import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.behavior.logic.BuiltinTriggers;
 import dev.materione.behavior.logic.LogicIds;
+import dev.materione.plugin.logic.action.ActionbarAction;
+import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
+import dev.materione.plugin.logic.action.ChatAction;
+import dev.materione.plugin.logic.action.GiveExpAction;
+import dev.materione.plugin.logic.action.GiveItemAction;
 import dev.materione.plugin.logic.action.MessageAction;
 import dev.materione.plugin.logic.action.PotionAction;
 import dev.materione.plugin.logic.action.RunCommandAction;
 import dev.materione.plugin.logic.action.SetVarAction;
 import dev.materione.plugin.logic.action.SoundAction;
+import dev.materione.plugin.logic.action.StopSoundAction;
+import dev.materione.plugin.logic.action.TakeExpAction;
+import dev.materione.plugin.logic.action.TakeItemAction;
+import dev.materione.plugin.logic.action.TeleportAction;
+import dev.materione.plugin.logic.action.TitleAction;
+import dev.materione.plugin.logic.support.ItemCatalog;
+import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
 import dev.materione.plugin.logic.function.ContainsFunction;
@@ -45,15 +57,31 @@ public final class BuiltinLogic {
 
     private BuiltinLogic() {}
 
-    /** The built-in actions: the six M2 verbs. */
-    public static List<ActionType<?>> actions() {
-        return List.of(
+    /**
+     * The built-in actions. {@code items} is the live item registry the item actions resolve
+     * Materione ids against; pass {@link ItemCatalog#none()} where no content is loaded.
+     */
+    public static List<ActionType<?>> actions(ItemCatalog items) {
+        var actions = new ArrayList<ActionType<?>>(List.of(
                 new RunCommandAction(),
                 new MessageAction(),
                 new SoundAction(),
                 new PotionAction(),
                 new CancelAction(),
-                new SetVarAction());
+                new SetVarAction()));
+        // #212 (L6): player, world and server actions. One class each; no action depends on another.
+        actions.addAll(List.of(
+                new BroadcastAction(),
+                new ActionbarAction(),
+                new TitleAction(),
+                new StopSoundAction(),
+                new ChatAction(),
+                new TeleportAction(),
+                new GiveItemAction(items),
+                new TakeItemAction(items),
+                new GiveExpAction(),
+                new TakeExpAction()));
+        return List.copyOf(actions);
     }
 
     /** The built-in expression functions (logic.md §4.2): pure, typed, and callable from any expression. */
@@ -84,12 +112,14 @@ public final class BuiltinLogic {
     /**
      * Registers the built-in triggers, actions and expression functions under {@code materione:},
      * owned by {@code owner}.
+     *
+     * @param items the live item registries for the item actions (see {@link #actions(ItemCatalog)})
      */
-    public static void register(LogicApi api, Plugin owner) {
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items) {
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
-        for (ActionType<?> action : actions()) {
+        for (ActionType<?> action : actions(items)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
         for (ExpressionFunction function : functions()) {
