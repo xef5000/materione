@@ -20,11 +20,15 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.gui.GuiAuthoringApi;
+import dev.materione.api.gui.GuiAuthoringApi.GuiEdit;
+import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
+import dev.materione.api.gui.GuiAuthoringApi.SetOpen;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
+import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;
 import dev.materione.core.pipeline.ResourceCompiler;
@@ -79,12 +83,26 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             Path packsRoot,
             Supplier<Allocations> previewAllocations,
             List<String> materials) {
+        this(authoring, components, packsRoot, previewAllocations, materials, GuiRuleChecker.NONE);
+    }
+
+    /**
+     * As above, with the rule checker {@code validate} runs the GUI's {@code behavior:} through, the
+     * one the pack compile uses (logic.md §10): a bad rule is reported with its step path.
+     */
+    public GuiAuthoringApiImpl(
+            AuthoringApi authoring,
+            Registry<GuiComponent> components,
+            Path packsRoot,
+            Supplier<Allocations> previewAllocations,
+            List<String> materials,
+            GuiRuleChecker ruleChecker) {
         this.authoring = Objects.requireNonNull(authoring, "authoring");
         this.components = Objects.requireNonNull(components, "components");
         this.packsRoot = Objects.requireNonNull(packsRoot, "packsRoot");
         this.previewAllocations = Objects.requireNonNull(previewAllocations, "previewAllocations");
         this.materials = materials == null ? List.of() : List.copyOf(materials);
-        this.type = new GuiType(components);
+        this.type = new GuiType(components, ruleChecker);
     }
 
     // ------------------------------------------------------------------
@@ -164,7 +182,23 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (!pool.ok()) {
             return ApiResult.fail(pool.diagnostics());
         }
-        return ApiResult.ok(check(subject, textures.value(), pool.value()).diagnostics());
+        return ApiResult.ok(withLogicAndOpen(subject, check(subject, textures.value(), pool.value()).diagnostics()));
+    }
+
+    /**
+     * The compile's diagnostics (which carry the rule checker's, logic.md §10), then the open: block's
+     * shape problems, for one GUI.
+     */
+    private List<Diagnostic> withLogicAndOpen(Subject subject, List<Diagnostic> compiled) {
+        var all = new ArrayList<Diagnostic>(compiled);
+        if (subject.definition().containsKey("open")) {
+            GuiOpen.Parsed parsed = GuiOpen.read(subject.definition().get("open"));
+            all.addAll(parsed.problems());
+            if (parsed.spec() != null) {
+                all.addAll(GuiOpen.check(parsed.spec()));
+            }
+        }
+        return all;
     }
 
     // ------------------------------------------------------------------
@@ -195,6 +229,21 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         } catch (IllegalArgumentException refused) {
             return badRequest(refused.getMessage());
         }
+        Object openBefore = subject.definition().get("open");
+        Object openAfter = openBefore;
+        for (GuiEdit edit : request.edits()) {
+            if (edit instanceof SetOpen set) {
+                if (set.open() == null) {
+                    openAfter = null;
+                } else {
+                    List<Diagnostic> problems = GuiOpen.check(set.open());
+                    if (!problems.isEmpty()) {
+                        return badRequest(problems.get(0).message());
+                    }
+                    openAfter = GuiOpen.write(set.open());
+                }
+            }
+        }
 
         String key = subject.id().value();
         var fields = new ArrayList<FieldEdit>();
@@ -207,6 +256,11 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         List<Object> authoredLayers = currentLayers(subject);
         if (!authoredLayers.equals(next.layers())) {
             fields.add(new FieldEdit(List.of(key, "layers"), List.copyOf(next.layers())));
+        }
+        if (!Objects.equals(openBefore, openAfter)) {
+            fields.add(openAfter == null
+                    ? FieldEdit.removal(List.of(key, "open"))
+                    : new FieldEdit(List.of(key, "open"), openAfter));
         }
         if (fields.isEmpty() && request.assets().isEmpty()) {
             return ApiResult.ok(view(subject)); // nothing to change: no revision, no write
@@ -228,11 +282,11 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             return ApiResult.fail(after.diagnostics());
         }
         ApiResult<Map<String, Map<String, Object>>> pool = templatePool(after.value());
-        List<Diagnostic> warnings = pool.ok()
+        List<Diagnostic> compiled = pool.ok()
                 ? check(after.value(), new PackTextures(request.pack(), packsRoot.resolve(request.pack())), pool.value())
                         .diagnostics()
                 : List.of();
-        return ApiResult.ok(view(after.value()), warnings);
+        return ApiResult.ok(view(after.value()), withLogicAndOpen(after.value(), compiled));
     }
 
     @Override
@@ -448,12 +502,14 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
                 }
             }
         }
+        OpenSpec open = subject.definition().containsKey("open")
+                ? GuiOpen.read(subject.definition().get("open")).spec() : null;
         return new GuiDocumentView(
                 subject.pack(), subject.path(), subject.id().value(),
                 textOf(subject.definition().get("title")),
                 wholeNumber(subject.definition().get("rows")),
                 subject.revision() == null ? -1 : subject.revision(),
-                layers);
+                layers, open);
     }
 
     private static Layer layerView(Map<String, Object> layer) {
@@ -510,6 +566,9 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             layers.add(authored);
         }
         definition.put("layers", layers);
+        if (view.open() != null) {
+            definition.put("open", GuiOpen.write(view.open()));
+        }
         return definition;
     }
 

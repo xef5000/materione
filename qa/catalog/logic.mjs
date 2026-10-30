@@ -204,7 +204,7 @@ export default [
     },
   }),
 
-  // Built-in conditions (logic.md §19). Each right-click runs the if: steps of probe_conditions.yml and each
+  // Built-in conditions (logic.md §22). Each right-click runs the if: steps of probe_conditions.yml and each
   // answer is a chat line; the scenarios set the state the condition reads first.
   test({
     id: 'logic.conditions-permission',

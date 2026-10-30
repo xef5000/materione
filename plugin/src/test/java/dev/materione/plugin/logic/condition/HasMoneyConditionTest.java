@@ -10,7 +10,7 @@ import dev.materione.plugin.logic.action.ProviderActionsTest;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code has_money} (logic.md §19): the shorthand, the currency resolution shared with give_money and
+ * {@code has_money} (logic.md §22): the shorthand, the currency resolution shared with give_money and
  * take_money, and the false answers for an unknown or unavailable currency.
  */
 class HasMoneyConditionTest {

@@ -26,7 +26,7 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code has_item: ruby} or {@code has_item: {item, amount, name_contains, lore_contains, ignore_case,
- * strict, armor, offhand}} (logic.md §19). It counts with the matcher {@code take_item} uses
+ * strict, armor, offhand}} (logic.md §22). It counts with the matcher {@code take_item} uses
  * ({@link ItemMatch}, in {@code plugin.logic.support}), so the two agree on what an item is.
  *
  * <ul>

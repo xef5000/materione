@@ -36,6 +36,12 @@ Materione's internals, only these markers.
 | `MATERIONE-GUI-REFRESH-CLOSED id=<id> player=<name>` | a viewer's window was closed because its GUI is no longer live |
 | `MATERIONE-GUI-DENIED reason=player-required` | `/materione gui open` from the console without naming a player |
 | `MATERIONE-GUI-FAILED reason=not-live\|no-such-player\|refused` | `/materione gui open` could not resolve the GUI, the player, or the open was refused |
+| `MATERIONE-GUI-FAILED reason=window gui=<id> player=<name> detail=<why>` | the server refused or could not open a GUI's window after its session was created; the session ended (#214) |
+
+The `guilogic` fixture pack (#214) announces its own opens and closes on the console as
+`say MATERIONE-GUILOGIC-OPEN <gui> ...`, `MATERIONE-GUILOGIC-PONG slot=<n>` and
+`MATERIONE-GUILOGIC-CLOSE <gui> reason=<reason>`; those lines come from the pack's rules, not the plugin, and
+only the QA catalog's `guilogic` suite reads them.
 
 The standard scenario boots with the fixture packs under `fixtures/packs/`
 filtered to sample + corpus + nested (4 + 50 items, plus the nested pack's

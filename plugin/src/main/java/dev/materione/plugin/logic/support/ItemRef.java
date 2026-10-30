@@ -79,7 +79,7 @@ public sealed interface ItemRef permits ItemRef.Vanilla, ItemRef.Materione {
 
     /**
      * True when {@code view} is this item. A vanilla reference, when {@code strict}, matches only stacks with
-     * no Materione identity; otherwise any stack of that material (logic.md §19, {@code has_item: {strict}}).
+     * no Materione identity; otherwise any stack of that material (logic.md §22, {@code has_item: {strict}}).
      */
     default boolean matches(ItemView view, boolean strict) {
         return switch (this) {

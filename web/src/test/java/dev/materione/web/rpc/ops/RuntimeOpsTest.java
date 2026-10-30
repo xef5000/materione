@@ -89,6 +89,49 @@ class RuntimeOpsTest {
     }
 
     @Test
+    void theOptionalArgsReachTheApiAsPlainText() {
+        var gui = new FakeGuis(() -> CompletableFuture.completedFuture(ApiResult.ok(null)), Map.of());
+        JsonObject payload = object("id", "demo:shop");
+        JsonObject args = new JsonObject();
+        args.addProperty("category", "tools");
+        args.addProperty("page", 2);
+        args.addProperty("vip", true);
+        payload.add("args", args);
+
+        Wire.Response response = dispatcher(gui, Optional.of(OWNER)).dispatch(request("runtime.openGui", payload));
+
+        assertThat(response.ok()).isTrue();
+        assertThat(gui.lastArgs).containsEntry("category", "tools").containsEntry("page", "2")
+                .containsEntry("vip", "true");
+    }
+
+    @Test
+    void noArgsMeansAnEmptyMapWhichIsWhatEveryEarlierClientSends() {
+        var gui = new FakeGuis(() -> CompletableFuture.completedFuture(ApiResult.ok(null)), Map.of());
+
+        dispatcher(gui, Optional.of(OWNER)).dispatch(request("runtime.openGui", object("id", "demo:shop")));
+
+        assertThat(gui.lastArgs).isEmpty();
+    }
+
+    @Test
+    void argsThatAreNotAFlatObjectAreABadRequest() {
+        var gui = new FakeGuis(() -> CompletableFuture.completedFuture(ApiResult.ok(null)), Map.of());
+        JsonObject notAnObject = object("id", "demo:shop", "args", "category=tools");
+        JsonObject nested = object("id", "demo:shop");
+        JsonObject args = new JsonObject();
+        args.add("list", new com.google.gson.JsonArray());
+        nested.add("args", args);
+
+        for (JsonObject payload : List.of(notAnObject, nested)) {
+            Wire.Response response = dispatcher(gui, Optional.of(OWNER)).dispatch(request("runtime.openGui", payload));
+            assertThat(response.ok()).isFalse();
+            assertThat(response.error().code()).isEqualTo("MTR-0008");
+        }
+        assertThat(gui.opened).isEmpty();
+    }
+
+    @Test
     void previewTargetReportsTheApprovedPlayerWhenOnline() {
         var gui = new FakeGuis(() -> CompletableFuture.completedFuture(ApiResult.ok(null)),
                 Map.of(OWNER, "Probe"));
@@ -155,10 +198,19 @@ class RuntimeOpsTest {
             return Optional.empty();
         }
 
+        Map<String, String> lastArgs = Map.of();
+
         @Override
         public CompletableFuture<ApiResult<Void>> open(ActorContext actor, NamespacedId guiId, UUID targetPlayer) {
             opened.add(targetPlayer + " " + guiId);
             return outcome.get();
+        }
+
+        @Override
+        public CompletableFuture<ApiResult<Void>> open(
+                ActorContext actor, NamespacedId guiId, UUID targetPlayer, Map<String, String> args) {
+            lastArgs = args;
+            return open(actor, guiId, targetPlayer);
         }
 
         @Override

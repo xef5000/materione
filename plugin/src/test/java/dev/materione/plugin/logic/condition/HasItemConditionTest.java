@@ -10,7 +10,7 @@ import dev.materione.plugin.logic.support.ItemCatalog;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code has_item} (logic.md §19): parse accept and reject, and the false answers. The matching rules themselves
+ * {@code has_item} (logic.md §22): parse accept and reject, and the false answers. The matching rules themselves
  * (lore, case, strict, slot inclusion) are unit-tested on the shared matcher, {@code ItemMatchTest}, since an
  * inventory of real stacks needs a server.
  */

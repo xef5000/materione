@@ -1,5 +1,7 @@
 package dev.materione.content.gui;
 
+import dev.materione.api.gui.TextureSource;
+import dev.materione.api.gui.ClickArea;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
@@ -96,6 +98,15 @@ public final class TextComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.TEXT;
+        }
+
+        /** The run's ink box: its measured advance wide and one glyph cell high, from its own origin. */
+        @Override
+        public ClickArea clickArea(TextureSource textures) {
+            boolean smallcaps = font == TitleSink.Font.SMALLCAPS;
+            int width = smallcaps ? SmallcapsFont.measure(text) : VanillaAscii.measure(text);
+            int height = smallcaps ? SmallcapsFont.GLYPH_ROWS : GuiFonts.VANILLA_ASCII_HEIGHT;
+            return new ClickArea.Rect(x, y, width, height);
         }
 
         @Override

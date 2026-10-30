@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 /**
- * The built-in conditions as the vocabulary and the registry see them (logic.md §4.2, §19): registered through the
+ * The built-in conditions as the vocabulary and the registry see them (logic.md §4.2, §22): registered through the
  * public API under {@code materione:}, with their category and shorthand, and no composite name among them.
  */
 class BuiltinConditionsTest {

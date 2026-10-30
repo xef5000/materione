@@ -10,6 +10,8 @@ import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.SlotSink;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.gui.TitleSink;
+import dev.materione.content.gui.logic.ClickMap;
+import dev.materione.content.gui.logic.ClickMapCompiler;
 import dev.materione.content.gui.raster.ArgbCanvas;
 import dev.materione.content.gui.raster.PngEncoder;
 import java.util.ArrayList;
@@ -101,7 +103,8 @@ public final class GuiCompiler {
         var slotList = new ArrayList<CompiledGui.Slot>();
         slots.forEach((slot, placement) -> slotList.add(new CompiledGui.Slot(slot, placement.item(), placement.amount())));
         slotList.sort(Comparator.comparingInt(CompiledGui.Slot::slot));
-        var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList);
+        ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
+        var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules());
         return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
     }
 

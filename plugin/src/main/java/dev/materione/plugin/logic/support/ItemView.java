@@ -13,7 +13,7 @@ import java.util.Optional;
  * @param material the vanilla material name ({@code DIAMOND})
  * @param name the plain display name, when the stack has a custom one
  * @param amount the stack size
- * @param lore the plain lore lines, in order; empty when the stack has none (logic.md §19)
+ * @param lore the plain lore lines, in order; empty when the stack has none (logic.md §22)
  */
 public record ItemView(Optional<NamespacedId> id, String material, Optional<String> name, int amount,
         List<String> lore) {

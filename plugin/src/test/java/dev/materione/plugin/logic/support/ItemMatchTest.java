@@ -8,7 +8,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The shared item matcher (logic.md §17 decision 2, §19): the take defaults are unchanged, and the options {@code
+ * The shared item matcher (logic.md §17 decision 2, §22): the take defaults are unchanged, and the options {@code
  * has_item} adds mean what they say. Pure, so no server is needed.
  */
 class ItemMatchTest {

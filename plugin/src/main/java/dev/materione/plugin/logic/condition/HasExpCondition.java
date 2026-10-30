@@ -16,7 +16,7 @@ import java.util.OptionalInt;
 import org.bukkit.entity.Player;
 
 /**
- * {@code has_exp: 50} or {@code has_exp: {amount, unit: points|levels}} (logic.md §19). It is the read
+ * {@code has_exp: 50} or {@code has_exp: {amount, unit: points|levels}} (logic.md §22). It is the read
  * half of {@code take_exp} and counts the same way: points are the player's total experience, levels are
  * the level. An amount the template does not render to a whole number in range is false.
  */

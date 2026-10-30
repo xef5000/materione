@@ -21,6 +21,8 @@ import java.util.Optional;
  *        the listed conditions; it holds when none are listed)
  * @param steps the flow
  * @param options cooldown, charges and their scope
+ * @param filters the keys the rule set on its trigger ({@code layer}, {@code click}, {@code every}),
+ *        as the trigger's description declares them; empty for a trigger with none
  * @param path where the rule was written, e.g. {@code behavior.2}
  */
 public record Rule(
@@ -30,10 +32,12 @@ public record Rule(
         Condition condition,
         List<Step> steps,
         RuleOptions options,
+        RuleFilters filters,
         StepPath path) {
 
     public Rule {
         steps = List.copyOf(steps);
+        filters = filters == null ? RuleFilters.none() : filters;
     }
 
     /** The rule's stable identity ({@code <owner>#<name>}) for logs and cooldown keys. */

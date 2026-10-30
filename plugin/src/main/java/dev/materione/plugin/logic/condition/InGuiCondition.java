@@ -19,10 +19,11 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code in_gui: shop:menu} or {@code in_gui: {id: shop:menu}}, or bare {@code in_gui: {}} for any GUI
- * (logic.md §19). True when the player has a Materione GUI open, and when given, that GUI's id matches.
+ * (logic.md §22). True when the player has a Materione GUI open, and when given, that GUI's id matches.
  *
- * <p>The open GUI is read through the {@link OpenGuis} port. Until the GUI session runtime (#214) wires
- * it, the port answers "nothing open", so this condition is false everywhere and never throws. An id
+ * <p>The open GUI is read through the {@link OpenGuis} port, which {@code BuiltinLogic} backs with the
+ * player's current GUI session. Before the GUI runtime binds, it answers "nothing open", so this condition
+ * is false and never throws. An id
  * names a pack's GUI, so it is written qualified ({@code shop:menu}); a bare id means {@code materione:}.
  */
 public final class InGuiCondition implements ConditionType<InGuiCondition.Params> {

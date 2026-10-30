@@ -18,7 +18,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * {@code is_near: {world: shop, x: 0, y: 64, z: 0, distance: 8}} (logic.md §19). True when the player is
+ * {@code is_near: {world: shop, x: 0, y: 64, z: 0, distance: 8}} (logic.md §22). True when the player is
  * within {@code distance} blocks of the point, measured straight (not along the ground). {@code world} is
  * optional: without it the point is in whatever world the player is in, and a point in another world is
  * never near.

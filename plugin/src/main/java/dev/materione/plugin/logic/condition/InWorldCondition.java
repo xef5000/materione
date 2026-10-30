@@ -15,7 +15,7 @@ import org.bukkit.World;
 import org.bukkit.entity.Player;
 
 /**
- * {@code in_world: nether} or {@code in_world: [world, world_nether]} (logic.md §19): true when the player
+ * {@code in_world: nether} or {@code in_world: [world, world_nether]} (logic.md §22): true when the player
  * is in one of the named worlds. World names are exact, as Bukkit keeps them.
  */
 public final class InWorldCondition implements ConditionType<InWorldCondition.Params> {

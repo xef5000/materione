@@ -16,12 +16,12 @@ import org.bukkit.entity.Player;
 
 /**
  * {@code has_permission: example.fly}, {@code has_permission: [a.b, c.d]} or
- * {@code has_permission: {permissions: [a.b, c.d], min: 1}} (logic.md §19).
+ * {@code has_permission: {permissions: [a.b, c.d], min: 1}} (logic.md §22).
  *
  * <p>With several nodes every one must hold, unless {@code min} says how many are enough. The check is
  * {@link Player#hasPermission}, which the active permission provider feeds: the session attachments the
  * default {@code give_permission} writes, and LuckPerms through its injected permissible. A Vault
- * permission service that is not mirrored into Bukkit is not consulted here (logic.md §19, decision 3).
+ * permission service that is not mirrored into Bukkit is not consulted here (logic.md §22, decision 3).
  */
 public final class HasPermissionCondition implements ConditionType<HasPermissionCondition.Params> {
 

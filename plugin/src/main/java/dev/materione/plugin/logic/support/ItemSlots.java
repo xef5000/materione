@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Slot arithmetic over a player's inventory as {@link Stacks#contents} lays it out (logic.md §19):
+ * Slot arithmetic over a player's inventory as {@link Stacks#contents} lays it out (logic.md §22):
  * indexes {@code 0..35} are the main storage, {@code 36..39} the armour and {@code 40} the offhand. Pure,
  * so the inclusion rules of {@code has_item} and the room rules of {@code has_item_space} are unit-tested.
  */

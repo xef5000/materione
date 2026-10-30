@@ -1,6 +1,8 @@
 package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.content.gui.logic.ClickMap;
+import dev.materione.content.gui.logic.GuiRules;
 import java.util.List;
 
 /**
@@ -14,14 +16,25 @@ import java.util.List;
  *     tags and offset-font text runs, in draw order
  * @param accessibleTitle the GUI's plain title, for narration and title-less clients
  * @param slots the item in each slot the GUI fills, sorted by slot
+ * @param clicks which layers a click on each container slot reaches, topmost first (logic.md §6.2)
+ * @param rules the GUI's authored {@code behavior:} and {@code flows:}, for the runtime to compile
  */
-public record CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
+public record CompiledGui(
+        NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        ClickMap clicks, GuiRules rules) {
 
     /** The canvas width of every chest GUI (vanilla container width). */
     public static final int WIDTH = 176;
 
     public CompiledGui {
         slots = List.copyOf(slots);
+        clicks = clicks == null ? ClickMap.EMPTY : clicks;
+        rules = rules == null ? GuiRules.EMPTY : rules;
+    }
+
+    /** A GUI with no clickable layers and no logic: the v1 shape. */
+    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
+        this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRules.EMPTY);
     }
 
     /** The canvas height of a chest with {@code rows} rows: {@code 114 + rows·18}. */

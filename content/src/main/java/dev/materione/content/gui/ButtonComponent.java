@@ -1,5 +1,6 @@
 package dev.materione.content.gui;
 
+import dev.materione.api.gui.ClickArea;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
@@ -14,7 +15,8 @@ import java.util.List;
 
 /**
  * {@code button}: a raised bevel drawn as a clickable-looking control (gui.md §2).
- * Its clicks are v1-cancelled; bindings arrive with the logic seam (§8). Raster target.
+ * Every click on a GUI is cancelled; a {@code gui.click} rule naming its layer decides what the click does
+ * (logic.md §6.2). Raster target.
  */
 public final class ButtonComponent implements GuiComponent {
 
@@ -30,7 +32,7 @@ public final class ButtonComponent implements GuiComponent {
     public SelfDescription describe() {
         return new SelfDescription(
                 "Button",
-                "A raised control face; in this version it looks clickable and every click is cancelled",
+                "A raised control face; a gui.click rule that names its layer runs when it is clicked",
                 List.of(
                         new ParameterSchema("x", ParameterType.INTEGER, false, "0",
                                 "Left edge in GUI pixels", null, null)
@@ -81,6 +83,11 @@ public final class ButtonComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.RASTER;
+        }
+
+        @Override
+        public ClickArea clickArea(TextureSource textures) {
+            return new ClickArea.Rect(x, y, width, height);
         }
 
         @Override

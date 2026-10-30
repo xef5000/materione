@@ -16,7 +16,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
- * The place and GUI conditions (logic.md §19): {@code is_near}, {@code in_world} and {@code in_gui}. The fake
+ * The place and GUI conditions (logic.md §22): {@code is_near}, {@code in_world} and {@code in_gui}. The fake
  * player stands at (1, 2, 3) in a world named {@code world}, with the facing fixed by {@link PlayerFake}.
  */
 class PlaceAndGuiConditionsTest {

@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
- * The one item matcher (logic.md §17 decision 2, §19): which stacks an item reference names, and what
+ * The one item matcher (logic.md §17 decision 2, §22): which stacks an item reference names, and what
  * text they must carry. {@code take_item} and {@code has_item} both build it, so they agree on what an
  * item is.
  *

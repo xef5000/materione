@@ -21,7 +21,7 @@ import java.util.Objects;
 import org.bukkit.entity.Player;
 
 /**
- * {@code has_money: 250} or {@code has_money: {amount: 250, currency: gems}} (logic.md §18, §19).
+ * {@code has_money: 250} or {@code has_money: {amount: 250, currency: gems}} (logic.md §18, §22).
  *
  * <p>The currency resolves exactly as {@code give_money} and {@code take_money} resolve it: a named one by
  * {@link ProviderParams#resolve}, otherwise the default. A currency that is unknown, or whose integration

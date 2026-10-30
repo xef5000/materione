@@ -349,7 +349,9 @@ assignment matches wire order, and the browser transports buffer frames arriving
 during the handshake→channel handover instead of dropping them (a dropped frame
 desyncs the strict receive sequence).
 
-*As built (M6 preview in game, #185):* `runtime.openGui` (`{id}`) opens the live GUI for the session's
+*As built (M6 preview in game, #185; `args` since #214):* `runtime.openGui` (`{id, args?}`, where the optional
+`args` is a flat object of name to text, number or boolean, read by the GUI's rules as `gui.args.<name>`; anything
+nested is `MTR-0008`, and a release that predates it ignores the field) opens the live GUI for the session's
 approved player, the player who opened the session in game. It answers `{queued}` (true while the
 window is still opening on that player's thread) or refuses with the api's diagnostic; a session with
 no owner (a console session) is refused with `MTR-0009`, never given a guessed player. `runtime.previewTarget`
@@ -366,6 +368,24 @@ on the `gui` session capability (editor-op-gates.json). The studio calls `gui.va
 verdict) and `gui.customizeItem` (Customize) only when the blob advertises `gui`; it does not compose
 either from `authoring.bulk` any more. Payload shapes live in `GuiAuthoringOps` and the golden
 `fixtures/protocol/editor-gui-v1.json`.
+
+*As built (logic authoring, #221):* the `logic` capability (listed in `SessionBlob.CURRENT_CAPABILITIES`) gates five
+ops, each a translator over `AuthoringApi.logic()` (api.md §3.12, logic.md §19) and listed in editor-op-gates.json:
+`logic.vocabulary` (the behavior vocabulary), `logic.get` (`{pack, path}`, the typed rules and flows),
+`logic.edit` (`{pack, path, rev, edits}`, the edits as `{op: addRule|removeRules|reorderRules|patchRule|insertStep|
+patchStep|moveStep|removeStep|setNodePosition|addFlow|removeFlow|renameFlow, …}`), `logic.validate`
+(`{pack, resource, behavior, flows, trigger}`, a draft, no write) and `logic.instantiate` (`{recipe, params}`, refused
+until the recipe registry lands, #222). A refused edit's error names the step path in its `resource` field (the wire's
+target slot, as the other editor ops use it). The SPA's wrappers
+are `webui/src/lib/logic/server.ts`, which checks `hasCapability(…, 'logic')` before it calls any of them. The frames are
+pinned by `fixtures/protocol/editor-logic-v1.json`: `LogicAuthoringOpsTest` (JVM) regenerates and checks them, and
+`webui/test/logic-ops.spec.ts` (vitest) checks that each wrapper sends the golden request byte for byte. The variables
+ops (`logic.variables.*`) are not here; they wait on #211 and join under the same capability.
+
+*As built (GUI `open:`, #221):* `gui.edit` takes `{op: "setOpen", open}` (the block, or null to remove it), and
+`gui.get`/`gui.edit` return the block as `open` when the GUI has one (gui.md §6.1, logic.md §19). `gui.validate` adds the
+block's shape problems and the logic compiler's problems for the GUI's `behavior:` and `flows:`. These are wire-additive:
+an older studio that ignores the new keys keeps working.
 
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`

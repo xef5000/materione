@@ -64,7 +64,7 @@ public final class ProviderParams {
     }
 
     /**
-     * A permission node that is shaped like one (logic.md §19 reuses it for {@code has_permission}).
+     * A permission node that is shaped like one (logic.md §22 reuses it for {@code has_permission}).
      *
      * @throws IllegalArgumentException with an author-facing message
      */

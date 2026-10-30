@@ -27,7 +27,7 @@ import org.bukkit.inventory.ItemStack;
 
 /**
  * {@code has_item_space: 3} (three free slots) or {@code has_item_space: {item: ruby, amount: 5}} (room for
- * five rubies) (logic.md §19). Exactly one of {@code slots} and {@code item} is written.
+ * five rubies) (logic.md §22). Exactly one of {@code slots} and {@code item} is written.
  *
  * <p>Room counts the main storage only (slots {@code 0..35}), the slots a pickup fills; the armour and
  * offhand are never room. An empty slot holds a whole stack of the item, and a matching partial stack holds

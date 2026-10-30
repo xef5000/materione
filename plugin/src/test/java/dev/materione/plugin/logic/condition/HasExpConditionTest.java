@@ -9,7 +9,7 @@ import dev.materione.plugin.logic.action.PlayerFake;
 import dev.materione.plugin.logic.support.ExperienceUnit;
 import org.junit.jupiter.api.Test;
 
-/** {@code has_exp} (logic.md §19): points count the total, levels count the level, as take_exp does. */
+/** {@code has_exp} (logic.md §22): points count the total, levels count the level, as take_exp does. */
 class HasExpConditionTest {
 
     private final HasExpCondition condition = new HasExpCondition();

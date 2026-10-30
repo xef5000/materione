@@ -9,12 +9,11 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **Built-in conditions (logic.md §19, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
+- **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
   `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
-  with templated numbers), `in_world` and `in_gui` (through a port that reports nothing open until the GUI runtime
-  is wired). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
   work (#211) and `slot_has` the slot work (#218).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
@@ -65,6 +64,33 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The logic has a typed authoring API and web ops (logic.md §8, §19; api.md §3.12).** `authoring().logic()`
+  reads, edits, validates and instantiates the `behavior:` and `flows:` of any item, block, furniture or GUI:
+  twelve structural edits (add, remove and reorder rules; insert, patch, move and remove steps; set a node position;
+  add, remove and rename flows), each addressed by its step path, all or none, with refusals that name the step. An
+  edit that changes nothing writes nothing. The editor reaches the same operations through five `logic.*` ops, gated on
+  the new `logic` capability. A GUI's `open:` block (commands, typed arguments, permission, requirement, deny) is a
+  typed `GuiEdit.SetOpen`, and `gui.validate` now reports the logic compiler's problems for a GUI's rules and flows.
+  Item, block and furniture self-descriptions list `flows:`, and the GUI's list `behavior:`, `flows:` and `open:`.
+  `logic.instantiate` is refused until the recipe registry lands.
+- **GUIs have logic: sessions, click rules, GUI triggers and the `gui.*` actions (logic.md §6, §21).**
+  A GUI file can now carry `behavior:` and `flows:` like an item does. A rule on `gui.click` names the
+  `layer:` that was clicked (and optionally `click:` and `slot:`), and runs a flow: the topmost showing layer
+  with a matching rule takes the click, a rule with no layer answers the clicks no layer claimed, and every
+  click is still cancelled. Components say where they are clicked, so a button, a text or image layer, an item
+  or the slot wells take clicks without any geometry at play time. The click kinds are `left`, `right`,
+  `shift_left`, `shift_right`, `middle`, `double`, `drop`, `ctrl_drop`, `number_key` (with `click.key`) and
+  `swap_offhand`. The other triggers are `gui.opening` (a rule can cancel the open), `gui.open`, `gui.close`
+  (with a `reason`: `player`, `action`, `replaced` or `quit`), `gui.click_outside` and `gui.tick` (`every:`
+  ticks, running only while the GUI is open). Four actions drive GUIs from any flow: `gui.open` (with
+  `args`), `gui.close`, `gui.back` and `gui.refresh`. Each open GUI is a per-player **session** that keeps
+  its arguments (`gui.args.*`) and session variables (`gui.session.*`); opening another GUI puts the first on
+  a back stack, and `gui.back` brings it back as it was. A live reload keeps the session. Every way of opening
+  a GUI (the command, the API, the editor's preview, `gui.open`) now goes through one open path;
+  `/materione gui open <id> [player] [name=value...]` and `runtime.openGui` take plain-text arguments. Bad
+  rules are reported with their step path by the pack's diagnostics and by `gui.validate`, including a
+  `layer:` that names no layer and a filter the trigger does not accept. New build checks: listeners are
+  adapters (R10), and the 400-line guard now covers the GUI packages.
 - **Behavior rules are flows: `if`, `require`, `choose`, `wait`, `stop` and `call` (logic.md §2, §5, §16).**
   A rule's `do:` list can now branch (`if`/`then`/`else`, `choose`), guard (`require` runs steps until
   one fails, then runs its `else` and ends the run, the shape of a paywall), pause (`wait: <ticks>`),

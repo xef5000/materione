@@ -10,7 +10,7 @@ import dev.materione.plugin.logic.support.ItemCatalog;
 import org.junit.jupiter.api.Test;
 
 /**
- * {@code has_item_space} (logic.md §19). The empty-inventory answers use the fake player (36 free storage
+ * {@code has_item_space} (logic.md §22). The empty-inventory answers use the fake player (36 free storage
  * slots); the room arithmetic is unit-tested on {@code ItemSlots}, since a partially full inventory needs real
  * stacks.
  */

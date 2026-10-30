@@ -38,7 +38,7 @@ public final class PlayerFake {
     public boolean commandExists = true;
     /** The players of the player's world, answered by {@code getWorld().getPlayers()}. */
     public final List<Player> worldPlayers = new ArrayList<>();
-    /** The permission nodes the player holds, answered by {@code hasPermission} (logic.md §19). */
+    /** The permission nodes the player holds, answered by {@code hasPermission} (logic.md §22). */
     public final Set<String> permissions = new HashSet<>();
     /** The name of the player's world, answered by {@code getWorld().getName()}. */
     public String worldName = "world";
