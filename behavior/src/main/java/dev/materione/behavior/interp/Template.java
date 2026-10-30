@@ -36,6 +36,22 @@ public final class Template {
         }
     }
 
+    /**
+     * The parsed {@code ${...}} expressions of {@code template}, in order (the compiler reads the
+     * variable roots they touch). Shares the memoized parse.
+     *
+     * @throws IllegalArgumentException on an empty or unparsable {@code ${...}}
+     */
+    public static List<Expression> expressions(String template) {
+        if (template == null || template.isEmpty()) {
+            return List.of();
+        }
+        return CACHE.computeIfAbsent(template, Template::parse).stream()
+                .map(Segment::expression)
+                .filter(java.util.Objects::nonNull)
+                .toList();
+    }
+
     /** Renders {@code template}, evaluating every {@code ${...}} against the context. */
     public static String render(String template, EvaluationContext context) {
         if (template == null || template.isEmpty()) {

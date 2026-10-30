@@ -26,6 +26,8 @@ class LogicCodeOrganisationTest {
     private static final List<Path> GUARDED = List.of(
             Path.of("..", "api", "src", "main", "java", "dev", "materione", "api", "logic"),
             Path.of("..", "behavior", "src", "main", "java", "dev", "materione", "behavior", "logic"),
+            Path.of("..", "behavior", "src", "main", "java", "dev", "materione", "behavior", "flow"),
+            Path.of("..", "behavior", "src", "main", "java", "dev", "materione", "behavior", "run"),
             Path.of("src", "main", "java", "dev", "materione", "plugin", "logic"));
 
     private static final int MAX_LINES = 400;

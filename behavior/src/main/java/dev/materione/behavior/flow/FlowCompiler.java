@@ -1,0 +1,112 @@
+package dev.materione.behavior.flow;
+
+import dev.materione.api.NamespacedId;
+import dev.materione.behavior.logic.LogicLookup;
+import dev.materione.behavior.rule.EventSelector;
+import dev.materione.behavior.rule.ParsedRules;
+import dev.materione.behavior.rule.Rule;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * Turns a resource's {@code behavior:} and {@code flows:} sections into loaded rules (logic.md
+ * §5.1). Compilation is pure: problems come back as diagnostics for the caller to publish, and
+ * the compiler never touches the bus, the filesystem or the platform. It runs in the pipeline, once
+ * per resource per load.
+ *
+ * <p><b>What it guarantees.</b>
+ *
+ * <ul>
+ *   <li>Every action and condition is resolved through the registries and parsed once, so a rule
+ *       holds typed steps, not raw maps (§4.1).
+ *   <li>Every diagnostic carries the {@link StepPath} of what it is about, as its target
+ *       ({@code behavior.2.do.0.then.1}), so the studio and {@code validate} can point at a node.
+ *   <li>Every {@code ${root}} is checked against the rule's trigger schema (§2.6): an unknown root
+ *       is a warning and changes nothing else.
+ *   <li>A {@code call} is linked to its flow here; unknown flows, cycles and chains deeper than
+ *       {@link CallStep#MAX_DEPTH} skip the rule that holds them.
+ *   <li>Fail-soft with a fail-closed edge: one broken rule never costs its siblings, one broken step
+ *       never costs its rule, but a step that guards others ({@code require}, {@code choose}) never
+ *       lets its failure widen what the survivors do.
+ *   <li>Nothing the author wrote is altered: the input is only read, so a load, compile and
+ *       untouched save is byte-identical (master §5.6). {@code node: {x, y}} hints are accepted and
+ *       ignored.
+ * </ul>
+ */
+public final class FlowCompiler {
+
+    private FlowCompiler() {}
+
+    /**
+     * Compiles a resource's authored sections. Never returns null; invalid rules and flows surface
+     * in {@link ParsedRules#problems()}.
+     *
+     * @param owner the resource that declares them
+     * @param behavior the {@code behavior:} value (a list of rule maps), or anything for none
+     * @param flows the {@code flows:} value (a map of flow id to steps), or null
+     * @param lookup the registries actions, conditions and triggers are resolved against
+     */
+    public static ParsedRules compile(NamespacedId owner, Object behavior, Object flows, LogicLookup lookup) {
+        return compile(new CompileContext(owner, lookup, true), behavior, flows);
+    }
+
+    /** {@link #compile(NamespacedId, Object, Object, LogicLookup)} for a resource without named flows. */
+    public static ParsedRules compile(NamespacedId owner, Object behavior, LogicLookup lookup) {
+        return compile(owner, behavior, null, lookup);
+    }
+
+    /**
+     * Compiles rules a mechanic generated rather than an author wrote. They are not in the
+     * resource's file, so their diagnostics name the rule but carry no field target.
+     */
+    public static ParsedRules compileGenerated(NamespacedId owner, Object rules, LogicLookup lookup) {
+        return compile(new CompileContext(owner, lookup, false), rules, null);
+    }
+
+    private static ParsedRules compile(CompileContext context, Object behavior, Object flowsSection) {
+        List<?> entries = behavior instanceof List<?> list ? list : List.of();
+        if (entries.isEmpty() && flowsSection == null) {
+            return ParsedRules.empty();
+        }
+        var flows = new FlowSet(context, flowsSection, flowRoots(context.lookup, entries));
+        var compiler = new RuleCompiler(context, flows);
+        var rules = new ArrayList<Rule>();
+        for (int index = 0; index < entries.size(); index++) {
+            compiler.compile(index, entries.get(index)).ifPresent(rules::add);
+        }
+        flows.compileAll();
+        return new ParsedRules(List.copyOf(rules), List.copyOf(context.problems));
+    }
+
+    /**
+     * The roots a flow body may read: everything any rule of the resource's triggers provides, plus
+     * {@code args}. A flow is shared by rules with different triggers, so it is checked against the
+     * union and never against one. Null (unchecked) when any rule's trigger declares no schema, or
+     * there are no rules to learn a trigger from.
+     */
+    private static Set<String> flowRoots(LogicLookup lookup, List<?> entries) {
+        var union = new HashSet<String>(CompileUnit.UNIVERSAL_ROOTS);
+        union.add("args");
+        boolean any = false;
+        for (Object entry : entries) {
+            if (!(entry instanceof Map<?, ?> raw) || !(raw.get("on") instanceof String on) || on.isBlank()) {
+                continue;
+            }
+            Optional<EventSelector> selector = lookup.selector(on);
+            if (selector.isEmpty()) {
+                continue;
+            }
+            Set<String> roots = RuleCompiler.rootsOf(lookup, selector.get());
+            if (roots == null) {
+                return null;
+            }
+            union.addAll(roots);
+            any = true;
+        }
+        return any ? union : null;
+    }
+}

@@ -37,10 +37,14 @@ public final class EngineExpressions implements ExpressionCompiler {
         }
     }
 
-    /** The expression engine's view of a run's context. */
-    static EvaluationContext evaluationOf(LogicContext context) {
-        return context instanceof MapLogicContext map
-                ? map.evaluation()
+    /**
+     * The expression engine's view of a run's context. A context that already holds one (the
+     * engine's own) hands it over without allocating; any other is read through its
+     * {@link LogicContext#resolve resolve}.
+     */
+    public static EvaluationContext evaluationOf(LogicContext context) {
+        return context instanceof EvaluationAware aware
+                ? aware.evaluation()
                 : EvaluationContext.of(context::resolve);
     }
 

@@ -47,6 +47,17 @@ public interface ActionType<P> {
     Threading threading();
 
     /**
+     * The thread a step with these parsed parameters must run on. It defaults to the type's
+     * {@link #threading()}; a type whose placement depends on its parameters overrides it
+     * ({@code run_command} runs on the global thread for the console and in the player's region
+     * for {@code as: player|op}). The engine calls this overload, never the bare one, when it
+     * dispatches a step; the bare one stays the type's headline value for the vocabulary.
+     */
+    default Threading threading(P params) {
+        return threading();
+    }
+
+    /**
      * Turns one step's authored parameters into the immutable object {@link #execute} runs.
      *
      * @throws IllegalArgumentException to reject the step, with a message an author can act on

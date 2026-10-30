@@ -1,5 +1,6 @@
 package dev.materione.core.scheduling;
 
+import dev.materione.api.scheduling.ScheduledHandle;
 import dev.materione.api.scheduling.SchedulingGateway;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -33,5 +34,29 @@ public final class SchedulingGatewayImpl implements SchedulingGateway {
     @Override
     public void executeGlobal(Plugin plugin, Runnable task) {
         Bukkit.getGlobalRegionScheduler().execute(plugin, task);
+    }
+
+    @Override
+    public ScheduledHandle executeEntityLater(
+            Plugin plugin, Entity entity, long delayTicks, Runnable task, Runnable retired) {
+        // the entity scheduler rejects a delay below one tick; 0 means "next opportunity"
+        io.papermc.paper.threadedregions.scheduler.ScheduledTask scheduled = delayTicks <= 0
+                ? entity.getScheduler().run(plugin, scheduledTask -> task.run(), retired)
+                : entity.getScheduler().runDelayed(plugin, scheduledTask -> task.run(), retired, delayTicks);
+        if (scheduled == null) { // the entity was already removed: it will never run the task
+            if (retired != null) {
+                retired.run();
+            }
+            return ScheduledHandle.NONE;
+        }
+        return scheduled::cancel;
+    }
+
+    @Override
+    public ScheduledHandle executeGlobalLater(Plugin plugin, long delayTicks, Runnable task) {
+        io.papermc.paper.threadedregions.scheduler.ScheduledTask scheduled = delayTicks <= 0
+                ? Bukkit.getGlobalRegionScheduler().run(plugin, scheduledTask -> task.run())
+                : Bukkit.getGlobalRegionScheduler().runDelayed(plugin, scheduledTask -> task.run(), delayTicks);
+        return scheduled::cancel;
     }
 }

@@ -20,10 +20,9 @@ import org.bukkit.entity.Player;
  * {@code run_command: "say hi"} or {@code run_command: {command, as: console|player|op}}: runs a
  * server command, with {@code ${...}} and {@code %placeholders%} filled in.
  *
- * <p>Declared {@link Threading#GLOBAL} because commands may touch any region and the default
- * sender is the console. The M2 engine runs every GLOBAL action one scheduler hop later on the
- * player's thread; the flow interpreter must route the player and op senders to the player's
- * region when it dispatches for real (logic.md §4.1).
+ * <p>The thread depends on the sender (logic.md §15): the console may touch any region, so it runs
+ * on the {@link Threading#GLOBAL} thread; {@code as: player|op} executes as the player and so runs
+ * in the player's region. The type's headline {@link #threading()} is the console default.
  */
 public final class RunCommandAction implements ActionType<RunCommandAction.Params> {
 
@@ -53,6 +52,11 @@ public final class RunCommandAction implements ActionType<RunCommandAction.Param
     @Override
     public Threading threading() {
         return Threading.GLOBAL;
+    }
+
+    @Override
+    public Threading threading(Params params) {
+        return params.sender() == Sender.CONSOLE ? Threading.GLOBAL : Threading.PLAYER_REGION;
     }
 
     @Override

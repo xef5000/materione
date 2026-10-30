@@ -18,7 +18,7 @@ import java.util.function.UnaryOperator;
  * <p>One instance belongs to one run and is not thread-safe (see {@link LogicContext}). The root
  * map is copied on construction, so the caller keeps no handle on the live tree.
  */
-public final class MapLogicContext implements LogicContext {
+public final class MapLogicContext implements LogicContext, EvaluationAware {
 
     private static final String LOCALS_KEY = "vars";
 
@@ -50,6 +50,7 @@ public final class MapLogicContext implements LogicContext {
     }
 
     /** The same variable tree as the expression engine's evaluation context (rule conditions read it). */
+    @Override
     public EvaluationContext evaluation() {
         return evaluation;
     }

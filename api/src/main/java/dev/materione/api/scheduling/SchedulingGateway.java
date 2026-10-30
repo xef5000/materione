@@ -28,4 +28,31 @@ public interface SchedulingGateway {
      * stage allowed on the main thread).
      */
     void executeGlobal(Plugin plugin, Runnable task);
+
+    /**
+     * Runs a task on the thread owning {@code entity} after {@code delayTicks} (0 = at the
+     * entity's next opportunity, never inline). When the entity is removed before the task can
+     * run (a player quits), {@code retired} runs instead, if it is non-null.
+     *
+     * <p>The server-backed implementation overrides this; the default exists so a test double that
+     * never schedules ahead need not implement it, and it fails loudly rather than dropping the delay.
+     *
+     * @return a handle that cancels the task while it is still queued
+     */
+    default ScheduledHandle executeEntityLater(
+            Plugin plugin, Entity entity, long delayTicks, Runnable task, Runnable retired) {
+        throw new UnsupportedOperationException("this gateway cannot schedule ahead");
+    }
+
+    /**
+     * Runs a task on the global region/main thread after {@code delayTicks} (0 = at the next
+     * global tick, never inline).
+     *
+     * <p>Same default as {@link #executeEntityLater}.
+     *
+     * @return a handle that cancels the task while it is still queued
+     */
+    default ScheduledHandle executeGlobalLater(Plugin plugin, long delayTicks, Runnable task) {
+        throw new UnsupportedOperationException("this gateway cannot schedule ahead");
+    }
 }

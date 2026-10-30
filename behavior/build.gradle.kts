@@ -7,4 +7,6 @@ plugins {
 dependencies {
     api(project(":api"))
     api(project(":core"))
+    // tests author rules as YAML, the shape the pipeline hands the compiler
+    testImplementation(libs.snakeyaml)
 }

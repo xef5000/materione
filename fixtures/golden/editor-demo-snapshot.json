@@ -21,7 +21,7 @@
         {
           "advanced": false,
           "default": "0",
-          "description": "Ticks to wait before the action runs",
+          "description": "Ticks to wait before the action runs; the flow waits with it",
           "id": "delay",
           "label": "Delay",
           "order": 0,
@@ -713,7 +713,7 @@
             {
               "advanced": false,
               "default": "0",
-              "description": "Ticks to wait before the action runs",
+              "description": "Ticks to wait before the action runs; the flow waits with it",
               "id": "delay",
               "label": "Delay",
               "order": 0,
@@ -764,7 +764,7 @@
               "uiHint": "advanced"
             }
           ],
-          "supported": false
+          "supported": true
         },
         {
           "description": "Runs steps in order until one fails; then runs the else steps and stops the flow.",
@@ -794,7 +794,7 @@
               "uiHint": "advanced"
             }
           ],
-          "supported": false
+          "supported": true
         },
         {
           "description": "Suspends the flow for a number of ticks without blocking a thread.",
@@ -812,7 +812,7 @@
               "uiHint": "number"
             }
           ],
-          "supported": false
+          "supported": true
         },
         {
           "description": "Ends this run, optionally cancelling the underlying event.",
@@ -828,9 +828,19 @@
               "section": "general",
               "type": "boolean",
               "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "id": "cancel_session_runs",
+              "label": "Cancel Session Runs",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
             }
           ],
-          "supported": false
+          "supported": true
         },
         {
           "description": "Runs a named flow of the same resource inline.",
@@ -859,7 +869,7 @@
               "uiHint": "advanced"
             }
           ],
-          "supported": false
+          "supported": true
         },
         {
           "description": "Runs the first branch whose condition holds.",
@@ -889,7 +899,7 @@
               "uiHint": "advanced"
             }
           ],
-          "supported": false
+          "supported": true
         }
       ],
       "triggers": [
@@ -6534,7 +6544,7 @@
     },
     {
       "code": "MTR-0012",
-      "message": "pre-apply: items: +26 ~0 -0 (removed stay keep-flagged); blocks: +6 -0; furniture: +10 -0; recipes: 5 enabled, 0 disabled",
+      "message": "pre-apply: items: +27 ~0 -0 (removed stay keep-flagged); blocks: +6 -0; furniture: +10 -0; recipes: 5 enabled, 0 disabled",
       "severity": "info"
     }
   ],
@@ -8719,6 +8729,58 @@
           "rev": 0,
           "sha256": "36d99e4d021bd9675ba583d8a203e23afd97eeea18257e065af9d8e582d6efd8"
         },
+        "items/flow_wand.yml": {
+          "parsed": {
+            "flow_wand": {
+              "material": "STICK",
+              "display_name": "Flow Wand",
+              "behavior": [
+                {
+                  "on": "click:left",
+                  "do": [
+                    {
+                      "message": "flow: start"
+                    },
+                    {
+                      "wait": 20
+                    },
+                    {
+                      "message": "flow: after wait"
+                    },
+                    {
+                      "call": "gate"
+                    }
+                  ]
+                }
+              ],
+              "flows": {
+                "gate": [
+                  {
+                    "require": [
+                      {
+                        "run_command": {
+                          "command": "flowwand_missing_command",
+                          "as": "player"
+                        }
+                      }
+                    ],
+                    "else": [
+                      {
+                        "message": "flow: guard refused"
+                      }
+                    ]
+                  },
+                  {
+                    "message": "flow: never shown"
+                  }
+                ]
+              }
+            }
+          },
+          "raw": "# Flow showcase (logic.md §2, qa mechanics.flow-wait-and-require): one left-click starts a flow that\n# messages at once, waits a second without blocking the server, messages again, then calls a named\n# flow whose `require` fails (a player command that does not exist) so its else runs and the run\n# ends before the step after it.\nflow_wand:\n  material: STICK\n  display_name: \"Flow Wand\"\n  behavior:\n    - on: click:left\n      do:\n        - message: \"flow: start\"\n        - wait: 20\n        - message: \"flow: after wait\"\n        - call: gate\n  flows:\n    gate:\n      - require:\n          - run_command: { command: \"flowwand_missing_command\", as: player }\n        else:\n          - message: \"flow: guard refused\"\n      - message: \"flow: never shown\"\n",
+          "rev": 0,
+          "sha256": "43ea7bb9c7e95ca63eab4add7a43b24b659b5c2b9173f0eeb50c1debab74e7b3"
+        },
         "items/light_snack.yml": {
           "parsed": {
             "light_snack": {
@@ -8960,6 +9022,12 @@
           "id": "feast_bread",
           "pack": "world",
           "path": "items/feast_bread.yml",
+          "type": "items"
+        },
+        {
+          "id": "flow_wand",
+          "pack": "world",
+          "path": "items/flow_wand.yml",
           "type": "items"
         },
         {
@@ -9293,6 +9361,16 @@
         {
           "health": "unknown",
           "healthMessage": "pipeline validation and apply freshness are unknown",
+          "id": "flow_wand",
+          "material": "STICK",
+          "name": "Flow Wand",
+          "pack": "world",
+          "path": "items/flow_wand.yml",
+          "type": "items"
+        },
+        {
+          "health": "unknown",
+          "healthMessage": "pipeline validation and apply freshness are unknown",
           "id": "light_snack",
           "material": "BREAD",
           "name": "Light Snack",
@@ -9344,7 +9422,7 @@
     }
   ],
   "reload": {
-    "itemsLive": 26,
+    "itemsLive": 27,
     "quarantined": 0
   },
   "scaffoldId": "demo_scaffold",
