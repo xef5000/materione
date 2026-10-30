@@ -1,0 +1,10 @@
+# The guilogic fixture pack (#214): two GUIs whose rules exercise the GUI runtime end to end: a
+# click that messages and plays a sound, a button that opens another GUI with arguments, a button
+# that goes back, and a button that closes. The paper harness boots it (rules compile at load, no
+# diagnostics) and the probe loop's QA catalog (qa/catalog/guilogic.mjs) clicks through it with a
+# real client. It holds no items on purpose: other suites pin the item counts of the packs they load.
+id: guilogic
+version: 1.0.0
+schema_version: 1
+
+depends: []

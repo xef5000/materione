@@ -1,5 +1,6 @@
 package dev.materione.content.gui;
 
+import dev.materione.api.gui.ClickArea;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
@@ -114,6 +115,19 @@ public final class SlotsComponent implements GuiComponent {
         @Override
         public RenderTarget target() {
             return RenderTarget.RASTER;
+        }
+
+        /** The container's own slots when the wells cover them; the player inventory is not part of the GUI's map. */
+        @Override
+        public ClickArea clickArea(TextureSource textures) {
+            if (region == Region.PLAYER) {
+                return ClickArea.NONE;
+            }
+            var slots = new java.util.HashSet<Integer>();
+            for (int slot = 0; slot < rows * 9; slot++) {
+                slots.add(slot);
+            }
+            return new ClickArea.Slots(slots);
         }
 
         @Override

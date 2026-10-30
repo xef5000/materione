@@ -13,6 +13,8 @@ import dev.materione.plugin.logic.currency.XpCurrencyIntegration;
 import dev.materione.plugin.logic.function.BalanceFunction;
 import dev.materione.plugin.logic.function.FormatCurrencyFunction;
 import dev.materione.behavior.logic.LogicIds;
+import dev.materione.plugin.gui.GuiBridge;
+import dev.materione.plugin.gui.trigger.GuiTriggers;
 import dev.materione.plugin.logic.action.ActionbarAction;
 import dev.materione.plugin.logic.action.BroadcastAction;
 import dev.materione.plugin.logic.action.CancelAction;
@@ -34,6 +36,10 @@ import dev.materione.plugin.logic.action.TakeExpAction;
 import dev.materione.plugin.logic.action.TakeItemAction;
 import dev.materione.plugin.logic.action.TeleportAction;
 import dev.materione.plugin.logic.action.TitleAction;
+import dev.materione.plugin.logic.action.gui.BackGuiAction;
+import dev.materione.plugin.logic.action.gui.CloseGuiAction;
+import dev.materione.plugin.logic.action.gui.OpenGuiAction;
+import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
@@ -121,16 +127,40 @@ public final class BuiltinLogic {
     }
 
     /**
+     * The GUI actions (logic.md §6): open, close, back and refresh. They reach the GUI runtime through
+     * {@code bridge}, which the runtime binds itself into once it exists.
+     */
+    public static List<ActionType<?>> guiActions(GuiBridge bridge) {
+        return List.of(
+                new OpenGuiAction(bridge),
+                new CloseGuiAction(bridge),
+                new BackGuiAction(bridge),
+                new RefreshGuiAction(bridge));
+    }
+
+    /**
      * Registers the built-in triggers, actions and expression functions under {@code materione:},
-     * owned by {@code owner}.
+     * owned by {@code owner}. The GUI actions are bound to a bridge nothing binds, so they fail soft
+     * ("the GUI runtime is not available"); the plugin uses the overload that passes its own.
      *
      * @param items the live item registries for the item actions (see {@link #actions(ItemCatalog)})
      */
     public static void register(LogicApi api, Plugin owner, ItemCatalog items) {
+        register(api, owner, items, new GuiBridge());
+    }
+
+    /** As above, with the bridge the GUI actions reach the GUI runtime through. */
+    public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge) {
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
+        for (TriggerType trigger : GuiTriggers.all()) {
+            api.triggers().register(owner, builtIn(trigger.id()), trigger);
+        }
         for (ActionType<?> action : actions(items)) {
+            api.actions().register(owner, builtIn(action.id()), action);
+        }
+        for (ActionType<?> action : guiActions(bridge)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
         for (ExpressionFunction function : functions()) {

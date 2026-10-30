@@ -6,6 +6,7 @@ import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.core.domain.JavaMethodCall;
 import com.tngtech.archunit.lang.ArchRule;
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition;
+import java.util.List;
 
 /**
  * The Materione boundary rules (plugin architecture §11) — "violations fail
@@ -187,11 +188,74 @@ public final class MaterioneArchRules {
      * belong in the parent package, never in a sibling action. A class's own nested types (its
      * parameter record) are part of it.
      *
-     * <p>R10 of the same section (listeners are adapters) has no subjects until the GUI runtime
-     * lands its {@code plugin.gui..} packages, and arrives with them.
+     * <p>R10 of the same section (listeners are adapters) is {@link #LISTENERS_ARE_ADAPTERS}.
      */
     public static final ArchRule LOGIC_ACTIONS_ARE_INDEPENDENT =
             actionsAreIndependentIn("dev.materione.plugin.logic.action");
+
+    /**
+     * R10 — listeners are adapters (logic.md §9 rule 1): a class in {@code dev.materione.plugin.gui..}
+     * or {@code dev.materione.plugin.logic..} that handles Bukkit events (it has a method annotated
+     * {@code @EventHandler}) converts the event and hands it to a collaborator; it may not depend on
+     * the actions ({@code plugin.logic.action..}) or on the GUI renderer ({@code plugin.gui.render..})
+     * directly, because that is where policy would creep in. Reaching them through a collaborator is
+     * the point.
+     */
+    public static final ArchRule LISTENERS_ARE_ADAPTERS = listenersAreAdaptersIn(
+            List.of("dev.materione.plugin.gui", "dev.materione.plugin.logic"),
+            List.of("dev.materione.plugin.logic.action", "dev.materione.plugin.gui.render"));
+
+    /** R10 over any packages (its planted-violation test points it at fixture packages). */
+    public static ArchRule listenersAreAdaptersIn(List<String> listenerPackages, List<String> forbiddenPackages) {
+        return ArchRuleDefinition.classes()
+                .that(residesInAny(listenerPackages))
+                .and(isNotTestClass())
+                .and(handlesEvents())
+                .should(new com.tngtech.archunit.lang.ArchCondition<com.tngtech.archunit.core.domain.JavaClass>(
+                        "not depend on actions or the renderer directly") {
+                    @Override
+                    public void check(com.tngtech.archunit.core.domain.JavaClass listener,
+                            com.tngtech.archunit.lang.ConditionEvents events) {
+                        for (var dependency : listener.getDirectDependenciesFromSelf()) {
+                            var target = dependency.getTargetClass();
+                            if (target.isArray()) {
+                                target = target.getBaseComponentType();
+                            }
+                            for (String forbidden : forbiddenPackages) {
+                                if (target.getPackageName().equals(forbidden)
+                                        || target.getPackageName().startsWith(forbidden + ".")) {
+                                    events.add(com.tngtech.archunit.lang.SimpleConditionEvent.violated(listener,
+                                            listener.getName() + " is a listener and depends on "
+                                                    + target.getName() + " directly"));
+                                }
+                            }
+                        }
+                    }
+                })
+                .allowEmptyShould(true);
+    }
+
+    private static DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass> residesInAny(
+            List<String> packages) {
+        return new DescribedPredicate<>("reside in " + packages) {
+            @Override
+            public boolean test(com.tngtech.archunit.core.domain.JavaClass clazz) {
+                return packages.stream().anyMatch(prefix -> clazz.getPackageName().equals(prefix)
+                        || clazz.getPackageName().startsWith(prefix + "."));
+            }
+        };
+    }
+
+    /** A class with a method annotated {@code @EventHandler} (matched by name: no Bukkit class literals here). */
+    private static DescribedPredicate<com.tngtech.archunit.core.domain.JavaClass> handlesEvents() {
+        return new DescribedPredicate<>("handle Bukkit events") {
+            @Override
+            public boolean test(com.tngtech.archunit.core.domain.JavaClass clazz) {
+                return clazz.getMethods().stream().anyMatch(method -> method.getAnnotations().stream()
+                        .anyMatch(annotation -> annotation.getRawType().getName().equals("org.bukkit.event.EventHandler")));
+            }
+        };
+    }
 
     /** R11 over any package (its planted-violation test points it at a fixture package). */
     public static ArchRule actionsAreIndependentIn(String actionPackage) {

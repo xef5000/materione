@@ -4,6 +4,7 @@ import dev.materione.api.logic.Cancellation;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.behavior.expr.EvaluationContext;
 import dev.materione.behavior.logic.MapLogicContext;
+import dev.materione.behavior.rule.FilterFacts;
 
 /**
  * One fired event flowing through the engine: the normalized taxonomy key,
@@ -22,6 +23,7 @@ public final class BehaviorEvent implements Cancellation {
     private final Object payload;
     private final Object anchor;
     private Object cancelKey;
+    private FilterFacts filterFacts = FilterFacts.NONE;
     private boolean cancelRequested;
 
     /**
@@ -74,6 +76,21 @@ public final class BehaviorEvent implements Cancellation {
     public BehaviorEvent withCancelKey(Object key) {
         this.cancelKey = key;
         return this;
+    }
+
+    /**
+     * Supplies what this event says about itself to the rules' trigger filters (the layer and slot
+     * of a GUI click, the click kind): a rule that sets a filter fires only when the event's fact
+     * for it is one of the rule's values. An event with no facts answers only rules without filters.
+     */
+    public BehaviorEvent withFilterFacts(FilterFacts facts) {
+        this.filterFacts = facts == null ? FilterFacts.NONE : facts;
+        return this;
+    }
+
+    /** The facts set by {@link #withFilterFacts}; none by default. */
+    public FilterFacts filterFacts() {
+        return filterFacts;
     }
 
     /** The cancellation key set by {@link #withCancelKey}, or null. */

@@ -157,7 +157,9 @@ public final class PipelineService {
             components.register(NamespacedId.of("materione", component.name()),
                     component, component.describe(), "materione");
         }
-        var guis = new dev.materione.content.gui.GuiType(components);
+        // the gui type checks its rules with the flow compiler, against the logic registries as they
+        // are when the pack compiles (they register after this, before content loads)
+        var guis = new dev.materione.content.gui.GuiType(components, ruleChecker());
         registry.register(NamespacedId.of("materione", "gui"), guis, guis.describe(), "materione");
         // named currencies (logic.md §18): content whose money is read at use, not emitted to the pack
         var currencies = new dev.materione.content.currency.CurrencyType();
@@ -606,7 +608,7 @@ public final class PipelineService {
                 new dev.materione.core.runtime.RuntimeEffects(effectEntries));
         // GUI slots resolve against every item of this apply, placement items included (gui.md §5)
         builder.view(RuntimeGuis.KEY, RuntimeGuis.build(
-                guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish));
+                guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish, logicLookup()));
         return builder.build();
     }
 
@@ -917,6 +919,16 @@ public final class PipelineService {
      */
     private dev.materione.behavior.logic.LogicLookup logicLookup() {
         return new dev.materione.behavior.logic.RegistryLogicLookup(registries);
+    }
+
+    /** The GUI type's rule checker: the flow compiler plus the checks only a GUI can make (logic.md §10). */
+    private dev.materione.content.gui.logic.GuiRuleChecker ruleChecker() {
+        return new dev.materione.plugin.gui.rules.GuiRuleDiagnoser(this::logicLookup);
+    }
+
+    /** The checker the GUI authoring API validates drafts with: the same one the pack compile uses. */
+    public dev.materione.content.gui.logic.GuiRuleChecker guiRuleChecker() {
+        return ruleChecker();
     }
 
     /**

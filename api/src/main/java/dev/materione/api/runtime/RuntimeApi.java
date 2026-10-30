@@ -4,6 +4,7 @@ import dev.materione.api.ApiResult;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -77,11 +78,24 @@ public interface RuntimeApi {
 
         /**
          * Opens a live GUI for one online player, replacing whatever container the player has
-         * open. Every click inside the GUI is cancelled in v1 (gui.md §5). Requires the
-         * {@code materione.gui.open} node. The future completes when the window is open (or
-         * immediately, with the reason, when the request is refused); it never blocks the caller.
+         * open. Every click inside the GUI is cancelled (gui.md §5); the GUI's own rules decide
+         * what a click does (logic.md §6.2). Requires the {@code materione.gui.open} node. The
+         * future completes when the window is open (or immediately, with the reason, when the
+         * request is refused); it never blocks the caller.
          */
         CompletableFuture<ApiResult<Void>> open(ActorContext actor, NamespacedId guiId, UUID targetPlayer);
+
+        /**
+         * {@link #open(ActorContext, NamespacedId, UUID)} with the arguments the GUI opens with
+         * (logic.md §6.1): a plain name-to-value map, read by the GUI's rules as
+         * {@code gui.args.<name>}. Typed parsing and validation of the values belong to the GUI's
+         * open specification, not to this call. An implementation that predates arguments ignores
+         * them, which is what the default does.
+         */
+        default CompletableFuture<ApiResult<Void>> open(
+                ActorContext actor, NamespacedId guiId, UUID targetPlayer, Map<String, String> args) {
+            return open(actor, guiId, targetPlayer);
+        }
 
         /** The online player's name, or empty when that player is offline. */
         Optional<String> onlineName(UUID player);

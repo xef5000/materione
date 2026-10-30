@@ -4,8 +4,11 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
+import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
+import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -62,6 +65,22 @@ public final class RuntimeGuis {
             Function<NamespacedId, Optional<RuntimeItem>> items,
             Function<NamespacedId, Optional<Material>> vanilla,
             Consumer<Diagnostic> diagnostics) {
+        return build(compiled, items, vanilla, diagnostics, null);
+    }
+
+    /**
+     * As above, and compiles each GUI's {@code behavior:} and {@code flows:} against {@code logic}
+     * (logic.md §6). The rule problems are not published here: the diagnose stage of the pack compile
+     * already reported them, with the same compiler, and republishing would repeat every one.
+     *
+     * @param logic the registries rules resolve against; null builds a view with no rules
+     */
+    public static RuntimeGuis build(
+            Map<NamespacedId, CompiledGui> compiled,
+            Function<NamespacedId, Optional<RuntimeItem>> items,
+            Function<NamespacedId, Optional<Material>> vanilla,
+            Consumer<Diagnostic> diagnostics,
+            LogicLookup logic) {
         var out = new LinkedHashMap<NamespacedId, Live>();
         for (CompiledGui gui : compiled.values()) {
             var slots = new ArrayList<Slot>();
@@ -73,7 +92,11 @@ public final class RuntimeGuis {
                     slots.add(new Slot(entry.slot(), item, entry.amount()));
                 }
             }
-            out.put(gui.id(), new Live(gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots));
+            GuiRuleSet rules = logic == null
+                    ? GuiRuleSet.EMPTY
+                    : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
+            out.put(gui.id(), new Live(
+                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules));
         }
         return new RuntimeGuis(out);
     }
@@ -131,12 +154,22 @@ public final class RuntimeGuis {
      * @param title the MiniMessage title with the background glyph and text runs, in draw order
      * @param accessibleTitle the plain title, for listings
      * @param slots the resolved slots, sorted by slot
+     * @param clicks which layers a click on each container slot reaches, topmost first
+     * @param logic the GUI's compiled rules, indexed by trigger
      */
     public record Live(
-            NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
+            NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRuleSet logic) {
 
         public Live {
             slots = List.copyOf(slots);
+            clicks = clicks == null ? ClickMap.EMPTY : clicks;
+            logic = logic == null ? GuiRuleSet.EMPTY : logic;
+        }
+
+        /** A GUI with no clickable layers and no rules. */
+        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
+            this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRuleSet.EMPTY);
         }
 
         /**

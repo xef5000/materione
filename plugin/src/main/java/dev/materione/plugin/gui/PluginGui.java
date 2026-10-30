@@ -41,4 +41,13 @@ public abstract class PluginGui implements InventoryHolder {
      * cancelled; handlers decide what it means (navigation, pickup, …).
      */
     protected abstract void onClick(InventoryClickEvent event);
+
+    /**
+     * A click outside this gui's window. The event is already cancelled, and most guis ignore it, so
+     * the default does nothing; a gui that reacts to it (logic.md §6.2, {@code gui.click_outside})
+     * overrides it.
+     */
+    protected void onOutsideClick(InventoryClickEvent event) {
+        // no gui reacts by default
+    }
 }
