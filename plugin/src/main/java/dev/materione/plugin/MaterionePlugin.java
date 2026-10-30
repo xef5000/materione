@@ -496,7 +496,7 @@ public final class MaterionePlugin extends JavaPlugin {
                         packsRoot,
                         () -> pipeline.allocation().preview(),
                         ItemMaterialPalette.supportedItemMaterials(),
-                        pipeline.guiRuleChecker()));
+                        pipeline.guiRuleChecker()),
                 // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
                 base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
