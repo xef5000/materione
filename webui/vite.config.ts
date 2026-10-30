@@ -13,8 +13,16 @@ export default defineConfig({
   plugins: [svelte()],
   server: {
     // The demo imports its recorded server snapshot from the shared fixture corpus; the GUI studio reads the
-    // smallcaps glyph file the Java compiler reads (its single source), so both sides draw the same font.
-    fs: { allow: [searchForWorkspaceRoot(process.cwd()), '../fixtures/golden', '../fonts/smallcaps'] },
+    // smallcaps glyph file and the vanilla default-font widths the Java compiler reads (their single sources),
+    // so both sides draw and measure the same font.
+    fs: {
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        '../fixtures/golden',
+        '../fonts/smallcaps',
+        '../fonts/vanilla-ascii',
+      ],
+    },
     proxy: {
       '/s': origin,
       '/editor/ws': { target: origin, ws: true },

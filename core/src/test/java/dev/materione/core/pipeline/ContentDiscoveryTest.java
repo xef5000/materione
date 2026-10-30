@@ -3,6 +3,7 @@ package dev.materione.core.pipeline;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.pipeline.ReloadScope;
 import dev.materione.core.diagnostics.DiagnosticsBusService;
 import dev.materione.core.diagnostics.QuarantineTracker;
@@ -89,8 +90,8 @@ class ContentDiscoveryTest {
     }
 
     @Test
-    void duplicateIdsResolveByDiscoveryOrderWhetherNestedOrSibling() throws IOException {
-        // siblings: the later file in path order owns the id (the rule siblings always had)
+    void duplicateIdsKeepTheFirstPathAndReportTheRestWhetherNestedOrSibling() throws IOException {
+        // siblings: the first file in path order keeps the id, the other is excluded (#194, MTR-0056)
         Path siblings = pack("siblings");
         write(siblings.resolve("items/a.yml"), "dup:\n  material: IRON_SWORD\n");
         write(siblings.resolve("items/b.yml"), "dup:\n  material: DIAMOND_SWORD\n");
@@ -101,11 +102,20 @@ class ContentDiscoveryTest {
 
         assertThat(runner.request(new ReloadScope.Everything(), packs()).completed()).isTrue();
 
-        // both declarations stay in their pack; only the graph node picks a winner
-        assertThat(resourcesWithId(NamespacedId.parse("siblings:dup"))).isEqualTo(2);
-        assertThat(winnerPath(NamespacedId.parse("siblings:dup"))).isEqualTo("items/b.yml");
-        assertThat(resourcesWithId(NamespacedId.parse("nested:dup"))).isEqualTo(2);
-        assertThat(winnerPath(NamespacedId.parse("nested:dup"))).isEqualTo("items/z/b.yml");
+        // the loser is not a resource at all: validation, graph and compile see one declaration
+        assertThat(resourcesWithId(NamespacedId.parse("siblings:dup"))).isEqualTo(1);
+        assertThat(winnerPath(NamespacedId.parse("siblings:dup"))).isEqualTo("items/a.yml");
+        assertThat(resourcesWithId(NamespacedId.parse("nested:dup"))).isEqualTo(1);
+        assertThat(winnerPath(NamespacedId.parse("nested:dup"))).isEqualTo("items/a.yml");
+        assertThat(quarantine.size()).isZero();
+        assertThat(diagnostics.recent(256).stream()
+                .filter(d -> d.code() == DiagnosticCodes.DUPLICATE_RESOURCE_ID)
+                .map(d -> d.message()))
+                .containsExactlyInAnyOrder(
+                        "resource siblings:dup (item) is declared in both items/a.yml and items/b.yml;"
+                                + " items/a.yml is used and items/b.yml's declaration is ignored",
+                        "resource nested:dup (item) is declared in both items/a.yml and items/z/b.yml;"
+                                + " items/a.yml is used and items/z/b.yml's declaration is ignored");
     }
 
     @Test

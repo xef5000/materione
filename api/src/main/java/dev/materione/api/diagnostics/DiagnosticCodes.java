@@ -258,6 +258,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0055", Severity.ERROR, "Permission denied for this operation");
 
     /**
+     * Two documents in one pack declare the same resource id for the same content type (plugin.md
+     * §5). The first document in path order keeps the id and the other declaration is ignored;
+     * authoring refuses to create a second declaration with this code.
+     */
+    public static final DiagnosticCode DUPLICATE_RESOURCE_ID =
+            new DiagnosticCode("MTR-0056", Severity.WARN, "Resource id declared in more than one file");
+
+    /**
      * A logic step was skipped at load (logic.md §10): it names an action or condition that is not
      * registered, or the registered type rejected its parameters while parsing. Only that step is
      * skipped; its siblings and the rest of the rule still load.
@@ -321,6 +329,7 @@ public final class DiagnosticCodes {
             GUI_BACKGROUND_EXHAUSTED,
             GUI_SLOT_ITEM_UNRESOLVED,
             PERMISSION_DENIED,
+            DUPLICATE_RESOURCE_ID,
             LOGIC_STEP_REJECTED);
 
     private DiagnosticCodes() {}

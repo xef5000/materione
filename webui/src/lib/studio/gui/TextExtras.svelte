@@ -23,7 +23,7 @@
   {#if font === 'default'}
     <p class="hint approx" data-testid="default-font-hint">
       <Icon name="info" size={14} />
-      <span><strong>Approximate preview.</strong> The client's own font draws this in game; the studio shows a lookalike, so letter shapes and widths can differ by a pixel or two.</span>
+      <span><strong>Approximate preview.</strong> The client's own font draws this in game; the studio shows a lookalike, so letter shapes can differ by a pixel or two. Widths are the client's, so the next run lines up.</span>
     </p>
   {:else if font === 'smallcaps'}
     <p class="hint exact" data-testid="smallcaps-hint">

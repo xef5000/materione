@@ -115,6 +115,30 @@ class TemplateAuthoringTest {
         assertThat(edited.ok()).as(edited.diagnostics().toString()).isTrue();
     }
 
+    /** #194: a second declaration of an id already in the pack is refused, not silently shadowed. */
+    @Test
+    void creatingAnIdAnotherFileAlreadyDeclaresWritesNothing() throws Exception {
+        Files.createDirectories(temp.resolve("packs/demo/items/weapons"));
+        Files.writeString(temp.resolve("packs/demo/items/weapons/blades.yml"),
+                "ruby_dagger:\n  material: PAPER\n");
+
+        ApiResult<AuthoringApi.DocumentView> refused = api.createResource(editor(),
+                new AuthoringApi.CreateResourceRequest("demo", "ruby_dagger", "Ruby Dagger", "items", null, false));
+
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.diagnostics().get(0).code())
+                .isEqualTo(dev.materione.api.diagnostics.DiagnosticCodes.DUPLICATE_RESOURCE_ID);
+        assertThat(refused.diagnostics().get(0).message())
+                .isEqualTo("resource ruby_dagger is already declared in items/weapons/blades.yml");
+        assertThat(temp.resolve("packs/demo/items/ruby_dagger.yml")).doesNotExist();
+
+        ApiResult<AuthoringApi.DocumentView> duplicated = api.duplicateResource(editor(),
+                new AuthoringApi.DuplicateResourceRequest("demo", "items/weapons/blades.yml", "ruby_dagger", null));
+        assertThat(duplicated.ok()).isFalse();
+        assertThat(duplicated.diagnostics().get(0).code())
+                .isEqualTo(dev.materione.api.diagnostics.DiagnosticCodes.DUPLICATE_RESOURCE_ID);
+    }
+
     @Test
     void anUnknownTemplateWritesNothing() {
         ApiResult<AuthoringApi.DocumentView> refused = api.createResource(editor(), dagger("nope"));

@@ -15,7 +15,6 @@ import dev.materione.content.gui.raster.PngEncoder;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -77,16 +76,7 @@ public final class GuiCompiler {
         var title = new GuiTitle(namespace, backgroundCodepoint, advance);
         var textFonts = new LinkedHashMap<String, List<Map<String, Object>>>();
         boolean smallcapsUsed = false;
-        var reported = new LinkedHashSet<String>();
         for (TextRun run : runs) {
-            if (!title.canPlace()) {
-                if (reported.add(run.layerId())) {
-                    report.skip(gui, run.layerId(),
-                            "its text follows a default-font run, whose width the compiler cannot measure; "
-                                    + "place it before that run, or use smallcaps");
-                }
-                continue;
-            }
             title.place(run.x(), run.y(), run.text(), run.font(), run.argb());
             String key = GuiFonts.text(namespace, run.font(), run.y());
             textFonts.computeIfAbsent(key, ignored -> run.font() == TitleSink.Font.SMALLCAPS
@@ -209,7 +199,7 @@ public final class GuiCompiler {
             }
             boolean supported = run.font() == TitleSink.Font.SMALLCAPS
                     ? SmallcapsFont.supports(character)
-                    : character >= 0x20 && character <= 0x7E;
+                    : VanillaAscii.supports(character);
             if (!supported) {
                 return "the " + (run.font() == TitleSink.Font.SMALLCAPS ? "smallcaps" : "default")
                         + " font draws printable ASCII only";

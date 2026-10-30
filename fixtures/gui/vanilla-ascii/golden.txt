@@ -1,0 +1,16 @@
+; The golden for the vanilla default-font advance table (gui.md section 9.4, #202).
+;
+; The table itself is a single source, fonts/vanilla-ascii/advances.txt, read by the Java compiler
+; (VanillaAscii) and the studio (font/vanilla-ascii.ts). This file pins it. It holds no widths:
+; the digest is over the canonical form, "space N" then "0xHH N" for U+0021..U+007E, each line ending
+; in LF, UTF-8. Both implementations recompute it from what they parsed (VanillaAsciiTest,
+; webui/test/vanilla-ascii.spec.ts). A changed table must change this file in the same commit, after
+; scripts/gui/derive-vanilla-ascii-advances.mjs --check has passed against the client jar it names.
+;
+; Provenance: Minecraft 26.1.2 client jar, assets/minecraft/textures/font/ascii.png sha1
+; b015d6cac492732cbbf29ad9a5e0fd463e75b84a (128x128, 1-bit palette). The 26.2 jar yields the same table.
+
+source-png-sha1 b015d6cac492732cbbf29ad9a5e0fd463e75b84a
+canonical-sha256 ddc5f8f674cb0b6e5fd928225f5b769131ca88c31f695b0fc33bb1e4b662292e
+; histogram of the 95 advances, space included (advance: count)
+histogram 2:8 3:2 4:11 5:4 6:68 7:2

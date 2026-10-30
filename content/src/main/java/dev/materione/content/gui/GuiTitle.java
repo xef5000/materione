@@ -22,9 +22,9 @@ import dev.materione.api.gui.TitleSink;
  * ink width plus one ({@code actualWidth + 1}), so after it the pen is at
  * {@code −8 + advance}, and a shift of {@code 8 − advance} returns it to the origin.
  *
- * <p>Text advances are known only for {@code smallcaps} (its own widths). A {@code default}
- * run's advance would need the vanilla ASCII ink widths, which the compiler does not carry;
- * after such a run the pen is unknown, so {@link #canPlace()} is false for the next run.
+ * <p>Text advances are known for both fonts: {@code smallcaps} from its own pixels
+ * ({@link SmallcapsFont}), {@code default} from the vanilla ASCII table ({@link VanillaAscii}, gui.md
+ * section 9.4). Every run therefore moves the pen by a known amount, and any run may follow any other.
  */
 final class GuiTitle {
 
@@ -40,7 +40,6 @@ final class GuiTitle {
     private final String namespace;
     private final StringBuilder out = new StringBuilder();
     private int pen;
-    private boolean penKnown = true;
 
     /**
      * Starts the title with the background glyph, which must be the first thing drawn so
@@ -58,24 +57,15 @@ final class GuiTitle {
         moveTo(0);
     }
 
-    /** Whether the pen position is known, so the next run can be placed. */
-    boolean canPlace() {
-        return penKnown;
-    }
-
     /**
      * Appends one text run whose top-left is {@code (x, y)} in GUI pixels. The caller has
-     * checked {@link #canPlace()} and the run's characters and row.
+     * checked the run's characters and row.
      */
     void place(int x, int y, String text, TitleSink.Font font, int argb) {
         moveTo(x - ORIGIN_X);
         out.append("<font:").append(GuiFonts.text(namespace, font, y)).append("><#")
                 .append(hex(argb)).append('>').append(text).append("</font>");
-        if (font == TitleSink.Font.SMALLCAPS) {
-            pen += SmallcapsFont.measure(text);
-        } else {
-            penKnown = false;
-        }
+        pen += font == TitleSink.Font.SMALLCAPS ? SmallcapsFont.measure(text) : VanillaAscii.measure(text);
     }
 
     String build() {

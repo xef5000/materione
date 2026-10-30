@@ -21,8 +21,9 @@ import java.util.List;
  * line and column — it never reads or blocks other files.
  *
  * <p>Targeted reloads: a full ({@code Everything}) run parses every pack;
- * {@code OnePack}/{@code FileSet} scopes parse only their targets and
- * splice onto the previous run's packs. A targeted scope expands to a
+ * {@code OnePack}/{@code FileSet} scopes splice onto the previous run's packs: untouched packs
+ * are reused, and each touched pack is rebuilt whole (unchanged documents come from the hash cache,
+ * so the rebuild reads but does not re-parse them). A targeted scope expands to a
  * full run whenever there is no previous run to build on — or when any
  * out-of-scope source drifted from its recorded fingerprint (the cache is
  * a correctness net first, a speed feature second).
@@ -35,7 +36,12 @@ public final class ParseStage {
 
     private record CachedDocument(String sha256, LosslessYamlDocument document) {}
 
-    private static final java.util.function.Predicate<Path> ALL_FILES = file -> true;
+    /**
+     * MTR-0056 findings per pack, from the last build of that pack. Kept beside the pack so a
+     * targeted run that rides an untouched pack over still reports its duplicates.
+     */
+    private final java.util.concurrent.ConcurrentHashMap<String, List<Diagnostic>> duplicateFindings =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Parses per the context's scope. Never throws.
@@ -45,6 +51,16 @@ public final class ParseStage {
             parse(context);
         } finally {
             publishParseFailures(context);
+            publishDuplicateFindings(context);
+        }
+    }
+
+    /** MTR-0056 for every pack in this run, including packs a targeted run rode over. */
+    private void publishDuplicateFindings(PipelineContext context) {
+        for (ContentPack pack : context.packs()) {
+            for (Diagnostic finding : duplicateFindings.getOrDefault(pack.id(), List.of())) {
+                context.diagnostics().publish(finding);
+            }
         }
     }
 
@@ -69,7 +85,7 @@ public final class ParseStage {
 
         if (!(scope instanceof ReloadScope.OnePack one) && !(scope instanceof ReloadScope.FileSet set)) {
             for (Path packDir : packDirs) {
-                context.packs().add(buildPack(context, packDir, ALL_FILES));
+                context.packs().add(buildPack(context, packDir));
             }
             pruneFingerprints(context, root, packDirs);
             return;
@@ -162,19 +178,18 @@ public final class ParseStage {
                     "targeted scope expanded to everything: " + expandReason,
                     null, null, null));
             for (Path packDir : packDirs) {
-                context.packs().add(buildPack(context, packDir, ALL_FILES));
+                context.packs().add(buildPack(context, packDir));
             }
             return;
         }
 
-        // splice: untouched packs ride over untouched, touched ones rebuild scoped
+        // splice: untouched packs ride over; touched packs are rebuilt whole. Their documents are
+        // cached by content hash, so the rebuild is cheap, and a partial rebuild would drop the
+        // unchanged siblings and get duplicate winners wrong (#194).
         var previousById = new java.util.LinkedHashMap<String, ContentPack>();
         for (ContentPack pack : context.previousPacks()) {
             previousById.put(pack.id(), pack);
         }
-        java.util.function.Predicate<Path> filter = one != null
-                ? file -> true
-                : file -> inScope.contains(relativeOf(root, file.toAbsolutePath().normalize()));
         for (var entry : previousById.entrySet()) {
             if (!touchedPacks.contains(entry.getKey())) {
                 context.packs().add(entry.getValue());
@@ -183,7 +198,7 @@ public final class ParseStage {
         for (String packId : touchedPacks.stream().sorted().toList()) {
             Path packDir = root.resolve(packId);
             if (Files.isDirectory(packDir)) {
-                context.packs().add(buildPack(context, packDir, filter));
+                context.packs().add(buildPack(context, packDir));
             }
         }
     }
@@ -202,7 +217,7 @@ public final class ParseStage {
         return relative.getNameCount() > 1 ? relative.getName(0).toString() : "";
     }
 
-    private ContentPack buildPack(PipelineContext context, Path packDir, java.util.function.Predicate<Path> include) {
+    private ContentPack buildPack(PipelineContext context, Path packDir) {
         String packId = packDir.getFileName().toString();
         Path manifestFile = packDir.resolve(PackLayout.MANIFEST_FILE);
         PackManifest manifest = null;
@@ -221,12 +236,20 @@ public final class ParseStage {
                     "no pack.yml in " + packId,
                     null, null, "create pack.yml with at least 'id: <pack-id>'"));
         }
+        // every document of the pack is parsed and every surviving resource is kept: a pack built
+        // here is exactly what a full run builds for it, whatever the reload scope was
         var resources = new ArrayList<ContentResource>();
         for (String dir : PackLayout.CONTENT_DIRS) {
-            parseDir(context, packDir, packId, dir, resources, include);
+            parseDir(context, packDir, packId, dir, resources);
+        }
+        DuplicateResources.Resolution duplicates = DuplicateResources.resolve(packDir, resources);
+        if (duplicates.diagnostics().isEmpty()) {
+            duplicateFindings.remove(packId);
+        } else {
+            duplicateFindings.put(packId, duplicates.diagnostics());
         }
         indexAssets(context, packDir, packId);
-        return new ContentPack(packId, packDir, manifest, resources);
+        return new ContentPack(packId, packDir, manifest, duplicates.kept());
     }
 
     /**
@@ -334,8 +357,7 @@ public final class ParseStage {
             (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
 
     private void parseDir(
-            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out,
-            java.util.function.Predicate<Path> include) {
+            PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
         Path dirPath = packDir.resolve(dir);
         String contentType = dir.endsWith("templates") ? "template" : dir.substring(0, dir.length() - 1);
         // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
@@ -346,9 +368,6 @@ public final class ParseStage {
                         "could not list " + dirPath + ": " + failure.getMessage(),
                         null, null, "check file permissions")));
         for (Path file : yamls) {
-            if (!include.test(file.toAbsolutePath().normalize())) {
-                continue; // out of a targeted scope's reach — rides over from the previous run
-            }
             var document = documentOf(context, file);
             if (document.parseError().isPresent()) {
                 continue;

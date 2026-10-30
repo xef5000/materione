@@ -204,11 +204,11 @@ it on screen (§9.1).
   and every provider uses `height = cell height`, so its scale is 1 and nothing is resampled.
   The small-caps cell is 16 px (rows ≥ −3 are drawable); the vanilla ASCII cell is 8 px, so a
   `default` run must start on row 5 or lower.
-- *Text advances.* A `smallcaps` run's advance is the sum of its characters' advances, known
-  exactly from the font's own pixels. A `default` run's advance would need the vanilla ASCII
-  ink widths, which the compiler does not carry, so the pen is unknown after one: only the last
-  text run of a title may be `default`. A run placed after it is reported (`MTR-0052`), never
-  guessed.
+- *Text advances.* Every run's advance is known exactly, so any run may follow any other. A
+  `smallcaps` run's advance is the sum of its characters' advances, from the font's own pixels.
+  A `default` run's advance is the sum of the vanilla ASCII advances, the 95 numbers of §9.4
+  (`fonts/vanilla-ascii/advances.txt`, since #202). Before #202 a `default` run made the pen
+  unknown and only the last run could be `default`; that restriction is gone.
 - *Text characters.* Printable ASCII only (`0x20`–`0x7E`). `<`, `\`, `&` and `§` are rejected,
   since they are MiniMessage and legacy-code syntax.
 
@@ -257,8 +257,8 @@ client's bitmap rule applied to the glyph's own pixels; the table is pinned by
 grayscale sheet loads as black cells (§9.5). Licence and metrics: `fonts/smallcaps/README.md`.
 `default` uses the client's own font: offset providers reference the vanilla bitmap textures by
 resource location (nothing redistributed); the studio preview of `default` is approximate and
-says so. Non-ASCII in `default` is a documented v1 limitation, and `default` text is restricted to
-its last run until its advances ship (§9.4).
+says so. Non-ASCII in `default` is a documented v1 limitation: the table covers printable ASCII
+only (§9.4).
 
 ---
 
@@ -387,8 +387,8 @@ the tools a designer expects.
 | Strokes are commands | `GuiHistory` | a stroke, fill or clear is **one** `PixelCommand` carrying a patch (touched pixels, before and after) rather than a copy of the canvas. The document does not change, so the history tracks the newest applied pixel command by identity: a stroke makes the studio dirty, undoing back to the saved state makes it clean, and undoing past a save, or painting something else after it, never looks clean. Paint-only saves send empty `edits` plus the PNG (section 7) |
 | Paint target | `GuiStudioState` | the selected paint layer, else the topmost visible unlocked one, else a new `Paint` layer is created by the first stroke (one more undo step); a locked or hidden target is explained in the status bar, never painted. A paint layer whose canvas no longer matches the rows is grown (overlap kept) |
 | Image layers | `studio/gui/ImageExtras.svelte`, `ImageChooser.svelte` | add by **upload** (file dialog, or drop a file on the canvas) or **from the Assets workspace** (the item studio's explorer). An upload is stored at `textures/gui/<gui-path>/<file>.png` with the file's own bytes (a PNG is never re-encoded; other formats the browser can read are converted) and rides the layout transaction as an `assets` entry; moving and resizing are the canvas's (nearest neighbour), with **Natural size** and 1x-4x scale buttons |
-| Text layers | `gui/font/`, `gui/text.ts`, `gui/compose.ts`, `studio/gui/TextEditOverlay.svelte` | **smallcaps is pixel-exact**: the canvas draws each glyph from the shared font source `fonts/smallcaps/smallcaps.txt` (section 4, *Fonts*, parsed by `font/smallcaps.ts`; `font/render.ts` draws it), at the pen the compiler computes, tinted by the colour; the browser spec compares every ink pixel against glyphs parsed independently from that file. The studio also draws the vanilla **Inventory** label as a faint ghost at (8, height - 94), since the client draws it over the background (section 9.2). **Double-click** (or `Enter`) edits in place: a hidden input takes the keyboard, the canvas keeps drawing the real font, and the overlay draws only caret and selection from the font's own advances; typing previews live without touching the history, `Enter`/leaving commits one undo step, `Escape` takes it back. `default` is drawn with the bundled Minecraftia and says **Approximate preview**; its advances only size the selection box |
-| Compiler rules, shown | `gui/validation.ts`, `gui/server.ts` (since #204, §10 #8) | the verdict is the server's: `gui.validate` answers for the document as shown, debounced as you edit, and each diagnostic lands on the layer it names. The studio holds no copy of the rules, so the list below is what the server enforces, stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, `default` above row 5, and **only the last text run may be `default`** (the default run is told it hides the layers after it; those layers are told why). Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
+| Text layers | `gui/font/`, `gui/text.ts`, `gui/compose.ts`, `studio/gui/TextEditOverlay.svelte` | **smallcaps is pixel-exact**: the canvas draws each glyph from the shared font source `fonts/smallcaps/smallcaps.txt` (section 4, *Fonts*, parsed by `font/smallcaps.ts`; `font/render.ts` draws it), at the pen the compiler computes, tinted by the colour; the browser spec compares every ink pixel against glyphs parsed independently from that file. The studio also draws the vanilla **Inventory** label as a faint ghost at (8, height - 94), since the client draws it over the background (section 9.2). **Double-click** (or `Enter`) edits in place: a hidden input takes the keyboard, the canvas keeps drawing the real font, and the overlay draws only caret and selection from the font's own advances; typing previews live without touching the history, `Enter`/leaving commits one undo step, `Escape` takes it back. `default` is drawn with the bundled Minecraftia and says **Approximate preview**; its advances are the client's own widths (`fonts/vanilla-ascii/advances.txt`, §9.4), so the pen and the selection box are exact |
+| Compiler rules, shown | `gui/validation.ts`, `gui/server.ts` (since #204, §10 #8) | the verdict is the server's: `gui.validate` answers for the document as shown, debounced as you edit, and each diagnostic lands on the layer it names. The studio holds no copy of the rules, so the list below is what the server enforces, stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, and `default` above row 5. Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
 | Item layers | `studio/gui/ItemExtras.svelte` | the picker is the item studio's (Materione items with their thumbnails, vanilla materials with their icons); a pick is stored `pack:id` or `minecraft:id` (a bare id resolves in the `materione` namespace in game, so it is never written). Items **snap to container slots only**: drags, nudges and typed slots resolve to the chest's own slots (`ItemComponent` rejects the rest). The canvas draws the real item icon (the existing thumbnail pipeline, `ItemIcon` with a `bare` mode) and the stack count |
 | Customize | `gui/customize.ts`, `gui/server.ts`, `GuiStudioState.customize`, `GuiItemAppearance.svelte` | see below; `gui.customizeItem` decides the item's id and refusals (§10 #2) |
 
@@ -574,6 +574,12 @@ on deriving the numbers from the Mojang asset. #188 records the decision and doe
 it. The implementation is the follow-up issue the owner files. When it lands, lift the "last
 default-font run only" restriction for printable ASCII.
 
+*Shipped (#202).* The table is `fonts/vanilla-ascii/advances.txt`, derived by
+`scripts/gui/derive-vanilla-ascii-advances.mjs` from the client jar, read by `VanillaAscii` (Java)
+and `font/vanilla-ascii.ts` (studio), and pinned by `fixtures/gui/vanilla-ascii/golden.txt`. The
+"last default-font run only" restriction is lifted (see *Decisions taken in #202*). The row-5 limit
+is a height rule, not a width question, and stays.
+
 ### 9.5 Smallcaps sheet format (a defect, fixed in #188)
 
 The placeholder sheet was **grayscale**, with no alpha. On 26.1.2 the client loads it as an opaque
@@ -670,10 +676,9 @@ These fill the gaps §4 leaves open. Each one is reversible by the owner.
 5. **Font keys:** `<ns>:gui` for the background; `<ns>:gui/smallcaps_y<Y>` and
    `<ns>:gui/default_y<Y>` for text, one offset font per (font, y). An identical provider from
    two GUIs is emitted once (`PackCompiler.Emitter.fontProvider`).
-6. **Default-font text is restricted.** Its advance is not known to the compiler, so only the
-   last text run of a title may use `default`; a run after it, a run on row 4 or above, and a
-   non-ASCII run are skipped with `MTR-0052`. Shipping a width table of the vanilla ASCII ink
-   widths would lift the restriction; that is a metric-data decision for the owner.
+6. **Default-font text is restricted.** *(Superseded in part by #202: the "only the last run"
+   rule is gone, since the vanilla widths are shipped. A run on row 4 or above and a non-ASCII run
+   are still skipped with `MTR-0052`.)*
 7. **Colours stay `#RRGGBB` or `#AARRGGBB`** (#183's `GuiComponentConfiguration.color`). The
    shared vectors use the same order, and the studio writes the same strings.
 8. **Raster components accept negative origins and zero sizes** (`x`, `y` in −512..512;
@@ -751,7 +756,7 @@ These fill gaps the sections above leave open. Each one is reversible by the own
 3. **Item layers address container slots only**, matching `ItemComponent` (the player inventory is vanilla and not an item layer target); the studio snaps and flags accordingly instead of writing a layer the compiler would skip.
 4. **Pixel edits are commands outside the document.** The history tracks them by identity of the newest applied pixel command, so dirtiness is exact without copying canvases.
 5. **Uploads keep the original PNG bytes** and are stored under `textures/gui/<gui-path>/`; they ride the layout transaction like a paint layer's PNG, so an undone or deleted layer never leaves a file behind.
-6. **The default-font warning stays until #202 ships.** The studio flags `default` above row 5 and any text after a `default` run today; once the vanilla ASCII widths ship (#202) those restrictions go and so does the warning.
+6. **The default-font warning stays until #202 ships.** *(Resolved by #202: the text-after-`default` flag is gone with the restriction. The `default`-above-row-5 flag remains, as the server's verdict.)*
 ### Decisions taken in #185 (runtime, live refresh and preview)
 
 These fill the gaps §5 leaves open. Each one is reversible by the owner.
@@ -809,3 +814,16 @@ These move the GUI rules from the studio into the API (api.md §3.9). Each decis
 12. **The studio keeps `authoring.setFields` for saves.** Its layer model is a whole-list diff, so the changed `layers` value is the natural unit; `gui.edit` is the structural path for API consumers. Switching the studio's save would mean deriving the five structural edits from the diff, which loses the one-shot "the layout as it stands" property the studio relies on.
 13. **Without the `gui` capability the studio degrades, and says so.** A connection whose session blob does not advertise `gui` (an older plugin, or the demo, which has no blob) gets no verdict and no Customize: the studio shows an explicit banner, draws no skip flags, and disables Customize with the reason. Layout editing and saves are unchanged, since they use `setFields` as before.
 14. **Demo and browser tests.** The demo server has no compiler, so its studio reports the verdict as unavailable; `gui-studio.pw.ts` asserts that state, and the live Customize flow is pinned by the QA catalog (`gui.studio-item-customize`) on a running server.
+
+### Decisions taken in #202 (vanilla ASCII advance widths)
+
+These implement §9.4 and lift the `default`-run restriction. Each decision is reversible by the owner.
+
+1. **One numeric table, one source.** The 95 advances (space included) live in `fonts/vanilla-ascii/advances.txt`. The Java compiler (`VanillaAscii`, read from the classpath the way `SmallcapsFont` reads its file) and the studio (`font/vanilla-ascii.ts`, imported raw) parse that file, so nothing is hand-copied. The golden (`fixtures/gui/vanilla-ascii/golden.txt`) pins the table's canonical digest and histogram, and both sides test it. The texture is never written anywhere.
+2. **The table is derived, not remembered, and the derivation is reproducible.** `scripts/gui/derive-vanilla-ascii-advances.mjs <client.jar>` reads `assets/minecraft/textures/font/ascii.png` and `assets/minecraft/font/include/space.json` from the client jar (a zip read with Node's built-in `zlib`, no dependency) and applies the client's bitmap rule to each 8 px cell. `--check` fails when the file on disk differs from the jar. The source is the Minecraft 26.1.2 jar of the launcher install; the 26.2 jar yields the same table. The texture is a 128 × 128 **1-bit palette** PNG: index 0 is transparent, index 1 is white ink, so the derivation decodes palette and `tRNS` alpha as well as RGBA. Its SHA-1 is in the table's header.
+3. **Space is 4, from the space provider.** Its cell in `ascii.png` is empty, so its width comes from `include/space.json`, the value the offset font's `space` provider already emitted (`GuiFonts.defaults`).
+4. **The restriction is lifted by width, not by a rule.** A `default` run moves the pen by `VanillaAscii.measure`, so `GuiTitle` no longer tracks an unknown pen (`canPlace` is gone) and any run may follow any other. A test pins a `default` run followed by a `smallcaps` run and by a second `default` run, at the measured shift.
+5. **What remains of the restriction.** A `default` run must start on row 5 or lower (`ascent ≤ height`: the vanilla cell is 8 px and the ascent for row `y` is `13 − y`), so rows 0–4 stay `MTR-0052`. Non-ASCII in `default` stays `MTR-0052`, since the table covers `0x20`–`0x7E` only. Neither is a width question, so no table solves either.
+6. **Diagnostics.** `MTR-0052` loses its "text placed after a `default` run" cause (plugin.md §5). The studio's text-after-`default` flag goes with it, because that flag is the server's verdict and the server no longer reports the case. The `default`-above-row-5 flag remains.
+7. **The studio's `default` preview keeps its approximate glyphs and says so**, but its pen and selection box use the exact widths. Only letter shapes are approximate now.
+8. **Existing goldens do not change.** The shared raster vectors and the pack goldens contain no `default` run after another run, and the `guitext` fixture has its `default` run last, so their bytes are unchanged.

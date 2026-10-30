@@ -38,6 +38,8 @@ const STUDIO_COVERS = [
   'fixtures/gui/raster/**',
   'fonts/smallcaps/**',
   'fixtures/gui/smallcaps/**',
+  'fonts/vanilla-ascii/**',
+  'fixtures/gui/vanilla-ascii/**',
   'content/src/main/java/dev/materione/content/gui/**',
   'web/src/main/java/dev/materione/web/rpc/ops/EditorContentOps.java',
   'core/src/main/java/dev/materione/core/authoring/AuthoringApiImpl.java',
@@ -370,6 +372,51 @@ export default [
         ctx.expect(await page.getByTestId('text-issue').first().innerText()).toContain('row 5 or lower');
         await page.locator('[data-flag]').first().waitFor({ state: 'visible', timeout: 10_000 });
         ctx.expect(await page.locator('[data-flag]').count()).toBeGreaterThan(0);
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.studio-text-default-chain',
+    title: 'sample:qa_chest text layers: a default run followed by a smallcaps run on the same row is NOT flagged (the client widths place it, gui.md 9.4), the smallcaps run is pixel-exact on the canvas, and a default run above row 5 is still flagged',
+    dependsOn: ['gui.studio-new-chest'],
+    covers: STUDIO_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        // the default run is the first layer, so the compiler draws it before the smallcaps run after it
+        const textButton = page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Text' });
+        await textButton.click();
+        await page.getByTestId('gui-text-edit').waitFor({ state: 'visible', timeout: 10_000 });
+        await page.keyboard.type('Shop');
+        await page.keyboard.press('Enter');
+        await page.getByRole('group', { name: 'Font' }).getByRole('button', { name: 'Default', exact: true }).click();
+        await page.getByRole('textbox', { name: 'X', exact: true }).fill('8');
+        await page.getByRole('textbox', { name: 'Y', exact: true }).fill('2');
+        await page.keyboard.press('Enter');
+        // positive control: the verdict has arrived once the default run above row 5 is flagged
+        await page.getByTestId('text-issue').first().waitFor({ state: 'visible', timeout: 10_000 });
+        ctx.expect(await page.getByTestId('text-issue').first().innerText()).toContain('row 5 or lower');
+        await page.getByRole('textbox', { name: 'Y', exact: true }).fill('6');
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => document.querySelectorAll('[data-testid=text-issue]').length === 0, null,
+          { timeout: 10_000 });
+
+        // a smallcaps run after it: the old "text after a default run" flag must not come back
+        await textButton.click();
+        await page.getByTestId('gui-text-edit').waitFor({ state: 'visible', timeout: 10_000 });
+        await page.keyboard.type('Gold');
+        await page.keyboard.press('Enter');
+        await page.getByRole('textbox', { name: 'X', exact: true }).fill('40');
+        await page.getByRole('textbox', { name: 'Y', exact: true }).fill('6');
+        await page.keyboard.press('Enter');
+        await page.waitForTimeout(1500); // the verdict is debounced (gui.validate, §6)
+        ctx.expect(await page.getByTestId('text-issue').count()).toBe(0);
+        ctx.expect(await page.locator('[data-flag]').count()).toBe(0);
+        for (const [px, py] of inkPixels('Gold', 40, 6)) ctx.expect(await pixel(page, px, py)).toEqual([64, 64, 64, 255]);
       } finally {
         removeFixtureFile();
       }
