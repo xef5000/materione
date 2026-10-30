@@ -33,6 +33,8 @@
       ],
       "actions": [
         {
+          "available": true,
+          "category": "flow",
           "deferred": false,
           "description": "Cancels the underlying game event after the actions run",
           "displayName": "Cancel the event",
@@ -51,10 +53,14 @@
               "uiHint": "toggle"
             }
           ],
+          "registeredBy": "materione",
           "shorthand": "value",
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "threading": "any"
         },
         {
+          "available": true,
+          "category": "player",
           "deferred": false,
           "description": "Shows text to the player, on the action bar, or to everyone",
           "displayName": "Send message",
@@ -89,10 +95,14 @@
               "uiHint": "select"
             }
           ],
+          "registeredBy": "materione",
           "shorthand": "text",
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
         },
         {
+          "available": true,
+          "category": "player",
           "deferred": false,
           "description": "Applies a potion effect to the player",
           "displayName": "Give potion effect",
@@ -134,9 +144,13 @@
               "uiHint": "number"
             }
           ],
-          "sinceVersion": "2.0.0"
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
         },
         {
+          "available": true,
+          "category": "server",
           "deferred": true,
           "description": "Runs a server command; %player% and ${...} are filled in",
           "displayName": "Run command",
@@ -157,7 +171,8 @@
               "advanced": false,
               "allowedValues": [
                 "console",
-                "player"
+                "player",
+                "op"
               ],
               "default": "console",
               "description": "Who runs it",
@@ -170,10 +185,14 @@
               "uiHint": "select"
             }
           ],
+          "registeredBy": "materione",
           "shorthand": "command",
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "threading": "global"
         },
         {
+          "available": true,
+          "category": "data",
           "deferred": false,
           "description": "Stores a value for the rest of this event chain",
           "displayName": "Set variable",
@@ -202,9 +221,13 @@
               "uiHint": "text"
             }
           ],
-          "sinceVersion": "2.0.0"
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0",
+          "threading": "any"
         },
         {
+          "available": true,
+          "category": "player",
           "deferred": false,
           "description": "Plays a sound at the player",
           "displayName": "Play sound",
@@ -246,10 +269,55 @@
               "uiHint": "number"
             }
           ],
+          "registeredBy": "materione",
           "shorthand": "sound",
-          "sinceVersion": "2.0.0"
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
         }
       ],
+      "categories": [
+        {
+          "builtIn": true,
+          "displayName": "Player",
+          "id": "player"
+        },
+        {
+          "builtIn": true,
+          "displayName": "GUI",
+          "id": "gui"
+        },
+        {
+          "builtIn": true,
+          "displayName": "World",
+          "id": "world"
+        },
+        {
+          "builtIn": true,
+          "displayName": "Server",
+          "id": "server"
+        },
+        {
+          "builtIn": true,
+          "displayName": "Economy",
+          "id": "economy"
+        },
+        {
+          "builtIn": true,
+          "displayName": "Data",
+          "id": "data"
+        },
+        {
+          "builtIn": true,
+          "displayName": "Flow",
+          "id": "flow"
+        },
+        {
+          "builtIn": true,
+          "displayName": "Integration",
+          "id": "integration"
+        }
+      ],
+      "conditions": [],
       "events": [
         {
           "description": "The player left- or right-clicks with the item, or right-clicks the furniture",
@@ -402,6 +470,7 @@
           "id": "custom"
         }
       ],
+      "functions": [],
       "mechanics": [
         {
           "activation": "Right-clicking with the item opens its storage; contents save when the inventory closes",
@@ -622,7 +691,2523 @@
           "type": "enum",
           "uiHint": "select"
         }
-      ]
+      ],
+      "steps": [
+        {
+          "description": "Runs a registered action, optionally with a chance or a delay. A failure never aborts the flow.",
+          "displayName": "Action",
+          "id": "action",
+          "parameters": [
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "Probability from 0 to 1 that the action runs",
+              "id": "chance",
+              "label": "Chance",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "0",
+              "description": "Ticks to wait before the action runs",
+              "id": "delay",
+              "label": "Delay",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "supported": true
+        },
+        {
+          "description": "Runs one list of steps when a condition holds and another when it does not.",
+          "displayName": "If",
+          "id": "if",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The condition",
+              "id": "if",
+              "label": "If",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "description": "Steps run when it holds",
+              "id": "then",
+              "label": "Then",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "description": "Steps run when it does not",
+              "id": "else",
+              "label": "Else",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "supported": false
+        },
+        {
+          "description": "Runs steps in order until one fails; then runs the else steps and stops the flow.",
+          "displayName": "Require",
+          "id": "require",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "Steps that must all succeed",
+              "id": "require",
+              "label": "Require",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "description": "Steps run when one fails",
+              "id": "else",
+              "label": "Else",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "supported": false
+        },
+        {
+          "description": "Suspends the flow for a number of ticks without blocking a thread.",
+          "displayName": "Wait",
+          "id": "wait",
+          "parameters": [
+            {
+              "advanced": false,
+              "id": "ticks",
+              "label": "Ticks",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "supported": false
+        },
+        {
+          "description": "Ends this run, optionally cancelling the underlying event.",
+          "displayName": "Stop",
+          "id": "stop",
+          "parameters": [
+            {
+              "advanced": false,
+              "id": "cancel",
+              "label": "Cancel",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "supported": false
+        },
+        {
+          "description": "Runs a named flow of the same resource inline.",
+          "displayName": "Call",
+          "id": "call",
+          "parameters": [
+            {
+              "advanced": false,
+              "id": "flow",
+              "label": "Flow",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "description": "Arguments the flow reads as args.*",
+              "id": "with",
+              "label": "With",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "supported": false
+        },
+        {
+          "description": "Runs the first branch whose condition holds.",
+          "displayName": "Choose",
+          "id": "choose",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The branches, each an if/then pair",
+              "id": "choose",
+              "label": "Choose",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": true,
+              "description": "Steps run when no branch holds",
+              "id": "else",
+              "label": "Else",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "supported": false
+        }
+      ],
+      "triggers": [
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "The furniture's id",
+              "hosts": [
+                "furniture"
+              ],
+              "path": "furniture.id",
+              "type": "string"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player left- or right-clicks with the item, or right-clicks the furniture",
+          "details": [
+            "right",
+            "left"
+          ],
+          "displayName": "Click",
+          "filters": [],
+          "firedBy": [
+            "item",
+            "furniture"
+          ],
+          "id": "click",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "The custom block's id",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.id",
+              "type": "string"
+            },
+            {
+              "description": "The block's state-space technique",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.technique",
+              "type": "string"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player breaks a block while holding the item, or breaks this block",
+          "details": [],
+          "displayName": "Break",
+          "filters": [],
+          "firedBy": [
+            "item",
+            "block"
+          ],
+          "id": "break",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The custom block's id",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.id",
+              "type": "string"
+            },
+            {
+              "description": "The block's state-space technique",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.technique",
+              "type": "string"
+            },
+            {
+              "description": "The furniture's id",
+              "hosts": [
+                "furniture"
+              ],
+              "path": "furniture.id",
+              "type": "string"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The block or furniture is placed",
+          "details": [],
+          "displayName": "Place",
+          "filters": [],
+          "firedBy": [
+            "block",
+            "furniture"
+          ],
+          "id": "place",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The custom block's id",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.id",
+              "type": "string"
+            },
+            {
+              "description": "The block's state-space technique",
+              "hosts": [
+                "block"
+              ],
+              "path": "block.technique",
+              "type": "string"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player left- or right-clicks the placed block",
+          "details": [
+            "right",
+            "left"
+          ],
+          "displayName": "Interact",
+          "filters": [],
+          "firedBy": [
+            "block"
+          ],
+          "id": "interact",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The item becomes the held item",
+          "details": [],
+          "displayName": "Equip",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "equip",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The item stops being the held item",
+          "details": [],
+          "displayName": "Unequip",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "unequip",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player drops the item",
+          "details": [],
+          "displayName": "Drop",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "drop",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player picks the item up",
+          "details": [],
+          "displayName": "Pick up",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "pickup",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player eats or drinks the item",
+          "details": [],
+          "displayName": "Consume",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "consume",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The item takes durability damage",
+          "details": [],
+          "displayName": "Damage",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "damage",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "The player's X coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.x",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Y coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.y",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's Z coordinate",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.z",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's yaw",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.yaw",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's pitch",
+              "hosts": [
+                "item"
+              ],
+              "path": "player.pitch",
+              "type": "decimal"
+            },
+            {
+              "description": "X of the event location",
+              "hosts": [],
+              "path": "location.x",
+              "type": "decimal"
+            },
+            {
+              "description": "Y of the event location",
+              "hosts": [],
+              "path": "location.y",
+              "type": "decimal"
+            },
+            {
+              "description": "Z of the event location",
+              "hosts": [],
+              "path": "location.z",
+              "type": "decimal"
+            },
+            {
+              "description": "World name of the event location",
+              "hosts": [],
+              "path": "location.world",
+              "type": "string"
+            },
+            {
+              "description": "World name",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.name",
+              "type": "string"
+            },
+            {
+              "description": "World time in ticks",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "world.time",
+              "type": "integer"
+            },
+            {
+              "description": "The Materione item id, blank for a vanilla item",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.id",
+              "type": "string"
+            },
+            {
+              "description": "The item's vanilla material, lowercase",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.material",
+              "type": "string"
+            },
+            {
+              "description": "The stack size",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.amount",
+              "type": "integer"
+            },
+            {
+              "description": "Durability used, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_used",
+              "type": "integer"
+            },
+            {
+              "description": "Maximum durability, once the durability mechanic has counted",
+              "hosts": [
+                "item"
+              ],
+              "path": "item.durability_max",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [
+                "item",
+                "block"
+              ],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            }
+          ],
+          "description": "The player dies carrying the item",
+          "details": [],
+          "displayName": "Death",
+          "filters": [],
+          "firedBy": [
+            "item"
+          ],
+          "id": "death",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "Inventory click",
+          "filters": [],
+          "firedBy": [],
+          "id": "inv_click",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "Tick",
+          "filters": [],
+          "firedBy": [],
+          "id": "tick",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "Menu click",
+          "filters": [],
+          "firedBy": [],
+          "id": "menu.click",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "HUD threshold",
+          "filters": [],
+          "firedBy": [],
+          "id": "hud.threshold",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "Dialog submit",
+          "filters": [],
+          "firedBy": [],
+          "id": "dialog.submit",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [],
+          "description": "Reserved; not fired yet",
+          "details": [],
+          "displayName": "Custom",
+          "filters": [],
+          "firedBy": [],
+          "id": "custom",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        }
+      ],
+      "version": 2
     },
     "guiComponents": [
       {

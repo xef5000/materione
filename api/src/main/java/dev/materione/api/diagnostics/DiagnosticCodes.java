@@ -265,6 +265,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode DUPLICATE_RESOURCE_ID =
             new DiagnosticCode("MTR-0056", Severity.WARN, "Resource id declared in more than one file");
 
+    /**
+     * A logic step was skipped at load (logic.md §10): it names an action or condition that is not
+     * registered, or the registered type rejected its parameters while parsing. Only that step is
+     * skipped; its siblings and the rest of the rule still load.
+     */
+    public static final DiagnosticCode LOGIC_STEP_REJECTED =
+            new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -321,7 +329,8 @@ public final class DiagnosticCodes {
             GUI_BACKGROUND_EXHAUSTED,
             GUI_SLOT_ITEM_UNRESOLVED,
             PERMISSION_DENIED,
-            DUPLICATE_RESOURCE_ID);
+            DUPLICATE_RESOURCE_ID,
+            LOGIC_STEP_REJECTED);
 
     private DiagnosticCodes() {}
 

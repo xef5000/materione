@@ -29,6 +29,8 @@ export default [
       'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
       'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
     ],
     dependsOn: ['commands.give-basic'],
     steps: async (ctx) => {
@@ -95,6 +97,8 @@ return count.toString()`);
     covers: [
       'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
       'behavior/src/main/java/dev/materione/behavior/**',
       'fixtures/packs/world/**',
     ],
@@ -172,6 +176,8 @@ return count.toString()`);
     covers: [
       'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/ItemAutoUpdater.java',
       'behavior/src/main/java/dev/materione/behavior/**',
       'fixtures/packs/world/**',
@@ -334,6 +340,8 @@ return 'attacked'`);
       'plugin/src/main/java/dev/materione/plugin/runtime/mechanics/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
       'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
       'behavior/src/main/java/dev/materione/behavior/**',
       'platform/src/main/java/dev/materione/platform/items/MaterioneStacks.java',
       'fixtures/packs/world/**',

@@ -22,8 +22,9 @@ class DiagnosticCodesTest {
             assertThat(code.summary()).isNotBlank();
         }
         // a deliberate pin: adding a code is an API change, so it moves this number on purpose
-        // (MTR-0054 GUI slot item not live, MTR-0055 permission denied: gui.md §5)
-        // MTR-0056 duplicate resource id across files (plugin.md §5, #194)
-        assertThat(DiagnosticCodes.all()).hasSize(56);
+        // (MTR-0054 GUI slot item not live, MTR-0055 permission denied: gui.md §5;
+        // MTR-0056 duplicate resource id across files: plugin.md §5, #194;
+        // MTR-0057 logic step rejected at load: logic.md §10, §14)
+        assertThat(DiagnosticCodes.all()).hasSize(57);
     }
 }

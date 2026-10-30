@@ -178,6 +178,8 @@ export default [
       'core/src/main/java/dev/materione/core/blocks/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/blocks/**',
       'plugin/src/main/java/dev/materione/plugin/runtime/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/**',
+      'api/src/main/java/dev/materione/api/logic/**',
       'behavior/src/main/java/dev/materione/behavior/**',
       'fixtures/packs/sample/blocks/**',
       'fixtures/packs/sample/items/**',

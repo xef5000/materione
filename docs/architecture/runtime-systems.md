@@ -52,6 +52,10 @@ Cross-cutting runtime rules:
 > **M6 upgrade:** [`logic.md`](logic.md) turns `do:` lists into structured flows (`if`/`require`/
 > `choose`/`wait`/`stop`/`call`), replaces `ActionExecutor` with typed `ActionType`/`ConditionType`/
 > `TriggerType` SPIs in `api`, and adds declared persistent variables. Every M2 rule keeps its meaning.
+> *As built (#207):* the SPIs, the registries and the six typed built-in actions have shipped
+> (`MaterioneAPI.logic()`, [`api.md`](api.md) §3.11); the event taxonomy below is now the set of
+> built-in trigger registrations, and rules parse their actions at load. The structured flows are
+> the next step ([`logic.md`](logic.md) §14).
 
 ```
 Rule = { id, on: EventSelector, if: [Conditions], do: [Actions], opts }

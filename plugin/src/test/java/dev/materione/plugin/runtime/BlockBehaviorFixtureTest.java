@@ -35,7 +35,9 @@ class BlockBehaviorFixtureTest {
                 .orElseThrow();
         assertThat(block.behavior()).isNotEmpty();
 
-        ParsedRules rules = RuleParser.compile(block.id(), block.behavior());
+        ParsedRules rules = RuleParser.compile(block.id(), block.behavior(),
+                dev.materione.plugin.logic.LogicTestSupport
+                        .withBuiltIns(new dev.materione.core.registry.RegistryService()).lookup());
         assertThat(rules.problems()).isEmpty();
         assertThat(rules.rules()).hasSize(1);
         assertThat(rules.rules().get(0).on().type()).isEqualTo("interact");

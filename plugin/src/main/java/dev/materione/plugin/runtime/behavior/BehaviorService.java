@@ -3,7 +3,8 @@ package dev.materione.plugin.runtime.behavior;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.scheduling.SchedulingGateway;
-import dev.materione.behavior.expr.EvaluationContext;
+import dev.materione.api.logic.Facets;
+import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.behavior.runtime.CooldownStore;
 import dev.materione.behavior.runtime.DeferredRunner;
@@ -50,17 +51,6 @@ public final class BehaviorService {
         // resolved per event, never captured: reloads swap the reference
         this.registries = runtime::registries;
         this.engine = new RuleEngine(deferredRunner(), diagnostics::publish, new CooldownStore());
-        BukkitActionExecutors.registerAll(engine);
-    }
-
-    /** The registered events, actions and rule options (editor self-description). */
-    public dev.materione.api.registry.BehaviorVocabulary vocabulary() {
-        return engine.vocabulary();
-    }
-
-    /** Number of registered action types (doctor surface). */
-    public int executorCount() {
-        return engine.registeredExecutorCount();
     }
 
     /**
@@ -153,7 +143,7 @@ public final class BehaviorService {
         furnitureVars.put("id", furnitureId.toString());
         root.put("furniture", furnitureVars);
         root.put("vars", new LinkedHashMap<String, Object>());
-        BehaviorEvent event = new BehaviorEvent(eventType, detail, new EvaluationContext(root), cancellable, player);
+        BehaviorEvent event = new BehaviorEvent(eventType, detail, logicContext(root, player), cancellable, player);
         engine.fire(rules, event);
         boolean cancelRequested = event.isCancelRequested();
         if (cancelRequested && cancellable != null) {
@@ -179,7 +169,7 @@ public final class BehaviorService {
      * {@code player/item/location/server/vars}. {@code vars} is the single
      * mutable namespace ({@code set_var} writes there).
      */
-    private EvaluationContext buildContext(Player player, ItemStack stack) {
+    private MapLogicContext buildContext(Player player, ItemStack stack) {
         var root = new LinkedHashMap<String, Object>();
         Location location = player.getLocation();
         World world = location.getWorld();
@@ -219,7 +209,17 @@ public final class BehaviorService {
         root.put("server", serverVars);
 
         root.put("vars", new LinkedHashMap<String, Object>());
-        return new EvaluationContext(root);
+        return logicContext(root, player);
+    }
+
+    /**
+     * The run's context: the variable tree plus what only the platform can supply, the player
+     * facet and PlaceholderAPI resolution for that player.
+     */
+    private static MapLogicContext logicContext(Map<String, Object> root, Player player) {
+        return new MapLogicContext(root)
+                .with(Facets.PLAYER, player)
+                .withPlaceholders(text -> PlaceholderResolver.apply(player, text));
     }
 
     private static Map<String, Object> itemContext(ItemStack stack) {
@@ -251,7 +251,7 @@ public final class BehaviorService {
      * event (explosions and pistons fire no events), plus
      * {@code location/world/block/vars}.
      */
-    private EvaluationContext buildBlockContext(
+    private MapLogicContext buildBlockContext(
             Player player, Location location, NamespacedId blockId, String techniqueName) {
         var root = new LinkedHashMap<String, Object>();
         if (player != null) {
@@ -288,7 +288,7 @@ public final class BehaviorService {
         root.put("server", serverVars);
 
         root.put("vars", new LinkedHashMap<String, Object>());
-        return new EvaluationContext(root);
+        return logicContext(root, player);
     }
 
     /** Deferral through the gateway: entity-anchored when possible, global otherwise. */

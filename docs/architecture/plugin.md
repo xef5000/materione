@@ -142,10 +142,12 @@ Rules (enforced in review + by an ArchUnit-style ban test):
   from: display name, description, parameter schema (id/type/range/default/required),
   since-version, and an optional one-sentence `activation` (when the entry acts in game; built-in
   mechanics declare it). One source of truth for editor forms, docs, and tab completion.
-  Hand-written per-mechanic editor forms are forbidden — they drift. *As built (M5):* actions are
-  not yet a registry; each `ActionExecutor` carries its own `describe()`/`shorthand()` and the
-  event taxonomy (`EventTypes.describe()`) records which content types fire each event. The editor
-  reads both, with the mechanics registry, through `authoring.describe` (web.md §4.2).
+  Hand-written per-mechanic editor forms are forbidden — they drift. *As built (M6, #207):*
+  actions, conditions, triggers and expression functions are registries (`actions`, `conditions`,
+  `triggers`, `expression-functions`; [`logic.md`](logic.md) §4, [`api.md`](api.md) §3.11). Each
+  type carries its own description, and the built-in trigger registrations record which content
+  types fire each event. The editor reads them, with the mechanics registry, through
+  `authoring.describe` (web.md §4.2), whose `behavior` section is `LogicApi.vocabulary()`.
 - **Module metadata** (*M5, editor item-studio rework*). `ParameterSchema.EditorMetadata` carries
   additive presentation fields a content type uses to declare that a parameter is a **module** —
   one thing a user wants, an add/remove card in the editor's module studios (issue #152):
@@ -399,6 +401,13 @@ The pipeline's duplicate-id rule (plugin.md §4.2, #194) adds one code:
 | Code | Severity | Meaning and recovery |
 |---|---|---|
 | `MTR-0056` | warning | Two documents in one pack declare the same resource id for the same content type. Discovery order decides the winner (the first path, plain string order, keeps the id); the other declaration is ignored, is not a resource, and is reported with its file. Rename one declaration or move it to another pack. The same code is an **error** from the authoring API: creating or duplicating a resource whose id a file in the pack already declares is refused and nothing is written. |
+
+The M6 logic SPI ([`logic.md`](logic.md) §4, §14) parses every action when its rule loads, so a bad
+step is found at load rather than when a player first triggers it:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
 
 ---
 

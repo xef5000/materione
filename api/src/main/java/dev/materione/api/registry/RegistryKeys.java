@@ -14,11 +14,17 @@ public final class RegistryKeys {
     /** {@link dev.materione.api.mechanics.Mechanic} implementations (canned ECA bundles). */
     public static final RegistryKey MECHANICS = new RegistryKey("mechanics");
 
-    /** ECA action executors (D4 — one action vocabulary everywhere). */
+    /** {@link dev.materione.api.logic.ActionType} implementations (D4 — one action vocabulary everywhere). */
     public static final RegistryKey ACTIONS = new RegistryKey("actions");
 
-    /** ECA condition types. */
+    /** {@link dev.materione.api.logic.ConditionType} implementations. */
     public static final RegistryKey CONDITIONS = new RegistryKey("conditions");
+
+    /** {@link dev.materione.api.logic.TriggerType} descriptions: the events a rule can answer (logic.md §4.3). */
+    public static final RegistryKey TRIGGERS = new RegistryKey("triggers");
+
+    /** {@link dev.materione.api.logic.ExpressionFunction} implementations callable from expressions (logic.md §4.2). */
+    public static final RegistryKey EXPRESSION_FUNCTIONS = new RegistryKey("expression-functions");
 
     /** Delivery hosting backends (master §8.4). */
     public static final RegistryKey DELIVERY_BACKENDS = new RegistryKey("delivery-backends");

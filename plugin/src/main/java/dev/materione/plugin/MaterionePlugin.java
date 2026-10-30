@@ -81,6 +81,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.DatapackService datapackService;
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
     private dev.materione.plugin.runtime.gui.GuiComponentsService guiComponents;
+    private dev.materione.plugin.logic.LogicService logic;
     private dev.materione.plugin.runtime.EditorTransportService editorTransport;
     /** API-first wiring (api.md §5 Phase 2); null before content load. */
     private MaterioneAPI api;
@@ -212,6 +213,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (mechanics != null) {
                 mechanics.close();
             }
+            if (logic != null) {
+                logic.close();
+            }
             if (guiComponents != null) {
                 guiComponents.close();
             }
@@ -284,6 +288,10 @@ public final class MaterionePlugin extends JavaPlugin {
         mechanics.registerNatives(registries);
         // addon GUI layer kinds through the same registry path the built-ins use (gui.md §10 #7)
         guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
+        // the logic vocabulary (triggers, actions) through the public API, before content load:
+        // rules resolve their actions against these registries when they are parsed (logic.md §4)
+        logic = new dev.materione.plugin.logic.LogicService(this, registries);
+        dev.materione.plugin.logic.BuiltinLogic.register(logic, this);
     }
 
     private void loadContent() {
@@ -435,7 +443,7 @@ public final class MaterionePlugin extends JavaPlugin {
                 MaterioneVersion.VERSION, registries, diagnostics,
                 this::descriptorOrNull, scheduling,
                 authoringApi, assetApi, pipelineApi, deliveryApi, runtimeApi, adminApi, mechanics,
-                guiComponents);
+                guiComponents, logic);
         // the public surface any addon can look up (api.md §4.1)
         getServer().getServicesManager().register(
                 dev.materione.api.MaterioneAPI.class, api, this,
@@ -456,8 +464,6 @@ public final class MaterionePlugin extends JavaPlugin {
         editorTransport = new dev.materione.plugin.runtime.EditorTransportService(
                 this, diagnostics, scheduling, pipeline, api, documents, audit,
                 authoringApi);
-        editorTransport.behaviorVocabulary(() -> behavior == null
-                ? dev.materione.api.registry.BehaviorVocabulary.empty() : behavior.vocabulary());
         editorTransport.start(settings, storage);
     }
 

@@ -38,4 +38,8 @@ class AllModulesArchitectureTest {
     /** API-first (R9, api.md §4.2): the web editor consumes only {@code dev.materione.api..}. */
     @ArchTest
     static final ArchRule webOnlyConsumesApi = MaterioneArchRules.WEB_ONLY_CONSUMES_API;
+
+    /** Logic (R11, logic.md §9): one action, one class; action classes do not depend on each other. */
+    @ArchTest
+    static final ArchRule logicActionsAreIndependent = MaterioneArchRules.LOGIC_ACTIONS_ARE_INDEPENDENT;
 }

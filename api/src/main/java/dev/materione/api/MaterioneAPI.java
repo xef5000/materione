@@ -45,6 +45,14 @@ public interface MaterioneAPI {
         throw new IllegalStateException("MaterioneAPI sub-api 'mechanics' is not wired yet");
     }
 
+    /**
+     * Register actions, conditions, triggers and expression functions, and read the behavior
+     * vocabulary, without depending on implementation modules (logic.md §4, §8).
+     */
+    default dev.materione.api.logic.LogicApi logic() {
+        throw new IllegalStateException("MaterioneAPI sub-api 'logic' is not wired yet");
+    }
+
     /** Register GUI layer kinds (addon components) without depending on implementation modules (gui.md §10 #7). */
     default dev.materione.api.gui.GuiComponentsApi guiComponents() {
         throw new IllegalStateException("MaterioneAPI sub-api 'guiComponents' is not wired yet");

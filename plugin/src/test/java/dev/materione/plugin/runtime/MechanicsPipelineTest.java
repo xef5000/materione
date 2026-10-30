@@ -39,6 +39,9 @@ class MechanicsPipelineTest {
     private static final NamespacedId MECHANIC = NamespacedId.parse("example:charge");
     private final RegistryService registries = new RegistryService();
     private final DiagnosticsBusService diagnostics = new DiagnosticsBusService(64);
+    // rules resolve their actions against the logic registries at parse time
+    private final dev.materione.plugin.logic.LogicService logic =
+            dev.materione.plugin.logic.LogicTestSupport.withBuiltIns(registries);
     private final PipelineService pipeline = new PipelineService(null, diagnostics,
             new QuarantineTracker(), registries, null,
             new PlatformDescriptor("1.21.4", false, false, false, Set.of()));
@@ -86,8 +89,8 @@ class MechanicsPipelineTest {
         assertThat(rules.getFirst().on().matches("click", "right")).isTrue();
         assertThat(rules.getFirst().actions()).singleElement()
                 .satisfies(action -> {
-                    assertThat(action.type()).isEqualTo("message");
-                    assertThat(action.scalarParam())
+                    assertThat(action.id()).isEqualTo("message");
+                    assertThat(((dev.materione.plugin.logic.action.MessageAction.Params) action.params()).text().source())
                             .isEqualTo("blade-wear ${item.durability_used}/${item.durability_max}");
                 });
         assertThat(diagnostics.recent(64)).isEmpty();
@@ -143,9 +146,9 @@ class MechanicsPipelineTest {
 
         assertThat(rules).hasSize(2);
         assertThat(rules).extracting(rule -> rule.id()).doesNotHaveDuplicates();
-        assertThat(rules).extracting(rule -> rule.actions().getFirst().param("as"))
+        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) rule.actions().getFirst().params()).sender().name().toLowerCase())
                 .containsExactly("console", "player");
-        assertThat(rules).extracting(rule -> rule.actions().getFirst().param("command"))
+        assertThat(rules).extracting(rule -> ((dev.materione.plugin.logic.action.RunCommandAction.Params) rule.actions().getFirst().params()).command().source())
                 .containsExactly("say console", "materione version");
         assertThat(shadow.view(ItemMechanics.KEY).forItem(ITEM)).hasSize(2);
         assertThat(diagnostics.recent(64)).isEmpty();

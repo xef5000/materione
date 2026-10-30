@@ -724,7 +724,7 @@ public final class PipelineService {
                 block.drops(), block.blastResistant(), block.movePolicy()));
         if (!block.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
-                    dev.materione.behavior.rule.RuleParser.compile(block.id(), block.behavior());
+                    dev.materione.behavior.rule.RuleParser.compile(block.id(), block.behavior(), logicLookup());
             parsedRules.problems().forEach(diagnostics::publish);
             if (!parsedRules.isEmpty()) {
                 blockBehaviors.put(block.id(), parsedRules.rules());
@@ -765,7 +765,8 @@ public final class PipelineService {
                         .toList()));
         if (!furniture.behavior().isEmpty()) {
             dev.materione.behavior.rule.ParsedRules parsedRules =
-                    dev.materione.behavior.rule.RuleParser.compile(furniture.id(), furniture.behavior());
+                    dev.materione.behavior.rule.RuleParser.compile(
+                            furniture.id(), furniture.behavior(), logicLookup());
             parsedRules.problems().forEach(diagnostics::publish);
             if (!parsedRules.isEmpty()) {
                 furnitureBehaviors.put(furniture.id(), parsedRules.rules());
@@ -855,9 +856,19 @@ public final class PipelineService {
     }
 
     /**
+     * The registries rules resolve their actions and triggers against, read at each compile so an
+     * addon registration is seen by the next reload (logic.md §4).
+     */
+    private dev.materione.behavior.logic.LogicLookup logicLookup() {
+        return new dev.materione.behavior.logic.RegistryLogicLookup(registries);
+    }
+
+    /**
      * Compiles one item's {@code behavior:} section into engine rules
      * (runtime-systems §2). Broken rules are diagnosed (MTR-0021/0022) and
-     * skipped — their siblings still load.
+     * skipped — their siblings still load; a single action the registry does
+     * not know, or whose type rejects its parameters, is skipped alone
+     * (MTR-0057).
      */
     private void compileBehaviors(
             ItemDefinition item,
@@ -887,7 +898,8 @@ public final class PipelineService {
                 declaration.put("id", item.id() + "#" + index);
             }
             try {
-                var parsed = dev.materione.behavior.rule.RuleParser.compile(item.id(), List.of(declaration));
+                var parsed = dev.materione.behavior.rule.RuleParser.compile(
+                        item.id(), List.of(declaration), logicLookup());
                 parsed.problems().forEach(diagnostics::publish);
                 compiled.addAll(parsed.rules());
             } catch (RuntimeException failure) {
