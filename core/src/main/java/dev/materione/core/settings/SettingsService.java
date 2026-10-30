@@ -75,6 +75,11 @@ public final class SettingsService {
         defaults.put("editor_port", 8089);
         defaults.put("editor_mode", "cloud");
         defaults.put("relay_base_url", "https://editor.materione.com");
+        // server transfer for the connect action (logic.md §15): blank host = no transfer packet,
+        // and the default mode is the packet; "bungeecord" selects the proxy plugin channel instead
+        defaults.put("transfer_host", "");
+        defaults.put("transfer_mode", "packet");
+        defaults.put("transfer_port", 25565);
         return defaults;
     }
 

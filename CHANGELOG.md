@@ -21,8 +21,8 @@ releases may change file formats, settings and the public API.
   is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
 - **Server transfer** sends a player by the 1.20.5+ transfer packet, to the `transfer_host` and
   `transfer_port` in `settings.yml`, or by the BungeeCord plugin channel (BungeeCord and Velocity)
-  when `transfer_mode: bungeecord` is set. Neither key is in the default settings file; add them to
-  use the feature.
+  when `transfer_mode: bungeecord` is set. The three keys (`transfer_host`, `transfer_port`,
+  `transfer_mode`) are in the default settings file with defaults that keep the feature off.
 - `MTR-0058`: an optional integration could not install its provider and was skipped (a warning).
 - Plugin API: `LogicApi.providers()` and the `dev.materione.api.logic.provider` types, for addons
   that supply an economy, a permission provider or a transfer.

@@ -517,6 +517,21 @@ schemas (master §5.5):
 World-attachment rule: if data must survive a world copy/restore and die with the world, it
 belongs in chunk PDC — not in a database, not in `generated/`.
 
+**Settings keys.** `settings/settings.yml` is written with these defaults on first boot. The file is
+produced by the YAML dumper, so it carries no comments; this table is the reference.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `debug` | `false` | Verbose diagnostics. |
+| `delivery_host` / `delivery_port` | `0.0.0.0` / `8090` | Bind address of the self-hosted pack server. |
+| `delivery_public_host` | blank | Host written into pack URLs (set it for remote players). |
+| `editor_enabled` / `editor_mode` | `true` / `cloud` | Editor on or off; cloud relay or `local`. |
+| `editor_host` / `editor_port` / `editor_file_watcher` | `127.0.0.1` / `8089` / `true` | Local editor listener. |
+| `relay_base_url` | `https://editor.materione.com` | Cloud editor relay. |
+| `transfer_host` | blank | Target host of the 1.20.5+ transfer packet used by `connect`. Blank means the packet is off and `connect` is unavailable (logic.md §15). |
+| `transfer_port` | `25565` | Target port of the transfer packet. Must be 1 to 65535. |
+| `transfer_mode` | `packet` | `bungeecord` selects the BungeeCord/Velocity plugin channel for `connect` instead of the packet. |
+
 ### 7.2 Usage metrics (bStats) and the opt-out
 
 The plugin reports anonymous usage statistics to [bStats](https://bstats.org) under plugin id

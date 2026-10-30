@@ -955,10 +955,10 @@ are the choices. The SPI shapes are in [`api.md`](api.md) §3.11.
    a permission plugin gives, because only that plugin can change its own data, and the action's
    outcome is `OK` in that case. The docs of `take_permission` say so.
 8. **Transfer defaults to the 1.20.5+ packet, when a host is configured.** Settings name the target:
-   `transfer_host` (blank by default, so the packet is off) and `transfer_port` (`25565`). With the host
-   blank, `connect` is unavailable, with the reason. These keys are **not** added to
-   `settings-default.yml`: a blank default would change the golden (`fixtures/golden/settings-default.yml`)
-   for a feature most servers do not use, so they are documented here and read only when present.
+   `transfer_host` (blank by default, so the packet is off), `transfer_port` (`25565`) and
+   `transfer_mode` (`packet`). All three are in the default settings file and in the settings key table
+   of [`plugin.md`](plugin.md) §7.1, with defaults that keep the feature off. With the host blank,
+   `connect` is unavailable, with the reason. The settings golden is regenerated with them.
    An out-of-range port or a blank host is reported as `MTR-0058` and skipped, never a failed enable.
    The `connect` step's `server:` argument is the proxy's name for a proxy; the packet goes to the
    configured host and ignores it. This is the one place an author's argument is informational, and it

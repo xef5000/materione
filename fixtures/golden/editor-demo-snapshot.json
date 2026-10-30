@@ -9507,10 +9507,13 @@
       "editor_mode": "cloud",
       "editor_port": 8089,
       "relay_base_url": "https://editor.materione.com",
+      "transfer_host": "",
+      "transfer_mode": "packet",
+      "transfer_port": 25565,
       "version": 1
     },
-    "raw": "version: 1\ndebug: false\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\n",
-    "sha256": "b77d8e0cced4537395357d2642432ecb0c361fb00d356e95a394a09e7d389de9"
+    "raw": "version: 1\ndebug: false\ndelivery_host: 0.0.0.0\ndelivery_port: 8090\ndelivery_public_host: ''\neditor_enabled: true\neditor_file_watcher: true\neditor_host: 127.0.0.1\neditor_port: 8089\neditor_mode: cloud\nrelay_base_url: https://editor.materione.com\ntransfer_host: ''\ntransfer_mode: packet\ntransfer_port: 25565\n",
+    "sha256": "d94eb34df7617663c06a93337e4190a45c351231c1c1dbd2c83a2661f0f4039a"
   },
   "source": "Recorded from the real editor ops over fixtures/packs/sample + world by EditorDemoSnapshotTest; regenerate with -Dmaterione.golden.regen=true.",
   "types": [

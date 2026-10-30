@@ -9,3 +9,6 @@ editor_host: 127.0.0.1
 editor_port: 8089
 editor_mode: cloud
 relay_base_url: https://editor.materione.com
+transfer_host: ''
+transfer_mode: packet
+transfer_port: 25565
