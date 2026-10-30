@@ -408,6 +408,7 @@ step is found at load rather than when a player first triggers it:
 | Code | Severity | Meaning and recovery |
 |---|---|---|
 | `MTR-0057` | warning | A step in a rule's `do:` list was skipped at load: it names an action (or condition) that is not registered, or the registered type rejected the step's parameters while parsing. The message names the resource, the rule, the action and the reason. Only that step is skipped, its siblings and the rest of the rule still load; a rule whose steps all fail is skipped with `MTR-0021`. Fix the spelling or the parameter, or install the addon that provides the action, then reload. (An unknown `on:` trigger keeps `MTR-0021`.) |
+| `MTR-0058` | warning | An optional integration (Vault economy or permissions, LuckPerms, the BungeeCord plugin channel) could not install its provider: the adapter failed to link against the installed version, or its setup call threw. The server keeps the default provider or none, and the economy, permission and `connect` actions report themselves unavailable (logic.md §4.5). Install a supported version of the plugin, then reload. |
 
 ---
 

@@ -7,6 +7,26 @@ releases may change file formats, settings and the public API.
 
 ## [Unreleased]
 
+### Added
+
+- **Economy, permission and server-transfer actions, backed by provider SPIs (logic.md §4.5, #213).**
+  Five new actions: `give_money: 100` and `take_money: 100` (the latter fails with `insufficient
+  funds` and takes nothing), `give_permission: example.fly` and `take_permission: example.fly`, and
+  `connect: lobby`. Each reports itself unavailable, with the reason, when nothing can run it: the
+  money actions without an economy, `connect` without a transfer. Permissions always work: they
+  default to a session-only Bukkit grant.
+- **Vault and LuckPerms are used when installed.** Vault provides the economy and, when LuckPerms
+  is absent, the permission service; LuckPerms provides permissions with native expiry. Both are
+  optional server dependencies. Installing either then running `/materione reload` (or restarting)
+  is enough. The provider state is logged as `MATERIONE-LOGIC-OK` on every reload.
+- **Server transfer** sends a player by the 1.20.5+ transfer packet, to the `transfer_host` and
+  `transfer_port` in `settings.yml`, or by the BungeeCord plugin channel (BungeeCord and Velocity)
+  when `transfer_mode: bungeecord` is set. Neither key is in the default settings file; add them to
+  use the feature.
+- `MTR-0058`: an optional integration could not install its provider and was skipped (a warning).
+- Plugin API: `LogicApi.providers()` and the `dev.materione.api.logic.provider` types, for addons
+  that supply an economy, a permission provider or a transfer.
+
 ### Changed
 
 - **The GUI studio asks the server, not its own copy of the rules (gui.md §6, §10 #8–#9).** The

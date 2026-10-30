@@ -902,3 +902,130 @@ as before.
 **Build checks.** R11 (one action, one class, §9 rule 2) and the 400-line guard (§9 rule 4) ship
 with this change, each proven against a planted violation. R10 has no subjects until the GUI runtime
 creates the `plugin.gui..` packages, and arrives with them.
+
+---
+
+## 15. Decisions taken in #213 (L7: provider SPIs, adapters, and the money, permission and connect actions)
+
+#213 shipped the three provider SPIs of §4.5, the Bukkit default permission provider, the transfer
+packet, the Vault, LuckPerms and BungeeCord-channel adapters, and five actions: `give_money`,
+`take_money`, `give_permission`, `take_permission` and `connect`. Where §4.5 left a choice open, these
+are the choices. The SPI shapes are in [`api.md`](api.md) §3.11.
+
+**The SPI shape**
+
+1. **Providers take a `UUID`, never a Bukkit handle.** The contracts are `EconomyProvider`,
+   `PermissionProvider` and `ServerTransfer` in `dev.materione.api.logic.provider`. An action resolves
+   the `Player` facet to its UUID and the provider does the rest, so a provider is unit-tested against
+   an in-memory fake, and an adapter is the only code that touches Vault's `OfflinePlayer`.
+2. **Results distinguish the three answers an economy can give.** `EconomyResult` is sealed:
+   `Succeeded(balance)`, `InsufficientFunds(balance)` (the provider must have taken nothing), or
+   `Failed(reason)` (the economy could not answer). `take_money` maps the middle one to a `FAILED`
+   outcome (`insufficient funds: balance X, needs Y`) that `require` (§2.2) can branch on, and the
+   third to its reason verbatim. Permissions and transfer return `ProviderResult`, which is either OK
+   or refused with a reason.
+3. **`available()` is a default method on each SPI, read at use.** Vault answers from its own service
+   registry each time it is asked, so an economy plugin that registers after Vault is picked up without
+   a reload. §14.5's availability rule holds: the action's `availability()` asks the slot, and the
+   vocabulary reads it on each build.
+4. **Temporary grants are two methods, and only one needs expiry.** `grantFor(UUID, node, Duration)`
+   is refused by default and implemented by LuckPerms through its native expiry node. `withGrant(UUID,
+   node, Runnable)` is a default built from `grant` and `revoke`, so every provider gets the scoped form.
+   No action exposes a duration yet; the SPI carries it for the API and for the `run_command as: op`
+   work (below).
+
+**Slots and registration**
+
+5. **One slot per provider kind, behind `LogicApi.providers()`.** `LogicProviders` holds the economy,
+   the permission provider and the transfer, each as a slot. A new registration replaces the slot and
+   returns a `ProviderRegistration`; closing the handle restores what it replaced, and a handle that
+   has been replaced does not clear its successor. The permission slot falls back to the session
+   default and so is never empty. An owner that disables takes its registrations with it, as the
+   registries do (§14.1).
+6. **Providers are looked up at use, never cached.** An action holds the `LogicProviders` object, not
+   the provider, and asks for the economy each time it runs or reports availability. A late
+   registration therefore needs no reload of the action set; the integration that makes it is the only
+   thing re-run (decision 9).
+
+**Defaults**
+
+7. **Permissions default to Bukkit attachments, session-only.** `BukkitPermissions` attaches a
+   permission to the player through a plugin-owned `PermissionAttachment`, and drops the attachment map
+   entry when the player quits. `revoke` removes only the grant this provider made. It cannot take a node
+   a permission plugin gives, because only that plugin can change its own data, and the action's
+   outcome is `OK` in that case. The docs of `take_permission` say so.
+8. **Transfer defaults to the 1.20.5+ packet, when a host is configured.** Settings name the target:
+   `transfer_host` (blank by default, so the packet is off) and `transfer_port` (`25565`). With the host
+   blank, `connect` is unavailable, with the reason. These keys are **not** added to
+   `settings-default.yml`: a blank default would change the golden (`fixtures/golden/settings-default.yml`)
+   for a feature most servers do not use, so they are documented here and read only when present.
+   An out-of-range port or a blank host is reported as `MTR-0058` and skipped, never a failed enable.
+   The `connect` step's `server:` argument is the proxy's name for a proxy; the packet goes to the
+   configured host and ignores it. This is the one place an author's argument is informational, and it
+   is in the action's own description.
+
+**Adapters and the soft-depend gate**
+
+9. **`Integrations` is the only guarded entry point, and it decides from the enabled state.** Vault
+   provides the economy when it is enabled, and the permission provider when LuckPerms is not enabled
+   (LuckPerms wins when both are). The BungeeCord channel is chosen by setting, `transfer_mode:
+   bungeecord`, not by detecting a plugin, because the channel is a contract the proxy answers, not a
+   plugin the server has. `Integrations` refreshes at start, on every `/materione reload` and content
+   reload, and whenever Vault or LuckPerms enables or disables.
+10. **An absent plugin loads nothing; a present but unusable one is reported and skipped.** Each adapter
+    is constructed only inside the branch that checked `isPluginEnabled` for its plugin, so the JVM does
+    not load Vault or LuckPerms classes when they are absent. Each adapter's constructor also loads its
+    optional API type (`Economy.class.getName()`), so an incompatible or half-installed plugin fails
+    inside the gate's `try`, not later inside an action. That failure is `MTR-0058` (plugin.md §5),
+    a warning, and the server keeps the default provider. The `IntegrationsGuardTest` proves both the
+    absent case (nothing registered, no diagnostic) and the enabled-but-unloadable case.
+11. **`paper-plugin.yml` declares both as soft dependencies with `join-classpath: true`.** Without
+    `join-classpath` Paper would not expose Vault's or LuckPerms' classes to Materione's classloader,
+    so an installed plugin would still look absent to the adapters. `required: false` keeps the server
+    bootable without either.
+
+**Threading and categories**
+
+12. **Money runs `GLOBAL`; permissions and `connect` run `PLAYER_REGION`.** Vault and the economies behind
+    it are not region-safe, so they run on the global thread (the main thread on Paper). The Bukkit
+    default attachment and the transfer both act on the player, so they run on the player's thread.
+    LuckPerms writes asynchronously and does not care, which is why one declared threading serves all
+    providers.
+13. **Categories follow the issue: `economy` for the money actions, `server` for the permission and
+    `connect` actions.** Permission nodes are server state (who may do what), and the connect step moves
+    the player between servers, so neither is `player`.
+
+**Parameters and outcomes**
+
+14. **Amounts and nodes are checked at load.** `amount` is required, finite, above 0 and at most
+    `1.0E12`, which is a guard against a typo, not a provider limit. `permission` must match dot-separated
+    segments of letters, digits, dashes, underscores and `*`. Both are shared in `plugin.logic`
+    (`ProviderParams`), because one action class may not depend on another (R11).
+15. **The failure reasons an author sees are fixed strings.** `no economy provider`, `no server
+    transfer`, `event has no player`, and `insufficient funds: balance …, needs …`. The unavailable
+    reasons are sentences the editor shows. Tests pin them, because the trace (§7.6) and the QA catalog
+    read them.
+
+**Deferred, and why**
+
+16. **`run_command as: op` still uses the operator flag, not the permission provider.** §4.5 names it as a
+    user of `PermissionProvider`. Changing it touches the `GLOBAL` runner and the console path that
+    #208 owns, so it moves there. The SPI is ready for it.
+17. **No `has_money` condition, no per-player target, and no duration on the permission actions.** The
+    issue scopes the actions to give and take. `has_money` is a condition (L4, #210). A target other than
+    the run's player and a `duration:` parameter are additive and can be added without changing the SPI.
+18. **In-game money and permission flows are not in the QA catalog yet.** The catalog entry
+    `logic.providers-unavailable-without-vault` proves the boot-time state on a server without Vault.
+    A catalog entry that pays a player through Vault needs a probe server with Vault and an economy, which
+    the probe does not provision. The fake-provider and harness tests carry the logic until then.
+
+**Dependencies (compileOnly, not shaded).** Vault API `com.github.MilkBowl:VaultAPI:1.7.1`, resolved from
+JitPack through a repository filtered to that group (settings). Its pom declares no license and its
+Bukkit dependency is `provided`, so nothing transitive comes in. LuckPerms API `net.luckperms:api:5.4`,
+MIT, from Maven Central; its pom has no runtime dependencies. Both are supplied by the server at runtime
+and never appear in the shaded jar. [`build.md`](build.md) §1 and §4 carry the same facts.
+
+**For #212 and #208.** `BuiltinLogic.providerActions(LogicProviders)` is a separate block from the six
+M2 actions and from #212's additions. Its registrations are appended in `BuiltinLogic.register`, so the
+two streams touch different lines. Actions in `plugin.logic.action` depend only on the API and on
+`ProviderParams`.

@@ -28,6 +28,8 @@ exit remains separate; anything else marked *M-later* is reserved, not built.
 | bStats | 3.2.1 | MIT. `org.bstats:bstats-bukkit` (+ its `bstats-base` runtime): anonymous usage metrics, plugin id 34981. Shaded + relocated under `materione.libs.org.bstats` (§4). Referenced only by `MaterionePlugin`, behind a fail-soft wrapper; the data and the opt-out are described in [plugin.md](plugin.md) §7.2. |
 | Node / npm | node 22.17.0 | **M3**: provisions hermetically via `com.github.node-gradle.node` 7.1.0 for `:webui` (the SPA build). No local Node required; CI included. The Node distribution resolves through an Ivy repo declared in settings (`org.nodejs:node`). SPA deps pin via committed `package-lock.json`. |
 | Playwright | `@playwright/test` 1.64.1 | Dev-only browser regression tier for `webui/`; Chromium is installed separately and is not shipped in the SPA or plugin jar. |
+| Vault API | 1.7.1 (`com.github.MilkBowl:VaultAPI`) | **#213**: `compileOnly` in `integrations`, for the economy and permission adapters. Resolved from JitPack through a settings repository filtered to that group. Its pom declares no license; verify the upstream license before publishing a shaded adapter (none is shaded). Its Bukkit dependency is `provided`, so nothing transitive joins the build. |
+| LuckPerms API | 5.4 (`net.luckperms:api`, MIT) | **#213**: `compileOnly` in `integrations`, for the LuckPerms permission adapter. Maven Central; its pom has no runtime dependencies. |
 | Harness Paper | 1.21.4 build 232 | Absolute URL + sha256 pinned in the version catalog (§7). |
 
 Kotlin DSL throughout, one version catalog (`gradle/libs.versions.toml`), convention plugins
@@ -44,9 +46,11 @@ under `build-logic/` (named `build-logic`, not `build` — `build/` is Gradle's 
    │          │     │        content ──► api, core          (item + recipe content types)
    └──────────┴─────┴─────► pack ──► api, core, (creative, SnakeYAML-testOnly)
                              delivery ──► api, core + creative-server
-                             behavior, web, importers, integrations — skeletons until their
-                             milestones; they may depend on api + core, never on each other's
-                             internals, never on platform internals (master §10 rules)
+                             integrations ──► api, core + paper-api, Vault API, LuckPerms API
+                                                    (compileOnly: the soft-depend adapters, #213)
+                             behavior, web, importers — skeletons until their milestones; they may
+                             depend on api + core, never on each other's internals, never on
+                             platform internals (master §10 rules)
 
   testing ──► testFixtures consumed by every module's tests (build infrastructure, not shipped)
   harness  ──► standalone: boots the real server, copies the shaded jar in (no product deps)
@@ -71,7 +75,7 @@ assembled by `plugin/` via Shadow; **nothing depends on `plugin`** (the leaf, ru
 |---|---|---|
 | `materione.java-conventions` | everything | Toolchain 21, `-parameters -Xlint -Werror` (escape: `-Pmaterione.noWerror`), UTF-8, reproducible archives (no timestamps, stable order — D7), JUnit + launcher, `materione.fixtures.root` system property, `fixtures/` declared as a test **input** (a corpus change invalidates test tasks — path references are invisible to Gradle otherwise), `materione.golden.regen` passthrough, integration-tag exclusion on unit `Test` tasks. |
 | `materione.library-conventions` | library modules | Test bundle (JUnit, AssertJ, ArchUnit) + `testing` testFixtures. |
-| `materione.paper-conventions` | api, core, platform, plugin | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. |
+| `materione.paper-conventions` | api, core, platform, plugin, integrations | `paper-api` and SnakeYAML as `compileOnly` — never `implementation`, never on a runtime classpath, never shaded. The server provides both. (`integrations` joined in #213, for the Bukkit types its adapters name.) |
 | `materione.plugin-conventions` | plugin only | Shadow wiring (relocations for creative, Gson, Undertow + its runtime, bStats), `paper-plugin.yml` `@materioneVersion@` token replacement, generated `MaterioneVersion` source, distributable naming (`Materione-<version>.jar`, plain jar classifier `plain`). |
 
 Custom tasks in `build-logic/src/main/kotlin`: `GenerateVersionSourceTask` (version class
@@ -96,6 +100,11 @@ stays `compileOnly` (the server provides it; the lossless YAML layer loads it re
 from the server at runtime).
 
 **M3 amendment:** the second shaded dependency set is **Undertow 2.3.26.Final** (+ XNIO/JBoss transitive runtime) for the editor listener — relocated under `materione.libs.io.undertow` / `.org.xnio` / `.org.jboss` / `.org.wildfly` by `materione.plugin-conventions`. Referenced only from `dev.materione.web` (ban rule R8), so relocation is invisible to every other module. Gson stays server-provided for our own code; the SPA build toolchain (Node/npm) never ships — only its static output rides in the jar under `webui/`. The settings repository list gains one Ivy entry (nodejs.org dist) so the strict repositories policy survives the node plugin.
+
+**#213 amendment (soft-depend adapters):** Vault and LuckPerms are **not shaded**. They are `compileOnly` in
+`integrations` and supplied by the server; the adapters load only when their plugin is enabled
+(`Integrations`, logic.md §15). `paper-plugin.yml` declares both as optional server dependencies with
+`join-classpath: true`. The shaded jar gains no classes from either API.
 
 **bStats amendment:** the third shaded set is **bStats 3.2.1** (`bstats-bukkit` + `bstats-base`, MIT), relocated under `materione.libs.org.bstats` by `materione.plugin-conventions`. Only `MaterionePlugin` references it, and it starts after the bootstrap phases in `onEnable`, behind a fail-soft wrapper: a failure is a warning and enable continues. The bStats jars carry no license file, so the shaded jar carries no MIT notice for it; creative and Undertow are in the same position. Bundling third-party notices is an open item, not decided here. No ban rule (§5) names bStats: the rules govern `dev.materione` code, and its only call site is `MaterionePlugin`.
 
@@ -180,8 +189,13 @@ and asserts the stable log markers:
 MATERIONE-BOOT-OK <version>          MATERIONE-CONTENT-OK items=<n> defs=<n> pack=<hash12|noop>
 MATERIONE-VERSION <version>          MATERIONE-DELIVERY-OK <url>
 MATERIONE-DOCTOR-OK                  MATERIONE-RELOAD-OK items=<n>
+MATERIONE-LOGIC-OK economy=<name|none> transfer=<yes|none> unavailable=<action ids|none>
 MATERIONE-BYE
 ```
+
+`MATERIONE-LOGIC-OK` (#213) is logged at boot and on every content reload. The harness asserts it on
+a workspace with no Vault and no transfer host: `economy=none transfer=none
+unavailable=give_money,take_money,connect`, so the money and connect actions are proven unavailable.
 
 These markers are test API — treat changes to them like changes to `MTR-####` codes
 (plugin.md §5). The standard scenario (`PaperBootstrapIT`) is the M1 exit gate: boot with

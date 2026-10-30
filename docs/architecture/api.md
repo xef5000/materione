@@ -288,7 +288,17 @@ the editor palette and the docs read the same registries (D5).
 | `conditions()` | `LogicRegistry<ConditionType<?>>`: predicates. Same shape, with `test(P, LogicContext)` as a pure read. |
 | `triggers()` | `LogicRegistry<TriggerType>`: descriptions of the events a rule answers: details, `firedBy`, filters, a context schema of `ContextVariable`s, and `cancellable`. A runtime still fires the event; registering one makes it known to the compiler and the studio. |
 | `functions()` | `LogicRegistry<ExpressionFunction>`: calls available inside expressions. The registry and the vocabulary carry them; binding them into the expression grammar is the expression work (logic.md §13 L3). |
+| `providers()` | `LogicProviders` (§4.5 of logic.md, #213): the three provider slots the money, permission and `connect` actions run against. `economy()` and `transfer()` are `Optional`; `permissions()` is always present (the session-only Bukkit default when nothing else is registered). `setEconomy(owner, EconomyProvider)`, `setPermissions(owner, PermissionProvider)` and `setTransfer(owner, ServerTransfer)` each replace the slot and return a `ProviderRegistration` whose `close()` restores the slot, and a disabled owner is refused. Read at use, never cached by an action. |
 | `vocabulary()` | The version-2 `BehaviorVocabulary`, rebuilt from the registries (and the mechanics registry) on every call. |
+
+The provider SPIs live in `dev.materione.api.logic.provider`, and every method takes a `UUID`, never
+a Bukkit handle, so an addon's provider is testable without a server:
+
+| Type | Shape |
+|---|---|
+| `EconomyProvider` | `name()`, `available()`, `balance(UUID)`, `has(UUID, double)`, `withdraw(UUID, double)`, `deposit(UUID, double)`. Each returns an `EconomyResult`: `Succeeded(balance)`, `InsufficientFunds(balance)` (nothing was taken), or `Failed(reason)`. |
+| `PermissionProvider` | `name()`, `available()`, `grant(UUID, node)`, `revoke(UUID, node)`, and two defaults built on them: `withGrant(UUID, node, Runnable)` (grant, run, revoke even on throw) and `grantFor(UUID, node, Duration)` (native expiry only; the default refuses). Each returns a `ProviderResult` (`OK` or `failed(reason)`). |
+| `ServerTransfer` | `name()`, `available()`, `send(UUID, server)` returning a `ProviderResult`. |
 
 `LogicRegistry<T>` registers with `register(Plugin owner, NamespacedId id, T type)` and returns a
 `LogicRegistration` handle. Registration opens one bounded write on that registry and edits nothing

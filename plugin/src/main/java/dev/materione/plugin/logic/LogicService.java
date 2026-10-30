@@ -6,6 +6,7 @@ import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.registry.BehaviorVocabulary;
 import dev.materione.api.registry.RegistryKeys;
 import dev.materione.behavior.logic.RegistryLogicLookup;
@@ -35,6 +36,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<ConditionType<?>> conditions;
     private final LogicRegistryImpl<TriggerType> triggers;
     private final LogicRegistryImpl<ExpressionFunction> functions;
+    private final LogicProvidersImpl providers;
     private boolean closed;
 
     /**
@@ -52,6 +54,8 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         this.functions = new LogicRegistryImpl<>(registries, RegistryKeys.EXPRESSION_FUNCTIONS,
                 ExpressionFunction.class, "function", ExpressionFunction::id, type -> type.describe().self());
         Objects.requireNonNull(host, "host").getServer().getPluginManager().registerEvents(this, host);
+        // the session-only Bukkit permission provider is the default (logic.md §4.5)
+        this.providers = new LogicProvidersImpl(new BukkitPermissions(host));
     }
 
     /** The generic registry entry types are wildcards ({@code ActionType<?>}); the registry stores the erasure. */
@@ -81,6 +85,11 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     }
 
     @Override
+    public LogicProviders providers() {
+        return providers;
+    }
+
+    @Override
     public BehaviorVocabulary vocabulary() {
         return VocabularyBuilder.build(registries);
     }
@@ -102,6 +111,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         conditions.ownerDisabled(owner);
         triggers.ownerDisabled(owner);
         functions.ownerDisabled(owner);
+        providers.ownerDisabled(owner);
     }
 
     /** Removes every registration and stops listening. Idempotent. */

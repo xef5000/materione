@@ -273,6 +273,14 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode LOGIC_STEP_REJECTED =
             new DiagnosticCode("MTR-0057", Severity.WARN, "Logic step rejected at load; skipped");
 
+    /**
+     * An optional integration (Vault, LuckPerms, the BungeeCord channel) could not install its
+     * provider: its classes failed to link against the installed version, or the call failed. The
+     * server runs with the default provider or none, and the actions say so (logic.md §4.5).
+     */
+    public static final DiagnosticCode INTEGRATION_SKIPPED =
+            new DiagnosticCode("MTR-0058", Severity.WARN, "Integration provider could not be installed; skipped");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -330,7 +338,8 @@ public final class DiagnosticCodes {
             GUI_SLOT_ITEM_UNRESOLVED,
             PERMISSION_DENIED,
             DUPLICATE_RESOURCE_ID,
-            LOGIC_STEP_REJECTED);
+            LOGIC_STEP_REJECTED,
+            INTEGRATION_SKIPPED);
 
     private DiagnosticCodes() {}
 

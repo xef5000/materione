@@ -59,6 +59,83 @@
           "threading": "any"
         },
         {
+          "available": false,
+          "category": "server",
+          "deferred": false,
+          "description": "Sends the player to another server; a proxy takes the name, the transfer packet uses its configured host",
+          "displayName": "Connect to server",
+          "id": "connect",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Target server name as the proxy knows it",
+              "id": "server",
+              "label": "Server",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "server",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region",
+          "unavailableReason": "No server transfer is configured (set transfer_host, or install a proxy channel)"
+        },
+        {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Adds money to the player's economy balance",
+          "displayName": "Give money",
+          "id": "give_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to give; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "No economy provider is installed (Vault with an economy plugin)"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Grants a permission node to the player through the active permission provider",
+          "displayName": "Give permission",
+          "id": "give_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
           "available": true,
           "category": "player",
           "deferred": false,
@@ -271,6 +348,57 @@
           ],
           "registeredBy": "materione",
           "shorthand": "sound",
+          "sinceVersion": "2.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": false,
+          "category": "economy",
+          "deferred": true,
+          "description": "Removes money from the player's economy balance; fails when the balance is too low",
+          "displayName": "Take money",
+          "id": "take_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount to take; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "threading": "global",
+          "unavailableReason": "No economy provider is installed (Vault with an economy plugin)"
+        },
+        {
+          "available": true,
+          "category": "server",
+          "deferred": false,
+          "description": "Removes a permission node from the player through the active permission provider",
+          "displayName": "Take permission",
+          "id": "take_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Permission node, e.g. example.fly",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
           "sinceVersion": "2.0.0",
           "threading": "player_region"
         }
