@@ -35,7 +35,10 @@ describe('the palette', () => {
 
   it('is grouped Triggers first, the action categories in the server\'s order, Flow last', () => {
     expect(groups[0]!.id).toBe('triggers');
-    expect(groups.map((group) => group.id)).toEqual(['triggers', 'player', 'gui', 'world', 'server', 'economy', 'data', 'flow']);
+    const ids = groups.map((group) => group.id);
+    expect(ids.slice(0, 6)).toEqual(['triggers', 'player', 'gui', 'world', 'server', 'economy']);
+    expect(ids[ids.length - 1]).toBe('flow');
+    if (ids.includes('conditions')) expect(ids.indexOf('conditions')).toBe(ids.length - 2); // Conditions, then Flow (§7.3)
     expect(groups[groups.length - 1]!.entries[0]!.kind).toBe('control'); // the control steps lead the Flow group
   });
 

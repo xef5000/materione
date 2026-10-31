@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The Logic tab in the GUI studio (logic.md §7, §26, #223).** A GUI's rules and named flows are drawn as a
+  colour-coded node graph beside the Design tab: triggers, actions, `if`, `require`, `choose`, `wait`, `stop`
+  and `call` as nodes joined by stepped "redstone" wires, coloured by the registry's categories. Build a flow by
+  dragging a wire out of a port to the empty canvas and picking from the search palette (`/`), which lists what
+  the server's vocabulary describes and greys an unavailable provider with its reason. A join, a loop or a
+  second wire out of a port is refused with a one-line reason, because the file could not say it. Pan, zoom,
+  frame (`F`), keyboard navigation, delete and undo (shared with Design) all work. Positions are saved as
+  `node: {x, y}` on the node that moved; an untouched logic block saves byte-identical. Saving replays the
+  changes through `logic.edit`. The tab needs a plugin that advertises the `logic` capability.
 - **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,

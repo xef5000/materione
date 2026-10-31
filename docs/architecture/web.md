@@ -387,6 +387,18 @@ ops (`logic.variables.*`) are not here; they wait on #211 and join under the sam
 block's shape problems and the logic compiler's problems for the GUI's `behavior:` and `flows:`. These are wire-additive:
 an older studio that ignores the new keys keeps working.
 
+*As built (the Logic tab, #223):* the GUI studio gains a **Logic** tab (a node canvas, logic.md §7, §26) beside **Design**.
+It is a second view of the studio's one document: `webui/src/lib/logic/` holds the pure rules (the authored tree and
+its edits mirroring the server's editor, the graph projection, layout and wire routing, the structural edit
+planner, the palette from the vocabulary) and `webui/src/lib/studio/logic/` the components. It adds no op and no wire
+shape. It reads `logic.vocabulary` (the palette, the colours, the node shapes), asks `logic.validate` about the draft
+once editing pauses, and saves through `logic.edit`, after the Design fields' `authoring.setFields`, in one Save. The
+tab needs the `logic` capability and shows a notice without it. Its edits are commands on the shared undo history.
+*Tests:* `webui/test/logic-*.spec.ts` (projection round trip over every logic fixture, edits and inverses,
+planner refusals, the pending log, the vocabulary and the camera) and `webui/browser/specs/logic-tab.pw.ts` (build open,
+sound, command, close by dragging wires, save, and the file is the expected YAML; the fixture's `logic.edit` runs the
+same edit code the canvas plans with, and its vocabulary is the recorded plugin snapshot).
+
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
 (`{pack, operations, dryRun}`, operations `set` / `create` / `duplicate`, ≤ 50) answer from
@@ -1137,6 +1149,7 @@ first, then used.
 | Radius | `--radius-sm` 4, `--radius` 8, `--radius-lg` 12, `--radius-pill` | Controls use `--radius`; panels and cards `--radius-lg` |
 | Canvas | `--checker-a/b`, `--paint-default`, `--canvas-grid`, `--canvas-hover`, `--canvas-mark`, `--canvas-dim`, `--preview-*` | Read by `token()`; never a literal in a `.ts` file |
 | GUI studio | `--gui-stage`, `--gui-guide`, `--gui-slot-grid`, `--gui-pixel-grid`, `--gui-hover`, `--gui-marquee`, `--gui-placeholder` | The canvas stage and its overlays (gui.md §6); the GUI's own pixels are data (the raster vectors), never tokens |
+| Logic canvas | `--logic-trigger`, `--logic-player`, `--logic-gui`, `--logic-economy`, `--logic-data`, `--logic-world`, `--logic-server`, `--logic-flow`, `--logic-integration`, `--logic-addon`, `--logic-stage`, `--logic-grid`, `--logic-wire-shade` | One colour per registry category (logic.md §7.3); `--logic-addon` is every category the studio has no colour for |
 | Legacy | `--legacy-0` … `--legacy-f` | Minecraft's 16 text colors, for the game surface and swatches |
 | Game surface | `--font-minecraft`, `--text-minecraft` (16 px), `--mc-shadow-offset`, `--mc-tooltip-bg`, `--mc-tooltip-border(-low)` | Player-visible text drawn the way the client draws it (§6.2) |
 | Motion | `--motion-fast` 120 ms, `--motion-base` 200 ms, `--motion-slow` 320 ms, `--motion-shimmer`, `--ease-standard`, `--ease-emphasized`, `--ease-exit` | Collapse to 0 ms under `prefers-reduced-motion`; read by `motionMs()` in Svelte (§6.3) |
