@@ -28,6 +28,7 @@ import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
+import dev.materione.content.gui.logic.GuiOpen;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.document.LosslessYamlDocument;

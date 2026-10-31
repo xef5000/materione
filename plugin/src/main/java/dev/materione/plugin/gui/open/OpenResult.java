@@ -17,8 +17,10 @@ public record OpenResult(Outcome outcome, GuiSession session, String reason) {
         OPENED,
         /** The GUI is unknown, or its last compile quarantined it. */
         NOT_LIVE,
-        /** The open gate refused (permission, argument, requirement). */
+        /** The open gate refused (permission, requirement). */
         DENIED,
+        /** An argument does not read as its declared type; the reason is the usage line (logic.md §6.1). */
+        USAGE,
         /** A {@code gui.opening} rule cancelled the open. */
         CANCELLED,
         /** The server could not open the window. */

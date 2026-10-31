@@ -147,6 +147,7 @@ public final class GuiRuntime implements RuntimeApi.GuiRuntimeApi {
             case OPENED -> ApiResult.ok(null);
             case NOT_LIVE -> ApiResult.fail(DiagnosticCodes.UNRESOLVED_REFERENCE, result.reason());
             case DENIED -> ApiResult.fail(DiagnosticCodes.PERMISSION_DENIED, result.reason());
+            case USAGE -> ApiResult.fail(DiagnosticCodes.CONTENT_SCHEMA_INVALID, result.reason());
             case CANCELLED, FAILED ->
                     ApiResult.fail(DiagnosticCodes.PIPELINE_STAGE_FAILED, "GUI open failed: " + result.reason());
         };
@@ -165,6 +166,7 @@ public final class GuiRuntime implements RuntimeApi.GuiRuntimeApi {
     public void refreshAfterSwap(RuntimeRegistries previous, RuntimeRegistries current) {
         if (stack != null) {
             stack.refresh().afterSwap(previous, current);
+            stack.openCommands().resync(viewOf(current));
         }
     }
 

@@ -37,6 +37,8 @@ Materione's internals, only these markers.
 | `MATERIONE-GUI-DENIED reason=player-required` | `/materione gui open` from the console without naming a player |
 | `MATERIONE-GUI-FAILED reason=not-live\|no-such-player\|refused` | `/materione gui open` could not resolve the GUI, the player, or the open was refused |
 | `MATERIONE-GUI-FAILED reason=window gui=<id> player=<name> detail=<why>` | the server refused or could not open a GUI's window after its session was created; the session ended (#214) |
+| `MATERIONE-OPEN-TREE declared=<n> registered=<n>` | the server's COMMANDS event registered the open commands of the live GUIs (#215); printed at start and on each server reload that fires the event |
+| `MATERIONE-OPEN-COMMAND alias=<alias> outcome=opened\|refused\|usage\|console` | a GUI's open command (`open: commands:`, #215) ran: `opened` or `refused` for a player (the refusal's reason is in chat), `usage` for an argument that does not read as its type, `console` for a console sender, which has no window |
 
 The `guilogic` fixture pack (#214) announces its own opens and closes on the console as
 `say MATERIONE-GUILOGIC-OPEN <gui> ...`, `MATERIONE-GUILOGIC-PONG slot=<n>` and

@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.event;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.Facets;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.Viewer;
@@ -40,8 +41,30 @@ public final class GuiContexts {
         root.put("gui", gui);
         root.put("vars", new LinkedHashMap<String, Object>());
         root.putAll(extra);
+        return withPlayer(new MapLogicContext(root).with(GuiSession.FACET, session), viewer);
+    }
 
-        MapLogicContext context = new MapLogicContext(root).with(GuiSession.FACET, session);
+    /**
+     * The context a GUI's open requirement and its deny steps run against (logic.md §6.1). There is no
+     * session yet, so the session variables and pages are empty, and {@code gui.args} is the typed argument
+     * values the open was given. The player and the server are as for any GUI run.
+     */
+    public static MapLogicContext open(Viewer viewer, NamespacedId gui, Map<String, String> args) {
+        var root = new LinkedHashMap<String, Object>();
+        root.put("player", playerVars(viewer));
+        root.put("server", serverVars());
+        var guiVars = new LinkedHashMap<String, Object>();
+        guiVars.put("id", gui.toString());
+        guiVars.put("args", args);
+        guiVars.put("session", new LinkedHashMap<String, Object>());
+        guiVars.put("page", new LinkedHashMap<String, Object>());
+        root.put("gui", guiVars);
+        root.put("vars", new LinkedHashMap<String, Object>());
+        return withPlayer(new MapLogicContext(root), viewer);
+    }
+
+    /** Attaches the player facet and placeholder resolver, when there is a player. */
+    private static MapLogicContext withPlayer(MapLogicContext context, Viewer viewer) {
         Player player = viewer.player();
         if (player != null) {
             context.with(Facets.PLAYER, player)

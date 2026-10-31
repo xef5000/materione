@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **GUI open commands (logic.md §6.1, §23, #215).** A GUI's `open:` block now opens it. `commands: [shop, store]`
+  registers Brigadier commands at boot, and a content reload adds and hides them without a restart. Arguments are
+  typed (`string`, `int`, `number`, `player`, `boolean`, `choice`) with defaults, optional arguments and completions,
+  so `/shop tools` works from the chat box, and a bad value gets a usage line such as `usage: /shop <item:string>`
+  instead of a client error. `permission:` gates the open, and `requirement:` with `deny:` runs the steps that tell
+  the player why it was refused. Players with `materione.gui.bypass.<pack>.<id>` skip the requirement. Four new
+  diagnostic codes cover a bad default (`MTR-0066`), a command name another plugin already uses (`MTR-0067`), a
+  requirement that does not load (`MTR-0068`, which refuses the open) and a reload that needs a restart to change an
+  argument (`MTR-0069`).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
