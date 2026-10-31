@@ -1542,6 +1542,136 @@ side). The surface is [`api.md`](api.md) §3.12, the wire is [`web.md`](web.md) 
     split into `LogicAuthoringApiImpl` (reads and writes), `LogicEditor` (the edits), `LogicTree` (paths), `StepShape` (the kind
     checks), `LogicViews` (the typed view) and `LogicRefusal` (the refusal).
 
+## 20. Decisions taken in #211 (L5: declared variables, stores and `set_var` v2)
+
+#211 shipped §3: the `variable` content type, the two stores behind a port, the scoped reads of
+`vars.*`, `set_var` v2, the PlaceholderAPI expansion, `/materione var` and `LogicApi.variables()`. Where §3
+left a choice open, these are the choices. Each is reversible by the owner. The API is
+`dev.materione.api.logic.variable`; the engine's reads are in `MapLogicContext`; the stores and the command
+are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.VarCommand`.
+
+**The declaration**
+
+1. **The content type is `variable`, read from `variables/`.** It follows the other content types (singular
+   name, plural directory), so the registry id is `materione:variable`. One file may declare several variables,
+   one per top-level key, as every content type does. It compiles to no pack output: the declaration is runtime
+   state in the shadow, published as the `RuntimeVariables` view (swapped with the other registries), and the
+   value lives in the store. A definition with an unknown scope or type, or a `default:` of the wrong type, is
+   quarantined like any other malformed resource.
+2. **A declaration is `{id, scope, type, default, description}`.** `scope` is `player` or `server`, `type` is
+   `number` (always a finite `double`), `string` or `boolean`. An omitted `default:` is `0`, empty text or `false`.
+   The default is coerced to the type when the declaration is built, so every read of a never-written variable
+   returns a value of the declared type. Unknown keys stay in the authored file (lossless, §9 rule 6).
+
+**Scopes and the spelling of a reference**
+
+3. **Four words are reserved as scopes.** `local`, `session`, `player` and `server` cannot be run-local names,
+   so `vars.player` always means the scope. A name written with one of them is `MTR-0063` (a load error).
+4. **Reads.** `vars.x` and `vars.local.x` are the run's locals (M2 unchanged). `vars.session.x` is the GUI
+   session's variable, read through the `VariableFacets.SESSION` facet (absent: empty). `vars.player.<pack>.<key>`
+   and `vars.server.<pack>.<key>` read a declared variable: the stored value, or the default when nothing is
+   stored. A scope that does not match the declaration, or an undeclared name, reads as absent (`null`).
+5. **Writes.** A `set_var` names its target with the same path as the read, without the `vars.` root: `count`
+   (a local, always), `local.count`, `session.page`, `player.coins` (pack = the resource's own pack),
+   `player.shop.coins`, `server.shop.season`, or `shop:coins` (scope from the declaration). A bare name is always
+   local, so a typo never creates a stored key; only a qualified spelling can reach a persistent variable.
+6. **A deliberate narrowing of §3.2.** §3.2 says a bare name resolves within the resource's own pack. That holds
+   for `set_var` (`player.coins`; the parse knows the pack, see decision 9) and for declarations, but **not for
+   expression reads**: an expression is parsed without its resource, so `vars.player.coins` is absent and the
+   read spells the pack (`vars.player.shop.coins`). Making reads pack-relative would need the compile environment
+   in the expression compiler; it is a reversible follow-up, not a change of the spelling of a stored key.
+
+**`set_var` v2**
+
+7. **Shape.** `{var, op, value}`; `op` is `set` (the default), `add`, `subtract`, `multiply`, `toggle`, `remove`
+   or `reset`. The M2 shape `{name, value}` still works and writes a run-local with `set`. `value` is required for
+   the four ops that take one, and rejected for `toggle`, `remove` and `reset`.
+8. **Two kinds of error, decided at load.** A name that is not declared, or a scope that does not match, is
+   `MTR-0063`. A literal that does not fit the type (`"lots"` into a number, `true` into a string), or an op the
+   type does not take (`toggle` on a number, `add` on a boolean), is `MTR-0064`. Both skip the step only. The
+   type chooses the code by throwing `ParseRejection` (a new `api.logic` type, a subclass of
+   `IllegalArgumentException` that names its `DiagnosticCode`); `ActionCompiler` reports that code, and any other
+   parse failure stays `MTR-0057`. A template or expression is typed only when it runs, so it is checked then.
+9. **The parse reads the resource's pack and declarations through `CompileEnvironment`.** `ParamReader` carries it
+   (`ParamReader.environment()`), and the flow compiler supplies it from the owner's pack and the lookup's
+   `variable(id)`. The pipeline's shadow build parses every `variable` resource in a pre-pass, before items, rules and
+   flows, so a rule may name a variable declared in a file that sorts after it. `LogicLookup.variable(id)` defaults
+   to empty, so a lookup with no declarations rejects every qualified persistent name.
+10. **Runtime semantics.** `set` coerces the value to the declared type (a template's text becomes a number when
+    it reads as one), and a value that does not fit fails the step with a reason. Arithmetic works on numbers and
+    coerces text the same way; a run-local that was never set counts as `0` (and `false` for `toggle`); a result
+    that is not finite fails. `remove` and `reset` both clear the stored value, so a persistent read returns the
+    default again (a local is removed). The step's effect is visible to the rest of the same run at once, because
+    the run's reads go to the same store.
+11. **Threading.** `threading()` stays `ANY` (the headline value the vocabulary lists). `threading(P)` returns
+    `PLAYER_REGION` for a player-scope target, so a write to a player's container runs on that player's thread, and
+    `ANY` for locals, sessions and server variables (the server store is synchronised).
+
+**The stores**
+
+12. **One port per scope.** `VariableStore` (api) is `read(declaration, player)` and `write(declaration, player, value)`
+    (null clears), with the scope on the port. `VariableBinding` (api) is the run's view: the declarations, the stored
+    value and the write, for the run's player (player scope) and the server (server scope).
+    `LogicContext.variables()` hands it out, defaulting to `VariableBinding.NONE`, which declares nothing and refuses
+    every write, so a fake context in a test sees absent variables. The cross-server adapters (#25) implement
+    `VariableStore` for their scope and touch nothing else.
+13. **The player store is the persistent data container.** `PdcVariableStore` keeps each value under
+    `materione:var.<pack>.<key>` with the type the declaration gives it (`DOUBLE`, `STRING` or `BOOLEAN`). It looks the
+    container up per call, so an offline player (no container) reads absent and refuses writes (`MTR-0065`); the admin
+    command needs an online player. A value stored with a type the declaration no longer has reads as absent.
+14. **The server store is one JSON file, written atomically and debounced.** `storage/variables.json` holds
+    `{"<pack:key>": value}`. A write updates memory and marks the store dirty; the service flushes on a 5-second
+    debounce (a global-scheduler loop, started with `VariableService.autoFlush`) and on disable. A flush writes a
+    temporary sibling and moves it over the file (`ATOMIC_MOVE`, with a plain replace when the filesystem refuses it).
+    A file that does not parse is moved aside as `variables.json.corrupt`, a warning is logged and the store starts
+    empty. A failed flush stays dirty and is retried on the next tick (`MTR-0065`).
+15. **Recovery is about the file, never about the declarations.** Removing a declaration from a pack leaves its stored
+    value in the store; it is unreachable until the declaration returns. Nothing is deleted.
+
+**Read and write APIs**
+
+16. **`LogicApi.variables()` (`VariablesApi`).** `declarations()`, `declaration(id)`, `get(id, player)` and
+    `set(actor, id, player, value)`. A write checks `materione.var` first (`MTR-0055`), then the id and the type,
+    then the holder, and returns `ApiResult<Object>` carrying the effective value. Reads never check the actor.
+    `get` for an offline player reads the default (the holder is not reachable, and the read does not claim otherwise).
+17. **`/materione var get|set|list <player> [<var>] [<value>]`, permission `materione.var`.** `<var>` is `pack:key`,
+    or a bare key when exactly one declaration has it. A server variable ignores `<player>`, so write `-`. `list`
+    takes an optional player. The command calls the API, so it uses the same checks as a flow.
+
+**PlaceholderAPI**
+
+18. **The expansion grammar is in `integrations`, the class is in `plugin`.** `VariablePlaceholders` (pure, unit-tested)
+    resolves `var_<pack>_<key>`, `var_<pack>_<key>_<player>`, `gui_open` and `gui_last`. The `PlaceholderExpansion`
+    subclass must extend PlaceholderAPI's class, so it lives in `plugin` (`MaterionePlaceholders`), and is installed only
+    when PlaceholderAPI is enabled (`installIfPresent`). `paper-plugin.yml` declares PlaceholderAPI as an optional
+    dependency loaded before Materione. The compile dependency is `me.clip:placeholderapi` (compile only, not transitive),
+    pinned in the version catalog and fetched from the extendedclip repository through a content filter.
+19. **Declared ids split the placeholder.** `<pack>_<key>` may contain underscores on either side, so the resolver takes
+    the longest declared prefix; what follows is the player name. A name no player is known by, and an undeclared id,
+    resolve to null, which leaves the token as PlaceholderAPI found it.
+20. **Seams left open.** `GuiSessionPort` (api) answers `%materione_gui_open%` and `%materione_gui_last%`; it is empty
+    until the GUI runtime (#214) registers one with `VariableService.guiSessions`. The `balance` placeholders for
+    currencies (#233) are reserved and resolve to null; #233 adds its branch beside `var_` and does not touch the
+    resolver's grammar.
+
+**Diagnostics and the rest**
+
+21. **New codes.** `MTR-0063` (undeclared or reserved name, error, load), `MTR-0064` (value or op does not fit the type,
+    error, at load for literals and at run time for computed values), `MTR-0065` (a persistent variable could not be read
+    or written, warning, run, rate-limited). The pinned count in `DiagnosticCodesTest` is 65.
+22. **Fixtures.** `fixtures/packs/corpus/variables/qa.yml` declares two variables for the QA suite. It adds no item, model
+    or texture, so no pinned count changes. `fixtures/golden/editor-demo-snapshot.json` is regenerated: the `set_var`
+    schema changed, and the `variable` type is listed.
+
+**Not in this PR (by design).** Cross-server adapters (#25), the GUI session that fills `VariableFacets.SESSION` and the
+GUI port (#214), currencies and their placeholders (#233), and the QA rule that sets a variable from a click (it needs the
+GUI or a QA rule fixture; the catalog suite drives the command and the store instead).
+
+**Open question for review.** On Folia, a player's container may only be read on that player's region thread. Writes are
+placed there by `threading(P)`. A pure read in an expression, or a placeholder request, reads the container from the
+thread that evaluates it. On Paper this is one thread and is safe. On Folia it is a hazard that needs either a hop for
+reads or a per-run cache of the values a run reads. Left open here; the decision belongs with the Folia pass.
+
 ## 21. Decisions taken in #214 (G1: sessions, the opener, click routing and the GUI triggers)
 
 #214 shipped the GUI runtime's core (§6.1 stages 1, 2, 5 to 8, §6.2, §5.2 for GUIs). Every later GUI issue
@@ -1721,6 +1851,122 @@ the diagnose stage, so `validate`, `edit` and the pack compile all carry the sam
 (plus the GUI-only layer checks). The two would have reported every problem twice, so `LogicCheck`
 was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the logic authoring API's own check.
 
+## 22. Decisions taken in #210 (L4: built-in conditions)
+
+#210 ships the eight built-in conditions of §4.2 that the current main can support. Each is one class in
+`dev.materione.plugin.logic.condition`, registered through `LogicApi.conditions()` in its own block of
+`BuiltinLogic`, and each takes the shape §4.2 gives. `var` and `slot_has` are not in this change (see decision 1).
+Where §4.2 and §9 left a choice open, these are the choices. Each is reversible by the owner.
+
+**As built**
+
+| Condition | Category | Parameters (shorthand in bold) | Answers false when |
+|---|---|---|---|
+| `has_permission` | player | **`permission`** (one node, or a list), `permissions` (a list), `min` (default: all) | the player lacks enough of the nodes; no player |
+| `has_money` | economy | **`amount`** (above 0), `currency` (default currency when omitted) | the currency is unknown or unavailable; the balance is short; no player |
+| `has_exp` | player | **`amount`** (1 to 1,000,000), `unit` (points, levels) | the player holds less; no player |
+| `has_item` | player | **`item`**, `amount` (default 1), `name_contains`, `lore_contains`, `ignore_case`, `strict`, `armor`, `offhand` | the matching count is short; the item does not resolve; no player |
+| `has_item_space` | player | **`slots`** (free storage slots, 0 to 36), or `item` with `amount` (room for that many) | the room is short; the item does not resolve; no player |
+| `is_near` | world | `world` (default: the player's world), `x`, `y`, `z`, `distance` (templates allowed) | the player is outside the radius or in another world; a template does not render to a number in range |
+| `in_world` | world | **`worlds`** (one name, or a list) | the player is in none of the worlds |
+| `in_gui` | gui | **`id`** (a GUI id, such as `shop:menu`), or none for any GUI | no GUI is open, or not the one named |
+
+1. **Eight built-ins, `var` and `slot_has` left out.** `var` needs the variables API (#211), which is not on main,
+   so it is not registered; a later change adds it beside `has_exp` and needs no engine change. `slot_has` is #218's
+   (§6.5). The eight are the whole of #210's list that main can support. `BuiltinLogic.conditions(providers, guis,
+   items)` builds the list, and `register(api, owner, items, bridge)` registers it.
+
+2. **The composite names are never a predicate.** `all`, `any`, `not` and `at_least` are read as composites by the rule
+   compiler before it looks for a registered predicate (decision 5 of §16), so a condition with one of those ids would
+   be unreachable. None of the built-ins takes one, and `BuiltinConditionsTest` asserts that the built-in ids and the
+   registry lookups exclude them. Parse accept and reject for the reserved names is the compiler's, and is covered by
+   `ConditionsInFlowsTest`, which shows `all:` is a group and not a predicate.
+
+3. **`has_permission` asks Bukkit, not the permission provider.** `PermissionProvider` (§4.5) grants and revokes and has no
+   check, and adding one would widen an SPI that addons already implement. The check is `Player.hasPermission`, which is
+   what every plugin reads and which the active provider feeds: the session attachments that `give_permission` writes,
+   and LuckPerms through the permissible it injects. A Vault permission service that Materione uses but Bukkit does not
+   mirror is not consulted by this condition. Several nodes need all of them unless `min` says otherwise; a bare list is
+   accepted as the shorthand, so `has_permission: [a.one, a.two]` reads as the mapping form.
+
+4. **`has_money` resolves the currency exactly as `give_money` and `take_money` do** (§18 item 28): a named currency by
+   `ProviderParams.resolve`, the default when none is named, and false when that is unknown or its backend is not bound.
+   It reads through `CurrencyBackend.has`, so it never mutates. **Threading** follows §16 decision 17: a predicate runs on
+   the player's region, and the backend's own thread is not consulted. On Paper every backend is safe there. On Folia a
+   GLOBAL backend (Vault, the custom command pair) is read from the player's region. That is the same gap `balance()`
+   has (§18 item 25), and it is closed by the same follow-up, a threading hook for predicates. It is not closed here.
+
+5. **Experience counts the way `take_exp` takes it.** Points are the player's total experience and levels are the level,
+   so `has_exp: {amount: 5, unit: levels}` is true exactly when `take_exp` of five levels would succeed.
+
+6. **`has_item` shares the take matcher.** The matcher moved into `ItemMatch` (in `plugin.logic.support`) and
+   `InventoryPlan.wanted` now delegates to it. Its defaults are the take behaviour (text ignores case, a vanilla
+   reference matches only stacks with no Materione identity), so `take_item` is unchanged, and a test pins the two to the
+   same predicate. The options `has_item` adds are these:
+   - `ignore_case` (default true) applies to `name_contains` and `lore_contains`.
+   - `lore_contains` matches when some lore line contains the text. `ItemView` gained a `lore` field, read from the
+     stack's lore; the four-argument constructor stays for the take tests.
+   - `strict` (default true) decides what a vanilla reference matches. With `strict: false`, `minecraft:paper` counts a
+     custom item whose material is paper. A Materione reference is not affected. `strict` is the defined meaning of the
+     word in §4.2; the spec did not say more.
+   - `armor` and `offhand` (default true) decide whether those slots count. An excluded group is blanked, and its
+     positions are kept (`ItemSlots.included`), so nothing shifts. `take_item` still counts every slot.
+   - `model` from §4.2 is not in this change. It needs the model comparison the item studio defines, and no #210 issue asks
+     for it.
+
+7. **`has_item_space` counts the storage, and reads the stack size from the item.** Free slots are the empty entries of
+   slots `0..35`, the slots a pickup fills; armour and offhand never count. Room for an item is, per slot, a whole stack
+   for an empty slot, the rest of its stack for a matching partial one, and nothing for any other stack. The maximum stack
+   size comes from the item's built stack, so a custom item with a stack size of 16 is measured at 16. `give_item`'s
+   builder moved to `ItemTemplates` (in `plugin.logic.support`) so both read it the same way; its behaviour is unchanged.
+   The pure room arithmetic is `ItemSlots.room`, tested without a server.
+
+8. **`is_near` is a straight-line test in one world.** It compares squared distances, so the check is exact, and `world`
+   is optional. A point with a template that does not render to a number in range is false, not an error: a condition
+   that cannot decide does not grant. The numbers go through `Quantity`, so `x: "${vars.spawn_x}"` works, and the range
+   limits are the world border's reach (±30,000,000 for a coordinate, up to 60,000,000 for a distance).
+
+9. **`in_world` matches exact names.** Bukkit keeps world names case-sensitively, so `in_world: World` does not match
+   `world`. A scalar and a list read the same way, and an empty list is rejected at load.
+
+10. **`in_gui` reads a port, not a session.** `OpenGuis` (in `plugin.logic.support`) is the seam: one method,
+    `openGui(Player)`, answering the id of the GUI the player has open. `BuiltinLogic.register` backs it with the
+    player's current open session, read through the `GuiBridge` the `gui.*` actions use (§21), so
+    `plugin.logic.condition` never depends on `plugin.gui`. Before the runtime binds, and in tests,
+    `OpenGuis.none()` answers "nothing open", so the condition is false and never throws. It reads the session store
+    rather than the `GuiSession` facet so that it answers from any trigger, not only inside a GUI's own rules. An id names a pack's GUI, so it is written qualified (`shop:menu`); a bare id means
+    `materione:`, as for every Materione name.
+
+11. **Conditions run on the player's thread, and none declares a thread.** A predicate reads live player and world
+    state, so the interpreter hops to the player's region before it tests one (§16 decision 17). That is correct for
+    every condition here except the money read's Folia gap (decision 4). The inventory and the location are the
+    player's, and the experience is too, so no condition needs a hop of its own.
+
+12. **A condition that cannot decide answers false, and throws nothing on missing state.** A missing player, an
+    unresolvable item, an unavailable currency, a template that does not render to a number and an unknown GUI all
+    answer `false`. A load problem is `MTR-0057` at the condition's step path, as for every predicate (§16 decision 5).
+    An exception from a condition is contained by the interpreter as `MTR-0023`. **No new MTR code** was needed, and
+    `DiagnosticCodesTest` stays at 60.
+
+13. **Shorthands** are `permission`, `amount` (`has_money` and `has_exp`), `item`, `slots`, `worlds` and `id`. `is_near`
+    has none, because a point is never one number. The description's `shorthand` names a declared parameter, so the
+    vocabulary and the form agree (§14 decision 1).
+
+**Tests.** Unit tests for each condition's parse (accept and reject) and test against a fake player
+(`PlayerFake`, now public, with permissions, a world name, a position and a UUID), `ItemMatchTest` and `ItemSlotsTest` for
+the shared matcher and the slot arithmetic, `BuiltinConditionsTest` for registration, categories, shorthands and the
+reserved names, and `ConditionsInFlowsTest` for a condition in a rule `if:`, a step `if:`, a `choose` branch and an
+`at_least`, plus an expression function call in an `if:`. `ProviderActionsTest`'s currency fakes are public so
+`has_money` reuses them. `LogicCodeOrganisationTest` passes, so every class is under 400 lines.
+
+**QA catalog (player-visible, auto mode).** `probe:probe_conditions` runs `give_permission`, `has_permission`,
+`has_item`, `has_exp` and an `if:` on `contains(lower(player.name), 'pro')`, each reporting a chat line.
+`logic.conditions-permission`, `logic.conditions-item-exp` and `logic.conditions-expression-function` read those lines back.
+The expression entry is the one #209 asked for. The scenarios are on the `probe` pack; no `world` pack file changed.
+The entries are authored and checked by `qa/runner.mjs check`; their ledger state is "never" until a main swarm records them.
+A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
+that result depends on the probe player's operator state. The unit tests cover the negative branch.
+
 ## 25. Decisions taken in #218 (G5: input slots, gui.slot_change, player_inventory: locked, click-policy rows)
 
 #218 ships §6.5, including the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
@@ -1808,5 +2054,7 @@ by the owner.
 (an input-slot setting that cannot apply), documented in plugin.md §5. The next free code is `MTR-0077`.
 
 **Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
-`GuiBridge.Services.inputs()` is the port `slot_has` and `gui.slot_item` reach the window through (`InputSlotPort`).
+`GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a
+condition, in `BuiltinLogic.conditions`, §22's convention) reads the window through the `SlotPeek` port
+(`plugin.logic.support`), which `BuiltinLogic.register` builds from the same bridge, as `in_gui` builds `OpenGuis`.
 The trash recipe (#222) is the one place that will extend it.

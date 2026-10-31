@@ -611,24 +611,56 @@
           "available": true,
           "category": "data",
           "deferred": false,
-          "description": "Stores a value for the rest of this event chain",
+          "description": "Stores a value in a run-local, session or declared player or server variable",
           "displayName": "Set variable",
           "id": "set_var",
           "parameters": [
             {
               "advanced": false,
-              "description": "Variable name",
-              "id": "name",
-              "label": "Name",
+              "description": "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+              "id": "var",
+              "label": "Var",
               "order": 0,
-              "required": true,
+              "required": false,
               "section": "general",
               "type": "string",
               "uiHint": "text"
             },
             {
               "advanced": false,
-              "description": "Value or ${expression}",
+              "description": "Run-local variable name (the M2 spelling of var:)",
+              "id": "name",
+              "label": "Name",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "set",
+                "add",
+                "subtract",
+                "multiply",
+                "toggle",
+                "remove",
+                "reset"
+              ],
+              "default": "set",
+              "description": "What to do with the value",
+              "id": "op",
+              "label": "Op",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Value or ${expression}; not used by toggle, remove and reset",
               "id": "value",
               "label": "Value",
               "order": 0,
@@ -1102,6 +1134,388 @@
         }
       ],
       "conditions": [
+        {
+          "available": true,
+          "category": "player",
+          "description": "True when the player holds at least the amount of experience points or levels",
+          "displayName": "Has experience",
+          "id": "has_exp",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "How many points or levels, from 1",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "points",
+                "levels"
+              ],
+              "default": "points",
+              "description": "What the amount counts",
+              "id": "unit",
+              "label": "Unit",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "description": "True when the player holds at least the amount of an item, matching by id or material, name and lore",
+          "displayName": "Has item",
+          "id": "has_item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many must be held, across stacks",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Only items whose display name contains this text",
+              "id": "name_contains",
+              "label": "Name Contains",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Only items with a lore line containing this text",
+              "id": "lore_contains",
+              "label": "Lore Contains",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Compare the name and lore text without case",
+              "id": "ignore_case",
+              "label": "Ignore Case",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "A vanilla reference skips stacks that carry a Materione identity",
+              "id": "strict",
+              "label": "Strict",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Count the armour slots",
+              "id": "armor",
+              "label": "Armor",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            },
+            {
+              "advanced": false,
+              "default": "true",
+              "description": "Count the offhand slot",
+              "id": "offhand",
+              "label": "Offhand",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "item",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "description": "True when the inventory has that many free slots, or room for that many of an item",
+          "displayName": "Has item space",
+          "id": "has_item_space",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "How many empty storage slots (0 to 36)",
+              "id": "slots",
+              "label": "Slots",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>; room for amount of it",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "With item: how many of it there must be room for",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "slots",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": false,
+          "category": "economy",
+          "description": "True when the player's balance of a currency is at least the amount",
+          "displayName": "Has money",
+          "id": "has_money",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Amount the balance must reach; above 0",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Currency id, e.g. gems or shop:gems; the default currency when omitted",
+              "id": "currency",
+              "label": "Currency",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "amount",
+          "sinceVersion": "2.0.0",
+          "unavailableReason": "the vault integration is not installed, so materione:money cannot be used"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "description": "True when the player holds the permission node (or at least min of several)",
+          "displayName": "Has permission",
+          "id": "has_permission",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "One node, e.g. example.fly; a list of nodes is accepted here too",
+              "id": "permission",
+              "label": "Permission",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "description": "A list of nodes; every one must hold unless min is set",
+              "id": "permissions",
+              "label": "Permissions",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            },
+            {
+              "advanced": false,
+              "description": "How many of permissions must hold (default: all)",
+              "id": "min",
+              "label": "Min",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "permission",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "description": "True when the player has a Materione GUI open, or the GUI with this id",
+          "displayName": "In GUI",
+          "id": "in_gui",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "GUI id, e.g. shop:menu; any open GUI when omitted",
+              "id": "id",
+              "label": "Id",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "id",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "description": "True when the player is in one of the named worlds",
+          "displayName": "In world",
+          "id": "in_world",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "One world name, or a list of them",
+              "id": "worlds",
+              "label": "Worlds",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "worlds",
+          "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "world",
+          "description": "True when the player is within the distance of a point, in the named world",
+          "displayName": "Is near",
+          "id": "is_near",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "World name; the player's own world when omitted",
+              "id": "world",
+              "label": "World",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The point's x coordinate (a number or a template)",
+              "id": "x",
+              "label": "X",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "The point's y coordinate (a number or a template)",
+              "id": "y",
+              "label": "Y",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "The point's z coordinate (a number or a template)",
+              "id": "z",
+              "label": "Z",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Radius in blocks, from 0 (a number or a template)",
+              "id": "distance",
+              "label": "Distance",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "2.0.0"
+        },
         {
           "available": true,
           "category": "gui",
@@ -9017,6 +9431,67 @@
         ]
       },
       {
+        "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
+        "directory": "variables",
+        "displayName": "Variable",
+        "name": "variable",
+        "parameters": [
+          {
+            "advanced": false,
+            "allowedValues": [
+              "player",
+              "server"
+            ],
+            "description": "Where the value is stored: player (per player) or server (one for the server)",
+            "id": "scope",
+            "label": "Scope",
+            "order": 0,
+            "required": true,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "number",
+              "string",
+              "boolean"
+            ],
+            "description": "The value's type: number, string or boolean",
+            "id": "type",
+            "label": "Type",
+            "order": 0,
+            "required": true,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "Value read while nothing is stored (of the declared type; 0, empty text or false when omitted)",
+            "id": "default",
+            "label": "Default",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "raw",
+            "uiHint": "advanced"
+          },
+          {
+            "advanced": false,
+            "description": "Note shown in the studio and by /materione var list",
+            "id": "description",
+            "label": "Description",
+            "order": 0,
+            "required": false,
+            "section": "general",
+            "type": "string",
+            "uiHint": "text"
+          }
+        ]
+      },
+      {
         "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
         "directory": "guis",
         "displayName": "GUI",
@@ -14976,6 +15451,67 @@
           "section": "appearance",
           "type": "list",
           "uiHint": "list"
+        }
+      ]
+    },
+    {
+      "description": "A declared persistent variable: stored per player or on the server, typed, with a default",
+      "directory": "variables",
+      "displayName": "Variable",
+      "name": "variable",
+      "parameters": [
+        {
+          "advanced": false,
+          "allowedValues": [
+            "player",
+            "server"
+          ],
+          "description": "Where the value is stored: player (per player) or server (one for the server)",
+          "id": "scope",
+          "label": "Scope",
+          "order": 0,
+          "required": true,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": false,
+          "allowedValues": [
+            "number",
+            "string",
+            "boolean"
+          ],
+          "description": "The value's type: number, string or boolean",
+          "id": "type",
+          "label": "Type",
+          "order": 0,
+          "required": true,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
+        },
+        {
+          "advanced": true,
+          "description": "Value read while nothing is stored (of the declared type; 0, empty text or false when omitted)",
+          "id": "default",
+          "label": "Default",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced"
+        },
+        {
+          "advanced": false,
+          "description": "Note shown in the studio and by /materione var list",
+          "id": "description",
+          "label": "Description",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "string",
+          "uiHint": "text"
         }
       ]
     },

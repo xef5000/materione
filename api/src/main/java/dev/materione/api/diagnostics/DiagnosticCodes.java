@@ -336,6 +336,28 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode GUI_INPUT_SETTING_IGNORED =
             new DiagnosticCode("MTR-0076", Severity.WARN, "Input-slot setting ignored; the GUI loads without it");
 
+    /**
+     * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a
+     * scope (logic.md §3.2, §20). The step is skipped at load, so a typo never creates a key.
+     */
+    public static final DiagnosticCode VARIABLE_UNDECLARED =
+            new DiagnosticCode("MTR-0063", Severity.ERROR, "Undeclared or reserved variable name");
+
+    /**
+     * A value or operation does not fit the declared type of its variable (a string into a number,
+     * {@code toggle} on a number). Reported at load when the value is a literal; at run time the step
+     * fails when a computed value does not fit.
+     */
+    public static final DiagnosticCode VARIABLE_TYPE_MISMATCH =
+            new DiagnosticCode("MTR-0064", Severity.ERROR, "Value does not fit the variable's declared type");
+
+    /**
+     * A persistent variable could not be read or written at run time: the player holding it is gone,
+     * or the server store could not be written. Rate-limited; the action fails and nothing else changes.
+     */
+    public static final DiagnosticCode VARIABLE_STORE_FAILED =
+            new DiagnosticCode("MTR-0065", Severity.WARN, "Variable store could not be read or written");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -401,7 +423,10 @@ public final class DiagnosticCodes {
             FLOW_UNKNOWN_CONTEXT_ROOT,
             INPUT_ACCEPT_INVALID,
             INPUT_STATIC_ITEM_IGNORED,
-            GUI_INPUT_SETTING_IGNORED);
+            GUI_INPUT_SETTING_IGNORED,
+            VARIABLE_UNDECLARED,
+            VARIABLE_TYPE_MISMATCH,
+            VARIABLE_STORE_FAILED);
 
     private DiagnosticCodes() {}
 

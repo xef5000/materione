@@ -37,7 +37,7 @@ describe('the demo server replays the recorded real server', () => {
   it('serves every registered content type and the real behaviour vocabulary', async () => {
     const types = (await ok('browse.types')).types as { name: string; parameters: unknown[] }[];
     expect(types.map((type) => type.name).sort())
-      .toEqual(['block', 'currency', 'effect', 'furniture', 'glyph', 'gui', 'item', 'painting', 'recipe', 'sound']);
+      .toEqual(['block', 'currency', 'effect', 'furniture', 'glyph', 'gui', 'item', 'painting', 'recipe', 'sound', 'variable']);
     expect(types.find((type) => type.name === 'block')!.parameters.length).toBeGreaterThan(5);
     const describe = await ok('authoring.describe');
     expect((describe.behavior as { events: unknown[] }).events.length).toBeGreaterThan(5);

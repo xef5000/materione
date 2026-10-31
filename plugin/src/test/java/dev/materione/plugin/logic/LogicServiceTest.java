@@ -69,7 +69,7 @@ class LogicServiceTest {
         assertThat(greet.shorthand()).isEqualTo("text");
         assertThat(greet.description().displayName()).isEqualTo("Greet");
         assertThat(vocabulary.conditions()).extracting(BehaviorVocabulary.Condition::id)
-                .contains("example:is_night", "slot_has");
+                .contains("example:is_night", "has_permission", "has_money", "in_gui", "slot_has");
         // the built-ins are there beside them, registered the same way
         assertThat(vocabulary.actions()).extracting(BehaviorVocabulary.Action::id)
                 .contains("run_command", "message", "sound", "potion", "cancel", "set_var");
@@ -131,8 +131,9 @@ class LogicServiceTest {
         assertThat(api.logic().actions().get(NamespacedId.of("example", "greet"))).isEmpty();
 
         service.ownerDisabled(addon);
-        // the built-in slot_has is still there (it is materione's, not the addon's)
-        assertThat(api.logic().conditions().get(NamespacedId.of("example", "is_night"))).isEmpty();
+        assertThat(api.logic().conditions().entries()).extracting(entry -> entry.registeredBy())
+                .doesNotContain("example")
+                .contains("materione");
         assertThat(api.logic().actions().resolve("message")).isPresent(); // other owners are untouched
     }
 

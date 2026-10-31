@@ -158,6 +158,11 @@ public final class FlowRun {
         }
 
         @Override
+        public dev.materione.api.logic.variable.VariableBinding variables() {
+            return base.variables();
+        }
+
+        @Override
         public String applyPlaceholders(String text) {
             return base.applyPlaceholders(text);
         }

@@ -44,6 +44,14 @@ dependencyResolutionManagement {
                 includeGroup("net.md-5")
             }
         }
+        maven("https://repo.extendedclip.com/releases/") {
+            name = "extendedclip"
+            // PlaceholderAPI (compileOnly in :plugin for the %materione_*% expansion, logic.md §3.3); the
+            // server provides the jar at runtime, so nothing here is shaded.
+            content {
+                includeGroup("me.clip")
+            }
+        }
         // Vault's provider API (integrations, compileOnly). Published on JitPack only; the
         // filter admits the one group, so nothing else resolves from here.
         maven("https://jitpack.io") {

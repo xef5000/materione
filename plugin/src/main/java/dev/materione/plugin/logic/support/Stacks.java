@@ -34,7 +34,12 @@ public final class Stacks {
                 ? Optional.of(PlainTextComponentSerializer.plainText()
                         .serialize(stack.getItemMeta().displayName()))
                 : Optional.empty();
-        return new ItemView(MaterioneStacks.identityOf(stack), stack.getType().name(), name, stack.getAmount());
+        List<String> lore = stack.hasItemMeta() && stack.getItemMeta().hasLore()
+                ? stack.getItemMeta().lore().stream()
+                        .map(line -> PlainTextComponentSerializer.plainText().serialize(line))
+                        .toList()
+                : List.of();
+        return new ItemView(MaterioneStacks.identityOf(stack), stack.getType().name(), name, stack.getAmount(), lore);
     }
 
     /** Removes the planned amounts. Call only with a plan the same contents produced. */

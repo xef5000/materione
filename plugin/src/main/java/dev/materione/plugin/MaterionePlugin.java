@@ -82,6 +82,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.plugin.runtime.mechanics.MechanicsService mechanics;
     private dev.materione.plugin.runtime.gui.GuiComponentsService guiComponents;
     private dev.materione.plugin.logic.LogicService logic;
+    private dev.materione.plugin.logic.variable.VariableService variables;
     /** How the GUI actions reach the GUI runtime; bound when {@link #guiStack} is built. */
     private final dev.materione.plugin.gui.GuiBridge guiBridge = new dev.materione.plugin.gui.GuiBridge();
     /** The GUI runtime (sessions, opener, click routing); null before content load. */
@@ -221,6 +222,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (integrations != null) {
                 integrations.close();
             }
+            if (variables != null) {
+                variables.close(); // the server store is written once more before the registries go
+            }
             if (logic != null) {
                 logic.close();
             }
@@ -298,14 +302,30 @@ public final class MaterionePlugin extends JavaPlugin {
         guiComponents = new dev.materione.plugin.runtime.gui.GuiComponentsService(this, registries);
         // the logic vocabulary (triggers, actions) through the public API, before content load:
         // rules resolve their actions against these registries when they are parsed (logic.md §4)
+        // persistent variables (logic.md §3): the player's data container and the server file, with
+        // the live declarations of whichever shadow is applied
+        variables = new dev.materione.plugin.logic.variable.VariableService(
+                new dev.materione.plugin.logic.variable.PdcVariableStore(uuid -> java.util.Optional.ofNullable(
+                        org.bukkit.Bukkit.getPlayer(uuid)).map(org.bukkit.entity.Player::getPersistentDataContainer)),
+                new dev.materione.plugin.logic.variable.ServerVariableStore(
+                        getDataFolder().toPath().resolve("storage").resolve("variables.json"), getLogger()::warning),
+                this::liveDeclarations,
+                diagnostics::publish);
         logic = new dev.materione.plugin.logic.LogicService(this, registries, scheduling, diagnostics::publish,
-                settings == null ? null : settings.getString("default_currency", "materione:money"));
+                settings == null ? null : settings.getString("default_currency", "materione:money"),
+                variables);
         // the item actions read the live registries: empty until the first apply, then the current set;
         // the GUI actions reach the GUI runtime through the bridge it binds into once it is built
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
                 guiBridge);
         registerProviders();
+        // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
+        dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
+                new dev.materione.integrations.variables.VariablePlaceholders(variables.api(), variables::guiSessions),
+                "1");
+        // the debounced server flush: every 5 seconds, what changed since the last one is written
+        variables.autoFlush(task -> scheduling.executeGlobalLater(this, 100L, task));
     }
 
     /**
@@ -362,6 +382,18 @@ public final class MaterionePlugin extends JavaPlugin {
                 .collect(java.util.stream.Collectors.joining(","));
         getLogger().info("MATERIONE-LOGIC-OK currency=" + defaultCurrency.id() + " available=" + available
                 + " transfer=" + transfer + " unavailable=" + (unavailable.isEmpty() ? "none" : unavailable));
+    }
+
+    /** The persistent variables (logic.md §3); null before the logic phase has run. */
+    public dev.materione.plugin.logic.variable.VariableService variableService() {
+        return variables;
+    }
+
+    /** The declarations of the applied shadow; empty before the first apply. */
+    private dev.materione.core.runtime.RuntimeVariables liveDeclarations() {
+        var live = pipeline == null ? null : pipeline.runtime().registries();
+        var view = live == null ? null : live.view(dev.materione.core.runtime.RuntimeVariables.KEY);
+        return view == null ? dev.materione.core.runtime.RuntimeVariables.empty() : view;
     }
 
     private void loadContent() {
@@ -578,7 +610,7 @@ public final class MaterionePlugin extends JavaPlugin {
         }
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
-        behavior = new BehaviorService(logic.engine(), pipeline.runtime());
+        behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);
         getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
         // custom-block world runtime (runtime-systems §4): placement index is
         // disposable generated state — rebuilt from chunk scans if lost

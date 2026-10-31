@@ -8,13 +8,13 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
-import dev.materione.plugin.gui.GuiBridge;
 import dev.materione.plugin.gui.input.StackView;
 import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.logic.support.SlotPeek;
 import java.util.List;
 import java.util.Locale;
-import java.util.Optional;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * {@code slot_has: {slot: 13}}, {@code slot_has: {slot: 13, item: corpus:gem_red, amount: 2}}: true when an input
@@ -41,10 +41,11 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
         }
     }
 
-    private final GuiBridge bridge;
+    private final SlotPeek slots;
 
-    public SlotHasCondition(GuiBridge bridge) {
-        this.bridge = Objects.requireNonNull(bridge, "bridge");
+    /** @param slots the port the input slot's item is read through; {@link SlotPeek#none()} answers empty */
+    public SlotHasCondition(SlotPeek slots) {
+        this.slots = Objects.requireNonNull(slots, "slots");
     }
 
     @Override
@@ -80,9 +81,7 @@ public final class SlotHasCondition implements ConditionType<SlotHasCondition.Pa
         if (session == null) {
             return false;
         }
-        StackView held = bridge.services()
-                .map(services -> services.inputs().peek(session, params.slot()))
-                .orElse(StackView.EMPTY);
+        StackView held = slots.peek(session, params.slot());
         if (held.empty() || held.amount() < params.amount()) {
             return false;
         }

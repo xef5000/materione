@@ -56,7 +56,7 @@ class InputSlotActionsTest {
 
     @Test
     void slotHasParsesItsSlotItemAndAmountAndRejectsAnOutOfRangeSlot() {
-        var condition = new SlotHasCondition(f.bridge);
+        var condition = new SlotHasCondition(f.inputPort::peek);
         assertThat(condition.parse(reader(Map.of("slot", 4, "item", "corpus:gem_red", "amount", 2)))).isNotNull();
         assertThat(condition.parse(reader(Map.of("slot", 4, "item", "diamond")))).isNotNull();
         assertThatThrownBy(() -> condition.parse(reader(Map.of("slot", 60))))
@@ -67,7 +67,7 @@ class InputSlotActionsTest {
 
     @Test
     void slotHasReadsTheInputSlotOfTheRunsOwnGuiAndNothingElse() {
-        var condition = new SlotHasCondition(f.bridge);
+        var condition = new SlotHasCondition(f.inputPort::peek);
         f.inputPort.items.put(4, new StackView("corpus:gem_red", 2, 64));
         var ctx = GuiContexts.build(f.viewer, shop, Map.of());
 
