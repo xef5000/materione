@@ -16,8 +16,15 @@ releases may change file formats, settings and the public API.
   instead of a client error. `permission:` gates the open, and `requirement:` with `deny:` runs the steps that tell
   the player why it was refused. Players with `materione.gui.bypass.<pack>.<id>` skip the requirement. Four new
   diagnostic codes cover a bad default (`MTR-0066`), a command name another plugin already uses (`MTR-0067`), a
-  requirement that does not load (`MTR-0068`, which refuses the open) and a reload that needs a restart to change an
-  argument (`MTR-0069`).
+  requirement that does not load (`MTR-0068`, which refuses the open) and a command the server could not add to the
+  live tree even after a reload (`MTR-0069`). Booting with unchanged content asks the server for no data reload; a
+  content change that adds an open command or changes its arguments asks for one, logged as `MATERIONE-OPEN-TREE reload`.
+- **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
+  `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
+  it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
+  `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
+  work (#211) and `slot_has` the slot work (#218).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always

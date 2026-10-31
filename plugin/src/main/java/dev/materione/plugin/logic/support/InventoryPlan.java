@@ -2,7 +2,6 @@ package dev.materione.plugin.logic.support;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -20,10 +19,7 @@ public final class InventoryPlan {
 
     /** The predicate a matcher reads: the item, and the name text it must contain when one is given. */
     public static Predicate<ItemView> wanted(ItemRef ref, Optional<String> nameContains) {
-        String needle = nameContains.map(text -> text.toLowerCase(Locale.ROOT)).orElse(null);
-        return view -> ref.matches(view)
-                && (needle == null || view.name().map(name -> name.toLowerCase(Locale.ROOT).contains(needle))
-                        .orElse(false));
+        return ItemMatch.of(ref, nameContains).predicate();
     }
 
     /** How many matching items the slots hold in total. */

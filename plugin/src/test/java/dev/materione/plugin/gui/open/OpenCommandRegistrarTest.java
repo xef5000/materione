@@ -8,6 +8,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.plugin.gui.GuiFixture;
+import dev.materione.plugin.gui.RuntimeGuis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.lang.reflect.Proxy;
@@ -46,6 +47,8 @@ class OpenCommandRegistrarTest {
     /** What the fake server's {@code reloadData} does: Paper fires the COMMANDS event again, so this re-registers. */
     private Runnable onReload;
     private int reloads;
+    /** The clock the reload rate limit reads, in nanoseconds. */
+    private long now;
 
     @BeforeEach
     void setUp() {
@@ -53,9 +56,69 @@ class OpenCommandRegistrarTest {
         dispatcher = new CommandDispatcher<>();
         diagnostics = new ArrayList<>();
         handler = new OpenCommandHandler(plugin(), null, f::view, null, PlayerNames.NONE);
-        registrar = new OpenCommandRegistrar(plugin(), handler, f::view, diagnostics::add);
+        registrar = new OpenCommandRegistrar(plugin(), handler, f::view, f::view, diagnostics::add, () -> now);
         commands = commandsOver(dispatcher);
         onReload = () -> registrar.onCommands(commands);
+    }
+
+    @Test
+    void theBootRegistersFromTheBuiltRegistriesAndAnUnchangedSwapReloadsNothing() {
+        // at boot the COMMANDS event runs before the first apply: the live view is still empty, the built one is not
+        var livesEmpty = new OpenCommandRegistrar(plugin(), handler, RuntimeGuis::empty, f::view, diagnostics::add,
+                () -> now);
+        f.gui(SHOP);
+
+        livesEmpty.onCommands(commands);
+        livesEmpty.resync(f.view());
+
+        assertThat(dispatcher.getRoot().getChild("shop")).isNotNull();
+        assertThat(handler.bindings()).containsOnlyKeys("shop", "store");
+        assertThat(reloads).isZero();
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void aSwapOfUnchangedContentAsksForNoReload() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+
+        registrar.resync(f.view());
+        registrar.resync(f.view());
+
+        assertThat(reloads).isZero();
+    }
+
+    @Test
+    void severalSwapsInsideTheWindowAreCoalescedIntoOneReload() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("""
+                menu:
+                  title: Menu
+                  rows: 1
+                  layers: []
+                  open:
+                    commands: [menu]
+                """);
+        registrar.resync(f.view());
+        assertThat(reloads).isEqualTo(1);
+
+        f.gui("""
+                other:
+                  title: Other
+                  rows: 1
+                  layers: []
+                  open:
+                    commands: [other]
+                """);
+        now += java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        registrar.resync(f.view());
+        assertThat(reloads).as("inside the window the request is deferred").isEqualTo(1);
+
+        now += java.util.concurrent.TimeUnit.SECONDS.toNanos(6);
+        registrar.resync(f.view());
+        assertThat(reloads).as("the next swap after the window asks for everything still stale").isEqualTo(2);
+        assertThat(handler.declared("other")).isTrue();
     }
 
     private static final String SHOP = """
@@ -217,9 +280,9 @@ class OpenCommandRegistrarTest {
                 """);
         registrar.resync(f.view());
 
-        // both aliases of the GUI were built with the old shape, and the tree keeps it until a restart
-        assertThat(diagnostics).hasSize(2).allSatisfy(diagnostic ->
-                assertThat(diagnostic.code()).isEqualTo(DiagnosticCodes.OPEN_TREE_RESYNC));
+        // both aliases were built with the old shape: the swap asks for a reload, and the reload rebuilds them
+        assertThat(reloads).isEqualTo(1);
+        assertThat(diagnostics).isEmpty();
     }
 
     @Test

@@ -7,8 +7,11 @@ import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.kyori.adventure.title.Title;
@@ -24,18 +27,27 @@ import org.bukkit.inventory.PlayerInventory;
  * whether a teleport or a command is accepted) are answered from plain fields. Stacks are never
  * created here, because a real {@link ItemStack} needs a server; the inventory is always empty.
  */
-final class PlayerFake {
+public final class PlayerFake {
 
-    final List<String> calls = new ArrayList<>();
-    int totalExperience;
-    int level;
-    boolean teleportAccepted = true;
-    boolean commandExists = true;
+    public final List<String> calls = new ArrayList<>();
+    /** The player's unique id, answered by {@code getUniqueId()} (the money backends are keyed by it). */
+    public final UUID uuid = UUID.fromString("00000000-0000-0000-0000-00000000a1e7");
+    public int totalExperience;
+    public int level;
+    public boolean teleportAccepted = true;
+    public boolean commandExists = true;
     /** The players of the player's world, answered by {@code getWorld().getPlayers()}. */
-    final List<Player> worldPlayers = new ArrayList<>();
+    public final List<Player> worldPlayers = new ArrayList<>();
+    /** The permission nodes the player holds, answered by {@code hasPermission} (logic.md §22). */
+    public final Set<String> permissions = new HashSet<>();
+    /** The name of the player's world, answered by {@code getWorld().getName()}. */
+    public String worldName = "world";
+    /** The player's position, answered by {@code getLocation()}; the facing is fixed at 90 and 10. */
+    public double x = 1, y = 2, z = 3;
 
     private final World world = proxy(World.class, (method, args) -> switch (method.getName()) {
         case "getPlayers" -> List.copyOf(worldPlayers);
+        case "getName" -> worldName;
         default -> throw new AssertionError("unexpected world call: " + method.getName());
     });
 
@@ -45,7 +57,7 @@ final class PlayerFake {
     });
 
     /** The player itself. */
-    final Player player = proxy(Player.class, this::answer);
+    public final Player player = proxy(Player.class, this::answer);
 
     private Object answer(Method method, Object[] args) {
         return switch (method.getName()) {
@@ -85,7 +97,9 @@ final class PlayerFake {
                         + " yaw=" + to.getYaw() + " pitch=" + to.getPitch());
                 yield teleportAccepted;
             }
-            case "getLocation" -> new Location(world, 1, 2, 3, 90f, 10f);
+            case "getLocation" -> new Location(world, x, y, z, 90f, 10f);
+            case "hasPermission" -> permissions.contains((String) args[0]);
+            case "getUniqueId" -> uuid;
             case "getWorld" -> world;
             case "getInventory" -> inventory;
             case "getTotalExperience" -> totalExperience;
@@ -123,14 +137,14 @@ final class PlayerFake {
     }
 
     /** A context whose run holds this player and the placeholder {@code %server%} resolves to Lobby. */
-    LogicContext context() {
+    public LogicContext context() {
         return new MapLogicContext(Map.of("player", Map.of("name", "Alex")))
                 .with(Facets.PLAYER, player)
                 .withPlaceholders(text -> text.replace("%server%", "Lobby"));
     }
 
     /** A context with no player, for the "event has no player" paths. */
-    static LogicContext noPlayer() {
+    public static LogicContext noPlayer() {
         return new MapLogicContext(Map.of());
     }
 

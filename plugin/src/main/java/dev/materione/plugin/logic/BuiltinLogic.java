@@ -14,6 +14,7 @@ import dev.materione.plugin.logic.function.BalanceFunction;
 import dev.materione.plugin.logic.function.FormatCurrencyFunction;
 import dev.materione.behavior.logic.LogicIds;
 import dev.materione.plugin.gui.GuiBridge;
+import dev.materione.plugin.gui.session.GuiSession;
 import dev.materione.plugin.gui.trigger.GuiTriggers;
 import dev.materione.plugin.logic.action.ActionbarAction;
 import dev.materione.plugin.logic.action.BroadcastAction;
@@ -40,7 +41,17 @@ import dev.materione.plugin.logic.action.gui.BackGuiAction;
 import dev.materione.plugin.logic.action.gui.CloseGuiAction;
 import dev.materione.plugin.logic.action.gui.OpenGuiAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
+import dev.materione.api.logic.ConditionType;
+import dev.materione.plugin.logic.condition.HasExpCondition;
+import dev.materione.plugin.logic.condition.HasItemCondition;
+import dev.materione.plugin.logic.condition.HasItemSpaceCondition;
+import dev.materione.plugin.logic.condition.HasMoneyCondition;
+import dev.materione.plugin.logic.condition.HasPermissionCondition;
+import dev.materione.plugin.logic.condition.InGuiCondition;
+import dev.materione.plugin.logic.condition.InWorldCondition;
+import dev.materione.plugin.logic.condition.IsNearCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
+import dev.materione.plugin.logic.support.OpenGuis;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
@@ -149,8 +160,15 @@ public final class BuiltinLogic {
         register(api, owner, items, new GuiBridge());
     }
 
-    /** As above, with the bridge the GUI actions reach the GUI runtime through. */
+    /**
+     * As above, with the bridge the GUI actions reach the GUI runtime through. {@code in_gui} reads the
+     * player's current session through the same bridge, so it answers "no GUI" until the runtime binds.
+     */
     public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge) {
+        OpenGuis guis = player -> bridge.services()
+                .flatMap(services -> services.sessions().current(player.getUniqueId()))
+                .filter(GuiSession::isOpen)
+                .map(GuiSession::gui);
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
@@ -176,6 +194,32 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : currencyFunctions(api.providers())) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
+        // built-in conditions (logic.md §22, #210): their own block, after the rest
+        for (ConditionType<?> condition : conditions(api.providers(), guis, items)) {
+            api.conditions().register(owner, builtIn(condition.id()), condition);
+        }
+    }
+
+    /**
+     * The built-in conditions (logic.md §4.2, §22). Each is one class in {@code plugin.logic.condition}.
+     * None may take a composite name ({@code all}, {@code any}, {@code not}, {@code at_least}): the rule
+     * compiler reads those keys as composites before it looks up a predicate, so such a condition would be
+     * unreachable.
+     *
+     * @param providers the provider slots the money condition reads
+     * @param guis the port {@code in_gui} reads
+     * @param items the live item registries the item conditions resolve against
+     */
+    public static List<ConditionType<?>> conditions(LogicProviders providers, OpenGuis guis, ItemCatalog items) {
+        return List.of(
+                new HasPermissionCondition(),
+                new HasMoneyCondition(providers),
+                new HasExpCondition(),
+                new HasItemCondition(items),
+                new HasItemSpaceCondition(items),
+                new IsNearCondition(),
+                new InWorldCondition(),
+                new InGuiCondition(guis));
     }
 
     /**

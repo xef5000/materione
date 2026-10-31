@@ -44,7 +44,7 @@ import org.junit.jupiter.api.Test;
  * installed), and reports availability from what is installed at the moment it is asked. No server: the
  * player is a stand-in with a fixed UUID.
  */
-class ProviderActionsTest {
+public class ProviderActionsTest {
 
     private static final UUID ALEX = UUID.fromString("00000000-0000-0000-0000-00000000a1e7");
 
@@ -76,11 +76,11 @@ class ProviderActionsTest {
     }
 
     /** In-memory money: balances per player; a withdrawal the balance cannot cover takes nothing. */
-    static final class FakeBackend implements CurrencyBackend {
-        final Map<UUID, Double> balances = new HashMap<>();
-        String refusal;
-        boolean up = true;
-        Threading threading = Threading.GLOBAL;
+    public static final class FakeBackend implements CurrencyBackend {
+        public final Map<UUID, Double> balances = new HashMap<>();
+        public String refusal;
+        public boolean up = true;
+        public Threading threading = Threading.GLOBAL;
 
         @Override
         public Availability availability() {
@@ -157,7 +157,7 @@ class ProviderActionsTest {
     }
 
     /** In-memory permission nodes; {@code refusal} makes every request refuse with that reason. */
-    static final class FakePermissions implements PermissionProvider {
+    public static final class FakePermissions implements PermissionProvider {
         final Map<UUID, Set<String>> nodes = new HashMap<>();
         String refusal;
 
@@ -210,15 +210,15 @@ class ProviderActionsTest {
     }
 
     /** Providers the test installs and removes at will; the actions read them at each use. */
-    static final class FakeProviders implements LogicProviders {
-        final FakeBackend backend = new FakeBackend();
+    public static final class FakeProviders implements LogicProviders {
+        public final FakeBackend backend = new FakeBackend();
         final MaterioneCurrencyCatalog currencies;
         Optional<ServerTransfer> transfer = Optional.empty();
         final PermissionProvider permissions;
         /** Whether the vault integration is registered; toggled to model Vault arriving or leaving. */
-        boolean vaultInstalled = true;
+        public boolean vaultInstalled = true;
 
-        FakeProviders(PermissionProvider permissions) {
+        public FakeProviders(PermissionProvider permissions) {
             this.permissions = permissions;
             this.currencies = new MaterioneCurrencyCatalog(
                     authored -> vaultInstalled && "vault".equals(authored)

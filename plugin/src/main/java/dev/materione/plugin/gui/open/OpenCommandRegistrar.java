@@ -9,35 +9,46 @@ import dev.materione.plugin.gui.RuntimeGuis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 /**
- * Puts the open commands of the live GUIs into the server's command tree (logic.md §6.1, §23). The tree can only
- * be changed while the server's command lifecycle is running, so there are two moments:
+ * Puts the open commands of the live GUIs into the server's command tree (logic.md §6.1, §23). The tree can only be
+ * changed while the server's command lifecycle is running, so there are two moments:
  *
  * <ul>
- *   <li><b>The COMMANDS lifecycle event</b> ({@link #onCommands}): Paper calls it at start and on a server reload,
- *       and only there may commands be registered. Every declared alias is registered from the live view.
+ *   <li><b>The COMMANDS lifecycle event</b> ({@link #onCommands}): Paper calls it at start and on a server reload, and
+ *       only there may commands be registered. It registers from the <em>built</em> registries (the latest reload's,
+ *       applied or not), because the first apply runs after the event. So at boot the tree already holds what the
+ *       first swap publishes, and nothing needs a reload.
  *   <li><b>A content swap</b> ({@link #resync}): the declared set is updated at once, which hides a removed alias
- *       (Brigadier cannot remove a child; the node's {@code requires} checks the declared set). An alias the tree
- *       does not have yet asks Paper for a reload of its data, which fires the COMMANDS event again with the live
- *       view; if that does not put the alias in the tree, it is reported as needing a restart.
+ *       (Brigadier cannot remove a child; the node's {@code requires} checks the declared set). Only an alias the tree
+ *       lacks, or built with another argument shape, asks for a reload: {@code Server#reloadData}, which fires the
+ *       COMMANDS event again. Reloads are rate-limited, so several swaps in a short window are coalesced into one.
  * </ul>
  *
  * <p>A name that is already a command (vanilla, another plugin, or another GUI's open command) is skipped with
- * {@link DiagnosticCodes#OPEN_COMMAND_CONFLICT}. Paper would otherwise let a main label override it, so the check is
- * made before anything is registered. An argument shape that changed for an alias already in the tree cannot change
- * in place, and is reported as {@link DiagnosticCodes#OPEN_TREE_RESYNC}. Nothing here reads the command registrar
- * outside {@link #onCommands}: Paper refuses that, and a swap must never fail because of it.
+ * {@link DiagnosticCodes#OPEN_COMMAND_CONFLICT}, because Paper would otherwise let a main label override it. Nothing
+ * here reads the command registrar outside {@link #onCommands}: Paper refuses that, and a swap must never fail on it.
+ *
+ * <p>Log markers, read by the harness: {@code MATERIONE-OPEN-TREE declared=<n> registered=<n>} at each COMMANDS event;
+ * {@code MATERIONE-OPEN-TREE reload aliases=[...]} for a reload this registrar asked for; and
+ * {@code MATERIONE-OPEN-TREE reload-deferred aliases=[...]} for one the rate limit held back.
  */
 public final class OpenCommandRegistrar {
+
+    /** A reload is asked for at most this often; a swap inside the window is coalesced into the next allowed one. */
+    static final long MIN_RELOAD_NANOS = TimeUnit.SECONDS.toNanos(5);
 
     /** An alias this registrar has put in the tree, with the argument shape it was built with. */
     private record Owned(List<String> shape) {}
@@ -48,29 +59,51 @@ public final class OpenCommandRegistrar {
     private final Plugin plugin;
     private final OpenCommandHandler handler;
     private final Supplier<RuntimeGuis> live;
+    private final Supplier<RuntimeGuis> built;
     private final Consumer<Diagnostic> diagnostics;
+    private final LongSupplier clock;
     private final Map<String, Owned> owned = new HashMap<>();
-    /** Aliases the last COMMANDS event refused: a swap does not ask for another reload for them until the next event. */
+    /** Declared aliases the last COMMANDS event refused: no reload is asked for them until the next event. */
     private Set<String> refused = Set.of();
+    /** Aliases a reload did not put in the tree, and which must not ask for another until the next event. */
+    private Set<String> unreloadable = Set.of();
+    private long lastReload = Long.MIN_VALUE;
     private volatile boolean treeOpen;
 
+    /**
+     * @param live the applied registries' GUIs, which the executor and the suggestions read
+     * @param built the registries of the latest reload, which the COMMANDS event registers from
+     */
     public OpenCommandRegistrar(
-            Plugin plugin, OpenCommandHandler handler, Supplier<RuntimeGuis> live, Consumer<Diagnostic> diagnostics) {
+            Plugin plugin, OpenCommandHandler handler, Supplier<RuntimeGuis> live, Supplier<RuntimeGuis> built,
+            Consumer<Diagnostic> diagnostics) {
+        this(plugin, handler, live, built, diagnostics, System::nanoTime);
+    }
+
+    /** For tests: the clock the reload rate limit reads. */
+    OpenCommandRegistrar(
+            Plugin plugin, OpenCommandHandler handler, Supplier<RuntimeGuis> live, Supplier<RuntimeGuis> built,
+            Consumer<Diagnostic> diagnostics, LongSupplier clock) {
         this.plugin = plugin;
         this.handler = handler;
         this.live = live;
+        this.built = built;
         this.diagnostics = diagnostics;
+        this.clock = clock;
     }
 
     /**
      * Registers every declared alias. Called from the server's COMMANDS lifecycle event, at start and on a server
-     * reload, while the registrar is valid.
+     * reload, while the registrar is valid. Registers from the built registries, so it is correct before the first
+     * apply has run.
      */
     public synchronized void onCommands(Commands registrar) {
         treeOpen = true;
+        unreloadable = Set.of();
+        RuntimeGuis view = built.get();
         Set<String> previous = Set.copyOf(owned.keySet());
         owned.clear();
-        Map<String, Claim> claims = claims(live.get(), registrar, previous, true);
+        Map<String, Claim> claims = claims(view, registrar, previous, true);
         var bound = new LinkedHashMap<String, NamespacedId>();
         for (Map.Entry<String, Claim> entry : claims.entrySet()) {
             String alias = entry.getKey();
@@ -88,8 +121,8 @@ public final class OpenCommandRegistrar {
             }
         }
         // every declared alias this event did not bind is refused until the next event: a swap must not ask again
-        var rejected = new java.util.HashSet<String>();
-        for (RuntimeGuis.Live gui : live.get().all()) {
+        var rejected = new HashSet<String>();
+        for (RuntimeGuis.Live gui : view.all()) {
             if (gui.open() != null) {
                 rejected.addAll(gui.open().commands());
             }
@@ -101,34 +134,31 @@ public final class OpenCommandRegistrar {
     }
 
     /**
-     * Brings the declared set in line with the live GUIs after a content swap (logic.md §6.1, §23). It never throws:
-     * a swap is not allowed to fail on the command tree. An alias the tree does not have yet asks for a reload of
-     * the server's data, which fires the COMMANDS event again. Before that event has run there is no tree, so the
-     * declared set alone is updated, and the event registers it.
+     * Brings the declared set in line with the live GUIs after a content swap (logic.md §23, decision 15). It never
+     * throws. It asks for a reload only when a declared alias is missing from the tree or was built with another
+     * argument shape; a removed alias needs none, because its {@code requires} now fails. Before the COMMANDS event
+     * there is no tree, so only the declared set changes, and that event registers it.
      */
     public synchronized void resync(RuntimeGuis view) {
         Map<String, Claim> claims = claims(view, null, owned.keySet(), false);
         claims.keySet().removeAll(refused);
-        boolean missing = false;
         var next = new LinkedHashMap<String, NamespacedId>();
+        var stale = new LinkedHashMap<String, Claim>();
         for (Map.Entry<String, Claim> entry : claims.entrySet()) {
             String alias = entry.getKey();
             Claim claim = entry.getValue();
             Owned existing = owned.get(alias);
-            if (existing == null) {
-                missing |= treeOpen;
-            } else if (!existing.shape().equals(OpenCommandTree.shape(claim.args()))) {
-                diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_TREE_RESYNC, Severity.WARN,
-                        "open command '" + alias + "' of " + claim.gui() + " changed its argument names or types; "
-                                + "the tree keeps the old shape until the next restart",
-                        claim.gui(), null, "restart the server to apply the new argument shape"));
+            boolean missing = existing == null;
+            boolean reshaped = !missing && !existing.shape().equals(OpenCommandTree.shape(claim.args()));
+            if (treeOpen && (missing || reshaped) && !unreloadable.contains(alias)) {
+                stale.put(alias, claim);
             }
             next.put(alias, claim.gui());
         }
         Map<String, NamespacedId> before = handler.bindings();
         handler.rebind(next);
-        if (missing) {
-            reloadTree(claims);
+        if (!stale.isEmpty()) {
+            reloadTree(stale);
         }
         if (treeOpen && !before.equals(next)) {
             sendTree();
@@ -136,22 +166,40 @@ public final class OpenCommandRegistrar {
     }
 
     /**
-     * Asks Paper to reload the server's data, which fires the COMMANDS event with the live view (the reload cause).
-     * An alias still missing afterwards is reported, and applies at the next restart.
+     * Asks Paper to reload the server's data, which fires the COMMANDS event with the live view. Within the rate
+     * limit the request is deferred, and the next swap after the window asks again for everything still stale.
+     * An alias the reload did not put in the tree is reported and not asked for again until the next event.
      */
-    private void reloadTree(Map<String, Claim> claims) {
+    private void reloadTree(Map<String, Claim> stale) {
+        long now = clock.getAsLong();
+        if (lastReload != Long.MIN_VALUE && now - lastReload < MIN_RELOAD_NANOS) {
+            plugin.getLogger().info("MATERIONE-OPEN-TREE reload-deferred aliases=" + stale.keySet()
+                    + " reason=rate-limit");
+            return;
+        }
+        lastReload = now;
+        plugin.getLogger().info("MATERIONE-OPEN-TREE reload aliases=" + stale.keySet());
         try {
             plugin.getServer().reloadData();
         } catch (RuntimeException e) {
             plugin.getLogger().warning("MATERIONE-OPEN-TREE reload failed: " + e);
         }
-        for (Map.Entry<String, Claim> entry : claims.entrySet()) {
-            if (!owned.containsKey(entry.getKey())) {
+        var failed = new LinkedHashSet<String>();
+        for (Map.Entry<String, Claim> entry : stale.entrySet()) {
+            Owned after = owned.get(entry.getKey());
+            if (after == null || !after.shape().equals(OpenCommandTree.shape(entry.getValue().args()))) {
+                failed.add(entry.getKey());
+                Claim claim = entry.getValue();
                 diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_TREE_RESYNC, Severity.WARN,
-                        "open command '" + entry.getKey() + "' of " + entry.getValue().gui()
-                                + " could not be added to the live tree; it applies at the next restart",
-                        entry.getValue().gui(), null, "restart the server to register it"));
+                        "open command '" + entry.getKey() + "' of " + claim.gui() + " is not in the live tree after a "
+                                + "reload; it applies at the next restart",
+                        claim.gui(), null, "restart the server to register it"));
             }
+        }
+        if (!failed.isEmpty()) {
+            var remembered = new HashSet<>(unreloadable);
+            remembered.addAll(failed);
+            unreloadable = Set.copyOf(remembered);
         }
     }
 
@@ -167,8 +215,8 @@ public final class OpenCommandRegistrar {
     }
 
     /**
-     * The aliases the live GUIs claim, in order, with the conflicts left out. An alias one GUI claims twice, or that
-     * is already a command, is skipped and reported (when {@code report} is set).
+     * The aliases the GUIs claim, in order, with the conflicts left out. An alias one GUI claims twice, or that is
+     * already a command, is skipped and reported (when {@code report} is set).
      *
      * @param registrar the registrar of the COMMANDS event, or null outside it (then only the command map is checked)
      * @param ours the aliases this registrar put in the tree, which are not conflicts

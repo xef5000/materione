@@ -82,10 +82,24 @@ public final class OpenCommandRunner {
             // 2. a value the block does not allow is a usage answer from the server, not a crash
             problems.addAll(expect(console, log, options, "probe_open nope",
                     "MATERIONE-OPEN-COMMAND alias=probe_open outcome=usage"));
-            // 3. the author renames the command and reloads: the new alias is added without a restart
+            // 0. the boot registered from the built registries: the tree is the one the first swap publishes, so no
+            // data reload has happened (logic.md §23, decision 15). A boot that reloads is a defect, not a timing issue.
+            String boot = log.readAll();
+            // two aliases: probe_open from this scenario, and opentest from the guilogic fixture pack it also loads
+            if (!boot.contains("MATERIONE-OPEN-TREE declared=2 registered=2")) {
+                problems.add("the COMMANDS event at boot did not register probe_open and opentest from the built registries");
+            }
+            if (boot.contains("MATERIONE-OPEN-TREE reload ")) {
+                problems.add("a boot with unchanged content asked for a data reload: "
+                        + boot.lines().filter(line -> line.contains("MATERIONE-OPEN-TREE reload ")).findFirst().orElse(""));
+            }
+            // 3. the author renames the command and reloads: the swap asks for one reload, which adds the new alias
             Files.writeString(workspace.root.resolve("plugins/Materione/content/packs/sample/" + GUI_PATH),
                     guiYaml("probe_two", "probe_two"));
             problems.addAll(expect(console, log, options, "materione reload", "MATERIONE-RELOAD-OK"));
+            if (log.awaitLine("MATERIONE-OPEN-TREE reload aliases=[probe_two]", options.commandTimeout()) == null) {
+                problems.add("the reload that adds probe_two was not logged as a reload");
+            }
             problems.addAll(expect(console, log, options, "probe_two",
                     "MATERIONE-OPEN-COMMAND alias=probe_two outcome=console"));
             // 4. the old alias is no longer declared: it stops running. Commands run in order, so the marker of the

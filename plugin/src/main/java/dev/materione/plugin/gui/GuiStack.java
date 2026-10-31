@@ -53,9 +53,12 @@ public final class GuiStack {
      * @param engine the rule engine: the GUI's triggers and the open requirement's deny steps run through it
      * @param visibility whether a layer is showing for a session (the router skips a hidden one)
      * @param diagnostics where open-command conflicts and tree re-sync problems are published
+     * @param built the registries of the latest reload, applied or not: the command lifecycle registers from these,
+     *     since it can run before the first apply (logic.md §23, decision 15)
      */
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
-            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics) {
+            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
+            Supplier<RuntimeRegistries> built) {
         GuiLookup guis = GuiLookup.over(live);
         InputGuard guard = new InputGuard();
         RuleDispatcher dispatcher = engine::fire;
@@ -69,13 +72,9 @@ public final class GuiStack {
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
         opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner)));
-        Supplier<RuntimeGuis> view = () -> {
-            RuntimeRegistries registries = live.get();
-            RuntimeGuis current = registries == null ? null : registries.view(RuntimeGuis.KEY);
-            return current == null ? RuntimeGuis.empty() : current;
-        };
+        Supplier<RuntimeGuis> view = guisOf(live);
         var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
-        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, diagnostics);
+        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle);
         this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh);
@@ -106,6 +105,15 @@ public final class GuiStack {
     /** What the actions need, to bind into the {@link GuiBridge}. */
     public GuiBridge.Services services() {
         return services;
+    }
+
+    /** The GUIs of a registries supplier, empty before there are any. */
+    private static Supplier<RuntimeGuis> guisOf(Supplier<RuntimeRegistries> registries) {
+        return () -> {
+            RuntimeRegistries current = registries.get();
+            RuntimeGuis view = current == null ? null : current.view(RuntimeGuis.KEY);
+            return view == null ? RuntimeGuis.empty() : view;
+        };
     }
 
     /** The listeners to register: the click policy table is {@link GuiListener}, registered separately. */

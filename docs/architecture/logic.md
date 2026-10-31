@@ -1851,6 +1851,122 @@ the diagnose stage, so `validate`, `edit` and the pack compile all carry the sam
 (plus the GUI-only layer checks). The two would have reported every problem twice, so `LogicCheck`
 was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the logic authoring API's own check.
 
+## 22. Decisions taken in #210 (L4: built-in conditions)
+
+#210 ships the eight built-in conditions of §4.2 that the current main can support. Each is one class in
+`dev.materione.plugin.logic.condition`, registered through `LogicApi.conditions()` in its own block of
+`BuiltinLogic`, and each takes the shape §4.2 gives. `var` and `slot_has` are not in this change (see decision 1).
+Where §4.2 and §9 left a choice open, these are the choices. Each is reversible by the owner.
+
+**As built**
+
+| Condition | Category | Parameters (shorthand in bold) | Answers false when |
+|---|---|---|---|
+| `has_permission` | player | **`permission`** (one node, or a list), `permissions` (a list), `min` (default: all) | the player lacks enough of the nodes; no player |
+| `has_money` | economy | **`amount`** (above 0), `currency` (default currency when omitted) | the currency is unknown or unavailable; the balance is short; no player |
+| `has_exp` | player | **`amount`** (1 to 1,000,000), `unit` (points, levels) | the player holds less; no player |
+| `has_item` | player | **`item`**, `amount` (default 1), `name_contains`, `lore_contains`, `ignore_case`, `strict`, `armor`, `offhand` | the matching count is short; the item does not resolve; no player |
+| `has_item_space` | player | **`slots`** (free storage slots, 0 to 36), or `item` with `amount` (room for that many) | the room is short; the item does not resolve; no player |
+| `is_near` | world | `world` (default: the player's world), `x`, `y`, `z`, `distance` (templates allowed) | the player is outside the radius or in another world; a template does not render to a number in range |
+| `in_world` | world | **`worlds`** (one name, or a list) | the player is in none of the worlds |
+| `in_gui` | gui | **`id`** (a GUI id, such as `shop:menu`), or none for any GUI | no GUI is open, or not the one named |
+
+1. **Eight built-ins, `var` and `slot_has` left out.** `var` needs the variables API (#211), which is not on main,
+   so it is not registered; a later change adds it beside `has_exp` and needs no engine change. `slot_has` is #218's
+   (§6.5). The eight are the whole of #210's list that main can support. `BuiltinLogic.conditions(providers, guis,
+   items)` builds the list, and `register(api, owner, items, bridge)` registers it.
+
+2. **The composite names are never a predicate.** `all`, `any`, `not` and `at_least` are read as composites by the rule
+   compiler before it looks for a registered predicate (decision 5 of §16), so a condition with one of those ids would
+   be unreachable. None of the built-ins takes one, and `BuiltinConditionsTest` asserts that the built-in ids and the
+   registry lookups exclude them. Parse accept and reject for the reserved names is the compiler's, and is covered by
+   `ConditionsInFlowsTest`, which shows `all:` is a group and not a predicate.
+
+3. **`has_permission` asks Bukkit, not the permission provider.** `PermissionProvider` (§4.5) grants and revokes and has no
+   check, and adding one would widen an SPI that addons already implement. The check is `Player.hasPermission`, which is
+   what every plugin reads and which the active provider feeds: the session attachments that `give_permission` writes,
+   and LuckPerms through the permissible it injects. A Vault permission service that Materione uses but Bukkit does not
+   mirror is not consulted by this condition. Several nodes need all of them unless `min` says otherwise; a bare list is
+   accepted as the shorthand, so `has_permission: [a.one, a.two]` reads as the mapping form.
+
+4. **`has_money` resolves the currency exactly as `give_money` and `take_money` do** (§18 item 28): a named currency by
+   `ProviderParams.resolve`, the default when none is named, and false when that is unknown or its backend is not bound.
+   It reads through `CurrencyBackend.has`, so it never mutates. **Threading** follows §16 decision 17: a predicate runs on
+   the player's region, and the backend's own thread is not consulted. On Paper every backend is safe there. On Folia a
+   GLOBAL backend (Vault, the custom command pair) is read from the player's region. That is the same gap `balance()`
+   has (§18 item 25), and it is closed by the same follow-up, a threading hook for predicates. It is not closed here.
+
+5. **Experience counts the way `take_exp` takes it.** Points are the player's total experience and levels are the level,
+   so `has_exp: {amount: 5, unit: levels}` is true exactly when `take_exp` of five levels would succeed.
+
+6. **`has_item` shares the take matcher.** The matcher moved into `ItemMatch` (in `plugin.logic.support`) and
+   `InventoryPlan.wanted` now delegates to it. Its defaults are the take behaviour (text ignores case, a vanilla
+   reference matches only stacks with no Materione identity), so `take_item` is unchanged, and a test pins the two to the
+   same predicate. The options `has_item` adds are these:
+   - `ignore_case` (default true) applies to `name_contains` and `lore_contains`.
+   - `lore_contains` matches when some lore line contains the text. `ItemView` gained a `lore` field, read from the
+     stack's lore; the four-argument constructor stays for the take tests.
+   - `strict` (default true) decides what a vanilla reference matches. With `strict: false`, `minecraft:paper` counts a
+     custom item whose material is paper. A Materione reference is not affected. `strict` is the defined meaning of the
+     word in §4.2; the spec did not say more.
+   - `armor` and `offhand` (default true) decide whether those slots count. An excluded group is blanked, and its
+     positions are kept (`ItemSlots.included`), so nothing shifts. `take_item` still counts every slot.
+   - `model` from §4.2 is not in this change. It needs the model comparison the item studio defines, and no #210 issue asks
+     for it.
+
+7. **`has_item_space` counts the storage, and reads the stack size from the item.** Free slots are the empty entries of
+   slots `0..35`, the slots a pickup fills; armour and offhand never count. Room for an item is, per slot, a whole stack
+   for an empty slot, the rest of its stack for a matching partial one, and nothing for any other stack. The maximum stack
+   size comes from the item's built stack, so a custom item with a stack size of 16 is measured at 16. `give_item`'s
+   builder moved to `ItemTemplates` (in `plugin.logic.support`) so both read it the same way; its behaviour is unchanged.
+   The pure room arithmetic is `ItemSlots.room`, tested without a server.
+
+8. **`is_near` is a straight-line test in one world.** It compares squared distances, so the check is exact, and `world`
+   is optional. A point with a template that does not render to a number in range is false, not an error: a condition
+   that cannot decide does not grant. The numbers go through `Quantity`, so `x: "${vars.spawn_x}"` works, and the range
+   limits are the world border's reach (±30,000,000 for a coordinate, up to 60,000,000 for a distance).
+
+9. **`in_world` matches exact names.** Bukkit keeps world names case-sensitively, so `in_world: World` does not match
+   `world`. A scalar and a list read the same way, and an empty list is rejected at load.
+
+10. **`in_gui` reads a port, not a session.** `OpenGuis` (in `plugin.logic.support`) is the seam: one method,
+    `openGui(Player)`, answering the id of the GUI the player has open. `BuiltinLogic.register` backs it with the
+    player's current open session, read through the `GuiBridge` the `gui.*` actions use (§21), so
+    `plugin.logic.condition` never depends on `plugin.gui`. Before the runtime binds, and in tests,
+    `OpenGuis.none()` answers "nothing open", so the condition is false and never throws. It reads the session store
+    rather than the `GuiSession` facet so that it answers from any trigger, not only inside a GUI's own rules. An id names a pack's GUI, so it is written qualified (`shop:menu`); a bare id means
+    `materione:`, as for every Materione name.
+
+11. **Conditions run on the player's thread, and none declares a thread.** A predicate reads live player and world
+    state, so the interpreter hops to the player's region before it tests one (§16 decision 17). That is correct for
+    every condition here except the money read's Folia gap (decision 4). The inventory and the location are the
+    player's, and the experience is too, so no condition needs a hop of its own.
+
+12. **A condition that cannot decide answers false, and throws nothing on missing state.** A missing player, an
+    unresolvable item, an unavailable currency, a template that does not render to a number and an unknown GUI all
+    answer `false`. A load problem is `MTR-0057` at the condition's step path, as for every predicate (§16 decision 5).
+    An exception from a condition is contained by the interpreter as `MTR-0023`. **No new MTR code** was needed, and
+    `DiagnosticCodesTest` stays at 60.
+
+13. **Shorthands** are `permission`, `amount` (`has_money` and `has_exp`), `item`, `slots`, `worlds` and `id`. `is_near`
+    has none, because a point is never one number. The description's `shorthand` names a declared parameter, so the
+    vocabulary and the form agree (§14 decision 1).
+
+**Tests.** Unit tests for each condition's parse (accept and reject) and test against a fake player
+(`PlayerFake`, now public, with permissions, a world name, a position and a UUID), `ItemMatchTest` and `ItemSlotsTest` for
+the shared matcher and the slot arithmetic, `BuiltinConditionsTest` for registration, categories, shorthands and the
+reserved names, and `ConditionsInFlowsTest` for a condition in a rule `if:`, a step `if:`, a `choose` branch and an
+`at_least`, plus an expression function call in an `if:`. `ProviderActionsTest`'s currency fakes are public so
+`has_money` reuses them. `LogicCodeOrganisationTest` passes, so every class is under 400 lines.
+
+**QA catalog (player-visible, auto mode).** `probe:probe_conditions` runs `give_permission`, `has_permission`,
+`has_item`, `has_exp` and an `if:` on `contains(lower(player.name), 'pro')`, each reporting a chat line.
+`logic.conditions-permission`, `logic.conditions-item-exp` and `logic.conditions-expression-function` read those lines back.
+The expression entry is the one #209 asked for. The scenarios are on the `probe` pack; no `world` pack file changed.
+The entries are authored and checked by `qa/runner.mjs check`; their ledger state is "never" until a main swarm records them.
+A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
+that result depends on the probe player's operator state. The unit tests cover the negative branch.
+
 ## 23. Decisions taken in #215 (G2: open commands, typed arguments, the requirement and deny, the bypass)
 
 #215 shipped the open path's stages 2 to 4 (§6.1) and the command surface that starts it. The block is the
@@ -1916,21 +2032,34 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
 13. **Activation is `requires`, not removal.** Brigadier 1.3.10 cannot remove a child, and `addChild` merges a same-name
     child, so an alias that is no longer declared stays in the tree with a predicate that reads the handler's declared
     set. It is neither suggested nor run. An alias that comes back reuses its node.
-14. **The argument shape is sticky until a restart.** Names and Brigadier types are fixed when the node is made. A
-    reload that changes them cannot change the node, so it is reported as `MTR-0069` and applies at the next restart.
-    Changes to defaults, optionality, `suggest:`, permission and the GUI itself are live: the executor reads the block at
-    run time.
-15. **The tree is registered in the server's lifecycle, and a swap asks for a reload instead of editing it.**
-    `OpenCommandRegistrar` registers from the server's `COMMANDS` event, which Paper fires at start and on a server
-    reload. The registrar is valid only inside that event: a registrar kept from it and used later throws
-    `cannot access the dispatcher in this context` (found on Paper 1.21.4 by the harness scenario, which is why this
-    decision was revised). So a content swap never touches the tree. It updates the declared set at once, which hides
-    a removed alias through its `requires`. An alias the tree does not have yet asks Paper to reload the server's data;
-    if that fires the `COMMANDS` event again, the registrar re-registers from the live view. An alias still missing
-    afterwards is `MTR-0069`. An alias the event refused is not asked for again by later swaps until the next event.
-    A swap never throws into the swap observer for this reason.
-    **Open question, to settle on Paper:** whether `Server#reloadData` fires the reloadable `COMMANDS` event. The harness
-    scenario answers it; if it does not, adding an alias at runtime needs a restart and this decision is reversed.
+14. **The argument shape is fixed in the node, and a change to it is a reload.** Names and Brigadier types are fixed when
+    the node is made, so a swap that changes them asks for a reload, which rebuilds the node from the built registries
+    (decision 15). Only a reload that does not put the new shape in the tree is `MTR-0069`, and that applies at the next
+    restart. Changes to defaults, optionality, `suggest:`, permission and the GUI itself are live without any reload: the
+    executor reads the block at run time.
+15. **The command tree is registered from the built registries, and a swap reloads only for a change it needs.**
+    `OpenCommandRegistrar` registers from the server's `COMMANDS` lifecycle event, which Paper fires at start and on a
+    server reload. The registrar is valid only inside that event: a registrar kept from it and used later throws
+    `cannot access the dispatcher in this context` (found on Paper 1.21.4 by the harness scenario). The apply of a
+    boot runs on the global thread after `onEnable`, and the COMMANDS event at boot runs before it, so the live view is
+    still empty then. The registrar therefore registers from the **built** registries instead: `PipelineService.builtRegistries()`,
+    the registries of the latest reload, which are built synchronously and are what the first apply publishes. At boot the
+    tree holds the aliases the first swap will declare, so the first swap asks for nothing.
+
+    A content swap never edits the tree. It updates the declared set at once, which hides a removed alias through its
+    `requires` and needs no reload. It asks for a reload (`Server#reloadData`, which fires the COMMANDS event again with the
+    built registries) only when a declared alias is missing from the tree or was built with another argument shape. Such
+    a reload is **explicit**: it is logged as `MATERIONE-OPEN-TREE reload aliases=[...]`, and a request inside five seconds
+    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into the next swap after the
+    window. A deferred change therefore applies at the next swap after the window, or at a restart if no swap comes; the
+    registrar does not schedule a timer of its own. An alias the reload does not put in the tree is `MTR-0069`, and no
+    further reload is asked for it until the next COMMANDS event.
+
+    **Measured:** unchanged content at boot causes zero `reloadData` calls. `PaperOpenCommandIT` asserts it (no
+    `MATERIONE-OPEN-TREE reload` line before the content change), and `OpenCommandRegistrarTest` counts the reloads.
+    Reloading after an added alias was proven on Paper 1.21.4: `reloadData` fires the reloadable COMMANDS event there.
+    The cost of `reloadData` (it re-sends recipes, advancements and tags, and reloads datapacks) is paid only by a swap that
+    changes the set of open commands or their argument shapes.
 16. **Conflicts are checked before registration.** Paper's main label overrides an existing command, so the registrar
     checks the dispatcher and the command map first. A name already taken, or claimed twice, is skipped with `MTR-0067`;
     the GUI's other aliases and `/materione gui open` still work. The check ignores the registrar's own earlier nodes, so

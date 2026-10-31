@@ -537,7 +537,8 @@ public final class MaterionePlugin extends JavaPlugin {
         // its services bind into the bridge the GUI actions hold
         guiStack = new dev.materione.plugin.gui.GuiStack(
                 this, scheduling, () -> pipeline.runtime().registries(), logic.engine(),
-                dev.materione.plugin.gui.input.LayerVisibility.ALL, diagnostics::publish);
+                dev.materione.plugin.gui.input.LayerVisibility.ALL, diagnostics::publish,
+                () -> pipeline.builtRegistries());
         guiBridge.bind(guiStack.services());
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
         var guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
