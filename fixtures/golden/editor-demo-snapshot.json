@@ -1439,6 +1439,60 @@
           ],
           "registeredBy": "materione",
           "sinceVersion": "2.0.0"
+        },
+        {
+          "available": true,
+          "category": "data",
+          "description": "Compares a run-local, session or declared player or server variable with a value",
+          "displayName": "Variable",
+          "id": "var",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
+              "id": "var",
+              "label": "Var",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "==",
+                "!=",
+                ">",
+                ">=",
+                "<",
+                "<="
+              ],
+              "default": "==",
+              "description": "How to compare",
+              "id": "op",
+              "label": "Op",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            },
+            {
+              "advanced": false,
+              "description": "Value to compare with, or ${expression}",
+              "id": "value",
+              "label": "Value",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "var",
+          "sinceVersion": "2.0.0"
         }
       ],
       "events": [

@@ -540,6 +540,8 @@ public final class MaterionePlugin extends JavaPlugin {
                 dev.materione.plugin.gui.input.LayerVisibility.ALL, diagnostics::publish,
                 () -> pipeline.builtRegistries());
         guiBridge.bind(guiStack.services());
+        // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
+        variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
         var guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
                 this, scheduling, () -> pipeline.runtime().registries(), guiStack);
