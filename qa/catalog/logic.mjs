@@ -224,6 +224,23 @@ export default [
   }),
 
   test({
+    id: 'logic.conditions-var',
+    title: 'probe:probe_conditions right-click writes a run-local with set_var and the if: on var (op ">=") takes its true branch (chat line "CHECK var-three")',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/VarCondition.java',
+      'fixtures/packs/probe/items/probe_conditions.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_conditions');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK var-three/);
+    },
+  }),
+
+  test({
     id: 'logic.conditions-item-exp',
     title: 'probe:probe_conditions right-click finds three diamonds (has_item) and five levels (has_exp) and reports both: chat lines "CHECK item-three" and "CHECK exp-five"',
     mode: 'auto',

@@ -1,9 +1,11 @@
 package dev.materione.plugin.gui.event;
 
 import dev.materione.api.logic.Facets;
+import dev.materione.api.logic.variable.VariableFacets;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.gui.session.GuiSessionVariables;
 import dev.materione.plugin.runtime.behavior.PlaceholderResolver;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -15,7 +17,8 @@ import org.bukkit.entity.Player;
  * Builds the context a GUI rule runs against (logic.md §2.6, §6.2): the variable tree the trigger
  * descriptions declare ({@code player.*}, {@code server.*}, {@code gui.*}, {@code click.*},
  * {@code layer.id}, mutable {@code vars}) and the facets an action reaches for (the player, the
- * session). One place builds it, so every GUI trigger offers the same {@code gui.*} and the schema in
+ * session, and the session's variables as {@code vars.session.*}). One place builds it, so every GUI
+ * trigger offers the same {@code gui.*} and the schema in
  * {@link dev.materione.plugin.gui.trigger.GuiTriggers} stays true.
  *
  * <p>{@code gui.args} and {@code gui.session} are the session's own maps, not copies: a rule that
@@ -41,7 +44,9 @@ public final class GuiContexts {
         root.put("vars", new LinkedHashMap<String, Object>());
         root.putAll(extra);
 
-        MapLogicContext context = new MapLogicContext(root).with(GuiSession.FACET, session);
+        MapLogicContext context = new MapLogicContext(root)
+                .with(GuiSession.FACET, session)
+                .with(VariableFacets.SESSION, new GuiSessionVariables(session));
         Player player = viewer.player();
         if (player != null) {
             context.with(Facets.PLAYER, player)
