@@ -2,6 +2,7 @@ package dev.materione.plugin.logic;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.TriggerType;
@@ -39,7 +40,9 @@ import dev.materione.plugin.logic.action.TitleAction;
 import dev.materione.plugin.logic.action.gui.BackGuiAction;
 import dev.materione.plugin.logic.action.gui.CloseGuiAction;
 import dev.materione.plugin.logic.action.gui.OpenGuiAction;
+import dev.materione.plugin.logic.action.gui.GuiSlotItemAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
+import dev.materione.plugin.logic.condition.SlotHasCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
@@ -135,7 +138,17 @@ public final class BuiltinLogic {
                 new OpenGuiAction(bridge),
                 new CloseGuiAction(bridge),
                 new BackGuiAction(bridge),
-                new RefreshGuiAction(bridge));
+                new RefreshGuiAction(bridge),
+                new GuiSlotItemAction(bridge));
+    }
+
+    /**
+     * The built-in GUI conditions (logic.md §25): {@code slot_has}, which reads an input slot of the GUI the run
+     * belongs to. Each is one class; it reads the GUI runtime through {@code bridge}, so it answers false until
+     * the runtime binds.
+     */
+    public static List<ConditionType<?>> guiConditions(GuiBridge bridge) {
+        return List.of(new SlotHasCondition(bridge));
     }
 
     /**
@@ -162,6 +175,9 @@ public final class BuiltinLogic {
         }
         for (ActionType<?> action : guiActions(bridge)) {
             api.actions().register(owner, builtIn(action.id()), action);
+        }
+        for (ConditionType<?> condition : guiConditions(bridge)) {
+            api.conditions().register(owner, builtIn(condition.id()), condition);
         }
         for (ExpressionFunction function : functions()) {
             api.functions().register(owner, builtIn(function.id()), function);

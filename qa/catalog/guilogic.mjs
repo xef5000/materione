@@ -1,6 +1,7 @@
 // GUI logic, the first slice (roadmap M6, docs/architecture/logic.md §6, issue 214): a GUI's rules answer
-// real clicks from a real client. The guilogic fixture pack (fixtures/packs/guilogic) holds two GUIs; the
-// menu has three buttons in its middle row (ping, open, close at slots 11, 13 and 15) and announces every
+// real clicks from a real client. The guilogic fixture pack (fixtures/packs/guilogic) holds its GUIs; the
+// trade GUI carries the input slots of logic.md §25 (issue 218). The first slice's menu has three buttons in its
+// middle row (ping, open, close at slots 11, 13 and 15) and announces every
 // open and close on the server console (`say MATERIONE-GUILOGIC-...`), which these tests read as markers
 // next to what the client shows. Clicks are real container clicks sent by the client
 // (`handleContainerInput`), so the whole path runs: the click packet, the policy table, the click router,
@@ -213,6 +214,32 @@ export default [
       } finally {
         await closeWindow(ctx);
       }
+    },
+  }),
+
+  test({
+    id: 'guilogic.input-slots',
+    title: 'guilogic:trade (logic.md §25): a one-row chest of 45 slots (9 container, 36 player) opens and announces itself; a left click on an empty input slot with an empty cursor changes nothing and fires no gui.slot_change; the player inventory is free; closing the window by hand fires gui.close with reason=player and leaves the cursor empty',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione gui open guilogic:trade Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-OPEN guilogic:trade/);
+        await ctx.sleep(600); // the client finishes opening the window
+        ctx.expect(await openSlots(ctx)).toBe(45);
+
+        // an empty click on an input slot is no change: the server applies nothing and no rule runs
+        await click(ctx, 4);
+        await ctx.sleep(600);
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-SLOT/)).toBe(0);
+        ctx.expect(String(await ctx.exec('return player.containerMenu.getCarried().isEmpty()'))).toBe('true');
+        ctx.expect(await containerOpen(ctx)).toBe(true);
+      } finally {
+        await closeWindow(ctx);
+      }
+      await ctx.waitForServerLog(/MATERIONE-GUILOGIC-TRADE-CLOSED/);
     },
   }),
 ];

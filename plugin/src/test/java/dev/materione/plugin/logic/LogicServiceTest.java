@@ -69,11 +69,11 @@ class LogicServiceTest {
         assertThat(greet.shorthand()).isEqualTo("text");
         assertThat(greet.description().displayName()).isEqualTo("Greet");
         assertThat(vocabulary.conditions()).extracting(BehaviorVocabulary.Condition::id)
-                .containsExactly("example:is_night");
+                .contains("example:is_night", "slot_has");
         // the built-ins are there beside them, registered the same way
         assertThat(vocabulary.actions()).extracting(BehaviorVocabulary.Action::id)
                 .contains("run_command", "message", "sound", "potion", "cancel", "set_var");
-        assertThat(vocabulary.triggers()).hasSize(23);
+        assertThat(vocabulary.triggers()).hasSize(25); // 23 before #218; gui.slot_change and gui.click_inventory added
         assertThat(action.id()).isEqualTo(NamespacedId.of("example", "greet"));
         assertThat(condition.id()).isEqualTo(NamespacedId.of("example", "is_night"));
     }
@@ -131,7 +131,8 @@ class LogicServiceTest {
         assertThat(api.logic().actions().get(NamespacedId.of("example", "greet"))).isEmpty();
 
         service.ownerDisabled(addon);
-        assertThat(api.logic().conditions().entries()).isEmpty();
+        // the built-in slot_has is still there (it is materione's, not the addon's)
+        assertThat(api.logic().conditions().get(NamespacedId.of("example", "is_night"))).isEmpty();
         assertThat(api.logic().actions().resolve("message")).isPresent(); // other owners are untouched
     }
 

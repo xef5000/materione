@@ -137,6 +137,17 @@ public final class GuiType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Rows", "placement", 10, false, "number", "", "3")
                                         .withRange(1.0, (double) MAX_ROWS, "rows")),
+                        new ParameterSchema("player_inventory", ParameterType.ENUM, false, "free",
+                                "The viewer's own inventory while the GUI is open: free (clicks work) or locked "
+                                        + "(every click is cancelled and gui.click_inventory fires)",
+                                List.of("free", "locked"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Player inventory", "behavior", 20, false, "select", "", "free")
+                                        .withOptions(List.of(
+                                                ParameterSchema.EditorOption.of("free", "Free",
+                                                        "The viewer can move their own items"),
+                                                ParameterSchema.EditorOption.of("locked",
+                                                        "Locked", "Clicks in the viewer's inventory are cancelled")))),
                         layers,
                         dev.materione.content.logic.LogicSchemas.behavior(),
                         dev.materione.content.logic.LogicSchemas.flows(),
@@ -188,8 +199,34 @@ public final class GuiType implements ContentType {
         }
         var out = new ArrayList<Diagnostic>();
         diagnoseLayers(gui, out);
+        diagnoseInputSettings(gui, out);
         diagnoseRules(gui, out);
         return List.copyOf(out);
+    }
+
+    /**
+     * The input-slot settings that cannot apply (logic.md §25, MTR-0076): {@code accept:} on a layer that
+     * is not an input, and a {@code player_inventory:} that is neither value. Each is ignored, so the GUI
+     * loads and says so.
+     */
+    private static void diagnoseInputSettings(GuiDefinition gui, List<Diagnostic> out) {
+        if (!PlayerInventory.valid(gui.raw().get("player_inventory"))) {
+            out.add(new Diagnostic(
+                    DiagnosticCodes.GUI_INPUT_SETTING_IGNORED, Severity.WARN,
+                    gui.id() + ": player_inventory must be locked or free; free is used",
+                    gui.id(), null, "write player_inventory: locked or player_inventory: free",
+                    DiagnosticTarget.field("player_inventory")));
+        }
+        for (int index = 0; index < gui.layers().size(); index++) {
+            GuiLayer layer = gui.layers().get(index);
+            if (layer.compiled() instanceof SlotsComponent.Layer wells && !wells.input() && wells.accept() != null) {
+                out.add(new Diagnostic(
+                        DiagnosticCodes.GUI_INPUT_SETTING_IGNORED, Severity.WARN,
+                        gui.id() + ": layer '" + layer.id() + "' has accept, which applies to input slots only; it is ignored",
+                        gui.id(), null, "add input: true to the layer, or remove accept",
+                        DiagnosticTarget.field("layers", String.valueOf(index))));
+            }
+        }
     }
 
     /**
@@ -207,9 +244,16 @@ public final class GuiType implements ContentType {
                     "the section is ignored; the GUI and its layers still work",
                     DiagnosticTarget.field(problem.field())));
         }
-        if (!gui.rules().isEmpty()) {
+        // the checker also compiles the input slots' accept conditions (MTR-0074), so it runs for a GUI with
+        // an accept even when it has no rules; a GUI with neither is not checked at all
+        if (!gui.rules().isEmpty() || hasAccept(gui)) {
             out.addAll(ruleChecker.check(gui));
         }
+    }
+
+    private static boolean hasAccept(GuiDefinition gui) {
+        return gui.layers().stream().anyMatch(layer -> layer.compiled() instanceof SlotsComponent.Layer wells
+                && wells.input() && wells.accept() != null);
     }
 
     private static void diagnoseLayers(GuiDefinition gui, List<Diagnostic> out) {

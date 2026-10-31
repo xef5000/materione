@@ -16,8 +16,7 @@ import java.util.List;
  * The triggers the GUI runtime fires (logic.md §6.2), as descriptions: their filters, the variables
  * they guarantee, and whether a rule may cancel them. Registered through the public logic API like an
  * addon's, so the compiler checks {@code ${root}} paths against these schemas and the studio
- * autocompletes from them (one declaration for both, D5). {@code gui.click_inventory},
- * {@code gui.slot_change} and {@code gui.page} arrive with the work that fires them.
+ * autocompletes from them (one declaration for both, D5). {@code gui.page} arrives with the list work.
  */
 public final class GuiTriggers {
 
@@ -27,7 +26,7 @@ public final class GuiTriggers {
 
     private GuiTriggers() {}
 
-    /** The six triggers, in the order the editor lists them. */
+    /** The eight triggers, in the order the editor lists them. */
     public static List<TriggerType> all() {
         return List.of(
                 trigger(GuiRuleSet.OPENING, "GUI opening",
@@ -69,7 +68,33 @@ public final class GuiTriggers {
                         "Every so many ticks while the GUI is open; nothing runs when the GUI has no tick rule",
                         List.of(), List.of(requiredFilter("every", ParameterType.INTEGER,
                                 "Run every this many ticks (20 is a second); at least 1", 1.0)),
-                        false));
+                        false),
+                trigger(GuiRuleSet.SLOT_CHANGE, "GUI input slot change",
+                        "The player is about to put an item into, or take one out of, an input slot. The change "
+                                + "happens unless a rule cancels it, which reverts it",
+                        List.of(ContextVariable.of("slot.index", ParameterType.INTEGER, "The container slot, from 0"),
+                                ContextVariable.of("slot.item", ParameterType.STRING,
+                                        "The item the slot will hold (its id, blank when empty)"),
+                                ContextVariable.of("slot.amount", ParameterType.INTEGER,
+                                        "How many the slot will hold"),
+                                ContextVariable.of("slot.previous", ParameterType.STRING,
+                                        "The item the slot holds now (its id, blank when empty)")),
+                        List.of(filter("layer", ParameterType.STRING, List.of(),
+                                "Only changes to this input layer (an id, or a list of ids)", null)),
+                        true),
+                trigger(GuiRuleSet.CLICK_INVENTORY, "GUI inventory click",
+                        "The player clicks in their own inventory while the GUI is open. A locked inventory "
+                                + "cancels the click anyway; a free one lets it through unless a rule cancels it",
+                        List.of(ContextVariable.of("click.type", ParameterType.STRING, "The click kind: " + clickKinds()),
+                                ContextVariable.of("click.slot", ParameterType.INTEGER,
+                                        "The clicked slot of the player's inventory"),
+                                ContextVariable.of("click.key", ParameterType.INTEGER,
+                                        "The hotbar key 1 to 9 of a number_key click, else 0"),
+                                ContextVariable.of("slot.item", ParameterType.STRING,
+                                        "The item the player clicked (its id, blank when empty)")),
+                        List.of(filter("click", ParameterType.ENUM, ClickKind.ids(),
+                                "Only this kind of click (a kind, or a list)", null)),
+                        true));
     }
 
     private static String clickKinds() {

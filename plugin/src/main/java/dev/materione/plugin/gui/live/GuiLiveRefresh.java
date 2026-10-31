@@ -117,7 +117,7 @@ public final class GuiLiveRefresh {
         }
         switch (GuiRefreshPlan.viewerAction(shape.get().title(), shape.get().rows(), now)) {
             case CLOSE -> {
-                lifecycle.removed(session);
+                lifecycle.removed(viewer, session);
                 windows.close(viewer);
                 player.sendMessage(Component.text(
                         "The GUI " + session.gui() + " is no longer available; the window was closed.",
@@ -126,7 +126,7 @@ public final class GuiLiveRefresh {
                         + " player=" + viewer.name());
             }
             case REOPEN -> windows.reopen(viewer, session, now.orElseThrow(), () -> ticker.ensure(viewer, session),
-                    reason -> lifecycle.removed(session));
+                    reason -> lifecycle.removed(viewer, session));
             case UPDATE_CONTENTS -> {
                 windows.rewrite(viewer, session, now.orElseThrow());
                 ticker.ensure(viewer, session);

@@ -313,6 +313,29 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode FLOW_UNKNOWN_CONTEXT_ROOT =
             new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
 
+    /**
+     * An input slot's {@code accept:} condition does not compile (logic.md §25): an unknown predicate or
+     * a malformed expression. The slot accepts nothing until the condition is fixed; the rest of the GUI
+     * stays live.
+     */
+    public static final DiagnosticCode INPUT_ACCEPT_INVALID =
+            new DiagnosticCode("MTR-0074", Severity.WARN, "Input slot accept condition does not compile; the slot accepts nothing");
+
+    /**
+     * A container slot of an input layer also has a static item from an item layer (gui.md §2). The
+     * player's items take the slot, so the static item is not shown and cannot be taken out (logic.md §25).
+     */
+    public static final DiagnosticCode INPUT_STATIC_ITEM_IGNORED =
+            new DiagnosticCode("MTR-0075", Severity.WARN, "Static item in an input slot is ignored");
+
+    /**
+     * An input-slot setting cannot apply (logic.md §25): {@code accept:} on a layer that is not an input,
+     * {@code input:} on a layer with no container slots, or a {@code player_inventory:} that is neither
+     * {@code locked} nor {@code free}. The setting is ignored; the GUI and its other layers still work.
+     */
+    public static final DiagnosticCode GUI_INPUT_SETTING_IGNORED =
+            new DiagnosticCode("MTR-0076", Severity.WARN, "Input-slot setting ignored; the GUI loads without it");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -375,7 +398,10 @@ public final class DiagnosticCodes {
             CURRENCY_REJECTED,
             FLOW_CALL_INVALID,
             FLOW_RUN_ABORTED,
-            FLOW_UNKNOWN_CONTEXT_ROOT);
+            FLOW_UNKNOWN_CONTEXT_ROOT,
+            INPUT_ACCEPT_INVALID,
+            INPUT_STATIC_ITEM_IGNORED,
+            GUI_INPUT_SETTING_IGNORED);
 
     private DiagnosticCodes() {}
 

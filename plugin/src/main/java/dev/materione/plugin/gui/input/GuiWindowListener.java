@@ -34,6 +34,9 @@ public final class GuiWindowListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof GuiMenu menu) || !(event.getPlayer() instanceof Player player)) {
             return;
         }
+        // whatever window closes, the player's items in its input slots are theirs: a window that was
+        // replaced by a reopen has already handed them over, so this finds nothing and changes nothing
+        InputReturns.release(player, menu);
         GuiSession session = menu.session();
         if (session.window() != menu) {
             return;

@@ -30,6 +30,10 @@ public final class GuiRuleSet {
     public static final String CLICK = "gui.click";
     public static final String CLICK_OUTSIDE = "gui.click_outside";
     public static final String TICK = "gui.tick";
+    /** A change an input slot is about to take (logic.md §25); a rule can refuse it. */
+    public static final String SLOT_CHANGE = "gui.slot_change";
+    /** A click in the viewer's own inventory while the GUI is open (logic.md §6.2). */
+    public static final String CLICK_INVENTORY = "gui.click_inventory";
 
     /** The rules of a GUI that has none. */
     public static final GuiRuleSet EMPTY = new GuiRuleSet(List.of());

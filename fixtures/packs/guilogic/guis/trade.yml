@@ -1,0 +1,45 @@
+# The input-slot fixture (logic.md §25, issue 218): a one-row chest whose slots take gems only. The player's
+# items go into the input slots; an item the accept refuses never lands. Every change to a slot, the open and
+# the close are announced on the server console (`say MATERIONE-GUILOGIC-...`), which the QA catalog reads as
+# markers. The viewer's inventory stays free.
+trade:
+  title: Trade
+  rows: 1
+  player_inventory: free
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: gems
+      type: slots
+      region: container
+      input: true
+      accept: "${slot.item == 'corpus:gem_red'}"
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "TRADE"
+      font: smallcaps
+      color: "#404040"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-OPEN ${gui.id}"
+            as: console
+    - on: gui.slot_change
+      layer: gems
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-SLOT slot=${slot.index} item=${slot.item} amount=${slot.amount}"
+            as: console
+    - on: gui.close
+      reason: player
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-TRADE-CLOSED"
+            as: console

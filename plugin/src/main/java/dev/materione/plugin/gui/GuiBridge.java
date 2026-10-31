@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.plugin.gui.input.InputSlotPort;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
@@ -20,7 +21,8 @@ public final class GuiBridge {
 
     /** The collaborators an action needs. */
     public record Services(
-            GuiLookup guis, GuiSessions sessions, GuiOpener opener, GuiLifecycle lifecycle, GuiLiveRefresh refresh) {
+            GuiLookup guis, GuiSessions sessions, GuiOpener opener, GuiLifecycle lifecycle, GuiLiveRefresh refresh,
+            InputSlotPort inputs) {
 
         public Services {
             Objects.requireNonNull(guis, "guis");
@@ -28,6 +30,7 @@ public final class GuiBridge {
             Objects.requireNonNull(opener, "opener");
             Objects.requireNonNull(lifecycle, "lifecycle");
             Objects.requireNonNull(refresh, "refresh");
+            Objects.requireNonNull(inputs, "inputs");
         }
     }
 

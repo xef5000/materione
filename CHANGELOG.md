@@ -9,6 +9,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Input slots and the player's inventory (logic.md §6.5, §25, #218).** A `slots` layer with
+  `input: true` lets players put items into its container slots, optionally limited by an `accept:`
+  condition on `slot.item`. Items placed there go back to the player when the window closes, quits or is
+  replaced (inventory first, then at their feet), and nothing is deleted unless a flow says so. Four
+  pieces of vocabulary: `gui.slot_change` (cancellable, fires before the change), `gui.click_inventory`
+  (cancellable), `slot_has` (an input slot holds an item) and `gui.slot_item` (`clear`, `take`,
+  `set_amount`, `repair`, `enchant`). A GUI's `player_inventory: locked` cancels every click in the
+  viewer's inventory. Diagnostics MTR-0074 to MTR-0076. Not yet shipped: the crash journal for items in
+  an open window (a hard crash still loses them), the `gui.slot_change` layer check, and the in-game
+  QA run for `guilogic.input-slots`.
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always

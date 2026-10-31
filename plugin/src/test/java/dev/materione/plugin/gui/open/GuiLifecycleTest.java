@@ -92,9 +92,10 @@ class GuiLifecycleTest {
 
     @Test
     void aGuiThatWentAwayEndsItsSessionQuietly() {
-        f.lifecycle.removed(session);
+        f.lifecycle.removed(f.viewer, session);
 
         assertThat(session.endedBecause()).isEqualTo(CloseReason.REMOVED);
         assertThat(f.ran).isEmpty();
+        assertThat(f.windows.released).containsExactly(session);
     }
 }
