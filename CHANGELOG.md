@@ -9,13 +9,26 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Dynamic GUI slots: conditions, templates, item sources, animation and a refresh clock (logic.md §6.3,
+  §24, #216).** An item layer can be shown only when a `visible_if` condition holds, and the topmost visible
+  layer of a slot wins. Its name, lore, amount and glint are templates, and its `item:` can be a plain id, a
+  template or a named source: `head: {player: "${player.name}"}` shows the viewer's own head, and
+  `player_slot: main_hand` shows the viewer's item. `frames: {every, items}` animates a slot. A GUI can set
+  `refresh: <ticks>` to re-render its dynamic layers on a clock. An unknown head or a missing item shows a
+  barrier item with the reason in its lore, never air. Only the changed slots are written to the window.
+  Diagnostics `MTR-0070` to `MTR-0073`. Raster and text layers cannot be conditional yet (#217).
+- **Item sources are a registry (logic.md §4.4, api.md §3.11).** `LogicApi.itemSources()` takes an
+  `ItemSource`, and the built-ins register through it: `materione:item`, `materione:head` and
+  `materione:player_slot`. The optional `hdb`, `itemsadder`, `nexo` and `mmoitems` sources register while
+  their plugin runs; on a server without the plugin they show a barrier. Those four adapters reach their
+  plugins through reflection, not compile-time dependencies, and their calls are not verified in this build.
 - **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
   `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
   with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
   work (#211) and `slot_has` the slot work (#218).
-- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
+>- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
   available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a

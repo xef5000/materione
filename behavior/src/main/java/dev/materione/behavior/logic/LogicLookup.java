@@ -28,6 +28,14 @@ public interface LogicLookup {
     /** The condition an author's key names. */
     Optional<ConditionType<?>> condition(String authoredId);
 
+    /**
+     * The item source an author's key names ({@code head}, {@code materione:head}, {@code example:weather}).
+     * Empty by default, so a lookup with no item-source registry rejects every source.
+     */
+    default Optional<dev.materione.api.logic.ItemSource<?>> itemSource(String authoredId) {
+        return Optional.empty();
+    }
+
     /** True when {@code authoredId} names a registered trigger. */
     boolean triggerKnown(String authoredId);
 

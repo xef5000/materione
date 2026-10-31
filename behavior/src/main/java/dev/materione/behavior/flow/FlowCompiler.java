@@ -54,6 +54,43 @@ public final class FlowCompiler {
         return compile(new CompileContext(owner, lookup, true), behavior, flows);
     }
 
+    /**
+     * Compiles one condition outside a rule: a GUI layer's {@code visible_if} (logic.md §6.3). It takes the
+     * same shapes a {@code require} or {@code if} takes (an expression, a predicate, a composite), and its
+     * {@code ${root}} paths are checked against {@code roots} (null checks nothing). Pure, like {@link #compile}.
+     *
+     * @param owner the resource that declares the condition
+     * @param subject what the condition belongs to, for messages ({@code gui shop layer buy})
+     * @param raw what the author wrote
+     * @param roots the variable roots the condition may read, or null
+     * @param lookup the registries predicates and functions resolve against
+     */
+    public static CompiledCondition compileCondition(
+            NamespacedId owner, String subject, Object raw, Set<String> roots, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, false);
+        var unit = new CompileUnit(context, subject, roots, "in this condition");
+        Condition compiled = null;
+        try {
+            compiled = new ConditionCompiler(unit).compile(raw, StepPath.root());
+        } catch (Skip skipped) {
+            // the problem is already reported to the context
+        }
+        return new CompiledCondition(Optional.ofNullable(compiled), List.copyOf(context.problems));
+    }
+
+    /**
+     * A condition compiled outside a rule.
+     *
+     * @param condition the compiled tree, or empty when the condition is unusable
+     * @param problems why it is unusable, or what it reads that the roots do not provide
+     */
+    public record CompiledCondition(Optional<Condition> condition, List<dev.materione.api.diagnostics.Diagnostic> problems) {
+
+        public CompiledCondition {
+            problems = List.copyOf(problems);
+        }
+    }
+
     /** {@link #compile(NamespacedId, Object, Object, LogicLookup)} for a resource without named flows. */
     public static ParsedRules compile(NamespacedId owner, Object behavior, LogicLookup lookup) {
         return compile(owner, behavior, null, lookup);

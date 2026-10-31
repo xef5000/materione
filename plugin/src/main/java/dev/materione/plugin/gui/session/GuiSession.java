@@ -2,6 +2,7 @@ package dev.materione.plugin.gui.session;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ContextFacet;
+import dev.materione.plugin.gui.render.Rendered;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -44,7 +45,10 @@ public final class GuiSession {
     private final Map<String, Object> pages = new ConcurrentHashMap<>();
     private final AtomicReference<CloseReason> ended = new AtomicReference<>();
     private final AtomicBoolean ticking = new AtomicBoolean();
+    private final AtomicBoolean clocking = new AtomicBoolean();
     private volatile long elapsedTicks;
+    private volatile long windowTicks;
+    private volatile Rendered rendered = Rendered.EMPTY;
     private volatile Object window;
 
     /**
@@ -138,6 +142,43 @@ public final class GuiSession {
     /** Releases the ticker claim (the ticker stopped, for instance because no rule ticks any more). */
     public void releaseTicker() {
         ticking.set(false);
+    }
+
+    /** Claims the right to run this session's refresh clock; false when one already runs. */
+    public boolean claimClock() {
+        return clocking.compareAndSet(false, true);
+    }
+
+    /** Releases the refresh clock claim (the clock stopped: the window closed, or the GUI has no clock). */
+    public void releaseClock() {
+        clocking.set(false);
+    }
+
+    /** The last render of the window this session shows; {@link Rendered#EMPTY} before the first one. */
+    public Rendered rendered() {
+        return rendered;
+    }
+
+    /** Records a render of the window (the paint path). */
+    public void remember(Rendered next) {
+        rendered = next;
+    }
+
+    /** A new window: nothing is shown yet, and its clock starts at zero (so an animation starts at its first frame). */
+    public void forgetWindow() {
+        rendered = Rendered.EMPTY;
+        windowTicks = 0;
+    }
+
+    /** Ticks the window has been open on the refresh clock, which chooses an animation's frame. */
+    public long windowTicks() {
+        return windowTicks;
+    }
+
+    /** Advances the window's clock by {@code ticks}, the refresh clock's period. */
+    public long advanceWindowTicks(long ticks) {
+        windowTicks += ticks;
+        return windowTicks;
     }
 
     /** Ticks the window has been open, as counted by the ticker. */

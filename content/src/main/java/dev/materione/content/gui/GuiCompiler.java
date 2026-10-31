@@ -62,16 +62,21 @@ public final class GuiCompiler {
 
         var runs = new ArrayList<TextRun>();
         var slots = new LinkedHashMap<Integer, SlotPlacement>();
-        for (var layer : gui.layers()) {
+        var items = new ArrayList<CompiledGui.Placement>();
+        for (int index = 0; index < gui.layers().size(); index++) {
+            GuiLayer layer = gui.layers().get(index);
             if (!layer.visible()) {
                 continue;
             }
             if (layer.compiled().target() == RenderTarget.TEXT) {
                 collectText(gui, layer.id(), layer.compiled(), runs, report);
+            } else if (layer.compiled() instanceof ItemComponent.Layer item) {
+                items.add(new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item));
             } else if (layer.compiled().target() == RenderTarget.SLOT) {
                 collectSlots(gui, layer.id(), layer.compiled(), slots, report);
             }
         }
+        List<CompiledGui.Placement> placements = placeItems(gui, items, slots, report);
 
         // the client's advance for a bitmap glyph: its ink width plus one pixel of spacing
         int advance = background.inkWidth() + 1;
@@ -104,8 +109,45 @@ public final class GuiCompiler {
         slots.forEach((slot, placement) -> slotList.add(new CompiledGui.Slot(slot, placement.item(), placement.amount())));
         slotList.sort(Comparator.comparingInt(CompiledGui.Slot::slot));
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
-        var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules());
+        var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
+                placements, gui.refresh());
         return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
+    }
+
+    /**
+     * Splits the item layers between the static slot table and the per-viewer placements (logic.md §6.3). A
+     * slot is static when every layer that fills it is a plain id with no override and no condition: then its
+     * item is resolved once and two such layers in one slot are the existing skip (the earlier one). A slot
+     * with any other layer goes wholly to the placements, where the layers compete by order at render time,
+     * so a stack of conditional items in one slot is the intended use and is never skipped.
+     */
+    private static List<CompiledGui.Placement> placeItems(
+            GuiDefinition gui, List<CompiledGui.Placement> items, Map<Integer, SlotPlacement> slots, Report report) {
+        var bySlot = new TreeMap<Integer, List<CompiledGui.Placement>>();
+        for (CompiledGui.Placement placement : items) {
+            bySlot.computeIfAbsent(placement.slot(), ignored -> new ArrayList<>()).add(placement);
+        }
+        var placements = new ArrayList<CompiledGui.Placement>();
+        bySlot.forEach((slot, group) -> {
+            boolean perViewer = group.stream().anyMatch(p -> p.visibleIf() != null || p.item().staticItem().isEmpty());
+            if (perViewer) {
+                slots.remove(slot); // a static entry of an addon layer yields to the placements of its slot
+                placements.addAll(group);
+                return;
+            }
+            for (CompiledGui.Placement placement : group) {
+                var sink = (SlotSink) (index, item, amount) -> {
+                    SlotPlacement previous = slots.put(index, new SlotPlacement(placement.layerId(), item, amount));
+                    if (previous != null && !previous.layerId().equals(placement.layerId())) {
+                        report.skip(gui, previous.layerId(),
+                                "slot " + index + " is filled by the later layer '" + placement.layerId() + "'");
+                    }
+                };
+                placement.item().placeSlots(sink);
+            }
+        });
+        placements.sort(java.util.Comparator.comparingInt(CompiledGui.Placement::order));
+        return List.copyOf(placements);
     }
 
     /**
