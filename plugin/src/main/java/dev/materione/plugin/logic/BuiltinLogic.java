@@ -176,6 +176,10 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : currencyFunctions(api.providers())) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
+        // item sources of GUI item layers (logic.md §4.4): materione:item, materione:head, materione:player_slot
+        for (dev.materione.api.logic.ItemSource<?> source : dev.materione.plugin.logic.item.BuiltinItemSources.all(items)) {
+            api.itemSources().register(owner, builtIn(source.id()), source);
+        }
     }
 
     /**

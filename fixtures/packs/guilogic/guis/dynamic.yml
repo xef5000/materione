@@ -1,0 +1,44 @@
+# The dynamic GUI of the guilogic fixture (#216, logic.md §6.3): a conditional item, the viewer's own
+# head and an animated slot. `on=1` opens it with the conditional diamond shown; `on=0` hides it. The
+# window's clock (refresh: 20) moves the animation: the redstone block and the emerald take turns every 20
+# ticks. It is built from vanilla materials only, so the pack still holds no Materione items.
+# The open is announced on the server console (`say MATERIONE-GUILOGIC-DYNAMIC-OPEN ...`), which the QA
+# catalog (qa/catalog/guidynamic.mjs) reads as a marker.
+dynamic:
+  title: Dynamic
+  rows: 3
+  refresh: 20
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: conditional
+      type: item
+      slot: 11
+      item: minecraft:diamond
+      visible_if: "gui.args.on == '1'"
+      name: "<aqua>Shown only when on=1"
+    - id: viewer_head
+      type: item
+      slot: 13
+      item:
+        head:
+          player: "${player.name}"
+      name: "<yellow>${player.name}"
+    - id: animated
+      type: item
+      slot: 15
+      frames:
+        every: 20
+        items:
+          - minecraft:redstone_block
+          - minecraft:emerald
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-DYNAMIC-OPEN ${gui.id} on=${gui.args.on}"
+            as: console

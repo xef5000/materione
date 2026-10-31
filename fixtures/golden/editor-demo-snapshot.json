@@ -5773,7 +5773,7 @@
         "target": "text"
       },
       {
-        "description": "One item shown in a container slot: a Materione item or a vanilla material",
+        "description": "One item shown in a container slot: a Materione item, a vanilla material, a named source such as a player head, or a template; with templated overrides and animation",
         "displayName": "Item",
         "id": "materione:item",
         "parameters": [
@@ -5793,31 +5793,91 @@
           },
           {
             "advanced": false,
-            "description": "A Materione item (ns:id) or a vanilla material (minecraft:diamond_sword)",
+            "description": "The item: a Materione item (ns:id), a vanilla material (minecraft:diamond_sword), a template (${entry.item}), or one source such as { head: { player: \"${player.name}\" } } or { player_slot: main_hand }. Exactly one of item or frames",
             "example": "shop:gui/main/sword",
             "id": "item",
             "label": "Item",
             "order": 20,
             "referenceKind": "pack-item",
-            "required": true,
+            "required": false,
             "section": "appearance",
             "type": "reference",
             "uiHint": "item"
           },
           {
+            "advanced": true,
+            "description": "An animation in place of item: { every: <ticks>, items: [sources...] }; the layer shows items in turn",
+            "id": "frames",
+            "label": "Frames",
+            "order": 21,
+            "required": false,
+            "section": "appearance",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
             "advanced": false,
             "default": "1",
-            "description": "How many to show, 1 to 64",
+            "description": "How many to show: a whole number from 1 to 64, or a template",
             "example": "1",
             "id": "amount",
             "label": "Amount",
-            "max": 64.0,
-            "min": 1.0,
             "order": 30,
             "required": false,
             "section": "appearance",
-            "type": "integer",
-            "uiHint": "number"
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "The item's display name (MiniMessage, with templates). On an item layer this is also the layers-panel label",
+            "id": "name",
+            "label": "Item name",
+            "order": 40,
+            "required": false,
+            "section": "appearance",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "Lore lines (MiniMessage, with templates); combined with the item's own lore by lore_mode",
+            "id": "lore",
+            "label": "Lore",
+            "order": 50,
+            "required": false,
+            "section": "appearance",
+            "type": "list",
+            "uiHint": "structured-list"
+          },
+          {
+            "advanced": true,
+            "allowedValues": [
+              "replace",
+              "append",
+              "prepend"
+            ],
+            "default": "replace",
+            "description": "How lore combines with the item's own lore: replace, append or prepend",
+            "example": "replace",
+            "id": "lore_mode",
+            "label": "Lore mode",
+            "order": 60,
+            "required": false,
+            "section": "appearance",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
+            "advanced": true,
+            "description": "Enchantment glint: true, false, or a template that renders true or false",
+            "id": "glint",
+            "label": "Glint",
+            "order": 70,
+            "required": false,
+            "section": "appearance",
+            "type": "string",
+            "uiHint": "text"
           }
         ],
         "registeredBy": "materione",
@@ -8602,6 +8662,17 @@
             "unit": "rows"
           },
           {
+            "advanced": true,
+            "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
+            "id": "refresh",
+            "label": "Refresh",
+            "order": 20,
+            "required": false,
+            "section": "behavior",
+            "type": "integer",
+            "uiHint": "number"
+          },
+          {
             "advanced": false,
             "description": "Ordered layers, bottom to top; each layer is one component instance",
             "id": "layers",
@@ -8685,6 +8756,17 @@
                 "type": "integer",
                 "uiHint": "number",
                 "unit": "%"
+              },
+              {
+                "advanced": true,
+                "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. Item layers only in this build: the layer order is its priority, and the topmost visible layer of a slot wins",
+                "id": "visible_if",
+                "label": "Visible if",
+                "order": 35,
+                "required": false,
+                "section": "identity",
+                "type": "raw",
+                "uiHint": "text"
               }
             ],
             "order": 0,
@@ -14536,6 +14618,17 @@
           "unit": "rows"
         },
         {
+          "advanced": true,
+          "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
+          "id": "refresh",
+          "label": "Refresh",
+          "order": 20,
+          "required": false,
+          "section": "behavior",
+          "type": "integer",
+          "uiHint": "number"
+        },
+        {
           "advanced": false,
           "description": "Ordered layers, bottom to top; each layer is one component instance",
           "id": "layers",
@@ -14619,6 +14712,17 @@
               "type": "integer",
               "uiHint": "number",
               "unit": "%"
+            },
+            {
+              "advanced": true,
+              "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. Item layers only in this build: the layer order is its priority, and the topmost visible layer of a slot wins",
+              "id": "visible_if",
+              "label": "Visible if",
+              "order": 35,
+              "required": false,
+              "section": "identity",
+              "type": "raw",
+              "uiHint": "text"
             }
           ],
           "order": 0,

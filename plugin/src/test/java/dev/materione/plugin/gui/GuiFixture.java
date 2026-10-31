@@ -116,7 +116,7 @@ public final class GuiFixture {
         guis = lookup();
         events = new GuiEvents(engine::fire);
         router = new ClickRouter(guis, events, (session, layer) -> visibility.visible(session, layer), guard);
-        ticker = new GuiTicker(guis, events, ticks);
+        ticker = new GuiTicker(guis, events, ticks, windows);
         lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         opener = new GuiOpener(guis, sessions, events, windows, ticker, Logger.getAnonymousLogger());
         refresh = new GuiLiveRefresh(plugin(), null, guis, sessions, windows, lifecycle, ticker);
@@ -231,6 +231,11 @@ public final class GuiFixture {
         @Override
         public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("rewrite " + gui.id().value());
+        }
+
+        @Override
+        public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+            log.add("advance " + gui.id().value());
         }
 
         @Override

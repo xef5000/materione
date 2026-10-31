@@ -11,6 +11,8 @@ import dev.materione.plugin.gui.input.InventoryInput;
 import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
+import dev.materione.plugin.gui.render.GuiRenderer;
+import dev.materione.plugin.gui.render.LoggingRenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
@@ -50,10 +52,13 @@ public final class GuiStack {
         InputGuard guard = new InputGuard();
         GuiEvents events = new GuiEvents(dispatcher);
         this.router = new ClickRouter(guis, events, visibility, guard);
-        WindowHost windows = new BukkitWindowHost(plugin, scheduling, new InventoryInput(sessions, router), guard);
+        GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()));
+        WindowHost windows = new BukkitWindowHost(
+                plugin, scheduling, new InventoryInput(sessions, router), guard, renderer);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
-                        plugin, viewer.player(), ticks, task, retired));
+                        plugin, viewer.player(), ticks, task, retired),
+                windows);
         this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);

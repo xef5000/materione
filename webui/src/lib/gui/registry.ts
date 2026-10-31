@@ -134,8 +134,9 @@ export function newLayer(
   const id = uniqueId(bare, taken);
   const layer: Json = { id, type: bare, name: shortName(info) };
   for (const param of info.parameters) {
-    if (!param.required && !(param.id === 'x' || param.id === 'y')) continue;
-    const value = defaultValue(param) ?? (param.required ? REQUIRED_FALLBACKS[param.id] : undefined);
+    // an item is optional in the schema (an animated layer has frames instead), but a new item layer starts with one
+    if (!param.required && !(param.id === 'x' || param.id === 'y' || param.id === 'item')) continue;
+    const value = defaultValue(param) ?? REQUIRED_FALLBACKS[param.id];
     if (value !== undefined) layer[param.id] = value;
   }
   return { ...layer, ...overrides, id, type: bare } as GuiLayer;

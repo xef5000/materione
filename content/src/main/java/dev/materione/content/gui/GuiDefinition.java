@@ -19,6 +19,8 @@ import java.util.Map;
  * @param skipped layers that were quarantined, in authored order
  * @param rules the GUI's {@code behavior:} and {@code flows:} as authored (logic.md §6)
  * @param raw the merged authored mapping, kept for lossless reads
+ * @param refresh the {@code refresh:} clock in ticks (logic.md §6.3), 0 when off
+ * @param refreshProblem why {@code refresh:} was not read as a clock, or null
  */
 public record GuiDefinition(
         NamespacedId id,
@@ -27,13 +29,25 @@ public record GuiDefinition(
         List<GuiLayer> layers,
         List<SkippedLayer> skipped,
         GuiRules rules,
-        Map<String, Object> raw) {
+        Map<String, Object> raw,
+        int refresh,
+        String refreshProblem) {
 
     public GuiDefinition {
         layers = List.copyOf(layers);
         skipped = List.copyOf(skipped);
         rules = rules == null ? GuiRules.EMPTY : rules;
         raw = Collections.unmodifiableMap(new LinkedHashMap<>(raw));
+        if (refresh < 0) {
+            throw new IllegalArgumentException("refresh is 0 (off) or a whole number of ticks");
+        }
+    }
+
+    /** A GUI with its clock off and no problem with it. */
+    public GuiDefinition(
+            NamespacedId id, String title, int rows, List<GuiLayer> layers, List<SkippedLayer> skipped,
+            GuiRules rules, Map<String, Object> raw) {
+        this(id, title, rows, layers, skipped, rules, raw, 0, null);
     }
 
     /**
