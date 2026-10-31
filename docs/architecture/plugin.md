@@ -450,6 +450,18 @@ an unknown key, a bad command name, an argument of an unknown type) is `MTR-0021
 
 ---
 
+The M6 dynamic GUI layers ([`logic.md`](logic.md) §6.3, §24, #216) add four codes. Each names the layer or field it is
+about, so the editor opens it:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0070` | warning | A GUI item layer names an item source the server does not know, or the source rejects its parameters (a head with two skins, a player slot that is not one of six). The layer is left out and the rest of the GUI shows. Optional integrations are not this case: while their plugin is absent the layer shows a barrier (`MTR-0072`). Fix the source's spelling or parameters. |
+| `MTR-0071` | warning | The GUI's `refresh:` clock is not a whole number of ticks of at least 1. The GUI does not refresh on a clock; `gui.refresh` and reloads still update it. Write `refresh: 20`, for example. |
+| `MTR-0072` | warning | At render, a GUI item's source could not produce an item for the viewer: an unknown player's head, a missing live item, an optional plugin that is not installed. The slot shows a barrier whose lore is the reason. Rate-limited per layer. |
+| `MTR-0073` | warning | At render, a dynamic GUI layer's condition or template failed. The condition counts as false, so the layer is hidden; a template renders its fallback, and an amount that is not a number shows 1. Rate-limited per layer. |
+
+---
+
 ## 6. Platform isolation layer
 
 `platform/` is the only module that knows a server version exists. It exposes:
@@ -628,6 +640,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Pack build (5k assets, warm) | < 30 s, cache-hit no-op < 100 ms | deterministic hashing |
 | Editor save round-trip | < 2 s end-to-end | save → validate → targeted apply → confirm |
 | Flow dispatch (rule gate + interpreter, a 10-step flow, actions excluded) | ≤ 0.5 ms p99 | `FlowDispatchPerfTest`; logic.md §5.3 |
+| GUI refresh pass (50 open windows × 54 dynamic slots, every 20 ticks: each window's render and diff) | ≤ 2 ms per pass, best of three | `DynamicSlotsPerfTest`; measured 0.43 ms; logic.md §6.3, §24. The Bukkit stack build of a changed slot is outside the budget |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read
 (~10–50 µs, NBT decode). The updater's inventory scans are the real cost center — they are

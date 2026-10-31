@@ -537,7 +537,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // its services bind into the bridge the GUI actions hold
         guiStack = new dev.materione.plugin.gui.GuiStack(
                 this, scheduling, () -> pipeline.runtime().registries(), logic.engine(),
-                dev.materione.plugin.gui.input.LayerVisibility.ALL, diagnostics::publish,
+                dev.materione.plugin.gui.input.LayerVisibility.RENDERED, diagnostics::publish,
                 () -> pipeline.builtRegistries());
         guiBridge.bind(guiStack.services());
         // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)

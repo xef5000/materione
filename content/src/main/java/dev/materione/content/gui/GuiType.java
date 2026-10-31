@@ -55,9 +55,13 @@ public final class GuiType implements ContentType {
     /** The namespace an unqualified component name aliases, as with mechanics. */
     static final String BUILTIN_NAMESPACE = "materione";
 
-    /** Layer fields the gui type owns; everything else belongs to the component. */
+    /**
+     * Layer fields the gui type owns; everything else belongs to the component. {@code name} is common (the
+     * layers panel's label), and it is also handed to a component whose schema declares a {@code name}
+     * parameter, which is how an item layer names its item.
+     */
     private static final Set<String> COMMON_FIELDS =
-            Set.of("id", "type", "name", "visible", "locked", "opacity");
+            Set.of("id", "type", "name", "visible", "locked", "opacity", "visible_if");
 
     private final Registry<GuiComponent> components;
     private final GuiRuleChecker ruleChecker;
@@ -117,7 +121,14 @@ public final class GuiType implements ContentType {
                         "Raster layers only: 0 is transparent, 100 is opaque", null, null)
                         .withEditor(new ParameterSchema.EditorMetadata(
                                 "Opacity", "appearance", 50, true, "number", "", "100")
-                                .withRange(0.0, (double) MAX_OPACITY, "%")));
+                                .withRange(0.0, (double) MAX_OPACITY, "%")),
+                new ParameterSchema("visible_if", ParameterType.RAW, false, null,
+                        "A condition (an expression, a predicate or a composite, as in a rule's require) that "
+                                + "decides whether the layer is shown, checked on every render. Item layers only "
+                                + "in this build: the layer order is its priority, and the topmost visible layer "
+                                + "of a slot wins", null, null)
+                        .withEditor(new ParameterSchema.EditorMetadata(
+                                "Visible if", "identity", 35, true, "text", "", "")));
         var layers = new ParameterSchema("layers", ParameterType.LIST, false, null,
                 "Ordered layers, bottom to top; each layer is one component instance",
                 null, layerFields)
@@ -137,6 +148,12 @@ public final class GuiType implements ContentType {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Rows", "placement", 10, false, "number", "", "3")
                                         .withRange(1.0, (double) MAX_ROWS, "rows")),
+                        new ParameterSchema("refresh", ParameterType.INTEGER, false, null,
+                                "Refresh clock in ticks: the window re-evaluates its dynamic layers this often "
+                                        + "(conditions, templates, animations). Off when absent; gui.refresh and "
+                                        + "reloads always update it", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Refresh", "behavior", 20, true, "number", "", "")),
                         layers,
                         dev.materione.content.logic.LogicSchemas.behavior(),
                         dev.materione.content.logic.LogicSchemas.flows(),
@@ -174,7 +191,12 @@ public final class GuiType implements ContentType {
                         index, rejection.layerId, rejection.type, rejection.getMessage()));
             }
         }
-        return Optional.of(new GuiDefinition(id, title, rows, layers, skipped, GuiRules.parse(merged), merged));
+        Object authoredRefresh = merged.get("refresh");
+        Integer clock = authoredRefresh == null ? null : wholeNumber(authoredRefresh);
+        boolean clockOk = authoredRefresh == null || (clock != null && clock >= 1);
+        return Optional.of(new GuiDefinition(id, title, rows, layers, skipped, GuiRules.parse(merged), merged,
+                clockOk && clock != null ? clock : 0,
+                clockOk ? null : "refresh is a whole number of ticks, at least 1, not " + authoredRefresh));
     }
 
     /**
@@ -188,8 +210,21 @@ public final class GuiType implements ContentType {
         }
         var out = new ArrayList<Diagnostic>();
         diagnoseLayers(gui, out);
+        diagnoseRefresh(gui, out);
         diagnoseRules(gui, out);
         return List.copyOf(out);
+    }
+
+    /** {@code MTR-0071} when {@code refresh:} was not a clock: the GUI still loads, without one. */
+    private static void diagnoseRefresh(GuiDefinition gui, List<Diagnostic> out) {
+        if (gui.refreshProblem() != null) {
+            out.add(new Diagnostic(
+                    DiagnosticCodes.GUI_REFRESH_INVALID, Severity.WARN,
+                    "GUI " + gui.id() + ": " + gui.refreshProblem() + "; the clock is off",
+                    gui.id(), null,
+                    "write refresh as a whole number of ticks, such as refresh: 20",
+                    DiagnosticTarget.field("refresh")));
+        }
     }
 
     /**
@@ -210,6 +245,7 @@ public final class GuiType implements ContentType {
         if (!gui.rules().isEmpty()) {
             out.addAll(ruleChecker.check(gui));
         }
+        out.addAll(ruleChecker.checkLayers(gui));
     }
 
     private static void diagnoseLayers(GuiDefinition gui, List<Diagnostic> out) {
@@ -293,9 +329,12 @@ public final class GuiType implements ContentType {
             throw new Rejection(layerId, type, "opacity applies to raster layers only");
         }
 
+        Object visibleIf = visibleIf(fields, layerId, type);
+        // a component that declares a name parameter (the item layer's item name) receives the common name too
+        boolean takesName = declaresName(component);
         var own = new LinkedHashMap<String, Object>();
         fields.forEach((key, value) -> {
-            if (!COMMON_FIELDS.contains(key)) {
+            if (!COMMON_FIELDS.contains(key) || (takesName && "name".equals(key))) {
                 own.put(key, value);
             }
         });
@@ -311,7 +350,35 @@ public final class GuiType implements ContentType {
         if (compiled == null || compiled.target() != target) {
             throw new Rejection(layerId, type, "component produced a layer for a different target");
         }
-        return new GuiLayer(layerId, componentId, name, visible, locked, opacity, compiled);
+        if (visibleIf != null && !(compiled instanceof ItemComponent.Layer)) {
+            // a raster or text layer is drawn into the background or the title, which cannot change while
+            // the window is open until overlay glyphs exist (logic.md §6.4, #217)
+            throw new Rejection(layerId, type, "visible_if works on item layers in this build; "
+                    + "raster and text layers need overlay glyphs (logic.md §6.4, #217)");
+        }
+        return new GuiLayer(layerId, componentId, name, visible, locked, opacity, compiled, visibleIf);
+    }
+
+    /** Whether a component's schema declares a {@code name} parameter of its own. */
+    private static boolean declaresName(GuiComponent component) {
+        try {
+            return component.describe().parameters().stream().anyMatch(parameter -> "name".equals(parameter.id()));
+        } catch (RuntimeException failure) {
+            return false; // containment: a broken description receives only its own fields
+        }
+    }
+
+    /** The authored {@code visible_if}, kept as written when it has a condition's shape; null when absent. */
+    private static Object visibleIf(Map<String, Object> fields, String layerId, String type) {
+        if (!fields.containsKey("visible_if")) {
+            return null;
+        }
+        Object value = fields.get("visible_if");
+        if (value instanceof String || value instanceof Boolean || value instanceof List<?>
+                || value instanceof Map<?, ?>) {
+            return value;
+        }
+        throw new Rejection(layerId, type, "visible_if is a condition: an expression, a predicate or a list");
     }
 
     /** A component's target, read inside the layer's containment: a broken addon skips only its layer. */

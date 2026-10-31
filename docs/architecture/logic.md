@@ -286,6 +286,9 @@ table becomes the built-in trigger registrations. `describe()` declares:
 
 ### 4.4 Item sources
 
+> **As built (#216).** The SPI is `dev.materione.api.logic.ItemSource`, registered through
+> `LogicApi.itemSources()` (`RegistryKeys.ITEM_SOURCES`). The choices are in §24.
+
 `ItemSource` is the SPI behind every place a GUI names an item. It parses a source string or map
 at load, and resolves it to an `ItemStack` at render time against the context. The built-ins are:
 
@@ -719,7 +722,8 @@ Rules:
 The implementing PRs assign codes from `MTR-0057` upwards and document them in plugin.md §5. #207
 took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
-the next free code is `MTR-0061`.
+#211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
+`MTR-0073` (§24); the next free code is `MTR-0074`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -1975,6 +1979,8 @@ The entries are authored and checked by `qa/runner.mjs check`; their ledger stat
 A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
 that result depends on the probe player's operator state. The unit tests cover the negative branch.
 
+---
+
 ## 23. Decisions taken in #215 (G2: open commands, typed arguments, the requirement and deny, the bypass)
 
 #215 shipped the open path's stages 2 to 4 (§6.1) and the command surface that starts it. The block is the
@@ -2090,6 +2096,123 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
     tree, the window, the requirement and deny messages) is in `qa/catalog/opencommands.mjs`, and needs a real client.
 22. **Numbering.** §20 is taken by #211 and §22 is reserved by an open PR; this section takes the next free number and
     is reconciled at merge.
+
+---
+
+## 24. Decisions taken in #216 (G3: dynamic slots, item sources, the refresh clock and the render diff)
+
+#216 makes a GUI's item slots depend on the viewer and the clock. It builds on the G1 seams (§21): the
+`LayerVisibility` the router asks, the per-session renderer that `WindowRenderer` became, `gui.refresh`, and the
+ticker. Where the design left a choice open, these are the choices. Each is reversible by the owner. The code is in
+`content.gui` (the item layer and its compile), `api.logic` (the SPI), `behavior` (the condition entry point),
+`plugin.gui.dynamic`, `plugin.gui.render`, `plugin.logic.item` and `integrations.items`.
+
+**Layer fields**
+
+1. **`visible_if` is a common layer field** that takes the shape a `require` takes (§2.3): an expression, a
+   predicate or a composite. The gui type keeps the authored value; the engine compiles it when the live view is
+   built, through `FlowCompiler.compileCondition`, so `content` stays rule-free. Its `${root}`s are checked against the
+   GUI's roots (`player`, `server`, `vars`, `gui`; `MTR-0060`). The condition's own problems keep their codes.
+2. **Only item layers honour `visible_if` in this build.** A raster or text layer (`panel`, `button`, `slots`,
+   `image`, `paint`, `text`) is drawn into the background or the title, which cannot change while a window is open
+   until overlay glyphs exist (§6.4, #217). A `visible_if` on one of them skips that layer (`MTR-0052`) with the
+   reason in its message, rather than shipping a layer that silently ignores its condition. #217 lifts the
+   restriction. This is where the design's "every layer" is narrower than written.
+3. **`name` means two things on an item layer, and the file does not change.** It is the layers-panel label on every
+   layer, and on an item layer it is the item's display name, a template (§6.3). The value reaches a component only
+   when the component's schema declares a `name` parameter, so a component that does not declare it still receives
+   only its own fields. No shipped pack names an item layer, so no existing GUI changes meaning.
+4. **`item:` takes a plain id, a template or one named source.** `shop:gui/sword` and `minecraft:diamond` are plain
+   ids; `${entry.item}` is a template; `head: {player: "${player.name}"}` and `player_slot: main_hand` are named sources
+   (§4.4). A layer has exactly one of `item:` and `frames:`. The authored value is kept as written, so a plain-id file
+   is byte-identical through a load and an untouched save.
+5. **The overrides are typed at load and templated at render.** `amount` is a whole number from 1 to 64 or a template,
+   kept as text. `name` is text. `lore` is text or a list, with `lore_mode` (`replace`, `append`, `prepend`; it needs
+   `lore`). `glint` is `true`, `false` or a template. Templates use the engine's `${...}` and `%token%` syntax.
+6. **`refresh: <ticks>` is the GUI's clock**, a whole number of at least 1. An invalid value is reported (`MTR-0071`)
+   and the GUI has no clock; `gui.refresh` and reloads still update it.
+
+**Dynamic analysis**
+
+7. **A layer is dynamic when** it has a `visible_if`, a templated override, a templated source, the `player_slot`
+   source (the viewer's own item), or `frames`. The refresh clock re-reads only dynamic layers. A static layer keeps the
+   item it resolved when the window was built: a fixed `head: {player: Notch}` is resolved on open, on `gui.refresh`
+   and on a reload, not on the clock.
+8. **A slot is static or per-viewer, as a whole.** A slot whose every layer is a plain id with no override and no
+   condition is a static slot (`CompiledGui.slots`), resolved at apply time as before, and two static layers in one
+   slot keep the existing skip (the earlier one, `MTR-0052`). Any other layer in a slot moves the whole slot to the
+   per-viewer placements, where its layers compete by layer order: the topmost visible layer wins, and a visible layer
+   that resolves to nothing leaves the slot empty. A stack of conditional items in one slot is the intended use, so
+   the compile never skips one of them.
+
+**Item sources (§4.4)**
+
+9. **`ItemSource<P>` is an `api.logic` SPI** with `parse(ParamReader)` (pure, typed at load) and
+   `resolve(P, LogicContext)`, which returns an `ItemResolution`: an `ItemStack`, nothing at all, or a reason. It is
+   registered through `LogicApi.itemSources()` under `RegistryKeys.ITEM_SOURCES` (`item-sources`). The built-ins
+   register exactly as an addon does: `materione:item` (plain ids, `minecraft:` materials and templates, resolved with
+   the `give_item` rules), `materione:head` (exactly one of `player`, `texture` or `base64`; a literal skin is checked
+   at load, a template when it renders) and `materione:player_slot` (six slots; an empty slot shows nothing). The
+   source's shorthand is the key a scalar payload is read under.
+10. **An unresolvable source is a barrier, never air.** The slot shows a red barrier whose lore is the reason, and the
+    failure is reported as `MTR-0072`, rate-limited per layer. A source name the registry does not know at load skips
+    the layer with `MTR-0070`.
+11. **The optional catalogues are registered while their plugin runs.** `hdb`, `itemsadder`, `nexo` and `mmoitems` are
+    registered by `integrations` when their plugin is enabled, and refreshed when it enables or disables. While the
+    plugin is absent the name is still accepted at load and resolves to a barrier that names the plugin, so a pack that
+    uses `hdb:` loads on a server without HeadDatabase. **Deviation from the issue text:** the four provider APIs are not
+    pinned in the version catalogue and are not compiled in this build, so their adapters reach the provider by class
+    name through reflection (`integrations.items.OptionalItemSources`) instead of through `compileOnly` calls. Those
+    call paths are not exercised here. A call that does not match the installed provider shows as a barrier with the
+    reason, so a mismatch is visible in the window. Pinning the provider jars and replacing the reflection with direct
+    calls is the follow-up once the jars are verified.
+12. **The item of a `materione:item` source is read from the live registry at each resolve.** A reload is seen by the
+    next render, and a removed item becomes a barrier.
+
+**Rendering and the refresh clock**
+
+13. **The renderer is pure; one class touches the server.** `SlotRenderer` decides each slot from the compiled GUI and
+    the viewer's `LogicContext` and returns a `Rendered`: the slot appearances, the hidden layers and the resolved
+    layers. It keeps no state, since one instance serves every window on every region thread. `GuiRenderer` renders,
+    diffs and paints. `RenderDiff` writes only the slots whose `Appearance` changed, and clears a slot that emptied.
+    Bukkit stacks are built for a changed slot only.
+14. **The click router routes to what the viewer sees.** The window remembers its last render on the session, and
+    `LayerVisibility.RENDERED` answers from the layers that render hid. A click therefore follows the window, not the
+    authored file. The router and the click policy (G5, #218) are otherwise unchanged.
+15. **A partial render re-reads only the dynamic layers** and keeps the resolved appearance of the others. A full
+    render re-reads everything, which is what a reload and `gui.refresh` need.
+16. **The refresh clock is a second chain on the window's ticker.** Its period is the greatest common divisor of
+    `refresh:` and every animation's frame rate. Each link re-reads the live GUI and the window, so a reload that
+    changes the clock is followed, and the chain stops with the window. Animations run on the window's own clock, so
+    `frames` animate even without `refresh:`.
+17. **Failures hide or fall back, and are reported.** A condition that throws hides its layer; a template that throws
+    renders its fallback (the line is dropped, the amount is 1). Each is `MTR-0073`, rate-limited per problem
+    (`LoggingRenderReporter`, one entry per problem per 30 seconds).
+18. **The refresh budget.** `DynamicSlotsPerfTest` measures one refresh pass for 50 sessions of 54 dynamic slots at
+    0.43 ms (best of three) on the development machine, against a budget of 2 ms per pass (plugin.md §9). The pass
+    measures the decision and the diff. The Bukkit stack build of a changed slot is outside it, because it needs a
+    server to time, and only a changed slot pays it.
+
+**Diagnostics and the engine**
+
+19. **Four codes** (plugin.md §5): `MTR-0070` (an item source is unknown or rejects its parameters; the layer is left
+    out), `MTR-0071` (the `refresh:` clock is not a whole number of ticks of at least 1), `MTR-0072` (a source could
+    not resolve at render; a barrier is shown) and `MTR-0073` (a dynamic layer failed at render). A wrong layer shape
+    is still `MTR-0052`, and a condition's own problems keep their codes (`MTR-0021`, `MTR-0022`, `MTR-0057`,
+    `MTR-0060`).
+20. **An unterminated `${` is malformed in a GUI.** The expression engine keeps an unclosed `${` as literal text, which
+    is its existing behaviour and is unchanged. In a GUI layer it is reported as `MTR-0022` at its field, because it is
+    almost always a typo that would otherwise show on screen.
+
+**Deferred**
+
+- Raster and text `visible_if` and their animation: #217 (overlay glyphs, §6.4).
+- `item-sources` in the behaviour vocabulary (`VocabularyBuilder`) and the editor's palette for them: with the Logic
+  tab (#223, #224). The studio's layer inspector reads the new fields from the self-description, but no inspector
+  control for `visible_if` or `frames` is designed here.
+- The click policy for input slots: #218.
+
+---
 
 ## 26. Decisions taken in #223 (W1: the studio Logic tab)
 

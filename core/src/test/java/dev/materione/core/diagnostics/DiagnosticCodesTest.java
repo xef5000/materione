@@ -31,7 +31,10 @@ class DiagnosticCodesTest {
         // MTR-0063 undeclared or reserved variable, MTR-0064 type mismatch, MTR-0065 store failed:
         // logic.md §3, §20, #211;
         // MTR-0066 GUI open argument unreadable, MTR-0067 open command conflict, MTR-0068 open requirement
-        // does not load, MTR-0069 open command tree needs a restart: logic.md §23, #215)
-        assertThat(DiagnosticCodes.all()).hasSize(69);
+        // does not load, MTR-0069 open command tree needs a restart: logic.md §23, #215;
+        // MTR-0070 GUI item source rejected, MTR-0071 GUI refresh clock invalid,
+        // MTR-0072 GUI item source unresolved at render, MTR-0073 GUI dynamic layer failed at render:
+        // logic.md §24, #216)
+        assertThat(DiagnosticCodes.all()).hasSize(73);
     }
 }

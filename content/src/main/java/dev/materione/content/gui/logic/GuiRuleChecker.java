@@ -21,6 +21,14 @@ public interface GuiRuleChecker {
     /** Checks nothing: the checker of a host with no flow engine. */
     GuiRuleChecker NONE = gui -> List.of();
 
-    /** The problems with {@code gui}'s rules, targeted at the offending node. */
+    /** The problems with {@code gui}'s rules, targeted at the offending node. Called only for a GUI with rules. */
     List<Diagnostic> check(GuiDefinition gui);
+
+    /**
+     * The problems with the item layers' sources, conditions and templates (logic.md §6.3), targeted at the
+     * layer's field. Called for every GUI; the default checks nothing.
+     */
+    default List<Diagnostic> checkLayers(GuiDefinition gui) {
+        return List.of();
+    }
 }

@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Dynamic GUI slots: conditions, templates, item sources, animation and a refresh clock (logic.md §6.3,
+  §24, #216).** An item layer can be shown only when a `visible_if` condition holds, and the topmost visible
+  layer of a slot wins. Its name, lore, amount and glint are templates, and its `item:` can be a plain id, a
+  template or a named source: `head: {player: "${player.name}"}` shows the viewer's own head, and
+  `player_slot: main_hand` shows the viewer's item. `frames: {every, items}` animates a slot. A GUI can set
+  `refresh: <ticks>` to re-render its dynamic layers on a clock. An unknown head or a missing item shows a
+  barrier item with the reason in its lore, never air. Only the changed slots are written to the window.
+  Diagnostics `MTR-0070` to `MTR-0073`. Raster and text layers cannot be conditional yet (#217).
+- **Item sources are a registry (logic.md §4.4, api.md §3.11).** `LogicApi.itemSources()` takes an
+  `ItemSource`, and the built-ins register through it: `materione:item`, `materione:head` and
+  `materione:player_slot`. The optional `hdb`, `itemsadder`, `nexo` and `mmoitems` sources register while
+  their plugin runs; on a server without the plugin they show a barrier. Those four adapters reach their
+  plugins through reflection, not compile-time dependencies, and their calls are not verified in this build.
 - **GUI open commands (logic.md §6.1, §23, #215).** A GUI's `open:` block now opens it. `commands: [shop, store]`
   registers Brigadier commands at boot, and a content reload adds and hides them without a restart. Arguments are
   typed (`string`, `int`, `number`, `player`, `boolean`, `choice`) with defaults, optional arguments and completions,
