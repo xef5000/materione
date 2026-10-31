@@ -8,7 +8,7 @@ import dev.materione.api.registry.ParameterSchema;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-/** The six GUI triggers describe themselves: filters, context schema, cancellability (logic.md §6.2). */
+/** The GUI triggers describe themselves: filters, context schema, cancellability (logic.md §6.2). */
 class GuiTriggersTest {
 
     private static TriggerType trigger(String id) {
@@ -20,9 +20,10 @@ class GuiTriggersTest {
     }
 
     @Test
-    void theSixTriggersAreFiredByGuis() {
+    void theEightTriggersAreFiredByGuis() {
         assertThat(GuiTriggers.all()).extracting(TriggerType::id).containsExactly(
-                "gui.opening", "gui.open", "gui.close", "gui.click", "gui.click_outside", "gui.tick");
+                "gui.opening", "gui.open", "gui.close", "gui.click", "gui.click_outside", "gui.tick",
+                "gui.slot_change", "gui.click_inventory");
         assertThat(GuiTriggers.all()).allSatisfy(trigger -> {
             assertThat(trigger.describe().firedBy()).containsExactly("gui");
             assertThat(trigger.describe().fired()).isTrue();
@@ -30,9 +31,23 @@ class GuiTriggersTest {
     }
 
     @Test
-    void onlyOpeningCanBeCancelled() {
+    void onlyOpeningAndTheInputTriggersCanBeCancelled() {
         assertThat(GuiTriggers.all().stream().filter(t -> t.describe().cancellable()).map(TriggerType::id))
-                .containsExactly("gui.opening");
+                .containsExactly("gui.opening", "gui.slot_change", "gui.click_inventory");
+    }
+
+    @Test
+    void slotChangeFiltersOnTheInputLayerAndGuaranteesTheSlot() {
+        assertThat(contextPaths("gui.slot_change")).contains("slot.index", "slot.item", "slot.amount", "slot.previous");
+        assertThat(trigger("gui.slot_change").describe().filters()).extracting(ParameterSchema::id)
+                .containsExactly("layer");
+    }
+
+    @Test
+    void clickInventoryFiltersOnTheClickKindAndCarriesTheItem() {
+        assertThat(contextPaths("gui.click_inventory")).contains("click.type", "click.slot", "slot.item");
+        assertThat(trigger("gui.click_inventory").describe().filters()).extracting(ParameterSchema::id)
+                .containsExactly("click");
     }
 
     @Test

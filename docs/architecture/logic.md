@@ -1966,3 +1966,95 @@ The expression entry is the one #209 asked for. The scenarios are on the `probe`
 The entries are authored and checked by `qa/runner.mjs check`; their ledger state is "never" until a main swarm records them.
 A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
 that result depends on the probe player's operator state. The unit tests cover the negative branch.
+
+## 25. Decisions taken in #218 (G5: input slots, gui.slot_change, player_inventory: locked, click-policy rows)
+
+#218 ships §6.5, including the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
+`Transfers`, `InputSlots`, `WindowPolicy`, `ClickTarget`, `InputSlotClicks`, `InputReturns`, `InputSlotOps`,
+`SlotOp`, `InputJournal`, `GuiJournal`), in the `GuiListener` policy table, in `content.gui` (`SlotsComponent`, `PlayerInventory`,
+`CompiledGui.Input`), and in the logic vocabulary (`slot_has`, `gui.slot_item`). Each choice below is reversible
+by the owner.
+
+**Which slots are input slots**
+
+1. **The topmost layer decides.** A container slot is an input slot when the topmost visible clickable layer over
+   it (the `ClickMap`, §6.2) is a `slots` layer with `input: true`. A button or item above the wells takes the
+   slot, so the layer above owns the click and the slot is not an input. `CompiledGui.inputs()` lists the input
+   slots; `region: player` cannot take `input: true` (the layer is skipped with `MTR-0052`).
+2. **Static items do not sit in input slots.** An item layer under an input slot is dropped from the live view with
+   `MTR-0075`. A static item there could be taken out, and the player's items own the slot.
+3. **The policy is read from the live view at click time** (`WindowPolicy`). A reload is followed by the next click
+   with no copy to keep in step. A window keeps its own record of the input slots it was shown with
+   (`GuiMenu.inputSlots()`), and only that record decides what is returned (decision 8).
+
+**Changes, and why they cannot duplicate**
+
+4. **`gui.slot_change` fires before the change.** The change is predicted (`SlotPolicy`) and the rules see it: `slot.item`
+   is what the slot will hold, `slot.previous` what it holds now. A cancel refuses the change, so the click is
+   cancelled and nothing moves. A post-change revert would race the player's next click, and a revert of a shift
+   that spans slots is not exact, so the check happens first. **Consequence:** a rule cannot delete the incoming
+   item from the slot it is about; `accept:` refuses it instead. The trash recipe (#222) therefore needs its own
+   mechanism. This is flagged for the owner.
+5. **Single-slot clicks are the server's, after the check.** Pickups, places, swaps, the number-key and offhand swaps
+   touch one input slot and the cursor or the viewer's slot, so the server applies them and conserves the items.
+   Drop keys, the creative clone and unknown actions take an item out of the window with no check, so they are
+   refused in an input slot.
+6. **Multi-slot moves are ours, all or nothing.** The server's own shift-click would also fill the window's display
+   slots, and its double-click collection would take display items to the cursor. So a shift-click into the inputs,
+   a shift-click out of one and a double-click collection are planned (`Transfers`, which conserves items) and
+   applied here. Every slot the plan changes is checked first, and one refusal refuses the whole move. A drag is the
+   server's, checked with the item each touched slot will hold (`getNewItems()`), and it is refused if it touches
+   a non-input slot of the window.
+7. **Accept is fail-closed.** `accept:` is an expression or predicate on `slot.item` (the candidate), compiled once per
+   live view with the flow engine (`FlowCompiler.compileCondition`) and checked against `gui.slot_change`'s
+   variables. One that does not compile, or throws while tested, accepts nothing (`MTR-0074`).
+8. **Returns.** Items in input slots go back on every end of a session (close by the player, quit, a flow's close,
+   replacement, removal) and on every window close, including a window that was replaced. The player's inventory
+   gets them first; what does not fit drops at their feet. A re-open (a title or size change) carries them to the
+   new window, and a rewrite keeps them in slots that are still inputs and returns the rest. Nothing is deleted unless
+   a flow says so (`gui.slot_item: {op: clear}`).
+9. **`gui.click_inventory` fires for every click in the viewer's inventory while the window is open**, whatever
+   `player_inventory` says, and a rule may cancel it. A `locked` inventory cancels the click regardless. A free one
+   lets it through.
+10. **`player_inventory: locked` cancels every viewer click.** A player with a locked inventory cannot pick up from
+    it, so cannot put items into the input slots; the inputs are then only fed by a flow. This is the design's
+    consequence, not an oversight, and the GUI author chooses it.
+
+**Actions and conditions**
+
+11. **`slot_has` reads the input slots only** and is false for any other slot, an empty one, or a run with no open GUI,
+    so a check never reads a display item. **`gui.slot_item`** is one action with `op: clear|take|set_amount|repair|enchant`.
+    It needs the run's own open session, as `gui.close` does. `clear` deletes the item and `take` gives it to the player.
+    `set_amount` with 0 clears the slot.
+
+**Deferred**
+
+12. **The crash journal.** While a window is open, the items in its input slots are not in the player's saved
+    inventory, so a hard crash after an autosave would lose them. The journal (`InputJournal`, with its Bukkit side
+    `GuiJournal`) copies them into the player's persistent data under `materione:gui_inputs`. It holds exactly the
+    items the player's current window holds in its input slots: it is written right after each change the server
+    has already made (the manual moves, the `gui.slot_item` operations, a rewrite, a re-open), and one tick after a
+    single-slot click or a drag, which the server applies after the handler returns. Every release (a close, a
+    quit, a flow's close, a replacement, a removal) gives the items to the inventory and then mirrors the empty
+    window into the journal in the same tick, so a save never holds an item in both places. A join gives back
+    what the journal still holds, once: `restore` clears the journal before it hands the items out. The journal
+    follows the player's current window, not the window that closed, so a stale window's close never clears the
+    journal of the window that replaced it. The rules are unit-tested over a plain store (`InputJournalTest`),
+    including the normal-close case that must never return an item twice. The window of one tick between a click
+    and its journal write is the only exposure left: an item the server moved in that tick is lost if the server
+    dies before the next tick. The "dupes impossible" criterion rests on the checks above, the planning tests and
+    the journal's invariant. The headless harness cannot drive a player, so the in-game path is judged by the QA
+    catalog.
+13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
+    layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
+14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real
+    client and are blessed on main.
+
+**Diagnostics.** `MTR-0074` (accept does not compile), `MTR-0075` (static item under an input slot) and `MTR-0076`
+(an input-slot setting that cannot apply), documented in plugin.md §5. The next free code is `MTR-0077`.
+
+**Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
+`GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a
+condition, in `BuiltinLogic.conditions`, §22's convention) reads the window through the `SlotPeek` port
+(`plugin.logic.support`), which `BuiltinLogic.register` builds from the same bridge, as `in_gui` builds `OpenGuis`.
+The trash recipe (#222) is the one place that will extend it.

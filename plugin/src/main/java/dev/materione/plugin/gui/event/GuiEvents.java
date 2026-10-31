@@ -6,6 +6,8 @@ import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.input.ClickKind;
+import dev.materione.plugin.gui.input.InputSlots;
+import dev.materione.plugin.gui.input.StackView;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import dev.materione.plugin.gui.session.CloseReason;
 import dev.materione.plugin.gui.session.GuiSession;
@@ -95,6 +97,61 @@ public final class GuiEvents {
             case "click" -> kind.id();
             default -> null;
         }, extra);
+    }
+
+    /**
+     * Fires {@code gui.slot_change} for a change an input slot is about to take (logic.md §25). The rules
+     * see the change before it happens; a cancel refuses it.
+     *
+     * @param layer the input layer the slot belongs to (the trigger's {@code layer:} filter)
+     * @param before the slot's item now
+     * @param after the slot's item once the change is made
+     * @return true when a rule cancelled the change
+     */
+    public boolean slotChange(
+            Viewer viewer, GuiSession session, RuntimeGuis.Live gui, String layer, int index,
+            StackView before, StackView after) {
+        BehaviorEvent event = fire(GuiRuleSet.SLOT_CHANGE, gui.logic().rules(GuiRuleSet.SLOT_CHANGE), viewer, session,
+                key -> "layer".equals(key) ? layer : null, slotVars(index, before, after));
+        return event != null && event.isCancelRequested();
+    }
+
+    /**
+     * Whether an input slot accepts an item (logic.md §25): its {@code accept:} condition, tested in the
+     * same context a {@code gui.slot_change} rule sees, with {@code slot.item} the entering item.
+     */
+    public boolean accepts(
+            Viewer viewer, GuiSession session, InputSlots.Input input, int index, StackView entering, StackView before) {
+        if (input.accept() == null && !input.acceptBroken()) {
+            return true;
+        }
+        return InputSlots.accepts(input, GuiContexts.build(viewer, session, slotVars(index, before, entering)));
+    }
+
+    /**
+     * Fires {@code gui.click_inventory} for a click in the viewer's own inventory (logic.md §6.2).
+     *
+     * @param slot the clicked slot of the player's inventory
+     * @param item the item the player clicked, as an id (blank when empty)
+     * @return true when a rule cancelled the click
+     */
+    public boolean clickInventory(
+            Viewer viewer, GuiSession session, RuntimeGuis.Live gui, ClickKind kind, int slot, int key, String item) {
+        var extra = new java.util.LinkedHashMap<String, Object>(GuiContexts.click(kind.id(), slot, key));
+        extra.put("slot", Map.of("item", item));
+        BehaviorEvent event = fire(GuiRuleSet.CLICK_INVENTORY, gui.logic().rules(GuiRuleSet.CLICK_INVENTORY),
+                viewer, session, key2 -> "click".equals(key2) ? kind.id() : null, extra);
+        return event != null && event.isCancelRequested();
+    }
+
+    /** The {@code slot.*} variables of one input-slot change. */
+    private static Map<String, Object> slotVars(int index, StackView before, StackView after) {
+        var slot = new java.util.LinkedHashMap<String, Object>();
+        slot.put("index", index);
+        slot.put("item", after.id());
+        slot.put("amount", after.amount());
+        slot.put("previous", before.id());
+        return Map.of("slot", slot);
     }
 
     private BehaviorEvent fire(

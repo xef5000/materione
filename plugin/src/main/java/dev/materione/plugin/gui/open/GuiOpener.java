@@ -109,6 +109,7 @@ public final class GuiOpener {
         }
         if (sessions.end(previous, CloseReason.REPLACED)) {
             guis.find(previous.gui()).ifPresent(gui -> events.closed(viewer, previous, gui, CloseReason.REPLACED));
+            windows.releaseInputs(viewer, previous); // the player's input items leave with the window they were in
         }
     }
 }

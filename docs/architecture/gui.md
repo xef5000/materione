@@ -304,6 +304,10 @@ only (§9.4).
 - *Clicks.* `GuiListener` routes three targets: the GUI's own slots and the outside of the window are
   cancelled, and the viewer's inventory stays live except the two actions that would move items into or
   out of the GUI (shift-move, double-click collection). The table is `GuiListener.route`, unit-tested.
+  Since #218 the table has input-slot rows (logic.md §25): a click on an input slot is checked against
+  `gui.slot_change` and the slot's `accept:` before the server applies it, shift-moves and double-click
+  collection into and out of input slots are planned and applied by the input rules, and
+  `player_inventory: locked` cancels every viewer click.
   The GUI's handler was empty in v1; since #214 it hands the click to the click router, and a click
   outside the window is offered to the GUI as `gui.click_outside` (logic.md §21 decision 11). The table
   itself is unchanged.

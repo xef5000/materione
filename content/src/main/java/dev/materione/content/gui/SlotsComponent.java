@@ -62,8 +62,19 @@ public final class SlotsComponent implements GuiComponent {
                                 "Well colours: {fill, highlight, shadow} as #RRGGBB or #AARRGGBB",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Well colours", "appearance", 20, true, "advanced", "", ""))),
-                "1.0.0");
+                                        "Well colours", "appearance", 20, true, "advanced", "", "")),
+                        new ParameterSchema("input", ParameterType.BOOLEAN, false, "false",
+                                "Input slots: the player's items may be placed in these container slots "
+                                        + "(logic.md §6.5). Requires a region that includes the container",
+                                null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Input slots", "behavior", 30, false, "toggle", "", "false")),
+                        new ParameterSchema("accept", ParameterType.RAW, false, null,
+                                "Input slots only: a condition on slot.item that an item must meet to be placed "
+                                        + "(an expression or a predicate, logic.md §2.3)", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Accept", "behavior", 40, true, "advanced", "", ""))),
+                "1.1.0");
     }
 
     @Override
@@ -80,7 +91,13 @@ public final class SlotsComponent implements GuiComponent {
             default -> throw new IllegalArgumentException(
                     "layer " + configuration.layerId() + ": region must be container, player or all");
         };
-        return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.rows());
+        boolean input = configuration.bool("input", false);
+        if (input && region == Region.PLAYER) {
+            throw new IllegalArgumentException(
+                    "layer " + configuration.layerId() + ": input slots need the container, so region must be container or all");
+        }
+        return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.rows(),
+                input, configuration.parameters().get("accept"));
     }
 
     /**
@@ -109,8 +126,15 @@ public final class SlotsComponent implements GuiComponent {
         return origins;
     }
 
-    /** Parsed slot wells: which area, the inset colours, and the chest's row count for geometry. */
-    public record Layer(Region region, GuiBevel bevel, int rows) implements CompiledGuiLayer {
+    /**
+     * Parsed slot wells: which area, the inset colours, and the chest's row count for geometry.
+     *
+     * @param input whether the container slots take the player's items (logic.md §25)
+     * @param accept the authored {@code accept:} condition as written, or null; compiled by the runtime
+     *     (it needs the flow engine), and read only when {@code input} is true
+     */
+    public record Layer(Region region, GuiBevel bevel, int rows, boolean input, Object accept)
+            implements CompiledGuiLayer {
 
         @Override
         public RenderTarget target() {

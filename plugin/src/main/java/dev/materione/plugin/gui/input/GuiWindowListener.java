@@ -10,6 +10,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 
 /**
@@ -24,9 +25,11 @@ import org.bukkit.event.player.PlayerQuitEvent;
 public final class GuiWindowListener implements Listener {
 
     private final GuiLifecycle lifecycle;
+    private final GuiJournal journal;
 
-    public GuiWindowListener(GuiLifecycle lifecycle) {
+    public GuiWindowListener(GuiLifecycle lifecycle, GuiJournal journal) {
         this.lifecycle = lifecycle;
+        this.journal = journal;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -34,6 +37,10 @@ public final class GuiWindowListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof GuiMenu menu) || !(event.getPlayer() instanceof Player player)) {
             return;
         }
+        // whatever window closes, the player's items in its input slots are theirs: a window that was
+        // replaced by a reopen has already handed them over, so this finds nothing and changes nothing
+        InputReturns.release(player, menu);
+        journal.mirror(player); // the journal follows the player's current window, which may be another one
         GuiSession session = menu.session();
         if (session.window() != menu) {
             return;
@@ -47,5 +54,11 @@ public final class GuiWindowListener implements Listener {
     @EventHandler(priority = EventPriority.MONITOR)
     public void onQuit(PlayerQuitEvent event) {
         lifecycle.playerQuit(Viewer.of(event.getPlayer()));
+    }
+
+    /** A join after a crash: whatever the journal still holds was in an open window's input slots, and goes back. */
+    @EventHandler(priority = EventPriority.LOW)
+    public void onJoin(PlayerJoinEvent event) {
+        journal.restore(event.getPlayer());
     }
 }

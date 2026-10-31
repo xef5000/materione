@@ -4,6 +4,7 @@ import dev.materione.api.NamespacedId;
 import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.input.GuiInput;
 import dev.materione.plugin.gui.session.GuiSession;
+import java.util.Set;
 import org.bukkit.event.inventory.InventoryClickEvent;
 
 /**
@@ -20,6 +21,8 @@ public final class GuiMenu extends PluginGui {
     private final int rows;
     private final String title;
     private final GuiInput input;
+    /** The input slots this window was shown with: the only slots whose items are the player's (logic.md §25). */
+    private volatile Set<Integer> inputSlots = Set.of();
 
     public GuiMenu(GuiSession session, int rows, String title, GuiInput input) {
         super(rows * 9, MaterioneText.parseData(title));
@@ -27,6 +30,16 @@ public final class GuiMenu extends PluginGui {
         this.rows = rows;
         this.title = title;
         this.input = input;
+    }
+
+    /** The input slots this window holds the player's items in, as it was last shown or rewritten. */
+    public Set<Integer> inputSlots() {
+        return inputSlots;
+    }
+
+    /** Records the input slots the window now shows (on open, and on every rewrite). */
+    public void inputSlots(Set<Integer> slots) {
+        this.inputSlots = Set.copyOf(slots);
     }
 
     /** The session this window shows. It outlives a re-open of the window (a title or size change). */

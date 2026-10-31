@@ -94,6 +94,7 @@ public final class GuiFixture {
     private final Map<NamespacedId, CompiledGui> compiled = new LinkedHashMap<>();
     private final AtomicReference<RuntimeGuis> view = new AtomicReference<>(RuntimeGuis.empty());
     public LayerVisibility visibility = LayerVisibility.ALL;
+    public final FakeInputs inputPort = new FakeInputs();
 
     public GuiFixture() {
         var registries = new RegistryService();
@@ -120,7 +121,7 @@ public final class GuiFixture {
         lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         opener = new GuiOpener(guis, sessions, events, windows, ticker, Logger.getAnonymousLogger());
         refresh = new GuiLiveRefresh(plugin(), null, guis, sessions, windows, lifecycle, ticker);
-        bridge.bind(new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh));
+        bridge.bind(new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh, inputPort));
     }
 
     private GuiLookup lookup() {
@@ -236,6 +237,36 @@ public final class GuiFixture {
         @Override
         public Optional<Shape> shape(Viewer viewer, GuiSession session) {
             return Optional.ofNullable(shapes.get(session));
+        }
+
+        /** The sessions whose input items were released to their viewer, in order. */
+        public final List<GuiSession> released = new ArrayList<>();
+
+        @Override
+        public void releaseInputs(Viewer viewer, GuiSession session) {
+            released.add(session);
+        }
+    }
+
+    /**
+     * A stand-in for the window's input slots (logic.md §25): the items the test places, and the operations the
+     * actions apply, recorded in order. {@code refuse} is the reason every operation fails with, when set.
+     */
+    public static final class FakeInputs implements dev.materione.plugin.gui.input.InputSlotPort {
+        public final Map<Integer, dev.materione.plugin.gui.input.StackView> items = new LinkedHashMap<>();
+        public final List<String> applied = new ArrayList<>();
+        public String refuse;
+
+        @Override
+        public dev.materione.plugin.gui.input.StackView peek(GuiSession session, int slot) {
+            return items.getOrDefault(slot, dev.materione.plugin.gui.input.StackView.EMPTY);
+        }
+
+        @Override
+        public Optional<String> apply(org.bukkit.entity.Player player, GuiSession session, int slot,
+                dev.materione.plugin.gui.input.SlotOp op) {
+            applied.add(slot + ":" + op.kind().id());
+            return Optional.ofNullable(refuse);
         }
     }
 

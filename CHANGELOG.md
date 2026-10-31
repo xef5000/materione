@@ -9,6 +9,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Input slots and the player's inventory (logic.md §6.5, §25, #218).** A `slots` layer with
+  `input: true` lets players put items into its container slots, optionally limited by an `accept:`
+  condition on `slot.item`. Items placed there go back to the player when the window closes, quits or is
+  replaced (inventory first, then at their feet), and nothing is deleted unless a flow says so. Four
+  pieces of vocabulary: `gui.slot_change` (cancellable, fires before the change), `gui.click_inventory`
+  (cancellable), `slot_has` (an input slot holds an item) and `gui.slot_item` (`clear`, `take`,
+  `set_amount`, `repair`, `enchant`). A GUI's `player_inventory: locked` cancels every click in the
+  viewer's inventory. Items in an open window are journaled in the player's persistent data, so a hard
+  crash gives them back on the next join. Diagnostics MTR-0074 to MTR-0076. Not yet shipped: the
+  `gui.slot_change` layer check, and the in-game QA run for `guilogic.input-slots`.
 - **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
