@@ -1,0 +1,20 @@
+# Shapes the canvas must carry without rewriting: strays, a stop followed by steps, bare names, nested branches
+odd:
+  behavior:
+    - on: click:right
+      cooldown: 20
+      do:
+        - stop
+        - message: unreachable but kept
+        - sound: x
+          then: [{ stray: true }]
+          delay: 10
+        - if: true
+          then:
+            - if: ${a}
+              then: [gui.close]
+              else: [stop]
+          else:
+            - require: []
+        - choose: not-a-list
+        - 42

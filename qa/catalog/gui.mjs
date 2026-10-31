@@ -45,6 +45,17 @@ const STUDIO_COVERS = [
   'core/src/main/java/dev/materione/core/authoring/AuthoringApiImpl.java',
 ];
 
+const LOGIC_COVERS = [
+  'webui/src/lib/studio/logic/**',
+  'webui/src/lib/logic/**',
+  'webui/src/lib/studio/gui/GuiStudio.svelte',
+  'webui/src/lib/gui/studio.svelte.ts',
+  'webui/browser/specs/logic-tab.pw.ts',
+  'webui/test-support/qa-browser.mjs',
+  'web/src/main/java/dev/materione/web/rpc/ops/LogicAuthoringOps.java',
+  'behavior/src/main/java/dev/materione/behavior/logic/authoring/**',
+];
+
 async function openNewChest(ctx) {
   const page = await ctx.browser.openEditor();
   await page.getByLabel('project').selectOption('sample');
@@ -482,6 +493,66 @@ export default [
         await ctx.browser.browserShot('gui-studio-item-customized');
         ctx.needsEyes(
           'the brush leaves a smooth round stroke with no gaps and a ghost footprint (white line with a dark edge) follows the cursor; the Text layer in edit mode shows pixel-font letters with a blinking orange caret and a dashed box, never a second font; the default-font text is visibly the client font with the "Approximate preview" note and an orange "!" flag when a restriction applies; the customized item shows its real icon in the slot and the item studio Appearance card (render, texture and model slots, tooltip) inline in the inspector without layout overflow.',
+        );
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.logic-tab-visual',
+    title: 'sample:qa_chest Logic tab: a flow built by dragging wires out of ports (open, sound, command, close), the search palette with an unavailable provider greyed, and a refused wire',
+    mode: 'visual',
+    dependsOn: ['gui.studio-new-chest'],
+    covers: LOGIC_COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+        await ctx.browser.browserShot('logic-tab-empty');
+        await page.getByRole('button', { name: /add a trigger/i }).click();
+        await page.locator('[data-entry="trigger:gui.open"]').click();
+        const dragOut = async (node, port) => {
+          const box = await page.locator('[data-node="' + node + '"][data-port="' + port + '"]').boundingBox();
+          const x = box.x + box.width / 2;
+          const y = box.y + box.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x + 80, y + 60, { steps: 4 });
+          await page.mouse.move(x + 150, y + 150, { steps: 4 });
+          await page.mouse.up();
+        };
+        const fill = async (node, value) => {
+          await page.locator('.node[data-node="' + node + '"] input.value').fill(value);
+          await page.keyboard.press('Enter');
+        };
+        await dragOut('behavior.0', 'out');
+        await page.locator('[data-entry="action:sound"]').click();
+        await fill('behavior.0.do.0', 'block.chest.open');
+        await dragOut('behavior.0.do.0', 'after');
+        await page.locator('[data-entry="action:run_command"]').click();
+        await fill('behavior.0.do.1', 'say shop opened');
+        await dragOut('behavior.0.do.1', 'after');
+        await page.locator('[data-entry="action:gui.close"]').click();
+        await page.getByTestId('logic-canvas').focus();
+        await page.keyboard.press('0');
+        await ctx.browser.browserShot('logic-tab-flow');
+        await page.keyboard.press('/');
+        await page.getByRole('textbox', { name: 'Search the palette' }).fill('money');
+        await ctx.browser.browserShot('logic-tab-palette-unavailable');
+        await page.keyboard.press('Escape');
+        const from = await page.locator('[data-node="behavior.0"][data-port="out"]').boundingBox();
+        const to = await page.locator('.node[data-node="behavior.0.do.2"] header').boundingBox();
+        await page.mouse.move(from.x + 6, from.y + 6);
+        await page.mouse.down();
+        await page.mouse.move(to.x + 40, to.y + 10, { steps: 8 });
+        await ctx.browser.browserShot('logic-tab-refused-wire');
+        await page.mouse.up();
+        ctx.needsEyes(
+          'the Logic tab shows the four-node flow as colour-coded nodes (amber trigger, blue Play sound, slate Run command, purple Close GUI) joined by stepped pixel wires in the colour of the node they leave, with square ports on the node edges and a dust pixel at every bend; the empty state is readable and offers Add a trigger; the palette is grouped (Triggers first), searchable, and the Economy entries are greyed with the Vault reason rather than hidden; while a wire is dragged onto an already-fed node the status line says why in one line and the loose wire is dashed; the chrome uses the editor tokens (navy surfaces, orange only for the primary action and focus) and nothing overflows horizontally.',
         );
       } finally {
         removeFixtureFile();

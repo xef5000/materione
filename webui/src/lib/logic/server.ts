@@ -12,6 +12,7 @@
  */
 import { unwrap, type RpcChannel } from '../api';
 import { hasCapability } from '../protocol/session';
+import type { Response } from '../protocol/wire';
 
 /** Whether the connected server answers the logic API (the `logic` capability). */
 export function logicApiAvailable(channel: RpcChannel | null | undefined): boolean {
@@ -120,6 +121,20 @@ export async function logicEdit(
 ): Promise<LogicView> {
   const response = await channel.call('logic.edit', { pack, path, rev, edits: [...edits] });
   return unwrap(response) as unknown as LogicView;
+}
+
+/**
+ * `logic.edit` as the raw reply, for a caller that needs the refusal's step path (`error.resource`, which
+ * `unwrap` drops): the studio's save points at the node the server refused.
+ */
+export function logicEditResponse(
+  channel: RpcChannel,
+  pack: string,
+  path: string,
+  rev: number,
+  edits: readonly LogicEdit[],
+): Promise<Response> {
+  return channel.call('logic.edit', { pack, path, rev, edits: [...edits] });
 }
 
 /** `logic.validate`: the step-path diagnostics the compiler reports for a draft. Nothing is written. */
