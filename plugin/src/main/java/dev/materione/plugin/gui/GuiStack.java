@@ -7,6 +7,7 @@ import dev.materione.plugin.gui.event.RuleDispatcher;
 import dev.materione.plugin.gui.input.ClickRouter;
 import dev.materione.plugin.gui.input.GuiWindowListener;
 import dev.materione.plugin.gui.input.InputGuard;
+import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputSlotClicks;
 import dev.materione.plugin.gui.input.InputSlotOps;
 import dev.materione.plugin.gui.input.InventoryInput;
@@ -53,16 +54,19 @@ public final class GuiStack {
         InputGuard guard = new InputGuard();
         GuiEvents events = new GuiEvents(dispatcher);
         this.router = new ClickRouter(guis, events, visibility, guard);
-        WindowHost windows = new BukkitWindowHost(plugin, scheduling, new InventoryInput(sessions, router), guard);
+        GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
+        WindowHost windows = new BukkitWindowHost(
+                plugin, scheduling, new InventoryInput(sessions, router), guard, journal);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
                         plugin, viewer.player(), ticks, task, retired));
         this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
-        this.windowListener = new GuiWindowListener(lifecycle);
-        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard);
-        this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh, new InputSlotOps(guis));
+        this.windowListener = new GuiWindowListener(lifecycle, journal);
+        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
+        this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh,
+                new InputSlotOps(guis, journal));
     }
 
     /** The input-slot rules the click router consults (logic.md §25). */

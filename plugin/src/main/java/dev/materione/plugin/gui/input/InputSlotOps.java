@@ -19,9 +19,11 @@ import org.bukkit.inventory.meta.Damageable;
 public final class InputSlotOps implements InputSlotPort {
 
     private final GuiLookup guis;
+    private final GuiJournal journal;
 
-    public InputSlotOps(GuiLookup guis) {
+    public InputSlotOps(GuiLookup guis, GuiJournal journal) {
         this.guis = guis;
+        this.journal = journal;
     }
 
     @Override
@@ -79,6 +81,7 @@ public final class InputSlotOps implements InputSlotPort {
                 return Optional.of("unsupported operation " + op.kind().id());
             }
         }
+        journal.mirror(player); // the window changed: the journal follows it
         return Optional.empty();
     }
 

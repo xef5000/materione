@@ -44,12 +44,15 @@ public final class InputSlotClicks {
     private final GuiSessions sessions;
     private final GuiEvents events;
     private final InputGuard guard;
+    private final GuiJournal journal;
 
-    public InputSlotClicks(GuiLookup guis, GuiSessions sessions, GuiEvents events, InputGuard guard) {
+    public InputSlotClicks(GuiLookup guis, GuiSessions sessions, GuiEvents events, InputGuard guard,
+            GuiJournal journal) {
         this.guis = guis;
         this.sessions = sessions;
         this.events = events;
         this.guard = guard;
+        this.journal = journal;
     }
 
     /** The policy of a window for the viewer who clicked it, read from the live view now. */
@@ -105,8 +108,12 @@ public final class InputSlotClicks {
             return false;
         }
         Viewer viewer = Viewer.of(player);
-        return during(player.getUniqueId(), () ->
+        boolean allowed = during(player.getUniqueId(), () ->
                 allows(viewer, menu.session(), live.get(), input.get(), slot, before, change));
+        if (allowed) {
+            journal.mirrorNextTick(player); // the server applies the click after this handler returns
+        }
+        return allowed;
     }
 
     /**
@@ -152,6 +159,7 @@ public final class InputSlotClicks {
                 top.setItem(move.slot(), grown(top.getItem(move.slot()), source, move.count()));
             }
             event.getClickedInventory().setItem(event.getSlot(), BukkitStacks.withAmount(source, src.amount() - plan.moved()));
+            journal.mirror(player);
             return null;
         });
     }
@@ -189,6 +197,7 @@ public final class InputSlotClicks {
                 storage.setItem(move.slot(), grown(storage.getItem(move.slot()), item, move.count()));
             }
             menu.getInventory().setItem(slot, BukkitStacks.withAmount(item, left));
+            journal.mirror(player);
             return null;
         });
     }
@@ -242,6 +251,7 @@ public final class InputSlotClicks {
                         BukkitStacks.withAmount(item, BukkitStacks.view(item).amount() - move.count()));
             }
             player.setItemOnCursor(BukkitStacks.withAmount(cursor, cur.amount() + fromWindow.moved() + fromBag.moved()));
+            journal.mirror(player);
             return null;
         });
     }
@@ -261,7 +271,7 @@ public final class InputSlotClicks {
         Viewer viewer = Viewer.of(player);
         ItemStack cursor = event.getOldCursor();
         int topSize = menu.getInventory().getSize();
-        return during(player.getUniqueId(), () -> {
+        boolean allowed = during(player.getUniqueId(), () -> {
             for (int raw : event.getRawSlots()) {
                 if (raw >= topSize) {
                     continue;
@@ -286,6 +296,10 @@ public final class InputSlotClicks {
             }
             return true;
         });
+        if (allowed) {
+            journal.mirrorNextTick(player); // the server places the drag after this handler returns
+        }
+        return allowed;
     }
 
     // --- helpers ------------------------------------------------------------------

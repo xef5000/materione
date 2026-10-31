@@ -1723,9 +1723,9 @@ was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the l
 
 ## 25. Decisions taken in #218 (G5: input slots, gui.slot_change, player_inventory: locked, click-policy rows)
 
-#218 ships §6.5 except the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
+#218 ships §6.5, including the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
 `Transfers`, `InputSlots`, `WindowPolicy`, `ClickTarget`, `InputSlotClicks`, `InputReturns`, `InputSlotOps`,
-`SlotOp`), in the `GuiListener` policy table, in `content.gui` (`SlotsComponent`, `PlayerInventory`,
+`SlotOp`, `InputJournal`, `GuiJournal`), in the `GuiListener` policy table, in `content.gui` (`SlotsComponent`, `PlayerInventory`,
 `CompiledGui.Input`), and in the logic vocabulary (`slot_has`, `gui.slot_item`). Each choice below is reversible
 by the owner.
 
@@ -1781,15 +1781,24 @@ by the owner.
     It needs the run's own open session, as `gui.close` does. `clear` deletes the item and `take` gives it to the player.
     `set_amount` with 0 clears the slot.
 
-**Deferred, and where the exit criteria are not met**
+**Deferred**
 
-12. **Crash safety is not shipped.** While a window is open, the items in its input slots are not in the player's
-    saved inventory, so a hard crash between an autosave and the close loses them. This is the exposure an open
-    crafting grid has in vanilla, but the exit criterion asks for more. The planned fix is a journal in the player's
-    persistent data, written one tick after each change and cleared on release, and restored on join. It needs a
-    decision on where the journal lives, so it is not part of this PR. The "dupes impossible" criterion is met by
-    the checks above and by the policy and planning tests, not by the in-game IT, which this headless harness
-    cannot drive.
+12. **The crash journal.** While a window is open, the items in its input slots are not in the player's saved
+    inventory, so a hard crash after an autosave would lose them. The journal (`InputJournal`, with its Bukkit side
+    `GuiJournal`) copies them into the player's persistent data under `materione:gui_inputs`. It holds exactly the
+    items the player's current window holds in its input slots: it is written right after each change the server
+    has already made (the manual moves, the `gui.slot_item` operations, a rewrite, a re-open), and one tick after a
+    single-slot click or a drag, which the server applies after the handler returns. Every release (a close, a
+    quit, a flow's close, a replacement, a removal) gives the items to the inventory and then mirrors the empty
+    window into the journal in the same tick, so a save never holds an item in both places. A join gives back
+    what the journal still holds, once: `restore` clears the journal before it hands the items out. The journal
+    follows the player's current window, not the window that closed, so a stale window's close never clears the
+    journal of the window that replaced it. The rules are unit-tested over a plain store (`InputJournalTest`),
+    including the normal-close case that must never return an item twice. The window of one tick between a click
+    and its journal write is the only exposure left: an item the server moved in that tick is lost if the server
+    dies before the next tick. The "dupes impossible" criterion rests on the checks above, the planning tests and
+    the journal's invariant. The headless harness cannot drive a player, so the in-game path is judged by the QA
+    catalog.
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real
@@ -1800,4 +1809,4 @@ by the owner.
 
 **Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
 `GuiBridge.Services.inputs()` is the port `slot_has` and `gui.slot_item` reach the window through (`InputSlotPort`).
-The trash recipe (#222) and the crash journal (decision 12) are the two places that extend it.
+The trash recipe (#222) is the one place that will extend it.

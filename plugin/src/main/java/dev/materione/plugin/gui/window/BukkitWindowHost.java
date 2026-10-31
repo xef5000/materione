@@ -5,6 +5,7 @@ import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.input.GuiInput;
+import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputReturns;
 import dev.materione.plugin.gui.input.InputSlots;
@@ -39,12 +40,15 @@ public final class BukkitWindowHost implements WindowHost {
     private final SchedulingGateway scheduling;
     private final GuiInput input;
     private final InputGuard guard;
+    private final GuiJournal journal;
 
-    public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard) {
+    public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
+            GuiJournal journal) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.input = input;
         this.guard = guard;
+        this.journal = journal;
     }
 
     @Override
@@ -96,10 +100,12 @@ public final class BukkitWindowHost implements WindowHost {
             }
             if (!shown) {
                 items.values().forEach(item -> InputReturns.giveBack(player, item));
+                journal.mirror(player); // the items went back to the player: the journal must not still hold them
                 failed.accept("the window was refused by the server (an InventoryOpenEvent was cancelled)");
                 return;
             }
             items.forEach((slot, item) -> placeInput(player, menu, slot, item));
+            journal.mirror(player);
             plugin.getLogger().info("MATERIONE-GUI-OPENED id=" + gui.id() + " player=" + viewer.name()
                     + " rows=" + gui.rows() + " slots=" + gui.slots().size());
             opened.run();
@@ -118,8 +124,12 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public void releaseInputs(Viewer viewer, GuiSession session) {
+        Player player = viewer.player();
         if (session.window() instanceof GuiMenu menu) {
-            InputReturns.release(viewer.player(), menu);
+            InputReturns.release(player, menu);
+        }
+        if (player != null) {
+            journal.mirror(player); // the items are with the player now; the journal lets go of them in the same tick
         }
     }
 
@@ -137,6 +147,7 @@ public final class BukkitWindowHost implements WindowHost {
                     InputReturns.giveBack(viewer.player(), entry.getValue());
                 }
             }
+            journal.mirror(viewer.player());
         });
     }
 
