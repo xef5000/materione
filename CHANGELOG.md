@@ -9,6 +9,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **GUI open commands (logic.md §6.1, §23, #215).** A GUI's `open:` block now opens it. `commands: [shop, store]`
+  registers Brigadier commands at boot, and a content reload adds and hides them without a restart. Arguments are
+  typed (`string`, `int`, `number`, `player`, `boolean`, `choice`) with defaults, optional arguments and completions,
+  so `/shop tools` works from the chat box, and a bad value gets a usage line such as `usage: /shop <item:string>`
+  instead of a client error. `permission:` gates the open, and `requirement:` with `deny:` runs the steps that tell
+  the player why it was refused. Players with `materione.gui.bypass.<pack>.<id>` skip the requirement. Four new
+  diagnostic codes cover a bad default (`MTR-0066`), a command name another plugin already uses (`MTR-0067`), a
+  requirement that does not load (`MTR-0068`, which refuses the open) and a command the server could not add to the
+  live tree even after a reload (`MTR-0069`). Booting with unchanged content asks the server for no data reload; a
+  content change that adds an open command or changes its arguments asks for one, logged as `MATERIONE-OPEN-TREE reload`.
 - **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
