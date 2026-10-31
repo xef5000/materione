@@ -6,12 +6,14 @@ import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryKey;
 import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.RegistryView;
 import java.util.Optional;
+import java.util.function.Function;
 
 /**
  * The {@link LogicLookup} over the live registries ({@code actions}, {@code conditions},
@@ -21,9 +23,25 @@ import java.util.Optional;
 public final class RegistryLogicLookup implements LogicLookup {
 
     private final RegistryView registries;
+    private final Function<NamespacedId, Optional<VariableDeclaration>> declarations;
 
     public RegistryLogicLookup(RegistryView registries) {
+        this(registries, id -> Optional.empty());
+    }
+
+    /**
+     * @param declarations the persistent variables the content being compiled declares; the plugin
+     *        passes the ones of the shadow under construction
+     */
+    public RegistryLogicLookup(
+            RegistryView registries, Function<NamespacedId, Optional<VariableDeclaration>> declarations) {
         this.registries = registries;
+        this.declarations = declarations;
+    }
+
+    @Override
+    public Optional<VariableDeclaration> variable(NamespacedId id) {
+        return declarations.apply(id);
     }
 
     @Override

@@ -22,7 +22,13 @@ releases may change file formats, settings and the public API.
   `materione:player_slot`. The optional `hdb`, `itemsadder`, `nexo` and `mmoitems` sources register while
   their plugin runs; on a server without the plugin they show a barrier. Those four adapters reach their
   plugins through reflection, not compile-time dependencies, and their calls are not verified in this build.
-- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
+- **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
+  `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
+  it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
+  `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
+  work (#211) and `slot_has` the slot work (#218).
+>- **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
   available as the built-in `materione:money`), `xp` (experience points or levels) and `custom` (a
@@ -80,6 +86,20 @@ releases may change file formats, settings and the public API.
   typed `GuiEdit.SetOpen`, and `gui.validate` now reports the logic compiler's problems for a GUI's rules and flows.
   Item, block and furniture self-descriptions list `flows:`, and the GUI's list `behavior:`, `flows:` and `open:`.
   `logic.instantiate` is refused until the recipe registry lands.
+- **Declared persistent variables (logic.md §3, §20).** A `variables/` file declares a `player` or
+  `server` variable, typed as `number`, `string` or `boolean`, with a default and a description:
+  `coins: {scope: player, type: number, default: 0}`. Player values live in the player's data container;
+  server values in `storage/variables.json`, written atomically on a debounce and on disable.
+  - `set_var` takes `{var, op, value}` with `set`, `add`, `subtract`, `multiply`, `toggle`, `remove` and
+    `reset`. The M2 `{name, value}` shape still writes a run-local. An undeclared name (`MTR-0063`) or a
+    value of the wrong type (`MTR-0064`) is refused at load and the step is skipped.
+  - Expressions read `vars.player.<pack>.<key>`, `vars.server.<pack>.<key>`, `vars.session.<name>` and
+    `vars.local.<name>`. A declared variable never written reads its default.
+  - PlaceholderAPI: `%materione_var_<pack>_<key>%`, `%materione_var_<pack>_<key>_<player>%`,
+    `%materione_gui_open%` and `%materione_gui_last%` (the GUI ones are empty until the GUI runtime lands).
+  - `/materione var get|set|list` (permission `materione.var`) and `api.logic().variables()`.
+  - Diagnostics `MTR-0063` to `MTR-0065`.
+
 - **GUIs have logic: sessions, click rules, GUI triggers and the `gui.*` actions (logic.md §6, §21).**
   A GUI file can now carry `behavior:` and `flows:` like an item does. A rule on `gui.click` names the
   `layer:` that was clicked (and optionally `click:` and `slot:`), and runs a flow: the topmost showing layer

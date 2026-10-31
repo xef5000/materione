@@ -19,3 +19,8 @@ dependencies:
       load: BEFORE
       required: false
       join-classpath: true
+    # Optional: loaded first when present, so the %materione_…% expansion can register.
+    PlaceholderAPI:
+      load: BEFORE
+      required: false
+      join-classpath: true

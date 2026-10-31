@@ -203,6 +203,67 @@ export default [
       ctx.expect(stopped).toBe(true);
     },
   }),
+
+  // Built-in conditions (logic.md §22). Each right-click runs the if: steps of probe_conditions.yml and each
+  // answer is a chat line; the scenarios set the state the condition reads first.
+  test({
+    id: 'logic.conditions-permission',
+    title: 'probe:probe_conditions right-click grants the probe.check permission, and the if: on has_permission then takes its true branch (chat line "CHECK perm-granted")',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/HasPermissionCondition.java',
+      'fixtures/packs/probe/items/probe_conditions.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_conditions');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK perm-granted/);
+    },
+  }),
+
+  test({
+    id: 'logic.conditions-item-exp',
+    title: 'probe:probe_conditions right-click finds three diamonds (has_item) and five levels (has_exp) and reports both: chat lines "CHECK item-three" and "CHECK exp-five"',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/HasItemCondition.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/HasExpCondition.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/support/ItemMatch.java',
+      'fixtures/packs/probe/items/probe_conditions.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_conditions');
+      await ctx.rcon('give Probe minecraft:diamond 3');
+      await ctx.rcon('experience set Probe 5 levels');
+      await ctx.sleep(600);
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK item-three/);
+      await ctx.waitForChat(/CHECK exp-five/);
+    },
+  }),
+
+  test({
+    id: 'logic.conditions-expression-function',
+    title: 'probe:probe_conditions right-click runs an if: whose expression calls contains(lower(player.name), \'pro\'), so the chat line "CHECK fn-name" appears for the probe player',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/function/ContainsFunction.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/LowerFunction.java',
+      'fixtures/packs/probe/items/probe_conditions.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_conditions');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK fn-name/);
+    },
+  }),
+
   test({
     id: 'logic.providers-unavailable-without-vault',
     title: 'with no Vault and no transfer host, reload reports materione:money and the money and connect actions unavailable',

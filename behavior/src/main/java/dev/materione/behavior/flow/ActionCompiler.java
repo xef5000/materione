@@ -3,6 +3,7 @@ package dev.materione.behavior.flow;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.ParseRejection;
 import java.util.Map;
 import java.util.Optional;
 
@@ -64,9 +65,16 @@ final class ActionCompiler {
         try {
             return bind(key, resolved.get(), payload, chance, delayTicks, path);
         } catch (RuntimeException e) {
-            unit.problem(DiagnosticCodes.LOGIC_STEP_REJECTED, Severity.WARN, path,
-                    "action '" + key + "' rejected: " + e.getMessage(),
-                    "fix this action's parameters; only this action was skipped");
+            // a type that knows its own problem names its code (logic.md §3.2); everything else is MTR-0057
+            if (e instanceof ParseRejection rejection) {
+                unit.problem(rejection.code(), rejection.code().defaultSeverity(), path,
+                        "action '" + key + "' rejected: " + e.getMessage(),
+                        "fix this action's parameters; only this action was skipped");
+            } else {
+                unit.problem(DiagnosticCodes.LOGIC_STEP_REJECTED, Severity.WARN, path,
+                        "action '" + key + "' rejected: " + e.getMessage(),
+                        "fix this action's parameters; only this action was skipped");
+            }
             throw Skip.step();
         }
     }
@@ -75,7 +83,8 @@ final class ActionCompiler {
     private <P> Step bind(
             String key, ActionType<P> type, Object payload, double chance, long delayTicks, StepPath path) {
         var recorder = new RecordingExpressions(unit.context.lookup.functions());
-        var reader = Shapes.reader(Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder);
+        var reader = Shapes.reader(
+                Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder, unit.context.environment);
         ActionStep<P> step = ActionStep.bind(path, key, type, reader, chance, delayTicks);
         recorder.check(unit, path);
         return step;

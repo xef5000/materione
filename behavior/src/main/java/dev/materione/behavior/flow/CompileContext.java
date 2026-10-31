@@ -2,6 +2,7 @@ package dev.materione.behavior.flow;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.logic.variable.CompileEnvironment;
 import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.behavior.logic.LogicLookup;
@@ -17,6 +18,8 @@ final class CompileContext {
 
     final NamespacedId owner;
     final LogicLookup lookup;
+    /** The owner's pack and declared variables, what a step's reader needs to check a {@code set_var}. */
+    final CompileEnvironment environment;
     /** Whether diagnostics point at a field of the resource; false for rules generated from mechanics. */
     final boolean targets;
     final List<Diagnostic> problems = new ArrayList<>();
@@ -27,6 +30,7 @@ final class CompileContext {
         this.owner = owner;
         this.lookup = lookup;
         this.targets = targets;
+        this.environment = CompileEnvironment.of(owner.namespace(), lookup::variable);
     }
 
     void report(DiagnosticCode code, Severity severity, String subject, StepPath path, String problem, String hint) {

@@ -161,7 +161,8 @@ final class ConditionCompiler {
     /** Captures the type's parameter type so parse and bind agree on it. */
     private <P> Condition bind(String key, ConditionType<P> type, Object payload, StepPath path) {
         var recorder = new RecordingExpressions(unit.context.lookup.functions());
-        var reader = Shapes.reader(Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder);
+        var reader = Shapes.reader(
+                Shapes.paramsOf(key, type.describe().shorthand(), payload), recorder, unit.context.environment);
         P params = type.parse(reader);
         if (params == null) {
             throw new IllegalArgumentException("the condition produced no parameters");

@@ -1,8 +1,10 @@
 package dev.materione.behavior.logic;
 
+import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.TriggerDescription;
+import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.rule.EventSelector;
 import java.util.Locale;
@@ -43,6 +45,14 @@ public interface LogicLookup {
      * or the lookup cannot say; the compiler then skips the check rather than guess.
      */
     default Optional<TriggerDescription> trigger(String authoredId) {
+        return Optional.empty();
+    }
+
+    /**
+     * The declaration of a persistent variable a {@code set_var} at load may name (logic.md §3.2).
+     * Empty by default, so a lookup with no declarations rejects every qualified persistent name.
+     */
+    default Optional<VariableDeclaration> variable(NamespacedId id) {
         return Optional.empty();
     }
 

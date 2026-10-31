@@ -56,7 +56,7 @@ public final class EvaluationContext {
     }
 
     /** A logic context with the variables of an evaluation context and no facets, for evaluation without a run. */
-    private record VariablesOnly(EvaluationContext variables) implements LogicContext {
+    private record VariablesOnly(EvaluationContext tree) implements LogicContext {
         @Override
         public <T> Optional<T> facet(ContextFacet<T> facet) {
             return Optional.empty();
@@ -64,7 +64,7 @@ public final class EvaluationContext {
 
         @Override
         public Object resolve(List<String> path) {
-            return variables.resolve(path);
+            return tree.resolve(path);
         }
 
         @Override

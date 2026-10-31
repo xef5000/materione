@@ -13,14 +13,13 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.core.runtime.RuntimeRegistries;
-import dev.materione.platform.items.MaterioneStacks;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.ItemRef;
+import dev.materione.plugin.logic.support.ItemTemplates;
 import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.Optional;
-import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -87,7 +86,7 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
         RuntimeRegistries registries = catalog.current().orElse(null);
         ItemStack template;
         try {
-            template = templateOf(ItemRef.resolve(params.item().render(context), registries), registries);
+            template = ItemTemplates.of(ItemRef.resolve(params.item().render(context), registries), registries);
         } catch (IllegalArgumentException e) {
             return ActionOutcome.failed(e.getMessage());
         }
@@ -95,21 +94,4 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
         return ActionOutcome.OK;
     }
 
-    /** One stack of what {@code ref} names, built with the same factory the content browser uses. */
-    private static ItemStack templateOf(ItemRef ref, RuntimeRegistries registries) {
-        return switch (ref) {
-            case ItemRef.Vanilla vanilla -> {
-                Material material = Material.matchMaterial(vanilla.material());
-                if (material == null || !material.isItem()) {
-                    throw new IllegalArgumentException("'minecraft:" + vanilla.material().toLowerCase() + "' is not a vanilla item");
-                }
-                yield new ItemStack(material);
-            }
-            case ItemRef.Materione item -> {
-                var live = registries.item(item.id())
-                        .orElseThrow(() -> new IllegalArgumentException("the item was unloaded while the step ran"));
-                yield MaterioneStacks.build(MaterioneStacks.specOf(live));
-            }
-        };
-    }
 }

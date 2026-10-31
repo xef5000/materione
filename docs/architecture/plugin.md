@@ -421,6 +421,9 @@ the step path of what it is about (`behavior.2.do.0.then.1`) as its target:
 | `MTR-0058` | error | A `call` step cannot be linked at load: it names a flow the resource does not declare, the flows call each other in a cycle (the message names the chain, `a -> b -> a`), the chain of nested calls is deeper than 16, or the flow it calls did not load. The rule that holds the call is skipped; flows are shared within one resource only. Declare the flow under `flows:`, break the cycle, or fix the flow's own problems reported beside it. |
 | `MTR-0059` | warning | A running flow was ended by its budget (logic.md §5.3): more than 1,000 steps in one run, calls nested deeper than 16, the player already had 64 runs parked on a `wait` or `delay:`, or the platform could not schedule the run. The run ends; the server and other runs are unaffected. Reported at most once per second per rule. Simplify the flow, or find what floods the trigger. |
 | `MTR-0060` | warning | A `${root}` in a template, expression or call argument is not a variable the rule's trigger provides (`${plyer.name}`). The step still loads and the value reads as empty at run time. The hint lists the known roots. A trigger that declares no variables is not checked. |
+| `MTR-0063` | error | A `set_var` names a persistent variable no pack declares (`shop:gems`, `player.gems`), a scope that does not match the declaration (`server.shop.coins`), or a reserved scope word as a local name (`name: player`). The step is skipped at load; a typo never creates a key. Declare the variable in a `variables/` file of its pack, or fix the name. (Also the write refusal of `api.logic().variables()` for an undeclared id.) |
+| `MTR-0064` | error | A value or operation does not fit the variable's declared type: a literal string into a number, `toggle` on a number, `add` on a boolean. Reported at load for literals, and the step is skipped. A template or expression is checked when it runs, and a value that does not fit fails the step (outcome `FAILED`). |
+| `MTR-0065` | warning | A persistent variable could not be read or written at run time: the player holding a player variable is offline, or the server store could not be written (the flush is retried on the next tick). Rate-limited; the action fails and nothing else changes. |
 
 A step that fails while a flow runs is still `MTR-0023`: an action that returns `FAILED` outside a `require`,
 an action that throws (always), and a condition that cannot be evaluated (the condition then counts as
@@ -531,6 +534,8 @@ A shader effect could not animate a painting tooltip anyway.
 | Placed blocks/furniture | **chunk PDC** (CustomBlockData + MorePersistentDataTypes) | lives and dies with the world; no external DB to desync |
 | Placement index (accelerator) | `generated/index/` | rebuildable by chunk scan (self-healing); never load-bearing truth |
 | Player state (HUD values, cooldowns, menu prefs) | player PDC; cross-server behind a storage interface (local default; Redis/SQL adapters later) | single-server works with zero setup |
+| Declared player variables (logic.md §3) | player PDC, `materione:var.<pack>.<key>` | travels with the player's data; the `VariableStore` port takes cross-server adapters (#25) |
+| Declared server variables (logic.md §3) | `storage/variables.json` | runtime state, not content; written atomically (temporary file, then rename) on a 5-second debounce and on disable |
 | Web sessions, audit log | `storage/` | survives restarts, inspectable |
 | Allocation table | `storage/allocation.bin` | **durable, operator-backed-up** — append-only; tombstones are unrecoverable truth (D7, §4.4) |
 
