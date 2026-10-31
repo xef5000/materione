@@ -1,7 +1,7 @@
 # Logic L4 condition probe (qa logic.conditions-*): one right-click runs built-in conditions inside if: steps
 # and reports each answer as a chat line the QA run reads back. The permission is granted first, so the
 # has_permission check sees it; the item and experience are set by the run; the last if: calls an expression
-# function (contains, lower) on the player's name.
+# function (contains, lower) on the player's name; the var check compares a run-local the run just wrote.
 probe_conditions:
   material: COMPASS
   display_name: "Condition Probe"
@@ -27,3 +27,9 @@ probe_conditions:
         - if: "${contains(lower(player.name), 'pro')}"
           then:
             - chat: "CHECK fn-name"
+        - set_var: {var: tries, value: 3}
+        - if: {var: {var: tries, op: ">=", value: 3}}
+          then:
+            - chat: "CHECK var-three"
+          else:
+            - chat: "CHECK var-short"

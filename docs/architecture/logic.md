@@ -1650,7 +1650,10 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     the longest declared prefix; what follows is the player name. A name no player is known by, and an undeclared id,
     resolve to null, which leaves the token as PlaceholderAPI found it.
 20. **Seams left open.** `GuiSessionPort` (api) answers `%materione_gui_open%` and `%materione_gui_last%`; it is empty
-    until the GUI runtime (#214) registers one with `VariableService.guiSessions`. The `balance` placeholders for
+    until the GUI runtime (#214) registers one with `VariableService.guiSessions`. *Closed after #214 merged:* the
+    plugin registers `GuiSessionsPort` over the live `GuiSessions`, which now remembers the last GUI a player had
+    open (`GuiSessions.last`, set when a session is replaced or closes), and `GuiContexts` puts a
+    `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map. The `balance` placeholders for
     currencies (#233) are reserved and resolve to null; #233 adds its branch beside `var_` and does not touch the
     resolver's grammar.
 
@@ -1855,7 +1858,7 @@ was removed and `GuiRuleChecker` is the one seam. `LogicDiagnostics` stays the l
 
 #210 ships the eight built-in conditions of §4.2 that the current main can support. Each is one class in
 `dev.materione.plugin.logic.condition`, registered through `LogicApi.conditions()` in its own block of
-`BuiltinLogic`, and each takes the shape §4.2 gives. `var` and `slot_has` are not in this change (see decision 1).
+`BuiltinLogic`, and each takes the shape §4.2 gives. `var` followed once #211 merged (decision 1); `slot_has` is #218's.
 Where §4.2 and §9 left a choice open, these are the choices. Each is reversible by the owner.
 
 **As built**
@@ -1870,11 +1873,16 @@ Where §4.2 and §9 left a choice open, these are the choices. Each is reversibl
 | `is_near` | world | `world` (default: the player's world), `x`, `y`, `z`, `distance` (templates allowed) | the player is outside the radius or in another world; a template does not render to a number in range |
 | `in_world` | world | **`worlds`** (one name, or a list) | the player is in none of the worlds |
 | `in_gui` | gui | **`id`** (a GUI id, such as `shop:menu`), or none for any GUI | no GUI is open, or not the one named |
+| `var` | data | **`var`** (named as `set_var` names it), `op` (`==`, `!=`, `>`, `>=`, `<`, `<=`; default `==`), `value` (template allowed) | the comparison fails; an ordering between values that are not both numbers; a session variable outside a GUI |
 
 1. **Eight built-ins, `var` and `slot_has` left out.** `var` needs the variables API (#211), which is not on main,
    so it is not registered; a later change adds it beside `has_exp` and needs no engine change. `slot_has` is #218's
    (§6.5). The eight are the whole of #210's list that main can support. `BuiltinLogic.conditions(providers, guis,
-   items)` builds the list, and `register(api, owner, items, bridge)` registers it.
+   items)` builds the list, and `register(api, owner, items, bridge)` registers it. *Added after #211 merged:* `var`
+   resolves its variable at load exactly as `set_var` does (`MTR-0063` for an undeclared name, `MTR-0064` for a
+   literal that does not fit the declared type or an ordering on a variable that is not a number), and compares two
+   numbers (or numeric text) as numbers and anything else as text, equality only. A declared variable never written
+   compares as its default; an absent run-local or session variable equals nothing, so only `!=` is true.
 
 2. **The composite names are never a predicate.** `all`, `any`, `not` and `at_least` are read as composites by the rule
    compiler before it looks for a registered predicate (decision 5 of §16), so a condition with one of those ids would

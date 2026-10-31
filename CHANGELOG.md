@@ -22,8 +22,10 @@ releases may change file formats, settings and the public API.
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
   `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
-  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
-  work (#211) and `slot_has` the slot work (#218).
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session), and `var`, a typed compare on a variable
+  (`var: {var: player.shop.coins, op: ">=", value: 100}`) that names the variable as `set_var` does and checks a
+  declared one at load. `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `slot_has`
+  follows the slot work (#218).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
@@ -92,7 +94,8 @@ releases may change file formats, settings and the public API.
   - Expressions read `vars.player.<pack>.<key>`, `vars.server.<pack>.<key>`, `vars.session.<name>` and
     `vars.local.<name>`. A declared variable never written reads its default.
   - PlaceholderAPI: `%materione_var_<pack>_<key>%`, `%materione_var_<pack>_<key>_<player>%`,
-    `%materione_gui_open%` and `%materione_gui_last%` (the GUI ones are empty until the GUI runtime lands).
+    `%materione_gui_open%` and `%materione_gui_last%` (the GUI open now and the one before it); `vars.session.*`
+    is the open GUI's `gui.session.*`.
   - `/materione var get|set|list` (permission `materione.var`) and `api.logic().variables()`.
   - Diagnostics `MTR-0063` to `MTR-0065`.
 

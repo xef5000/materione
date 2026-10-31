@@ -27,6 +27,15 @@ public final class GuiSessions {
         return entry == null ? Optional.empty() : Optional.ofNullable(entry.current);
     }
 
+    /**
+     * The GUI the player had open before the current one: the last session that stopped being current,
+     * by being replaced or by closing. Empty when they have had none since they joined.
+     */
+    public Optional<NamespacedId> last(UUID player) {
+        PlayerGuis entry = players.get(player);
+        return entry == null ? Optional.empty() : Optional.ofNullable(entry.last);
+    }
+
     /** The player's back stack (created empty on first use). */
     public SessionHistory history(UUID player) {
         return players.computeIfAbsent(player, ignored -> new PlayerGuis()).history;
@@ -41,6 +50,9 @@ public final class GuiSessions {
         PlayerGuis entry = players.computeIfAbsent(next.player(), ignored -> new PlayerGuis());
         synchronized (entry) {
             GuiSession previous = entry.current;
+            if (previous != null) {
+                entry.last = previous.gui();
+            }
             entry.current = next;
             return Optional.ofNullable(previous);
         }
@@ -59,6 +71,7 @@ public final class GuiSessions {
             synchronized (entry) {
                 if (entry.current == session) {
                     entry.current = null;
+                    entry.last = session.gui();
                 }
                 if (ended && !reason.keepsHistory() && entry.current == null) {
                     entry.history.clear();
@@ -104,6 +117,7 @@ public final class GuiSessions {
 
     private static final class PlayerGuis {
         private volatile GuiSession current;
+        private volatile NamespacedId last;
         private final SessionHistory history = new SessionHistory();
     }
 }
