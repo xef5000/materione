@@ -15,6 +15,8 @@
   import ImageChooser from './ImageChooser.svelte';
   import LayersPanel from './LayersPanel.svelte';
   import PaintOptions from './PaintOptions.svelte';
+  import LogicTab from '../logic/LogicTab.svelte';
+  import { LogicCanvasState } from '../../logic/canvas.svelte';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
   import { ops, unwrap } from '../../api';
@@ -50,6 +52,10 @@
   // One studio state per opened document: ContentView keys this component by resource.
   // svelte-ignore state_referenced_locally
   const studio = new GuiStudioState(resource.pack, resource.path, rootIdForResource(resource.id));
+  // The Logic tab is a second view of the same document: it shares this studio's history, dirty state and save.
+  // svelte-ignore state_referenced_locally
+  const logic = new LogicCanvasState(studio);
+  let tab = $state<'design' | 'logic'>('design');
   const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
 
   const rootId = $derived(rootIdForResource(resource.id));
@@ -169,6 +175,18 @@
       return;
     }
     if (typing(event.target)) return;
+    if (tab === 'logic') {
+      // The Logic tab owns its own keys; undo and redo are the one history the tabs share.
+      if (mod && key === 'z') {
+        event.preventDefault();
+        if (event.shiftKey) logic.redo();
+        else logic.undo();
+      } else if (mod && key === 'y') {
+        event.preventDefault();
+        logic.redo();
+      }
+      return;
+    }
     if (event.key === ' ') {
       // Space on a focused control still activates it; only elsewhere does it mean "pan".
       if ((event.target as HTMLElement | null)?.closest('button, a, [role="button"]')) return;
@@ -235,6 +253,14 @@
     }
   }
 
+  /** Arrow keys move between the tabs, as a tablist does. */
+  function tabKeys(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+    event.preventDefault();
+    tab = tab === 'design' ? 'logic' : 'design';
+    document.getElementById(`gui-tab-${tab}`)?.focus();
+  }
+
   function keyup(event: KeyboardEvent): void {
     if (event.key === ' ') studio.panKey = false;
   }
@@ -280,6 +306,14 @@
     </button>
   </header>
 
+  <div class="tabs" role="tablist" aria-label="Studio views" tabindex="-1" onkeydown={tabKeys}>
+    <button type="button" role="tab" id="gui-tab-design" aria-selected={tab === 'design'} aria-controls="gui-panel" tabindex={tab === 'design' ? 0 : -1} class:on={tab === 'design'} onclick={() => (tab = 'design')}>Design</button>
+    <button type="button" role="tab" id="gui-tab-logic" aria-selected={tab === 'logic'} aria-controls="gui-panel" tabindex={tab === 'logic' ? 0 : -1} class:on={tab === 'logic'} onclick={() => (tab = 'logic')}>
+      <Icon name="workflow" size={13} /> Logic
+    </button>
+  </div>
+
+  {#if tab === 'design'}
   <div class="tools" role="toolbar" aria-label="Studio tools">
     <div class="cluster">
       {@render tool('mouse-pointer-2', 'Select', 'V', () => studio.chooseTool('select'), studio.tool === 'select')}
@@ -313,6 +347,7 @@
   </div>
 
   {#if isPaintTool(studio.tool)}<PaintOptions {studio} />{/if}
+  {/if}
 
   {#if documentDraft.error}<p class="banner error" role="alert">{documentDraft.error}</p>{/if}
   {#if studio.saveError}
@@ -343,7 +378,12 @@
   {/each}
   {#if studio.notice && !anyDirty}<p class="banner notice" role="status">{studio.notice}</p>{/if}
 
-  <div class="body">
+  {#if tab === 'logic'}
+  <div class="logic-body" id="gui-panel" role="tabpanel" aria-labelledby="gui-tab-logic">
+    <LogicTab {logic} {resource} {active} />
+  </div>
+  {:else}
+  <div class="body" id="gui-panel" role="tabpanel" aria-labelledby="gui-tab-design">
     <aside class="left">
       <ComponentPalette {studio} />
       <LayersPanel {studio} />
@@ -364,6 +404,7 @@
     <div class="right"><InspectorPanel {studio} {textures} /></div>
   </div>
   {#if studio.choosing}<ImageChooser {studio} {textures} />{/if}
+  {/if}
 </section>
 
 <style>
@@ -451,6 +492,43 @@
     border-color: var(--border);
     color: var(--faint);
     cursor: default;
+  }
+  .tabs {
+    display: flex;
+    flex: none;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-3) 0;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+  }
+  .tabs button {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-bottom: -1px;
+    padding: var(--space-1) var(--space-4);
+    background: none;
+    border: 1px solid transparent;
+    border-bottom: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    color: var(--muted);
+    font: 600 var(--text-sm) var(--font-sans);
+    cursor: pointer;
+  }
+  .tabs button:hover {
+    color: var(--fg);
+  }
+  .tabs button.on {
+    background: var(--bg-app);
+    border-color: var(--border);
+    color: var(--fg);
+  }
+  .logic-body {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+    min-width: 0;
   }
   .tools {
     display: flex;

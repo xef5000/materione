@@ -9,6 +9,9 @@ import goldenSnapshot from '../../fixtures/golden/editor-demo-snapshot.json';
 import type { AssetRef, ResourceRef, ResourceSummary, RpcChannel, TypeInfo } from '../src/lib/api';
 import type { PushFrame } from '../src/lib/events';
 import type { Response } from '../src/lib/protocol/wire';
+import type { SessionBlob } from '../src/lib/protocol/session';
+import type { LogicEdit } from '../src/lib/logic/server';
+import { applyEdits, blockOf, isRecord as isLogicRecord, LogicEditRefused } from '../src/lib/logic/tree';
 import type { BrowserTestControls, FixtureAuditEntry, RecordedRpcCall, RecordedWrite } from './contract';
 
 interface FixtureDocument {
@@ -785,6 +788,7 @@ function isWriteOperation(op: string): boolean {
     op.startsWith('edit.') ||
     op === 'authoring.commit' ||
     op === 'authoring.setFields' ||
+    op === 'logic.edit' ||
     op === 'authoring.bulk' ||
     op === 'authoring.saveModel' ||
     op === 'authoring.createResource' ||
@@ -835,12 +839,17 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #guided: boolean;
   readonly #modules: boolean;
   readonly #gui: boolean;
+  /** Only the `?logic` fixture advertises a capability list (the GUI and logic APIs); the others have no blob, like the demo. */
+  readonly blob?: SessionBlob;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; rows?: number } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
-    this.#gui = options.gui ?? false;
+    this.#gui = !!(options.gui || options.logic);
+    if (options.logic) {
+      this.blob = { sessionId: 'fixture', protocolVersions: [1], capabilities: ['gui', 'logic'], pluginSigningPubKey: new Uint8Array(32) };
+    }
     this.#resources = [...RESOURCES];
     if (this.#gui) {
       // The GUI studio's fixture (issue #186): the sample shop screen with its two textures.
@@ -1094,6 +1103,14 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.putDocument(op, payload);
       case 'authoring.setFields':
         return this.setFields(op, payload);
+      case 'gui.validate':
+        return this.success(op, { diagnostics: [] });
+      case 'logic.vocabulary':
+        return this.success(op, structuredClone(goldenSnapshot.describe.behavior));
+      case 'logic.validate':
+        return this.logicValidate(op, payload);
+      case 'logic.edit':
+        return this.logicEdit(op, payload);
       case 'authoring.references':
         return this.references(op, payload);
       case 'authoring.bulk':
@@ -1404,6 +1421,52 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     document.rev += edits.length > 0 || Array.isArray(payload.assets) && payload.assets.length > 0 ? 1 : 0;
     document.raw = serializeFixtureYaml(document.parsed);
     return this.success(op, { rev: document.rev });
+  }
+
+  /** A stand-in for the compiler: a step whose primary value is empty is the one thing it flags here. */
+  private logicValidate(op: string, payload: Record<string, unknown>): Response {
+    const diagnostics: unknown[] = [];
+    const behavior = Array.isArray(payload.behavior) ? payload.behavior : [];
+    behavior.forEach((rule, r) => {
+      const steps = isLogicRecord(rule) && Array.isArray(rule.do) ? rule.do : [];
+      steps.forEach((step, s) => {
+        if (isLogicRecord(step) && Object.values(step).some((value) => value === '')) {
+          diagnostics.push({
+            code: 'MTR-0057', severity: 'warn', message: 'an action is missing its value',
+            field: ['behavior', String(r), 'do', String(s)],
+          });
+        }
+      });
+    });
+    return this.success(op, { diagnostics });
+  }
+
+  /** logic.edit: the server's editor, run by the same code the studio plans with. All or none, at the revision. */
+  private logicEdit(op: string, payload: Record<string, unknown>): Response {
+    const document = this.findDocument(payload);
+    if (!document) return this.failure(op, 'MTR-0009', 'fixture document not found');
+    if (numberValue(payload.rev) !== document.rev) return this.failure(op, 'MTR-0034', 'document revision no longer matches');
+    const root = Object.keys(document.parsed)[0];
+    if (!root) return this.failure(op, 'MTR-0009', 'fixture resource root not found');
+    const edits = Array.isArray(payload.edits) ? (payload.edits as LogicEdit[]) : [];
+    let block;
+    try {
+      block = applyEdits(blockOf(document.parsed[root]!), edits);
+    } catch (error) {
+      if (error instanceof LogicEditRefused) {
+        return { op, id: `fixture-${++this.#nextResponseId}`, ok: false, error: { code: 'MTR-0057', message: error.message, resource: error.path } };
+      }
+      throw error;
+    }
+    const parsed = structuredClone(document.parsed);
+    for (const key of ['behavior', 'flows'] as const) {
+      if (block[key] === undefined) delete parsed[root]![key];
+      else parsed[root]![key] = block[key];
+    }
+    document.parsed = parsed;
+    document.rev += 1;
+    document.raw = serializeFixtureYaml(parsed);
+    return this.success(op, { pack: document.pack, path: document.path, id: root, rev: document.rev, rules: [], flows: [], warnings: [] });
   }
 
   private references(op: string, payload: Record<string, unknown>): Response {
