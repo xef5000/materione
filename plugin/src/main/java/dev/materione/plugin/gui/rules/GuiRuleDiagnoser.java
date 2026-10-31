@@ -12,6 +12,7 @@ import dev.materione.content.gui.GuiLayer;
 import dev.materione.content.gui.ItemComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.open.OpenPlan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -46,6 +47,10 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
         LogicLookup registries = lookup.get();
         GuiRuleSet.Compiled compiled = GuiRuleSet.compile(gui.id(), gui.rules(), registries);
         var out = new ArrayList<>(compiled.problems());
+        OpenPlan open = OpenPlan.compile(gui.id(), gui.rules(), registries);
+        if (open != null) {
+            out.addAll(open.problems()); // the open block's own compile: arguments, requirement and deny (logic.md §6.1)
+        }
         var layers = new HashMap<String, Boolean>();
         for (GuiLayer layer : gui.layers()) {
             layers.put(layer.id().toLowerCase(Locale.ROOT), layer.visible());

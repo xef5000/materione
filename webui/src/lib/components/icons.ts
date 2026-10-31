@@ -50,6 +50,11 @@ import Undo2 from '@lucide/svelte/icons/undo-2';
 import Volume2 from '@lucide/svelte/icons/volume-2';
 import X from '@lucide/svelte/icons/x';
 import Zap from '@lucide/svelte/icons/zap';
+import Coins from '@lucide/svelte/icons/coins';
+import Database from '@lucide/svelte/icons/database';
+import GitBranch from '@lucide/svelte/icons/git-branch';
+import Plug from '@lucide/svelte/icons/plug';
+import Workflow from '@lucide/svelte/icons/workflow';
 import Activity from '@lucide/svelte/icons/activity';
 import House from '@lucide/svelte/icons/house';
 import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
@@ -148,6 +153,11 @@ export const icons = {
   'volume-2': Volume2,
   x: X,
   zap: Zap,
+  coins: Coins,
+  database: Database,
+  'git-branch': GitBranch,
+  plug: Plug,
+  workflow: Workflow,
   blend: Blend,
   bold: Bold,
   italic: Italic,

@@ -83,6 +83,12 @@ public final class PipelineService {
     /** Server-reported data-pack format (major.minor); null when detection failed. */
     private final PackFormats.Version detectedDataFormat;
     private volatile ApplyReport lastReport;
+    /**
+     * The registries the most recent reload built, applied or not. The apply runs later on the global thread, so
+     * the server's command lifecycle (which runs before the first tick) reads this to register what the first swap
+     * will publish (logic.md §23, decision 15).
+     */
+    private volatile RuntimeRegistries lastBuilt;
     private boolean fingerprintsLoaded;
     private AllocationTable allocation;
     private CompletableFuture<Void> applyCompletion = CompletableFuture.completedFuture(null);
@@ -172,6 +178,15 @@ public final class PipelineService {
 
     public ContentRuntime runtime() {
         return runtime;
+    }
+
+    /**
+     * The registries of the latest reload, whether or not its apply has run yet; the applied ones before any reload.
+     * Read by the command lifecycle, which can run before the first apply (logic.md §23, decision 15).
+     */
+    public RuntimeRegistries builtRegistries() {
+        RuntimeRegistries built = lastBuilt;
+        return built != null ? built : runtime.registries();
     }
 
     /**
@@ -281,6 +296,7 @@ public final class PipelineService {
         // that never touch pack output, and their rules compile here
         // (MTR-0021/0022). Only delivery and the swap itself are skippable.
         RuntimeRegistries shadow = buildShadow(packs);
+        lastBuilt = shadow;
         var preApply = runtime.diffAgainst(shadow, sha);
         boolean packUnchanged = sha.equals(runtime.livePackSha256());
         boolean noop = packUnchanged && changesNothing(preApply);

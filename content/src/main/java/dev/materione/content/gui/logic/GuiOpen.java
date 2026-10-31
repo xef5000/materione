@@ -1,4 +1,4 @@
-package dev.materione.content.gui;
+package dev.materione.content.gui.logic;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -21,17 +21,17 @@ import java.util.regex.Pattern;
  * a list; {@code deny} is a list of steps); their compile is the logic compiler's, reached through the
  * GUI's logic check.
  */
-final class GuiOpen {
+public final class GuiOpen {
 
     /** The argument types the runtime parses (logic.md §6.1). */
-    static final Set<String> ARG_TYPES = Set.of("string", "int", "number", "player", "boolean", "choice");
+    public static final Set<String> ARG_TYPES = Set.of("string", "int", "number", "player", "boolean", "choice");
 
     private static final Pattern COMMAND = Pattern.compile("[a-z0-9_-]+");
     private static final Pattern ARG_NAME = Pattern.compile("[a-z][a-z0-9_]*");
     private static final Set<String> KEYS = Set.of("commands", "args", "permission", "requirement", "deny");
 
     /** A read block: the typed spec and the problems found in its authored shape. */
-    record Parsed(OpenSpec spec, List<Diagnostic> problems) {}
+    public record Parsed(OpenSpec spec, List<Diagnostic> problems) {}
 
     private GuiOpen() {}
 
@@ -39,7 +39,7 @@ final class GuiOpen {
      * Reads the authored {@code open:} value. A value that is not a mapping yields no spec and one
      * problem; a malformed part yields the spec with what could be read and the problems named.
      */
-    static Parsed read(Object raw) {
+    public static Parsed read(Object raw) {
         var problems = new ArrayList<Diagnostic>();
         if (!(raw instanceof Map<?, ?> mapping)) {
             problems.add(problem("open: must be a mapping of commands, args, permission, requirement and deny"));
@@ -86,7 +86,7 @@ final class GuiOpen {
     }
 
     /** The problems in a spec, for a write: the same checks {@link #read} makes, on the typed form. */
-    static List<Diagnostic> check(OpenSpec spec) {
+    public static List<Diagnostic> check(OpenSpec spec) {
         var problems = new ArrayList<Diagnostic>();
         var names = new HashSet<String>();
         for (String command : spec.commands()) {
@@ -115,7 +115,7 @@ final class GuiOpen {
     }
 
     /** The authored mapping of a spec, in the order the reference shows (commands, args, permission, requirement, deny). */
-    static Map<String, Object> write(OpenSpec spec) {
+    public static Map<String, Object> write(OpenSpec spec) {
         var block = new LinkedHashMap<String, Object>();
         if (!spec.commands().isEmpty()) {
             block.put("commands", List.copyOf(spec.commands()));

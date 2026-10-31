@@ -437,6 +437,17 @@ meaning and step paths as for items (`gui.validate` returns them for a `saved` o
 section of the wrong shape, and three warnings on a rule that loads and never runs: a `layer:` that names no
 layer of the GUI or a hidden one, a `slot:` outside the container, and a trigger no GUI fires.
 
+The GUI open commands ([`logic.md`](logic.md) §23, #215) add four codes. A malformed `open:` block (a non-mapping,
+an unknown key, a bad command name, an argument of an unknown type) is `MTR-0021` at `open`, like a malformed
+`behavior:`. The other problems of the block are these:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0066` | warning | An `open.args` entry cannot be read as its declared type: a `default:` that is not a whole number for an `int`, not a number for a `number`, not `true` or `false` for a `boolean`, not one of the `suggest:` values for a `choice`. The default is dropped and the argument keeps its other settings. A `choice` with no `suggest:` list reads as a `string`, with the same code. Fix the default or the list. |
+| `MTR-0067` | warning | An open command cannot be registered because its name is already a command: vanilla, another plugin, or another GUI's open command. Paper would let a main label override it, so the alias is skipped before anything is registered; the GUI's other aliases and `/materione gui open` still work. Rename one of the two. Reported at boot and at each reload that sees the conflict. |
+| `MTR-0068` | error | A GUI's `open.requirement` does not load (an unknown condition, a malformed expression, a broken predicate). The open fails closed: every player without the bypass node `materione.gui.bypass.<pack>.<id>` is refused, so a broken check never grants what it guards. Fix the condition named beside it. |
+| `MTR-0069` | warning | A content swap asked for a server data reload to add an open command to the live tree, or to rebuild one whose argument names or types changed (logic.md §23, decision 15), and the reload did not put it there. The alias is not in the tree until the next restart, and no further reload is asked for it until the next COMMANDS event. Restart the server to apply it. |
+
 ---
 
 The M6 dynamic GUI layers ([`logic.md`](logic.md) §6.3, §24, #216) add four codes. Each names the layer or field it is

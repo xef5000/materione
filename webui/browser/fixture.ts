@@ -17,6 +17,7 @@ async function startFixture(): Promise<void> {
     catalog: params.has('catalog'),
     modules: params.has('modules'),
     gui: params.has('gui'),
+    logic: params.has('logic'),
     rows: Number(params.get('rows')) || 0,
   });
   adapter.setPushHandler(handlePush);

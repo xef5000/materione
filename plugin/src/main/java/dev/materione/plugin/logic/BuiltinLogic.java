@@ -50,6 +50,7 @@ import dev.materione.plugin.logic.condition.HasPermissionCondition;
 import dev.materione.plugin.logic.condition.InGuiCondition;
 import dev.materione.plugin.logic.condition.InWorldCondition;
 import dev.materione.plugin.logic.condition.IsNearCondition;
+import dev.materione.plugin.logic.condition.VarCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
 import java.util.ArrayList;
@@ -223,7 +224,8 @@ public final class BuiltinLogic {
                 new HasItemSpaceCondition(items),
                 new IsNearCondition(),
                 new InWorldCondition(),
-                new InGuiCondition(guis));
+                new InGuiCondition(guis),
+                new VarCondition());
     }
 
     /**

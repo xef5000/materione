@@ -97,6 +97,21 @@
   --gui-marquee: rgb(249 115 30 / 0.16);
   --gui-placeholder: rgb(249 115 30 / 0.2);
 
+  /* the Logic canvas (logic.md §7.3): one fixed colour per registry category; --logic-addon is every other category */
+  --logic-trigger: #f5a524;
+  --logic-player: #4ea1ff;
+  --logic-gui: #b48cff;
+  --logic-economy: #e9c648;
+  --logic-data: #3fd2c0;
+  --logic-world: #5ed39b;
+  --logic-server: #8da0b8;
+  --logic-flow: #e6edf5;
+  --logic-integration: #ff8fc2;
+  --logic-addon: #d99a6c;
+  --logic-stage: #061424;
+  --logic-grid: rgb(255 255 255 / 0.07);
+  --logic-wire-shade: rgb(0 0 0 / 0.55);
+
   /* type: a 7-step scale on Inter, with the mono stack for ids and code */
   --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: ui-monospace, 'SFMono-Regular', 'Cascadia Code', Menlo, Consolas, monospace;

@@ -10,6 +10,7 @@ import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -99,6 +100,7 @@ public final class RuntimeGuis {
                     : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
             out.put(gui.id(), new Live(
                     gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules,
+                    OpenPlan.compile(gui.id(), gui.rules(), logic),
                     gui.placements(), gui.refresh(), compileItems(gui, logic)));
         }
         return new RuntimeGuis(out);
@@ -180,13 +182,14 @@ public final class RuntimeGuis {
      * @param slots the resolved slots, sorted by slot
      * @param clicks which layers a click on each container slot reaches, topmost first
      * @param logic the GUI's compiled rules, indexed by trigger
+     * @param open the GUI's compiled {@code open:} block (logic.md §6.1), or null when it has none
      * @param placements the GUI's per-viewer item layers as authored, compared on a reload
      * @param refresh the {@code refresh:} clock in ticks, 0 when off
      * @param items the per-viewer item layers, compiled, in layer order
      */
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
-            ClickMap clicks, GuiRuleSet logic, List<CompiledGui.Placement> placements, int refresh,
+            ClickMap clicks, GuiRuleSet logic, OpenPlan open, List<CompiledGui.Placement> placements, int refresh,
             List<CompiledItemLayer> items) {
 
         public Live {
@@ -197,10 +200,26 @@ public final class RuntimeGuis {
             items = List.copyOf(items);
         }
 
-        /** A GUI with clicks and rules, and no per-viewer layers or clock. */
-        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        /** A GUI with no {@code open:} block, and per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, List<CompiledGui.Placement> placements, int refresh,
+                List<CompiledItemLayer> items) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, null, placements, refresh, items);
+        }
+
+        /** A GUI with an {@code open:} block, and no per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, OpenPlan open) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, open, List.of(), 0, List.of());
+        }
+
+        /** A GUI with clicks and rules, and no {@code open:} block, per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, List.of(), 0, List.of());
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no clickable layers and no rules. */
