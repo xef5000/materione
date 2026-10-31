@@ -1966,3 +1966,112 @@ The expression entry is the one #209 asked for. The scenarios are on the `probe`
 The entries are authored and checked by `qa/runner.mjs check`; their ledger state is "never" until a main swarm records them.
 A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
 that result depends on the probe player's operator state. The unit tests cover the negative branch.
+
+## 26. Decisions taken in #223 (W1: the studio Logic tab)
+
+#223 shipped §7.1 to §7.3: the **Logic** tab beside **Design** in the GUI studio, a node canvas over the same
+document. Everything it edits goes through the authoring ops of §19 (`logic.vocabulary`, `logic.validate`,
+`logic.edit`); no op, no wire shape and no protocol golden changed. The code is `webui/src/lib/logic/` (pure
+rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reversible by the owner.
+
+**The model: a projection, never a second copy**
+
+1. **The canvas holds no state of its own.** A GUI's `behavior:` and `flows:` are two top-level fields the GUI
+   studio already carries verbatim (gui.md §2). The canvas draws `project(block)` and recomputes it after every
+   edit. `unproject(project(block))` rebuilds the very same tree, key order and unknown fields included, so loading
+   and saving an untouched logic block is byte-identical (§12 decision 3, master §5.6). A node carries the authored
+   map it came from, minus the lists its ports feed; keys the projection does not understand (a `then:` on an
+   action, a `choose:` that is not a list) stay in that map and are written back. The round trip is tested over
+   every YAML fixture in the repository that holds logic, plus the studio's own.
+2. **Ports are the ones §7.2 names, with `after` first.** A trigger and a flow entry have `out`; an action, `wait`,
+   `stop` and `call` have `after`; `if` has `after`, `then`, `else`; `require` has `after`, `steps`, `failed`;
+   `choose` has `after`, one `case N` per case, and `else`. The sequence continues from the first port, so a lane
+   of steps runs level and the branches hang below it. Nothing is lost: a step after a `stop` still has its place.
+3. **Layout is deterministic and a stored position wins.** A rule is a lane (trigger left, steps right), a branch
+   hangs below its node, and the lane continues to the right of the branches; lanes stack, rules first and named
+   flows after. A node with `node: {x, y}` is drawn there and only that node. A named flow has no position of its
+   own (§19 decision 7), so a flow entry follows the layout.
+
+**One history, one save**
+
+4. **The Logic tab edits the GUI studio's document, so undo, redo, dirty and Save are shared with Design.** Each
+   canvas gesture is one history command that holds the logic block before and after, the `LogicEdit`s that made
+   the change, and the edits that take it back. Ctrl+Z from either tab undoes whatever was done last.
+5. **Save replays the edits through `logic.edit` (D6).** The studio keeps a log of the edits the server has not seen,
+   in step with the history: a new command appends its edits; undoing one that was never saved drops them (so a
+   refused edit that was undone never reaches the server); undoing one that was saved appends its inverse, and
+   redoing it appends the edits again. Consecutive position edits of one node fold into the last. A save sends
+   the Design fields through `authoring.setFields` first (when they changed), then the log through `logic.edit`,
+   at the revision the first one produced. If only the logic part fails, the layout is saved and the logic stays
+   dirty, so a retry sends only the logic. A refusal shows the server's message and the step path it names.
+6. **A log that falls out of step with the history saves the whole block instead.** It must not happen. If it
+   does, `behavior:` and `flows:` go through `authoring.setFields`, which is also an existing edit op, rather than
+   a guess. The compiler still checks the result (fail-soft, §10).
+7. **A server without the `logic` capability gets a notice, not a broken canvas.** The tab says what is missing;
+   the in-browser demo has no capability list, so it shows the notice too. A file whose logic cannot be drawn
+   faithfully (a `behavior:` that is not a list) is shown as an error and not edited here; the studio's own
+   read-only rule (gui.md §6) applies too.
+
+**The structural rules**
+
+8. **There are no loose nodes.** The file is a tree of lists (D1), so every node is in one. A new node is born
+   spliced into a wire: from the palette at a port, after the selection, or at the end of the last rule. A wire is
+   never "deleted" on its own, because it would leave a node the file cannot say. Deleting a node removes it with
+   what hangs below its branches, and the chain closes up.
+9. **A gesture is judged by what the file can say, and a refusal is one line.** Dragging from an output port onto
+   a node is refused for a **join** ("*X* is already fed by *Y*; a node has one input"), for **fan-out** ("*A*
+   '*port*' already feeds *B*; fan-out is not allowed") and for a **cycle** ("That would make a loop: *X* already
+   leads to *Y*"), and nothing can feed a trigger. The way to rewire is the input end: dragging a node's input dot
+   onto a **free** output port lifts the node and every step behind it and moves them there (`moveStep` per
+   step, in order); the same three refusals apply to that drop. The status line says what a drop would do while
+   the pointer is still down. Releasing a wire from a free port on empty canvas opens the palette at that port;
+   from an occupied port it is the fan-out refusal.
+10. **Writing to a branch the file does not have is a replacement.** `patchStep` never edits a branch key (§19
+    decision 3), so an `if` with no `else:` gets one by removing the step and inserting a copy that has the empty
+    list, at the same path, with its `node:` and everything under it. Adding or removing a case of a switch is the
+    same replacement. A new `if` is born with `then: []` only, so nothing is invented that was not used.
+11. **Known limit of `moveStep` the canvas steers around.** The server refuses a move whose target path starts
+    with the source path (§19 decision 4), which also catches moving a step into a branch of a later sibling,
+    where the target index is read after the removal. The canvas never plans that move: a chain lifted by its
+    input includes every later sibling, so a drop below it is a cycle and is refused first.
+
+**The palette and the nodes**
+
+12. **The palette is the vocabulary and nothing else.** Grouped as Triggers, then the action categories in the
+    server's order, then Conditions, then Flow (the control steps first). An add-on's category appears in its place
+    and takes the add-on colour. Only the triggers the resource's host fires are listed (`firedBy` contains
+    `gui`), and all of them when none match. An entry whose provider is unavailable is greyed with the server's
+    reason and **cannot be inserted**; an existing node for it carries a warning with the same reason. (Reversible:
+    insertable with a warning is the other reading of "greyed with reason".)
+13. **A new node is born with the shape its entry implies.** An action with a `shorthand` starts as
+    `{id: <parameter default or empty>}`; one with no required parameter is a bare name (`- gui.close`); one with
+    required parameters and no shorthand starts as `{id: {}}`. `if` and each switch case start as `"${true}"`,
+    `wait` as 20 ticks, `call` as the first named flow. The compiler's verdict then points at what is missing.
+14. **Colour is a fixed token palette keyed by registry category** (§7.3): `--logic-trigger`, `-player`, `-gui`,
+    `-economy`, `-data`, `-world`, `-server`, `-flow`, `-integration`, and `--logic-addon` for any other category.
+    Wires take the colour of the node they leave, drawn as stepped lines on a four-pixel grid with a dust pixel at
+    each bend.
+15. **One inline field per node, until the inspector (#224).** An action, `if`, `wait` or `call` with a one-line
+    value edits it in place (`patchStep`); a trigger edits its selector. Everything else is read-only on the
+    node. This is a stop-gap so a flow can be built end to end; typed fields, template autocomplete and
+    condition stacks are #224.
+16. **The compiler's verdict is drawn on the nodes.** The draft is sent to `logic.validate` once editing pauses
+    (the Design tab's pause), and each diagnostic goes to the deepest node whose step path is a prefix of its
+    `field`. The vocabulary adds the two things only it knows: an unknown or unavailable action.
+
+**Accessibility and motion**
+
+17. **Every gesture has a keyboard route.** Arrow keys walk the graph (right follows the sequence, left goes
+    back, up and down walk the nodes in order), `Enter` edits a node's value or, on a focused port, opens the
+    palette there, `/` opens the palette, `Delete` removes, `F` frames the selection (or everything), `0` fits,
+    `1` is actual size, `+` and `-` zoom, `Ctrl+Z` undoes. Nodes are a roving-focus tree. The page never
+    scrolls sideways: the canvas pans inside its own box. Camera moves use the `--motion-*` tokens, so they are
+    instant under reduced motion; the only animation is the loose wire's dashes, and only when motion is allowed.
+
+**Deferred**
+
+- The node inspector, typed fields and condition stacks (#224); the Script tab, Design ↔ Logic linkage and the
+  recipes panel (#225); the live trace (#226).
+- Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
+  a node and what follows it).
+- Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.

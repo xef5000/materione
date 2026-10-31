@@ -1,0 +1,62 @@
+# The shop screen of logic.md §2.1, plus every other step kind
+shop:
+  title: Shop
+  rows: 3
+  layers:
+    - { id: frame, type: panel, x: 0, y: 0, width: 176, height: 168 }
+  behavior:
+    - on: gui.click
+      layer: buy
+      click: [left, shift_left]
+      id: buy_sword
+      cooldown: 500
+      do:
+        - if:
+            all:
+              - has_money: 250
+              - has_item_space: 1
+          then:
+            - take_money: 250
+            - give_item: { item: shop:gui/main/sword, amount: 1 }
+            - sound: entity.player.levelup
+            - message: "<green>Bought for $250. Balance: %vault_eco_balance%"
+          else:
+            - message: "<red>You need $250."
+            - sound: { sound: block.note_block.bass, pitch: 0.5 }
+        - gui.refresh
+    - on: gui.open
+      if: "${player.level >= 10}"
+      node: { x: 40, y: 400 }
+      do:
+        - require:
+            - take_money: 10
+            - give_item: apple
+          else:
+            - message: "<red>Not enough"
+            - stop
+        - choose:
+            - if: "${vars.rank == 'gold'}"
+              then:
+                - message: gold
+              node: { x: 3, y: 4 }
+            - if: "${vars.rank == 'iron'}"
+              then: []
+          else:
+            - wait: 20
+            - call: purchase
+        - wait: { ticks: 40 }
+          chance: 50
+        - call: { flow: purchase, with: { price: 250 } }
+        - stop
+    - on: gui.close
+      do: []
+    - on: gui.tick
+  flows:
+    purchase:
+      - take_money: "${args.price}"
+      - if: "${args.price > 100}"
+        then:
+          - sound: block.anvil.use
+        node: { x: 500, y: 700 }
+    empty: []
+  future_key: 7

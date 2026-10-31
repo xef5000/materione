@@ -50,6 +50,10 @@ import {
 import type { Guide } from './snap';
 import { compiledOrder, layerBounds, orderBadges, overlays, sceneOf, type Scene } from './scene';
 import { customizeItem, draftOf, guiApiAvailable, validateDraft } from './server';
+import { isLogicCommand, withBlock } from '../logic/command';
+import { LogicLog } from '../logic/log';
+import { logicApiAvailable, logicEditResponse } from '../logic/server';
+import { blockOf } from '../logic/tree';
 import type { ServerDiagnostic } from './server';
 import { flagsOf, isSkipped, type LayerFlag } from './validation';
 import { centered, fitView, panBy, stepZoom, zoomTo, type Point, type Size, type View } from './viewport';
@@ -70,6 +74,8 @@ const NO_GUI_API =
 
 export class GuiStudioState {
   readonly #history = new GuiHistory(starterDocument());
+  /** The logic edits the server has not seen yet (the Logic tab shares this history; logic.md §7.1). */
+  readonly #logic = new LogicLog();
   #location: GuiLocation | null = null;
   readonly #images = new Map<string, ArgbCanvas | null>();
   readonly #loading = new Set<string>();
@@ -192,6 +198,7 @@ export class GuiStudioState {
     this.#location = result.location;
     this.seenRev = rev;
     this.#history.reset(result.doc);
+    this.#logic.reset();
     this.blocking = result.blocking;
     this.issues = result.issues;
     this.selection = [];
@@ -235,19 +242,24 @@ export class GuiStudioState {
   run(command: Command | null): boolean {
     if (!command || this.readOnly) return false;
     this.#history.execute(command);
+    if (isLogicCommand(command)) this.#logic.executed(command);
     this.sync();
     return true;
   }
 
   undo(): void {
     if (this.readOnly) return;
+    const command = this.#history.nextUndo;
     this.#history.undo();
+    if (isLogicCommand(command)) this.#logic.undone(command);
     this.sync();
   }
 
   redo(): void {
     if (this.readOnly) return;
+    const command = this.#history.nextRedo;
     this.#history.redo();
+    if (isLogicCommand(command)) this.#logic.redone(command);
     this.sync();
   }
 
@@ -888,27 +900,61 @@ export class GuiStudioState {
         encoded.set(reference, this.#uploads.get(reference) ?? base64Of(await encodePng(canvas)));
       }
       const plan = planSave(this.#location.prefix, this.#history.baseline, this.#history.doc, encoded);
-      if (isEmptyPlan(plan)) {
+      // The Logic tab's edits go through logic.edit, the same ops the canvas planned them with (D6); only a
+      // log that fell out of step with the history is saved as the whole behavior and flows fields.
+      const savedLogic = blockOf(this.#history.baseline.rest);
+      const logicEdits = this.#logic.desynced ? [] : this.#logic.edits();
+      if (this.#logic.desynced) {
+        const block = blockOf(this.#history.doc.rest);
+        for (const key of ['behavior', 'flows'] as const) {
+          if (JSON.stringify(block[key]) !== JSON.stringify(savedLogic[key])) {
+            plan.edits.push(block[key] === undefined
+              ? { field: [...this.#location.prefix, key], value: undefined, remove: true }
+              : { field: [...this.#location.prefix, key], value: block[key] });
+          }
+        }
+      }
+      if (logicEdits.length > 0 && !logicApiAvailable(channel)) {
+        this.saveError = 'This server does not offer the logic API (the logic capability), so logic changes cannot be saved. Update the Materione plugin.';
+        return false;
+      }
+      if (isEmptyPlan(plan) && logicEdits.length === 0) {
         this.#history.markSaved();
+        this.#logic.saved();
         this.sync();
         return true;
       }
-      const response = await sendSave(channel, this.pack, this.path, draft.rev, plan);
-      if (!response.ok) {
-        this.conflict = response.error.code === 'MTR-0034';
+      const failed = (code: string, message: string, path?: string): false => {
+        this.conflict = code === 'MTR-0034';
         this.saveError = this.conflict
           ? 'This GUI changed on the server since you opened it. Your edits are kept here; reload to take the server version.'
-          : `${response.error.code}: ${response.error.message}`;
+          : `${code}: ${message}${path ? ` (at ${path})` : ''}`;
         return false;
-      }
-      this.#history.markSaved();
-      for (const asset of plan.assets) {
-        const reference = [...encoded.keys()].find((key) => textureAssetPath(key) === asset.path);
-        if (reference) {
-          this.#dirtyAssets.delete(reference);
-          this.#uploads.delete(reference);
+      };
+      if (!isEmptyPlan(plan)) {
+        const response = await sendSave(channel, this.pack, this.path, draft.rev, plan);
+        if (!response.ok) return failed(response.error.code, response.error.message);
+        this.#history.markSaved();
+        for (const asset of plan.assets) {
+          const reference = [...encoded.keys()].find((key) => textureAssetPath(key) === asset.path);
+          if (reference) {
+            this.#dirtyAssets.delete(reference);
+            this.#uploads.delete(reference);
+          }
+        }
+        if (logicEdits.length > 0) {
+          // the layout is on the server; what is still unsaved is the logic, so it is still what "dirty" measures
+          this.#history.rebase(withBlock(this.#history.doc, savedLogic));
+          this.sync();
+          await reconcileDocumentDraft(draft, channel);
         }
       }
+      if (logicEdits.length > 0) {
+        const response = await logicEditResponse(channel, this.pack, this.path, draft.rev, logicEdits);
+        if (!response.ok) return failed(response.error.code, response.error.message, response.error.resource ?? undefined);
+        this.#history.markSaved();
+      }
+      this.#logic.saved();
       this.sync();
       this.notice = 'Saved. The server is applying it.';
       await reconcileDocumentDraft(draft, channel);
