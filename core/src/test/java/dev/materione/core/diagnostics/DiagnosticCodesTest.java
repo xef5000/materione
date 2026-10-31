@@ -29,7 +29,9 @@ class DiagnosticCodesTest {
         // MTR-0060 unknown variable root for the trigger: logic.md §10, §16 (#208);
         // MTR-0061 optional integration provider skipped, MTR-0062 currency rejected: logic.md §18 (#213);
         // MTR-0063 undeclared or reserved variable, MTR-0064 type mismatch, MTR-0065 store failed:
-        // logic.md §3, §20, #211)
-        assertThat(DiagnosticCodes.all()).hasSize(65);
+        // logic.md §3, §20, #211;
+        // MTR-0066 GUI open argument unreadable, MTR-0067 open command conflict, MTR-0068 open requirement
+        // does not load, MTR-0069 open command tree needs a restart: logic.md §23, #215)
+        assertThat(DiagnosticCodes.all()).hasSize(69);
     }
 }

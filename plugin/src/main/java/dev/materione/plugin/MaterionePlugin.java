@@ -536,8 +536,9 @@ public final class MaterionePlugin extends JavaPlugin {
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);
         // its services bind into the bridge the GUI actions hold
         guiStack = new dev.materione.plugin.gui.GuiStack(
-                this, scheduling, () -> pipeline.runtime().registries(), logic.engine()::fire,
-                dev.materione.plugin.gui.input.LayerVisibility.ALL);
+                this, scheduling, () -> pipeline.runtime().registries(), logic.engine(),
+                dev.materione.plugin.gui.input.LayerVisibility.ALL, diagnostics::publish,
+                () -> pipeline.builtRegistries());
         guiBridge.bind(guiStack.services());
         // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
         variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));
@@ -607,6 +608,14 @@ public final class MaterionePlugin extends JavaPlugin {
             // the GUI sessions' own events: a window closing and a player leaving
             guiStack.listeners().forEach(listener -> getServer().getPluginManager().registerEvents(listener, this));
         }
+        // the open commands (logic.md §6.1): Paper registers commands only inside this lifecycle event, which
+        // also fires again on a server reload; the handler reads the guiStack when it runs
+        getLifecycleManager().registerEventHandler(io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents.COMMANDS,
+                event -> {
+                    if (guiStack != null) {
+                        guiStack.openCommands().onCommands(event.registrar());
+                    }
+                });
         // ECA bridge (runtime-systems §2): rules resolve from the live shadow
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);

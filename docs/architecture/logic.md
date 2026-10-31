@@ -1975,6 +1975,122 @@ The entries are authored and checked by `qa/runner.mjs check`; their ledger stat
 A permission check after `take_permission` is not asserted, because a server operator passes any unregistered node, so
 that result depends on the probe player's operator state. The unit tests cover the negative branch.
 
+## 23. Decisions taken in #215 (G2: open commands, typed arguments, the requirement and deny, the bypass)
+
+#215 shipped the open path's stages 2 to 4 (§6.1) and the command surface that starts it. The block is the
+`OpenSpec` of #221 (§19), unchanged in shape. Each decision is reversible by the owner. The code is in
+`plugin.gui.open` (the gate, the commands, the compile), `content.gui.logic` (the block's reader) and
+`behavior.flow.FlowCompiler` (two entry points). The diagnostic codes are `MTR-0066` to `MTR-0069`, reserved for
+this PR; the surface is in [`plugin.md`](plugin.md) §5.
+
+**The block and its compile**
+
+1. **The reader moves to the logic package.** `GuiOpen` (the shape reader and writer of #221) moves from `content.gui`
+   to `content.gui.logic`, where `GuiRules` lives, and its readers are public. `GuiRules` carries the block as
+   `OpenSpec open` next to `behavior` and `flows`, so the one parse of a GUI reads every logic section. A shape
+   problem of the block (a non-mapping, an unknown key, a bad command name, an unknown argument type) is a
+   `GuiRules.Problem` at `open`, reported as `MTR-0021` like a malformed `behavior:`. #221's typed write is unchanged.
+2. **The block is typed at load, into an `OpenPlan`.** `OpenPlan.compile` runs with the live view, as the rules do.
+   Each argument becomes an `OpenArgSpec` with its `ArgType` (`string`, `int`, `number`, `player`, `boolean`,
+   `choice`) and its default in canonical text. A default that does not read as its type is dropped with `MTR-0066`
+   and the argument keeps its other settings. A `choice` with no `suggest:` list reads as a `string`, with the same
+   code. Nothing reads a raw map at open time (§9 rule 5).
+3. **The requirement and the deny steps compile through the flow compiler, under the `gui.opening` trigger.** The two
+   entry points are `FlowCompiler.condition` and `FlowCompiler.denied`. Their problems name `open.requirement` and
+   `open.deny`, not `behavior.<n>`, so a diagnostic points at the block the author wrote. `denied` compiles only the
+   flows its `call`s reach, because the GUI's own rules already report the rest.
+4. **The diagnose stage reports the block.** `GuiRuleDiagnoser` adds the block's own compile problems to the rule
+   problems, so the pack compile and `gui.validate` agree (as §21 decision 18 does for `behavior:`).
+
+**The gate (stages 2 to 4)**
+
+5. **The order is permission, arguments, requirement.** `OpenSpecGate` checks `open.permission` first (a refusal is
+   `MTR-0055`, `DENIED`), then types the arguments (a failure is a usage line, `USAGE`), then evaluates the requirement.
+   A GUI with no `open:` block is admitted with its arguments as given, as before.
+6. **Arguments are typed by one parser.** `ArgParser` takes the raw text every surface passes (the command, the API,
+   `gui.open`) and returns canonical values in the block's order. A missing argument takes its default; a missing one
+   with no default is an error unless it is optional; an argument the block does not declare is an error, so a
+   misspelt name is reported rather than ignored. Every refusal names the argument and then the usage line,
+   generated from the block: `usage: /shop <item:string> [category:all|tools=all] [target:player]` (a required
+   argument in angle brackets, an optional one or one with a default in square brackets).
+7. **The requirement is never negated through the engine.** A rule's `if:` that throws counts the whole condition
+   as false (§4), so `not` of a broken requirement would be true and grant the open. The gate instead tests the
+   requirement itself: a throw, or a requirement that did not load, is "not met". `OpenPlan.requirementMet` is the one
+   place that decides, and it is unit-tested with both.
+8. **The bypass skips the requirement and nothing else.** `materione.gui.bypass.<pack>.<id>` skips the requirement
+   (stage 4). It does not skip the permission or the argument types, which are the author's contract with the caller.
+9. **A failed requirement runs the deny steps as the player's run, then refuses.** The deny steps are a rule with no
+   condition, run by `FlowInterpreter.start` with the player's run owner and no cancellation key, so the window is
+   never opened and a `cancel` on it cannot reach them. The requirement's context is `GuiContexts.open`: the player,
+   the server, `gui.id`, the typed `gui.args`, and empty session variables and pages, since no session exists yet.
+10. **A broken requirement fails closed, and says so.** A requirement that did not load refuses every player without the
+    bypass, with `MTR-0068` at error severity, reported at pack compile. The author sees it before a player does.
+
+**The commands**
+
+11. **Each alias is a Brigadier literal, and the arguments are typed in the client's tree.** The client validates the
+    value as it is typed and offers completions (issue #96: a typed argument has to reach the synced tree, or the
+    client refuses the command before the server sees it). `int` is an integer, `number` a double, `boolean` a bool,
+    `string` and `choice` a quotable string (a choice offers its values), and `player` a word the server resolves by
+    exact online name, so a selector such as `@a` is not accepted. The server parses every value again with the live
+    block, so a value the client let through, or a raw packet, gets the usage line and never a crash.
+12. **Every prefix of the arguments reaches the executor.** `/shop` and `/shop tools` both run the handler, which decides
+    whether what it has is enough. Declaring an argument optional or with a default is therefore a server decision,
+    which keeps the tree's shape a function of names and types only.
+13. **Activation is `requires`, not removal.** Brigadier 1.3.10 cannot remove a child, and `addChild` merges a same-name
+    child, so an alias that is no longer declared stays in the tree with a predicate that reads the handler's declared
+    set. It is neither suggested nor run. An alias that comes back reuses its node.
+14. **The argument shape is fixed in the node, and a change to it is a reload.** Names and Brigadier types are fixed when
+    the node is made, so a swap that changes them asks for a reload, which rebuilds the node from the built registries
+    (decision 15). Only a reload that does not put the new shape in the tree is `MTR-0069`, and that applies at the next
+    restart. Changes to defaults, optionality, `suggest:`, permission and the GUI itself are live without any reload: the
+    executor reads the block at run time.
+15. **The command tree is registered from the built registries, and a swap reloads only for a change it needs.**
+    `OpenCommandRegistrar` registers from the server's `COMMANDS` lifecycle event, which Paper fires at start and on a
+    server reload. The registrar is valid only inside that event: a registrar kept from it and used later throws
+    `cannot access the dispatcher in this context` (found on Paper 1.21.4 by the harness scenario). The apply of a
+    boot runs on the global thread after `onEnable`, and the COMMANDS event at boot runs before it, so the live view is
+    still empty then. The registrar therefore registers from the **built** registries instead: `PipelineService.builtRegistries()`,
+    the registries of the latest reload, which are built synchronously and are what the first apply publishes. At boot the
+    tree holds the aliases the first swap will declare, so the first swap asks for nothing.
+
+    A content swap never edits the tree. It updates the declared set at once, which hides a removed alias through its
+    `requires` and needs no reload. It asks for a reload (`Server#reloadData`, which fires the COMMANDS event again with the
+    built registries) only when a declared alias is missing from the tree or was built with another argument shape. Such
+    a reload is **explicit**: it is logged as `MATERIONE-OPEN-TREE reload aliases=[...]`, and a request inside five seconds
+    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into the next swap after the
+    window. A deferred change therefore applies at the next swap after the window, or at a restart if no swap comes; the
+    registrar does not schedule a timer of its own. An alias the reload does not put in the tree is `MTR-0069`, and no
+    further reload is asked for it until the next COMMANDS event.
+
+    **Measured:** unchanged content at boot causes zero `reloadData` calls. `PaperOpenCommandIT` asserts it (no
+    `MATERIONE-OPEN-TREE reload` line before the content change), and `OpenCommandRegistrarTest` counts the reloads.
+    Reloading after an added alias was proven on Paper 1.21.4: `reloadData` fires the reloadable COMMANDS event there.
+    The cost of `reloadData` (it re-sends recipes, advancements and tags, and reloads datapacks) is paid only by a swap that
+    changes the set of open commands or their argument shapes.
+16. **Conflicts are checked before registration.** Paper's main label overrides an existing command, so the registrar
+    checks the dispatcher and the command map first. A name already taken, or claimed twice, is skipped with `MTR-0067`;
+    the GUI's other aliases and `/materione gui open` still work. The check ignores the registrar's own earlier nodes, so
+    a reload does not conflict with itself.
+17. **Command execution is the API cause, and needs no `materione.gui.open`.** A player who types a GUI's command is
+    governed by the GUI's `open.permission`, not by the API node. The command parses its arguments before the sender
+    check, so a console sender gets the usage line for a bad value and the message "only a player can open" for a good
+    one. Each outcome is logged as `MATERIONE-OPEN-COMMAND alias=<a> outcome=opened|refused|usage|console`, which the
+    harness and the QA suite read.
+18. **Result mapping.** `OpenResult.Outcome.USAGE` is new: an argument refusal, distinct from `DENIED` (permission or
+    requirement). The API maps `USAGE` to `CONTENT_SCHEMA_INVALID` and `DENIED` to `PERMISSION_DENIED`, as before.
+
+**Scope and what is not here**
+
+19. **No per-argument permission.** The `OpenArg` of #221 has no `permission:` key, so `open.permission` is the one node,
+    and it applies to the whole block. Adding a per-argument node would be a schema change, and the schema is shared
+    with the editor.
+20. **No Bedrock or prompt surface.** Dialog and prompt arguments are §11's and #220's. The chat argument flow is out.
+21. **The probe run is deferred to the blessing run.** The in-game behaviour (the typed command reaching the client's
+    tree, the window, the requirement and deny messages) is in `qa/catalog/opencommands.mjs`, and needs a real client.
+22. **Numbering.** §20 is taken by #211 and §22 is reserved by an open PR; this section takes the next free number and
+    is reconciled at merge.
+
 ## 26. Decisions taken in #223 (W1: the studio Logic tab)
 
 #223 shipped §7.1 to §7.3: the **Logic** tab beside **Design** in the GUI studio, a node canvas over the same

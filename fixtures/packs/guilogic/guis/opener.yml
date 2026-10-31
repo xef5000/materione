@@ -1,0 +1,30 @@
+# The GUI an open command opens (logic.md §6.1, #215): /opentest opens it with a typed category. A bad
+# category is answered with the usage line; a food request fails the requirement, and the deny steps tell the
+# player why instead of opening the window.
+opener:
+  title: Opener
+  rows: 1
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: wells
+      type: slots
+      region: container
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "OPENER"
+      font: smallcaps
+      color: "#404040"
+  open:
+    commands: [opentest]
+    args:
+      - { name: category, type: choice, default: all, suggest: [all, tools, food] }
+    requirement: "gui.args.category != 'food'"
+    deny:
+      - message: "<red>No food here, pick another category."

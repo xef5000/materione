@@ -72,7 +72,8 @@ public final class GuiOpener {
         RuntimeGuis.Live gui = found.get();
         OpenGate.Admission admission = gate.admit(viewer, gui, request.args());
         if (!admission.allowed()) {
-            return OpenResult.refused(OpenResult.Outcome.DENIED, admission.reason());
+            return OpenResult.refused(admission.usage() ? OpenResult.Outcome.USAGE : OpenResult.Outcome.DENIED,
+                    admission.reason());
         }
 
         var session = new GuiSession(viewer.id(), viewer.name(), gui.id(), admission.args());

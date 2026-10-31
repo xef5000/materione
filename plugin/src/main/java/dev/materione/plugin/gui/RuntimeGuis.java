@@ -8,6 +8,7 @@ import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
+import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -96,7 +97,8 @@ public final class RuntimeGuis {
                     ? GuiRuleSet.EMPTY
                     : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
             out.put(gui.id(), new Live(
-                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules));
+                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules,
+                    OpenPlan.compile(gui.id(), gui.rules(), logic)));
         }
         return new RuntimeGuis(out);
     }
@@ -156,10 +158,11 @@ public final class RuntimeGuis {
      * @param slots the resolved slots, sorted by slot
      * @param clicks which layers a click on each container slot reaches, topmost first
      * @param logic the GUI's compiled rules, indexed by trigger
+     * @param open the GUI's compiled {@code open:} block (logic.md §6.1), or null when it has none
      */
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
-            ClickMap clicks, GuiRuleSet logic) {
+            ClickMap clicks, GuiRuleSet logic, OpenPlan open) {
 
         public Live {
             slots = List.copyOf(slots);
@@ -167,9 +170,16 @@ public final class RuntimeGuis {
             logic = logic == null ? GuiRuleSet.EMPTY : logic;
         }
 
+        /** A GUI with no {@code open:} block. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, null);
+        }
+
         /** A GUI with no clickable layers and no rules. */
         public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
-            this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRuleSet.EMPTY);
+            this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRuleSet.EMPTY, null);
         }
 
         /**
