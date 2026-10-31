@@ -9,6 +9,9 @@ import dev.materione.plugin.gui.event.RuleDispatcher;
 import dev.materione.plugin.gui.input.ClickRouter;
 import dev.materione.plugin.gui.input.GuiWindowListener;
 import dev.materione.plugin.gui.input.InputGuard;
+import dev.materione.plugin.gui.input.GuiJournal;
+import dev.materione.plugin.gui.input.InputSlotClicks;
+import dev.materione.plugin.gui.input.InputSlotOps;
 import dev.materione.plugin.gui.input.InventoryInput;
 import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
@@ -49,6 +52,7 @@ public final class GuiStack {
     private final GuiWindowListener windowListener;
     private final OpenCommandRegistrar openCommands;
     private final GuiBridge.Services services;
+    private final InputSlotClicks inputClicks;
 
     /**
      * @param live the registries that are live now
@@ -66,9 +70,10 @@ public final class GuiStack {
         RuleDispatcher dispatcher = engine::fire;
         GuiEvents events = new GuiEvents(dispatcher);
         this.router = new ClickRouter(guis, events, visibility, guard);
+        GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
         GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()));
         WindowHost windows = new BukkitWindowHost(
-                plugin, scheduling, new InventoryInput(sessions, router), guard, renderer);
+                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
                         plugin, viewer.player(), ticks, task, retired),
@@ -81,8 +86,15 @@ public final class GuiStack {
         var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
         this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
-        this.windowListener = new GuiWindowListener(lifecycle);
-        this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh);
+        this.windowListener = new GuiWindowListener(lifecycle, journal);
+        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
+        this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh,
+                new InputSlotOps(guis, journal));
+    }
+
+    /** The input-slot rules the click router consults (logic.md §25). */
+    public InputSlotClicks inputClicks() {
+        return inputClicks;
     }
 
     public GuiSessions sessions() {

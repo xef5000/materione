@@ -6,10 +6,12 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
+import dev.materione.content.gui.PlayerInventory;
 import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
@@ -86,8 +88,15 @@ public final class RuntimeGuis {
             LogicLookup logic) {
         var out = new LinkedHashMap<NamespacedId, Live>();
         for (CompiledGui gui : compiled.values()) {
+            InputSlots inputs = InputSlots.compile(gui.inputs(), gui.id(), logic,
+                    gui.playerInventory() == PlayerInventory.LOCKED);
             var slots = new ArrayList<Slot>();
             for (CompiledGui.Slot entry : gui.slots()) {
+                if (inputs.isInput(entry.slot())) {
+                    // the player's items take an input slot; a static item there could be taken out for free
+                    diagnostics.accept(staticItemIgnored(gui, entry));
+                    continue;
+                }
                 Item item = resolve(entry.item(), items, vanilla);
                 if (item == null) {
                     diagnostics.accept(unresolved(gui, entry));
@@ -99,7 +108,7 @@ public final class RuntimeGuis {
                     ? GuiRuleSet.EMPTY
                     : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
             out.put(gui.id(), new Live(
-                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules,
+                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
                     OpenPlan.compile(gui.id(), gui.rules(), logic),
                     gui.placements(), gui.refresh(), compileItems(gui, logic)));
         }
@@ -163,6 +172,16 @@ public final class RuntimeGuis {
         return null;
     }
 
+    private static Diagnostic staticItemIgnored(CompiledGui gui, CompiledGui.Slot entry) {
+        return new Diagnostic(
+                DiagnosticCodes.INPUT_STATIC_ITEM_IGNORED, Severity.WARN,
+                "GUI " + gui.id() + " slot " + entry.slot() + " is an input slot, so its static item '"
+                        + entry.item() + "' is not shown",
+                gui.id(), null,
+                "move the item out of the input layer's slots, or make the layer not an input",
+                null);
+    }
+
     private static Diagnostic unresolved(CompiledGui gui, CompiledGui.Slot entry) {
         return new Diagnostic(
                 DiagnosticCodes.GUI_SLOT_ITEM_UNRESOLVED, Severity.WARN,
@@ -189,15 +208,23 @@ public final class RuntimeGuis {
      */
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
-            ClickMap clicks, GuiRuleSet logic, OpenPlan open, List<CompiledGui.Placement> placements, int refresh,
-            List<CompiledItemLayer> items) {
+            ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
+            List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items) {
 
         public Live {
             slots = List.copyOf(slots);
             clicks = clicks == null ? ClickMap.EMPTY : clicks;
             logic = logic == null ? GuiRuleSet.EMPTY : logic;
+            inputs = inputs == null ? InputSlots.NONE : inputs;
             placements = List.copyOf(placements);
             items = List.copyOf(items);
+        }
+
+        /** A GUI with input slots, and no {@code open:} block, per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, InputSlots inputs) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no {@code open:} block, and per-viewer layers or clock. */
@@ -205,21 +232,21 @@ public final class RuntimeGuis {
                 NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, List<CompiledGui.Placement> placements, int refresh,
                 List<CompiledItemLayer> items) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, null, placements, refresh, items);
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, placements, refresh, items);
         }
 
         /** A GUI with an {@code open:} block, and no per-viewer layers or clock. */
         public Live(
                 NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, OpenPlan open) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, open, List.of(), 0, List.of());
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, open, List.of(), 0, List.of());
         }
 
         /** A GUI with clicks and rules, and no {@code open:} block, per-viewer layers or clock. */
         public Live(
                 NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, null, List.of(), 0, List.of());
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no clickable layers and no rules. */

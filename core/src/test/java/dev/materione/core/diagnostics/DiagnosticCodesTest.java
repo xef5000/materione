@@ -34,7 +34,9 @@ class DiagnosticCodesTest {
         // does not load, MTR-0069 open command tree needs a restart: logic.md §23, #215;
         // MTR-0070 GUI item source rejected, MTR-0071 GUI refresh clock invalid,
         // MTR-0072 GUI item source unresolved at render, MTR-0073 GUI dynamic layer failed at render:
-        // logic.md §24, #216)
-        assertThat(DiagnosticCodes.all()).hasSize(73);
+        // logic.md §24, #216;
+        // MTR-0074 input accept invalid, MTR-0075 static item in an input slot, MTR-0076 input setting ignored:
+        // logic.md §25, #218)
+        assertThat(DiagnosticCodes.all()).hasSize(76);
     }
 }

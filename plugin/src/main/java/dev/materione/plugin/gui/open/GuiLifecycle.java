@@ -63,8 +63,10 @@ public final class GuiLifecycle {
     }
 
     /** The session's GUI stopped being live: ends it quietly (its rules are gone with it). */
-    public void removed(GuiSession session) {
-        sessions.end(session, CloseReason.REMOVED);
+    public void removed(Viewer viewer, GuiSession session) {
+        if (sessions.end(session, CloseReason.REMOVED)) {
+            windows.releaseInputs(viewer, session);
+        }
     }
 
     private boolean end(Viewer viewer, GuiSession session, CloseReason reason) {
@@ -72,6 +74,9 @@ public final class GuiLifecycle {
             return false;
         }
         guis.find(session.gui()).ifPresent(gui -> events.closed(viewer, session, gui, reason));
+        // the player's items in the window's input slots go back to them, whatever ended the session
+        // (logic.md §6.5); after the close rules, which may still read them
+        windows.releaseInputs(viewer, session);
         return true;
     }
 }

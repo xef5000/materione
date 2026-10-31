@@ -603,7 +603,10 @@ public final class MaterionePlugin extends JavaPlugin {
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
         // gui click router (holder identity — no title matching): one
         // listener for every Materione menu, admin browser today, M6 menus later
-        getServer().getPluginManager().registerEvents(new GuiListener(), this);
+        // the input-slot rules (logic.md §25) are the router's collaborator; without a GUI runtime the router
+        // judges every window as one with no input slots
+        getServer().getPluginManager().registerEvents(
+                new GuiListener(guiStack != null ? guiStack.inputClicks() : null), this);
         if (guiStack != null) {
             // the GUI sessions' own events: a window closing and a player leaving
             guiStack.listeners().forEach(listener -> getServer().getPluginManager().registerEvents(listener, this));

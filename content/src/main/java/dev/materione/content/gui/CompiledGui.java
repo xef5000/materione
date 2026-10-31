@@ -23,12 +23,15 @@ import java.util.List;
  * @param slots the static item in each slot the GUI fills, sorted by slot
  * @param clicks which layers a click on each container slot reaches, topmost first (logic.md §6.2)
  * @param rules the GUI's authored {@code behavior:} and {@code flows:}, for the runtime to compile
+ * @param playerInventory whether the viewer's own inventory is usable while the GUI is open (logic.md §6.5)
+ * @param inputs the container slots that take the player's items, by slot, sorted (logic.md §25)
  * @param placements the per-viewer item layers, in layer order (logic.md §6.3)
  * @param refresh the {@code refresh:} clock in ticks, 0 when off (logic.md §6.3)
  */
 public record CompiledGui(
         NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
-        ClickMap clicks, GuiRules rules, List<Placement> placements, int refresh) {
+        ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
+        List<Placement> placements, int refresh) {
 
     /** The canvas width of every chest GUI (vanilla container width). */
     public static final int WIDTH = 176;
@@ -37,22 +40,45 @@ public record CompiledGui(
         slots = List.copyOf(slots);
         clicks = clicks == null ? ClickMap.EMPTY : clicks;
         rules = rules == null ? GuiRules.EMPTY : rules;
+        playerInventory = playerInventory == null ? PlayerInventory.FREE : playerInventory;
+        inputs = List.copyOf(inputs);
         placements = List.copyOf(placements);
         if (refresh < 0) {
             throw new IllegalArgumentException("refresh is 0 (off) or a whole number of ticks");
         }
     }
 
+    /** A GUI with playerInventory and inputs, and no per-viewer items or clock. */
+    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs) {
+        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, List.of(), 0);
+    }
+
+    /** A GUI with per-viewer items or clock, and the viewer's inventory free. */
+    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRules rules, List<Placement> placements, int refresh) {
+        this(id, rows, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), placements, refresh);
+    }
+
     /** A GUI with no clickable layers and no logic: the v1 shape. */
     public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
-        this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRules.EMPTY, List.of(), 0);
+        this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRules.EMPTY, PlayerInventory.FREE, List.of(), List.of(), 0);
     }
 
     /** A GUI with clicks and rules, and no per-viewer items or clock: the M6 G1 shape. */
     public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, List.of(), 0);
+        this(id, rows, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), List.of(), 0);
     }
+
+    /**
+     * One container slot that takes the player's items.
+     *
+     * @param slot the chest slot, 0 at the top-left
+     * @param layer the input layer that claims the slot (its topmost layer)
+     * @param accept the layer's {@code accept:} as authored, or null to accept anything
+     */
+    public record Input(int slot, String layer, Object accept) {}
 
     /** The canvas height of a chest with {@code rows} rows: {@code 114 + rows·18}. */
     public static int height(int rows) {

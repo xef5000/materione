@@ -43,7 +43,16 @@ describe('the palette', () => {
   });
 
   it('lists only the triggers the host fires', () => {
-    expect(groups[0]!.entries.map((entry) => entry.id)).toEqual(['gui.opening', 'gui.open', 'gui.close', 'gui.click', 'gui.click_outside', 'gui.tick']);
+    expect(groups[0]!.entries.map((entry) => entry.id)).toEqual([
+      'gui.opening',
+      'gui.open',
+      'gui.close',
+      'gui.click',
+      'gui.click_outside',
+      'gui.tick',
+      'gui.slot_change',
+      'gui.click_inventory',
+    ]);
     expect(paletteGroups(vocabulary)[0]!.entries.length).toBeGreaterThan(20);
   });
 

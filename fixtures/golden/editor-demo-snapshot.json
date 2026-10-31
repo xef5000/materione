@@ -401,6 +401,82 @@
         },
         {
           "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Clears, takes, resizes, repairs or enchants the item in an input slot of this GUI",
+          "displayName": "Input slot item",
+          "id": "gui.slot_item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The container slot, from 0 at the top-left",
+              "id": "slot",
+              "label": "Slot",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "clear",
+                "take",
+                "set_amount",
+                "repair",
+                "enchant"
+              ],
+              "description": "clear, take, set_amount, repair or enchant",
+              "id": "op",
+              "label": "Op",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            },
+            {
+              "advanced": false,
+              "description": "set_amount only: the new amount, 0 clears the slot",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "enchant only: the enchantment's key, for example sharpness",
+              "id": "enchantment",
+              "label": "Enchantment",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "enchant only: the level, at least 1",
+              "id": "level",
+              "label": "Level",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
           "category": "player",
           "deferred": false,
           "description": "Shows text to the player, on the action bar, or to everyone",
@@ -1442,6 +1518,51 @@
         },
         {
           "available": true,
+          "category": "gui",
+          "description": "True when an input slot of this GUI holds the item, at least this amount",
+          "displayName": "Slot has item",
+          "id": "slot_has",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The container slot, from 0 at the top-left",
+              "id": "slot",
+              "label": "Slot",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "description": "Materione item id, or minecraft:<material>; any item when absent",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": "1",
+              "description": "How many the slot must hold at least",
+              "id": "amount",
+              "label": "Amount",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "available": true,
           "category": "data",
           "description": "Compares a run-local, session or declared player or server variable with a value",
           "displayName": "Variable",
@@ -1699,6 +1820,24 @@
             "gui"
           ],
           "id": "gui.tick"
+        },
+        {
+          "description": "The player is about to put an item into, or take one out of, an input slot. The change happens unless a rule cancels it, which reverts it",
+          "details": [],
+          "displayName": "GUI input slot change",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.slot_change"
+        },
+        {
+          "description": "The player clicks in their own inventory while the GUI is open. A locked inventory cancels the click anyway; a free one lets it through unless a rule cancels it",
+          "details": [],
+          "displayName": "GUI inventory click",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click_inventory"
         }
       ],
       "functions": [
@@ -5812,6 +5951,290 @@
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The container slot, from 0",
+              "hosts": [],
+              "path": "slot.index",
+              "type": "integer"
+            },
+            {
+              "description": "The item the slot will hold (its id, blank when empty)",
+              "hosts": [],
+              "path": "slot.item",
+              "type": "string"
+            },
+            {
+              "description": "How many the slot will hold",
+              "hosts": [],
+              "path": "slot.amount",
+              "type": "integer"
+            },
+            {
+              "description": "The item the slot holds now (its id, blank when empty)",
+              "hosts": [],
+              "path": "slot.previous",
+              "type": "string"
+            }
+          ],
+          "description": "The player is about to put an item into, or take one out of, an input slot. The change happens unless a rule cancels it, which reverts it",
+          "details": [],
+          "displayName": "GUI input slot change",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Only changes to this input layer (an id, or a list of ids)",
+              "id": "layer",
+              "label": "Layer",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.slot_change",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": true,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The click kind: left, right, shift_left, shift_right, middle, double, drop, ctrl_drop, number_key, swap_offhand",
+              "hosts": [],
+              "path": "click.type",
+              "type": "string"
+            },
+            {
+              "description": "The clicked slot of the player's inventory",
+              "hosts": [],
+              "path": "click.slot",
+              "type": "integer"
+            },
+            {
+              "description": "The hotbar key 1 to 9 of a number_key click, else 0",
+              "hosts": [],
+              "path": "click.key",
+              "type": "integer"
+            },
+            {
+              "description": "The item the player clicked (its id, blank when empty)",
+              "hosts": [],
+              "path": "slot.item",
+              "type": "string"
+            }
+          ],
+          "description": "The player clicks in their own inventory while the GUI is open. A locked inventory cancels the click anyway; a free one lets it through unless a rule cancels it",
+          "details": [],
+          "displayName": "GUI inventory click",
+          "filters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "left",
+                "right",
+                "shift_left",
+                "shift_right",
+                "middle",
+                "double",
+                "drop",
+                "ctrl_drop",
+                "number_key",
+                "swap_offhand"
+              ],
+              "description": "Only this kind of click (a kind, or a list)",
+              "id": "click",
+              "label": "Click",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.click_inventory",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
         }
       ],
       "version": 2
@@ -5950,10 +6373,34 @@
             "section": "appearance",
             "type": "raw",
             "uiHint": "advanced"
+          },
+          {
+            "advanced": false,
+            "default": "false",
+            "description": "Input slots: the player's items may be placed in these container slots (logic.md §6.5). Requires a region that includes the container",
+            "example": "false",
+            "id": "input",
+            "label": "Input slots",
+            "order": 30,
+            "required": false,
+            "section": "behavior",
+            "type": "boolean",
+            "uiHint": "toggle"
+          },
+          {
+            "advanced": true,
+            "description": "Input slots only: a condition on slot.item that an item must meet to be placed (an expression or a predicate, logic.md §2.3)",
+            "id": "accept",
+            "label": "Accept",
+            "order": 40,
+            "required": false,
+            "section": "behavior",
+            "type": "raw",
+            "uiHint": "advanced"
           }
         ],
         "registeredBy": "materione",
-        "sinceVersion": "1.0.0",
+        "sinceVersion": "1.1.0",
         "target": "raster"
       },
       {
@@ -9192,11 +9639,40 @@
             "unit": "rows"
           },
           {
+            "advanced": false,
+            "allowedValues": [
+              "free",
+              "locked"
+            ],
+            "default": "free",
+            "description": "The viewer's own inventory while the GUI is open: free (clicks work) or locked (every click is cancelled and gui.click_inventory fires)",
+            "example": "free",
+            "id": "player_inventory",
+            "label": "Player inventory",
+            "options": [
+              {
+                "description": "The viewer can move their own items",
+                "label": "Free",
+                "value": "free"
+              },
+              {
+                "description": "Clicks in the viewer's inventory are cancelled",
+                "label": "Locked",
+                "value": "locked"
+              }
+            ],
+            "order": 20,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
             "advanced": true,
             "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
             "id": "refresh",
             "label": "Refresh",
-            "order": 20,
+            "order": 30,
             "required": false,
             "section": "behavior",
             "type": "integer",
@@ -15209,11 +15685,40 @@
           "unit": "rows"
         },
         {
+          "advanced": false,
+          "allowedValues": [
+            "free",
+            "locked"
+          ],
+          "default": "free",
+          "description": "The viewer's own inventory while the GUI is open: free (clicks work) or locked (every click is cancelled and gui.click_inventory fires)",
+          "example": "free",
+          "id": "player_inventory",
+          "label": "Player inventory",
+          "options": [
+            {
+              "description": "The viewer can move their own items",
+              "label": "Free",
+              "value": "free"
+            },
+            {
+              "description": "Clicks in the viewer's inventory are cancelled",
+              "label": "Locked",
+              "value": "locked"
+            }
+          ],
+          "order": 20,
+          "required": false,
+          "section": "behavior",
+          "type": "enum",
+          "uiHint": "select"
+        },
+        {
           "advanced": true,
           "description": "Refresh clock in ticks: the window re-evaluates its dynamic layers this often (conditions, templates, animations). Off when absent; gui.refresh and reloads always update it",
           "id": "refresh",
           "label": "Refresh",
-          "order": 20,
+          "order": 30,
           "required": false,
           "section": "behavior",
           "type": "integer",

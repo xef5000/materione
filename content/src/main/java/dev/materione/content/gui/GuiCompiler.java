@@ -110,8 +110,31 @@ public final class GuiCompiler {
         slotList.sort(Comparator.comparingInt(CompiledGui.Slot::slot));
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
         var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
+                PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
                 placements, gui.refresh());
         return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
+    }
+
+    /**
+     * The input slots (logic.md §25): every container slot whose topmost clickable layer is a visible
+     * input {@code slots} layer. A slot under a button or an item is not an input slot, because the
+     * layer above it takes the click.
+     */
+    static List<CompiledGui.Input> inputsOf(GuiDefinition gui, ClickMap clicks) {
+        var accepts = new LinkedHashMap<String, Object>();
+        for (GuiLayer layer : gui.layers()) {
+            if (layer.visible() && layer.compiled() instanceof SlotsComponent.Layer wells && wells.input()) {
+                accepts.put(layer.id(), wells.accept());
+            }
+        }
+        var inputs = new ArrayList<CompiledGui.Input>();
+        for (int slot = 0; slot < gui.rows() * 9; slot++) {
+            List<String> top = clicks.layersAt(slot);
+            if (!top.isEmpty() && accepts.containsKey(top.get(0))) {
+                inputs.add(new CompiledGui.Input(slot, top.get(0), accepts.get(top.get(0))));
+            }
+        }
+        return inputs;
     }
 
     /**

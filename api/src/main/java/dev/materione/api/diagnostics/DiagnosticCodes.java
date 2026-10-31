@@ -346,6 +346,7 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
 
     /**
+<<<<<<< HEAD
      * A GUI item layer names an item source the server does not provide, or the source rejects its
      * parameters (logic.md §4.4, §6.3). The layer is left out of the window; the rest of the GUI still
      * shows. Optional integrations are not this case: while their plugin is absent the layer shows a
@@ -376,6 +377,29 @@ public final class DiagnosticCodes {
      */
     public static final DiagnosticCode GUI_DYNAMIC_LAYER_FAILED =
             new DiagnosticCode("MTR-0073", Severity.WARN, "GUI dynamic layer failed while rendering");
+
+    /**
+     * An input slot's {@code accept:} condition does not compile (logic.md §25): an unknown predicate or
+     * a malformed expression. The slot accepts nothing until the condition is fixed; the rest of the GUI
+     * stays live.
+     */
+    public static final DiagnosticCode INPUT_ACCEPT_INVALID =
+            new DiagnosticCode("MTR-0074", Severity.WARN, "Input slot accept condition does not compile; the slot accepts nothing");
+
+    /**
+     * A container slot of an input layer also has a static item from an item layer (gui.md §2). The
+     * player's items take the slot, so the static item is not shown and cannot be taken out (logic.md §25).
+     */
+    public static final DiagnosticCode INPUT_STATIC_ITEM_IGNORED =
+            new DiagnosticCode("MTR-0075", Severity.WARN, "Static item in an input slot is ignored");
+
+    /**
+     * An input-slot setting cannot apply (logic.md §25): {@code accept:} on a layer that is not an input,
+     * {@code input:} on a layer with no container slots, or a {@code player_inventory:} that is neither
+     * {@code locked} nor {@code free}. The setting is ignored; the GUI and its other layers still work.
+     */
+    public static final DiagnosticCode GUI_INPUT_SETTING_IGNORED =
+            new DiagnosticCode("MTR-0076", Severity.WARN, "Input-slot setting ignored; the GUI loads without it");
 
     /**
      * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a
@@ -466,6 +490,9 @@ public final class DiagnosticCodes {
             GUI_REFRESH_INVALID,
             GUI_ITEM_SOURCE_UNRESOLVED,
             GUI_DYNAMIC_LAYER_FAILED,
+            INPUT_ACCEPT_INVALID,
+            INPUT_STATIC_ITEM_IGNORED,
+            GUI_INPUT_SETTING_IGNORED,
             VARIABLE_UNDECLARED,
             VARIABLE_TYPE_MISMATCH,
             VARIABLE_STORE_FAILED,

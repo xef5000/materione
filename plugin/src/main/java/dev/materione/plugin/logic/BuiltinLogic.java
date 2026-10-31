@@ -2,6 +2,7 @@ package dev.materione.plugin.logic;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
+import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.TriggerType;
@@ -40,6 +41,7 @@ import dev.materione.plugin.logic.action.TitleAction;
 import dev.materione.plugin.logic.action.gui.BackGuiAction;
 import dev.materione.plugin.logic.action.gui.CloseGuiAction;
 import dev.materione.plugin.logic.action.gui.OpenGuiAction;
+import dev.materione.plugin.logic.action.gui.GuiSlotItemAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.plugin.logic.condition.HasExpCondition;
@@ -50,9 +52,12 @@ import dev.materione.plugin.logic.condition.HasPermissionCondition;
 import dev.materione.plugin.logic.condition.InGuiCondition;
 import dev.materione.plugin.logic.condition.InWorldCondition;
 import dev.materione.plugin.logic.condition.IsNearCondition;
+import dev.materione.plugin.logic.condition.SlotHasCondition;
 import dev.materione.plugin.logic.condition.VarCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
+import dev.materione.plugin.logic.support.SlotPeek;
+import dev.materione.plugin.gui.input.StackView;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
@@ -147,7 +152,8 @@ public final class BuiltinLogic {
                 new OpenGuiAction(bridge),
                 new CloseGuiAction(bridge),
                 new BackGuiAction(bridge),
-                new RefreshGuiAction(bridge));
+                new RefreshGuiAction(bridge),
+                new GuiSlotItemAction(bridge));
     }
 
     /**
@@ -170,6 +176,10 @@ public final class BuiltinLogic {
                 .flatMap(services -> services.sessions().current(player.getUniqueId()))
                 .filter(GuiSession::isOpen)
                 .map(GuiSession::gui);
+        // slot_has reads an input slot of the run's own GUI through the runtime's port (logic.md §25); empty until it binds
+        SlotPeek slots = (session, slot) -> bridge.services()
+                .map(services -> services.inputs().peek(session, slot))
+                .orElse(StackView.EMPTY);
         for (TriggerType trigger : BuiltinTriggers.all()) {
             api.triggers().register(owner, builtIn(trigger.id()), trigger);
         }
@@ -200,7 +210,7 @@ public final class BuiltinLogic {
             api.itemSources().register(owner, builtIn(source.id()), source);
         }
         // built-in conditions (logic.md §22, #210): their own block, after the rest
-        for (ConditionType<?> condition : conditions(api.providers(), guis, items)) {
+        for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots)) {
             api.conditions().register(owner, builtIn(condition.id()), condition);
         }
     }
@@ -214,8 +224,10 @@ public final class BuiltinLogic {
      * @param providers the provider slots the money condition reads
      * @param guis the port {@code in_gui} reads
      * @param items the live item registries the item conditions resolve against
+     * @param slots the port {@code slot_has} reads an input slot of the run's GUI through (logic.md §25)
      */
-    public static List<ConditionType<?>> conditions(LogicProviders providers, OpenGuis guis, ItemCatalog items) {
+    public static List<ConditionType<?>> conditions(
+            LogicProviders providers, OpenGuis guis, ItemCatalog items, SlotPeek slots) {
         return List.of(
                 new HasPermissionCondition(),
                 new HasMoneyCondition(providers),
@@ -225,7 +237,8 @@ public final class BuiltinLogic {
                 new IsNearCondition(),
                 new InWorldCondition(),
                 new InGuiCondition(guis),
-                new VarCondition());
+                new VarCondition(),
+                new SlotHasCondition(slots));
     }
 
     /**

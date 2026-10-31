@@ -8,6 +8,7 @@ import dev.materione.api.registry.RegistryKeys;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
+import dev.materione.plugin.logic.support.SlotPeek;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +23,7 @@ class BuiltinConditionsTest {
 
     /** Only the eight in #210's scope: {@code var} waits for the variables API (#211), {@code slot_has} for #218. */
     private static final Set<String> EXPECTED = Set.of("has_permission", "has_money", "has_exp", "has_item",
-            "has_item_space", "is_near", "in_world", "in_gui", "var");
+            "has_item_space", "is_near", "in_world", "in_gui", "var", "slot_has");
 
     private static final Set<String> COMPOSITES = Set.of("all", "any", "not", "at_least");
 
@@ -53,7 +54,8 @@ class BuiltinConditionsTest {
 
     @Test
     void noBuiltInConditionTakesACompositeName() {
-        var ids = BuiltinLogic.conditions(service.providers(), OpenGuis.none(), ItemCatalog.none()).stream()
+        var ids = BuiltinLogic.conditions(service.providers(), OpenGuis.none(), ItemCatalog.none(), SlotPeek.none())
+                .stream()
                 .map(ConditionType::id)
                 .toList();
         assertThat(ids).containsExactlyInAnyOrderElementsOf(EXPECTED);

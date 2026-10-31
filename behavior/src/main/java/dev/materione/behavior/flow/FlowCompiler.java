@@ -109,6 +109,43 @@ public final class FlowCompiler {
         return compile(new CompileContext(owner, lookup, false), rules, null);
     }
 
+    /**
+     * Compiles one condition that a resource holds outside its rules (logic.md §25: an input slot's
+     * {@code accept:}). The condition is parsed exactly as an {@code if:} is, and its variables are
+     * checked against the variables trigger {@code on} provides. Never throws for content: a condition
+     * that does not compile comes back empty, with the reasons as messages.
+     *
+     * @param owner the resource that holds it
+     * @param raw what the author wrote
+     * @param on the trigger whose variables the condition may read, for example {@code gui.slot_change}
+     * @param lookup the registries predicates resolve against
+     */
+    public static ConditionCompilation compileCondition(NamespacedId owner, Object raw, String on, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, false);
+        Set<String> roots = lookup.selector(on).map(selector -> RuleCompiler.rootsOf(lookup, selector)).orElse(null);
+        var unit = new CompileUnit(context, "condition '" + on + "'", roots, "the '" + on + "' trigger provides");
+        Optional<Condition> condition;
+        try {
+            condition = Optional.of(new ConditionCompiler(unit).compile(raw, StepPath.root()));
+        } catch (Skip skipped) {
+            condition = Optional.empty();
+        }
+        return new ConditionCompilation(condition, context.problems.stream().map(Diagnostic::message).toList());
+    }
+
+    /**
+     * The result of {@link #compileCondition}.
+     *
+     * @param condition the compiled condition, or empty when it did not compile
+     * @param problems why it did not compile (or what a warning says about it), as messages
+     */
+    public record ConditionCompilation(Optional<Condition> condition, List<String> problems) {
+
+        public ConditionCompilation {
+            problems = List.copyOf(problems);
+        }
+    }
+
     /** The outcome of compiling one condition: the condition, or null when it did not load. */
     public record ParsedCondition(Condition condition, List<Diagnostic> problems) {}
 

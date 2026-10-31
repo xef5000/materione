@@ -32,6 +32,12 @@ public interface WindowHost {
     void close(Viewer viewer);
 
     /**
+     * Gives the items in the session's input slots back to the viewer, and empties them (logic.md §25). Called
+     * when the session ends, so a window that is closing (or stays open for a tick) holds no item of theirs.
+     */
+    void releaseInputs(Viewer viewer, GuiSession session);
+
+    /**
      * Rewrites the contents of the viewer's window in place, when it is this session's window. Every layer
      * is read again: this is what {@code gui.refresh} and a reload need.
      */

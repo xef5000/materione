@@ -2,16 +2,20 @@ package dev.materione.plugin.gui.rules;
 
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.DiagnosticTarget;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.logic.TriggerDescription;
+import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.GuiDefinition;
 import dev.materione.content.gui.GuiLayer;
 import dev.materione.content.gui.ItemComponent;
+import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -60,7 +64,33 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
             layerFilter(gui, rule, layers, out);
             slotFilter(gui, rule, out);
         }
+        acceptConditions(gui, registries, out);
         return out;
+    }
+
+    /**
+     * The {@code accept:} of each input layer must compile (logic.md §25, MTR-0074). One that does not is
+     * reported at the layer's own field; the slot accepts nothing until it is fixed, and the rest of the GUI
+     * still loads.
+     */
+    private static void acceptConditions(GuiDefinition gui, LogicLookup registries, List<Diagnostic> out) {
+        for (int index = 0; index < gui.layers().size(); index++) {
+            GuiLayer layer = gui.layers().get(index);
+            if (!(layer.compiled() instanceof SlotsComponent.Layer wells) || !wells.input() || wells.accept() == null) {
+                continue;
+            }
+            var compiled = FlowCompiler.compileCondition(gui.id(), wells.accept(), InputSlots.SLOT_CHANGE, registries);
+            if (compiled.condition().isEmpty()) {
+                String reason = compiled.problems().isEmpty() ? "it is not a condition" : compiled.problems().get(0);
+                out.add(new Diagnostic(
+                        DiagnosticCodes.INPUT_ACCEPT_INVALID, Severity.WARN,
+                        gui.id() + " layer '" + layer.id() + "' accept does not compile, so its slots accept nothing: "
+                                + reason,
+                        gui.id(), null,
+                        "fix the accept condition: an expression on slot.item, or a predicate such as has_money",
+                        DiagnosticTarget.field("layers", String.valueOf(index), "accept")));
+            }
+        }
     }
 
     /**
