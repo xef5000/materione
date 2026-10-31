@@ -55,6 +55,21 @@ export class GuiHistory {
     return this.#future[this.#future.length - 1]?.label ?? null;
   }
 
+  /** The command an undo would take back (the studio mirrors the edits of a logic command to the server). */
+  get nextUndo(): Command | null {
+    return this.#past[this.#past.length - 1]?.command ?? null;
+  }
+
+  /** The command a redo would run again. */
+  get nextRedo(): Command | null {
+    return this.#future[this.#future.length - 1] ?? null;
+  }
+
+  /** Sets the baseline "dirty" is measured from, without touching the history (a save that went through in parts). */
+  rebase(baseline: GuiDocument): void {
+    this.#baseline = baseline;
+  }
+
   /** Differs structurally from the last saved (or loaded) document. */
   get dirty(): boolean {
     return !sameDocument(this.#doc, this.#baseline) || this.pixelsDirty;

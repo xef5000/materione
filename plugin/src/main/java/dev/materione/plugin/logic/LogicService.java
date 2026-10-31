@@ -3,6 +3,7 @@ package dev.materione.plugin.logic;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.ItemSource;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.TriggerType;
@@ -52,6 +53,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<TriggerType> triggers;
     private final LogicRegistryImpl<ExpressionFunction> functions;
     private final LogicRegistryImpl<CurrencyIntegration> currencyIntegrations;
+    private final LogicRegistryImpl<ItemSource<?>> itemSources;
     private final MaterioneCurrencyCatalog currencies;
     private final LogicProvidersImpl providers;
     private final RuleEngine engine;
@@ -107,6 +109,8 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         this.currencyIntegrations = new LogicRegistryImpl<>(registries, RegistryKeys.CURRENCY_INTEGRATIONS,
                 CurrencyIntegration.class, "currency integration", CurrencyIntegration::id,
                 integration -> integration.describe());
+        this.itemSources = new LogicRegistryImpl<>(registries, RegistryKeys.ITEM_SOURCES, erased(ItemSource.class),
+                "item source", ItemSource::id, source -> source.describe().self());
         this.currencies = new MaterioneCurrencyCatalog(currencyIntegrations::resolve, defaultCurrency);
         Objects.requireNonNull(host, "host").getServer().getPluginManager().registerEvents(this, host);
         // the session-only Bukkit permission provider is the default (logic.md §4.5)
@@ -143,6 +147,12 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     @Override
     public LogicRegistry<CurrencyIntegration> currencyIntegrations() {
         return currencyIntegrations;
+    }
+
+    /** The {@code item-sources} registry (logic.md §4.4). */
+    @Override
+    public LogicRegistry<ItemSource<?>> itemSources() {
+        return itemSources;
     }
 
     /** The provider slots and the currency catalog (logic.md §4.5, §18). */
@@ -217,6 +227,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         triggers.ownerDisabled(owner);
         functions.ownerDisabled(owner);
         currencyIntegrations.ownerDisabled(owner);
+        itemSources.ownerDisabled(owner);
         providers.ownerDisabled(owner);
     }
 
@@ -232,6 +243,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         triggers.close();
         functions.close();
         currencyIntegrations.close();
+        itemSources.close();
         HandlerList.unregisterAll(this);
     }
 }

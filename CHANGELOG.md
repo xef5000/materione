@@ -19,12 +19,46 @@ releases may change file formats, settings and the public API.
   viewer's inventory. Items in an open window are journaled in the player's persistent data, so a hard
   crash gives them back on the next join. Diagnostics MTR-0074 to MTR-0076. Not yet shipped: the
   `gui.slot_change` layer check, and the in-game QA run for `guilogic.input-slots`.
+- **Dynamic GUI slots: conditions, templates, item sources, animation and a refresh clock (logic.md §6.3,
+  §24, #216).** An item layer can be shown only when a `visible_if` condition holds, and the topmost visible
+  layer of a slot wins. Its name, lore, amount and glint are templates, and its `item:` can be a plain id, a
+  template or a named source: `head: {player: "${player.name}"}` shows the viewer's own head, and
+  `player_slot: main_hand` shows the viewer's item. `frames: {every, items}` animates a slot. A GUI can set
+  `refresh: <ticks>` to re-render its dynamic layers on a clock. An unknown head or a missing item shows a
+  barrier item with the reason in its lore, never air. Only the changed slots are written to the window.
+  Diagnostics `MTR-0070` to `MTR-0073`. Raster and text layers cannot be conditional yet (#217).
+- **Item sources are a registry (logic.md §4.4, api.md §3.11).** `LogicApi.itemSources()` takes an
+  `ItemSource`, and the built-ins register through it: `materione:item`, `materione:head` and
+  `materione:player_slot`. The optional `hdb`, `itemsadder`, `nexo` and `mmoitems` sources register while
+  their plugin runs; on a server without the plugin they show a barrier. Those four adapters reach their
+  plugins through reflection, not compile-time dependencies, and their calls are not verified in this build.
+- **GUI open commands (logic.md §6.1, §23, #215).** A GUI's `open:` block now opens it. `commands: [shop, store]`
+  registers Brigadier commands at boot, and a content reload adds and hides them without a restart. Arguments are
+  typed (`string`, `int`, `number`, `player`, `boolean`, `choice`) with defaults, optional arguments and completions,
+  so `/shop tools` works from the chat box, and a bad value gets a usage line such as `usage: /shop <item:string>`
+  instead of a client error. `permission:` gates the open, and `requirement:` with `deny:` runs the steps that tell
+  the player why it was refused. Players with `materione.gui.bypass.<pack>.<id>` skip the requirement. Four new
+  diagnostic codes cover a bad default (`MTR-0066`), a command name another plugin already uses (`MTR-0067`), a
+  requirement that does not load (`MTR-0068`, which refuses the open) and a command the server could not add to the
+  live tree even after a reload (`MTR-0069`). Booting with unchanged content asks the server for no data reload; a
+  content change that adds an open command or changes its arguments asks for one, logged as `MATERIONE-OPEN-TREE reload`.
+- **The Logic tab in the GUI studio (logic.md §7, §26, #223).** A GUI's rules and named flows are drawn as a
+  colour-coded node graph beside the Design tab: triggers, actions, `if`, `require`, `choose`, `wait`, `stop`
+  and `call` as nodes joined by stepped "redstone" wires, coloured by the registry's categories. Build a flow by
+  dragging a wire out of a port to the empty canvas and picking from the search palette (`/`), which lists what
+  the server's vocabulary describes and greys an unavailable provider with its reason. A join, a loop or a
+  second wire out of a port is refused with a one-line reason, because the file could not say it. Pan, zoom,
+  frame (`F`), keyboard navigation, delete and undo (shared with Design) all work. Positions are saved as
+  `node: {x, y}` on the node that moved; an untouched logic block saves byte-identical. Saving replays the
+  changes through `logic.edit`. The tab needs a plugin that advertises the `logic` capability.
 - **Built-in conditions (logic.md §22, #210).** Eight conditions for rule and step `if:`, `choose` and `at_least`:
   `has_permission` (one node, or a list with `min`), `has_money` (with `currency:`, resolved as `give_money` resolves
   it), `has_exp` (points or levels), `has_item` (id or material, amount, name and lore text, `ignore_case`, `strict`,
   `armor` and `offhand`), `has_item_space` (free slots, or room for an item), `is_near` (world, point and distance,
-  with templated numbers), `in_world` and `in_gui` (the player's current GUI session). `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `var` follows the variables
-  work (#211) and `slot_has` the slot work (#218).
+  with templated numbers), `in_world` and `in_gui` (the player's current GUI session), and `var`, a typed compare on a variable
+  (`var: {var: player.shop.coins, op: ">=", value: 100}`) that names the variable as `set_var` does and checks a
+  declared one at load. `has_item` shares its matcher with `take_item`, whose behaviour is unchanged. `slot_has`
+  follows the slot work (#218).
 - **Named currencies (logic.md §18, #213).** A currency is a file in `currencies/`, for example
   `gems: {integration: custom, symbol: "G$", decimals: 0, deposit-command: ..., withdraw-command: ...,
   balance-placeholder: ...}`. Three integrations ship: `vault` (the server's Vault economy, always
@@ -93,7 +127,8 @@ releases may change file formats, settings and the public API.
   - Expressions read `vars.player.<pack>.<key>`, `vars.server.<pack>.<key>`, `vars.session.<name>` and
     `vars.local.<name>`. A declared variable never written reads its default.
   - PlaceholderAPI: `%materione_var_<pack>_<key>%`, `%materione_var_<pack>_<key>_<player>%`,
-    `%materione_gui_open%` and `%materione_gui_last%` (the GUI ones are empty until the GUI runtime lands).
+    `%materione_gui_open%` and `%materione_gui_last%` (the GUI open now and the one before it); `vars.session.*`
+    is the open GUI's `gui.session.*`.
   - `/materione var get|set|list` (permission `materione.var`) and `api.logic().variables()`.
   - Diagnostics `MTR-0063` to `MTR-0065`.
 

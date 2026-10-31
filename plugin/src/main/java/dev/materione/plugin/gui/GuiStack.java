@@ -1,6 +1,8 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.event.RuleDispatcher;
@@ -14,21 +16,29 @@ import dev.materione.plugin.gui.input.InventoryInput;
 import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
+import dev.materione.plugin.gui.render.GuiRenderer;
+import dev.materione.plugin.gui.render.LoggingRenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
+import dev.materione.plugin.gui.open.OpenCommandHandler;
+import dev.materione.plugin.gui.open.OpenCommandRegistrar;
+import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.PlayerNames;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
 import dev.materione.plugin.gui.window.WindowHost;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.Plugin;
 
 /**
  * The GUI runtime, assembled (logic.md §9): sessions, events, router, window host, opener, lifecycle,
- * ticker and live refresh, wired in one place so that every collaborator takes only what it uses and
- * none of them reaches for a singleton. The plugin builds one, binds its services into the
- * {@link GuiBridge} the actions hold, registers {@link #listeners()} and hands the opener to the API.
+ * ticker, live refresh and the open commands, wired in one place so that every collaborator takes only what
+ * it uses and none of them reaches for a singleton. The plugin builds one, binds its services into the
+ * {@link GuiBridge} the actions hold, registers {@link #listeners()}, hands the opener to the API and the
+ * command registrar to the server's COMMANDS event.
  *
  * <p>Nothing here holds policy. The wiring is the whole of this class.
  */
@@ -40,28 +50,41 @@ public final class GuiStack {
     private final GuiLiveRefresh refresh;
     private final ClickRouter router;
     private final GuiWindowListener windowListener;
+    private final OpenCommandRegistrar openCommands;
     private final GuiBridge.Services services;
     private final InputSlotClicks inputClicks;
 
     /**
      * @param live the registries that are live now
-     * @param dispatcher where fired triggers go: the rule engine
+     * @param engine the rule engine: the GUI's triggers and the open requirement's deny steps run through it
      * @param visibility whether a layer is showing for a session (the router skips a hidden one)
+     * @param diagnostics where open-command conflicts and tree re-sync problems are published
+     * @param built the registries of the latest reload, applied or not: the command lifecycle registers from these,
+     *     since it can run before the first apply (logic.md §23, decision 15)
      */
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
-            RuleDispatcher dispatcher, LayerVisibility visibility) {
+            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
+            Supplier<RuntimeRegistries> built) {
         GuiLookup guis = GuiLookup.over(live);
         InputGuard guard = new InputGuard();
+        RuleDispatcher dispatcher = engine::fire;
         GuiEvents events = new GuiEvents(dispatcher);
         this.router = new ClickRouter(guis, events, visibility, guard);
         GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
+        GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()));
         WindowHost windows = new BukkitWindowHost(
-                plugin, scheduling, new InventoryInput(sessions, router), guard, journal);
+                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
-                        plugin, viewer.player(), ticks, task, retired));
+                        plugin, viewer.player(), ticks, task, retired),
+                windows);
         this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
+        opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
+                (rule, context, owner) -> engine.interpreter().start(rule, context, owner)));
+        Supplier<RuntimeGuis> view = guisOf(live);
+        var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
+        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal);
         this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
@@ -83,6 +106,11 @@ public final class GuiStack {
         return opener;
     }
 
+    /** The open commands: registered from the server's COMMANDS event, and re-synced after every content swap. */
+    public OpenCommandRegistrar openCommands() {
+        return openCommands;
+    }
+
     public GuiLiveRefresh refresh() {
         return refresh;
     }
@@ -94,6 +122,15 @@ public final class GuiStack {
     /** What the actions need, to bind into the {@link GuiBridge}. */
     public GuiBridge.Services services() {
         return services;
+    }
+
+    /** The GUIs of a registries supplier, empty before there are any. */
+    private static Supplier<RuntimeGuis> guisOf(Supplier<RuntimeRegistries> registries) {
+        return () -> {
+            RuntimeRegistries current = registries.get();
+            RuntimeGuis view = current == null ? null : current.view(RuntimeGuis.KEY);
+            return view == null ? RuntimeGuis.empty() : view;
+        };
     }
 
     /** The listeners to register: the click policy table is {@link GuiListener}, registered separately. */

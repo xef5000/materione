@@ -9,7 +9,10 @@ import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.PlayerInventory;
 import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
+import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
+import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
 import dev.materione.plugin.gui.input.InputSlots;
+import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -105,9 +108,32 @@ public final class RuntimeGuis {
                     ? GuiRuleSet.EMPTY
                     : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
             out.put(gui.id(), new Live(
-                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs));
+                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
+                    OpenPlan.compile(gui.id(), gui.rules(), logic),
+                    gui.placements(), gui.refresh(), compileItems(gui, logic)));
         }
         return new RuntimeGuis(out);
+    }
+
+    /**
+     * The per-viewer item layers, compiled against the registries (logic.md §6.3). The diagnose stage reported
+     * their problems already, so a layer that does not compile is simply not in the live view.
+     */
+    private static List<CompiledItemLayer> compileItems(CompiledGui gui, LogicLookup logic) {
+        if (logic == null || gui.placements().isEmpty()) {
+            return List.of();
+        }
+        var compiler = new ItemLayerCompiler(logic);
+        var out = new ArrayList<CompiledItemLayer>(gui.placements().size());
+        for (CompiledGui.Placement placement : gui.placements()) {
+            compiler.compile(gui.id(), placement.order(), placement).layer().ifPresent(out::add);
+        }
+        return List.copyOf(out);
+    }
+
+    /** The greatest common divisor, with 0 as the identity: the clock of a set of periods. */
+    static int gcd(int a, int b) {
+        return b == 0 ? a : gcd(b, a % b);
     }
 
     /** The material a vanilla {@code minecraft:} reference names; needs a running server. */
@@ -175,22 +201,52 @@ public final class RuntimeGuis {
      * @param slots the resolved slots, sorted by slot
      * @param clicks which layers a click on each container slot reaches, topmost first
      * @param logic the GUI's compiled rules, indexed by trigger
+     * @param open the GUI's compiled {@code open:} block (logic.md §6.1), or null when it has none
+     * @param placements the GUI's per-viewer item layers as authored, compared on a reload
+     * @param refresh the {@code refresh:} clock in ticks, 0 when off
+     * @param items the per-viewer item layers, compiled, in layer order
      */
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
-            ClickMap clicks, GuiRuleSet logic, InputSlots inputs) {
+            ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
+            List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items) {
 
         public Live {
             slots = List.copyOf(slots);
             clicks = clicks == null ? ClickMap.EMPTY : clicks;
             logic = logic == null ? GuiRuleSet.EMPTY : logic;
             inputs = inputs == null ? InputSlots.NONE : inputs;
+            placements = List.copyOf(placements);
+            items = List.copyOf(items);
         }
 
-        /** A GUI with clickable layers and rules, and no input slots: the shape before #218. */
-        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        /** A GUI with input slots, and no {@code open:} block, per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, InputSlots inputs) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, null, List.of(), 0, List.of());
+        }
+
+        /** A GUI with no {@code open:} block, and per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, List<CompiledGui.Placement> placements, int refresh,
+                List<CompiledItemLayer> items) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, placements, refresh, items);
+        }
+
+        /** A GUI with an {@code open:} block, and no per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, OpenPlan open) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, open, List.of(), 0, List.of());
+        }
+
+        /** A GUI with clicks and rules, and no {@code open:} block, per-viewer layers or clock. */
+        public Live(
+                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE);
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no clickable layers and no rules. */
@@ -199,12 +255,31 @@ public final class RuntimeGuis {
         }
 
         /**
+         * The period of the window's refresh clock in ticks, or 0 when the window has none: the greatest common
+         * divisor of {@code refresh:} and every animation's frame rate (logic.md §6.3).
+         */
+        public int clockPeriod() {
+            int period = refresh;
+            for (CompiledItemLayer layer : items) {
+                if (layer.frameEvery() > 0) {
+                    period = gcd(period, layer.frameEvery());
+                }
+            }
+            return period;
+        }
+
+        /**
          * Whether a viewer of {@code previous} would see the same window: same rows, same title,
          * and the same item in every slot. Items compare by identity and definition hash, never
-         * by object, so a rebuilt item with an unchanged definition is the same item.
+         * by object, so a rebuilt item with an unchanged definition is the same item. A per-viewer
+         * layer or clock that changed on a reload is a change too, even when this viewer's slots happen
+         * to look the same.
          */
         public boolean sameAs(Live previous) {
             if (rows != previous.rows || !title.equals(previous.title) || slots.size() != previous.slots.size()) {
+                return false;
+            }
+            if (refresh != previous.refresh || !placements.equals(previous.placements)) {
                 return false;
             }
             for (int index = 0; index < slots.size(); index++) {

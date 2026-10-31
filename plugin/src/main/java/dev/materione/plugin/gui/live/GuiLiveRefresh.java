@@ -73,7 +73,7 @@ public final class GuiLiveRefresh {
         for (GuiSession session : List.copyOf(sessions.all())) {
             Optional<RuntimeGuis.Live> now = after.gui(session.gui());
             boolean refresh = affected.contains(session.gui());
-            if (!refresh && now.filter(live -> live.logic().ticks()).isEmpty()) {
+            if (!refresh && now.filter(live -> live.logic().ticks() || live.clockPeriod() > 0).isEmpty()) {
                 continue;
             }
             Player player = Bukkit.getPlayer(session.player());

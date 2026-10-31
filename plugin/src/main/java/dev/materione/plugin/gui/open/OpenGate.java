@@ -27,9 +27,10 @@ public interface OpenGate {
      *
      * @param allowed whether the open may go on
      * @param args the arguments the session opens with (after typing and defaults), when allowed
-     * @param reason why it was refused, when it was
+     * @param reason why it was refused, when it was: the usage line for an argument that does not read
+     * @param usage whether the refusal is an argument problem (a usage message) rather than a denial
      */
-    record Admission(boolean allowed, Map<String, String> args, String reason) {
+    record Admission(boolean allowed, Map<String, String> args, String reason, boolean usage) {
 
         public Admission {
             args = Map.copyOf(args);
@@ -37,11 +38,16 @@ public interface OpenGate {
         }
 
         public static Admission allow(Map<String, String> args) {
-            return new Admission(true, args, "");
+            return new Admission(true, args, "", false);
         }
 
         public static Admission deny(String reason) {
-            return new Admission(false, Map.of(), reason);
+            return new Admission(false, Map.of(), reason, false);
+        }
+
+        /** A refusal because an argument does not read as its type: the reason is the usage line. */
+        public static Admission usage(String reason) {
+            return new Admission(false, Map.of(), reason, true);
         }
     }
 }

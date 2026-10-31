@@ -71,8 +71,17 @@ shop:                          # one resource per key (master §7.2); the key is
 
 Common layer fields, owned by the gui type and not by components: `id`, `type`, `name`,
 `visible` (default `true`; hidden layers are kept in the file but not compiled), `locked`
-(editor-only affordance, preserved), `opacity` (0–100, raster components only). Everything
-else belongs to the component's schema. Unknown fields are preserved losslessly (master
+(editor-only affordance, preserved), `opacity` (0–100, raster components only), and `visible_if`
+(a condition that shows the layer per render; item layers only in this build, logic.md §6.3, §24).
+Everything else belongs to the component's schema.
+
+**Item layers can be dynamic (logic.md §6.3, §24, #216).** An `item` layer takes `item:` (a plain
+id, a template such as `${entry.item}`, or one named source such as `head: {player: "${player.name}"}`
+or `player_slot: main_hand`) or `frames: {every, items}` for an animation. Its `name` (the item's display
+name), `lore` with `lore_mode`, `amount` and `glint` are templates. A GUI may set `refresh: <ticks>`, the
+clock that re-renders its dynamic layers; `gui.refresh` and reloads always update the window. A layer
+with a condition, a template, a viewer-bound source or an animation is dynamic; the rest are resolved
+once per window. Unknown fields are preserved losslessly (master
 §5.6); an unknown `type` quarantines that one layer (`MTR-` code assigned by the
 implementing PR, documented in plugin.md §5) and the rest of the GUI still compiles.
 

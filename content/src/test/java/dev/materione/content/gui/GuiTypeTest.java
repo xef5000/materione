@@ -115,8 +115,9 @@ class GuiTypeTest {
         assertThat(heading.argb()).isEqualTo(0xFF404040);
         var sword = (ItemComponent.Layer) shop.layers().get(6).compiled();
         assertThat(sword.slot()).isEqualTo(13);
-        assertThat(sword.item()).isEqualTo(NamespacedId.parse("shop:gui/main/sword"));
-        assertThat(sword.amount()).isEqualTo(1);
+        assertThat(sword.item()).isEqualTo(new dev.materione.content.gui.item.ItemSpec.Plain(
+                NamespacedId.parse("shop:gui/main/sword")));
+        assertThat(sword.amount()).isEqualTo("1"); // kept as text: a whole number or a template
     }
 
     @Test
@@ -222,10 +223,10 @@ class GuiTypeTest {
     void describeDeclaresTheCommonLayerFieldsForTheStudio() {
         SelfDescription description = new GuiType(components()).describe();
         assertThat(description.parameters()).extracting(ParameterSchema::id)
-                .containsExactly("title", "rows", "player_inventory", "layers", "behavior", "flows", "open");
-        ParameterSchema layers = description.parameters().get(3);
+                .containsExactly("title", "rows", "player_inventory", "refresh", "layers", "behavior", "flows", "open");
+        ParameterSchema layers = description.parameters().get(4);
         assertThat(layers.nested()).extracting(ParameterSchema::id)
-                .containsExactly("id", "type", "name", "visible", "locked", "opacity");
+                .containsExactly("id", "type", "name", "visible", "locked", "opacity", "visible_if");
         assertThat(layers.nested().get(1).editor().referenceKind()).isEqualTo("gui-component");
         assertThat(description.parameters().get(1).editor().max()).isEqualTo(6.0);
         assertThat(new GuiType(components()).name()).isEqualTo("gui");

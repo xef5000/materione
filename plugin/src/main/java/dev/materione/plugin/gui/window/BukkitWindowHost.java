@@ -9,7 +9,7 @@ import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputReturns;
 import dev.materione.plugin.gui.input.InputSlots;
-import dev.materione.plugin.gui.render.WindowRenderer;
+import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.Map;
 import java.util.Optional;
@@ -21,8 +21,8 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The {@link WindowHost} over Bukkit inventories (gui.md §5). It builds a {@link GuiMenu}, fills it
- * through the {@link WindowRenderer} and opens it on the viewer's thread.
+ * The {@link WindowHost} over Bukkit inventories (gui.md §5). It builds a {@link GuiMenu}, renders it through
+ * the {@link GuiRenderer} and opens it on the viewer's thread.
  *
  * <p>Changing a player's window while their click is being handled is unsafe, so when the
  * {@link InputGuard} says the viewer is mid-click, the open or close runs on their next tick through
@@ -41,14 +41,16 @@ public final class BukkitWindowHost implements WindowHost {
     private final GuiInput input;
     private final InputGuard guard;
     private final GuiJournal journal;
+    private final GuiRenderer renderer;
 
     public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
-            GuiJournal journal) {
+            GuiJournal journal, GuiRenderer renderer) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.input = input;
         this.guard = guard;
         this.journal = journal;
+        this.renderer = renderer;
     }
 
     @Override
@@ -67,7 +69,8 @@ public final class BukkitWindowHost implements WindowHost {
             Runnable opened, Consumer<String> failed) {
         Player player = viewer.player();
         GuiMenu menu = new GuiMenu(session, gui.rows(), gui.title(), input);
-        WindowRenderer.fill(menu.getInventory(), gui);
+        session.forgetWindow();
+        renderer.paint(menu.getInventory(), viewer, session, gui, true);
         menu.inputSlots(slotsOf(gui));
         later(viewer, () -> {
             if (!player.isOnline()) {
@@ -137,7 +140,7 @@ public final class BukkitWindowHost implements WindowHost {
     public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
         menuOf(viewer, session).ifPresent(menu -> {
             Map<Integer, ItemStack> kept = InputReturns.take(menu);
-            WindowRenderer.fill(menu.getInventory(), gui);
+            renderer.paint(menu.getInventory(), viewer, session, gui, true);
             Set<Integer> now = slotsOf(gui);
             menu.inputSlots(now);
             for (Map.Entry<Integer, ItemStack> entry : kept.entrySet()) {
@@ -149,6 +152,12 @@ public final class BukkitWindowHost implements WindowHost {
             }
             journal.mirror(viewer.player());
         });
+    }
+
+    @Override
+    public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
+        menuOf(viewer, session).ifPresent(menu ->
+                renderer.paint(menu.getInventory(), viewer, session, gui, false));
     }
 
     @Override

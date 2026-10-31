@@ -37,8 +37,17 @@ public interface WindowHost {
      */
     void releaseInputs(Viewer viewer, GuiSession session);
 
-    /** Rewrites the contents of the viewer's window in place, when it is this session's window. */
+    /**
+     * Rewrites the contents of the viewer's window in place, when it is this session's window. Every layer
+     * is read again: this is what {@code gui.refresh} and a reload need.
+     */
     void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui);
+
+    /**
+     * Repaints the dynamic layers of the viewer's window, when it is this session's window: the refresh
+     * clock's tick. Layers that do not change keep what they show, and the window's clock advances first.
+     */
+    void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui);
 
     /**
      * The title and size of the window the viewer has open for this session, or empty when their

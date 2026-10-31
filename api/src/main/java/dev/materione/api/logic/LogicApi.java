@@ -62,6 +62,14 @@ public interface LogicApi {
     LogicRegistry<dev.materione.api.logic.provider.CurrencyIntegration> currencyIntegrations();
 
     /**
+     * The {@code item-sources} registry: where a GUI item layer's item comes from (logic.md §4.4). The
+     * built-ins are {@code materione:item}, {@code materione:head} and {@code materione:player_slot}; the
+     * optional integrations add {@code materione:hdb} and the rest while their plugins run. An addon
+     * registers its own under its namespace. A late registration takes effect on the next reload.
+     */
+    LogicRegistry<ItemSource<?>> itemSources();
+
+    /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the
      * registries on every call: triggers (filters, context schema, cancellability, who fires them),
      * actions, conditions, step kinds, categories, expression functions and mechanics, with

@@ -23,7 +23,7 @@ class BuiltinConditionsTest {
 
     /** Only the eight in #210's scope: {@code var} waits for the variables API (#211), {@code slot_has} for #218. */
     private static final Set<String> EXPECTED = Set.of("has_permission", "has_money", "has_exp", "has_item",
-            "has_item_space", "is_near", "in_world", "in_gui", "slot_has");
+            "has_item_space", "is_near", "in_world", "in_gui", "var", "slot_has");
 
     private static final Set<String> COMPOSITES = Set.of("all", "any", "not", "at_least");
 

@@ -290,6 +290,38 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0062", Severity.WARN, "Currency definition rejected; quarantined");
 
     /**
+     * An {@code open:} argument cannot be read as its declared type (logic.md §6.1, #215): a
+     * {@code default:} that is not a whole number for an {@code int}, a {@code choice} with no
+     * {@code suggest:} list, and so on. The default is dropped and the argument keeps its other
+     * settings; the GUI still opens.
+     */
+    public static final DiagnosticCode OPEN_ARGUMENT_INVALID =
+            new DiagnosticCode("MTR-0066", Severity.WARN, "GUI open argument cannot be read; default dropped");
+
+    /**
+     * A GUI open command cannot be registered because its name is already a command (vanilla, another
+     * plugin, or another GUI's open command). That alias is skipped; the GUI's other aliases and
+     * {@code /materione gui open} still work (logic.md §6.1, #215).
+     */
+    public static final DiagnosticCode OPEN_COMMAND_CONFLICT =
+            new DiagnosticCode("MTR-0067", Severity.WARN, "GUI open command conflicts with another command; skipped");
+
+    /**
+     * A GUI's {@code open.requirement} does not load (logic.md §6.1, #215). The open then fails closed for
+     * every player without the bypass permission, so a broken check never grants what it guards.
+     */
+    public static final DiagnosticCode OPEN_REQUIREMENT_INVALID =
+            new DiagnosticCode("MTR-0068", Severity.ERROR, "GUI open requirement does not load; opening refused");
+
+    /**
+     * A reload could not change the GUI command tree as declared (logic.md §6.1, #215): a new open command
+     * could not be added to the live tree, or an existing one changed its argument names or types. The
+     * change takes effect on the next restart.
+     */
+    public static final DiagnosticCode OPEN_TREE_RESYNC =
+            new DiagnosticCode("MTR-0069", Severity.WARN, "GUI open command tree could not be re-synced; restart applies it");
+
+    /**
      * A {@code call} step cannot be linked at load (logic.md §2.4, §10): it names a flow the
      * resource does not declare, the flows call each other in a cycle, the chain of calls is deeper
      * than the call depth limit, or the callee failed to load. The rule holding the call is skipped.
@@ -312,6 +344,39 @@ public final class DiagnosticCodes {
      */
     public static final DiagnosticCode FLOW_UNKNOWN_CONTEXT_ROOT =
             new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
+
+    /**
+<<<<<<< HEAD
+     * A GUI item layer names an item source the server does not provide, or the source rejects its
+     * parameters (logic.md §4.4, §6.3). The layer is left out of the window; the rest of the GUI still
+     * shows. Optional integrations are not this case: while their plugin is absent the layer shows a
+     * barrier item ({@link #GUI_ITEM_SOURCE_UNRESOLVED}).
+     */
+    public static final DiagnosticCode GUI_ITEM_SOURCE_INVALID =
+            new DiagnosticCode("MTR-0070", Severity.WARN, "GUI item source unknown or rejected; layer left out");
+
+    /**
+     * A GUI's {@code refresh:} clock is not a whole number of ticks of at least 1 (logic.md §6.3). The
+     * GUI does not refresh on a clock; {@code gui.refresh} and reloads still update it.
+     */
+    public static final DiagnosticCode GUI_REFRESH_INVALID =
+            new DiagnosticCode("MTR-0071", Severity.WARN, "GUI refresh clock invalid; the clock is off");
+
+    /**
+     * A GUI item's source could not produce an item for a viewer at render time (logic.md §4.4): an
+     * unknown player's head, a missing live item, a missing optional plugin. The slot shows a barrier item
+     * whose lore names the reason, so the failure is visible in the window. Rate-limited per layer.
+     */
+    public static final DiagnosticCode GUI_ITEM_SOURCE_UNRESOLVED =
+            new DiagnosticCode("MTR-0072", Severity.WARN, "GUI item source unresolved; barrier shown");
+
+    /**
+     * A dynamic GUI layer's condition or template failed while the window was rendered (logic.md §6.3): the
+     * condition counts as false (the layer is hidden) and a template renders its fallback. Rate-limited per
+     * layer.
+     */
+    public static final DiagnosticCode GUI_DYNAMIC_LAYER_FAILED =
+            new DiagnosticCode("MTR-0073", Severity.WARN, "GUI dynamic layer failed while rendering");
 
     /**
      * An input slot's {@code accept:} condition does not compile (logic.md §25): an unknown predicate or
@@ -421,12 +486,20 @@ public final class DiagnosticCodes {
             FLOW_CALL_INVALID,
             FLOW_RUN_ABORTED,
             FLOW_UNKNOWN_CONTEXT_ROOT,
+            GUI_ITEM_SOURCE_INVALID,
+            GUI_REFRESH_INVALID,
+            GUI_ITEM_SOURCE_UNRESOLVED,
+            GUI_DYNAMIC_LAYER_FAILED,
             INPUT_ACCEPT_INVALID,
             INPUT_STATIC_ITEM_IGNORED,
             GUI_INPUT_SETTING_IGNORED,
             VARIABLE_UNDECLARED,
             VARIABLE_TYPE_MISMATCH,
-            VARIABLE_STORE_FAILED);
+            VARIABLE_STORE_FAILED,
+            OPEN_ARGUMENT_INVALID,
+            OPEN_COMMAND_CONFLICT,
+            OPEN_REQUIREMENT_INVALID,
+            OPEN_TREE_RESYNC);
 
     private DiagnosticCodes() {}
 

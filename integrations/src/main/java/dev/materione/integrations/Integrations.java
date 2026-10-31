@@ -5,6 +5,8 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticsBus;
 import dev.materione.api.logic.LogicApi;
+import dev.materione.integrations.items.OptionalItemSource;
+import dev.materione.integrations.items.OptionalItemSources;
 import dev.materione.integrations.luckperms.LuckPermsPermissionProvider;
 import dev.materione.integrations.proxy.BungeeCordTransfer;
 import dev.materione.integrations.vault.VaultCurrencyIntegration;
@@ -92,6 +94,13 @@ public final class Integrations implements Listener, AutoCloseable {
             attempt("BungeeCord transfer", () -> installed.add(
                     logic.providers().setTransfer(host, new BungeeCordTransfer(host))));
         }
+        // item sources of GUI item layers (logic.md §4.4): each is registered while its plugin runs
+        for (OptionalItemSource source : OptionalItemSources.all(host)) {
+            if (manager.isPluginEnabled(source.pluginName())) {
+                attempt(source.id() + " item source", () -> installed.add(logic.itemSources().register(
+                        host, NamespacedId.of("materione", source.id()), source)));
+            }
+        }
     }
 
     /** Vault or LuckPerms enabled or disabled: the selection may have changed. */
@@ -118,7 +127,7 @@ public final class Integrations implements Listener, AutoCloseable {
     }
 
     private static boolean isWatched(String name) {
-        return VAULT.equals(name) || LUCKPERMS.equals(name);
+        return VAULT.equals(name) || LUCKPERMS.equals(name) || OptionalItemSources.PLUGINS.contains(name);
     }
 
     private void uninstall() {

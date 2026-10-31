@@ -440,6 +440,29 @@ meaning and step paths as for items (`gui.validate` returns them for a `saved` o
 section of the wrong shape, and three warnings on a rule that loads and never runs: a `layer:` that names no
 layer of the GUI or a hidden one, a `slot:` outside the container, and a trigger no GUI fires.
 
+The GUI open commands ([`logic.md`](logic.md) §23, #215) add four codes. A malformed `open:` block (a non-mapping,
+an unknown key, a bad command name, an argument of an unknown type) is `MTR-0021` at `open`, like a malformed
+`behavior:`. The other problems of the block are these:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0066` | warning | An `open.args` entry cannot be read as its declared type: a `default:` that is not a whole number for an `int`, not a number for a `number`, not `true` or `false` for a `boolean`, not one of the `suggest:` values for a `choice`. The default is dropped and the argument keeps its other settings. A `choice` with no `suggest:` list reads as a `string`, with the same code. Fix the default or the list. |
+| `MTR-0067` | warning | An open command cannot be registered because its name is already a command: vanilla, another plugin, or another GUI's open command. Paper would let a main label override it, so the alias is skipped before anything is registered; the GUI's other aliases and `/materione gui open` still work. Rename one of the two. Reported at boot and at each reload that sees the conflict. |
+| `MTR-0068` | error | A GUI's `open.requirement` does not load (an unknown condition, a malformed expression, a broken predicate). The open fails closed: every player without the bypass node `materione.gui.bypass.<pack>.<id>` is refused, so a broken check never grants what it guards. Fix the condition named beside it. |
+| `MTR-0069` | warning | A content swap asked for a server data reload to add an open command to the live tree, or to rebuild one whose argument names or types changed (logic.md §23, decision 15), and the reload did not put it there. The alias is not in the tree until the next restart, and no further reload is asked for it until the next COMMANDS event. Restart the server to apply it. |
+
+---
+
+The M6 dynamic GUI layers ([`logic.md`](logic.md) §6.3, §24, #216) add four codes. Each names the layer or field it is
+about, so the editor opens it:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0070` | warning | A GUI item layer names an item source the server does not know, or the source rejects its parameters (a head with two skins, a player slot that is not one of six). The layer is left out and the rest of the GUI shows. Optional integrations are not this case: while their plugin is absent the layer shows a barrier (`MTR-0072`). Fix the source's spelling or parameters. |
+| `MTR-0071` | warning | The GUI's `refresh:` clock is not a whole number of ticks of at least 1. The GUI does not refresh on a clock; `gui.refresh` and reloads still update it. Write `refresh: 20`, for example. |
+| `MTR-0072` | warning | At render, a GUI item's source could not produce an item for the viewer: an unknown player's head, a missing live item, an optional plugin that is not installed. The slot shows a barrier whose lore is the reason. Rate-limited per layer. |
+| `MTR-0073` | warning | At render, a dynamic GUI layer's condition or template failed. The condition counts as false, so the layer is hidden; a template renders its fallback, and an amount that is not a number shows 1. Rate-limited per layer. |
+
 ---
 
 ## 6. Platform isolation layer
@@ -620,6 +643,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Pack build (5k assets, warm) | < 30 s, cache-hit no-op < 100 ms | deterministic hashing |
 | Editor save round-trip | < 2 s end-to-end | save → validate → targeted apply → confirm |
 | Flow dispatch (rule gate + interpreter, a 10-step flow, actions excluded) | ≤ 0.5 ms p99 | `FlowDispatchPerfTest`; logic.md §5.3 |
+| GUI refresh pass (50 open windows × 54 dynamic slots, every 20 ticks: each window's render and diff) | ≤ 2 ms per pass, best of three | `DynamicSlotsPerfTest`; measured 0.43 ms; logic.md §6.3, §24. The Bukkit stack build of a changed slot is outside the budget |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read
 (~10–50 µs, NBT decode). The updater's inventory scans are the real cost center — they are

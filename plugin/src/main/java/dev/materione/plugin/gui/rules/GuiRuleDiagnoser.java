@@ -8,11 +8,15 @@ import dev.materione.api.logic.TriggerDescription;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.Rule;
+import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.GuiDefinition;
 import dev.materione.content.gui.GuiLayer;
+import dev.materione.content.gui.ItemComponent;
 import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
+import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
 import dev.materione.plugin.gui.input.InputSlots;
+import dev.materione.plugin.gui.open.OpenPlan;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +51,10 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
         LogicLookup registries = lookup.get();
         GuiRuleSet.Compiled compiled = GuiRuleSet.compile(gui.id(), gui.rules(), registries);
         var out = new ArrayList<>(compiled.problems());
+        OpenPlan open = OpenPlan.compile(gui.id(), gui.rules(), registries);
+        if (open != null) {
+            out.addAll(open.problems()); // the open block's own compile: arguments, requirement and deny (logic.md §6.1)
+        }
         var layers = new HashMap<String, Boolean>();
         for (GuiLayer layer : gui.layers()) {
             layers.put(layer.id().toLowerCase(Locale.ROOT), layer.visible());
@@ -83,6 +91,38 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
                         DiagnosticTarget.field("layers", String.valueOf(index), "accept")));
             }
         }
+    }
+
+    /**
+     * The item layers' problems (logic.md §6.3): an unknown or rejected item source, a malformed template, a
+     * condition that does not compile. Each is reported at the layer's own field, so the editor opens it. Only
+     * visible layers are checked, because a hidden layer is not compiled into the window.
+     */
+    @Override
+    public List<Diagnostic> checkLayers(GuiDefinition gui) {
+        LogicLookup registries = lookup.get();
+        var compiler = new ItemLayerCompiler(registries);
+        var out = new ArrayList<Diagnostic>();
+        for (int index = 0; index < gui.layers().size(); index++) {
+            GuiLayer layer = gui.layers().get(index);
+            if (layer.visible() && layer.compiled() instanceof ItemComponent.Layer item) {
+                var placement = new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item);
+                out.addAll(compiler.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
+            }
+        }
+        return out;
+    }
+
+    /** The layer's position in the authored {@code layers:} list, or its position among the accepted layers. */
+    private static int authoredIndex(GuiDefinition gui, String layerId) {
+        if (gui.raw().get("layers") instanceof List<?> authored) {
+            for (int index = 0; index < authored.size(); index++) {
+                if (authored.get(index) instanceof Map<?, ?> layer && layerId.equals(layer.get("id"))) {
+                    return index;
+                }
+            }
+        }
+        return -1;
     }
 
     private static void trigger(GuiDefinition gui, LogicLookup registries, Rule rule, List<Diagnostic> out) {

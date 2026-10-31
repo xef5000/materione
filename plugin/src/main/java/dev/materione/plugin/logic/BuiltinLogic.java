@@ -53,6 +53,7 @@ import dev.materione.plugin.logic.condition.InGuiCondition;
 import dev.materione.plugin.logic.condition.InWorldCondition;
 import dev.materione.plugin.logic.condition.IsNearCondition;
 import dev.materione.plugin.logic.condition.SlotHasCondition;
+import dev.materione.plugin.logic.condition.VarCondition;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
 import dev.materione.plugin.logic.support.SlotPeek;
@@ -204,6 +205,10 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : currencyFunctions(api.providers())) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
+        // item sources of GUI item layers (logic.md §4.4): materione:item, materione:head, materione:player_slot
+        for (dev.materione.api.logic.ItemSource<?> source : dev.materione.plugin.logic.item.BuiltinItemSources.all(items)) {
+            api.itemSources().register(owner, builtIn(source.id()), source);
+        }
         // built-in conditions (logic.md §22, #210): their own block, after the rest
         for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots)) {
             api.conditions().register(owner, builtIn(condition.id()), condition);
@@ -232,6 +237,7 @@ public final class BuiltinLogic {
                 new IsNearCondition(),
                 new InWorldCondition(),
                 new InGuiCondition(guis),
+                new VarCondition(),
                 new SlotHasCondition(slots));
     }
 

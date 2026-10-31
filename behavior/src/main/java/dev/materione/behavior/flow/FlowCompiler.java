@@ -2,10 +2,14 @@ package dev.materione.behavior.flow;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.Severity;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.behavior.rule.EventSelector;
 import dev.materione.behavior.rule.ParsedRules;
 import dev.materione.behavior.rule.Rule;
+import dev.materione.behavior.rule.RuleFilters;
+import dev.materione.behavior.rule.RuleOptions;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -53,6 +57,43 @@ public final class FlowCompiler {
      */
     public static ParsedRules compile(NamespacedId owner, Object behavior, Object flows, LogicLookup lookup) {
         return compile(new CompileContext(owner, lookup, true), behavior, flows);
+    }
+
+    /**
+     * Compiles one condition outside a rule: a GUI layer's {@code visible_if} (logic.md §6.3). It takes the
+     * same shapes a {@code require} or {@code if} takes (an expression, a predicate, a composite), and its
+     * {@code ${root}} paths are checked against {@code roots} (null checks nothing). Pure, like {@link #compile}.
+     *
+     * @param owner the resource that declares the condition
+     * @param subject what the condition belongs to, for messages ({@code gui shop layer buy})
+     * @param raw what the author wrote
+     * @param roots the variable roots the condition may read, or null
+     * @param lookup the registries predicates and functions resolve against
+     */
+    public static CompiledCondition compileCondition(
+            NamespacedId owner, String subject, Object raw, Set<String> roots, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, false);
+        var unit = new CompileUnit(context, subject, roots, "in this condition");
+        Condition compiled = null;
+        try {
+            compiled = new ConditionCompiler(unit).compile(raw, StepPath.root());
+        } catch (Skip skipped) {
+            // the problem is already reported to the context
+        }
+        return new CompiledCondition(Optional.ofNullable(compiled), List.copyOf(context.problems));
+    }
+
+    /**
+     * A condition compiled outside a rule.
+     *
+     * @param condition the compiled tree, or empty when the condition is unusable
+     * @param problems why it is unusable, or what it reads that the roots do not provide
+     */
+    public record CompiledCondition(Optional<Condition> condition, List<dev.materione.api.diagnostics.Diagnostic> problems) {
+
+        public CompiledCondition {
+            problems = List.copyOf(problems);
+        }
     }
 
     /** {@link #compile(NamespacedId, Object, Object, LogicLookup)} for a resource without named flows. */
@@ -103,6 +144,67 @@ public final class FlowCompiler {
         public ConditionCompilation {
             problems = List.copyOf(problems);
         }
+    }
+
+    /** The outcome of compiling one condition: the condition, or null when it did not load. */
+    public record ParsedCondition(Condition condition, List<Diagnostic> problems) {}
+
+    /**
+     * Compiles one condition as the author wrote it (an expression, a predicate, or a composite), checked
+     * against the variable roots of {@code trigger}. Used for a GUI's {@code open.requirement} (logic.md
+     * §6.1): the problems name {@code open.requirement}, and a condition that did not load comes back null,
+     * which the caller treats as a failed check.
+     */
+    public static ParsedCondition condition(NamespacedId owner, Object raw, String trigger, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, true);
+        var unit = new CompileUnit(context, "open", rootsOf(lookup, trigger), "the '" + trigger + "' trigger provides");
+        try {
+            Condition condition = new ConditionCompiler(unit).compile(raw, StepPath.of("open", "requirement"));
+            return new ParsedCondition(condition, List.copyOf(context.problems));
+        } catch (Skip skip) {
+            return new ParsedCondition(null, List.copyOf(context.problems));
+        }
+    }
+
+    /**
+     * Compiles the steps of an {@code open.deny} list as one rule of {@code trigger} with no condition, so
+     * the caller can run it through the interpreter when a requirement fails (logic.md §6.1). Only the
+     * flows its {@code call}s reach are compiled here: the GUI's own rules already report the others.
+     *
+     * @return the rule, or no rule when the steps did not load (the problems say why)
+     */
+    public static ParsedRules denied(NamespacedId owner, String trigger, Object steps, Object flows, LogicLookup lookup) {
+        var context = new CompileContext(owner, lookup, true);
+        Optional<EventSelector> selector = lookup.selector(trigger);
+        if (selector.isEmpty()) {
+            return ParsedRules.empty();
+        }
+        Set<String> roots = rootsOf(lookup, trigger);
+        var unit = new CompileUnit(context, "open.deny", roots, "the '" + trigger + "' trigger provides");
+        var compiler = new StepCompiler(unit, new FlowSet(context, flows, roots));
+        StepPath path = StepPath.of("open", "deny");
+        try {
+            List<Step> body = compiler.list(steps, path);
+            if (body.isEmpty()) {
+                return new ParsedRules(List.of(), List.copyOf(context.problems));
+            }
+            if (compiler.deepestCall() > CallStep.MAX_DEPTH) {
+                context.report(DiagnosticCodes.FLOW_CALL_INVALID, Severity.ERROR, "open.deny", path,
+                        "calls nest " + compiler.deepestCall() + " deep, past the limit of " + CallStep.MAX_DEPTH,
+                        "flatten the chain of calls; the deny steps were dropped");
+                return new ParsedRules(List.of(), List.copyOf(context.problems));
+            }
+            var rule = new Rule(owner, "open.deny", selector.get(), new AllCond(List.of()), body,
+                    RuleOptions.none(), RuleFilters.none(), path);
+            return new ParsedRules(List.of(rule), List.copyOf(context.problems));
+        } catch (Skip skip) {
+            return new ParsedRules(List.of(), List.copyOf(context.problems));
+        }
+    }
+
+    /** The variable roots a condition or step of {@code trigger} may read, or null when the trigger has no schema. */
+    private static Set<String> rootsOf(LogicLookup lookup, String trigger) {
+        return lookup.selector(trigger).map(selector -> RuleCompiler.rootsOf(lookup, selector)).orElse(null);
     }
 
     private static ParsedRules compile(CompileContext context, Object behavior, Object flowsSection) {
