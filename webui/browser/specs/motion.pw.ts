@@ -143,10 +143,33 @@ test.describe('motion on', () => {
   test('a module row added to the studio flies in; the studio fades in on open', async ({ page }) => {
     await openModules(page);
     await openResource(page, 'Blocks', 'Plain Stone');
+    // Record a new row's animations the moment it is inserted: read later, after a visibility check
+    // and a round trip, a 200ms fly-in can already be over on a slow runner.
+    await page.evaluate(() => {
+      const seen: { target: string; duration: number }[] = [];
+      (window as unknown as { rowAnimations: typeof seen }).rowAnimations = seen;
+      new MutationObserver((mutations) => {
+        for (const mutation of mutations) {
+          for (const node of mutation.addedNodes) {
+            if (node instanceof HTMLElement && node.matches('li.row-item')) {
+              // the intro may start a frame after insertion: sample the row for a few frames
+              let frames = 0;
+              const sample = () => {
+                for (const animation of node.getAnimations()) {
+                  seen.push({ target: 'li.row-item', duration: Number(animation.effect?.getTiming().duration ?? 0) });
+                }
+                if (++frames < 10) requestAnimationFrame(sample);
+              };
+              sample();
+            }
+          }
+        }
+      }).observe(document.body, { childList: true, subtree: true });
+    });
     await addModule(page, 'explosion');
     await expect(page.locator('[data-module="blast_resistant"]')).toBeVisible();
-    const added = await animations(page);
-    expect(added).toContainEqual(expect.objectContaining({ target: 'li.row-item', duration: 200 }));
+    await expect.poll(() => page.evaluate(() => (window as unknown as { rowAnimations: unknown[] }).rowAnimations))
+      .toContainEqual(expect.objectContaining({ target: 'li.row-item', duration: 200 }));
 
     // The Studio mounts with the view-enter class: the Content <-> Studio switch fades in.
     const studio = page.locator('section.studio.view-enter');
