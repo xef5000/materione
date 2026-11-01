@@ -61,12 +61,7 @@ class CurrencyPlaceholderRegistryConcurrencyTest {
                     @Override public EconomyResult balance(UUID player) {
                         if (calls.incrementAndGet() == 1) {
                             entered.countDown();
-                            try {
-                                if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
-                            } catch (InterruptedException e) {
-                                Thread.currentThread().interrupt();
-                                throw new IllegalStateException(e);
-                            }
+                            awaitRelease(release);
                         }
                         return new EconomyResult.Succeeded(5);
                     }
@@ -108,6 +103,15 @@ class CurrencyPlaceholderRegistryConcurrencyTest {
         } finally {
             release.countDown();
             pool.shutdownNow();
+        }
+    }
+
+    private static void awaitRelease(CountDownLatch release) {
+        try {
+            if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("test timeout");
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
         }
     }
 }
