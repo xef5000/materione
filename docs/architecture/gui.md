@@ -679,6 +679,15 @@ These fill gaps the sections above leave open. Each one is reversible by the own
    `rows`, so a component can bound-check its own slots (the `item` component rejects a slot
    outside the GUI's rows) without the gui type knowing component rules.
 
+### Decisions taken in #253 (GUI type organisation)
+
+`GuiType` remains the content-type and schema facade; the package-private `GuiLayerParser`
+owns ordered layer parsing and per-layer validation. The split preserves registry resolution,
+component failure containment, schema order, diagnostics and the lossless authored document
+(D1, D6, master §5.6). The §9 size guard in [logic.md](logic.md#9-code-organisation)
+covers the facade and parser helpers, not unrelated legacy GUI classes. Conditional raster and
+text overlays remain #217's separate work.
+
 ### Decisions taken in #184 (raster, background glyph and title)
 
 These fill the gaps §4 leaves open. Each one is reversible by the owner.

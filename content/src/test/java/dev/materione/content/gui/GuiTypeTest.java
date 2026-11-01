@@ -18,6 +18,7 @@ import dev.materione.api.registry.RegistryKeys;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.core.document.LosslessYaml;
 import dev.materione.core.registry.RegistryService;
+import dev.materione.core.texture.PackTextures;
 import dev.materione.testing.golden.GoldenFiles;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -73,6 +74,24 @@ class GuiTypeTest {
                 assertThat(LosslessYaml.parse(raw).save()).as("round trip of %s", file).isEqualTo(raw);
             }
         }
+    }
+
+    @Test
+    void parsedShopStillCompilesToTheGoldenBackgroundAndTitle() throws IOException {
+        var type = new GuiType(components());
+        var id = NamespacedId.of("shop", "shop");
+        var gui = (GuiDefinition) type.parse(id, golden("shop.yml", "shop"), Map.of()).orElseThrow();
+        var textures = new PackTextures("shop", GoldenFiles.fixturesRoot().resolve("gui").resolve("pack"));
+        var compiled = GuiCompiler.compile(gui, 0xE200, textures);
+
+        assertThat(compiled.diagnostics()).isEmpty();
+        assertThat(compiled.assets().get("assets/shop/textures/font/materione/gui/shop.png"))
+                .isEqualTo(Files.readAllBytes(GoldenFiles.golden("gui/shop-background.png")));
+        assertThat(compiled.model().title()).isEqualTo(
+                "<shift:-8><font:shop:gui><#FFFFFF>\uE200</font><shift:-169>"
+                        + "<font:shop:gui/smallcaps_y6><#404040>Shop</font>");
+        assertThat(compiled.model().slots()).containsExactly(
+                new CompiledGui.Slot(13, NamespacedId.parse("shop:gui/main/sword"), 1));
     }
 
     @Test
@@ -220,6 +239,71 @@ class GuiTypeTest {
     }
 
     @Test
+    void unknownFieldsSurviveParsingAndUntouchedDocumentSave() {
+        String raw = """
+                # preserved comment
+                shop:
+                  title: Shop
+                  rows: 1
+                  future_gui: retained
+                  layers:
+                    - id: rec
+                      type: example:recording
+                      name: Label
+                      own_field: 42
+                      future_layer: retained
+                """;
+        var document = LosslessYaml.parse(raw);
+        @SuppressWarnings("unchecked")
+        var mapping = (Map<String, Object>) document.data().get("shop");
+        var recorder = new RecordingComponent();
+        var gui = (GuiDefinition) new GuiType(components(recorder)).parse(GUI, mapping, Map.of()).orElseThrow();
+
+        assertThat(gui.raw()).containsEntry("future_gui", "retained").containsEntry("layers", mapping.get("layers"));
+        assertThat(recorder.seen.parameters()).containsExactly(
+                Map.entry("own_field", 42), Map.entry("future_layer", "retained"));
+        assertThat(document.save()).isEqualTo(raw);
+    }
+
+    @Test
+    void rejectedIdsCanBeReusedAndDiagnosticsRetainAuthoredIndices() {
+        var type = new GuiType(components());
+        var definition = Map.<String, Object>of("title", "T", "rows", 1, "layers", List.of(
+                Map.of("id", "frame", "type", "missing"),
+                Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
+                Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
+                Map.of("id", "label", "type", "text", "text", "x", "visible_if", true)));
+        var gui = (GuiDefinition) type.parse(GUI, definition, Map.of()).orElseThrow();
+
+        assertThat(gui.layers()).extracting(GuiLayer::id).containsExactly("frame");
+        assertThat(gui.skipped()).extracting(GuiDefinition.SkippedLayer::index).containsExactly(0, 2, 3);
+        assertThat(gui.skipped().get(2).reason()).contains("visible_if works on item layers");
+        assertThat(type.diagnose(gui)).allSatisfy(d -> assertThat(d.code()).isEqualTo(DiagnosticCodes.GUI_LAYER_SKIPPED))
+                .extracting(d -> d.target().field())
+                .containsExactly(List.of("layers", "0"), List.of("layers", "2"), List.of("layers", "3"));
+    }
+
+    @Test
+    void addonTargetAndDescriptionFailuresRemainContained() {
+        var target = new FaultyComponent("bad_target", true);
+        var description = new FaultyComponent("bad_description", false);
+        var registry = components(target, description);
+        target.fail = true;
+        description.fail = true;
+        var type = new GuiType(registry);
+        var gui = (GuiDefinition) type.parse(GUI, Map.of("title", "T", "rows", 1, "layers", List.of(
+                Map.of("id", "bad", "type", "example:bad_target"),
+                Map.of("id", "survives", "type", "example:bad_description", "name", "common", "unknown", 42),
+                Map.of("id", "frame", "type", "panel", "width", 10, "height", 10))), Map.of()).orElseThrow();
+
+        assertThat(gui.layers()).extracting(GuiLayer::id).containsExactly("survives", "frame");
+        assertThat(gui.skipped()).hasSize(1);
+        assertThat(gui.skipped().get(0).reason()).contains("component failed:", "target failure");
+        assertThat(description.seen.parameters()).containsExactly(Map.entry("unknown", 42));
+        assertThat(type.diagnose(gui).get(0).target().field()).containsExactly("layers", "0");
+    }
+
+    @Test
     void describeDeclaresTheCommonLayerFieldsForTheStudio() {
         SelfDescription description = new GuiType(components()).describe();
         assertThat(description.parameters()).extracting(ParameterSchema::id)
@@ -349,6 +433,45 @@ class GuiTypeTest {
                     return RenderTarget.SLOT;
                 }
             };
+        }
+    }
+
+    private static final class FaultyComponent implements GuiComponent {
+        private final String name;
+        private final boolean targetFailure;
+        private boolean fail;
+        private GuiComponentConfiguration seen;
+
+        FaultyComponent(String name, boolean targetFailure) {
+            this.name = name;
+            this.targetFailure = targetFailure;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public SelfDescription describe() {
+            if (fail && !targetFailure) {
+                throw new IllegalStateException("description failure");
+            }
+            return SelfDescription.of("Test", "Test component");
+        }
+
+        @Override
+        public RenderTarget target() {
+            if (fail && targetFailure) {
+                throw new IllegalStateException("target failure");
+            }
+            return RenderTarget.SLOT;
+        }
+
+        @Override
+        public CompiledGuiLayer parse(GuiComponentConfiguration configuration) {
+            seen = configuration;
+            return () -> RenderTarget.SLOT;
         }
     }
 }

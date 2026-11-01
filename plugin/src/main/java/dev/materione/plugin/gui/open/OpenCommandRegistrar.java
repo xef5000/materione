@@ -5,6 +5,8 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.scheduling.ScheduledHandle;
+import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.RuntimeGuis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
@@ -49,6 +51,7 @@ public final class OpenCommandRegistrar {
 
     /** A reload is asked for at most this often; a swap inside the window is coalesced into the next allowed one. */
     static final long MIN_RELOAD_NANOS = TimeUnit.SECONDS.toNanos(5);
+    private static final long TICK_NANOS = TimeUnit.MILLISECONDS.toNanos(50);
 
     /** An alias this registrar has put in the tree, with the argument shape it was built with. */
     private record Owned(List<String> shape) {}
@@ -62,6 +65,7 @@ public final class OpenCommandRegistrar {
     private final Supplier<RuntimeGuis> built;
     private final Consumer<Diagnostic> diagnostics;
     private final LongSupplier clock;
+    private final SchedulingGateway scheduling;
     private final Map<String, Owned> owned = new HashMap<>();
     /** Declared aliases the last COMMANDS event refused: no reload is asked for them until the next event. */
     private Set<String> refused = Set.of();
@@ -69,6 +73,8 @@ public final class OpenCommandRegistrar {
     private Set<String> unreloadable = Set.of();
     private long lastReload = Long.MIN_VALUE;
     private volatile boolean treeOpen;
+    private ScheduledHandle pendingReload;
+    private boolean closed;
 
     /**
      * @param live the applied registries' GUIs, which the executor and the suggestions read
@@ -76,20 +82,21 @@ public final class OpenCommandRegistrar {
      */
     public OpenCommandRegistrar(
             Plugin plugin, OpenCommandHandler handler, Supplier<RuntimeGuis> live, Supplier<RuntimeGuis> built,
-            Consumer<Diagnostic> diagnostics) {
-        this(plugin, handler, live, built, diagnostics, System::nanoTime);
+            Consumer<Diagnostic> diagnostics, SchedulingGateway scheduling) {
+        this(plugin, handler, live, built, diagnostics, System::nanoTime, scheduling);
     }
 
     /** For tests: the clock the reload rate limit reads. */
     OpenCommandRegistrar(
             Plugin plugin, OpenCommandHandler handler, Supplier<RuntimeGuis> live, Supplier<RuntimeGuis> built,
-            Consumer<Diagnostic> diagnostics, LongSupplier clock) {
+            Consumer<Diagnostic> diagnostics, LongSupplier clock, SchedulingGateway scheduling) {
         this.plugin = plugin;
         this.handler = handler;
         this.live = live;
         this.built = built;
         this.diagnostics = diagnostics;
         this.clock = clock;
+        this.scheduling = scheduling;
     }
 
     /**
@@ -98,6 +105,10 @@ public final class OpenCommandRegistrar {
      * apply has run.
      */
     public synchronized void onCommands(Commands registrar) {
+        if (closed) {
+            return;
+        }
+        cancelReload();
         treeOpen = true;
         unreloadable = Set.of();
         RuntimeGuis view = built.get();
@@ -140,6 +151,9 @@ public final class OpenCommandRegistrar {
      * there is no tree, so only the declared set changes, and that event registers it.
      */
     public synchronized void resync(RuntimeGuis view) {
+        if (closed) {
+            return;
+        }
         Map<String, Claim> claims = claims(view, null, owned.keySet(), false);
         claims.keySet().removeAll(refused);
         var next = new LinkedHashMap<String, NamespacedId>();
@@ -159,6 +173,8 @@ public final class OpenCommandRegistrar {
         handler.rebind(next);
         if (!stale.isEmpty()) {
             reloadTree(stale);
+        } else {
+            cancelReload();
         }
         if (treeOpen && !before.equals(next)) {
             sendTree();
@@ -167,7 +183,7 @@ public final class OpenCommandRegistrar {
 
     /**
      * Asks Paper to reload the server's data, which fires the COMMANDS event with the live view. Within the rate
-     * limit the request is deferred, and the next swap after the window asks again for everything still stale.
+     * limit one scheduled retry asks again for everything still stale after the window.
      * An alias the reload did not put in the tree is reported and not asked for again until the next event.
      */
     private void reloadTree(Map<String, Claim> stale) {
@@ -175,8 +191,24 @@ public final class OpenCommandRegistrar {
         if (lastReload != Long.MIN_VALUE && now - lastReload < MIN_RELOAD_NANOS) {
             plugin.getLogger().info("MATERIONE-OPEN-TREE reload-deferred aliases=" + stale.keySet()
                     + " reason=rate-limit");
+            if (pendingReload == null) {
+                long remaining = MIN_RELOAD_NANOS - (now - lastReload);
+                long delayTicks = Math.max(1, (remaining + TICK_NANOS - 1) / TICK_NANOS);
+                try {
+                    pendingReload = scheduling.executeGlobalLater(plugin, delayTicks, this::retryReload);
+                } catch (RuntimeException e) {
+                    plugin.getLogger().warning("MATERIONE-OPEN-TREE could not schedule reload: " + e);
+                    for (Map.Entry<String, Claim> entry : stale.entrySet()) {
+                        diagnostics.accept(new Diagnostic(DiagnosticCodes.OPEN_TREE_RESYNC, Severity.WARN,
+                                "open command '" + entry.getKey() + "' of " + entry.getValue().gui()
+                                        + " could not schedule its command-tree reload",
+                                entry.getValue().gui(), null, "reload content after the rate-limit window or restart"));
+                    }
+                }
+            }
             return;
         }
+        cancelReload();
         lastReload = now;
         plugin.getLogger().info("MATERIONE-OPEN-TREE reload aliases=" + stale.keySet());
         try {
@@ -203,11 +235,31 @@ public final class OpenCommandRegistrar {
         }
     }
 
+    private synchronized void retryReload() {
+        pendingReload = null;
+        if (!closed) {
+            resync(live.get());
+        }
+    }
+
+    private void cancelReload() {
+        if (pendingReload != null) {
+            pendingReload.cancel();
+            pendingReload = null;
+        }
+    }
+
+    /** Cancels a deferred reload and ignores further lifecycle/swap callbacks during shutdown. */
+    public synchronized void close() {
+        closed = true;
+        cancelReload();
+    }
+
     /** Sends each online player the command tree again, so their suggestions follow the change. */
     private void sendTree() {
         try {
             for (Player player : plugin.getServer().getOnlinePlayers()) {
-                player.updateCommands();
+                scheduling.executeEntity(plugin, player, player::updateCommands);
             }
         } catch (RuntimeException e) {
             plugin.getLogger().warning("MATERIONE-OPEN-TREE could not re-send the tree: " + e);

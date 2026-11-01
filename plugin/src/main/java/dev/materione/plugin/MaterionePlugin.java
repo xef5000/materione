@@ -216,6 +216,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (delivery != null) {
                 delivery.stop();
             }
+            if (guiStack != null) {
+                guiStack.openCommands().close();
+            }
             if (mechanics != null) {
                 mechanics.close();
             }
@@ -584,11 +587,7 @@ public final class MaterionePlugin extends JavaPlugin {
     }
 
     private void registerCommands() {
-        // paper plugins ignore the old plugin.yml commands block: the command
-        // registers through the server's command map, delegating to the same
-        // executor/tab-completer pair (MaterioneCommandAdapter)
-        getServer().getCommandMap().register("materione",
-                new dev.materione.plugin.command.MaterioneCommandAdapter(new MaterioneCommand(this)));
+        var rootCommand = new dev.materione.plugin.command.MaterioneCommandAdapter(new MaterioneCommand(this));
         // permissions were declared in plugin.yml (default: op) — declare them
         // programmatically so the §9.2 taxonomy stays exactly as documented
         for (String permission : List.of(
@@ -615,6 +614,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // also fires again on a server reload; the handler reads the guiStack when it runs
         getLifecycleManager().registerEventHandler(io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents.COMMANDS,
                 event -> {
+                    event.registrar().register("materione", rootCommand.getDescription(), List.of(), rootCommand);
                     if (guiStack != null) {
                         guiStack.openCommands().onCommands(event.registrar());
                     }
