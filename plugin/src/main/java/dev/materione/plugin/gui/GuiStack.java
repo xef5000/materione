@@ -27,6 +27,7 @@ import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.BukkitWindowHost;
 import dev.materione.plugin.gui.window.WindowHost;
+import dev.materione.plugin.logic.variable.VariableService;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -65,13 +66,19 @@ public final class GuiStack {
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built) {
+        this(plugin, scheduling, live, engine, visibility, diagnostics, built, null);
+    }
+
+    public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
+            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
+            Supplier<RuntimeRegistries> built, VariableService variables) {
         GuiLookup guis = GuiLookup.over(live);
         InputGuard guard = new InputGuard();
         RuleDispatcher dispatcher = engine::fire;
-        GuiEvents events = new GuiEvents(dispatcher);
+        GuiEvents events = new GuiEvents(dispatcher, variables);
         this.router = new ClickRouter(guis, events, visibility, guard);
         GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
-        GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()));
+        GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()), variables);
         WindowHost windows = new BukkitWindowHost(
                 plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer);
         GuiTicker ticker = new GuiTicker(guis, events,
@@ -81,7 +88,7 @@ public final class GuiStack {
         this.lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         this.opener = new GuiOpener(guis, sessions, events, windows, ticker, plugin.getLogger());
         opener.gate(new OpenSpecGate(OpenSpecGate.Permissions.live(), PlayerNames.server(),
-                (rule, context, owner) -> engine.interpreter().start(rule, context, owner)));
+                (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
         var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
         this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics, scheduling);

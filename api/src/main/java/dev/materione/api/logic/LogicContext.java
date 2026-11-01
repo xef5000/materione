@@ -15,7 +15,9 @@ import java.util.Optional;
  *
  * <p><b>Lifecycle and threading.</b> A context belongs to one run. The engine builds it when a
  * trigger fires and hands it to one thread at a time; implementations are not thread-safe and
- * types must not retain a context after {@code execute}/{@code test} returns. A facet's value is
+ * types must not retain a context after {@code execute}/{@code test} returns. A resumable SPI hook
+ * may use it until its returned stage completes, but only from the single continuation thread
+ * supplied by its {@link ReadExecutor}; it must not retain it afterwards. A facet's value is
  * subject to the thread rules of its own type (a {@code Player} is only safe on its owner thread),
  * which is exactly what {@link Threading} declares.
  *

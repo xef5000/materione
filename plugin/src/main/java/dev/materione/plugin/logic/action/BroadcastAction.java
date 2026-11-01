@@ -7,14 +7,18 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.support.ResolvedText;
 import dev.materione.platform.text.MaterioneText;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.Bukkit;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -97,7 +101,19 @@ public final class BroadcastAction implements ActionType<BroadcastAction.Params>
                 }
                 world.getPlayers().forEach(recipient -> recipient.sendMessage(message));
             }
+
         }
         return ActionOutcome.OK;
+    }
+
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return ResolvedText.resolve(params.text(), context, reads).thenCompose(text -> {
+            CompletionStage<Optional<TemplateText>> target = params.scope() == Scope.SERVER
+                    ? CompletableFuture.completedFuture(params.target())
+                    : ResolvedText.resolve(params.target(), context, reads);
+            return target.thenCompose(resolved -> reads.on(threading(),
+                    () -> execute(new Params(text, params.scope(), resolved), context)));
+        });
     }
 }

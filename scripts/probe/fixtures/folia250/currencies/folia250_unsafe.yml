@@ -1,0 +1,3 @@
+folia250_unsafe:
+  integration: "folia250:sentinel"
+  decimals: 0

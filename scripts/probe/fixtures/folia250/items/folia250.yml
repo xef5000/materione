@@ -1,0 +1,49 @@
+# Local-only runtime evidence; copy into the disposable probe pack, never the canonical pack.
+folia250_live:
+  material: COMPASS
+  display_name: "Folia live read probe"
+  behavior:
+    - on: click:right
+      if:
+        - "balance('probe:qa_xp') >= 3"
+      do:
+        - wait: 2
+        - run_command: "say MTR250-GLOBAL-BEGIN"
+        - if: "${balance('probe:qa_xp') >= 3}"
+          then:
+            - run_command: "say MTR250-VALUES xp=${balance('probe:qa_xp')} coins=${vars.player.corpus.qa_coins}"
+            - if: {has_money: {amount: 3, currency: "probe:qa_xp"}}
+              then:
+                - message: "MTR250-LIVE xp=${balance('probe:qa_xp')} coins=${vars.player.corpus.qa_coins}"
+              else:
+                - message: "MTR250-UNEXPECTED-INSUFFICIENT"
+          else:
+            - message: "MTR250-UNEXPECTED-GATE"
+
+folia250_unsupported:
+  material: COMPASS
+  display_name: "Folia unavailable read probe"
+  behavior:
+    - on: drop
+      if:
+        - "balance('probe:folia250_unsafe') >= 0"
+      do:
+        - message: "MTR250-UNSAFE-RULE-RAN"
+
+folia250_retire:
+  material: COMPASS
+  display_name: "Folia retirement probe"
+  behavior:
+    - on: click:right
+      do:
+        - wait: 200
+        - run_command: "say MTR250-RETIRED-RAN"
+
+folia250_migrate:
+  material: COMPASS
+  display_name: "Folia migration probe"
+  behavior:
+    - on: click:right
+      do:
+        - wait: 200
+        - run_command: "say MTR250-MIGRATED xp=${balance('probe:qa_xp')} coins=${vars.player.corpus.qa_coins}"

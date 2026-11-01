@@ -35,6 +35,17 @@ class ContentDiscoveryTest {
     private final PipelineRunner runner = new PipelineRunner(diagnostics, quarantine);
 
     @Test
+    void variableAndCurrencyDeclarationsAreDiscoveredWithTheirRegisteredTypes() throws IOException {
+        Path alpha = pack("alpha");
+        write(alpha.resolve("variables/values.yml"), "coins:\n  scope: player\n  type: number\n");
+        write(alpha.resolve("currencies/xp.yml"), "levels:\n  integration: xp\n");
+
+        assertThat(runner.request(new ReloadScope.Everything(), packs()).completed()).isTrue();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("alpha:coins"), "variable")).isPresent();
+        assertThat(runner.lastGraph().node(NamespacedId.parse("alpha:levels"), "currency")).isPresent();
+    }
+
+    @Test
     void nestedDocumentsAreDiscoveredInSortedPathOrder() throws IOException {
         Path alpha = pack("alpha");
         write(alpha.resolve("items/z/b.yml"), "b:\n  material: STICK\n");

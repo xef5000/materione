@@ -29,6 +29,16 @@ public interface CurrencyBackend {
         return Threading.GLOBAL;
     }
 
+    /**
+     * The owner, demonstrated Folia safety, and offline support of {@link #balance} and
+     * {@link #has}. An existing integration remains source and binary compatible, but is not
+     * assumed safe on Folia merely because {@link #threading()} returns GLOBAL.
+     * This declaration is cheap and safe to inspect from any thread; it does not read player state.
+     */
+    default CurrencyReadCapability readCapability() {
+        return CurrencyReadCapability.unsupported(Threading.GLOBAL);
+    }
+
     /** The player's balance. */
     EconomyResult balance(UUID player);
 

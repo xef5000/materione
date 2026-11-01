@@ -6,6 +6,8 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -13,6 +15,8 @@ import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
@@ -85,10 +89,50 @@ public final class IsNearCondition implements ConditionType<IsNearCondition.Para
         if (x.isEmpty() || y.isEmpty() || z.isEmpty() || radius.isEmpty()) {
             return false;
         }
+        return near(at, x, y, z, radius);
+    }
+
+    private static boolean near(Location at, OptionalDouble x, OptionalDouble y, OptionalDouble z,
+            OptionalDouble radius) {
         double dx = at.getX() - x.getAsDouble();
         double dy = at.getY() - y.getAsDouble();
         double dz = at.getZ() - z.getAsDouble();
         double r = radius.getAsDouble();
         return dx * dx + dy * dy + dz * dz <= r * r;
+    }
+
+    @Override public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor reads) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return reads.on(Threading.PLAYER_REGION, () -> matchesWorld(player.getLocation(), params.world()))
+                .thenCompose(matches -> {
+                    if (!matches) {
+                        return CompletableFuture.completedFuture(false);
+                    }
+                    return params.x().resolveResumable(context, reads).thenCompose(x ->
+                            params.y().resolveResumable(context, reads).thenCompose(y ->
+                                    params.z().resolveResumable(context, reads).thenCompose(z ->
+                                            params.distance().resolveResumable(context, reads).thenCompose(distance ->
+                                                    reads.on(Threading.PLAYER_REGION, () -> {
+                                                        var xv = x.value(context);
+                                                        var yv = y.value(context);
+                                                        var zv = z.value(context);
+                                                        var dv = distance.value(context);
+                                                        if (xv.isEmpty() || yv.isEmpty() || zv.isEmpty()
+                                                                || dv.isEmpty()) {
+                                                            return false;
+                                                        }
+                                                        Location at = player.getLocation();
+                                                        return matchesWorld(at, params.world())
+                                                                && near(at, xv, yv, zv, dv);
+                                                    })))));
+                });
+    }
+
+    private static boolean matchesWorld(Location at, Optional<String> expected) {
+        World world = at == null ? null : at.getWorld();
+        return world != null && (expected.isEmpty() || expected.get().equals(world.getName()));
     }
 }

@@ -11,6 +11,7 @@ import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.behavior.logic.BuiltinTriggers;
 import dev.materione.plugin.logic.currency.CustomCurrencyIntegration;
 import dev.materione.plugin.logic.currency.XpCurrencyIntegration;
+import dev.materione.plugin.logic.currency.CurrencyReads;
 import dev.materione.plugin.logic.function.BalanceFunction;
 import dev.materione.plugin.logic.function.FormatCurrencyFunction;
 import dev.materione.behavior.logic.LogicIds;
@@ -172,6 +173,12 @@ public final class BuiltinLogic {
      * player's current session through the same bridge, so it answers "no GUI" until the runtime binds.
      */
     public static void register(LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge) {
+        register(api, owner, items, bridge, CurrencyReads.paper());
+    }
+
+    /** Registers built-ins with the server's currency-read ownership policy. */
+    public static void register(
+            LogicApi api, Plugin owner, ItemCatalog items, GuiBridge bridge, CurrencyReads reads) {
         OpenGuis guis = player -> bridge.services()
                 .flatMap(services -> services.sessions().current(player.getUniqueId()))
                 .filter(GuiSession::isOpen)
@@ -202,7 +209,7 @@ public final class BuiltinLogic {
         for (CurrencyIntegration integration : currencyIntegrations()) {
             api.currencyIntegrations().register(owner, builtIn(integration.id()), integration);
         }
-        for (ExpressionFunction function : currencyFunctions(api.providers())) {
+        for (ExpressionFunction function : currencyFunctions(api.providers(), reads)) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
         // item sources of GUI item layers (logic.md §4.4): materione:item, materione:head, materione:player_slot
@@ -210,7 +217,7 @@ public final class BuiltinLogic {
             api.itemSources().register(owner, builtIn(source.id()), source);
         }
         // built-in conditions (logic.md §22, #210): their own block, after the rest
-        for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots)) {
+        for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots, reads)) {
             api.conditions().register(owner, builtIn(condition.id()), condition);
         }
     }
@@ -228,9 +235,14 @@ public final class BuiltinLogic {
      */
     public static List<ConditionType<?>> conditions(
             LogicProviders providers, OpenGuis guis, ItemCatalog items, SlotPeek slots) {
+        return conditions(providers, guis, items, slots, CurrencyReads.paper());
+    }
+
+    public static List<ConditionType<?>> conditions(
+            LogicProviders providers, OpenGuis guis, ItemCatalog items, SlotPeek slots, CurrencyReads reads) {
         return List.of(
                 new HasPermissionCondition(),
-                new HasMoneyCondition(providers),
+                new HasMoneyCondition(providers, reads),
                 new HasExpCondition(),
                 new HasItemCondition(items),
                 new HasItemSpaceCondition(items),
@@ -251,7 +263,11 @@ public final class BuiltinLogic {
 
     /** The money expression functions, which read the currency catalog (logic.md §18). */
     public static List<ExpressionFunction> currencyFunctions(LogicProviders providers) {
-        return List.of(new BalanceFunction(providers), new FormatCurrencyFunction(providers));
+        return currencyFunctions(providers, CurrencyReads.paper());
+    }
+
+    public static List<ExpressionFunction> currencyFunctions(LogicProviders providers, CurrencyReads reads) {
+        return List.of(new BalanceFunction(providers, reads), new FormatCurrencyFunction(providers));
     }
 
     /**

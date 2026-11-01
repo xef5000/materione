@@ -8,6 +8,7 @@ import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.session.GuiSession;
 import dev.materione.plugin.gui.session.GuiSessionVariables;
 import dev.materione.plugin.runtime.behavior.PlaceholderResolver;
+import dev.materione.plugin.logic.variable.VariableService;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -33,6 +34,11 @@ public final class GuiContexts {
      * @param extra further top-level variables of the trigger ({@code click}, {@code layer}); may be empty
      */
     public static MapLogicContext build(Viewer viewer, GuiSession session, Map<String, Object> extra) {
+        return build(viewer, session, extra, null);
+    }
+
+    public static MapLogicContext build(
+            Viewer viewer, GuiSession session, Map<String, Object> extra, VariableService variables) {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", playerVars(viewer));
         root.put("server", serverVars());
@@ -46,7 +52,7 @@ public final class GuiContexts {
         root.putAll(extra);
         return withPlayer(new MapLogicContext(root)
                 .with(GuiSession.FACET, session)
-                .with(VariableFacets.SESSION, new GuiSessionVariables(session)), viewer);
+                .with(VariableFacets.SESSION, new GuiSessionVariables(session)), viewer, variables);
     }
 
     /**
@@ -55,6 +61,11 @@ public final class GuiContexts {
      * values the open was given. The player and the server are as for any GUI run.
      */
     public static MapLogicContext open(Viewer viewer, NamespacedId gui, Map<String, String> args) {
+        return open(viewer, gui, args, null);
+    }
+
+    public static MapLogicContext open(
+            Viewer viewer, NamespacedId gui, Map<String, String> args, VariableService variables) {
         var root = new LinkedHashMap<String, Object>();
         root.put("player", playerVars(viewer));
         root.put("server", serverVars());
@@ -65,11 +76,14 @@ public final class GuiContexts {
         guiVars.put("page", new LinkedHashMap<String, Object>());
         root.put("gui", guiVars);
         root.put("vars", new LinkedHashMap<String, Object>());
-        return withPlayer(new MapLogicContext(root), viewer);
+        return withPlayer(new MapLogicContext(root), viewer, variables);
     }
 
     /** Attaches the player facet and placeholder resolver, when there is a player. */
-    private static MapLogicContext withPlayer(MapLogicContext context, Viewer viewer) {
+    private static MapLogicContext withPlayer(MapLogicContext context, Viewer viewer, VariableService variables) {
+        if (variables != null) {
+            context.withVariables(variables.bind(viewer.id()));
+        }
         Player player = viewer.player();
         if (player != null) {
             context.with(Facets.PLAYER, player)

@@ -10,10 +10,9 @@ import java.util.Set;
 
 /**
  * Which runs are alive beyond the call that started them, and how many each player has parked
- * (logic.md §5.3). A run that finishes before it ever suspends is never recorded here: the common
- * click costs no bookkeeping. A run enters the registry when it first parks, or at start when it
- * carries a cancellation key (it must be reachable by {@link FlowInterpreter#cancel} even while it
- * is running).
+ * (logic.md §5.3). Runs started by a rule gate are tracked from creation so cancellation cannot
+ * miss the transition from a pending gate to a run. Other runs enter when they first park, or
+ * at start when they carry a cancellation key.
  *
  * <p>Methods are synchronized: they are touched on park, resume, finish and cancel, never per step.
  */
@@ -40,19 +39,29 @@ final class RunRegistry {
      */
     synchronized boolean admitParked(FlowRun run, int limit) {
         Object key = run.owner().playerKey();
-        int now = parkedByPlayer.getOrDefault(key, 0);
-        if (now >= limit) {
+        if (!admitGate(key, limit)) {
             return false;
         }
-        parkedByPlayer.put(key, now + 1);
         tracked.add(run);
         run.tracked = true;
         return true;
     }
 
+    synchronized boolean admitGate(Object key, int limit) {
+        int now = parkedByPlayer.getOrDefault(key, 0);
+        if (now >= limit) {
+            return false;
+        }
+        parkedByPlayer.put(key, now + 1);
+        return true;
+    }
+
     /** Ends the park accounting for {@code run} (it resumed, or it is finished). */
     synchronized void releaseParked(FlowRun run) {
-        Object key = run.owner().playerKey();
+        releaseGate(run.owner().playerKey());
+    }
+
+    synchronized void releaseGate(Object key) {
         int now = parkedByPlayer.getOrDefault(key, 0);
         if (now <= 1) {
             parkedByPlayer.remove(key);

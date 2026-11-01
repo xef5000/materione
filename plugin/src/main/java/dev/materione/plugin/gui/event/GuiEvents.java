@@ -11,6 +11,7 @@ import dev.materione.plugin.gui.input.StackView;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
 import dev.materione.plugin.gui.session.CloseReason;
 import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.logic.variable.VariableService;
 import java.util.List;
 import java.util.Map;
 
@@ -27,9 +28,15 @@ import java.util.Map;
 public final class GuiEvents {
 
     private final RuleDispatcher dispatcher;
+    private final VariableService variables;
 
     public GuiEvents(RuleDispatcher dispatcher) {
+        this(dispatcher, null);
+    }
+
+    public GuiEvents(RuleDispatcher dispatcher, VariableService variables) {
         this.dispatcher = dispatcher;
+        this.variables = variables;
     }
 
     /**
@@ -125,7 +132,7 @@ public final class GuiEvents {
         if (input.accept() == null && !input.acceptBroken()) {
             return true;
         }
-        return InputSlots.accepts(input, GuiContexts.build(viewer, session, slotVars(index, before, entering)));
+        return InputSlots.accepts(input, GuiContexts.build(viewer, session, slotVars(index, before, entering), variables));
     }
 
     /**
@@ -161,9 +168,13 @@ public final class GuiEvents {
             return null;
         }
         BehaviorEvent event = new BehaviorEvent(
-                trigger, null, GuiContexts.build(viewer, session, extra), null, viewer.player())
+                trigger, null, GuiContexts.build(viewer, session, extra, variables), null, viewer.player())
                 .withCancelKey(session)
                 .withFilterFacts(facts);
+        if (GuiRuleSet.OPENING.equals(trigger) || GuiRuleSet.SLOT_CHANGE.equals(trigger)
+                || GuiRuleSet.CLICK_INVENTORY.equals(trigger)) {
+            event.withSynchronousPreEvent();
+        }
         dispatcher.fire(rules, event);
         return event;
     }
