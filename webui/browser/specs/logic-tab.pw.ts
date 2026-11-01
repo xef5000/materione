@@ -191,7 +191,7 @@ test('the palette comes from the vocabulary: grouped, searchable, an unavailable
   await expect(palette.getByRole('region', { name: 'Triggers' })).toBeVisible();
   await expect(palette.getByRole('region', { name: 'Economy' })).toBeVisible();
   // only the triggers a GUI fires
-  await expect(palette.locator('[data-entry^="trigger:"]')).toHaveCount(6);
+  await expect(palette.locator('[data-entry^="trigger:"]')).toHaveCount(8);
 
   await page.getByRole('textbox', { name: 'Search the palette' }).fill('money');
   const money = palette.locator('[data-entry="action:take_money"]');
