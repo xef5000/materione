@@ -56,4 +56,24 @@ class TitleRefreshQueueTest {
         tasks.forEach(Runnable::run);
         assertThat(displayed).containsExactly("new");
     }
+
+    @Test
+    void onlyCurrentRetirementNotifiesFailureAndItCannotRunTwice() {
+        var session = new GuiSession(UUID.randomUUID(), "Probe", NamespacedId.of("shop", "test"), Map.of());
+        var queue = new TitleRefreshQueue();
+        var tasks = new ArrayList<Runnable>();
+        var retirements = new ArrayList<Runnable>();
+        var events = new ArrayList<String>();
+        queue.update(session, true, true, () -> { }, () -> events.add("old"),
+                (task, retired) -> { tasks.add(task); retirements.add(retired); },
+                () -> events.add("old retired"));
+        queue.update(session, true, true, () -> { }, () -> events.add("new"),
+                (task, retired) -> { tasks.add(task); retirements.add(retired); },
+                () -> events.add("new retired"));
+        retirements.get(0).run();
+        retirements.get(1).run();
+        retirements.get(1).run();
+        tasks.forEach(Runnable::run);
+        assertThat(events).containsExactly("new retired");
+    }
 }

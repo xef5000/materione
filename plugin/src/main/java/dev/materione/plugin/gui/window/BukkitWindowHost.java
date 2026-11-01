@@ -1,6 +1,10 @@
 package dev.materione.plugin.gui.window;
 
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.platform.gui.PaperRichTitles;
+import dev.materione.platform.gui.RichTitleTransport;
+import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
@@ -11,10 +15,12 @@ import dev.materione.plugin.gui.input.InputReturns;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.Rendered;
+import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
@@ -43,16 +49,41 @@ public final class BukkitWindowHost implements WindowHost {
     private final InputGuard guard;
     private final GuiJournal journal;
     private final GuiRenderer renderer;
+    private final RichTitleTransport titles;
+    private final RenderReporter reporter;
     private final TitleRefreshQueue titleRefreshes = new TitleRefreshQueue();
+    private BiConsumer<Viewer, GuiSession> reconcile;
 
     public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
             GuiJournal journal, GuiRenderer renderer) {
+        this(plugin, scheduling, input, guard, journal, renderer, PaperRichTitles.create(null), RenderReporter.SILENT);
+    }
+
+    @Override
+    public void bindReconciler(BiConsumer<Viewer, GuiSession> reconcile) {
+        this.reconcile = java.util.Objects.requireNonNull(reconcile);
+    }
+
+    public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
+            GuiJournal journal, GuiRenderer renderer, RichTitleTransport titles, RenderReporter reporter) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.input = input;
         this.guard = guard;
         this.journal = journal;
         this.renderer = renderer;
+        this.titles = titles;
+        this.reporter = reporter;
+    }
+
+    @Override
+    public Optional<String> unavailable(RuntimeGuis.Live gui) {
+        if (gui.visuals() == null || titles.available()) {
+            return Optional.empty();
+        }
+        String reason = "rich-title transport is unavailable; conditional title overlays cannot be opened";
+        reporter.problem(DiagnosticCodes.GUI_DYNAMIC_LAYER_FAILED, gui.id(), "title", reason);
+        return Optional.of(reason);
     }
 
     @Override
@@ -65,12 +96,19 @@ public final class BukkitWindowHost implements WindowHost {
     @Override
     public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
             Consumer<String> failed) {
-        titleRefreshes.invalidate(session);
-        show(viewer, session, gui, true, opened, failed);
+        Object expectedWindow = session.window();
+        titleRefreshes.update(session, true, guard.dispatching(viewer.id()),
+                () -> show(viewer, session, gui, true, opened, failed),
+                () -> reconcile(viewer, session, expectedWindow), (task, retired) -> later(viewer, task, retired));
     }
 
     private void show(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean carryCursor,
             Runnable opened, Consumer<String> failed) {
+        Optional<String> problem = unavailable(gui);
+        if (problem.isPresent()) {
+            failed.accept(problem.get());
+            return;
+        }
         Rendered next = renderer.render(viewer, session, gui, true, session.windowTicks());
         show(viewer, session, gui, carryCursor, next, opened, failed);
     }
@@ -150,6 +188,15 @@ public final class BukkitWindowHost implements WindowHost {
     }
 
     @Override
+    public void closeOwned(Viewer viewer, GuiSession session) {
+        later(viewer, () -> {
+            if (menuOf(viewer, session).isPresent()) {
+                viewer.player().closeInventory();
+            }
+        }, () -> { });
+    }
+
+    @Override
     public void releaseInputs(Viewer viewer, GuiSession session) {
         Player player = viewer.player();
         if (session.window() instanceof GuiMenu menu) {
@@ -173,31 +220,50 @@ public final class BukkitWindowHost implements WindowHost {
     private void refresh(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full) {
         titleRefreshes.invalidate(session);
         menuOf(viewer, session).ifPresent(menu -> {
+            if (gui.visuals() != null && !titles.available()) {
+                Runnable close = () -> {
+                    if (session.isOpen() && session.window() == menu && menuOf(viewer, session).isPresent()) {
+                        reporter.problem(DiagnosticCodes.GUI_DYNAMIC_LAYER_FAILED, gui.id(), "title",
+                                "rich-title transport is unavailable; closing the dynamic visual window");
+                        viewer.player().closeInventory();
+                    }
+                };
+                titleRefreshes.update(session, true, guard.dispatching(viewer.id()), close,
+                        () -> reconcile(viewer, session, menu),
+                        (task, retired) -> later(viewer, task, retired));
+                return;
+            }
             Rendered next = renderer.render(viewer, session, gui, full, session.windowTicks());
             boolean changed = !menu.title().equals(next.title());
             Set<Integer> now = slotsOf(gui, next);
             boolean ownershipChanged = !menu.inputSlots().equals(now);
             titleRefreshes.update(session, changed || ownershipChanged, guard.dispatching(viewer.id()), () -> {
                 if (changed) {
-                    show(viewer, session, gui, true, next, () -> { }, reason ->
-                            plugin.getLogger().warning("GUI title refresh failed: " + reason));
-                } else {
-                    if (!ownershipChanged) {
-                        renderer.paint(menu.getInventory(), session, session.rendered(), next);
-                    } else {
-                        Map<Integer, ItemStack> kept = InputReturns.take(menu);
-                        renderer.paint(menu.getInventory(), session, session.rendered(), next);
-                        menu.inputSlots(now);
-                        placeInputs(viewer.player(), menu, kept);
-                        journal.mirror(viewer.player());
+                    String error = titles.send(viewer.player(), menu.getInventory(), MaterioneText.parseData(next.title()));
+                    if (error != null) {
+                        reporter.problem(DiagnosticCodes.GUI_DYNAMIC_LAYER_FAILED, gui.id(), "title", error);
+                        viewer.player().closeInventory();
+                        return;
                     }
+                    menu.title(next.title());
                 }
-            }, () -> {
-                if (session.isOpen() && session.window() == menu) {
-                    refresh(viewer, session, gui, true);
+                if (!ownershipChanged) {
+                    renderer.paint(menu.getInventory(), session, session.rendered(), next);
+                } else {
+                    Map<Integer, ItemStack> kept = InputReturns.take(menu);
+                    renderer.paint(menu.getInventory(), session, session.rendered(), next);
+                    menu.inputSlots(now);
+                    placeInputs(viewer.player(), menu, kept);
+                    journal.mirror(viewer.player());
                 }
-            }, (task, retired) -> later(viewer, task, retired));
+            }, () -> reconcile(viewer, session, menu), (task, retired) -> later(viewer, task, retired));
         });
+    }
+
+    private void reconcile(Viewer viewer, GuiSession session, Object expectedWindow) {
+        if (session.isOpen() && session.window() == expectedWindow && menuOf(viewer, session).isPresent()) {
+            java.util.Objects.requireNonNull(reconcile, "GUI live reconciler is not bound").accept(viewer, session);
+        }
     }
 
     @Override

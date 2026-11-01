@@ -815,8 +815,9 @@ These fill the gaps §5 leaves open. Each one is reversible by the owner.
 3. **Viewers are found by holder, not by a tracked set.** A refresh schedules one region task per
    online player and inspects that player's own top inventory there. Nothing is read off-thread on
    Folia, and no viewer set can go stale when a window closes some other way.
-4. **A title or size change re-opens; anything else edits in place.** The title and size of a Bukkit
-   window are fixed at creation, so only those force a new window. The cursor item is moved off the
+4. **A base-title or size change on reload re-opens; other updates edit in place.** Dynamic title
+   refreshes instead use the pinned platform transport (logic.md §6.4); this does not reopen the
+   server inventory. A shape-changing reload creates a new window. The cursor item is moved off the
    old window before it closes and back onto the new one; a closed window (a removed GUI) keeps
    vanilla's return-to-inventory behaviour, which is the one case the cursor is not preserved.
 5. **Two new diagnostic codes.** `MTR-0054` (a GUI slot's item is not live; warning, the slot stays

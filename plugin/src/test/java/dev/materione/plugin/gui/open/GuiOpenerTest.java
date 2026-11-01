@@ -179,10 +179,42 @@ class GuiOpenerTest {
 
         OpenResult result = open("shop", Map.of(), OpenRequest.Cause.API);
 
-        assertThat(result.ok()).as("the session was created before the window").isTrue();
+        assertThat(result.outcome()).isEqualTo(OpenResult.Outcome.FAILED);
+        assertThat(result.reason()).contains("the server said no");
         assertThat(f.sessions.current(f.viewer.id())).as("and ended when the window failed").isEmpty();
         assertThat(f.ran).as("gui.open never fires for a window that never opened")
                 .containsExactly("mark:opening demo:shop category=");
+    }
+
+    @Test
+    void failedReplacementClosesTheRetiredWindowAndReturnsItsInputsOnce() {
+        GuiSession previous = open("shop", Map.of(), OpenRequest.Cause.API).session();
+        f.windows.log.clear();
+        f.windows.failOpenWith = "the server said no";
+
+        OpenResult result = open("map", Map.of(), OpenRequest.Cause.API);
+
+        assertThat(result.outcome()).isEqualTo(OpenResult.Outcome.FAILED);
+        assertThat(previous.endedBecause()).isEqualTo(CloseReason.REPLACED);
+        assertThat(f.sessions.current(f.viewer.id())).isEmpty();
+        assertThat(f.windows.released).containsExactly(previous);
+        assertThat(f.windows.log).containsExactly("close");
+    }
+
+    @Test
+    void lateFailedOpenDoesNotCloseAnotherSessionsWindow() {
+        open("shop", Map.of(), OpenRequest.Cause.API);
+        f.windows.defer = true;
+        open("map", Map.of(), OpenRequest.Cause.API);
+        f.windows.defer = false;
+        GuiSession replacement = open("shop", Map.of(), OpenRequest.Cause.API).session();
+        f.windows.log.clear();
+        f.windows.failOpenWith = "late failure";
+
+        f.windows.deferred.forEach(Runnable::run);
+
+        assertThat(f.sessions.current(f.viewer.id())).containsSame(replacement);
+        assertThat(f.windows.log).isEmpty();
     }
 
     @Test

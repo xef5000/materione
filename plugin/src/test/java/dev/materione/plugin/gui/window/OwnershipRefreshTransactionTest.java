@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.scheduling.ScheduledHandle;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.content.gui.GuiCompiler;
+import dev.materione.platform.gui.RichTitleTransport;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.GuiMenu;
@@ -17,9 +18,13 @@ import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputSlotClicks;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
+import dev.materione.plugin.gui.open.GuiOpener;
+import dev.materione.plugin.gui.open.OpenRequest;
+import dev.materione.plugin.gui.open.OpenResult;
 import dev.materione.plugin.gui.session.GuiSession;
 import dev.materione.plugin.gui.session.GuiSessions;
 import dev.materione.plugin.gui.session.CloseReason;
+import dev.materione.plugin.gui.tick.GuiTicker;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
@@ -70,7 +75,32 @@ class OwnershipRefreshTransactionTest {
         exercise(false, false, true);
     }
 
+    @Test
+    void titleAndOwnershipChangesWaitForCancelledShiftAndKeepTheMenuAndCursor() throws Exception {
+        exercise(true, false, false, true, false);
+    }
+
+    @Test
+    void failedTitleTransportDoesNotApplyNewOwnershipOrLoseInput() throws Exception {
+        exercise(true, false, false, true, true);
+    }
+
+    @Test
+    void unsupportedTransportRejectsDynamicVisualWindowBeforeOpening() throws Exception {
+        exercise(false, false, false, true, false, true);
+    }
+
     private static void exercise(boolean cancel, boolean revert, boolean replace) throws Exception {
+        exercise(cancel, revert, replace, false, false);
+    }
+
+    private static void exercise(boolean cancel, boolean revert, boolean replace, boolean dynamic, boolean fail)
+            throws Exception {
+        exercise(cancel, revert, replace, dynamic, fail, false);
+    }
+
+    private static void exercise(boolean cancel, boolean revert, boolean replace, boolean dynamic, boolean fail,
+            boolean unavailable) throws Exception {
         var oldServer = Bukkit.class.getDeclaredField("server");
         oldServer.setAccessible(true);
         Object previous = oldServer.get(null);
@@ -105,7 +135,7 @@ class OwnershipRefreshTransactionTest {
             blockType.set(Material.DIAMOND, (java.util.function.Supplier<Object>) () -> null);
             oldServer.set(null, server);
             var fixture = new GuiFixture();
-            var definition = fixture.definition("""
+            String yaml = """
                     trade:
                       title: Trade
                       rows: 1
@@ -119,8 +149,16 @@ class OwnershipRefreshTransactionTest {
                       behavior:
                         - on: gui.slot_change
                           do: [gui.refresh]
-                    """);
-            var compiled = GuiCompiler.compile(definition, 0xE200, ref -> Optional.empty()).model();
+                    """;
+            if (dynamic) {
+                yaml = yaml.replace("  behavior:", "    - id: label\n"
+                        + "      type: text\n      x: 8\n      y: 6\n      text: DYNAMIC\n"
+                        + "      visible_if: \"gui.session.cover == true\"\n  behavior:");
+            }
+            var definition = fixture.definition(yaml);
+            var nextGlyph = new AtomicInteger(0xE201);
+            var compiled = GuiCompiler.compile(definition, 0xE200, ref -> Optional.empty(),
+                    (layer, frame) -> nextGlyph.getAndIncrement()).model();
             var live = RuntimeGuis.build(Map.of(compiled.id(), compiled), id -> Optional.empty(),
                     id -> Optional.empty(), ignored -> { }, fixture.logic.lookup()).gui(compiled.id()).orElseThrow();
             assertThat(live.items()).hasSize(1);
@@ -147,6 +185,9 @@ class OwnershipRefreshTransactionTest {
                 default -> null;
             });
             var playerRef = new AtomicReference<Player>();
+            var cursor = FakeStack.of(2);
+            var opens = new AtomicInteger();
+            var closes = new AtomicInteger();
             InventoryView view = proxy(InventoryView.class, (name, args) -> switch (name) {
                 case "getTopInventory" -> topRef.get();
                 case "getBottomInventory" -> bag;
@@ -163,6 +204,9 @@ class OwnershipRefreshTransactionTest {
                 case "getGameMode" -> GameMode.SURVIVAL;
                 case "getInventory" -> bag;
                 case "getOpenInventory" -> view;
+                case "getItemOnCursor" -> cursor;
+                case "openInventory" -> { opens.incrementAndGet(); yield null; }
+                case "closeInventory" -> { closes.incrementAndGet(); yield null; }
                 case "getPersistentDataContainer" -> pdc;
                 default -> null;
             });
@@ -186,12 +230,72 @@ class OwnershipRefreshTransactionTest {
             var renderer = new GuiRenderer(RenderReporter.SILENT);
             var guard = new InputGuard();
             var journal = new GuiJournal(plugin, scheduling, sessions);
-            var host = new BukkitWindowHost(plugin, scheduling, input, guard, journal, renderer);
             var viewer = Viewer.of(player);
-            var menu = new GuiMenu(session, 1, live.title(), input);
+            var initial = renderer.render(viewer, session, live, true, 0);
+            var menu = new GuiMenu(session, 1, initial.title(), input);
+            var sends = new AtomicInteger();
+            RichTitleTransport titles = new RichTitleTransport() {
+                public boolean available() { return !unavailable; }
+                public String send(Player who, Inventory expected, net.kyori.adventure.text.Component title) {
+                    sends.incrementAndGet();
+                    assertThat(who.getItemOnCursor()).isSameAs(cursor);
+                    assertThat(expected).isSameAs(menu.getInventory());
+                    assertThat(session.window()).isSameAs(menu);
+                    assertThat(menu.inputSlots()).contains(0);
+                    assertThat(amount(topItems[0])).isEqualTo(cancel ? 5 : 0);
+                    return fail ? "unavailable" : null;
+                }
+            };
+            var problems = new ArrayList<String>();
+            var host = new BukkitWindowHost(plugin, scheduling, input, guard, journal, renderer,
+                    titles, (code, gui, layer, message) -> problems.add(code.code() + ":" + message));
+            host.bindReconciler((who, current) -> host.rewrite(who, current, live));
             session.attach(menu);
-            session.remember(renderer.render(viewer, session, live, true, 0));
+            session.remember(initial);
             menu.inputSlots(SetOf.inputs(live, session));
+            if (unavailable) {
+                topItems[0] = FakeStack.of(5);
+                GuiLookup lookup = new GuiLookup() {
+                    public Optional<RuntimeGuis.Live> find(dev.materione.api.NamespacedId id) {
+                        return id.equals(live.id()) ? Optional.of(live) : Optional.empty();
+                    }
+                    public java.util.Collection<dev.materione.api.NamespacedId> ids() { return List.of(live.id()); }
+                };
+                var ticker = new GuiTicker(lookup, fixture.events, (who, ticks, task, retired) -> { }, host);
+                var opener = new GuiOpener(lookup, sessions, fixture.events, host, ticker,
+                        java.util.logging.Logger.getAnonymousLogger());
+                OpenResult result = opener.open(OpenRequest.of(viewer, live.id(), Map.of(), OpenRequest.Cause.API));
+                assertThat(result.outcome()).isEqualTo(OpenResult.Outcome.FAILED);
+                assertThat(result.reason()).contains("unavailable");
+                assertThat(problems).singleElement().asString().contains("MTR-0073", "unavailable");
+                assertThat(sessions.current(playerId)).containsSame(session);
+                assertThat(session.isOpen()).isTrue();
+                assertThat(session.window()).isSameAs(menu);
+                assertThat(menu.inputSlots()).contains(0);
+                assertThat(amount(topItems[0])).isEqualTo(5);
+                assertThat(amount(bagItems[9])).isZero();
+                assertThat(returns.get()).isZero();
+                assertThat(journalWrites.get()).isZero();
+                assertThat(sends.get()).isZero();
+                assertThat(opens.get()).isZero();
+                assertThat(closes.get()).isZero();
+                var staticLive = new RuntimeGuis.Live(live.id(), live.rows(), initial.title(), live.accessibleTitle(),
+                        live.slots(), live.clicks(), live.logic(), live.inputs(), live.open(), live.placements(),
+                        live.refresh(), live.items());
+                guard.during(playerId, () -> {
+                    host.rewrite(viewer, session, live);
+                    host.rewrite(viewer, session, staticLive);
+                    assertThat(closes.get()).isZero();
+                });
+                assertThat(tasks).hasSize(1);
+                tasks.forEach(Runnable::run);
+                assertThat(closes.get()).isZero();
+                assertThat(session.isOpen()).isTrue();
+                assertThat(session.window()).isSameAs(menu);
+                assertThat(amount(topItems[0])).isEqualTo(5);
+                assertThat(returns.get()).isZero();
+                return;
+            }
             topItems[0] = FakeStack.of(5);
             var events = new GuiEvents((rules, event) -> {
                 session.vars().put("cover", true);
@@ -200,6 +304,7 @@ class OwnershipRefreshTransactionTest {
                 assertThat(topItems[0].getAmount()).isEqualTo(5);
                 assertThat(returns.get()).isZero();
                 assertThat(journalWrites.get()).isZero();
+                assertThat(sends.get()).isZero();
                 if (revert) {
                     session.vars().put("cover", false);
                     host.rewrite(viewer, session, live);
@@ -228,6 +333,23 @@ class OwnershipRefreshTransactionTest {
                 sessions.begin(new GuiSession(playerId, "Probe", compiled.id(), Map.of()));
             }
             tasks.remove(0).run();
+            if (dynamic) {
+                assertThat(sends.get()).isEqualTo(1);
+                assertThat(session.window()).isSameAs(menu);
+                assertThat(player.getItemOnCursor()).isSameAs(cursor);
+                assertThat(opens.get()).isZero();
+                if (fail) {
+                    assertThat(problems).singleElement().asString().contains("MTR-0073", "unavailable");
+                    assertThat(closes.get()).isEqualTo(1);
+                    assertThat(menu.title()).isEqualTo(initial.title());
+                    assertThat(menu.inputSlots()).contains(0);
+                    assertThat(amount(topItems[0])).isEqualTo(5);
+                    assertThat(returns.get()).isZero();
+                    return;
+                }
+                assertThat(closes.get()).isZero();
+                assertThat(menu.title()).isNotEqualTo(initial.title());
+            }
             if (revert || replace) {
                 assertThat(menu.inputSlots()).contains(0);
                 assertThat(amount(topItems[0])).isZero();
@@ -241,6 +363,11 @@ class OwnershipRefreshTransactionTest {
             assertThat(journalWrites.get()).isEqualTo(cancel ? 1 : 2);
             assertThat(amount(topItems[0])).isEqualTo(1); // the visible display item is not player-owned
             assertThat(amount(bagItems[9])).isEqualTo(5);
+            if (dynamic) {
+                host.rewrite(viewer, session, live);
+                assertThat(sends.get()).isEqualTo(1);
+                assertThat(session.window()).isSameAs(menu);
+            }
         } finally {
             oldServer.set(null, previous);
             blockType.set(Material.DIAMOND, previousBlockType);
@@ -288,6 +415,8 @@ class OwnershipRefreshTransactionTest {
         @Override public ItemMeta getItemMeta() { return null; }
         @Override public boolean editMeta(java.util.function.Consumer<? super ItemMeta> edit) { return true; }
         @Override public FakeStack clone() { return of(amount); }
+        @Override public boolean equals(Object other) { return other instanceof FakeStack stack && amount == stack.amount; }
+        @Override public int hashCode() { return amount; }
     }
 
     private static final class SetOf {

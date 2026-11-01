@@ -3,6 +3,7 @@ package dev.materione.plugin.gui.window;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.session.GuiSession;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -15,6 +16,14 @@ import java.util.function.Consumer;
  */
 public interface WindowHost {
 
+    /** A known reason this GUI cannot be opened, checked before replacing the current session. */
+    default java.util.Optional<String> unavailable(RuntimeGuis.Live gui) {
+        return java.util.Optional.empty();
+    }
+
+    /** Binds the live resolver used after a guarded inventory transaction. */
+    default void bindReconciler(BiConsumer<Viewer, GuiSession> reconcile) {}
+
     /**
      * Shows {@code gui} to the viewer for {@code session}, replacing whatever window they have.
      * Either {@code opened} runs once the window is up (possibly a tick later, when the viewer is
@@ -24,12 +33,21 @@ public interface WindowHost {
 
     /**
      * Opens a new window for the same session after the GUI's title or size changed (the cursor item
-     * travels with the viewer). Same completion contract as {@link #open}.
+     * travels with the viewer). A deferred request re-evaluates the current live GUI through the bound
+     * reconciler; a superseding request may cancel it.
      */
-    void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened, Consumer<String> failed);
+    void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
+            Consumer<String> failed);
 
     /** Closes the viewer's window (a tick later when they are mid-click). */
     void close(Viewer viewer);
+
+    /** Close only if this session still owns the viewer's visible window. */
+    default void closeOwned(Viewer viewer, GuiSession session) {
+        if (shape(viewer, session).isPresent()) {
+            close(viewer);
+        }
+    }
 
     /**
      * Gives the items in the session's input slots back to the viewer, and empties them (logic.md §25). Called

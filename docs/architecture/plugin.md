@@ -464,7 +464,7 @@ about, so the editor opens it:
 | `MTR-0070` | warning | A GUI item layer names an item source the server does not know, or the source rejects its parameters (a head with two skins, a player slot that is not one of six). The layer is left out and the rest of the GUI shows. Optional integrations are not this case: while their plugin is absent the layer shows a barrier (`MTR-0072`). Fix the source's spelling or parameters. |
 | `MTR-0071` | warning | The GUI's `refresh:` clock is not a whole number of ticks of at least 1. The GUI does not refresh on a clock; `gui.refresh` and reloads still update it. Write `refresh: 20`, for example. |
 | `MTR-0072` | warning | At render, a GUI item's source could not produce an item for the viewer: an unknown player's head, a missing live item, an optional plugin that is not installed. The slot shows a barrier whose lore is the reason. Rate-limited per layer. |
-| `MTR-0073` | warning | At render, a dynamic GUI layer's condition or template failed. The condition counts as false, so the layer is hidden; a template renders its fallback, and an amount that is not a number shows 1. Rate-limited per layer. |
+| `MTR-0073` | warning | At render, a dynamic GUI layer's condition or template failed. The condition counts as false, so the layer is hidden; a template renders its fallback, and an amount that is not a number shows 1. A missing or failed rich-title transport also uses this code: a dynamic-visual window is refused or closed rather than using a stale title and click policy (logic.md §6.4). Rate-limited per layer. |
 
 ---
 

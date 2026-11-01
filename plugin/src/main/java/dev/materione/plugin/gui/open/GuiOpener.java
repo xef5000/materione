@@ -11,6 +11,7 @@ import dev.materione.plugin.gui.tick.GuiTicker;
 import dev.materione.plugin.gui.window.WindowHost;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -75,6 +76,10 @@ public final class GuiOpener {
             return OpenResult.refused(admission.usage() ? OpenResult.Outcome.USAGE : OpenResult.Outcome.DENIED,
                     admission.reason());
         }
+        Optional<String> unavailable = windows.unavailable(gui);
+        if (unavailable.isPresent()) {
+            return OpenResult.refused(OpenResult.Outcome.FAILED, unavailable.get());
+        }
 
         var session = new GuiSession(viewer.id(), viewer.name(), gui.id(), admission.args());
         if (request.restore() != null) {
@@ -84,15 +89,23 @@ public final class GuiOpener {
             return OpenResult.refused(OpenResult.Outcome.CANCELLED, "a gui.opening rule cancelled the open");
         }
 
-        sessions.begin(session).ifPresent(previous -> replace(viewer, previous, request.cause()));
+        GuiSession previous = sessions.begin(session).orElse(null);
+        if (previous != null) {
+            replace(viewer, previous, request.cause());
+        }
         if (sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
             // a gui.close rule of the replaced GUI opened something else: that open won, this one is stale
             session.end(CloseReason.REMOVED);
             return OpenResult.refused(OpenResult.Outcome.CANCELLED, "another GUI opened while this one was opening");
         }
 
+        var synchronousFailure = new AtomicReference<String>();
         Consumer<String> failed = reason -> {
-            sessions.end(session, CloseReason.REMOVED);
+            synchronousFailure.set(reason);
+            if (sessions.current(viewer.id()).filter(current -> current == session).isPresent()
+                    && sessions.end(session, CloseReason.REMOVED) && previous != null) {
+                windows.closeOwned(viewer, previous);
+            }
             log.warning("MATERIONE-GUI-FAILED reason=window gui=" + gui.id() + " player=" + viewer.name()
                     + " detail=" + reason);
         };
@@ -100,7 +113,8 @@ public final class GuiOpener {
             events.opened(viewer, session, gui);
             ticker.ensure(viewer, session);
         }, failed);
-        return OpenResult.opened(session);
+        String failure = synchronousFailure.get();
+        return failure == null ? OpenResult.opened(session) : OpenResult.refused(OpenResult.Outcome.FAILED, failure);
     }
 
     /** The viewer's previous GUI is replaced: remember it for {@code gui.back}, end it, fire its close. */

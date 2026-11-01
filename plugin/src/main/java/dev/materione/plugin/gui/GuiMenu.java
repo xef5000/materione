@@ -19,7 +19,7 @@ public final class GuiMenu extends PluginGui {
 
     private final GuiSession session;
     private final int rows;
-    private final String title;
+    private String title;
     private final String baseTitle;
     private final GuiInput input;
     /** The input slots this window was shown with: the only slots whose items are the player's (logic.md §25). */
@@ -61,9 +61,13 @@ public final class GuiMenu extends PluginGui {
         return rows;
     }
 
-    /** The MiniMessage title the window was created with. */
+    /** The last successfully displayed MiniMessage title. */
     public String title() {
         return title;
+    }
+
+    public void title(String value) {
+        this.title = value;
     }
 
     public String baseTitle() {

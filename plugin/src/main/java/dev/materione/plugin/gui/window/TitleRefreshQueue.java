@@ -16,6 +16,11 @@ final class TitleRefreshQueue {
 
     void update(GuiSession session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
             BiConsumer<Runnable, Runnable> schedule) {
+        update(session, requiresDeferral, dispatching, apply, refresh, schedule, () -> { });
+    }
+
+    void update(GuiSession session, boolean requiresDeferral, boolean dispatching, Runnable apply, Runnable refresh,
+            BiConsumer<Runnable, Runnable> schedule, Runnable retired) {
         invalidate(session);
         if (!requiresDeferral || !dispatching) {
             apply.run();
@@ -27,6 +32,10 @@ final class TitleRefreshQueue {
             if (pending.remove(session, token)) {
                 refresh.run();
             }
-        }, () -> pending.remove(session, token));
+        }, () -> {
+            if (pending.remove(session, token)) {
+                retired.run();
+            }
+        });
     }
 }

@@ -422,11 +422,20 @@ shop:
 3. **Parse and validate `args`.** Argument types are `string`, `int`, `number`, `player`,
    `boolean` and `choice`. A failure sends a usage message that is generated from the schema.
 4. **Evaluate `open.requirement`.** When it fails, run `deny`. The bypass permission is
-   `materione.gui.bypass.<pack>.<id>`.
+   `materione.gui.bypass.<pack>.<id>`. A known unavailable window capability also refuses here,
+   before the previous session or its input ownership is changed.
 5. **Fire `gui.opening`.** The event is cancellable, so a flow may `stop: {cancel: true}`.
 6. **Create the `GuiSession`.**
 7. **Render (§6.3) and open.**
 8. **Fire `gui.open`.**
+
+An unexpected immediate host failure returns `FAILED`; if it follows replacement, the retired
+window is closed only while it is still the viewer's window. Deferred failures perform the same
+session-identity check. A failed shape-reload reopen ends its session, returns inputs once and
+closes that session's still-visible window; a stale failure cannot close a newer window, even
+within the same session. Rewrites, shape changes and unsupported-title closes requested during
+an inventory transaction coalesce; at execution the live resolver checks the owned session and
+window again and chooses the action from the current published GUI, including removal.
 
 **Command registration.** Commands register through Paper's Brigadier lifecycle and are re-synced
 to clients after a reload. An argument mismatch must not reproduce #96 (the client's synced tree
@@ -482,8 +491,8 @@ frame. The title assembler includes or omits each piece per render, raster first
 retaining authored order within each target. Static raster pieces also remain individual so
 their order relative to conditional raster pieces is preserved.
 
-- A changed rich title reopens the window with the same session, carrying cursor and inputs;
-  an unchanged title leaves the window in place. Real-client verification remains outstanding.
+- A changed rich title is sent to the existing native server menu; unchanged titles are not sent.
+  No Bukkit inventory open or close is performed for that refresh.
 - The cost is one codepoint per raster frame in a dynamic GUI, plus its transparent background;
   the block has 5,888 codepoints
   (`U+E200`–`U+F8FF`).
@@ -500,9 +509,15 @@ is deprecated as unsupported and accepts a legacy string, not an Adventure compo
 sends an open-screen packet then calls `updateInventory`; the
 [26.1.2 implementation](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryView.java)
 sends that packet then `sendAllDataToRemote`. Neither API can represent the custom font
-components required by this GUI title. Packet behavior alone does not establish cursor
-preservation or absence of client flicker. The implementation uses the existing reopen
-fallback; actual client screenshots and version-specific behavior remain to be verified.
+components required by this GUI title. The owner selected a pinned platform transport instead:
+for 1.21.4 and 26.1.2 it resolves Paper's native packet and Adventure bridge signatures, sends the
+component with the current server menu ID, and resynchronizes its contents and cursor. An
+unsupported version or signature refuses dynamic-visual opens (`MTR-0073`); a failure during
+refresh closes the window through the normal return path rather than continuing with a stale title
+and newer click policy. There is no silent reopen fallback. Packet delivery preserves the **server**
+menu and session, not necessarily the **client** screen or menu object: an open-screen packet can
+reconstruct those client objects. Actual client screenshots, cursor/input conservation, quick-craft
+and drag interactions, flicker, and both version-specific implementations remain unverified.
 
 ### 6.5 Input slots and the player's inventory
 
@@ -1728,7 +1743,8 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 4. **A window is its session's window only while the host says so.** `GuiMenu` points at the session, and
    the session records which window currently shows it (`attach`). A close event for any other window (the
    old one when the host re-opens, or when one GUI replaces another) is not the player closing. The listener
-   compares and ignores. This is what lets a title change re-open a window without ending the session.
+   compares and ignores. This lets a shape-changing reload re-open without ending the session; dynamic
+   title refreshes do not use that reopen path (§6.4).
 
 **The opener**
 
@@ -1860,7 +1876,7 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 |---|---|
 | #215 open commands | `GuiOpener.gate(OpenGate)` for permission, typed args, requirement, deny and bypass; `OpenSpec` beside `GuiRules` in `content.gui.logic`; `GuiRuntime` and the command already pass the arguments through. |
 | #216 dynamic slots | `LayerVisibility` (the router already asks it); `WindowRenderer` becomes the per-session renderer, and `gui.refresh` re-renders through it; the click map keeps conditional layers in and asks per click. |
-| #217 overlays | The title is assembled per GUI by the compiler; `WindowHost.reopen` is the title-change path. |
+| #217 overlays | The title is assembled per render; the pinned platform transport resends a changed title to the existing server menu (§6.4). |
 | #218 input slots | The `GuiListener.route` policy table gains its rows; `GuiInput.click` is where `gui.slot_change` and `gui.click_inventory` fire from; `GuiEvents` fires them. |
 | #211 variables | `GuiSession.vars()` is a live, concurrent map the session scope can write through and back a session facet with, and `GuiSessions.current(player)` / `SessionHistory` are what `%materione_gui_open%` and `%materione_gui_last%` read; nothing here depends on the variables work. |
 | #219 lists | `GuiSession.pages()`; `ClickArea.Slots` for a list's slots; `GuiEvents.click` takes extra context for `entry.*`. |
@@ -2248,10 +2264,9 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
   Invalid conditions hide their layer; a failed expansion omits its text and reports the
   existing `MTR-0073` dynamic-layer diagnostic. Click routing uses the last rendered visibility
   and current frame or expanded text footprint, not hidden layers or stale geometry.
-- A reopen retains the session, animation clock, cursor and input slots. A rejected reopen
-  restores the prior session/render and returns inputs to the prior window where possible.
-  Reopening may visibly flicker or affect client interactions; this has not been measured on a
-  client and is not a crash-durability guarantee.
+- Dynamic title changes use the pinned platform transport (§6.4), not `openInventory`: the server
+  menu, session and clock remain the same. A shape-changing reload still uses the existing reopen
+  path, which attempts to carry cursor and inputs. Neither path establishes crash durability.
 - Conditional and animated overlays are retained as potential input blockers; the displayed
   visibility and current footprint decide which authored input slots are active. An input
   becoming covered returns its item through the existing input-return path. Deferred title
@@ -2304,7 +2319,7 @@ by the owner.
    variables. One that does not compile, or throws while tested, accepts nothing (`MTR-0074`).
 8. **Returns.** Items in input slots go back on every end of a session (close by the player, quit, a flow's close,
    replacement, removal) and on every window close, including a window that was replaced. The player's inventory
-   gets them first; what does not fit drops at their feet. A re-open (a title or size change) carries them to the
+   gets them first; what does not fit drops at their feet. A shape-changing reload's re-open carries them to the
    new window, and a rewrite keeps them in slots that are still inputs and returns the rest. Nothing is deleted unless
    a flow says so (`gui.slot_item: {op: clear}`).
 9. **`gui.click_inventory` fires for every click in the viewer's inventory while the window is open**, whatever

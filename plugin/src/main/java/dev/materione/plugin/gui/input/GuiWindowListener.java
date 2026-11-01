@@ -19,7 +19,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
  * policy of its own.
  *
  * <p>A window that closes while it is no longer its session's window was replaced by the host (a
- * re-open after a title change, or another GUI opening over it); that is not the player closing it, and
+ * re-open after a shape-changing reload, or another GUI opening over it); that is not the player closing it, and
  * the session is left alone.
  */
 public final class GuiWindowListener implements Listener {

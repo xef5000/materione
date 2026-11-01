@@ -118,15 +118,17 @@ export default [
       try {
         await open(ctx);
         await waitForTitle(ctx, false);
-        await assertOpen(ctx, 63);
+        const containerId = await assertOpen(ctx, 63);
         await click(ctx, 54); // three-row chest: first hotbar slot
         await ctx.sleep(400);
         ctx.expect(await stack(ctx, 'player.containerMenu.getCarried()')).toBe('Red Gem:3');
         await click(ctx);
         await waitForTitle(ctx, true);
+        ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
         await stableWindow(ctx, 63, 'Red Gem:3');
         await click(ctx);
         await waitForTitle(ctx, false);
+        ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
         await stableWindow(ctx, 63, 'Red Gem:3');
       } finally {
         await ctx.exec("player.closeContainer(); return 'closed'");
@@ -227,13 +229,16 @@ export default [
     steps: async (ctx) => {
       try {
         await openAnimation(ctx);
+        const containerId = await assertOpen(ctx, 63);
         const first = await title(ctx);
         const second = await waitForDifferentTitle(ctx, first);
+        ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
         const third = await waitForDifferentTitle(ctx, second);
+        ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
         const fourth = await waitForDifferentTitle(ctx, third);
         ctx.expect(third).toBe(first);
         ctx.expect(fourth).toBe(second);
-        await assertOpen(ctx, 63);
+        ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
       } finally {
         await ctx.exec("player.closeContainer(); return 'closed'");
       }
@@ -255,6 +260,61 @@ export default [
         await assertOpen(ctx, 63);
         await ctx.shot('animation-second');
         ctx.needsEyes('The banner moves between the two positions; the background and container remain stable.');
+      } finally {
+        await ctx.exec("player.closeContainer(); return 'closed'");
+      }
+    },
+  }),
+  test({
+    id: 'guioverlay.animation-quick-craft',
+    title: 'overlay:animation_input conserves gems across a frame change during packet-driven quick-craft and later shift-out',
+    covers: [...covers, 'fixtures/packs/corpus/items/gem_red.yml'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await ctx.waitForServerLog(/MATERIONE-GIVE-OK id=corpus:gem_red player=Probe amount=3/);
+        await ctx.rcon('materione gui open overlay:animation_input Probe');
+        await ctx.waitForServerLog(/MATERIONE-OVERLAY-INTERACTION-OPEN/);
+        await ctx.sleep(600);
+        const id = await assertOpen(ctx, 45);
+        await click(ctx, 36);
+        await ctx.sleep(300);
+        ctx.expect(await stack(ctx, 'player.containerMenu.getCarried()')).toBe('Red Gem:3');
+        const first = await title(ctx);
+        await ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, -999, 0,
+          net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
+mc.gameMode.handleContainerInput(player.containerMenu.containerId, 0, 1,
+          net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
+return 'quick-craft started; screen=' + System.identityHashCode(mc.screen) +
+  ' client-menu=' + System.identityHashCode(player.containerMenu)`);
+        await waitForDifferentTitle(ctx, first);
+        ctx.expect(await assertOpen(ctx, 45)).toBe(id);
+        await ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, -999, 2,
+          net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
+return 'quick-craft ended; screen=' + System.identityHashCode(mc.screen) +
+  ' client-menu=' + System.identityHashCode(player.containerMenu)`);
+        await ctx.sleep(500);
+        const total = Number(await ctx.exec(`def total = 0
+def stacks = [player.containerMenu.getCarried()]
+for (int i = 0; i < player.containerMenu.slots.size(); i++) stacks.add(player.containerMenu.slots.get(i).getItem())
+for (def s : stacks) if (!s.isEmpty() && s.getHoverName().getString() == 'Red Gem') total += s.getCount()
+return total`));
+        ctx.expect(total).toBe(3);
+        await assertNoDrops(ctx);
+        // A fresh quick move after the transition must still use the same open container.
+        if (await stack(ctx, 'player.containerMenu.getCarried()') === 'Red Gem:3') {
+          await click(ctx, 0);
+          await ctx.sleep(300);
+        }
+        ctx.expect(await stack(ctx, 'player.containerMenu.slots.get(0).getItem()')).toBe('Red Gem:3');
+        await click(ctx, 0, 'QUICK_MOVE');
+        await ctx.sleep(500);
+        ctx.expect(await assertOpen(ctx, 45)).toBe(id);
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+        ctx.expect(await stack(ctx, 'player.containerMenu.getCarried()')).toBe('empty');
+        await assertNoDrops(ctx);
       } finally {
         await ctx.exec("player.closeContainer(); return 'closed'");
       }
