@@ -216,6 +216,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (delivery != null) {
                 delivery.stop();
             }
+            if (guiStack != null) {
+                guiStack.openCommands().close();
+            }
             if (mechanics != null) {
                 mechanics.close();
             }

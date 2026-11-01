@@ -6,6 +6,13 @@
 // captures the window.
 
 import { test } from './_lib.mjs';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const ALIAS_FILE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..',
+  'harness', 'build', 'probe', 'server', 'plugins', 'Materione', 'content', 'packs',
+  'sample', 'guis', 'qa_auto_alias.yml');
 
 const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/gui/**',
@@ -26,6 +33,37 @@ async function containerOpen(ctx) {
 }
 
 export default [
+  test({
+    id: 'opencommands.deferred-alias-applies-automatically',
+    title: 'sample:qa_auto_alias changes its command twice inside five seconds; qa_auto_second opens it after the scheduled retry without a third content reload',
+    covers: [...COVERS, 'core/src/main/java/dev/materione/core/scheduling/**'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      const original = fs.existsSync(ALIAS_FILE) ? fs.readFileSync(ALIAS_FILE, 'utf8') : null;
+      const yaml = (alias) => `qa_auto_alias:\n  title: Automatic alias\n  rows: 1\n  layers: []\n  open:\n    commands: [${alias}]\n`;
+      try {
+        await ctx.reset();
+        fs.mkdirSync(path.dirname(ALIAS_FILE), { recursive: true });
+        fs.writeFileSync(ALIAS_FILE, yaml('qa_auto_first'));
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-TREE reload aliases=.*qa_auto_first/);
+        fs.writeFileSync(ALIAS_FILE, yaml('qa_auto_second'));
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-TREE reload-deferred aliases=.*qa_auto_second/);
+        await ctx.waitForServerLog(/MATERIONE-OPEN-TREE reload aliases=.*qa_auto_second/);
+        await ctx.command('qa_auto_second');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=qa_auto_second outcome=opened/);
+        ctx.expect(await containerOpen(ctx)).toBeTruthy();
+        ctx.expect(await openSlots(ctx)).toBe(45);
+      } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
+        if (original === null) fs.rmSync(ALIAS_FILE, { force: true });
+        else fs.writeFileSync(ALIAS_FILE, original);
+        await ctx.rcon('materione reload');
+      }
+    },
+  }),
+
   test({
     id: 'opencommands.typed-command-opens-the-gui',
     title: 'the open command /opentest with the choice argument tools opens guilogic:opener (one row, 45 slots counting the player inventory) and the server answers outcome=opened',
