@@ -1,0 +1,44 @@
+ownership:
+  title: Overlay ownership
+  rows: 1
+  player_inventory: free
+  layers:
+    - {id: frame, type: panel, x: 0, y: 0, width: 176, height: 132}
+    - id: gems
+      type: slots
+      region: container
+      input: true
+      accept: "${slot.item == 'corpus:gem_red'}"
+    - id: cover
+      type: item
+      slot: 4
+      item: minecraft:barrier
+      visible_if: "gui.session.cover == true"
+    - {id: toggle, type: button, x: 152, y: 18, width: 16, height: 16}
+  behavior:
+    - on: gui.open
+      do:
+        - set_var: {var: session.cover, value: false}
+        - run_command:
+            command: "say MATERIONE-OVERLAY-OWNERSHIP-OPEN"
+            as: console
+    - on: gui.click
+      layer: toggle
+      do:
+        - set_var: {var: session.cover, op: toggle}
+        - gui.refresh
+    - on: gui.slot_change
+      layer: gems
+      if: "${slot.previous == 'corpus:gem_red' && slot.amount == 0}"
+      do:
+        - set_var: {var: session.cover, value: true}
+        - gui.refresh
+        - run_command:
+            command: "say MATERIONE-OVERLAY-OWNERSHIP-SHIFT"
+            as: console
+        - if: "${gui.args.cancel == '1'}"
+          then:
+            - run_command:
+                command: "say MATERIONE-OVERLAY-OWNERSHIP-CANCEL"
+                as: console
+            - stop: {cancel: true}

@@ -1,0 +1,24 @@
+animation:
+  title: Overlay animation
+  rows: 3
+  refresh: 5
+  layers:
+    - {id: background, type: panel, x: 0, y: 0, width: 176, height: 168}
+    - id: moving
+      type: image
+      image: gui/banner_strip
+      x: 56
+      y: 36
+      width: 36
+      height: 16
+      materione:overlay_frames:
+        every: 40
+        layers:
+          - {x: 56}
+          - {x: 104}
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-OVERLAY-ANIMATION-OPEN"
+            as: console

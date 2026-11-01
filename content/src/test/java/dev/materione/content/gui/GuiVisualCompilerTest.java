@@ -102,4 +102,25 @@ class GuiVisualCompilerTest {
                         "materione:overlay_frames", Map.of("every", 0, "layers", List.of(Map.of())))));
         assertThat(invalid.skipped()).singleElement().satisfies(skip -> assertThat(skip.reason()).contains("frames"));
     }
+
+    @Test
+    void animationQaFixtureCompilesTwoDistinctRasterFrames() throws Exception {
+        var fixture = GoldenFiles.fixturesRoot().resolve("packs").resolve("overlay");
+        var raw = dev.materione.core.document.LosslessYaml.parse(
+                Files.readString(fixture.resolve("guis").resolve("animation.yml"))).data();
+        @SuppressWarnings("unchecked")
+        var fields = (Map<String, Object>) raw.get("animation");
+        var gui = (GuiDefinition) GuiTestSupport.type()
+                .parse(dev.materione.api.NamespacedId.of("overlay", "animation"), fields, Map.of()).orElseThrow();
+        assertThat(gui.skipped()).isEmpty();
+        var next = new AtomicInteger(0xE201);
+        var result = GuiCompiler.compile(gui, 0xE200, new PackTextures("overlay", fixture),
+                (layer, frame) -> next.getAndIncrement());
+        assertThat(result.diagnostics()).isEmpty();
+        var animation = result.model().visuals().pieces().stream()
+                .filter(piece -> piece.layer().equals("moving"))
+                .map(piece -> (GuiVisualPlan.Raster) piece).findFirst().orElseThrow();
+        assertThat(animation.frame(0).codepoint()).isNotEqualTo(animation.frame(40).codepoint());
+        assertThat(animation.frame(80).codepoint()).isEqualTo(animation.frame(0).codepoint());
+    }
 }
