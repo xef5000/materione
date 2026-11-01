@@ -8,8 +8,8 @@ execution that stops dependents of a failure, and failure dossiers that a
 fixing agent can act on without re-testing.
 
 It runs **locally only** — the probe boots a real Paper 26.x server and a real
-windowed client, which is dev-machine work, not CI. CI gets the cheap
-`check` step (catalog integrity) and nothing else.
+windowed client, which is dev-machine work, not CI. CI runs the cheap
+`check` step (catalog integrity) and pure runner/evidence unit tests, never Minecraft.
 
 ## The three properties (and how they are met)
 
@@ -93,6 +93,7 @@ node qa/runner.mjs run [selectors]     # execute; selectors: ids, suite:<n>, all
 node qa/runner.mjs report [runId]      # print a run summary
 node qa/runner.mjs file <runId> <id>   # dossier → GitHub issue + board
 node qa/runner.mjs mark <id> pass|fail # close a needs-eyes verdict
+node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs # pure runner tests
 ```
 
 Run flags: `--no-build` (reuse the last `:plugin:shadowJar`), `--keep-server`
@@ -125,6 +126,10 @@ prose, and player-perceivable state (inventory, screen, position) over
 internals. A test that asserts internals breaks on every refactor; a test
 that asserts what a player sees breaks only when the player-visible behavior
 breaks.
+
+`toEqual` compares structured values without depending on mapping key order;
+array order, field presence and value types remain significant. Negative
+identity/structured assertions use `.not.toBe` and `.not.toEqual`.
 
 ## The swarm policy
 

@@ -17,6 +17,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
@@ -48,7 +49,7 @@ const PROJECT_OWNER = 'xef5000';
 const PROJECT_ID = process.env.MTR_PROJECT_ID ?? 'PVT_kwHOA9Lzdc4Bmaqo';
 
 class QaError extends Error {}
-class QaAssertionError extends Error {
+export class QaAssertionError extends Error {
   constructor(message, { operator, expected, actual }) {
     super(message);
     this.operator = operator;
@@ -57,10 +58,12 @@ class QaAssertionError extends Error {
   }
 }
 
-main(process.argv.slice(2)).catch((e) => {
-  process.stderr.write(`qa: ${redactEvidence(e.message ?? String(e))}\n`);
-  process.exit(e instanceof QaError ? 1 : 1);
-});
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  main(process.argv.slice(2)).catch((e) => {
+    process.stderr.write(`qa: ${redactEvidence(e.message ?? String(e))}\n`);
+    process.exit(e instanceof QaError ? 1 : 1);
+  });
+}
 
 async function main(argv) {
   const command = argv.shift();
@@ -792,16 +795,24 @@ function chatText(line) {
   return line?.plain ?? line?.text ?? line?.message ?? line?.content ?? JSON.stringify(line);
 }
 
-function makeExpect(actual) {
+export function makeExpect(actual) {
   const fail = (operator, expected, message) => {
     throw new QaAssertionError(message, { operator, expected, actual });
   };
   return {
+    not: {
+      toBe(expected) {
+        if (actual === expected) fail('not.toBe', expected, `expected a value other than ${trim(expected)}, got ${trim(actual)}`);
+      },
+      toEqual(expected) {
+        if (isDeepStrictEqual(actual, expected)) fail('not.toEqual', expected, `expected a structure other than ${trim(expected)}, got ${trim(actual)}`);
+      },
+    },
     toBe(expected) {
       if (actual !== expected) fail('toBe', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
     },
     toEqual(expected) {
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('toEqual', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
+      if (!isDeepStrictEqual(actual, expected)) fail('toEqual', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
     },
     toContain(sub) {
       if (!String(actual).includes(sub)) fail('toContain', sub, `expected output to contain ${trim(sub)}, got ${trim(actual)}`);
