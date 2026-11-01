@@ -96,9 +96,15 @@ node qa/runner.mjs mark <id> pass|fail # close a needs-eyes verdict
 ```
 
 Run flags: `--no-build` (reuse the last `:plugin:shadowJar`), `--keep-server`
-(leave the probe up for poking), `--file` (auto-file issues for this run's
-failures). Exit codes: `0` green, `1` failures/blocked, `2` infra (the
-environment broke — findings from an infra run are void).
+(leave the probe up for poking), `--no-ledger` (leave the ledger untouched and
+keep results, transcripts, screenshots and failure dossiers local under
+`qa/results/`), `--file` (auto-file issues for this run's failures).
+`--no-ledger` is for pre-merge validation, not a blessing: visual results
+cannot be marked in the ledger from that run, and it cannot be combined with
+`--file`. Filing a dossier separately updates the ledger. Dependencies still
+follow the normal ledger-based selection rules. Exit codes: `0` green, `1`
+failures/blocked, `2` infra (the environment broke — findings from an infra
+run are void).
 
 ## Writing tests
 
