@@ -1442,8 +1442,9 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     integrations (item 13); `has_money` (#210,
     which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
     as: op` still uses the operator flag, not the permission provider (#208).
-27. **For #211:** the PlaceholderAPI expansion must expose `%materione_balance_<pack>_<id>%` (the raw balance)
-    and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). The expansion is #211's work.
+27. **Balance placeholder follow-up (#252):** the expansion must expose `%materione_balance_<pack>_<id>%` (the raw
+    balance) and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). Its independent grammar
+    and typed bridge exist, but bootstrap wiring to the shared currency read service and end-to-end QA remain pending.
 28. **For #210:** `has_money` takes `currency:` with the same resolution as the actions, and reads through the
     catalog like `take_money` does.
 29. **In-game money flows are not in the QA catalog.** `logic.providers-unavailable-without-vault` proves the
@@ -1659,9 +1660,18 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     until the GUI runtime (#214) registers one with `VariableService.guiSessions`. *Closed after #214 merged:* the
     plugin registers `GuiSessionsPort` over the live `GuiSessions`, which now remembers the last GUI a player had
     open (`GuiSessions.last`, set when a session is replaced or closes), and `GuiContexts` puts a
-    `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map. The `balance` placeholders for
-    currencies (#233) are reserved and resolve to null; #233 adds its branch beside `var_` and does not touch the
-    resolver's grammar.
+    `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map.
+    The #252 resolver accepts a typed currency bridge without changing the variable grammar; the production expansion
+    still leaves balance tokens unresolved until the bridge is wired. The resolver compares the complete encoded
+    `<pack>_<id>` of every declared currency, including the `_formatted` form, and leaves collisions unresolved
+    rather than guessing an underscore split. A recognized token with no viewer or an unavailable, failed, or
+    non-finite read returns empty and reports a rate-limited `MTR-0023`. Raw finite amounts use plain decimal text;
+    formatted text delegates to the existing `format_currency` implementation for the explicit qualified id.
+    A single typed bridge operation must use a consistent immutable currency binding and metadata for both read and
+    format, or fail unavailable if consistency cannot be proved through a replacement. The bridge must re-resolve
+    the catalog and backend at use, never wait on a scheduled future, and prove the required ownership before
+    catalog, availability, backend or player access even on Paper async callbacks. Offline identity and reconnect
+    races must be safe or report unavailable; no cached balance substitutes for a current read.
 
 **Diagnostics and the rest**
 

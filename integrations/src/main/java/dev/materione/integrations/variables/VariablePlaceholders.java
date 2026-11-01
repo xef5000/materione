@@ -1,12 +1,23 @@
 package dev.materione.integrations.variables;
 
+import dev.materione.api.NamespacedId;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.diagnostics.Severity;
+import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.variable.GuiSessionPort;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariablesApi;
+import java.math.BigDecimal;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -26,24 +37,44 @@ import java.util.function.Supplier;
  * identifier that is not one of these, resolves to null, which leaves the token as PlaceholderAPI
  * found it.
  *
- * <p><b>Reserved seam.</b> {@code %materione_balance_<pack>_<id>%} and {@code …_formatted} belong to the
- * currencies of roadmap #233 and are not implemented here: they resolve to null until that PR adds them
- * beside the {@code var_} branch.
+ * <p>When a currency bridge is supplied, balance tokens match complete encoded declared ids, not an
+ * inferred underscore split. Collisions, including a raw id ending in {@code _formatted}, are unresolved.
  */
 public final class VariablePlaceholders {
 
     private static final String VAR = "var_";
+    private static final String BALANCE = "balance_";
+    private static final long REPORT_INTERVAL_MS = 1000;
 
     private final VariablesApi variables;
     private final Supplier<GuiSessionPort> guiSessions;
+    private final CurrencyPlaceholderBridge currencies;
+    private final Consumer<Diagnostic> diagnostics;
+    private final LongSupplier clock;
+    private final ConcurrentHashMap<String, Long> lastReport = new ConcurrentHashMap<>();
 
     /**
      * @param variables the declarations and values, read per request
      * @param guiSessions the GUI session port, read per request (it is registered when GUI sessions exist)
      */
     public VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions) {
-        this.variables = variables;
-        this.guiSessions = guiSessions;
+        this(variables, guiSessions, null, diagnostic -> { }, System::currentTimeMillis);
+    }
+
+    /** Enables balance placeholders through a live, thread-safe bridge and diagnostic sink. */
+    public VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions,
+            CurrencyPlaceholderBridge currencies, Consumer<Diagnostic> diagnostics) {
+        this(variables, guiSessions, Objects.requireNonNull(currencies, "currencies"),
+                diagnostics, System::currentTimeMillis);
+    }
+
+    VariablePlaceholders(VariablesApi variables, Supplier<GuiSessionPort> guiSessions,
+            CurrencyPlaceholderBridge currencies, Consumer<Diagnostic> diagnostics, LongSupplier clock) {
+        this.variables = Objects.requireNonNull(variables, "variables");
+        this.guiSessions = Objects.requireNonNull(guiSessions, "guiSessions");
+        this.currencies = currencies;
+        this.diagnostics = Objects.requireNonNull(diagnostics, "diagnostics");
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
     /**
@@ -61,8 +92,89 @@ public final class VariablePlaceholders {
         return switch (identifier) {
             case "gui_open" -> guiSessions.get().openGui(viewer).orElse("");
             case "gui_last" -> guiSessions.get().lastGui(viewer).orElse("");
-            default -> identifier.startsWith(VAR) ? variable(identifier.substring(VAR.length()), viewer, playerNamed) : null;
+            default -> identifier.startsWith(VAR) ? variable(identifier.substring(VAR.length()), viewer, playerNamed)
+                    : identifier.startsWith(BALANCE) && currencies != null
+                            ? balance(identifier.substring(BALANCE.length()), viewer) : null;
         };
+    }
+
+    private record BalanceMatch(NamespacedId id, boolean formatted) { }
+
+    private String balance(String token, UUID viewer) {
+        BalanceMatch match = null;
+        try {
+            for (NamespacedId id : currencies.currencies()) {
+                String encoded = id.namespace() + "_" + id.value();
+                BalanceMatch candidate = token.equals(encoded) ? new BalanceMatch(id, false)
+                        : token.equals(encoded + "_formatted") ? new BalanceMatch(id, true) : null;
+                if (candidate != null) {
+                    if (match != null && !match.equals(candidate)) {
+                        return null;
+                    }
+                    match = candidate;
+                }
+            }
+        } catch (RuntimeException error) {
+            report("catalog", null, "currency catalog failed: " + describe(error));
+            return null;
+        }
+        if (match == null) {
+            return null;
+        }
+        NamespacedId id = match.id();
+        if (viewer == null) {
+            report(id.toString(), id, "no viewer for balance");
+            return "";
+        }
+        CurrencyPlaceholderBridge.Balance balance;
+        try {
+            balance = currencies.read(id, viewer, match.formatted());
+        } catch (RuntimeException error) {
+            report(id.toString(), id, "balance request failed: " + describe(error));
+            return "";
+        }
+        EconomyResult result = balance == null ? null : balance.result();
+        if (!(result instanceof EconomyResult.Succeeded succeeded)) {
+            String reason = result instanceof EconomyResult.Failed failed ? failed.reason()
+                    : "provider returned no balance";
+            report(id.toString(), id, reason);
+            return "";
+        }
+        double amount = succeeded.balance();
+        if (!Double.isFinite(amount)) {
+            report(id.toString(), id, "provider returned a non-finite balance");
+            return "";
+        }
+        if (!match.formatted()) {
+            return BigDecimal.valueOf(amount).stripTrailingZeros().toPlainString();
+        }
+        String formatted = balance.formatted();
+        if (formatted == null) {
+            report(id.toString(), id, "currency formatting unavailable");
+            return "";
+        }
+        return formatted;
+    }
+
+    private static String describe(RuntimeException error) {
+        return error.getClass().getSimpleName() + (error.getMessage() == null ? "" : ": " + error.getMessage());
+    }
+
+    private void report(String key, NamespacedId id, String problem) {
+        long now = clock.getAsLong();
+        AtomicBoolean emit = new AtomicBoolean();
+        lastReport.compute(key, (ignored, previous) -> {
+            if (previous == null || now < previous || now - previous >= REPORT_INTERVAL_MS) {
+                emit.set(true);
+                return now;
+            }
+            return previous;
+        });
+        if (emit.get()) {
+            diagnostics.accept(new Diagnostic(DiagnosticCodes.ACTION_FAILED, Severity.WARN,
+                    "Currency placeholder " + (id == null ? "catalog" : id) + ": " + problem,
+                    id, null, "The placeholder is unavailable; repeated reports are rate-limited."));
+        }
     }
 
     private String variable(String rest, UUID viewer, Function<String, Optional<UUID>> playerNamed) {
