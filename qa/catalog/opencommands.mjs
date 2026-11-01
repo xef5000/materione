@@ -100,10 +100,15 @@ export default [
     timeoutMs: 120_000,
     steps: async (ctx) => {
       await ctx.reset();
-      await ctx.command('opentest food');
-      await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=refused/);
-      await ctx.waitForChat(/No food here, pick another category\./);
-      ctx.expect(await containerOpen(ctx)).toBe(false);
+      const restoreOperator = (await ctx.rcon('deop Probe')).includes('Made Probe no longer a server operator');
+      try {
+        await ctx.command('opentest food');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=refused/);
+        await ctx.waitForChat(/No food here, pick another category\./);
+        ctx.expect(await containerOpen(ctx)).toBe(false);
+      } finally {
+        if (restoreOperator) await ctx.rcon('op Probe');
+      }
     },
   }),
 
