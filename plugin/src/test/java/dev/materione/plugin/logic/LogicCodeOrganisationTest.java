@@ -13,9 +13,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.UUID;
+import java.util.function.ToLongFunction;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The build's teeth for logic.md §9: no main-source class over 400 lines in the logic packages, and
@@ -36,6 +37,8 @@ class LogicCodeOrganisationTest {
             Path.of("..", "content", "src", "main", "java", "dev", "materione", "content", "gui", "logic"));
 
     private static final int MAX_LINES = 400;
+    private static final Path GUI_CONTENT = Path.of(
+            "..", "content", "src", "main", "java", "dev", "materione", "content", "gui");
 
     @Test
     void noLogicClassExceedsTheSizeGuard() throws IOException {
@@ -46,11 +49,44 @@ class LogicCodeOrganisationTest {
     }
 
     @Test
-    void theSizeGuardFailsOnAnOversizedClass(@TempDir Path dir) throws IOException {
-        Files.writeString(dir.resolve("Small.java"), "class Small {}\n");
-        Files.writeString(dir.resolve("Huge.java"), "class Huge {\n" + "    int x;\n".repeat(MAX_LINES) + "}\n");
+    void guiFacadeAndParserAreUnderTheSizeGuard() throws IOException {
+        assertThat(GUI_CONTENT.resolve("GuiType.java")).isRegularFile();
+        assertThat(GUI_CONTENT.resolve("GuiLayerParser.java")).isRegularFile();
+        try (Stream<Path> files = Files.list(GUI_CONTENT)) {
+            assertThat(oversizedGuiSources(files, LogicCodeOrganisationTest::lineCount)).isEmpty();
+        }
+    }
 
-        assertThat(oversized(dir)).containsExactly("Huge.java");
+    @Test
+    void theSizeGuardFailsOnAnOversizedClass() {
+        var root = Path.of("planted");
+        var small = root.resolve("Small.java");
+        var huge = root.resolve("Huge.java");
+        assertThat(oversizedSources(Stream.of(small, huge), root,
+                path -> path.equals(small) ? MAX_LINES : MAX_LINES + 1)).containsExactly("Huge.java");
+    }
+
+    @Test
+    void theFocusedGuiSizeGuardFailsOnPlantedOversizedSources() {
+        var facade = Path.of("GuiType.java");
+        var parser = Path.of("GuiLayerParser.java");
+        var helper = Path.of("GuiLayerParserExtra.java");
+        var unrelated = Path.of("LegacyGui.java");
+        assertThat(oversizedGuiSources(Stream.of(facade, parser, helper, unrelated),
+                path -> path.equals(parser) ? MAX_LINES : MAX_LINES + 1))
+                .containsExactly("GuiLayerParserExtra.java", "GuiType.java");
+    }
+
+    @Test
+    void theFocusedGuiSizeGuardCountsAPlantedOversizedFile() throws IOException {
+        Path planted = Path.of("build", "GuiLayerParserPlanted" + UUID.randomUUID().toString().replace("-", "") + ".java");
+        try {
+            Files.writeString(planted, "// line\n".repeat(MAX_LINES + 1));
+            assertThat(oversizedGuiSources(Stream.of(planted), LogicCodeOrganisationTest::lineCount))
+                    .containsExactly(planted.getFileName().toString());
+        } finally {
+            Files.deleteIfExists(planted);
+        }
     }
 
     @Test
@@ -87,12 +123,28 @@ class LogicCodeOrganisationTest {
 
     private static List<String> oversized(Path root) throws IOException {
         try (Stream<Path> files = Files.walk(root)) {
-            return files.filter(path -> path.toString().endsWith(".java"))
-                    .filter(path -> lineCount(path) > MAX_LINES)
-                    .map(path -> root.relativize(path).toString().replace('\\', '/'))
-                    .sorted()
-                    .toList();
+            return oversizedSources(files, root, LogicCodeOrganisationTest::lineCount);
         }
+    }
+
+    private static List<String> oversizedSources(Stream<Path> files, Path root, ToLongFunction<Path> count) {
+        return files.filter(path -> path.toString().endsWith(".java"))
+                .filter(path -> count.applyAsLong(path) > MAX_LINES)
+                .map(path -> root.relativize(path).toString().replace('\\', '/'))
+                .sorted()
+                .toList();
+    }
+
+    private static List<String> oversizedGuiSources(Stream<Path> files, ToLongFunction<Path> count) {
+        return files.filter(path -> {
+                    String name = path.getFileName().toString();
+                    return name.equals("GuiType.java")
+                            || (name.startsWith("GuiLayerParser") && name.endsWith(".java"));
+                })
+                .filter(path -> count.applyAsLong(path) > MAX_LINES)
+                .map(path -> path.getFileName().toString())
+                .sorted()
+                .toList();
     }
 
     private static long lineCount(Path file) {

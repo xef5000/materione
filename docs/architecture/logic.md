@@ -709,7 +709,9 @@ Rules:
    interpreter talks to the world only through `LogicContext` facets and the `RunScheduler` port,
    so it is unit-tested without a server.
 4. **Size guard.** A build test fails any main-source class over **400 lines** in the new packages
-   above. Splitting is cheaper than an exception. Generated and test code is exempt.
+   above, as well as `content.gui.GuiType` and `GuiLayerParser` and its named helpers (#253).
+   It does not impose a new limit on the rest of the legacy `content.gui` package.
+   Splitting is cheaper than an exception. Generated and test code is exempt.
 5. **Typed parse at load.** No action or condition reads raw maps at run time (§4.1).
 6. **Every action and condition ships with** a self-description, a unit test of parse
    (accept and reject), a unit test of execute or test against a fake context, and, when
