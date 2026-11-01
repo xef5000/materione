@@ -404,10 +404,13 @@ public final class MaterionePlugin extends JavaPlugin {
     private void logLogicProviders() {
         var providers = logic.providers();
         var defaultCurrency = providers.currencies().defaultCurrency();
-        boolean available = providers.currencies().availability(defaultCurrency).available();
+        var reads = new dev.materione.plugin.logic.currency.CurrencyReads(
+                descriptorOrNull() == null || descriptorOrNull().folia(),
+                dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER);
+        boolean available = reads.availabilityResolved(providers.currencies(), defaultCurrency).available();
         String transfer = providers.transfer().filter(dev.materione.api.logic.provider.ServerTransfer::available)
                 .isPresent() ? "yes" : "none";
-        String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers).stream()
+        String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers, reads).stream()
                 .filter(action -> !action.availability().available())
                 .map(dev.materione.api.logic.ActionType::id)
                 .collect(java.util.stream.Collectors.joining(","));

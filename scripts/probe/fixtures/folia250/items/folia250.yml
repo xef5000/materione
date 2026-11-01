@@ -30,12 +30,33 @@ folia250_unsupported:
       do:
         - message: "MTR250-UNSAFE-RULE-RAN"
 
+folia250_unsupported_has:
+  material: COMPASS
+  display_name: "Folia unavailable has-money probe"
+  behavior:
+    - on: drop
+      if:
+        - has_money: {amount: 1, currency: "probe:folia250_unsafe"}
+      do:
+        - message: "MTR250-UNSAFE-HAS-RAN"
+
+folia250_pre_event:
+  material: COMPASS
+  display_name: "Folia synchronous mutation probe"
+  behavior:
+    - on: drop
+      do:
+        - set_var: {var: server.probe.folia250_total, value: 10}
+        - set_var: {var: server.probe.folia250_total, op: add, value: 2}
+
 folia250_retire:
   material: COMPASS
   display_name: "Folia retirement probe"
   behavior:
     - on: click:right
       do:
+        - wait: 2
+        - run_command: "say MTR250-RETIRE-START"
         - wait: 200
         - run_command: "say MTR250-RETIRED-RAN"
 

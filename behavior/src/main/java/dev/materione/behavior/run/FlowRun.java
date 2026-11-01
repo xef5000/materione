@@ -39,6 +39,8 @@ public final class FlowRun {
     CompletableFuture<?> evaluation;
     int choiceIndex;
     Map<String, Object> callArgs;
+    dev.materione.api.logic.ReadExecutor callReads;
+    dev.materione.api.logic.ReadExecutor choiceReads;
     int callArgIndex;
 
     record DeferredResume(dev.materione.api.logic.Threading owner, Runnable task) {}

@@ -202,7 +202,7 @@ public final class BuiltinLogic {
         for (ExpressionFunction function : functions()) {
             api.functions().register(owner, builtIn(function.id()), function);
         }
-        for (ActionType<?> action : providerActions(api.providers())) {
+        for (ActionType<?> action : providerActions(api.providers(), reads)) {
             api.actions().register(owner, builtIn(action.id()), action);
         }
         // currency integrations and the money functions (logic.md §18): the built-in block
@@ -276,9 +276,13 @@ public final class BuiltinLogic {
      * {@link LogicProviders}, never against a snapshot of what is installed.
      */
     public static List<ActionType<?>> providerActions(LogicProviders providers) {
+        return providerActions(providers, CurrencyReads.paper());
+    }
+
+    public static List<ActionType<?>> providerActions(LogicProviders providers, CurrencyReads reads) {
         return List.of(
-                new GiveMoneyAction(providers),
-                new TakeMoneyAction(providers),
+                new GiveMoneyAction(providers, reads),
+                new TakeMoneyAction(providers, reads),
                 new GivePermissionAction(providers),
                 new TakePermissionAction(providers),
                 new ConnectAction(providers));

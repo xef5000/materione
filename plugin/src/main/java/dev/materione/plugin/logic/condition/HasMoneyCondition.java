@@ -9,7 +9,6 @@ import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.provider.Currency;
-import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyCatalog;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
@@ -21,6 +20,7 @@ import dev.materione.plugin.logic.currency.CurrencyReads;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.entity.Player;
 
 /**
@@ -86,34 +86,36 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
             reads.unavailable("currency is unavailable");
             return false;
         }
-        CurrencyBackend backend = reads.lookup(() -> catalog.backend(currency).orElse(null));
-        if (backend == null) {
-            reads.unavailable("currency has no available backend");
-            return false;
-        }
-        return reads.read(backend, player, () -> backend.has(player.getUniqueId(), params.amount()))
+        return reads.readResolved(catalog, currency, player,
+                backend -> backend.has(player.getUniqueId(), params.amount()))
                 instanceof EconomyResult.Succeeded;
     }
 
     @Override
     public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor executor) {
-        if (context.facet(Facets.PLAYER).isEmpty()) {
-            return executor.on(dev.materione.api.logic.Threading.ANY, () -> test(params, context));
-        }
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) return CompletableFuture.completedFuture(false);
         return executor.on(dev.materione.api.logic.Threading.ANY, () -> {
             CurrencyCatalog catalog = reads.lookup(providers::currencies);
             Currency currency = reads.lookup(() -> ProviderParams.resolve(catalog, params.currency()));
-            return currency == null ? null : reads.lookup(() -> catalog.backend(currency).orElse(null));
-        }).thenCompose(backend -> backend == null
-                ? executor.on(dev.materione.api.logic.Threading.ANY, () -> test(params, context))
-                : reads.schedule(backend, executor, () -> test(params, context)));
+            if (currency == null) {
+                reads.unavailable("currency is unavailable");
+                return null;
+            }
+            return new Selection(catalog, currency);
+        }).thenCompose(selection -> selection == null ? CompletableFuture.completedFuture(false)
+                : reads.scheduleResolved(selection.catalog(), selection.currency(), player, executor,
+                        backend -> backend.has(player.getUniqueId(), params.amount()))
+                        .thenApply(result -> result instanceof EconomyResult.Succeeded));
     }
+
+    private record Selection(CurrencyCatalog catalog, Currency currency) {}
 
     /** Available when the default currency can be used, as for {@code take_money}. */
     @Override
     public Availability availability() {
         CurrencyCatalog catalog = providers.currencies();
-        Availability own = catalog.availability(catalog.defaultCurrency());
+        Availability own = reads.availabilityResolved(catalog, catalog.defaultCurrency());
         return own.available() ? Availability.AVAILABLE : own;
     }
 }

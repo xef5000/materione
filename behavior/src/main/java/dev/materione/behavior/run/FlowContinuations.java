@@ -49,7 +49,7 @@ abstract class FlowContinuations extends ControlSteps {
         ActionOutcome outcome;
         try {
             if (!await(run, action.path(), () ->
-                    action.type().executeResumable(action.params(), run.view(), run.reads))) {
+                    action.type().executeResumable(action.params(), run.view(), run.reads.captureOrigin()))) {
                 return false;
             }
             outcome = take(run);

@@ -1432,7 +1432,11 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     **Read capability (#250):** `CurrencyBackend.readCapability()` separately declares the read
     owner, explicit Folia support with a reason when unsupported, and an optional offline owner. Existing
     integrations default to unsupported on Folia; a `GLOBAL` thread label is not evidence that Vault or
-    an arbitrary PlaceholderAPI provider is safe. XP declares the player's region and no offline read.
+    an arbitrary PlaceholderAPI provider is safe. `CurrencyIntegration.lookupCapability()` independently
+    declares the owner and Folia safety of binding and availability; its default is unsupported. A live
+    read proves that capability before invoking either callback, then rechecks availability after the
+    read on its declared owner. Synchronous vocabulary availability fails closed when it cannot prove
+    the lookup owner without a player. XP declares the player's region and no offline read.
     `balance()` and `has_money` guard synchronous calls: on Folia an unsupported provider, unavailable
     backend or wrong owner is a read failure, not a balance of zero or a false result that `not` can invert.
     Paper retains its previous synchronous behaviour.
@@ -1440,11 +1444,14 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     Rule gates, conditions, action templates and computed values, and flow-call arguments use ordered
     nonblocking continuations. A continuation retains prior operands and does not replay a callback.
     Existing action and condition callbacks still run once on their declared owner; legacy expression
-    functions return to the expression's captured original owner after their arguments resolve. An
+    functions return to the evaluation's captured original owner after their arguments resolve. One
+    capture spans sequential action parameters, composite conditions, and flow-call arguments. An
     unidentifiable original owner is unavailable, not guessed. Addons that need a different hop inside
     a callback opt into the continuation API. A computed `set_var` operand resolves before the target's
-    current value is read and updated on its owner; server-scope `set_var` steps serialize on the global
-    owner. Live inventory and location predicates read their state after dynamic parameters resolve,
+    current value is read and updated on its owner. Server-scope `set_var` operations use the same
+    atomic in-memory mutation as all server-store writers, so they may run inline without a global hop;
+    operand evaluation and file flushing happen outside the mutation lock. Live inventory and location
+    predicates read their state after dynamic parameters resolve,
     while `is_near` still short-circuits an initial world mismatch before those parameters.
     Unsupported reads fail rather than become a value.
     For a cancellable pre-event, an evaluation requiring a hop before dispatch returns is unavailable

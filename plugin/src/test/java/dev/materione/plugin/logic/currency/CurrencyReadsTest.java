@@ -19,11 +19,12 @@ import dev.materione.behavior.run.RunReadExecutor;
 import dev.materione.behavior.run.RunScheduler;
 import dev.materione.plugin.logic.GatewayRunScheduler;
 import java.lang.reflect.Proxy;
-import java.util.UUID;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
@@ -196,6 +197,113 @@ class CurrencyReadsTest {
                 };
             }
         };
+    }
+
+    @Test
+    void undeclaredLookupNeverCallsBindAvailabilityOrRead() {
+        var fixture = new ResolvedFixture(false);
+        assertThatThrownBy(() -> fixture.reads.readResolved(fixture.catalog, fixture.currency, player,
+                backend -> backend.balance(UUID.randomUUID())))
+                .isInstanceOf(ReadUnavailableException.class).hasMessageContaining("not declared");
+        assertThatThrownBy(() -> fixture.reads.scheduleResolved(fixture.catalog, fixture.currency, player,
+                fixture.executor, backend -> backend.balance(UUID.randomUUID())).toCompletableFuture().join())
+                .hasCauseInstanceOf(ReadUnavailableException.class);
+        assertThat(fixture.calls).isEmpty();
+    }
+
+    @Test
+    void synchronousWrongLookupOwnerFailsBeforeBinding() {
+        var fixture = new ResolvedFixture(true);
+        assertThatThrownBy(() -> fixture.reads.readResolved(fixture.catalog, fixture.currency, player,
+                backend -> backend.balance(UUID.randomUUID())))
+                .isInstanceOf(ReadUnavailableException.class).hasMessageContaining("GLOBAL");
+        assertThat(fixture.calls).isEmpty();
+    }
+
+    @Test
+    void metadataAvailabilityNeverInvokesAnUnprovenOrWrongOwnerLookup() {
+        var unknown = new ResolvedFixture(false);
+        assertThat(unknown.reads.availabilityResolved(unknown.catalog, unknown.currency).available()).isFalse();
+        assertThat(unknown.calls).isEmpty();
+
+        var declared = new ResolvedFixture(true);
+        assertThat(declared.reads.availabilityResolved(declared.catalog, declared.currency).available()).isFalse();
+        assertThat(declared.calls).isEmpty();
+        declared.current = Threading.GLOBAL;
+        assertThat(declared.reads.availabilityResolved(declared.catalog, declared.currency)).isEqualTo(Availability.AVAILABLE);
+        assertThat(declared.calls).containsExactly("bind:GLOBAL", "availability:GLOBAL");
+    }
+
+    @Test
+    void resumableLookupReadAndFreshAvailabilityUseTheirDeclaredOwnersInOrder() {
+        var fixture = new ResolvedFixture(true);
+        var result = fixture.reads.scheduleResolved(fixture.catalog, fixture.currency, player,
+                fixture.executor, backend -> backend.balance(UUID.randomUUID())).toCompletableFuture();
+        assertThat(result).isNotDone();
+        fixture.runNext();
+        assertThat(fixture.calls).containsExactly("bind:GLOBAL", "availability:GLOBAL");
+        fixture.runNext();
+        assertThat(fixture.calls).containsExactly("bind:GLOBAL", "availability:GLOBAL", "read:PLAYER_REGION");
+        assertThat(result).isNotDone();
+        fixture.runNext();
+        assertThat(result.join()).isEqualTo(new EconomyResult.Succeeded(5));
+        assertThat(fixture.calls).containsExactly("bind:GLOBAL", "availability:GLOBAL",
+                "read:PLAYER_REGION", "availability:GLOBAL");
+    }
+
+    private static final class ResolvedFixture implements RunScheduler {
+        Threading current = Threading.PLAYER_REGION;
+        final ArrayDeque<Runnable> tasks = new ArrayDeque<>();
+        final List<String> calls = new ArrayList<>();
+        final Currency currency = MaterioneCurrencyCatalog.MONEY;
+        final CurrencyReads reads = new CurrencyReads(true, new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(Entity entity) { return current == Threading.PLAYER_REGION; }
+            @Override public boolean onGlobalThread() { return current == Threading.GLOBAL; }
+        });
+        final RunReadExecutor executor = new RunReadExecutor(this, "player");
+        final MaterioneCurrencyCatalog catalog;
+
+        ResolvedFixture(boolean declared) {
+            CurrencyBackend backend = new CurrencyBackend() {
+                @Override public CurrencyReadCapability readCapability() {
+                    return new CurrencyReadCapability(Threading.PLAYER_REGION, Availability.AVAILABLE, null);
+                }
+                @Override public Availability availability() {
+                    calls.add("availability:" + current);
+                    return Availability.AVAILABLE;
+                }
+                @Override public EconomyResult balance(UUID player) {
+                    calls.add("read:" + current);
+                    return new EconomyResult.Succeeded(5);
+                }
+                @Override public EconomyResult has(UUID player, double amount) { throw new AssertionError(); }
+                @Override public EconomyResult withdraw(UUID player, double amount) { throw new AssertionError(); }
+                @Override public EconomyResult deposit(UUID player, double amount) { throw new AssertionError(); }
+            };
+            CurrencyIntegration integration = new CurrencyIntegration() {
+                @Override public String id() { return "vault"; }
+                @Override public SelfDescription describe() { return new SelfDescription("fake", "fake", List.of(), "2"); }
+                @Override public CurrencyLookupCapability lookupCapability() {
+                    return declared ? new CurrencyLookupCapability(Threading.GLOBAL, Availability.AVAILABLE)
+                            : CurrencyIntegration.super.lookupCapability();
+                }
+                @Override public CurrencyBackend bind(ParamReader config) {
+                    calls.add("bind:" + current);
+                    return backend;
+                }
+            };
+            catalog = new MaterioneCurrencyCatalog(name -> Optional.of(integration), null);
+        }
+
+        @Override public boolean canRunInline(Object anchor, Threading owner) {
+            return owner == Threading.ANY || owner == current;
+        }
+        @Override public Handle schedule(Object anchor, Threading owner, long delay, Runnable task, Runnable retired) {
+            Runnable wrapped = () -> { current = owner; task.run(); };
+            tasks.add(wrapped);
+            return () -> tasks.remove(wrapped);
+        }
+        void runNext() { tasks.remove().run(); }
     }
 
     private static CurrencyBackend backend(CurrencyReadCapability capability) {

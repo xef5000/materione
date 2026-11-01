@@ -9,6 +9,7 @@ import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.registry.SelfDescription;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
@@ -20,8 +21,11 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Local-only sentinel: a backend which must never be called on Folia without a capability. */
 public final class FoliaProbe extends JavaPlugin implements Listener {
+    private MaterioneAPI api;
+    private final AtomicInteger unsafeCalls = new AtomicInteger();
+
     @Override public void onEnable() {
-        MaterioneAPI api = getServer().getServicesManager().load(MaterioneAPI.class);
+        api = getServer().getServicesManager().load(MaterioneAPI.class);
         if (api == null) {
             throw new IllegalStateException("Materione service is not available");
         }
@@ -37,6 +41,36 @@ public final class FoliaProbe extends JavaPlugin implements Listener {
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 1 && args[0].equals("rmw")) {
+            FoliaProbeVerification.rmw(this);
+            return true;
+        }
+        if (args.length == 1 && args[0].equals("vocabulary")) {
+            getServer().getAsyncScheduler().runNow(this, ignored -> {
+                int before = unsafeCalls.get();
+                var vocabulary = api.logic().vocabulary();
+                var moneyActions = vocabulary.actions().stream()
+                        .filter(action -> action.id().equals("give_money") || action.id().equals("take_money")).toList();
+                var conditions = vocabulary.conditions().stream()
+                        .filter(condition -> condition.id().equals("has_money")).toList();
+                int calls = unsafeCalls.get() - before;
+                boolean ok = moneyActions.size() == 2 && conditions.size() == 1 && calls == 0
+                        && moneyActions.stream().noneMatch(action -> action.availability().available())
+                        && !conditions.getFirst().availability().available();
+                getLogger().info("MTR250-VOCABULARY " + (ok ? "PASS" : "FAIL")
+                        + " unsafeCalls=" + calls + " actions=" + moneyActions.size()
+                        + " conditions=" + conditions.size());
+            });
+            return true;
+        }
+        if (args.length == 2 && args[0].equals("offline")) {
+            try {
+                FoliaProbeVerification.offline(this, UUID.fromString(args[1]));
+                return true;
+            } catch (IllegalArgumentException invalid) {
+                return false;
+            }
+        }
         if (!(sender instanceof Player player) || args.length != 1 || !args[0].equals("migrate")) {
             return false;
         }
@@ -58,7 +92,14 @@ public final class FoliaProbe extends JavaPlugin implements Listener {
             return new SelfDescription("Unsafe sentinel", "Must not be called on Folia", List.of(), "1");
         }
         @Override public CurrencyBackend bind(ParamReader params) {
+            unsafeCalls.incrementAndGet();
+            getLogger().severe("MTR250-UNSAFE-CALL bind");
             return new CurrencyBackend() {
+                @Override public dev.materione.api.logic.Availability availability() {
+                    unsafeCalls.incrementAndGet();
+                    getLogger().severe("MTR250-UNSAFE-CALL availability");
+                    return dev.materione.api.logic.Availability.AVAILABLE;
+                }
                 @Override public EconomyResult balance(UUID player) {
                     getLogger().severe("MTR250-UNSAFE-CALL balance");
                     return new EconomyResult.Succeeded(999);

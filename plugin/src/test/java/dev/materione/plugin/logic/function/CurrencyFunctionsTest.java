@@ -27,6 +27,7 @@ import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyReadCapability;
+import dev.materione.api.logic.provider.CurrencyLookupCapability;
 import dev.materione.behavior.run.RunReadExecutor;
 import dev.materione.behavior.run.RunScheduler;
 import java.lang.reflect.Proxy;
@@ -78,6 +79,12 @@ class CurrencyFunctionsTest {
                 @Override
                 public String id() {
                     return "vault";
+                }
+
+                @Override
+                public CurrencyLookupCapability lookupCapability() {
+                    return capability == null ? CurrencyIntegration.super.lookupCapability()
+                            : new CurrencyLookupCapability(Threading.ANY, Availability.AVAILABLE);
                 }
 
                 @Override
@@ -271,6 +278,6 @@ class CurrencyFunctionsTest {
         provider.currencies.define(List.of());
         scheduler.run();
         assertThatThrownBy(result::join).hasCauseInstanceOf(ReadUnavailableException.class)
-                .hasMessageContaining("unavailable");
+                .hasMessageContaining("binding changed");
     }
 }

@@ -111,12 +111,12 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         return Threading.ANY;
     }
 
-    /** Player variables use their region; server-variable steps serialize on the global owner. */
+    /** Player variables use their region; server mutations are atomic in the shared store. */
     @Override
     public Threading threading(Params params) {
         if (params.target() instanceof PersistentTarget persistent) {
             return persistent.declaration().scope() == VariableScope.PLAYER
-                    ? Threading.PLAYER_REGION : Threading.GLOBAL;
+                    ? Threading.PLAYER_REGION : Threading.ANY;
         }
         return Threading.ANY;
     }
@@ -156,6 +156,10 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
     public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
         Threading owner = params.target() instanceof PersistentTarget ? threading(params) : Threading.PLAYER_REGION;
         return operandResumable(params, context, reads).thenCompose(value -> reads.on(owner, () -> {
+            if (params.target() instanceof PersistentTarget persistent
+                    && persistent.declaration().scope() == VariableScope.SERVER) {
+                return mutateServer(persistent.declaration(), params.op(), value, context.variables());
+            }
             var prepared = prepare(params, context);
             if (prepared.failure() != null) {
                 return prepared.failure();
@@ -349,6 +353,9 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
 
     private static ActionOutcome writePersistent(VariableDeclaration declaration, Params params, LogicContext context) {
         VariableBinding binding = context.variables();
+        if (declaration.scope() == VariableScope.SERVER) {
+            return mutateServer(declaration, params.op(), operand(params, context), binding);
+        }
         // only the arithmetic and toggle read the current value; a set replaces it
         boolean needsCurrent = params.op() == VariableOp.ADD || params.op() == VariableOp.SUBTRACT
                 || params.op() == VariableOp.MULTIPLY || params.op() == VariableOp.TOGGLE;
@@ -364,6 +371,12 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
                     + " variable (is the player online?)");
         }
         return ActionOutcome.OK;
+    }
+
+    private static ActionOutcome mutateServer(
+            VariableDeclaration declaration, VariableOp op, Object value, VariableBinding binding) {
+        var result = binding.mutate(declaration, op, value);
+        return result.ok() ? ActionOutcome.OK : ActionOutcome.failed(declaration.id() + ": " + result.reason());
     }
 
     /** The operand of the step, evaluated now. */

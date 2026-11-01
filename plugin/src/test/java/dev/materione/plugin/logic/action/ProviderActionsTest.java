@@ -144,6 +144,12 @@ public class ProviderActionsTest {
         }
 
         @Override
+        public dev.materione.api.logic.provider.CurrencyLookupCapability lookupCapability() {
+            return backend.readCapability == null ? CurrencyIntegration.super.lookupCapability()
+                    : new dev.materione.api.logic.provider.CurrencyLookupCapability(Threading.ANY, Availability.AVAILABLE);
+        }
+
+        @Override
         public String id() {
             return "vault";
         }
@@ -226,9 +232,10 @@ public class ProviderActionsTest {
 
         public FakeProviders(PermissionProvider permissions) {
             this.permissions = permissions;
+            var integration = new FakeIntegration(backend);
             this.currencies = new MaterioneCurrencyCatalog(
                     authored -> vaultInstalled && "vault".equals(authored)
-                            ? Optional.of(new FakeIntegration(backend))
+                            ? Optional.of(integration)
                             : Optional.empty(),
                     "materione:money");
         }

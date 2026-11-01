@@ -7,4 +7,4 @@ depend: [Materione]
 commands:
   folia250:
     description: Local-only safe-read probe controls
-    usage: /folia250 migrate
+    usage: /folia250 migrate|rmw|offline <uuid>

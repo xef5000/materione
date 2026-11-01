@@ -108,11 +108,12 @@ public final class BroadcastAction implements ActionType<BroadcastAction.Params>
 
     @Override
     public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
-        return ResolvedText.resolve(params.text(), context, reads).thenCompose(text -> {
+        var scoped = reads.captureOrigin();
+        return ResolvedText.resolve(params.text(), context, scoped).thenCompose(text -> {
             CompletionStage<Optional<TemplateText>> target = params.scope() == Scope.SERVER
                     ? CompletableFuture.completedFuture(params.target())
-                    : ResolvedText.resolve(params.target(), context, reads);
-            return target.thenCompose(resolved -> reads.on(threading(),
+                    : ResolvedText.resolve(params.target(), context, scoped);
+            return target.thenCompose(resolved -> scoped.on(threading(),
                     () -> execute(new Params(text, params.scope(), resolved), context)));
         });
     }
