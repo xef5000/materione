@@ -1,0 +1,47 @@
+tabs:
+  title: Overlay tabs
+  rows: 3
+  refresh: 10
+  layers:
+    - id: background
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: toggle
+      type: button
+      x: 44
+      y: 36
+      width: 16
+      height: 16
+    - id: selected
+      type: image
+      image: gui/banner_strip
+      x: 80
+      y: 36
+      width: 36
+      height: 16
+      visible_if: "gui.session.tab == true"
+    - id: label
+      type: text
+      x: 80
+      y: 20
+      text: "ACTIVE ${player.name}"
+      font: default
+      visible_if: "gui.session.tab == true"
+  behavior:
+    - on: gui.open
+      do:
+        - set_var: {var: session.tab, value: false}
+        - run_command:
+            command: "say MATERIONE-OVERLAY-OPEN"
+            as: console
+    - on: gui.click
+      layer: toggle
+      do:
+        - set_var: {var: session.tab, op: toggle}
+        - gui.refresh
+        - run_command:
+            command: "say MATERIONE-OVERLAY-TOGGLED"
+            as: console

@@ -60,7 +60,7 @@ public final class InputSlotClicks {
         if (!(gui instanceof GuiMenu menu)) {
             return WindowPolicy.LEGACY;
         }
-        return liveOf(menu, who).map(live -> WindowPolicy.live(live.inputs())).orElse(WindowPolicy.STALE);
+        return liveOf(menu, who).map(live -> WindowPolicy.live(inputs(menu, live))).orElse(WindowPolicy.STALE);
     }
 
     /**
@@ -93,7 +93,7 @@ public final class InputSlotClicks {
         }
         Optional<RuntimeGuis.Live> live = liveOf(menu, player);
         int slot = event.getRawSlot();
-        Optional<InputSlots.Input> input = live.flatMap(view -> view.inputs().at(slot));
+        Optional<InputSlots.Input> input = live.flatMap(view -> inputs(menu, view).at(slot));
         if (live.isEmpty() || input.isEmpty()) {
             return false;
         }
@@ -135,7 +135,7 @@ public final class InputSlotClicks {
         during(player.getUniqueId(), () -> {
             Inventory top = menu.getInventory();
             var cells = new ArrayList<Transfers.Cell>();
-            for (InputSlots.Input input : live.get().inputs().all()) {
+            for (InputSlots.Input input : inputs(menu, live.get()).all()) {
                 ItemStack item = top.getItem(input.slot());
                 if (events.accepts(viewer, session, input, input.slot(), src, BukkitStacks.view(item))) {
                     cells.add(new Transfers.Cell(input.slot(), BukkitStacks.view(item).amount(),
@@ -147,7 +147,7 @@ public final class InputSlotClicks {
                 return null;
             }
             for (Transfers.Move move : plan.moves()) {
-                InputSlots.Input input = live.get().inputs().at(move.slot()).orElseThrow();
+                InputSlots.Input input = inputs(menu, live.get()).at(move.slot()).orElseThrow();
                 StackView before = BukkitStacks.view(top.getItem(move.slot()));
                 StackView after = before.empty() ? src.withAmount(move.count())
                         : before.withAmount(before.amount() + move.count());
@@ -174,7 +174,7 @@ public final class InputSlotClicks {
         }
         Optional<RuntimeGuis.Live> live = liveOf(menu, player);
         int slot = event.getRawSlot();
-        Optional<InputSlots.Input> input = live.flatMap(view -> view.inputs().at(slot));
+        Optional<InputSlots.Input> input = live.flatMap(view -> inputs(menu, view).at(slot));
         ItemStack item = menu.getInventory().getItem(slot);
         StackView before = BukkitStacks.view(item);
         if (live.isEmpty() || input.isEmpty() || before.empty()) {
@@ -221,7 +221,7 @@ public final class InputSlotClicks {
         during(player.getUniqueId(), () -> {
             Inventory top = menu.getInventory();
             var topCells = new ArrayList<Transfers.Cell>();
-            for (InputSlots.Input input : live.get().inputs().all()) {
+            for (InputSlots.Input input : inputs(menu, live.get()).all()) {
                 ItemStack item = top.getItem(input.slot());
                 topCells.add(new Transfers.Cell(input.slot(), BukkitStacks.view(item).amount(),
                         BukkitStacks.similar(item, cursor)));
@@ -233,7 +233,7 @@ public final class InputSlotClicks {
                 return null;
             }
             for (Transfers.Move move : fromWindow.moves()) {
-                InputSlots.Input input = live.get().inputs().at(move.slot()).orElseThrow();
+                InputSlots.Input input = inputs(menu, live.get()).at(move.slot()).orElseThrow();
                 StackView before = BukkitStacks.view(top.getItem(move.slot()));
                 int left = before.amount() - move.count();
                 StackView after = new StackView(left > 0 ? before.id() : "", left, before.maxStack());
@@ -276,7 +276,7 @@ public final class InputSlotClicks {
                 if (raw >= topSize) {
                     continue;
                 }
-                Optional<InputSlots.Input> input = live.get().inputs().at(raw);
+                Optional<InputSlots.Input> input = inputs(menu, live.get()).at(raw);
                 if (input.isEmpty()) {
                     return false;
                 }
@@ -303,6 +303,10 @@ public final class InputSlotClicks {
     }
 
     // --- helpers ------------------------------------------------------------------
+
+    private static InputSlots inputs(GuiMenu menu, RuntimeGuis.Live gui) {
+        return gui.inputs().only(menu.inputSlots());
+    }
 
     private boolean allows(Viewer viewer, GuiSession session, RuntimeGuis.Live live, InputSlots.Input input,
             int slot, StackView before, SlotPolicy.Change change) {

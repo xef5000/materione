@@ -104,6 +104,28 @@ class AllocationTableTest {
     }
 
     @Test
+    void overlayIdentitySurvivesReorderTombstoneAndRestart(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("allocation.bin");
+        var gui = NamespacedId.of("shop", "catalog/main");
+        var first = dev.materione.content.gui.GuiOverlayKeys.allocation(gui, "first", 0);
+        var second = dev.materione.content.gui.GuiOverlayKeys.allocation(gui, "second", 0);
+        assertThat(first).isNotEqualTo(second)
+                .isNotEqualTo(dev.materione.content.gui.GuiOverlayKeys.allocation(gui, "first", 1));
+        var table = AllocationTable.load(file);
+        int a = table.range(first, "gui-background", 1).start();
+        int b = table.range(second, "gui-background", 1).start();
+        table.tombstone(first, "gui-background");
+        table.flush();
+        var reloaded = AllocationTable.load(file);
+        assertThat(reloaded.range(second, "gui-background", 1).start()).isEqualTo(b);
+        assertThat(reloaded.range(first, "gui-background", 1).start()).isEqualTo(a);
+        assertThat(reloaded.allocationOf(first, "gui-background")).contains(Integer.toString(a));
+        reloaded.flush();
+        assertThat(AllocationTable.load(file).allocationOf(first, "gui-background"))
+                .contains(Integer.toString(a));
+    }
+
+    @Test
     void growingARunRebindsToAFreshRun(@TempDir Path tempDir) throws IOException {
         var table = AllocationTable.load(tempDir.resolve("allocation.bin"));
         var sheet = NamespacedId.parse("sample:anim");

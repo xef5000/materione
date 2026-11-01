@@ -15,6 +15,7 @@ import dev.materione.content.gui.ItemComponent;
 import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
 import java.util.ArrayList;
@@ -108,6 +109,23 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
             if (layer.visible() && layer.compiled() instanceof ItemComponent.Layer item) {
                 var placement = new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item);
                 out.addAll(compiler.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
+            } else if (layer.visible() && layer.compiled().target() != dev.materione.api.gui.RenderTarget.SLOT) {
+                var pieces = new ArrayList<dev.materione.content.gui.GuiVisualPlan.Piece>();
+                int authored = authoredIndex(gui, layer.id());
+                if (layer.compiled().target() == dev.materione.api.gui.RenderTarget.RASTER) {
+                    pieces.add(new dev.materione.content.gui.GuiVisualPlan.Raster(
+                            layer.id(), authored, layer.visibleIf(), List.of(), 0));
+                } else {
+                    try {
+                        layer.compiled().drawText((x, y, text, font, color) ->
+                                pieces.add(new dev.materione.content.gui.GuiVisualPlan.Text(
+                                        layer.id(), authored, layer.visibleIf(), x, y, text, font, color)));
+                    } catch (RuntimeException ignored) {
+                        continue; // the GUI compiler reports the broken component
+                    }
+                }
+                var plan = new dev.materione.content.gui.GuiVisualPlan(gui.id().namespace(), 0, 0, pieces);
+                out.addAll(TitleProgram.compile(gui.id(), plan, registries).problems());
             }
         }
         return out;

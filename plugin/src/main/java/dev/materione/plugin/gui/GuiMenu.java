@@ -20,15 +20,21 @@ public final class GuiMenu extends PluginGui {
     private final GuiSession session;
     private final int rows;
     private final String title;
+    private final String baseTitle;
     private final GuiInput input;
     /** The input slots this window was shown with: the only slots whose items are the player's (logic.md §25). */
     private volatile Set<Integer> inputSlots = Set.of();
 
     public GuiMenu(GuiSession session, int rows, String title, GuiInput input) {
+        this(session, rows, title, title, input);
+    }
+
+    public GuiMenu(GuiSession session, int rows, String title, String baseTitle, GuiInput input) {
         super(rows * 9, MaterioneText.parseData(title));
         this.session = session;
         this.rows = rows;
         this.title = title;
+        this.baseTitle = baseTitle;
         this.input = input;
     }
 
@@ -58,6 +64,10 @@ public final class GuiMenu extends PluginGui {
     /** The MiniMessage title the window was created with. */
     public String title() {
         return title;
+    }
+
+    public String baseTitle() {
+        return baseTitle;
     }
 
     @Override

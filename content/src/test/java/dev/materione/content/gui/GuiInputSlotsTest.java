@@ -50,6 +50,27 @@ class GuiInputSlotsTest {
     }
 
     @Test
+    void conditionalAndAnimatedBlockersRetainPotentialInputOwnership() {
+        var wells = GuiTestSupport.layer("wells", "slots", "region", "container", "input", true);
+        var conditional = GuiTestSupport.layer("tab", "button", "x", 8, "y", 18,
+                "width", 16, "height", 16, "visible_if", false);
+        var animated = GuiTestSupport.layer("moving", "button", "x", 26, "y", 18,
+                "width", 16, "height", 16, "materione:overlay_frames",
+                Map.of("every", 4, "layers", List.of(Map.of("x", 8), Map.of("x", 26))));
+        var gui = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1, wells, conditional, animated));
+        var model = GuiCompiler.compile(gui, 0xE200, TextureSource.NONE,
+                (layer, frame) -> 0xE201 + frame).model();
+        assertThat(model.clicks().layersAt(0)).containsExactly("moving", "tab", "wells");
+        assertThat(model.inputs()).extracting(CompiledGui.Input::slot).contains(0, 1);
+        var staticBlocker = GuiTestSupport.layer("permanent", "button", "x", 8, "y", 18,
+                "width", 16, "height", 16);
+        gui = GuiTestSupport.parse(GuiTestSupport.type(),
+                GuiTestSupport.definition(1, wells, staticBlocker, conditional));
+        model = GuiCompiler.compile(gui, 0xE200, TextureSource.NONE, (layer, frame) -> 0xE201).model();
+        assertThat(model.inputs()).extracting(CompiledGui.Input::slot).doesNotContain(0);
+    }
+
+    @Test
     void theViewerInventoryIsFreeUnlessItIsLocked() {
         assertThat(compile(GuiTestSupport.definition(1)).model().playerInventory()).isEqualTo(PlayerInventory.FREE);
         var locked = GuiTestSupport.definition(1);

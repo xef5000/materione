@@ -272,12 +272,12 @@ class GuiTypeTest {
                 Map.of("id", "frame", "type", "missing"),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
-                Map.of("id", "label", "type", "text", "text", "x", "visible_if", true)));
+                Map.of("id", "label", "type", "text", "text", "x", "visible_if", 3)));
         var gui = (GuiDefinition) type.parse(GUI, definition, Map.of()).orElseThrow();
 
         assertThat(gui.layers()).extracting(GuiLayer::id).containsExactly("frame");
         assertThat(gui.skipped()).extracting(GuiDefinition.SkippedLayer::index).containsExactly(0, 2, 3);
-        assertThat(gui.skipped().get(2).reason()).contains("visible_if works on item layers");
+        assertThat(gui.skipped().get(2).reason()).contains("visible_if is a condition");
         assertThat(type.diagnose(gui)).allSatisfy(d -> assertThat(d.code()).isEqualTo(DiagnosticCodes.GUI_LAYER_SKIPPED))
                 .extracting(d -> d.target().field())
                 .containsExactly(List.of("layers", "0"), List.of("layers", "2"), List.of("layers", "3"));
@@ -310,7 +310,8 @@ class GuiTypeTest {
                 .containsExactly("title", "rows", "player_inventory", "refresh", "layers", "behavior", "flows", "open");
         ParameterSchema layers = description.parameters().get(4);
         assertThat(layers.nested()).extracting(ParameterSchema::id)
-                .containsExactly("id", "type", "name", "visible", "locked", "opacity", "visible_if");
+                .containsExactly("id", "type", "name", "visible", "locked", "opacity", "visible_if",
+                        "materione:overlay_frames");
         assertThat(layers.nested().get(1).editor().referenceKind()).isEqualTo("gui-component");
         assertThat(description.parameters().get(1).editor().max()).isEqualTo(6.0);
         assertThat(new GuiType(components()).name()).isEqualTo("gui");
@@ -349,6 +350,41 @@ class GuiTypeTest {
     }
 
     // ------------------------------------------------------------------
+
+    @Test
+    void rasterAddonKeepsItsOwnFramesAndDeclaredNamespacedField() {
+        var addon = new FramedAddon();
+        var type = new GuiType(components(addon));
+        var original = GuiTestSupport.definition(1,
+                GuiTestSupport.layer("addon", "example:framed", "frames", "addon-format",
+                        "materione:overlay_frames", "also-addon-owned"));
+        var parsed = GuiTestSupport.parse(type, original);
+        assertThat(parsed.skipped()).isEmpty();
+        assertThat(parsed.layers().get(0).frames()).isNull();
+        assertThat(addon.seen.parameters()).containsEntry("frames", "addon-format")
+                .containsEntry("materione:overlay_frames", "also-addon-owned");
+        var builtIn = GuiTestSupport.parse(type, GuiTestSupport.definition(1,
+                GuiTestSupport.layer("panel", "panel", "width", 10, "height", 10, "frames", "legacy-value")));
+        assertThat(builtIn.skipped()).isEmpty();
+        assertThat(builtIn.layers().get(0).frames()).isNull();
+    }
+
+    private static final class FramedAddon implements GuiComponent {
+        GuiComponentConfiguration seen;
+
+        @Override public String name() { return "framed"; }
+        @Override public RenderTarget target() { return RenderTarget.RASTER; }
+        @Override public SelfDescription describe() {
+            return new SelfDescription("Framed", "Addon-owned fields", List.of(
+                    new ParameterSchema("frames", ParameterType.RAW, false, null, "", null, null),
+                    new ParameterSchema("materione:overlay_frames", ParameterType.RAW, false, null, "", null, null)),
+                    "1.0.0");
+        }
+        @Override public CompiledGuiLayer parse(GuiComponentConfiguration configuration) {
+            seen = configuration;
+            return () -> RenderTarget.RASTER;
+        }
+    }
 
     /** A minimal addon component: a text run whose payload is one string. */
     private static final class TagComponent implements GuiComponent {

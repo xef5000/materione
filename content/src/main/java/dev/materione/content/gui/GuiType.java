@@ -108,13 +108,16 @@ public final class GuiType implements ContentType {
                                 .withRange(0.0, (double) MAX_OPACITY, "%")),
                 new ParameterSchema("visible_if", ParameterType.RAW, false, null,
                         "A condition (an expression, a predicate or a composite, as in a rule's require) that "
-                                + "decides whether the layer is shown, checked on every render. Item layers only "
-                                + "in this build: the layer order is its priority, and the topmost visible layer "
+                                + "decides whether the layer is shown, checked on every render. The layer order "
+                                + "is its priority, and the topmost visible layer "
                                 + "of a slot wins", null, null)
                         .withEditor(new ParameterSchema.EditorMetadata(
-                                "Visible if", "identity", 35, true, "text", "", "")));
+                                "Visible if", "identity", 35, true, "text", "", "")),
+                new ParameterSchema(GuiLayerParser.OVERLAY_FRAMES, ParameterType.RAW, false, null,
+                        "Raster animation: {every: ticks, layers: [component-field patches]}", null, null));
         var layers = new ParameterSchema("layers", ParameterType.LIST, false, null,
-                "Ordered layers, bottom to top; each layer is one component instance",
+                "Ordered layers, bottom to top; each layer is one component instance. Raster layers may "
+                        + "animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}",
                 null, layerFields)
                 .withEditor(new ParameterSchema.EditorMetadata(
                         "Layers", "layers", 0, false, "structured-list", "", ""));
@@ -297,7 +300,16 @@ public final class GuiType implements ContentType {
                     "retire unused GUIs; the allocation table never reuses codepoints");
         }
         GuiCompilation compiled = GuiCompiler.compile(
-                gui, GuiBackgrounds.codepoint(number), emitter.textures());
+                gui, GuiBackgrounds.codepoint(number), emitter.textures(), (layer, frame) -> {
+                    int overlay = allocations.range(GuiOverlayKeys.allocation(gui.id(), layer.id(), frame),
+                            GuiBackgrounds.ALLOCATION_KIND, 1).start();
+                    if (!GuiBackgrounds.fits(overlay)) {
+                        throw new CompileRejectException(DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
+                                "GUI " + gui.id() + " has no overlay codepoint left (U+E200..U+F8FF is used up)",
+                                "retire unused GUIs; the allocation table never reuses codepoints");
+                    }
+                    return GuiBackgrounds.codepoint(overlay);
+                });
         compiled.diagnostics().forEach(emitter::diagnostic);
         compiled.assets().forEach(emitter::generatedAsset);
         // GUI fonts map plain ASCII (smallcaps, the vanilla grid) and reach the screen only

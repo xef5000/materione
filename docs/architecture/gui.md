@@ -72,8 +72,16 @@ shop:                          # one resource per key (master §7.2); the key is
 Common layer fields, owned by the gui type and not by components: `id`, `type`, `name`,
 `visible` (default `true`; hidden layers are kept in the file but not compiled), `locked`
 (editor-only affordance, preserved), `opacity` (0–100, raster components only), and `visible_if`
-(a condition that shows the layer per render; item layers only in this build, logic.md §6.3, §24).
+(a condition that shows supported item, raster or text layers per render, logic.md §6.3–§6.4).
 Everything else belongs to the component's schema.
+
+Raster layers also accept `materione:overlay_frames: {every: 4, layers: [{x: 0}, {x: 8}]}`, where each
+entry patches component fields over that layer and `every` is a positive tick count. Dynamic
+visuals allocate a glyph for each raster frame and assemble raster first, then text, in authored
+order within each target, matching static compilation and the studio. The namespaced field is
+an opt-in; a component declaring that field retains it, and its own `frames` is untouched.
+The authoring preview displays the first raster frame without evaluating viewer conditions;
+the live title is per viewer. Conditional or animated input slots are rejected.
 
 **Item layers can be dynamic (logic.md §6.3, §24, #216).** An `item` layer takes `item:` (a plain
 id, a template such as `${entry.item}`, or one named source such as `head: {player: "${player.name}"}`
@@ -685,8 +693,7 @@ These fill gaps the sections above leave open. Each one is reversible by the own
 owns ordered layer parsing and per-layer validation. The split preserves registry resolution,
 component failure containment, schema order, diagnostics and the lossless authored document
 (D1, D6, master §5.6). The §9 size guard in [logic.md](logic.md#9-code-organisation)
-covers the facade and parser helpers, not unrelated legacy GUI classes. Conditional raster and
-text overlays remain #217's separate work.
+covers the facade, parser and #217 visual-compile helpers, not unrelated legacy GUI classes.
 
 ### Decisions taken in #184 (raster, background glyph and title)
 
@@ -849,6 +856,12 @@ These move the GUI rules from the studio into the API (api.md §3.9). Each decis
 12. **The studio keeps `authoring.setFields` for saves.** Its layer model is a whole-list diff, so the changed `layers` value is the natural unit; `gui.edit` is the structural path for API consumers. Switching the studio's save would mean deriving the five structural edits from the diff, which loses the one-shot "the layout as it stands" property the studio relies on.
 13. **Without the `gui` capability the studio degrades, and says so.** A connection whose session blob does not advertise `gui` (an older plugin, or the demo, which has no blob) gets no verdict and no Customize: the studio shows an explicit banner, draws no skip flags, and disables Customize with the reason. Layout editing and saves are unchanged, since they use `setFields` as before.
 14. **Demo and browser tests.** The demo server has no compiler, so its studio reports the verdict as unavailable; `gui-studio.pw.ts` asserts that state, and the live Customize flow is pinned by the QA catalog (`gui.studio-item-customize`) on a running server.
+
+**Preview allocation prerequisite for #217.** A preview now snapshots the table and tracks
+its own allocations and counters. Multiple glyph requests in one preview therefore get distinct
+values in the same order as a real compile, including range growth and tombstones; no preview
+binding is persisted or shared with a later preview. The snapshot does not predict allocations
+made concurrently after it was created.
 
 ### Decisions taken in #202 (vanilla ASCII advance widths)
 

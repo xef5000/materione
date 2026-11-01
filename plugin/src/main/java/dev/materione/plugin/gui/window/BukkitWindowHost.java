@@ -10,6 +10,7 @@ import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputReturns;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.render.GuiRenderer;
+import dev.materione.plugin.gui.render.Rendered;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.Map;
 import java.util.Optional;
@@ -42,6 +43,7 @@ public final class BukkitWindowHost implements WindowHost {
     private final InputGuard guard;
     private final GuiJournal journal;
     private final GuiRenderer renderer;
+    private final TitleRefreshQueue titleRefreshes = new TitleRefreshQueue();
 
     public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
             GuiJournal journal, GuiRenderer renderer) {
@@ -56,22 +58,30 @@ public final class BukkitWindowHost implements WindowHost {
     @Override
     public void open(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
             Consumer<String> failed) {
+        titleRefreshes.invalidate(session);
         show(viewer, session, gui, false, opened, failed);
     }
 
     @Override
     public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
             Consumer<String> failed) {
+        titleRefreshes.invalidate(session);
         show(viewer, session, gui, true, opened, failed);
     }
 
     private void show(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean carryCursor,
             Runnable opened, Consumer<String> failed) {
+        Rendered next = renderer.render(viewer, session, gui, true, session.windowTicks());
+        show(viewer, session, gui, carryCursor, next, opened, failed);
+    }
+
+    private void show(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean carryCursor,
+            Rendered next, Runnable opened, Consumer<String> failed) {
         Player player = viewer.player();
-        GuiMenu menu = new GuiMenu(session, gui.rows(), gui.title(), input);
-        session.forgetWindow();
-        renderer.paint(menu.getInventory(), viewer, session, gui, true);
-        menu.inputSlots(slotsOf(gui));
+        Object previousWindow = session.window();
+        Rendered previousRender = session.rendered();
+        GuiMenu menu = new GuiMenu(session, gui.rows(), next.title(), gui.title(), input);
+        menu.inputSlots(slotsOf(gui, next));
         later(viewer, () -> {
             if (!player.isOnline()) {
                 failed.accept("the player is offline");
@@ -79,6 +89,10 @@ public final class BukkitWindowHost implements WindowHost {
             }
             if (!session.isOpen()) {
                 failed.accept("the session ended before its window opened");
+                return;
+            }
+            if (session.window() != previousWindow) {
+                failed.accept("the window changed before its replacement opened");
                 return;
             }
             // the cursor item is lifted off the old window first, so closing it does not hand the item
@@ -91,6 +105,10 @@ public final class BukkitWindowHost implements WindowHost {
             // the player's items in the old window's input slots move to this window with the session
             Map<Integer, ItemStack> items = carryCursor && session.window() instanceof GuiMenu previous
                     && previous != menu ? InputReturns.take(previous) : Map.of();
+            if (!carryCursor) {
+                session.forgetWindow();
+            }
+            renderer.paint(menu.getInventory(), session, Rendered.EMPTY, next);
             session.attach(menu);
             boolean shown;
             try {
@@ -102,12 +120,18 @@ public final class BukkitWindowHost implements WindowHost {
                 player.setItemOnCursor(carried);
             }
             if (!shown) {
-                items.values().forEach(item -> InputReturns.giveBack(player, item));
-                journal.mirror(player); // the items went back to the player: the journal must not still hold them
+                session.attach(previousWindow);
+                session.remember(previousRender);
+                if (previousWindow instanceof GuiMenu old && player.getOpenInventory().getTopInventory() == old.getInventory()) {
+                    items.forEach((slot, item) -> old.getInventory().setItem(slot, item));
+                } else {
+                    items.values().forEach(item -> InputReturns.giveBack(player, item));
+                }
+                journal.mirror(player);
                 failed.accept("the window was refused by the server (an InventoryOpenEvent was cancelled)");
                 return;
             }
-            items.forEach((slot, item) -> placeInput(player, menu, slot, item));
+            placeInputs(player, menu, items);
             journal.mirror(player);
             plugin.getLogger().info("MATERIONE-GUI-OPENED id=" + gui.id() + " player=" + viewer.name()
                     + " rows=" + gui.rows() + " slots=" + gui.slots().size());
@@ -138,44 +162,58 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
-        menuOf(viewer, session).ifPresent(menu -> {
-            Map<Integer, ItemStack> kept = InputReturns.take(menu);
-            renderer.paint(menu.getInventory(), viewer, session, gui, true);
-            Set<Integer> now = slotsOf(gui);
-            menu.inputSlots(now);
-            for (Map.Entry<Integer, ItemStack> entry : kept.entrySet()) {
-                if (now.contains(entry.getKey())) {
-                    menu.getInventory().setItem(entry.getKey(), entry.getValue());
-                } else {
-                    InputReturns.giveBack(viewer.player(), entry.getValue());
-                }
-            }
-            journal.mirror(viewer.player());
-        });
+        refresh(viewer, session, gui, true);
     }
 
     @Override
     public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
-        menuOf(viewer, session).ifPresent(menu ->
-                renderer.paint(menu.getInventory(), viewer, session, gui, false));
+        refresh(viewer, session, gui, false);
+    }
+
+    private void refresh(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full) {
+        titleRefreshes.invalidate(session);
+        menuOf(viewer, session).ifPresent(menu -> {
+            Rendered next = renderer.render(viewer, session, gui, full, session.windowTicks());
+            boolean changed = !menu.title().equals(next.title());
+            Set<Integer> now = slotsOf(gui, next);
+            boolean ownershipChanged = !menu.inputSlots().equals(now);
+            titleRefreshes.update(session, changed || ownershipChanged, guard.dispatching(viewer.id()), () -> {
+                if (changed) {
+                    show(viewer, session, gui, true, next, () -> { }, reason ->
+                            plugin.getLogger().warning("GUI title refresh failed: " + reason));
+                } else {
+                    if (!ownershipChanged) {
+                        renderer.paint(menu.getInventory(), session, session.rendered(), next);
+                    } else {
+                        Map<Integer, ItemStack> kept = InputReturns.take(menu);
+                        renderer.paint(menu.getInventory(), session, session.rendered(), next);
+                        menu.inputSlots(now);
+                        placeInputs(viewer.player(), menu, kept);
+                        journal.mirror(viewer.player());
+                    }
+                }
+            }, () -> {
+                if (session.isOpen() && session.window() == menu) {
+                    refresh(viewer, session, gui, true);
+                }
+            }, (task, retired) -> later(viewer, task, retired));
+        });
     }
 
     @Override
     public java.util.Optional<Shape> shape(Viewer viewer, GuiSession session) {
-        return menuOf(viewer, session).map(menu -> new Shape(menu.title(), menu.rows()));
+        return menuOf(viewer, session).map(menu -> new Shape(menu.baseTitle(), menu.rows()));
     }
 
-    /** Puts a carried item into an input slot of the window, or back to the player when the slot is no longer one. */
-    private static void placeInput(Player player, GuiMenu menu, int slot, ItemStack item) {
-        if (menu.inputSlots().contains(slot)) {
-            menu.getInventory().setItem(slot, item);
-        } else {
-            InputReturns.giveBack(player, item);
-        }
+    /** Puts retained inputs back and returns the stacks whose slots became covered. */
+    private static void placeInputs(Player player, GuiMenu menu, Map<Integer, ItemStack> items) {
+        InputMigration.move(items, menu.inputSlots(), menu.getInventory()::setItem,
+                item -> InputReturns.giveBack(player, item));
     }
 
-    private static Set<Integer> slotsOf(RuntimeGuis.Live gui) {
-        return gui.inputs().all().stream().map(InputSlots.Input::slot).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    private static Set<Integer> slotsOf(RuntimeGuis.Live gui, Rendered rendered) {
+        return gui.inputs().effective(gui.clicks(), rendered).all().stream()
+                .map(InputSlots.Input::slot).collect(java.util.stream.Collectors.toUnmodifiableSet());
     }
 
     private java.util.Optional<GuiMenu> menuOf(Viewer viewer, GuiSession session) {

@@ -139,6 +139,12 @@ class LogicCodeOrganisationTest {
         return files.filter(path -> {
                     String name = path.getFileName().toString();
                     return name.equals("GuiType.java")
+                            || name.equals("GuiCompiler.java")
+                            || name.equals("GuiRasterFrames.java")
+                            || name.equals("GuiVisualCompiler.java")
+                            || name.equals("GuiVisualPlan.java")
+                            || name.equals("GuiOverlayKeys.java")
+                            || name.equals("GuiTextRules.java")
                             || (name.startsWith("GuiLayerParser") && name.endsWith(".java"));
                 })
                 .filter(path -> count.applyAsLong(path) > MAX_LINES)

@@ -465,7 +465,8 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
   order, and layer order *is* priority, so authors see it.
 - **Templated item overrides.** On item layers, `name`, `lore` (`lore_mode: replace|append|prepend`),
   `amount` and `glint` are templates, and `item:` is an item source (§4.4).
-- **Animation.** `frames: {every: <ticks>, items: [sources...]}` on item layers.
+- **Animation.** `frames: {every: <ticks>, items: [sources...]}` on item layers;
+  raster layers opt in with `materione:overlay_frames: {every: <ticks>, layers: [component-field patches...]}` (§6.4).
 - **Dynamic detection.** A layer is *dynamic* when it has `visible_if`, a template, a templated
   source or `frames`. The compiler records this, and refresh re-evaluates **only** dynamic layers.
 - **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render).
@@ -474,19 +475,34 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
 
 ### 6.4 Conditional raster and dynamic title text
 
-The background is one flattened glyph (gui.md §4), so raster layers cannot toggle at runtime.
-**Decision:** a raster layer (`panel`, `image`, `paint`, `button`) with `visible_if` or `frames`
-does not flatten. It compiles to its **own overlay glyph**: its own codepoint, from the
-`gui-background` allocation. The title assembler then includes or omits it per render, at its
-place in the layer order.
+Static-only GUIs retain their flattened glyph (gui.md §4). When a GUI has conditional or
+animated raster or conditional or templated text, its background glyph is transparent and
+every visible raster layer compiles to its **own overlay glyph**, with a separate glyph per
+frame. The title assembler includes or omits each piece per render, raster first and then text,
+retaining authored order within each target. Static raster pieces also remain individual so
+their order relative to conditional raster pieces is preserved.
 
-- A title change re-sends the title (`InventoryView#setTitle`) without re-opening the window. This
-  needs verification on 1.21.4 and 26.x as part of the issue.
-- The cost is one codepoint per dynamic raster layer; the block has about 14k.
+- A changed rich title reopens the window with the same session, carrying cursor and inputs;
+  an unchanged title leaves the window in place. Real-client verification remains outstanding.
+- The cost is one codepoint per raster frame in a dynamic GUI, plus its transparent background;
+  the block has 5,888 codepoints
+  (`U+E200`–`U+F8FF`).
 - This gives tabs, toggles, selected states and progress art, which neither incumbent can do.
 
 Text layers with templates, and conditional text, are re-laid out per render through the same
 title assembler. The default-font width table (#202) makes arbitrary text measurable.
+
+**Paper API research, not real-client verification.** Paper's
+[`InventoryView#setTitle(String)` on 1.21.4](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
+and [26.1.2](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
+is deprecated as unsupported and accepts a legacy string, not an Adventure component. The
+[1.21.4 implementation](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryView.java)
+sends an open-screen packet then calls `updateInventory`; the
+[26.1.2 implementation](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryView.java)
+sends that packet then `sendAllDataToRemote`. Neither API can represent the custom font
+components required by this GUI title. Packet behavior alone does not establish cursor
+preservation or absence of client flicker. The implementation uses the existing reopen
+fallback; actual client screenshots and version-specific behavior remain to be verified.
 
 ### 6.5 Input slots and the player's inventory
 
@@ -2115,11 +2131,11 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
    predicate or a composite. The gui type keeps the authored value; the engine compiles it when the live view is
    built, through `FlowCompiler.compileCondition`, so `content` stays rule-free. Its `${root}`s are checked against the
    GUI's roots (`player`, `server`, `vars`, `gui`; `MTR-0060`). The condition's own problems keep their codes.
-2. **Only item layers honour `visible_if` in this build.** A raster or text layer (`panel`, `button`, `slots`,
+2. **At #216 only item layers honoured `visible_if`.** A raster or text layer (`panel`, `button`, `slots`,
    `image`, `paint`, `text`) is drawn into the background or the title, which cannot change while a window is open
    until overlay glyphs exist (§6.4, #217). A `visible_if` on one of them skips that layer (`MTR-0052`) with the
    reason in its message, rather than shipping a layer that silently ignores its condition. #217 lifts the
-   restriction. This is where the design's "every layer" is narrower than written.
+   restriction for supported raster and text layers (§6.4). Conditional input-slot layers remain rejected.
 3. **`name` means two things on an item layer, and the file does not change.** It is the layers-panel label on every
    layer, and on an item layer it is the item's display name, a template (§6.3). The value reaches a component only
    when the component's schema declares a `name` parameter, so a component that does not declare it still receives
@@ -2208,11 +2224,40 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
 
 **Deferred**
 
-- Raster and text `visible_if` and their animation: #217 (overlay glyphs, §6.4).
+- Raster and text `visible_if` and raster animation were deferred to #217 (§6.4).
 - `item-sources` in the behaviour vocabulary (`VocabularyBuilder`) and the editor's palette for them: with the Logic
   tab (#223, #224). The studio's layer inspector reads the new fields from the self-description, but no inspector
   control for `visible_if` or `frames` is designed here.
 - The click policy for input slots: #218.
+
+---
+
+### Decisions taken in #217 (conditional title overlays)
+
+- Each GUI/layer/frame has an unambiguous synthetic allocation identity in `gui-background`.
+  Allocations remain reserved when unused; an explicitly tombstoned identity is reactivated
+  with its original codepoint.
+  Compilation rejects a GUI on exhaustion rather than writing a partial pack. Preview uses an
+  independent snapshot and reserves provisional values without altering durable allocations.
+- `materione:overlay_frames` contains `every` (positive ticks) and a non-empty `layers` list (up to 256).
+  Each entry patches component-specific fields over the base layer; identity, opacity,
+  conditions and nested overlay frames cannot vary. A component that declares that namespaced
+  field owns it instead, and existing component-owned `frames` is untouched. A GUI's refresh clock includes the frame period.
+  Input slot layers cannot be conditional or animated; existing input ownership is unchanged.
+- Text templates use the existing expression engine and are validated again after expansion.
+  Invalid conditions hide their layer; a failed expansion omits its text and reports the
+  existing `MTR-0073` dynamic-layer diagnostic. Click routing uses the last rendered visibility
+  and current frame or expanded text footprint, not hidden layers or stale geometry.
+- A reopen retains the session, animation clock, cursor and input slots. A rejected reopen
+  restores the prior session/render and returns inputs to the prior window where possible.
+  Reopening may visibly flicker or affect client interactions; this has not been measured on a
+  client and is not a crash-durability guarantee.
+- Conditional and animated overlays are retained as potential input blockers; the displayed
+  visibility and current footprint decide which authored input slots are active. An input
+  becoming covered returns its item through the existing input-return path. Deferred title
+  or ownership-changing refreshes during a click run after the transaction, are superseded
+  by newer refreshes and re-render when they run. A `gui.slot_change` pre-event therefore
+  cannot return a stack while the same shift transfer is still applying it.
 
 ---
 

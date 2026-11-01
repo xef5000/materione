@@ -26,7 +26,7 @@ import dev.materione.api.gui.TitleSink;
  * ({@link SmallcapsFont}), {@code default} from the vanilla ASCII table ({@link VanillaAscii}, gui.md
  * section 9.4). Every run therefore moves the pen by a known amount, and any run may follow any other.
  */
-final class GuiTitle {
+public final class GuiTitle {
 
     /** Vanilla {@code titleLabelX}: the pen's starting column. */
     static final int ORIGIN_X = 8;
@@ -48,27 +48,31 @@ final class GuiTitle {
      * @param backgroundCodepoint the GUI's background codepoint
      * @param backgroundAdvance the glyph's advance, {@code actualWidth + 1}, from its pixels
      */
-    GuiTitle(String namespace, int backgroundCodepoint, int backgroundAdvance) {
+    public GuiTitle(String namespace, int backgroundCodepoint, int backgroundAdvance) {
         this.namespace = namespace;
-        moveTo(-ORIGIN_X);
-        out.append("<font:").append(GuiFonts.background(namespace)).append("><#FFFFFF>")
-                .appendCodePoint(backgroundCodepoint).append("</font>");
-        pen = -ORIGIN_X + backgroundAdvance;
-        moveTo(0);
+        glyph(backgroundCodepoint, backgroundAdvance);
     }
 
     /**
      * Appends one text run whose top-left is {@code (x, y)} in GUI pixels. The caller has
      * checked the run's characters and row.
      */
-    void place(int x, int y, String text, TitleSink.Font font, int argb) {
+    public void place(int x, int y, String text, TitleSink.Font font, int argb) {
         moveTo(x - ORIGIN_X);
         out.append("<font:").append(GuiFonts.text(namespace, font, y)).append("><#")
                 .append(hex(argb)).append('>').append(text).append("</font>");
         pen += font == TitleSink.Font.SMALLCAPS ? SmallcapsFont.measure(text) : VanillaAscii.measure(text);
     }
 
-    String build() {
+    public void glyph(int codepoint, int advance) {
+        moveTo(-ORIGIN_X);
+        out.append("<font:").append(GuiFonts.background(namespace)).append("><#FFFFFF>")
+                .appendCodePoint(codepoint).append("</font>");
+        pen = -ORIGIN_X + advance;
+        moveTo(0);
+    }
+
+    public String build() {
         return out.toString();
     }
 

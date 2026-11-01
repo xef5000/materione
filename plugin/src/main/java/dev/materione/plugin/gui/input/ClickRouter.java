@@ -63,7 +63,9 @@ public final class ClickRouter {
         }
         RuntimeGuis.Live gui = found.get();
         for (String layer : gui.clicks().layersAt(click.slot())) {
-            if (!visibility.visible(session, layer)) {
+            if (!visibility.visible(session, layer)
+                    || (session.rendered().coverage().containsKey(layer)
+                        && !session.rendered().coverage().get(layer).contains(click.slot()))) {
                 continue;
             }
             List<Rule> matching = matching(gui.logic().clickRules(layer), facts(layer, click));
