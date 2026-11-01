@@ -2,6 +2,7 @@ package dev.materione.plugin.logic.currency;
 
 import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.Currency;
@@ -150,6 +151,21 @@ public final class CurrencyReads {
                     : available.reason());
         }
         requireCurrent(plan);
+    }
+
+    /** Safe availability for metadata callers with no player owner. */
+    public Availability availabilityResolved(CurrencyCatalog catalog, Currency currency) {
+        if (!folia) {
+            return catalog.availability(currency);
+        }
+        try {
+            prepare(plan(catalog, currency), null);
+            return Availability.AVAILABLE;
+        } catch (RuntimeException failure) {
+            String reason = failure.getMessage();
+            return Availability.unavailable(reason == null || reason.isBlank()
+                    ? "currency availability lookup failed" : reason);
+        }
     }
 
     /** Read a resolved flow currency; on Folia binding and availability require their declared owner. */
