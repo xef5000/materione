@@ -7,15 +7,19 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.support.ResolvedText;
 import dev.materione.platform.text.MaterioneText;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.title.Title;
 import org.bukkit.entity.Player;
@@ -87,5 +91,17 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
 
     private static Duration ticks(int ticks) {
         return Duration.ofMillis(ticks * 50L);
+    }
+
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        if (context.facet(Facets.PLAYER).isEmpty()) {
+            return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
+        }
+        var scoped = reads.captureOrigin();
+        return ResolvedText.resolve(params.title(), context, scoped)
+                .thenCompose(title -> ResolvedText.resolve(params.subtitle(), context, scoped)
+                        .thenCompose(subtitle -> scoped.on(threading(), () -> execute(
+                                new Params(title, subtitle, params.fadeIn(), params.stay(), params.fadeOut()), context))));
     }
 }

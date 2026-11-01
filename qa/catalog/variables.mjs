@@ -39,6 +39,23 @@ export default [
   }),
 
   test({
+    id: 'variables.synchronous-read-after-player-write',
+    title: 'corpus:qa_coins command reads observe consecutive acknowledged player writes',
+    covers: [
+      ...COVERS,
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/SnapshotVariableStore.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/PdcVariableStore.java',
+    ],
+    dependsOn: ['variables.set-and-get-player'],
+    steps: async (ctx) => {
+      await ctx.rcon('materione var set Probe corpus:qa_coins 21');
+      ctx.expect(await ctx.rcon('materione var get Probe corpus:qa_coins')).toContain('corpus:qa_coins = 21');
+      await ctx.rcon('materione var set Probe corpus:qa_coins 34');
+      ctx.expect(await ctx.rcon('materione var get Probe corpus:qa_coins')).toContain('corpus:qa_coins = 34');
+    },
+  }),
+
+  test({
     id: 'variables.server-scope-ignores-the-player',
     title: 'corpus:qa_season is one value for the server: set with - reads back as summer',
     covers: COVERS,

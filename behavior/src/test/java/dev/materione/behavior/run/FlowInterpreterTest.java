@@ -5,6 +5,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.Cancellation;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.api.NamespacedId;
+import dev.materione.api.logic.variable.VariableBinding;
+import dev.materione.api.logic.variable.VariableDeclaration;
+import dev.materione.api.logic.variable.VariableScope;
+import dev.materione.api.logic.variable.VariableType;
+import dev.materione.behavior.runtime.BehaviorEvent;
 import dev.materione.behavior.flow.FlowFixture;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.rule.ParsedRules;
@@ -12,6 +19,7 @@ import dev.materione.behavior.rule.Rule;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -95,6 +103,51 @@ class FlowInterpreterTest {
         assertThat(f.ran).containsExactly("a:first", "b:second", "pure:after", "c:other");
         assertThat(trace).filteredOn(event -> event.type() == TraceEvent.Type.BRANCH)
                 .extracting(TraceEvent::detail).containsExactly("then", "else");
+    }
+
+    @Test
+    void anUnavailableConditionCancelsAndDoesNotRunItsElseBranch() {
+        var context = unavailableContext();
+        var event = new BehaviorEvent("click", "", context, null, ANCHOR);
+        FlowRun run = interpreter.start(rule("""
+                - if: "vars.player.shop.coins == 0"
+                  then: [ { a: grant } ]
+                  else: [ { b: fallback } ]
+                - c: after
+                """), event.context(), RunOwner.of("u1", ANCHOR));
+
+        assertThat(event.isCancelRequested()).isTrue();
+        assertThat(run.outcome()).isEqualTo(RunOutcome.ABORTED);
+        assertThat(f.ran).isEmpty();
+        assertThat(diagnostics).singleElement().satisfies(d -> assertThat(d.message()).contains("not owned"));
+    }
+
+    @Test
+    void anUnavailableActionTemplateCancelsAndDoesNotContinue() {
+        var context = unavailableContext();
+        var event = new BehaviorEvent("click", "", context, null, ANCHOR);
+        FlowRun run = interpreter.start(rule("""
+                - say: "${vars.player.shop.coins}"
+                - a: after
+                """), event.context(), RunOwner.of("u1", ANCHOR));
+
+        assertThat(event.isCancelRequested()).isTrue();
+        assertThat(run.outcome()).isEqualTo(RunOutcome.ABORTED);
+        assertThat(f.ran).isEmpty();
+    }
+
+    private static MapLogicContext unavailableContext() {
+        var id = NamespacedId.of("shop", "coins");
+        var declaration = new VariableDeclaration(id, VariableScope.PLAYER, VariableType.NUMBER, 0, "");
+        return new MapLogicContext(Map.of()).withVariables(new VariableBinding() {
+            @Override public Optional<VariableDeclaration> declaration(NamespacedId asked) {
+                return asked.equals(id) ? Optional.of(declaration) : Optional.empty();
+            }
+            @Override public Optional<Object> stored(VariableDeclaration ignored) {
+                throw new ReadUnavailableException("not owned");
+            }
+            @Override public boolean store(VariableDeclaration ignored, Object value) { return false; }
+        });
     }
 
     @Test

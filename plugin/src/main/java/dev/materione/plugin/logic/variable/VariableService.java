@@ -12,6 +12,7 @@ import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
 import dev.materione.api.logic.variable.VariablesApi;
+import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.core.runtime.RuntimeVariables;
 import java.io.IOException;
 import java.util.Collection;
@@ -36,6 +37,7 @@ public final class VariableService implements AutoCloseable {
     public static final String PERMISSION = "materione.var";
 
     private final Map<VariableScope, VariableStore> stores = new EnumMap<>(VariableScope.class);
+    private final SnapshotVariableStore playerSnapshots;
     private final Supplier<RuntimeVariables> declarations;
     private final Consumer<Diagnostic> diagnostics;
     private final VariablesApi api = new Api();
@@ -56,7 +58,8 @@ public final class VariableService implements AutoCloseable {
         if (playerStorage.scope() != VariableScope.PLAYER || serverStorage.scope() != VariableScope.SERVER) {
             throw new IllegalArgumentException("each store must hold its own scope");
         }
-        stores.put(VariableScope.PLAYER, playerStorage);
+        playerSnapshots = new SnapshotVariableStore(playerStorage);
+        stores.put(VariableScope.PLAYER, playerSnapshots);
         stores.put(VariableScope.SERVER, serverStorage);
         this.declarations = declarations;
         this.diagnostics = diagnostics;
@@ -97,6 +100,34 @@ public final class VariableService implements AutoCloseable {
         return stores.get(scope);
     }
 
+    /** Invalidates one player's snapshots on join, quit, or scheduler retirement. */
+    public void invalidatePlayer(UUID player) {
+        playerSnapshots.invalidate(player);
+    }
+
+    /** A shadow swap invalidates snapshots of declarations from the preceding generation. */
+    public void invalidateSnapshots() {
+        playerSnapshots.invalidateAll();
+    }
+
+    /** Refreshes player snapshots on the player's owning thread. */
+    public void refreshPlayer(UUID player) {
+        invalidatePlayer(player);
+        for (VariableDeclaration declaration : declarations()) {
+            if (declaration.scope() == VariableScope.PLAYER) {
+                try {
+                    playerSnapshots.read(declaration, player);
+                } catch (ReadUnavailableException unavailable) {
+                    invalidatePlayer(player);
+                    diagnostics.accept(new Diagnostic(DiagnosticCodes.VARIABLE_STORE_FAILED, Severity.WARN,
+                            "player variable snapshots could not be refreshed: " + unavailable.getMessage(),
+                            null, null, "retry on the player's owning thread"));
+                    return;
+                }
+            }
+        }
+    }
+
     /**
      * Flushes the server store now when it has changes. A failed flush is reported (MTR-0065) and
      * retried on the next tick, so nothing is lost while the disk recovers.
@@ -130,6 +161,7 @@ public final class VariableService implements AutoCloseable {
             return;
         }
         closed = true;
+        invalidateSnapshots();
         flushIfDirty();
     }
 
@@ -166,11 +198,27 @@ public final class VariableService implements AutoCloseable {
 
         @Override
         public Optional<Object> get(NamespacedId id, UUID player) {
-            return declaration(id).map(declared -> {
-                VariableStore store = stores.get(declared.scope());
-                UUID holder = declared.scope() == VariableScope.PLAYER ? player : null;
-                return store.read(declared, holder).orElse(declared.defaultValue());
-            });
+            ApiResult<Object> result = getResult(id, player);
+            return result.ok() ? Optional.ofNullable(result.value()) : Optional.empty();
+        }
+
+        @Override
+        public ApiResult<Object> getResult(NamespacedId id, UUID player) {
+            Optional<VariableDeclaration> found = declaration(id);
+            if (found.isEmpty()) {
+                return ApiResult.fail(DiagnosticCodes.VARIABLE_UNDECLARED, id + " is not a declared variable");
+            }
+            VariableDeclaration declared = found.get();
+            VariableStore store = stores.get(declared.scope());
+            UUID holder = declared.scope() == VariableScope.PLAYER ? player : null;
+            try {
+                return ApiResult.ok(store.read(declared, holder).orElse(declared.defaultValue()));
+            } catch (ReadUnavailableException unavailable) {
+                return playerSnapshots.snapshot(declared, holder)
+                        .<ApiResult<Object>>map(value -> ApiResult.ok(value.orElse(declared.defaultValue())))
+                        .orElseGet(() -> ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                                id + " is unavailable: " + unavailable.getMessage()));
+            }
         }
 
         @Override

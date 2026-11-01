@@ -8,6 +8,8 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.variable.CompileEnvironment;
 import dev.materione.api.logic.variable.VariableDeclaration;
@@ -20,6 +22,7 @@ import dev.materione.api.registry.SelfDescription;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code var: {var: player.shop.coins, op: ">=", value: 100}} (logic.md §3, §22): a typed compare on a
@@ -117,6 +120,12 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
         Object current = read(params.source(), context);
         String wanted = params.value().render(context);
         return compare(params.compare(), current, wanted);
+    }
+
+    @Override public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return reads.on(Threading.PLAYER_REGION, () -> read(params.source(), context))
+                .thenCompose(current -> params.value().renderResumable(context, reads)
+                        .thenApply(wanted -> compare(params.compare(), current, wanted)));
     }
 
     // --- load -----------------------------------------------------------------------

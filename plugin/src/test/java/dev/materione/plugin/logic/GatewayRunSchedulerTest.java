@@ -8,8 +8,11 @@ import dev.materione.api.scheduling.SchedulingGateway;
 import java.lang.reflect.Proxy;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.bukkit.Location;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.Test;
 
@@ -22,6 +25,7 @@ class GatewayRunSchedulerTest {
     private final Entity player = entity();
     private boolean ownsEntity = true;
     private boolean onGlobal = true;
+    private Runnable retirement;
 
     private final SchedulingGateway gateway = new SchedulingGateway() {
         @Override
@@ -48,6 +52,7 @@ class GatewayRunSchedulerTest {
         public ScheduledHandle executeEntityLater(
                 Plugin p, Entity entity, long delayTicks, Runnable task, Runnable retired) {
             calls.add("entity+" + delayTicks + (retired != null ? " with retired" : ""));
+            retirement = retired;
             return () -> cancelled[0] = true;
         }
 
@@ -125,5 +130,28 @@ class GatewayRunSchedulerTest {
         scheduler.schedule(null, Threading.PLAYER_REGION, 5, () -> { }, () -> { });
 
         assertThat(calls).containsExactly("global+5");
+    }
+
+    @Test
+    void retirementInvalidatesPlayerStateBeforeDroppingTheRun() {
+        UUID id = UUID.fromString("00000000-0000-0000-0000-000000000001");
+        Player playerEntity = (Player) Proxy.newProxyInstance(Player.class.getClassLoader(),
+                new Class<?>[] {Player.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "getUniqueId" -> id;
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+        List<UUID> retired = new ArrayList<>();
+        AtomicBoolean dropped = new AtomicBoolean();
+        var owned = new GatewayRunScheduler(plugin, gateway, new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(Entity entity) { return false; }
+            @Override public boolean onGlobalThread() { return false; }
+        }, retired::add);
+
+        owned.schedule(playerEntity, Threading.PLAYER_REGION, 0, () -> {}, () -> {
+            assertThat(retired).containsExactly(id);
+            dropped.set(true);
+        });
+        retirement.run();
+        assertThat(dropped).isTrue();
     }
 }

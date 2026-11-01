@@ -7,11 +7,13 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.support.ResolvedText;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.logic.support.InventoryPlan;
@@ -22,6 +24,8 @@ import dev.materione.plugin.logic.support.Quantity;
 import dev.materione.plugin.logic.support.Stacks;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Predicate;
 import org.bukkit.entity.Player;
 
@@ -101,6 +105,10 @@ public final class TakeItemAction implements ActionType<TakeItemAction.Params> {
         Optional<String> needle = params.nameContains()
                 .map(text -> text.render(context))
                 .filter(text -> !text.isBlank());
+        return take(player, amount, rendered, ref, needle);
+    }
+
+    private ActionOutcome take(Player player, int amount, String rendered, ItemRef ref, Optional<String> needle) {
         Predicate<ItemView> wanted = InventoryPlan.wanted(ref, needle);
         List<ItemView> slots = Stacks.contents(player.getInventory());
         var plan = InventoryPlan.plan(slots, wanted, amount);
@@ -110,5 +118,39 @@ public final class TakeItemAction implements ActionType<TakeItemAction.Params> {
         }
         Stacks.apply(player.getInventory(), plan.get());
         return ActionOutcome.OK;
+    }
+
+    private record ResolvedItem(ItemRef ref, String rendered, String failure) {}
+
+    @Override public CompletionStage<ActionOutcome> executeResumable(
+            Params params, LogicContext context, ReadExecutor reads) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
+        }
+        return params.amount().resolveResumable(context, reads).thenCompose(quantity -> {
+            var whole = quantity.wholeValue(context);
+            if (whole.isEmpty() || whole.getAsInt() < 1 || whole.getAsInt() > Give.MAX_AMOUNT) {
+                return CompletableFuture.completedFuture(
+                        ActionOutcome.failed("amount must be a whole number from 1 to " + Give.MAX_AMOUNT));
+            }
+            return params.item().renderResumable(context, reads).thenCompose(item -> reads.on(threading(), () -> {
+                String rendered = item.trim();
+                RuntimeRegistries registries = catalog.current().orElse(null);
+                try {
+                    return new ResolvedItem(ItemRef.resolve(rendered, registries), rendered, null);
+                } catch (IllegalArgumentException failure) {
+                    return new ResolvedItem(null, rendered, failure.getMessage());
+                }
+            })).thenCompose(item -> {
+                if (item.failure() != null) {
+                    return CompletableFuture.completedFuture(ActionOutcome.failed(item.failure()));
+                }
+                return ResolvedText.resolve(params.nameContains(), context, reads)
+                        .thenCompose(needle -> reads.on(threading(), () -> take(player, whole.getAsInt(),
+                                item.rendered(), item.ref(),
+                                needle.map(text -> text.render(context)).filter(text -> !text.isBlank()))));
+            });
+        });
     }
 }

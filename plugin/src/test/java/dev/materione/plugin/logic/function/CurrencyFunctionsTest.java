@@ -1,6 +1,7 @@
 package dev.materione.plugin.logic.function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.Facets;
@@ -16,6 +17,15 @@ import dev.materione.api.logic.provider.ServerTransfer;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
+import dev.materione.plugin.logic.currency.CurrencyReads;
+import dev.materione.plugin.logic.GatewayRunScheduler;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.api.logic.Availability;
+import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.provider.CurrencyReadCapability;
+import dev.materione.api.logic.provider.CurrencyLookupCapability;
+import dev.materione.behavior.run.RunReadExecutor;
+import dev.materione.behavior.run.RunScheduler;
 import java.lang.reflect.Proxy;
 import java.util.List;
 import java.util.Map;
@@ -33,15 +43,43 @@ class CurrencyFunctionsTest {
 
     private static final UUID ALEX = UUID.fromString("00000000-0000-0000-0000-00000000a1e7");
 
+    private static final class QueuedScheduler implements RunScheduler {
+        Threading current = Threading.GLOBAL;
+        Threading scheduled;
+        Runnable task;
+        @Override public boolean canRunInline(Object anchor, Threading owner) {
+            return owner == Threading.ANY || owner == current;
+        }
+        @Override public Handle schedule(Object anchor, Threading owner, long delay, Runnable task, Runnable retired) {
+            this.scheduled = owner;
+            this.task = task;
+            return () -> this.task = null;
+        }
+        void run() {
+            current = scheduled;
+            task.run();
+        }
+    }
+
     /** The catalog the functions read, with one integration bound to a fixed balance. */
     private static final class Providers implements LogicProviders {
         final MaterioneCurrencyCatalog currencies;
 
         Providers(double balance) {
+            this(balance, null);
+        }
+
+        Providers(double balance, CurrencyReadCapability capability) {
             CurrencyIntegration integration = new CurrencyIntegration() {
                 @Override
                 public String id() {
                     return "vault";
+                }
+
+                @Override
+                public CurrencyLookupCapability lookupCapability() {
+                    return capability == null ? CurrencyIntegration.super.lookupCapability()
+                            : new CurrencyLookupCapability(Threading.ANY, Availability.AVAILABLE);
                 }
 
                 @Override
@@ -52,6 +90,11 @@ class CurrencyFunctionsTest {
                 @Override
                 public CurrencyBackend bind(ParamReader config) {
                     return new CurrencyBackend() {
+                        @Override
+                        public CurrencyReadCapability readCapability() {
+                            return capability == null ? CurrencyBackend.super.readCapability() : capability;
+                        }
+
                         @Override
                         public EconomyResult balance(UUID player) {
                             return new EconomyResult.Succeeded(balance);
@@ -147,5 +190,59 @@ class CurrencyFunctionsTest {
         assertThat(balance.describe().self().displayName()).isEqualTo("Balance");
         assertThat(new BalanceFunction(new Providers(42)).id()).isEqualTo("balance");
         assertThat(new FormatCurrencyFunction(new Providers(0)).id()).isEqualTo("format_currency");
+    }
+
+    @Test
+    void foliaRejectsAnUndeclaredThirdPartyProviderEvenOnTheGlobalThread() {
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) { return true; }
+            @Override public boolean onGlobalThread() { return true; }
+        };
+        var balance = new BalanceFunction(new Providers(42), new CurrencyReads(true, probe));
+        var context = new MapLogicContext(Map.of()).with(Facets.PLAYER, player(ALEX));
+
+        assertThatThrownBy(() -> balance.call(List.of("shop:gems"), context))
+                .isInstanceOf(ReadUnavailableException.class).hasMessageContaining("not declared");
+    }
+
+    @Test
+    void resumableBalanceHopsToTheDeclaredOwnerAndReadsOnlyAfterTheHop() {
+        var scheduler = new QueuedScheduler();
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) {
+                return scheduler.current == Threading.PLAYER_REGION;
+            }
+            @Override public boolean onGlobalThread() { return scheduler.current == Threading.GLOBAL; }
+        };
+        var provider = new Providers(42,
+                new CurrencyReadCapability(Threading.PLAYER_REGION, Availability.AVAILABLE, null));
+        var balance = new BalanceFunction(provider, new CurrencyReads(true, probe));
+        var context = new MapLogicContext(Map.of()).with(Facets.PLAYER, player(ALEX));
+        var executor = new RunReadExecutor(scheduler, "player");
+        var result = balance.callResumable(List.of("shop:gems"), context, executor).toCompletableFuture();
+
+        assertThat(result).isNotDone();
+        scheduler.run();
+        assertThat(result.join()).isEqualTo(42.0);
+        assertThat(scheduler.scheduled).isEqualTo(Threading.PLAYER_REGION);
+    }
+
+    @Test
+    void aCurrencyRemovedBeforeTheScheduledReadDoesNotUseTheStaleBackend() {
+        var scheduler = new QueuedScheduler();
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) { return true; }
+            @Override public boolean onGlobalThread() { return false; }
+        };
+        var provider = new Providers(42,
+                new CurrencyReadCapability(Threading.PLAYER_REGION, Availability.AVAILABLE, null));
+        var balance = new BalanceFunction(provider, new CurrencyReads(true, probe));
+        var context = new MapLogicContext(Map.of()).with(Facets.PLAYER, player(ALEX));
+        var result = balance.callResumable(List.of("shop:gems"), context,
+                new RunReadExecutor(scheduler, "player")).toCompletableFuture();
+        provider.currencies.define(List.of());
+        scheduler.run();
+        assertThatThrownBy(result::join).hasCauseInstanceOf(ReadUnavailableException.class)
+                .hasMessageContaining("binding changed");
     }
 }

@@ -3,6 +3,7 @@ package dev.materione.behavior.expr;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Objects;
+import dev.materione.api.logic.ReadUnavailableException;
 
 /**
  * The tree-walk evaluator. Typed values: {@code Double} (all numbers),
@@ -64,6 +65,8 @@ public final class Expressions {
             result = call.function().call(Collections.unmodifiableList(values), context.logic());
         } catch (ExpressionException e) {
             throw e;
+        } catch (ReadUnavailableException e) {
+            throw e;
         } catch (RuntimeException e) {
             throw new ExpressionException("function '" + call.name() + "' failed: " + e.getMessage());
         }
@@ -75,7 +78,11 @@ public final class Expressions {
 
     private static Object unary(ExprNode.Unary unary, EvaluationContext context) {
         Object value = evaluate(unary.operand(), context);
-        if (unary.operator().equals("!")) {
+        return applyUnary(unary.operator(), value);
+    }
+
+    static Object applyUnary(String operator, Object value) {
+        if (operator.equals("!")) {
             return !truthy(value);
         }
         return -requireNumber(value, "unary -");
@@ -96,6 +103,10 @@ public final class Expressions {
         }
         Object left = evaluate(binary.left(), context);
         Object right = evaluate(binary.right(), context);
+        return applyBinary(op, left, right);
+    }
+
+    static Object applyBinary(String op, Object left, Object right) {
         return switch (op) {
             case "+" -> plus(left, right);
             case "-", "*", "/", "%" -> arithmetic(op, left, right);

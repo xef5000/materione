@@ -6,6 +6,7 @@ import dev.materione.api.logic.LogicContext;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiContexts;
+import dev.materione.plugin.logic.variable.VariableService;
 import java.util.Map;
 
 /**
@@ -42,11 +43,17 @@ public final class OpenSpecGate implements OpenGate {
     private final Permissions permissions;
     private final PlayerNames players;
     private final DenyRunner denies;
+    private final VariableService variables;
 
     public OpenSpecGate(Permissions permissions, PlayerNames players, DenyRunner denies) {
+        this(permissions, players, denies, null);
+    }
+
+    public OpenSpecGate(Permissions permissions, PlayerNames players, DenyRunner denies, VariableService variables) {
         this.permissions = permissions;
         this.players = players;
         this.denies = denies;
+        this.variables = variables;
     }
 
     @Override
@@ -63,7 +70,7 @@ public final class OpenSpecGate implements OpenGate {
             return Admission.usage(OpenUsage.refusal("/materione gui open " + gui.id(), plan, parsed.error()));
         }
         if (plan.hasRequirement() && !permissions.has(viewer, OpenPlan.bypassNode(gui.id()))) {
-            LogicContext context = GuiContexts.open(viewer, gui.id(), parsed.values());
+            LogicContext context = GuiContexts.open(viewer, gui.id(), parsed.values(), variables);
             if (!plan.requirementMet(context)) {
                 if (plan.deny() != null) {
                     denies.run(plan.deny(), context, RunOwner.of(viewer.id().toString(), viewer.player()));

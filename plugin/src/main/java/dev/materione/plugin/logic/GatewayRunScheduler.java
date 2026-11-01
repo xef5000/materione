@@ -4,8 +4,11 @@ import dev.materione.api.logic.Threading;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.behavior.run.RunScheduler;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Consumer;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
 
 /**
@@ -46,15 +49,22 @@ public final class GatewayRunScheduler implements RunScheduler {
     private final Plugin plugin;
     private final SchedulingGateway gateway;
     private final ThreadProbe probe;
+    private final Consumer<UUID> retired;
 
     public GatewayRunScheduler(Plugin plugin, SchedulingGateway gateway) {
         this(plugin, gateway, ThreadProbe.SERVER);
     }
 
     public GatewayRunScheduler(Plugin plugin, SchedulingGateway gateway, ThreadProbe probe) {
+        this(plugin, gateway, probe, ignored -> {});
+    }
+
+    public GatewayRunScheduler(
+            Plugin plugin, SchedulingGateway gateway, ThreadProbe probe, Consumer<UUID> retired) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.gateway = Objects.requireNonNull(gateway, "gateway");
         this.probe = Objects.requireNonNull(probe, "probe");
+        this.retired = Objects.requireNonNull(retired, "retired");
     }
 
     @Override
@@ -69,9 +79,22 @@ public final class GatewayRunScheduler implements RunScheduler {
     }
 
     @Override
+    public Threading currentOwner(Object anchor) {
+        if (probe.onGlobalThread()) {
+            return Threading.GLOBAL;
+        }
+        return anchor instanceof Entity entity && probe.ownsEntity(entity) ? Threading.PLAYER_REGION : null;
+    }
+
+    @Override
     public Handle schedule(Object anchor, Threading thread, long delayTicks, Runnable task, Runnable dropped) {
         if (thread != Threading.GLOBAL && anchor instanceof Entity entity) {
-            var handle = gateway.executeEntityLater(plugin, entity, delayTicks, task, dropped);
+            var handle = gateway.executeEntityLater(plugin, entity, delayTicks, task, () -> {
+                if (entity instanceof Player player) {
+                    retired.accept(player.getUniqueId());
+                }
+                dropped.run();
+            });
             return handle::cancel;
         }
         var handle = gateway.executeGlobalLater(plugin, delayTicks, task);

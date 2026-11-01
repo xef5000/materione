@@ -27,6 +27,15 @@ public interface CurrencyIntegration {
     SelfDescription describe();
 
     /**
+     * Ownership of binding and backend availability; safe to inspect from any thread and stable
+     * for the registration's lifetime. The default makes no Folia safety claim, even when the
+     * backend's read owner is GLOBAL.
+     */
+    default CurrencyLookupCapability lookupCapability() {
+        return CurrencyLookupCapability.unsupported();
+    }
+
+    /**
      * Turns a currency's integration keys into a backend.
      *
      * @param config the currency's mapping, read with strict typed accessors

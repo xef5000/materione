@@ -13,7 +13,7 @@
 //
 // Zero npm dependencies. The suite runs LOCALLY through the probe agent
 // (`scripts/probe/probe.mjs agent`) — deliberately not CI (issue #34/#38);
-// the only CI step is `check`. See qa/README.md for the charter.
+// CI runs `check` and pure runner/evidence tests. See qa/README.md for the charter.
 
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -35,6 +35,7 @@ const PROBE = path.join(ROOT, 'scripts', 'probe', 'probe.mjs');
 const SERVER_LOG = path.join(ROOT, 'harness', 'build', 'probe', 'server', 'logs', 'latest.log');
 const CLIENT_LOG = path.join(ROOT, 'harness', 'build', 'probe', 'client', 'client.log');
 const VERSIONS_TOML = path.join(ROOT, 'gradle', 'libs.versions.toml');
+const SERVER_PLUGINS = path.join(ROOT, 'harness', 'build', 'probe', 'server', 'plugins');
 
 // Probe pins whose change invalidates every recorded result (a new server or
 // bridge build is a new test environment, not a diff-sized change).
@@ -208,16 +209,37 @@ function atomicWrite(file, content) {
 }
 
 function envKey() {
+  return probeEnvironment().key;
+}
+
+function probeEnvironment() {
   const toml = fs.readFileSync(VERSIONS_TOML, 'utf8');
   const block = toml.slice(toml.indexOf('[versions]'));
   const pins = {};
   for (const m of block.matchAll(/^([\w-]+) = "(.+)"$/gm)) pins[m[1]] = m[2];
+  return environmentFingerprint(pins, SERVER_PLUGINS);
+}
+
+export function environmentFingerprint(pins, pluginsDir) {
   const relevant = {};
   for (const key of ENV_PINS) {
     if (!pins[key]) throw new QaError(`gradle/libs.versions.toml is missing the "${key}" probe pin`);
     relevant[key] = pins[key];
   }
-  return sha256(JSON.stringify(relevant)).slice(0, 12);
+  let files;
+  try {
+    files = fs.readdirSync(pluginsDir);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    files = [];
+  }
+  const optional = files
+    .filter((name) => name.toLowerCase().endsWith('.jar') && name.toLowerCase() !== 'materione.jar')
+    .sort()
+    .filter((name) => fs.statSync(path.join(pluginsDir, name)).isFile())
+    .map((name) => ({ name, sha256: sha256(fs.readFileSync(path.join(pluginsDir, name))) }));
+  if (optional.length) relevant['optional-plugin-jars'] = optional;
+  return { key: sha256(JSON.stringify(relevant)).slice(0, 12), plugins: optional };
 }
 
 function sha256(text) { return crypto.createHash('sha256').update(text).digest('hex'); }
@@ -262,7 +284,7 @@ function testStatus(test, ledger, head, env, dirty) {
   const entry = ledger[test.id];
   if (!entry) return { state: 'never', due: true, reason: 'never run' };
   if (entry.def !== test.defHash) return { state: 'changed', due: true, reason: 'test definition changed since it last ran' };
-  if (entry.env !== env) return { state: 'env-changed', due: true, reason: 'probe pins changed since it last ran' };
+  if (entry.env !== env) return { state: 'env-changed', due: true, reason: 'probe pins or optional runtime plugin jars changed since it last ran' };
   if (entry.result === 'fail') return { state: 'failed', due: true, reason: `failed at ${short(entry.sha)}${entry.issue ? ` (issue #${entry.issue})` : ''}` };
   if (entry.result === 'visual') return { state: 'needs-eyes', due: true, reason: 'screenshot evidence awaits a verdict (runner mark)' };
   if (entry.result !== 'pass') return { state: 'unknown', due: true, reason: `ledger has result "${entry.result}"` };
@@ -348,7 +370,8 @@ async function cmdRun(argv) {
   const tests = await loadCatalog();
   const byId = validateCatalog(tests);
   const head = headSha();
-  const env = envKey();
+  const environment = probeEnvironment();
+  const env = environment.key;
   const dirty = isDirty();
   if (dirty && !flags.noLedger) {
     process.stderr.write('qa: WARNING — the working tree is dirty; passes recorded this run are marked recorded-dirty and will not count as fresh.\n');
@@ -422,6 +445,7 @@ async function cmdRun(argv) {
     }
     line('booting the probe server (fresh world, all fixture packs) ...');
     await agent.call('up', { build: !flags.noBuild }, 600_000);
+    if (envKey() !== env) throw new QaError('optional runtime plugin jars or probe pins changed during startup; rerun with a stable environment');
     line('launching the probe client ...');
     await agent.call('client', {}, 360_000);
     line('joining (resource pack pre-accepted) ...');
@@ -446,7 +470,7 @@ async function cmdRun(argv) {
       }
       const started = Date.now();
       try {
-        const result = await runTest(test, agent, runDir, { head, dirty, noLedger: flags.noLedger });
+        const result = await runTest(test, agent, runDir, { head, dirty, environment, noLedger: flags.noLedger });
         outcomes.set(id, { outcome: result.outcome, ms: Date.now() - started, ...result.meta });
         const icon = result.outcome === 'pass' ? '✔' : result.outcome === 'visual' ? '👁' : '✘';
         line(`${icon} ${id.padEnd(38)} ${result.outcome.toUpperCase().padEnd(7)} (${((Date.now() - started) / 1000).toFixed(1)}s)${result.meta?.dossier ? ` → ${result.meta.dossier}` : ''}${result.outcome === 'visual' && !flags.noLedger ? ` → close with: runner mark ${id} pass|fail` : ''}`);
@@ -498,7 +522,7 @@ async function cmdRun(argv) {
   }
 }
 
-async function runTest(test, agent, runDir, { head, dirty, noLedger }) {
+async function runTest(test, agent, runDir, { head, dirty, environment, noLedger }) {
   const testDir = path.join(runDir, test.id);
   fs.mkdirSync(testDir, { recursive: true });
   const transcript = [];
@@ -524,13 +548,13 @@ async function runTest(test, agent, runDir, { head, dirty, noLedger }) {
 
   const ms = Date.now();
   if (!stepsError) {
-    // head/dirty are the run-start snapshots: the run's own ledger writes
-    // must never pollute the dirty flag of the entries it records.
+    // Preserve the run-start code and boot environment; later disk or ledger
+    // changes cannot relabel what the running server actually exercised.
     // An open issue link carries forward across fail/visual re-records — it
     // belongs to the test until a pass (the fix PR closes the issue).
     const previous = readLedger(test.suite)[test.id];
     const entry = {
-      sha: head, dirty, env: envKey(), def: test.defHash,
+      sha: head, dirty, env: environment.key, runtimePlugins: environment.plugins, def: test.defHash,
       result: test.mode === 'visual' ? 'visual' : 'pass',
       at: new Date(ms).toISOString(), run: path.basename(runDir),
       eyes: ctx.eyesNote,
@@ -557,6 +581,7 @@ async function runTest(test, agent, runDir, { head, dirty, noLedger }) {
   const meta = {
     operator: stepsError.operator, expected: stepsError.expected, actual: stepsError.actual,
     health: healthy ? 'ok' : 'broken', logOffset, eyesNote: ctx.eyesNote,
+    runtimePlugins: environment.plugins,
   };
   writeTranscript(testDir, transcript);
   if (!healthy) {
@@ -564,7 +589,7 @@ async function runTest(test, agent, runDir, { head, dirty, noLedger }) {
   }
   const dossier = writeDossier({ test, testDir, transcript, error: stepsError, meta, ctx });
   if (!noLedger) writeLedgerEntry(test, {
-    sha: head, dirty, env: envKey(), def: test.defHash,
+    sha: head, dirty, env: environment.key, runtimePlugins: environment.plugins, def: test.defHash,
     result: 'fail', at: new Date(ms).toISOString(), run: path.basename(runDir),
     dossier: path.relative(ROOT, dossier),
   });
@@ -917,6 +942,7 @@ ${String(test.steps)}
 ## Environment
 
 - probe pins: Paper ${pin('paper-probe-version')}-${pin('paper-probe-build')}, DebugBridge sha1 ${pin('probe-debugbridge-sha1').slice(0, 10)}…, fabric-loader ${pin('probe-fabric-loader')}
+- optional runtime jars: ${(meta.runtimePlugins ?? []).map(({ name, sha256 }) => `${name} (SHA-256 ${sha256})`).join(', ') || 'none'}
 - registry mode: registry (probe boots 26.x only)
 <!-- qa-test: ${test.id} @ ${head} -->
 `;
@@ -1145,6 +1171,10 @@ function ensureLabel(gh, name, description, color) {
 
 // =================================================================== mark ==
 
+export function visualVerdict(previous, verdict, { by, note, at = new Date().toISOString() }) {
+  return { ...previous, result: verdict, markedAt: at, markedBy: by, note };
+}
+
 async function cmdMark(argv) {
   const positional = [];
   let note = null;
@@ -1166,17 +1196,7 @@ async function cmdMark(argv) {
   if (!previous || (previous.result !== 'visual' && !process.argv.includes('--force'))) {
     throw new QaError(`${testId} is not awaiting a visual verdict (ledger result: ${previous?.result ?? 'none'}) — use --force to override`);
   }
-  const entry = {
-    ...previous,
-    result: verdict,
-    at: new Date().toISOString(),
-    sha: headSha(),
-    dirty: isDirty(),
-    env: envKey(),
-    def: test.defHash,
-    markedBy: by,
-    note,
-  };
+  const entry = visualVerdict(previous, verdict, { by, note });
   // Evidence paths are not recorded here (they would be machine-local);
   // `runner file` promotes the run's evidence into qa/evidence/ and fills
   // the ledger with repo-relative paths.
@@ -1185,7 +1205,7 @@ async function cmdMark(argv) {
     entry.issueUrl = `https://github.com/xef5000/materione/issues/${issue}`;
   }
   writeLedgerEntry(test, entry);
-  process.stdout.write(`${testId} marked ${verdict} (by ${by}) at ${short(headSha())}\n`);
+  process.stdout.write(`${testId} marked ${verdict} (by ${by}), captured at ${short(previous.sha)}\n`);
 
   // A visual failure needs the same paper trail an auto failure gets: write
   // a dossier into the originating run dir so `runner file` can turn it into

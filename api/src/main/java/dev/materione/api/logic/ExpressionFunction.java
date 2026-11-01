@@ -1,6 +1,7 @@
 package dev.materione.api.logic;
 
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 
 /**
  * A function callable from an expression (logic.md §4.2): {@code contains(a, b)},
@@ -43,4 +44,15 @@ public interface ExpressionFunction {
      * @throws IllegalArgumentException when an argument has the wrong kind
      */
     Object call(List<Object> arguments, LogicContext context);
+
+    /**
+     * Opt-in continuation hook. Existing functions retain their synchronous behaviour; a function
+     * whose read needs another owner overrides this and uses {@code executor}. Legacy functions run
+     * on the expression's captured original owner, not whichever owner completed their last argument.
+     * An unavailable synchronous read completes exceptionally rather than replaying the function.
+     */
+    default CompletionStage<Object> callResumable(
+            List<Object> arguments, LogicContext context, ReadExecutor executor) {
+        return executor.onOrigin(() -> call(arguments, context));
+    }
 }

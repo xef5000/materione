@@ -9,6 +9,8 @@ import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
 import dev.materione.plugin.logic.support.SlotPeek;
+import dev.materione.plugin.logic.currency.CurrencyReads;
+import dev.materione.plugin.gui.GuiBridge;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,6 +52,33 @@ class BuiltinConditionsTest {
         assertThat(byId.get("in_gui").description().category().id()).isEqualTo("gui");
         assertThat(byId.get("is_near").description().shorthand()).isNull();
         assertThat(byId.get("is_near").description().category().id()).isEqualTo("world");
+    }
+
+    @Test
+    void foliaVocabularyNeverBindsAnUndeclaredCurrencyIntegration() {
+        var service = LogicTestSupport.newService(new RegistryService());
+        var owner = LogicTestSupport.owner("materione");
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) { return false; }
+            @Override public boolean onGlobalThread() { return false; }
+        };
+        BuiltinLogic.register(service, owner, ItemCatalog.none(), new GuiBridge(), new CurrencyReads(true, probe));
+        service.currencyIntegrations().register(owner, dev.materione.api.NamespacedId.of("materione", "vault"),
+                new dev.materione.api.logic.provider.CurrencyIntegration() {
+                    @Override public String id() { return "vault"; }
+                    @Override public dev.materione.api.registry.SelfDescription describe() {
+                        return new dev.materione.api.registry.SelfDescription("unsafe", "unsafe", List.of(), "2");
+                    }
+                    @Override public dev.materione.api.logic.provider.CurrencyBackend bind(
+                            dev.materione.api.logic.ParamReader config) {
+                        throw new AssertionError("unproven bind must not run");
+                    }
+                });
+        var vocabulary = service.vocabulary();
+        assertThat(vocabulary.actions()).filteredOn(action -> Set.of("give_money", "take_money").contains(action.id()))
+                .hasSize(2).allSatisfy(action -> assertThat(action.availability().available()).isFalse());
+        assertThat(vocabulary.conditions()).filteredOn(condition -> condition.id().equals("has_money"))
+                .singleElement().satisfies(condition -> assertThat(condition.availability().available()).isFalse());
     }
 
     @Test

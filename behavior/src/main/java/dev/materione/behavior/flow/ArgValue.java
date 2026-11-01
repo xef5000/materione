@@ -3,6 +3,9 @@ package dev.materione.behavior.flow;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.ValueExpression;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
+import java.util.concurrent.CompletionStage;
 
 /**
  * One value of a {@code call}'s {@code with:} map, compiled (logic.md §2.4, §2.5). Every value is
@@ -15,6 +18,11 @@ public sealed interface ArgValue permits ArgValue.Literal, ArgValue.Text, ArgVal
 
     /** The value for the callee's {@code args.<name>}. */
     Object resolve(LogicContext context);
+
+    /** Resolves once with owner-aware continuation support. */
+    default CompletionStage<Object> resolveResumable(LogicContext context, ReadExecutor executor) {
+        return executor.on(Threading.ANY, () -> resolve(context));
+    }
 
     /** A value with nothing to evaluate: a number, a boolean, a plain string, a list or a map. */
     record Literal(Object value) implements ArgValue {
@@ -30,6 +38,11 @@ public sealed interface ArgValue permits ArgValue.Literal, ArgValue.Text, ArgVal
         public Object resolve(LogicContext context) {
             return template.render(context);
         }
+
+        @Override
+        public CompletionStage<Object> resolveResumable(LogicContext context, ReadExecutor executor) {
+            return template.renderResumable(context, executor).thenApply(value -> value);
+        }
     }
 
     /** A single {@code ${expression}}, evaluated to its typed result. */
@@ -37,6 +50,11 @@ public sealed interface ArgValue permits ArgValue.Literal, ArgValue.Text, ArgVal
         @Override
         public Object resolve(LogicContext context) {
             return expression.evaluate(context);
+        }
+
+        @Override
+        public CompletionStage<Object> resolveResumable(LogicContext context, ReadExecutor executor) {
+            return expression.evaluateResumable(context, executor);
         }
     }
 }

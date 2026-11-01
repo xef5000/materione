@@ -7,6 +7,7 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
@@ -20,6 +21,8 @@ import dev.materione.plugin.logic.support.ItemTemplates;
 import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -84,9 +87,17 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
             amount = whole.getAsInt();
         }
         RuntimeRegistries registries = catalog.current().orElse(null);
+        try {
+            return deliver(player, amount, registries, params.item().render(context));
+        } catch (IllegalArgumentException failure) {
+            return ActionOutcome.failed(failure.getMessage());
+        }
+    }
+
+    private ActionOutcome deliver(Player player, int amount, RuntimeRegistries registries, String item) {
         ItemStack template;
         try {
-            template = ItemTemplates.of(ItemRef.resolve(params.item().render(context), registries), registries);
+            template = ItemTemplates.of(ItemRef.resolve(item, registries), registries);
         } catch (IllegalArgumentException e) {
             return ActionOutcome.failed(e.getMessage());
         }
@@ -94,4 +105,29 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
         return ActionOutcome.OK;
     }
 
+    @Override public CompletionStage<ActionOutcome> executeResumable(
+            Params params, LogicContext context, ReadExecutor reads) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
+        }
+        CompletionStage<Optional<Quantity>> amount = params.amount().isEmpty()
+                ? CompletableFuture.completedFuture(Optional.empty())
+                : params.amount().get().resolveResumable(context, reads).thenApply(Optional::of);
+        return amount.thenCompose(resolved -> {
+            int count = 1;
+            if (resolved.isPresent()) {
+                var whole = resolved.get().wholeValue(context);
+                if (whole.isEmpty() || whole.getAsInt() < 1 || whole.getAsInt() > Give.MAX_AMOUNT) {
+                    return CompletableFuture.completedFuture(
+                            ActionOutcome.failed("amount must be a whole number from 1 to " + Give.MAX_AMOUNT));
+                }
+                count = whole.getAsInt();
+            }
+            int finalCount = count;
+            return reads.on(threading(), () -> catalog.current().orElse(null)).thenCompose(registries ->
+                    params.item().renderResumable(context, reads).thenCompose(item ->
+                            reads.on(threading(), () -> deliver(player, finalCount, registries, item))));
+        });
+    }
 }

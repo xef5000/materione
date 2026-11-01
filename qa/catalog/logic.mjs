@@ -60,6 +60,30 @@ async function holdProbe(ctx, item) {
 }
 
 export default [
+  // This is Paper parity evidence only; it is not a substitute for a Folia ownership run.
+  test({
+    id: 'logic.currency-live-read-surfaces',
+    title: 'probe:probe_safe_reads gates, checks and renders the live probe:qa_xp balance',
+    mode: 'auto',
+    covers: [
+      'behavior/src/main/java/dev/materione/behavior/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/currency/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/BalanceFunction.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/HasMoneyCondition.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/action/SetVarAction.java',
+      'fixtures/packs/probe/currencies/qa_xp.yml',
+      'fixtures/packs/probe/items/probe_safe_reads.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_safe_reads');
+      await ctx.rcon('experience set Probe 3 levels');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/READ levels=3/);
+    },
+  }),
+
   test({
     id: 'logic.messages-broadcast-chat',
     title: 'probe:probe_messages right-click sends a server broadcast ("Probe server broadcast"), a world-scoped broadcast that names the player ("Probe broadcast from Probe") and a chat line the player says ("probe chat line"); each reaches the chat log exactly as authored, with the template filled in',

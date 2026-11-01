@@ -30,4 +30,10 @@ public interface VariableStore {
      * @return false when the holder is unavailable (an offline player) or the write failed
      */
     boolean write(VariableDeclaration declaration, UUID player, Object value);
+
+    /** Atomically applies a pure operation with respect to all writes, or reports unsupported. */
+    default VariableOps.Outcome mutate(VariableDeclaration declaration, UUID player, VariableOp operation,
+                                       Object operand) {
+        return new VariableOps.Outcome(false, null, "atomic variable mutation is unsupported");
+    }
 }

@@ -6,6 +6,11 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.logic.ContextFacet;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.api.logic.variable.VariableBinding;
+import dev.materione.api.logic.variable.VariableDeclaration;
+import dev.materione.api.logic.variable.VariableScope;
+import dev.materione.api.logic.variable.VariableType;
 import dev.materione.behavior.logic.LogicFixture;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.behavior.rule.ParsedRules;
@@ -18,6 +23,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /** Engine orchestration: matching, gating, deferral, chain continuation, cancel. */
@@ -88,6 +94,116 @@ class RuleEngineTest {
 
         engine.fire(rules, event("consume", "", Map.<String, Object>of("item", Map.of("amount", 7))));
         assertThat(ran).containsExactly("a:go");
+    }
+
+    @Test
+    void anUnavailableLiveRuleGateCancelsThePreEventInsteadOfUsingADefault() {
+        var id = NamespacedId.of("shop", "coins");
+        var declaration = new VariableDeclaration(id, VariableScope.PLAYER, VariableType.NUMBER, 0, "");
+        var binding = new VariableBinding() {
+            @Override public Optional<VariableDeclaration> declaration(NamespacedId asked) {
+                return asked.equals(id) ? Optional.of(declaration) : Optional.empty();
+            }
+
+            @Override public Optional<Object> stored(VariableDeclaration ignored) {
+                throw new ReadUnavailableException("not owned");
+            }
+            @Override public boolean store(VariableDeclaration ignored, Object value) { return false; }
+        };
+        var context = new MapLogicContext(Map.of()).withVariables(binding);
+        var event = new BehaviorEvent("click", "", context, null, "player-1").withSynchronousPreEvent();
+
+        engine.fire(rules(rule("click", List.of("vars.player.shop.coins == 0"), List.of(action("a", "wrong")))), event);
+
+        assertThat(event.isCancelRequested()).isTrue();
+        assertThat(ran).isEmpty();
+        assertThat(diagnostics).singleElement().satisfies(d -> assertThat(d.message()).contains("not owned"));
+    }
+
+    @Test
+    void ruleGatesResumeInOrderAndPreEventsRefuseCrossOwnerReads() {
+        var id = NamespacedId.of("shop", "coins");
+        var declaration = new VariableDeclaration(id, VariableScope.PLAYER, VariableType.NUMBER, 0, "");
+        var binding = new VariableBinding() {
+            @Override public Optional<VariableDeclaration> declaration(NamespacedId asked) {
+                return asked.equals(id) ? Optional.of(declaration) : Optional.empty();
+            }
+            @Override public Optional<Object> stored(VariableDeclaration ignored) {
+                assertThat(scheduler.current).isEqualTo(Threading.PLAYER_REGION);
+                return Optional.of(7);
+            }
+            @Override public boolean store(VariableDeclaration ignored, Object value) { return false; }
+        };
+        var declarations = rules(
+                rule("click", List.of("vars.player.shop.coins == 7"), List.of(action("a", "first"))),
+                rule("click", List.of(), List.of(action("b", "second"))));
+        scheduler.current = Threading.GLOBAL;
+        var event = new BehaviorEvent("click", "", new MapLogicContext(Map.of()).withVariables(binding),
+                null, "player-1");
+        engine.fire(declarations, event);
+        assertThat(ran).isEmpty();
+        scheduler.runPending();
+        assertThat(ran).containsExactly("a:first", "b:second");
+
+        ran.clear();
+        scheduler.current = Threading.GLOBAL;
+        var pre = new BehaviorEvent("click", "", new MapLogicContext(Map.of()).withVariables(binding),
+                null, "player-1").withSynchronousPreEvent();
+        engine.fire(declarations, pre);
+        assertThat(pre.isCancelRequested()).isTrue();
+        assertThat(scheduler.pending()).isZero();
+        assertThat(ran).isEmpty();
+    }
+
+    @Test
+    void playerDepartureCancelsAPendingGateBeforeLaterRules() {
+        var id = NamespacedId.of("shop", "coins");
+        var declaration = new VariableDeclaration(id, VariableScope.PLAYER, VariableType.NUMBER, 0, "");
+        var binding = new VariableBinding() {
+            @Override public Optional<VariableDeclaration> declaration(NamespacedId asked) {
+                return asked.equals(id) ? Optional.of(declaration) : Optional.empty();
+            }
+            @Override public Optional<Object> stored(VariableDeclaration ignored) {
+                throw new AssertionError("cancelled gate read was executed");
+            }
+            @Override public boolean store(VariableDeclaration ignored, Object value) { return false; }
+        };
+        scheduler.current = Threading.GLOBAL;
+        var context = new MapLogicContext(Map.of("player", Map.of("uuid", "u1"))).withVariables(binding);
+        var event = new BehaviorEvent("click", "", context, null, "player-1");
+        engine.fire(rules(rule("click", List.of("vars.player.shop.coins == 1"), List.of(action("a", "never"))),
+                rule("click", List.of(), List.of(action("b", "never")))), event);
+        assertThat(engine.interpreter().parkedRuns("u1")).isEqualTo(1);
+        assertThat(engine.interpreter().cancelPlayer("u1")).isEqualTo(1);
+        assertThat(engine.interpreter().parkedRuns("u1")).isZero();
+        scheduler.runPending();
+        assertThat(ran).isEmpty();
+    }
+
+    @Test
+    void pendingGatesShareTheParkedRunBudget() {
+        var id = NamespacedId.of("shop", "coins");
+        var declaration = new VariableDeclaration(id, VariableScope.PLAYER, VariableType.NUMBER, 0, "");
+        var binding = new VariableBinding() {
+            @Override public Optional<VariableDeclaration> declaration(NamespacedId asked) {
+                return asked.equals(id) ? Optional.of(declaration) : Optional.empty();
+            }
+            @Override public Optional<Object> stored(VariableDeclaration ignored) { return Optional.of(1); }
+            @Override public boolean store(VariableDeclaration ignored, Object value) { return false; }
+        };
+        var limited = new RuleEngine(new FlowInterpreter(scheduler, new RunBudget(100, 1, 4), diagnostics::add),
+                new CooldownStore());
+        var declarations = rules(rule("click", List.of("vars.player.shop.coins == 1"),
+                List.of(action("a", "once"))));
+        scheduler.current = Threading.GLOBAL;
+        var context = new MapLogicContext(Map.of("player", Map.of("uuid", "u1"))).withVariables(binding);
+        limited.fire(declarations, new BehaviorEvent("click", "", context, null, "player-1"));
+        limited.fire(declarations, new BehaviorEvent("click", "", context, null, "player-1"));
+        assertThat(limited.interpreter().parkedRuns("u1")).isEqualTo(1);
+        scheduler.runPending();
+        assertThat(ran).containsExactly("a:once");
+        assertThat(limited.interpreter().parkedRuns("u1")).isZero();
+        assertThat(diagnostics).anySatisfy(d -> assertThat(d.message()).contains("budget"));
     }
 
     @Test

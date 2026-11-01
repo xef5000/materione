@@ -1,5 +1,7 @@
 package dev.materione.api.logic;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * One predicate in the {@code conditions} registry (logic.md §4.2): {@code has_permission},
  * {@code has_money}, {@code in_gui}. Registered and described exactly like an {@link ActionType},
@@ -40,6 +42,11 @@ public interface ConditionType<P> {
 
     /** Evaluates the condition; a pure read of {@code context} and whatever providers it consults. */
     boolean test(P params, LogicContext context);
+
+    /** Opt-in continuation hook; legacy predicates execute once and cannot be replayed. */
+    default CompletionStage<Boolean> testResumable(P params, LogicContext context, ReadExecutor executor) {
+        return executor.on(Threading.ANY, () -> test(params, context));
+    }
 
     /** Whether the server can evaluate this condition now; read each time the vocabulary is built. */
     default Availability availability() {

@@ -7,12 +7,16 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.support.ResolvedText;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -92,5 +96,15 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
         }
         player.playSound(player.getLocation(), key, params.volume(), params.pitch());
         return ActionOutcome.OK;
+    }
+
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        if (params.scope() != Scope.SERVER && context.facet(Facets.PLAYER).isEmpty()) {
+            return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
+        }
+        return ResolvedText.resolve(params.sound(), context, reads)
+                .thenCompose(sound -> reads.on(threading(params),
+                        () -> execute(new Params(sound, params.volume(), params.pitch(), params.scope()), context)));
     }
 }

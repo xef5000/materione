@@ -7,6 +7,7 @@ import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
@@ -20,6 +21,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code gui.open: shop} or {@code gui.open: {gui: shop, args: {category: tools}}}: opens another GUI
@@ -98,4 +101,40 @@ public final class OpenGuiAction implements ActionType<OpenGuiAction.Params> {
                 OpenRequest.of(run.viewer(), target.get(), args, OpenRequest.Cause.ACTION));
         return result.ok() ? ActionOutcome.OK : ActionOutcome.failed(result.reason());
     }
+
+    @Override public CompletionStage<ActionOutcome> executeResumable(
+            Params params, LogicContext context, ReadExecutor reads) {
+        return reads.on(threading(), () -> {
+            try {
+                GuiRun run = GuiRun.ofPlayer(bridge, context);
+                NamespacedId near = run.session() == null ? null : run.session().gui();
+                return new Prepared(run, run.services().guis().resolve(params.gui(), near).orElse(null), null);
+            } catch (GuiRun.Refused refused) {
+                return new Prepared(null, null, refused.getMessage());
+            }
+        }).thenCompose(prepared -> {
+            if (prepared.failure() != null) {
+                return CompletableFuture.completedFuture(ActionOutcome.failed(prepared.failure()));
+            }
+            if (prepared.target() == null) {
+                return CompletableFuture.completedFuture(
+                        ActionOutcome.failed("no live GUI matches '" + params.gui() + "'"));
+            }
+            CompletionStage<Map<String, String>> arguments = CompletableFuture.completedFuture(new LinkedHashMap<>());
+            for (var entry : params.args().entrySet()) {
+                arguments = arguments.thenCompose(values -> entry.getValue().renderResumable(context, reads)
+                        .thenApply(value -> {
+                            values.put(entry.getKey(), value);
+                            return values;
+                        }));
+            }
+            return arguments.thenCompose(args -> reads.on(threading(), () -> {
+                OpenResult result = prepared.run().services().opener().open(
+                        OpenRequest.of(prepared.run().viewer(), prepared.target(), args, OpenRequest.Cause.ACTION));
+                return result.ok() ? ActionOutcome.OK : ActionOutcome.failed(result.reason());
+            }));
+        });
+    }
+
+    private record Prepared(GuiRun run, NamespacedId target, String failure) {}
 }

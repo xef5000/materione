@@ -1,0 +1,4 @@
+folia250_total:
+  scope: server
+  type: number
+  default: 0

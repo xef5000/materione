@@ -65,6 +65,9 @@ public final class BehaviorService {
             return;
         }
         BehaviorEvent event = new BehaviorEvent(eventType, detail, buildContext(player, stack), cancellable, player);
+        if (cancellable != null) {
+            event.withSynchronousPreEvent();
+        }
         engine.fire(rules, event);
         if (event.isCancelRequested() && cancellable != null) {
             cancellable.setCancelled(true);
@@ -96,6 +99,9 @@ public final class BehaviorService {
         BehaviorEvent event = new BehaviorEvent(
                 eventType, detail, buildBlockContext(player, location, blockId, techniqueName),
                 cancellable, player);
+        if (cancellable != null) {
+            event.withSynchronousPreEvent();
+        }
         engine.fire(rules, event);
         if (event.isCancelRequested() && cancellable != null) {
             cancellable.setCancelled(true);
@@ -145,6 +151,9 @@ public final class BehaviorService {
         root.put("furniture", furnitureVars);
         root.put("vars", new LinkedHashMap<String, Object>());
         BehaviorEvent event = new BehaviorEvent(eventType, detail, logicContext(root, player), cancellable, player);
+        if (cancellable != null) {
+            event.withSynchronousPreEvent();
+        }
         engine.fire(rules, event);
         boolean cancelRequested = event.isCancelRequested();
         if (cancelRequested && cancellable != null) {

@@ -33,6 +33,17 @@ dependencies {
     }
 }
 
+// Explicit local-only addon for Folia ownership probes; never included in the production plugin jar.
+val foliaProbe by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output + sourceSets.main.get().compileClasspath
+}
+tasks.register<Jar>("foliaProbeJar") {
+    description = "Builds the local-only Folia read-safety sentinel addon."
+    group = "verification"
+    archiveClassifier.set("folia-probe")
+    from(foliaProbe.output)
+}
+
 tasks.named<org.gradle.api.tasks.testing.Test>("test") {
     addTestOutputListener { descriptor, event ->
         if (descriptor.className == "dev.materione.plugin.runtime.ContentPerfBudgetTest"

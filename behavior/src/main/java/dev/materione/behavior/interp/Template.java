@@ -5,9 +5,14 @@ import dev.materione.behavior.expr.Expression;
 import dev.materione.behavior.expr.ExpressionParser;
 import dev.materione.behavior.expr.Expressions;
 import dev.materione.behavior.expr.FunctionResolver;
+import dev.materione.behavior.expr.ResumableExpressions;
+import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ReadExecutor;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code ${expression}} interpolation for author-facing strings (messages,
@@ -51,6 +56,31 @@ public final class Template {
                 }
             }
             return out.toString();
+        }
+
+        /** Renders segments in authored order, retaining prior segments across scheduled reads. */
+        public CompletionStage<String> renderResumable(LogicContext context, ReadExecutor executor) {
+            var reads = ResumableExpressions.reads(context, executor);
+            CompletionStage<StringBuilder> result = CompletableFuture.completedFuture(new StringBuilder());
+            for (Segment segment : segments) {
+                result = result.thenCompose(out -> {
+                    if (!executor.active()) {
+                        return CompletableFuture.failedFuture(
+                                new java.util.concurrent.CancellationException("run ended"));
+                    }
+                    if (segment.literal() != null) {
+                        return CompletableFuture.completedFuture(out.append(segment.literal()));
+                    }
+                    return ResumableExpressions.evaluate(segment.expression().tree(), reads)
+                            .thenApply(value -> out.append(Expressions.stringify(value)));
+                });
+            }
+            return result.thenApply(out -> {
+                if (!executor.active()) {
+                    throw new java.util.concurrent.CancellationException("run ended");
+                }
+                return out.toString();
+            });
         }
     }
 

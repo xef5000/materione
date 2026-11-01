@@ -1,0 +1,12 @@
+probe_safe_reads:
+  material: COMPASS
+  display_name: "Live Read Probe"
+  behavior:
+    - on: click:right
+      if:
+        - "balance('probe:qa_xp') >= 3"
+      do:
+        - if: {has_money: {amount: 3, currency: "probe:qa_xp"}}
+          then:
+            - set_var: {var: seen, value: "${balance('probe:qa_xp')}"}
+            - message: "READ levels=${vars.seen}"

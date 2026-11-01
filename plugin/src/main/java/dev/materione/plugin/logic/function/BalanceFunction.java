@@ -3,16 +3,19 @@ package dev.materione.plugin.logic.function;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.FunctionDescription;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.provider.Currency;
-import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyCatalog;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.plugin.logic.currency.CurrencyReads;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CompletableFuture;
 import org.bukkit.entity.Player;
 
 /**
@@ -26,10 +29,16 @@ import org.bukkit.entity.Player;
 public final class BalanceFunction implements ExpressionFunction {
 
     private final LogicProviders providers;
+    private final CurrencyReads reads;
 
     /** @param providers the currency catalog the name resolves against */
     public BalanceFunction(LogicProviders providers) {
+        this(providers, CurrencyReads.paper());
+    }
+
+    public BalanceFunction(LogicProviders providers, CurrencyReads reads) {
         this.providers = Objects.requireNonNull(providers, "providers");
+        this.reads = Objects.requireNonNull(reads, "reads");
     }
 
     @Override
@@ -56,15 +65,37 @@ public final class BalanceFunction implements ExpressionFunction {
         if (player == null) {
             return null;
         }
-        CurrencyCatalog catalog = providers.currencies();
-        Currency currency = catalog.resolve(name).orElse(null);
+        CurrencyCatalog catalog = reads.lookup(providers::currencies);
+        Currency currency = reads.lookup(() -> catalog.resolve(name).orElse(null));
         if (currency == null) {
+            reads.unavailable("currency '" + name + "' is unavailable");
             return null;
         }
-        CurrencyBackend backend = catalog.backend(currency).orElse(null);
-        if (backend == null) {
-            return null;
-        }
-        return backend.balance(player.getUniqueId()) instanceof EconomyResult.Succeeded ok ? ok.balance() : null;
+        return reads.readResolved(catalog, currency, player, backend -> backend.balance(player.getUniqueId()))
+                instanceof EconomyResult.Succeeded ok ? ok.balance() : null;
     }
+
+    @Override
+    public CompletionStage<Object> callResumable(
+            List<Object> arguments, LogicContext context, ReadExecutor executor) {
+        if (!(arguments.get(0) instanceof String name)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) return CompletableFuture.completedFuture(null);
+        return executor.on(dev.materione.api.logic.Threading.ANY, () -> {
+            CurrencyCatalog catalog = reads.lookup(providers::currencies);
+            Currency currency = reads.lookup(() -> catalog.resolve(name).orElse(null));
+            if (currency == null) {
+                reads.unavailable("currency '" + name + "' is unavailable");
+                return null;
+            }
+            return new Selection(catalog, currency);
+        }).thenCompose(selection -> selection == null ? CompletableFuture.completedFuture(null)
+                : reads.scheduleResolved(selection.catalog(), selection.currency(), player, executor,
+                        backend -> backend.balance(player.getUniqueId()))
+                        .thenApply(result -> result instanceof EconomyResult.Succeeded ok ? ok.balance() : null));
+    }
+
+    private record Selection(CurrencyCatalog catalog, Currency currency) {}
 }

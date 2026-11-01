@@ -118,12 +118,22 @@ public final class MaterioneCurrencyCatalog implements CurrencyCatalog {
     }
 
     private Optional<CurrencyBackend> bind(Currency currency) {
-        var integration = integrations.apply(currency.integration());
+        var integration = integrationForRead(currency);
         if (integration.isEmpty()) {
             return Optional.empty();
         }
+        return bindForRead(currency, integration.get());
+    }
+
+    @Override
+    public Optional<CurrencyIntegration> integrationForRead(Currency currency) {
+        return integrations.apply(currency.integration());
+    }
+
+    @Override
+    public Optional<CurrencyBackend> bindForRead(Currency currency, CurrencyIntegration integration) {
         try {
-            return Optional.of(integration.get().bind(ParamReader.of(currency.config())));
+            return Optional.of(integration.bind(ParamReader.of(currency.config())));
         } catch (IllegalArgumentException e) {
             return Optional.empty();
         }

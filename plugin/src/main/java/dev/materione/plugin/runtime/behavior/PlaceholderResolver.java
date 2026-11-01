@@ -1,5 +1,7 @@
 package dev.materione.plugin.runtime.behavior;
 
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.platform.probe.PlatformProbe;
 import java.lang.reflect.Method;
 import org.bukkit.OfflinePlayer;
 
@@ -12,6 +14,7 @@ import org.bukkit.OfflinePlayer;
 public final class PlaceholderResolver {
 
     private static final Method SET_PLACEHOLDERS = lookup();
+    private static final boolean FOLIA = PlatformProbe.detectFoliaServer();
 
     private PlaceholderResolver() {}
 
@@ -25,12 +28,37 @@ public final class PlaceholderResolver {
         if (SET_PLACEHOLDERS == null || text == null || text.indexOf('%') < 0) {
             return text;
         }
+        if (FOLIA && !containsToken(text)) {
+            return text;
+        }
+        requireSafe(FOLIA);
         try {
             Object result = SET_PLACEHOLDERS.invoke(null, player, text);
             return result instanceof String resolved ? resolved : text;
         } catch (Exception e) {
             return text; // a broken placeholder provider must not break actions
         }
+    }
+
+    static void requireSafe(boolean folia) {
+        if (folia) {
+            throw new ReadUnavailableException("PlaceholderAPI expansions have not declared Folia-safe reads");
+        }
+    }
+
+    static boolean containsToken(String text) {
+        int start = text.indexOf('%');
+        while (start >= 0) {
+            int end = text.indexOf('%', start + 1);
+            if (end < 0) {
+                return false;
+            }
+            if (end > start + 1) {
+                return true;
+            }
+            start = end;
+        }
+        return false;
     }
 
     private static Method lookup() {

@@ -5,6 +5,8 @@ import dev.materione.api.logic.variable.VariableBinding;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
+import dev.materione.api.logic.variable.VariableOp;
+import dev.materione.api.logic.variable.VariableOps;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +50,13 @@ final class RunVariables implements VariableBinding {
     public boolean store(VariableDeclaration declaration, Object value) {
         VariableStore store = stores.get(declaration.scope());
         return store != null && store.write(declaration, holderOf(declaration), value);
+    }
+
+    @Override
+    public VariableOps.Outcome mutate(VariableDeclaration declaration, VariableOp operation, Object operand) {
+        VariableStore store = stores.get(declaration.scope());
+        return store == null ? new VariableOps.Outcome(false, null, "variable store is unavailable")
+                : store.mutate(declaration, holderOf(declaration), operation, operand);
     }
 
     /** The player a declaration is held by: the run's player for player scope, nobody for server scope. */
