@@ -28,6 +28,11 @@ final class VaultCurrencyBackend implements CurrencyBackend {
                 : Availability.unavailable(NO_ECONOMY + " (install an economy plugin such as EssentialsX)");
     }
 
+    @Override
+    public Object readBindingIdentity() {
+        return Bukkit.getServicesManager().getRegistration(Economy.class);
+    }
+
     /**
      * The legacy money-action owner is {@code GLOBAL}. That does not establish that an arbitrary
      * economy behind Vault is Folia-safe; read capability remains unsupported by default.
