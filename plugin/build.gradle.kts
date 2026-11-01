@@ -47,6 +47,18 @@ tasks.register<Jar>("foliaProbeJar") {
     from(foliaProbe.output)
 }
 
+// Optional local-only PlaceholderAPI callback and unsafe-provider sentinel.
+val placeholderProbe by sourceSets.creating {
+    compileClasspath += sourceSets.main.get().output + sourceSets.main.get().compileClasspath
+}
+tasks.register<Jar>("placeholderProbeJar") {
+    description = "Builds the local-only PlaceholderAPI currency probe addon."
+    group = "verification"
+    destinationDirectory.set(rootProject.layout.projectDirectory.dir("harness/build/qa-optional"))
+    archiveFileName.set("MaterionePlaceholderProbe.jar")
+    from(placeholderProbe.output)
+}
+
 tasks.named<org.gradle.api.tasks.testing.Test>("test") {
     addTestOutputListener { descriptor, event ->
         if (descriptor.className == "dev.materione.plugin.runtime.ContentPerfBudgetTest"

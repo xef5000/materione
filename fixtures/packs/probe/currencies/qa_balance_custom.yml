@@ -1,0 +1,7 @@
+qa_balance_custom:
+  integration: custom
+  symbol: "C"
+  decimals: 2
+  deposit-command: "say unused"
+  withdraw-command: "say unused"
+  balance-placeholder: "%mtr252_balance%"

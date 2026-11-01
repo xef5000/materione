@@ -105,6 +105,89 @@ testing that integration. The catalog entry checks that PlaceholderAPI is loaded
 the player-visible values. Its filename and hash participate in the boot environment key described
 under the swarm policy; adding or removing it changes the environment of the next server boot.
 
+### Local native currency callback gate
+
+The Paper `logic.currency-custom-placeholders` test additionally uses the **local-only**
+`MaterionePlaceholderProbe` addon. It registers a real `%mtr252_balance%` expansion and two
+counted, deliberately unsafe Folia currency integrations. Neither addon nor PlaceholderAPI is
+packaged with Materione. Only prepare the addon while another probe owns the shared ports/GPU;
+install and run it only after the reservation transfers. On Windows, from this worktree:
+
+```powershell
+.\gradlew.bat :plugin:placeholderProbeJar
+Get-FileHash harness\build\qa-optional\PlaceholderAPI-2.11.7.jar -Algorithm SHA256
+# After reservation transfer, in the owned disposable server only:
+New-Item -ItemType Directory -Force harness\build\probe\server\plugins
+Copy-Item harness\build\qa-optional\PlaceholderAPI-2.11.7.jar harness\build\probe\server\plugins\
+Copy-Item harness\build\qa-optional\MaterionePlaceholderProbe.jar harness\build\probe\server\plugins\
+node qa\runner.mjs run logic.currency-xp-placeholders logic.currency-custom-placeholders --no-ledger
+```
+
+The hash must be `f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d`.
+The runner boots its usual pinned Paper server and real client. The XP test uses the authored item
+and checks player-visible XP 3 → 12 and unknown-token preservation. The custom test calls the real
+PlaceholderAPI parser on the player owner and checks XP 3 → 12, custom raw/formatted 3 → 12 → 27,
+and unregister/unavailable/re-register. The `MTR252-READY` boot marker independently records
+enabled PAPI and registration of both public expansions.
+
+To check the real PAPI disable and a subsequent clean enable, use a separate Paper boot after that
+catalog run, while retaining the same reservation:
+
+```powershell
+node scripts\probe\probe.mjs boot
+# The expected reply is MTR252-DISABLE disabled=true empty=true.
+node scripts\probe\probe.mjs rcon "mtr252 papi-disable Probe"
+node scripts\probe\probe.mjs quit
+node scripts\probe\probe.mjs down
+node scripts\probe\probe.mjs boot
+node scripts\probe\probe.mjs rcon "mtr252 value 31"
+node scripts\probe\probe.mjs rcon "mtr252 sample Probe"
+Start-Sleep -Seconds 3
+Select-String -Path harness\build\probe\server\logs\latest.log -Pattern "MTR252-READY|MTR252-SAMPLE"
+node scripts\probe\probe.mjs quit
+node scripts\probe\probe.mjs down
+```
+
+The fresh boot must report `papi=true probe=true materione=true`, and the sample must contain
+`custom=31 customFormatted=C31.00`. Disabling invokes the captured, genuinely registered Materione
+callback once while PAPI is disabled; the helper does not re-register it on production's behalf.
+The pinned PAPI 2.11.7 clears its singleton in `onDisable` and sets it in `onLoad`; invoking Bukkit
+`enablePlugin` on the same already-loaded instance is not a valid clean re-enable. Restarting the
+disposable server exercises the public plugin lifecycle instead of faking PAPI initialization.
+
+The ordinary QA runner always boots Paper, so a separate **fresh** Folia probe is required; do not
+interpret Paper results as Folia evidence. After the final #250 merge and reservation transfer,
+with an authorized local Folia 26.x server jar and its verified SHA-256:
+
+```powershell
+$foliaJar = (Resolve-Path 'harness\build\folia\server.jar').Path
+$foliaSha = '<independently-verified-64-hex-sha256>'
+node scripts\probe\probe.mjs up --server-jar $foliaJar --server-sha256 $foliaSha
+node scripts\probe\probe.mjs client
+node scripts\probe\probe.mjs join
+node scripts\probe\probe.mjs rcon "experience set Probe 3 levels"
+node scripts\probe\probe.mjs rcon "mtr252 sample Probe"
+Start-Sleep -Seconds 3
+Select-String -Path harness\build\probe\server\logs\latest.log -Pattern "MTR252-READY|MTR252-SAMPLE"
+node scripts\probe\probe.mjs rcon "experience set Probe 12 levels"
+node scripts\probe\probe.mjs rcon "mtr252 sample Probe"
+Start-Sleep -Seconds 3
+Select-String -Path harness\build\probe\server\logs\latest.log -Pattern "MTR252-SAMPLE"
+node scripts\probe\probe.mjs quit
+node scripts\probe\probe.mjs down
+```
+
+`MTR252-READY` must show `papi=true probe=true materione=true`. The first sample must contain
+`xp=3 xpFormatted=XP3.00 custom= customFormatted= unsafeLookup= unsafeRead=` and the unchanged
+unknown token, followed by `lookupBind=0 readBind=1 availability=0 balance=0 expansion=0`.
+Thus an unsupported lookup is rejected before bind, a separately permitted lookup is rejected
+before its unsafe availability/read, and custom PAPI is rejected before its expansion callback.
+Missing or unresolved tokens, wrong counters, or a missing marker are failures, not zero balances.
+Repeat with XP 12: native XP must change to `12`/`XP12.00`, while only `readBind` grows to 2.
+Read counters from the fresh server; Paper samples intentionally invoke these providers and therefore
+cannot be reused for this assertion. The addon and PAPI jars remain in the optional boot environment
+fingerprint; remove them from the disposable plugins directory after this gate if no longer needed.
+
 Run flags: `--no-build` (reuse the last `:plugin:shadowJar`), `--keep-server`
 (leave the probe up for poking), `--no-ledger` (leave the ledger untouched and
 keep results, transcripts, screenshots and failure dossiers local under
