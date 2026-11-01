@@ -70,6 +70,13 @@ class HasMoneyConditionTest {
         var fake = new PlayerFake();
         assertThatThrownBy(() -> guarded.test(guarded.parse(reader(params("amount", 1))), fake.context()))
                 .isInstanceOf(ReadUnavailableException.class).hasMessageContaining("not declared");
+        assertThat(guarded.availability().available()).isFalse();
+        assertThatThrownBy(() -> guarded.testResumable(guarded.parse(reader(params("amount", 1))),
+                fake.context(), new RunReadExecutor(new RunScheduler() {
+                    @Override public boolean canRunInline(Object anchor, Threading owner) { return true; }
+                    @Override public Handle schedule(Object anchor, Threading owner, long ticks,
+                            Runnable task, Runnable retired) { throw new AssertionError(); }
+                }, "player")).toCompletableFuture().join()).hasCauseInstanceOf(ReadUnavailableException.class);
     }
 
     @Test

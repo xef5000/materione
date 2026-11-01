@@ -1432,7 +1432,11 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     **Read capability (#250):** `CurrencyBackend.readCapability()` separately declares the read
     owner, explicit Folia support with a reason when unsupported, and an optional offline owner. Existing
     integrations default to unsupported on Folia; a `GLOBAL` thread label is not evidence that Vault or
-    an arbitrary PlaceholderAPI provider is safe. XP declares the player's region and no offline read.
+    an arbitrary PlaceholderAPI provider is safe. `CurrencyIntegration.lookupCapability()` independently
+    declares the owner and Folia safety of binding and availability; its default is unsupported. A live
+    read proves that capability before invoking either callback, then rechecks availability after the
+    read on its declared owner. Synchronous vocabulary availability fails closed when it cannot prove
+    the lookup owner without a player. XP declares the player's region and no offline read.
     `balance()` and `has_money` guard synchronous calls: on Folia an unsupported provider, unavailable
     backend or wrong owner is a read failure, not a balance of zero or a false result that `not` can invert.
     Paper retains its previous synchronous behaviour.
