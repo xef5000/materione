@@ -1,15 +1,11 @@
 package dev.materione.behavior.run;
 
 import dev.materione.api.diagnostics.Diagnostic;
-import dev.materione.api.logic.ActionOutcome;
-import dev.materione.api.logic.Cancellation;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.Threading;
 import dev.materione.behavior.flow.ActionStep;
-import dev.materione.behavior.flow.ArgValue;
 import dev.materione.behavior.flow.CallStep;
 import dev.materione.behavior.flow.ChooseStep;
-import dev.materione.behavior.flow.Condition;
 import dev.materione.behavior.flow.IfStep;
 import dev.materione.behavior.flow.RequireStep;
 import dev.materione.behavior.flow.Step;
@@ -17,12 +13,12 @@ import dev.materione.behavior.flow.StepPath;
 import dev.materione.behavior.flow.StopStep;
 import dev.materione.behavior.flow.WaitStep;
 import dev.materione.behavior.rule.Rule;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
+import java.util.function.BooleanSupplier;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Executes a rule's flow as a resumable state machine (logic.md §5.2). A {@link FlowRun} is an
@@ -44,11 +40,70 @@ import java.util.function.Consumer;
  *
  * <p>The interpreter is shared by every rule and player and holds no per-run state of its own.
  */
-public final class FlowInterpreter extends ControlSteps {
+public final class FlowInterpreter extends FlowContinuations {
 
-    private final RunRegistry registry = new RunRegistry();
     private final AtomicLong ids = new AtomicLong();
     private volatile TraceSink trace;
+    private final Set<GateReads> gates = ConcurrentHashMap.newKeySet();
+
+    /** A pending rule gate participates in the same cancellation lifecycle as a parked run. */
+    public final class GateReads implements AutoCloseable {
+        private final RunOwner owner;
+        private final RunReadExecutor reads;
+        private final BooleanSupplier synchronousOnly;
+        private boolean parked;
+
+        private GateReads(RunOwner owner, BooleanSupplier synchronousOnly) {
+            this.owner = owner;
+            this.synchronousOnly = synchronousOnly;
+            this.reads = new RunReadExecutor(scheduler, owner.anchor(), synchronousOnly);
+        }
+
+        public RunReadExecutor executor() {
+            return reads;
+        }
+
+        /** Charges a pending gate to the same budget as a suspended flow. */
+        public synchronized boolean park() {
+            if (!reads.active() || !registry.admitGate(owner.playerKey(), budget.maxParkedPerPlayer())) {
+                return false;
+            }
+            parked = true;
+            return true;
+        }
+
+        public synchronized void resume() {
+            if (parked) {
+                parked = false;
+                registry.releaseGate(owner.playerKey());
+            }
+        }
+
+        /** Registers before releasing the gate lock, so cancellation cannot miss the new run. */
+        public FlowRun start(Rule rule, LogicContext context) {
+            FlowRun run;
+            synchronized (this) {
+                if (!reads.active()) {
+                    return null;
+                }
+                run = new FlowRun(ids.incrementAndGet(), rule, context, owner, scheduler, synchronousOnly);
+                registry.track(run);
+            }
+            return startPrepared(run);
+        }
+
+        @Override public synchronized void close() {
+            gates.remove(this);
+            reads.close();
+            resume();
+        }
+    }
+
+    public GateReads gateReads(RunOwner owner, BooleanSupplier synchronousOnly) {
+        var gate = new GateReads(owner, synchronousOnly);
+        gates.add(gate);
+        return gate;
+    }
 
     public FlowInterpreter(RunScheduler scheduler, RunBudget budget, Consumer<Diagnostic> diagnostics) {
         this(scheduler, budget, new RunReporter(diagnostics));
@@ -76,10 +131,20 @@ public final class FlowInterpreter extends ControlSteps {
      *        cancellation handle)
      */
     public FlowRun start(Rule rule, LogicContext context, RunOwner owner) {
-        var run = new FlowRun(ids.incrementAndGet(), rule, context, owner);
+        return start(rule, context, owner, () -> false);
+    }
+
+    public FlowRun start(Rule rule, LogicContext context, RunOwner owner, BooleanSupplier synchronousOnly) {
+        var run = new FlowRun(ids.incrementAndGet(), rule, context, owner, scheduler, synchronousOnly);
         if (owner.cancelKey() != null) {
             registry.track(run); // reachable by cancel() even while it is running
         }
+        return startPrepared(run);
+    }
+
+    private FlowRun startPrepared(FlowRun run) {
+        Rule rule = run.rule();
+        RunOwner owner = run.owner();
         if (registry.parked(owner.playerKey()) >= budget.maxParkedPerPlayer()) {
             abort(run, rule.path(), "the player already has " + budget.maxParkedPerPlayer()
                     + " parked runs; this one was refused");
@@ -100,12 +165,28 @@ public final class FlowInterpreter extends ControlSteps {
      */
     @Override
     public int cancel(Object cancelKey) {
-        return cancelAll(registry.byCancelKey(cancelKey));
+        int count = 0;
+        if (cancelKey != null) {
+            for (GateReads gate : gates) {
+                if (cancelKey.equals(gate.owner.cancelKey())) {
+                    gate.close();
+                    count++;
+                }
+            }
+        }
+        return count + cancelAll(registry.byCancelKey(cancelKey));
     }
 
     /** Cancels every live run of one player (the player left). */
     public int cancelPlayer(Object playerKey) {
-        return cancelAll(registry.byPlayer(playerKey));
+        int count = 0;
+        for (GateReads gate : gates) {
+            if (java.util.Objects.equals(playerKey, gate.owner.playerKey())) {
+                gate.close();
+                count++;
+            }
+        }
+        return count + cancelAll(registry.byPlayer(playerKey));
     }
 
     /** Runs {@code playerKey} has parked on a wait or delay right now. */
@@ -137,6 +218,20 @@ public final class FlowInterpreter extends ControlSteps {
     // --- the loop -------------------------------------------------------------------
 
     private void advance(FlowRun run) {
+        if (!run.executing.compareAndSet(false, true)) {
+            defer(run, Threading.PLAYER_REGION, () -> advance(run));
+            return;
+        }
+        try {
+            advanceLoop(run);
+        } finally {
+            run.executing.set(false);
+            dispatchDeferred(run);
+        }
+    }
+
+    @Override
+    final void advanceLoop(FlowRun run) {
         while (true) {
             if (run.cancelled) {
                 finish(run, RunOutcome.CANCELLED, "cancelled");
@@ -188,6 +283,12 @@ public final class FlowInterpreter extends ControlSteps {
         run.armed = null;
         run.stage = 0;
         run.hopped = false;
+        run.evaluation = null;
+        run.choiceIndex = 0;
+        run.callArgs = null;
+        run.callReads = null;
+        run.choiceReads = null;
+        run.callArgIndex = 0;
     }
 
     @Override
@@ -203,47 +304,6 @@ public final class FlowInterpreter extends ControlSteps {
         run.stack.push(frame);
     }
 
-    // --- steps ----------------------------------------------------------------------
-
-    private <P> boolean action(FlowRun run, Frame frame, ActionStep<P> action) {
-        if (run.stage == 0) {
-            run.stage = 1;
-            if (action.chance() < 1 && ThreadLocalRandom.current().nextDouble() >= action.chance()) {
-                emit(run, action.path(), TraceEvent.Type.STEP_SKIPPED, "chance " + action.chance());
-                consume(run, frame);
-                return true;
-            }
-            if (action.delayTicks() > 0) {
-                run.stage = 2; // the delay is served when the run comes back
-                Threading back = action.threading() == Threading.GLOBAL ? Threading.GLOBAL : Threading.PLAYER_REGION;
-                return !park(run, action.path(), back, action.delayTicks(), true);
-            }
-            run.stage = 2;
-        }
-        Threading needs = action.threading();
-        if (needs != Threading.ANY && !run.hopped && !scheduler.canRunInline(run.owner().anchor(), needs)) {
-            run.hopped = true;
-            return !park(run, action.path(), needs, 0, false);
-        }
-        consume(run, frame);
-        boolean thrown = false;
-        ActionOutcome outcome;
-        try {
-            outcome = action.execute(run.view());
-            if (outcome == null) {
-                outcome = ActionOutcome.failed("the action reported no outcome");
-            }
-        } catch (RuntimeException e) {
-            thrown = true;
-            outcome = ActionOutcome.failed(reasonOf(e));
-        }
-        if (outcome instanceof ActionOutcome.Failed failed) {
-            return failure(run, action.path(), "action '" + action.id() + "' failed: " + failed.reason(), thrown);
-        }
-        emit(run, action.path(), TraceEvent.Type.STEP_OK, "");
-        return true;
-    }
-
     /**
      * A step failed. Inside a {@code require} that is control flow: the require runs its else and
      * ends the run, and the failure is only traced. Anywhere else nobody handles it, so it is reported
@@ -257,71 +317,6 @@ public final class FlowInterpreter extends ControlSteps {
             reporter.failure(run.rule(), path, message);
         }
         return guard == null || failRequire(run, guard, message);
-    }
-
-    // --- suspension -----------------------------------------------------------------
-
-    /**
-     * Parks the run and schedules its resumption.
-     *
-     * @param path the step the run is parked at, for the trace
-     * @param timed whether this is a wait or delay (counted against the per-player limit) rather
-     *        than a hop to another thread
-     * @return true when the run is no longer executing on this thread (parked, or aborted)
-     */
-    @Override
-    final boolean park(FlowRun run, StepPath path, Threading thread, long ticks, boolean timed) {
-        long token;
-        synchronized (run) { // the accounting and the flag change together, or a cancel could leak a count
-            if (timed) {
-                if (!registry.admitParked(run, budget.maxParkedPerPlayer())) {
-                    abort(run, path, "the player already has " + budget.maxParkedPerPlayer() + " parked runs");
-                    return true;
-                }
-                run.timedPark = true;
-            }
-            token = ++run.parkToken;
-            run.parked = true;
-        }
-        emit(run, path, TraceEvent.Type.SUSPENDED,
-                timed ? ticks + " ticks" : thread.name().toLowerCase(java.util.Locale.ROOT) + " thread");
-        try {
-            RunScheduler.Handle handle = scheduler.schedule(run.owner().anchor(), thread, ticks,
-                    () -> resume(run, path, token), () -> dropped(run, token));
-            if (run.parkToken == token && run.parked) {
-                run.pending = handle;
-            }
-        } catch (RuntimeException e) {
-            endPark(run);
-            abort(run, run.rule().path(), "could not schedule the run: " + reasonOf(e));
-        }
-        return true;
-    }
-
-    private void resume(FlowRun run, StepPath path, long token) {
-        if (run.finished.get() || run.parkToken != token || !run.parked) {
-            return; // cancelled, or a duplicate
-        }
-        endPark(run);
-        emit(run, path, TraceEvent.Type.RESUMED, "");
-        advance(run);
-    }
-
-    private void dropped(FlowRun run, long token) {
-        if (run.parkToken == token && !run.finished.get()) {
-            finish(run, RunOutcome.DROPPED, "the player is gone");
-        }
-    }
-
-    private void endPark(FlowRun run) {
-        run.parked = false;
-        run.pending = RunScheduler.Handle.NONE;
-        synchronized (run) {
-            if (run.timedPark) {
-                run.timedPark = false;
-                registry.releaseParked(run);
-            }
-        }
     }
 
     // --- ending ---------------------------------------------------------------------
@@ -341,6 +336,7 @@ public final class FlowInterpreter extends ControlSteps {
             return;
         }
         run.outcome = outcome;
+        run.reads.close();
         run.pending.cancel();
         endPark(run);
         if (run.tracked) {

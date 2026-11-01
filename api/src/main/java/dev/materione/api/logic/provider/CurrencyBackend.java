@@ -3,6 +3,7 @@ package dev.materione.api.logic.provider;
 import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.Threading;
 import java.util.UUID;
+import org.bukkit.entity.Player;
 
 /**
  * The money of one bound currency for any player (logic.md §4.5, §18). Returned by
@@ -27,6 +28,49 @@ public interface CurrencyBackend {
      */
     default Threading threading() {
         return Threading.GLOBAL;
+    }
+
+    /**
+     * The owner, demonstrated Folia safety, and offline support of {@link #balance} and
+     * {@link #has}. An existing integration remains source and binary compatible, but is not
+     * assumed safe on Folia merely because {@link #threading()} returns GLOBAL.
+     * This declaration is cheap and safe to inspect from any thread; it does not read player state.
+     */
+    default CurrencyReadCapability readCapability() {
+        return CurrencyReadCapability.unsupported(Threading.GLOBAL);
+    }
+
+    /**
+     * Whether {@link #balanceForPlayer} is safe if the UUID reconnects during the call. A true
+     * answer promises the operation cannot read an unowned replacement player. This declaration
+     * must be cheap and safe to inspect on any thread.
+     */
+    default boolean stableOnlineIdentityRead() {
+        return false;
+    }
+
+    /**
+     * Whether an offline {@link #balance} is safe if the UUID connects or reconnects during the
+     * call. A true answer promises it never accesses an unowned online replacement. This declaration
+     * must be cheap and safe to inspect on any thread.
+     */
+    default boolean stableOfflineIdentityRead() {
+        return false;
+    }
+
+    /**
+     * Identity of the currently bound provider, read only on the lookup/availability owner. The
+     * same object must be returned while that provider incarnation is unchanged; removal and
+     * re-registration must produce a different object, even for the same provider instance.
+     * Null means the provider's lifecycle cannot be proved and synchronous placeholders fail closed.
+     */
+    default Object readBindingIdentity() {
+        return null;
+    }
+
+    /** Read for the captured online identity; override when the UUID lookup could change owners. */
+    default EconomyResult balanceForPlayer(Player player, UUID id) {
+        return balance(id);
     }
 
     /** The player's balance. */

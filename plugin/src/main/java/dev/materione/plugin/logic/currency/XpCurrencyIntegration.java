@@ -5,10 +5,13 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyIntegration;
+import dev.materione.api.logic.provider.CurrencyLookupCapability;
+import dev.materione.api.logic.provider.CurrencyReadCapability;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.platform.probe.PlatformProbe;
 import java.util.List;
 import java.util.UUID;
 import org.bukkit.Bukkit;
@@ -32,6 +35,11 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
     }
 
     @Override
+    public CurrencyLookupCapability lookupCapability() {
+        return new CurrencyLookupCapability(Threading.ANY, Availability.AVAILABLE);
+    }
+
+    @Override
     public SelfDescription describe() {
         return new SelfDescription("Experience",
                 "The player's experience, as points (total experience) or as levels",
@@ -48,6 +56,7 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
     /** The backend for one unit: the player's level, or total experience points. */
     private static final class XpBackend implements CurrencyBackend {
 
+        private static final boolean FOLIA = PlatformProbe.detectFoliaServer();
         private final boolean levels;
 
         XpBackend(boolean levels) {
@@ -69,10 +78,33 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
         }
 
         @Override
+        public CurrencyReadCapability readCapability() {
+            return new CurrencyReadCapability(Threading.PLAYER_REGION, Availability.AVAILABLE, null);
+        }
+
+        @Override
+        public boolean stableOnlineIdentityRead() {
+            return true;
+        }
+
+        @Override
+        public Object readBindingIdentity() {
+            return this;
+        }
+
+        @Override
+        public EconomyResult balanceForPlayer(Player player, UUID id) {
+            return new EconomyResult.Succeeded(levels ? player.getLevel() : player.getTotalExperience());
+        }
+
+        @Override
         public EconomyResult balance(UUID player) {
             Player online = Bukkit.getPlayer(player);
             if (online == null) {
                 return new EconomyResult.Failed("player is offline");
+            }
+            if (FOLIA && !Bukkit.isOwnedByCurrentRegion(online)) {
+                return new EconomyResult.Failed("player moved or reconnected before the XP read");
             }
             return new EconomyResult.Succeeded(levels ? online.getLevel() : online.getTotalExperience());
         }
@@ -105,6 +137,9 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
             Player online = Bukkit.getPlayer(player);
             if (online == null) {
                 return new EconomyResult.Failed("player is offline");
+            }
+            if (FOLIA && !Bukkit.isOwnedByCurrentRegion(online)) {
+                return new EconomyResult.Failed("player moved or reconnected before the XP change");
             }
             if (levels) {
                 online.giveExpLevels((int) delta);

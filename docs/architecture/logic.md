@@ -1161,16 +1161,17 @@ choice open, these are the choices. Each is reversible by the owner. The code is
 17. **Predicates run on the player's thread.** A condition that contains a registered predicate reads live
     player and world state, so the interpreter hops to the player's region before evaluating it, as it does
     for an action. A pure expression reads only the run's own data and evaluates wherever the run is.
-18. **Budgets.** Steps per run: every step *visited* counts, branches and calls included (1,000). Parked runs
-    per player count `wait` and `delay:` parks only (64); a thread hop is not a wait and does not count, so a
-    burst of Folia clicks is not refused. A player at the limit has a *new* run refused at start; a park that
-    would cross it aborts. Call depth is also enforced at run time (16) although the compiler already bounds
-    it. Each breach is `MTR-0059`.
+18. **Budgets.** Steps per run: every step *visited* counts, branches and calls included (1,000). The per-player
+    parked limit (64) counts `wait`, `delay:`, pending asynchronous evaluations and pending rule-gate reads;
+    a plain action-owner hop is not a wait and does not count. A player at the limit has a *new* run refused
+    at start; a park that would cross it aborts. Call depth is also enforced at run time (16) although the
+    compiler already bounds it. Run breaches are `MTR-0059`; a refused rule-gate read is `MTR-0023`.
 19. **Cancellation by owner key.** `RunOwner(playerKey, anchor, cancelKey)`. `BehaviorEvent.withCancelKey(key)`
     marks the runs an event starts; `FlowInterpreter.cancel(key)` cancels them: a parked run's pending
     resume is cancelled, a running one ends at its next step boundary. A run with a key is tracked from
-    its start (so it is reachable even while running, which `stop: {cancel_session_runs: true}` uses); other
-    runs are tracked only while parked, so the common click costs no bookkeeping. `cancelPlayer` is called
+    its start (so it is reachable even while running, which `stop: {cancel_session_runs: true}` uses).
+    Rule-gate-started runs are tracked from creation until completion, closing the cancellation race between
+    a pending gate and its new run. Other unkeyed runs are tracked only while parked. `cancelPlayer` is called
     on quit; the entity scheduler's `retired` callback also drops the run (`DROPPED`) and releases its
     count. A key of `null` matches nothing.
 20. **Trace.** `TraceEvent(runId, rule, path, type, detail)` with types `RUN_STARTED`, `STEP_OK`,
@@ -1428,17 +1429,52 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     are live state. An unknown currency, or one whose integration is not bound, reports `PLAYER_REGION`; the
     step then fails with its reason. The headline `threading()` stays `GLOBAL`, the common case, for the
     vocabulary. Permission actions and `connect` stay `PLAYER_REGION`.
-    **The `balance()` function cannot declare a thread:** an expression function has no threading hook, so a
-    balance read is evaluated on the thread of the step that evaluates it. For an XP currency that is the
-    player's region (correct); for a Vault or command currency the read is safe on Paper and needs the global
-    thread on Folia. Adding a threading hook to `ExpressionFunction` is the follow-up that closes this.
-    **Folia gap:** a `custom` balance read through PlaceholderAPI reads player data on the global thread. That is
-    correct on Paper and a known gap on Folia.
+    **Read capability (#250):** `CurrencyBackend.readCapability()` separately declares the read
+    owner, explicit Folia support with a reason when unsupported, and an optional offline owner. Existing
+    integrations default to unsupported on Folia; a `GLOBAL` thread label is not evidence that Vault or
+    an arbitrary PlaceholderAPI provider is safe. `CurrencyIntegration.lookupCapability()` independently
+    declares the owner and Folia safety of binding and availability; its default is unsupported. A live
+    read proves that capability before invoking either callback, then rechecks availability after the
+    read on its declared owner. Synchronous vocabulary availability fails closed when it cannot prove
+    the lookup owner without a player. XP declares the player's region and no offline read.
+    `balance()` and `has_money` guard synchronous calls: on Folia an unsupported provider, unavailable
+    backend or wrong owner is a read failure, not a balance of zero or a false result that `not` can invert.
+    Paper retains its previous synchronous behaviour.
+
+    Rule gates, conditions, action templates and computed values, and flow-call arguments use ordered
+    nonblocking continuations. A continuation retains prior operands and does not replay a callback.
+    Existing action and condition callbacks still run once on their declared owner; legacy expression
+    functions return to the evaluation's captured original owner after their arguments resolve. One
+    capture spans sequential action parameters, composite conditions, and flow-call arguments. An
+    unidentifiable original owner is unavailable, not guessed. Addons that need a different hop inside
+    a callback opt into the continuation API. A computed `set_var` operand resolves before the target's
+    current value is read and updated on its owner. Server-scope `set_var` operations use the same
+    atomic in-memory mutation as all server-store writers, so they may run inline without a global hop;
+    operand evaluation and file flushing happen outside the mutation lock. Live inventory and location
+    predicates read their state after dynamic parameters resolve,
+    while `is_near` still short-circuits an initial world mismatch before those parameters.
+    Unsupported reads fail rather than become a value.
+    For a cancellable pre-event, an evaluation requiring a hop before dispatch returns is unavailable
+    and requests cancellation; explicit waits retain their existing delayed semantics. As a conservative
+    pre-event boundary, an action requiring a different owner is refused before it runs. The GUI
+    opening, slot-change and inventory-click events are pre-events as well as cancellable Bukkit events.
+    Generic PlaceholderAPI expansion is rejected on Folia, rather than assuming arbitrary installed
+    expansions are safe; Paper's existing resolution is unchanged. Item-source adapter continuations
+    remain separate work (#251); currency placeholders remain separate work (#252).
+
+    **Player variables (#250):** live player PDC access is checked against the entity owner.
+    Synchronous external API reads may use immutable last-acknowledged snapshots when called off-owner;
+    no snapshot means unavailable, not the declared default. The `getResult` API distinguishes this from
+    an undeclared variable. Snapshots are invalidated on writes, join/quit, reload and scheduler retirement;
+    join refreshes the current declarations on the player thread. Offline reads retain their documented
+    default. GUI rule, open-gate and render contexts bind the viewer's variables. Snapshots are not a
+    balance cache and are not used in place of live flow reads. Fake-owner tests exercise these contracts;
+    real Folia runtime verification is still outstanding.
 
 **Deferred**
 
-26. Pack-first bare-name resolution and load-time currency validation (items 8 and 9); a threading hook for
-    `balance()` and the PlaceholderAPI player-data read on Folia (item 25); the `variable` and `item`
+26. Pack-first bare-name resolution and load-time currency validation (items 8 and 9); resumable fresh
+    reads and remaining Folia handling (item 25); the `variable` and `item`
     integrations (item 13); `has_money` (#210,
     which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
     as: op` still uses the operator flag, not the permission provider (#208).

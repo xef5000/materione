@@ -309,7 +309,25 @@ public final class MaterionePlugin extends JavaPlugin {
         // the live declarations of whichever shadow is applied
         variables = new dev.materione.plugin.logic.variable.VariableService(
                 new dev.materione.plugin.logic.variable.PdcVariableStore(uuid -> java.util.Optional.ofNullable(
-                        org.bukkit.Bukkit.getPlayer(uuid)).map(org.bukkit.entity.Player::getPersistentDataContainer)),
+                        org.bukkit.Bukkit.getPlayer(uuid)).map(player -> {
+                            var descriptor = descriptorOrNull();
+                            if ((descriptor == null || descriptor.folia())
+                                    && !org.bukkit.Bukkit.isOwnedByCurrentRegion(player)) {
+                                throw new dev.materione.api.logic.ReadUnavailableException(
+                                        "player variable access requires the player's region");
+                            }
+                            return player.getPersistentDataContainer();
+                        }),
+                        uuid -> {
+                            var player = org.bukkit.Bukkit.getPlayer(uuid);
+                            if (player == null) {
+                                return dev.materione.plugin.logic.variable.PdcVariableStore.Access.OFFLINE;
+                            }
+                            return (descriptorOrNull() != null && !descriptorOrNull().folia())
+                                            || org.bukkit.Bukkit.isOwnedByCurrentRegion(player)
+                                    ? dev.materione.plugin.logic.variable.PdcVariableStore.Access.OWNED
+                                    : dev.materione.plugin.logic.variable.PdcVariableStore.Access.UNOWNED;
+                        }, descriptorOrNull() == null || descriptorOrNull().folia()),
                 new dev.materione.plugin.logic.variable.ServerVariableStore(
                         getDataFolder().toPath().resolve("storage").resolve("variables.json"), getLogger()::warning),
                 this::liveDeclarations,
@@ -321,12 +339,17 @@ public final class MaterionePlugin extends JavaPlugin {
         // the GUI actions reach the GUI runtime through the bridge it binds into once it is built
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
-                guiBridge);
+                guiBridge,
+                new dev.materione.plugin.logic.currency.CurrencyReads(
+                        descriptorOrNull() == null || descriptorOrNull().folia(),
+                        dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER));
         registerProviders();
         // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
-        dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
-                new dev.materione.integrations.variables.VariablePlaceholders(variables.api(), variables::guiSessions),
-                "1");
+        if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
+            dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
+                    new dev.materione.integrations.variables.VariablePlaceholders(variables.api(), variables::guiSessions),
+                    "1");
+        }
         // the debounced server flush: every 5 seconds, what changed since the last one is written
         variables.autoFlush(task -> scheduling.executeGlobalLater(this, 100L, task));
     }
@@ -376,10 +399,13 @@ public final class MaterionePlugin extends JavaPlugin {
     private void logLogicProviders() {
         var providers = logic.providers();
         var defaultCurrency = providers.currencies().defaultCurrency();
-        boolean available = providers.currencies().availability(defaultCurrency).available();
+        var reads = new dev.materione.plugin.logic.currency.CurrencyReads(
+                descriptorOrNull() == null || descriptorOrNull().folia(),
+                dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER);
+        boolean available = reads.availabilityResolved(providers.currencies(), defaultCurrency).available();
         String transfer = providers.transfer().filter(dev.materione.api.logic.provider.ServerTransfer::available)
                 .isPresent() ? "yes" : "none";
-        String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers).stream()
+        String unavailable = dev.materione.plugin.logic.BuiltinLogic.providerActions(providers, reads).stream()
                 .filter(action -> !action.availability().available())
                 .map(dev.materione.api.logic.ActionType::id)
                 .collect(java.util.stream.Collectors.joining(","));
@@ -541,7 +567,7 @@ public final class MaterionePlugin extends JavaPlugin {
         guiStack = new dev.materione.plugin.gui.GuiStack(
                 this, scheduling, () -> pipeline.runtime().registries(), logic.engine(),
                 dev.materione.plugin.gui.input.LayerVisibility.RENDERED, diagnostics::publish,
-                () -> pipeline.builtRegistries());
+                () -> pipeline.builtRegistries(), variables);
         guiBridge.bind(guiStack.services());
         // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
         variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));

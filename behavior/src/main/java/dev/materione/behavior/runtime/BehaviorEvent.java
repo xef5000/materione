@@ -25,6 +25,7 @@ public final class BehaviorEvent implements Cancellation {
     private Object cancelKey;
     private FilterFacts filterFacts = FilterFacts.NONE;
     private boolean cancelRequested;
+    private volatile boolean synchronousPreEvent;
 
     /**
      * @param context the run's context; the event adds the cancellation facet to it
@@ -76,6 +77,23 @@ public final class BehaviorEvent implements Cancellation {
     public BehaviorEvent withCancelKey(Object key) {
         this.cancelKey = key;
         return this;
+    }
+
+    /**
+     * Marks a cancellable event whose decision must be made before the dispatch call returns.
+     * While it is open, reads that would require a scheduler hop must fail closed instead.
+     */
+    public BehaviorEvent withSynchronousPreEvent() {
+        synchronousPreEvent = true;
+        return this;
+    }
+
+    public boolean synchronousPreEventOpen() {
+        return synchronousPreEvent;
+    }
+
+    void closePreEvent() {
+        synchronousPreEvent = false;
     }
 
     /**

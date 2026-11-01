@@ -24,6 +24,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { localServerOverride } from './local-server.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROBE = path.join(ROOT, 'harness', 'build', 'probe');
@@ -58,6 +59,8 @@ function usage() {
 
 Server (Paper 26.x, superflat, offline, RCON):
   up                        stage + boot the probe server, wait for ready markers
+  up --server-jar <absolute-path> --server-sha256 <hash>
+                            opt into a verified local 26.x server jar
   down                      stop it (graceful "stop" via RCON)
   restart                   down + up
   rcon <command...>         send a server-console command, print the reply
@@ -269,9 +272,13 @@ async function doUp({ build = true, keepWorld = false } = {}) {
   const pins = readPins();
   if (pidAlive(readPid('server'))) fail('probe server already running — use: probe restart (or down)');
 
+  const override = localServerOverride(strOpt('server-jar', undefined), strOpt('server-sha256', undefined));
+  if (!override && (args.includes('--server-jar') || args.includes('--server-sha256'))) {
+    fail('local server override requires --server-jar <absolute-path> and --server-sha256 <64 hex digits>');
+  }
   fs.mkdirSync(SERVER_DIR, { recursive: true });
   const jar = await ensurePluginJar(build);
-  const paperJar = await downloadVerified(
+  const serverJar = override?.jar ?? await downloadVerified(
     path.join(DL_DIR, `paper-${pins['paper-probe-version']}-${pins['paper-probe-build']}.jar`),
     pins['paper-probe-url'],
     pins['paper-probe-sha256'],
@@ -306,9 +313,11 @@ async function doUp({ build = true, keepWorld = false } = {}) {
   }
 
   const java = await javaExecutable();
-  log(`booting Paper ${pins['paper-probe-version']}-${pins['paper-probe-build']} with ${java} ...`);
+  log(override
+    ? `booting local server ${override.jar} sha256=${override.sha256} with ${java} ...`
+    : `booting Paper ${pins['paper-probe-version']}-${pins['paper-probe-build']} with ${java} ...`);
   const stdout = fs.openSync(path.join(SERVER_DIR, 'stdout.log'), 'a');
-  const child = spawn(java, ['-Xmx2G', '-DIReallyKnowWhatIAmDoingISwear', '-jar', paperJar, '--nogui'], {
+  const child = spawn(java, ['-Xmx2G', '-DIReallyKnowWhatIAmDoingISwear', '-jar', serverJar, '--nogui'], {
     cwd: SERVER_DIR, stdio: ['ignore', stdout, stdout], detached: true,
   });
   child.unref();

@@ -7,6 +7,7 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -14,6 +15,8 @@ import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.support.ExperienceUnit;
 import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 
 /**
@@ -70,5 +73,14 @@ public final class GiveExpAction implements ActionType<GiveExpAction.Params> {
             player.giveExp(whole.getAsInt());
         }
         return ActionOutcome.OK;
+    }
+
+    @Override public CompletionStage<ActionOutcome> executeResumable(
+            Params params, LogicContext context, ReadExecutor reads) {
+        if (context.facet(Facets.PLAYER).isEmpty()) {
+            return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
+        }
+        return params.amount().resolveResumable(context, reads)
+                .thenCompose(amount -> reads.on(threading(), () -> execute(new Params(amount, params.unit()), context)));
     }
 }

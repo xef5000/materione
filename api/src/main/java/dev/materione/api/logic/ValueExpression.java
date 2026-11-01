@@ -1,5 +1,7 @@
 package dev.materione.api.logic;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * A parsed expression whose result is a typed value rather than text ({@code vars.count + 1}).
  * Obtained from {@link ParamReader#expression}; syntax errors surface at that call, at load.
@@ -16,4 +18,9 @@ public interface ValueExpression {
 
     /** Evaluates against {@code context}. */
     Object evaluate(LogicContext context);
+
+    /** Evaluates once, allowing registered reads to continue on their owners. */
+    default CompletionStage<Object> evaluateResumable(LogicContext context, ReadExecutor executor) {
+        return executor.on(Threading.ANY, () -> evaluate(context));
+    }
 }

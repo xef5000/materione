@@ -35,6 +35,20 @@ public interface CurrencyCatalog {
     /** The backend answering for {@code currency} now, or empty when {@link #availability} says why not. */
     Optional<CurrencyBackend> backend(Currency currency);
 
+    /** Captures the current integration without binding it or invoking availability. */
+    default Optional<CurrencyIntegration> integrationForRead(Currency currency) {
+        return Optional.empty();
+    }
+
+    /**
+     * Binds the exact captured integration without querying availability. The caller must prove
+     * lookup ownership before calling and recheck registration identity afterwards. Catalogs that
+     * cannot bind a captured integration leave the operation unavailable.
+     */
+    default Optional<CurrencyBackend> bindForRead(Currency currency, CurrencyIntegration integration) {
+        return Optional.empty();
+    }
+
     /** Whether {@code currency} can be used now: its integration is installed, bound, and answering. */
     Availability availability(Currency currency);
 }

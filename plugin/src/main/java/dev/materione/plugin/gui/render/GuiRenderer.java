@@ -5,6 +5,7 @@ import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiContexts;
 import dev.materione.plugin.gui.session.GuiSession;
+import dev.materione.plugin.logic.variable.VariableService;
 import java.util.Map;
 import org.bukkit.inventory.Inventory;
 
@@ -19,10 +20,16 @@ import org.bukkit.inventory.Inventory;
 public final class GuiRenderer {
 
     private final SlotRenderer slots;
+    private final VariableService variables;
 
     /** @param reporter where a problem the render worked around goes, rate-limited by the caller */
     public GuiRenderer(RenderReporter reporter) {
+        this(reporter, null);
+    }
+
+    public GuiRenderer(RenderReporter reporter, VariableService variables) {
         this.slots = new SlotRenderer(reporter);
+        this.variables = variables;
     }
 
     /**
@@ -33,7 +40,7 @@ public final class GuiRenderer {
      * @param ticks the window's clock
      */
     public Rendered render(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full, long ticks) {
-        LogicContext context = GuiContexts.build(viewer, session, Map.of());
+        LogicContext context = GuiContexts.build(viewer, session, Map.of(), variables);
         return slots.render(gui, context, ticks, full ? null : session.rendered());
     }
 

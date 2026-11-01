@@ -4,12 +4,15 @@ import dev.materione.api.logic.ExpressionCompiler;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.ValueExpression;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.behavior.expr.EvaluationContext;
 import dev.materione.behavior.expr.Expression;
 import dev.materione.behavior.expr.ExpressionException;
 import dev.materione.behavior.expr.ExpressionParser;
 import dev.materione.behavior.expr.FunctionResolver;
+import dev.materione.behavior.expr.ResumableExpressions;
 import dev.materione.behavior.interp.Template;
+import java.util.concurrent.CompletionStage;
 
 /**
  * The {@link ExpressionCompiler} the engine hands to {@code ParamReader}: templates and bare
@@ -64,6 +67,16 @@ public final class EngineExpressions implements ExpressionCompiler {
             // ${...} first, then %placeholders%: the order the M2 executors used
             return context.applyPlaceholders(compiled.render(evaluationOf(context)));
         }
+
+        @Override
+        public CompletionStage<String> renderResumable(LogicContext context, ReadExecutor executor) {
+            return compiled.renderResumable(context, executor).thenApply(text -> {
+                if (!executor.active()) {
+                    throw new java.util.concurrent.CancellationException("run ended");
+                }
+                return context.applyPlaceholders(text);
+            });
+        }
     }
 
     private record EngineExpression(Expression expression) implements ValueExpression {
@@ -79,6 +92,11 @@ public final class EngineExpressions implements ExpressionCompiler {
             } catch (ExpressionException e) {
                 throw new IllegalStateException(e.getMessage(), e);
             }
+        }
+
+        @Override
+        public CompletionStage<Object> evaluateResumable(LogicContext context, ReadExecutor executor) {
+            return ResumableExpressions.evaluate(expression.tree(), ResumableExpressions.reads(context, executor));
         }
     }
 }

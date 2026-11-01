@@ -86,6 +86,71 @@ The client window pops up on the desktop while it runs — that is expected
 (real rendering is the point). The window can be covered or minimized-adjacent;
 avoid *minimizing* it (the framebuffer stops updating).
 
+## Local Folia safe-read probe
+
+The Paper pin remains the default. To investigate Folia locally, obtain an official
+server jar and its published SHA-256 separately, verify its Minecraft version matches
+the probe client, and explicitly opt in with `up --server-jar <absolute-path>
+--server-sha256 <64-hex-digits>`. The launcher verifies the file before starting.
+The selection does not change the Paper pin or validate version compatibility.
+
+The `:plugin:foliaProbeJar` task builds a **local-only** sentinel addon; it is not
+part of the production plugin. Its `folia250:sentinel` currency intentionally has
+no Folia lookup or read capability and logs `MTR250-UNSAFE-CALL` if its binding,
+availability or read callbacks are invoked. The local-only
+fixtures under `scripts/probe/fixtures/folia250/` exercise supported XP and player
+variables, unsupported `balance` and `has_money` pre-event gates, retirement, and
+entity migration. The addon's `/folia250 migrate` uses the entity scheduler and
+`teleportAsync` to move the invoking player 512 blocks along X.
+
+With exclusive access to the probe ports and a matching JDK/client, the following
+PowerShell sequence stages that addon and starts a verified local Folia server:
+
+```powershell
+.\gradlew.bat :plugin:shadowJar :plugin:foliaProbeJar
+New-Item -ItemType Directory -Force harness\build\probe\server\plugins | Out-Null
+Copy-Item plugin\build\libs\materione-plugin-*-folia-probe.jar harness\build\probe\server\plugins\MaterioneFoliaProbe.jar
+node scripts\probe\probe.mjs up --no-build --server-jar <absolute-jar-path> --server-sha256 <published-sha256>
+Copy-Item scripts\probe\fixtures\folia250\items\folia250.yml harness\build\probe\server\plugins\Materione\content\packs\probe\items\
+Copy-Item scripts\probe\fixtures\folia250\currencies\folia250_unsafe.yml harness\build\probe\server\plugins\Materione\content\packs\probe\currencies\
+New-Item -ItemType Directory -Force harness\build\probe\server\plugins\Materione\content\packs\probe\variables | Out-Null
+Copy-Item scripts\probe\fixtures\folia250\variables\folia250.yml harness\build\probe\server\plugins\Materione\content\packs\probe\variables\
+node scripts\probe\probe.mjs rcon "materione reload"
+```
+
+Wait for `MATERIONE-RELOAD-OK`, confirm `MTR250-SENTINEL-READY` and `materione doctor`
+reports Folia, then launch/join the client. A successful live-read scenario emits
+`MTR250-VALUES xp=3 coins=21` and `MTR250-LIVE xp=3 coins=21` after staging XP
+levels and `corpus:qa_coins`. For unsupported drops, the sentinel must report
+`MTR250-DROP cancelled=true` without any `MTR250-UNSAFE-CALL` or unsafe-rule
+marker. For retirement, wait for `MTR250-RETIRE-START`, disconnect, and check
+that `MTR250-RETIRED-RAN` never appears after the delay. For migration, verify
+the successful `MTR250-MIGRATION` marker and client position before accepting
+`MTR250-MIGRATED`. Use fresh log offsets and verify each trigger actually fired.
+For multi-region evidence configure at least two actual tick workers in the disposable
+server's `config\paper-global.yml` (`threaded-regions.threads`; use four when one
+worker is insufficient), restart, then issue `folia250 rmw` through RCON. The addon
+force-loads independently owned chunks 0 and 1024, starts 5,000 engine `set_var`
+increments from each, and reports `MTR250-RMW PASS` only for an exact 10,000,
+distinct concurrent region threads, overlapping batches and zero ownership faults.
+`folia250 offline <uuid>` exercises a data-only test backend's declared GLOBAL
+offline read and refuses unsupported and wrong-owner synchronous reads before
+their callback. Repeat for the same identity after it reconnects: the test backend
+must reject the now-online identity. This is not a compatibility test for Vault,
+PlaceholderAPI or an arbitrary external SDK.
+
+To probe vocabulary on an editor-like async thread, set the disposable server's
+`default_currency` to `probe:folia250_unsafe` before startup, stage the sentinel
+currency fixture, and run `folia250 vocabulary`. `MTR250-VOCABULARY PASS` requires
+both money actions and `has_money` to be unavailable and no sentinel callbacks
+during vocabulary construction. Load-time configuration validation may bind the
+integration separately; it is not a read or a vocabulary callback.
+
+Stop the client and server gracefully, and remove the staged sentinel jar and
+all copied fixture files from the disposable server before the next Paper boot.
+Do not bless the QA ledger with this manual run: retain local evidence with the
+actual Folia version, build, jar hash and test outcomes instead.
+
 ## Agent mode (`probe.mjs agent`)
 
 The [QA suite](../qa/README.md) does not shell out per call — it drives a

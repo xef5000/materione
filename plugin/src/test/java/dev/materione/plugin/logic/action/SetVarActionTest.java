@@ -214,7 +214,7 @@ class SetVarActionTest {
         }
 
         @Test
-        void playerWritesRunOnThePlayersRegionAndServerWritesAnywhere() {
+        void playerWritesRunOnThePlayersRegionAndServerWritesCanRunInline() {
             var player = action.parse(reader(params("var", "player.shop.coins", "value", 1)));
             var server = action.parse(reader(params("var", "server.shop.season", "value", "x")));
             var local = action.parse(reader(params("var", "n", "value", 1)));

@@ -1,11 +1,16 @@
 package dev.materione.behavior.runtime;
 
 import dev.materione.behavior.expr.Expressions;
+import dev.materione.behavior.flow.ResumableConditions;
 import dev.materione.behavior.rule.Rule;
 import dev.materione.behavior.rule.RuleOptions;
 import dev.materione.behavior.run.FlowInterpreter;
 import dev.materione.behavior.run.RunOwner;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.api.logic.ReadRetiredException;
 import java.util.List;
+import java.util.ArrayList;
+import java.util.concurrent.CompletionException;
 
 /**
  * The ECA engine's rule gate (runtime-systems §2, D4): matches a fired event against rules, gates
@@ -42,8 +47,23 @@ public final class RuleEngine {
      * independently, so a skipped or failed rule never blocks its siblings.
      */
     public void fire(Iterable<Rule> rules, BehaviorEvent event) {
-        long now = System.currentTimeMillis();
-        for (Rule rule : rules) {
+        var ordered = new ArrayList<Rule>();
+        rules.forEach(ordered::add);
+        var gate = interpreter.gateReads(ownerOf(event), event::synchronousPreEventOpen);
+        try {
+            fireNext(ordered, 0, System.currentTimeMillis(), event, gate);
+        } finally {
+            event.closePreEvent();
+        }
+    }
+
+    private void fireNext(List<Rule> rules, int index, long now, BehaviorEvent event,
+            FlowInterpreter.GateReads gate) {
+        for (int i = index; i < rules.size(); i++) {
+            if (!gate.executor().active()) {
+                return;
+            }
+            Rule rule = rules.get(i);
             if (!rule.on().matches(event.eventType(), event.detail())
                     || !rule.filters().matches(event.filterFacts())) {
                 continue;
@@ -55,21 +75,81 @@ public final class RuleEngine {
             if (!cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges())) {
                 continue;
             }
-            if (!conditionsMet(rule, event)) {
+            var result = ResumableConditions.test(rule.condition(), event.context(), gate.executor())
+                    .toCompletableFuture();
+            if (!result.isDone()) {
+                if (event.synchronousPreEventOpen()) {
+                    event.requestCancel();
+                    interpreter.reporter().failure(rule, rule.path().child("if"),
+                            "condition failed: asynchronous read before synchronous event returns");
+                    gate.close();
+                    return;
+                }
+                if (!gate.park()) {
+                    interpreter.reporter().failure(rule, rule.path().child("if"),
+                            "condition failed: pending-read budget exhausted or gate cancelled");
+                    gate.close();
+                    return;
+                }
+                int next = i + 1;
+                result.whenComplete((holds, failure) -> {
+                    gate.resume();
+                    if (!gate.executor().active()) {
+                        return;
+                    }
+                    if (retired(failure)) {
+                        gate.close();
+                        return;
+                    }
+                    if (conditionResult(rule, event, holds, failure)) {
+                        gate.start(rule, event.context());
+                    }
+                    fireNext(rules, next, now, event, gate);
+                });
+                return;
+            }
+            Boolean holds = null;
+            Throwable failure = null;
+            try {
+                holds = result.join();
+            } catch (CompletionException e) {
+                failure = e.getCause();
+            } catch (java.util.concurrent.CancellationException e) {
+                failure = e;
+            }
+            if (retired(failure)) {
+                gate.close();
+                return;
+            }
+            if (!conditionResult(rule, event, holds, failure)) {
                 continue;
             }
-            interpreter.start(rule, event.context(), ownerOf(event));
+
+            gate.start(rule, event.context());
         }
+        gate.close();
     }
 
-    private boolean conditionsMet(Rule rule, BehaviorEvent event) {
-        try {
-            return rule.condition().test(event.context());
-        } catch (RuntimeException e) {
+    private static boolean retired(Throwable failure) {
+        while (failure instanceof CompletionException && failure.getCause() != null) {
+            failure = failure.getCause();
+        }
+        return failure instanceof ReadRetiredException;
+    }
+
+    private boolean conditionResult(Rule rule, BehaviorEvent event, Boolean holds, Throwable e) {
+        if (e != null) {
+            while (e instanceof CompletionException && e.getCause() != null) {
+                e = e.getCause();
+            }
             // a condition that cannot be evaluated never lets the rule through
+            if (e instanceof ReadUnavailableException && event.synchronousPreEventOpen()) {
+                event.requestCancel();
+            }
             interpreter.reporter().failure(rule, rule.path().child("if"), "condition failed: " + e.getMessage());
             return false;
         }
+        return Boolean.TRUE.equals(holds);
     }
 
     /** Runs belong to the player (logic.md §5.2): keyed by the event's player, anchored to its entity. */

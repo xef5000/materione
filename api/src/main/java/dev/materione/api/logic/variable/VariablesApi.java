@@ -3,6 +3,7 @@ package dev.materione.api.logic.variable;
 import dev.materione.api.ApiResult;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
@@ -25,13 +26,23 @@ public interface VariablesApi {
 
     /**
      * The effective value of {@code id} for {@code player}: the stored value, or the declared default
-     * when nothing is stored. Empty only when the variable is undeclared. A player-scope variable read
+     * when nothing is stored. Empty when the variable is undeclared or an online player's value is
+     * unavailable on this thread and no acknowledged snapshot exists. A player-scope variable read
      * for an offline player (or for null) reads as the default, because that player's stored value is
      * not reachable from the server until they are online.
+     * On Folia an off-owner read may return the latest acknowledged immutable snapshot; use
+     * {@link #getResult} to distinguish an unavailable read from an undeclared variable.
      *
      * @param player the holder for player scope; ignored for server scope (pass null)
      */
     Optional<Object> get(NamespacedId id, UUID player);
+
+    /** Like {@link #get}, with an explicit failure when no value can be supplied. */
+    default ApiResult<Object> getResult(NamespacedId id, UUID player) {
+        return get(id, player).map(ApiResult::ok)
+                .orElseGet(() -> ApiResult.fail(DiagnosticCodes.VARIABLE_STORE_FAILED,
+                        "variable is undeclared or unavailable: " + id));
+    }
 
     /**
      * Stores {@code value} for {@code player}; {@code null} clears it, so the next read returns the

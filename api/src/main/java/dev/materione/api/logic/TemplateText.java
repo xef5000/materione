@@ -1,5 +1,7 @@
 package dev.materione.api.logic;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * A parameter value that may contain {@code ${expression}} segments and {@code %placeholder%}
  * tokens (logic.md §2.5: every parameter is a template). Obtained from
@@ -20,4 +22,9 @@ public interface TemplateText {
      * {@link LogicContext#applyPlaceholders}.
      */
     String render(LogicContext context);
+
+    /** Renders once, allowing registered reads to continue on their owners. */
+    default CompletionStage<String> renderResumable(LogicContext context, ReadExecutor executor) {
+        return executor.on(Threading.ANY, () -> render(context));
+    }
 }

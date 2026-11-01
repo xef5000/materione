@@ -12,6 +12,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 
 /**
  * One execution of a rule's flow (logic.md §5.2): an explicit frame stack plus the context it runs
@@ -29,6 +32,18 @@ public final class FlowRun {
     private final Rule rule;
     private final RunOwner owner;
     private final RunContext view;
+    final RunReadExecutor reads;
+    final BooleanSupplier synchronousOnly;
+    final AtomicBoolean executing = new AtomicBoolean();
+    final AtomicReference<DeferredResume> deferredResume = new AtomicReference<>();
+    CompletableFuture<?> evaluation;
+    int choiceIndex;
+    Map<String, Object> callArgs;
+    dev.materione.api.logic.ReadExecutor callReads;
+    dev.materione.api.logic.ReadExecutor choiceReads;
+    int callArgIndex;
+
+    record DeferredResume(dev.materione.api.logic.Threading owner, Runnable task) {}
 
     final Deque<Frame> stack = new ArrayDeque<>(4);
     final AtomicBoolean finished = new AtomicBoolean();
@@ -37,7 +52,7 @@ public final class FlowRun {
     volatile boolean parked;
     volatile RunScheduler.Handle pending = RunScheduler.Handle.NONE;
     /** Bumped on every park, so a stale resume (cancelled, or fired twice) is recognised and ignored. */
-    long parkToken;
+    volatile long parkToken;
     /** Whether the park counts against the per-player limit (a wait or delay, not a thread hop). */
     boolean timedPark;
     /** Whether the registry holds this run (set by the registry). */
@@ -51,10 +66,13 @@ public final class FlowRun {
     /** Set while resuming from a hop: the step runs where the scheduler put it, whatever the check says. */
     boolean hopped;
 
-    FlowRun(long id, Rule rule, LogicContext context, RunOwner owner) {
+    FlowRun(long id, Rule rule, LogicContext context, RunOwner owner,
+            RunScheduler scheduler, BooleanSupplier synchronousOnly) {
         this.id = id;
         this.rule = rule;
         this.owner = owner;
+        this.synchronousOnly = synchronousOnly;
+        this.reads = new RunReadExecutor(scheduler, owner.anchor(), synchronousOnly);
         this.view = new RunContext(context, this);
     }
 

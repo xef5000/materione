@@ -6,6 +6,8 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
@@ -13,6 +15,8 @@ import dev.materione.plugin.logic.support.ExperienceUnit;
 import dev.materione.plugin.logic.support.Quantity;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 
 /**
@@ -63,5 +67,14 @@ public final class HasExpCondition implements ConditionType<HasExpCondition.Para
         return params.unit() == ExperienceUnit.LEVELS
                 ? player.getLevel() >= need
                 : player.getTotalExperience() >= need;
+    }
+
+    @Override public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor reads) {
+        if (context.facet(Facets.PLAYER).isEmpty()) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return params.amount().resolveResumable(context, reads)
+                .thenCompose(amount -> reads.on(Threading.PLAYER_REGION,
+                        () -> test(new Params(amount, params.unit()), context)));
     }
 }

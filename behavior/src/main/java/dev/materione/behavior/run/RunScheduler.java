@@ -26,6 +26,17 @@ public interface RunScheduler {
     boolean canRunInline(Object anchor, Threading thread);
 
     /**
+     * The owner proved for the current thread, or null when it cannot be identified. Platform
+     * implementations must not treat a missing entity anchor as proof of player-region ownership.
+     */
+    default Threading currentOwner(Object anchor) {
+        if (canRunInline(anchor, Threading.GLOBAL)) {
+            return Threading.GLOBAL;
+        }
+        return anchor != null && canRunInline(anchor, Threading.PLAYER_REGION) ? Threading.PLAYER_REGION : null;
+    }
+
+    /**
      * Runs {@code task} on a thread that satisfies {@code thread} for {@code anchor}, after
      * {@code delayTicks} (0 = as soon as that thread is next free, never inline). When the platform
      * can no longer run it (the player left before the task came due) {@code dropped} runs
