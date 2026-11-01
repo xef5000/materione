@@ -26,7 +26,7 @@ at HEAD until one of these invalidates it:
 | Invalidation | Meaning |
 |---|---|
 | `def` hash differs | the test itself was edited |
-| `env` key differs | probe pins changed (new server/bridge build) |
+| `env` key differs | probe pins or optional runtime plugin jar names/content changed |
 | `covers` globs intersect `git diff <recorded>..HEAD` | code the test exercises changed |
 | `dirty` was set | it was recorded on an uncommitted tree — never counts |
 | `sha` not an ancestor of HEAD | it was recorded off-main (see "bless on main") |
@@ -136,6 +136,10 @@ identity/structured assertions use `.not.toBe` and `.not.toEqual`.
 - **Run on main.** Squash merges change the sha by design, so passes recorded
   on a branch are `off-main` and never count. Full blessing happens on main;
   commit ledger updates there (`qa: ledger after <scope> swarm @ <sha>`).
+- **Keep capture provenance.** A visual verdict retains the captured commit,
+  environment, definition, timestamp and dirty flag; `markedAt` records the
+  review time separately. Reviewing later cannot bless stale or off-main
+  screenshots as though they were captured at the current HEAD.
 - **Feature PRs add catalog entries** for every user-visible behavior they
   ship (marked `never` — the next main swarm picks them up). The PR's own
   run proves they can pass; the merge makes them count.
@@ -145,6 +149,15 @@ identity/structured assertions use `.not.toBe` and `.not.toEqual`.
 - **Full re-swarm** (`run all`) per milestone tag or probe-pin bump — the
   env key already forces the latter.
 - One swarm at a time per machine (the probe owns fixed ports and the GPU).
+
+The environment key includes sorted SHA-256 fingerprints of optional top-level
+plugin jars in the disposable server. `Materione.jar` is excluded because its
+changes are tracked by the tested commit and `covers`, not by invalidating every
+test. A run verifies that its inputs stayed unchanged through server startup and
+records that boot environment throughout; replacing a jar on disk afterwards
+cannot relabel the already-loaded server. With no optional jars, the existing
+pin-only environment key is unchanged. Ledger entries retain the optional jar
+names and full hashes in `runtimePlugins`; failure dossiers include them too.
 
 ## Evidence lives in the repo (never on a machine)
 
@@ -180,8 +193,9 @@ main-branch raw URLs agree.
 - The probe is the **26.x registry seam** (`mode=registry`). Visual coverage
   of the 1.21.4 floor (datapack mode) stays with the headless
   [`:harness`](../harness/README.md) integration tests.
-- CI never boots Minecraft. `check` is the only CI step (catalog integrity +
-  ledger drift).
+- CI never boots the windowed probe. Catalog integrity/ledger drift and pure
+  runner/evidence tests are the cheap QA steps; the headless Paper harness is a
+  separate CI gate.
 - The ledger and the promoted failure evidence (`qa/evidence/`) are
   committed; `qa/results/` scratch is not. A pass whose scratch has been
   cleaned up is normal — the ledger's run id is its only pointer.
