@@ -102,7 +102,8 @@ server. Before starting the runner, place the official pinned PlaceholderAPI 2.1
 `harness/build/probe/server/plugins/`; the probe preserves optional plugin jars when it resets its
 world. This is an opt-in local prerequisite, not a bundled dependency. Remove the jar when no longer
 testing that integration. The catalog entry checks that PlaceholderAPI is loaded before asserting
-the player-visible values.
+the player-visible values. Its filename and hash participate in the boot environment key described
+under the swarm policy; adding or removing it changes the environment of the next server boot.
 
 Run flags: `--no-build` (reuse the last `:plugin:shadowJar`), `--keep-server`
 (leave the probe up for poking), `--no-ledger` (leave the ledger untouched and
