@@ -6,6 +6,12 @@ import { test } from './_lib.mjs';
 
 const COMMAND = 'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommand.java';
 
+async function inventoryCount(ctx) {
+  return Number(await ctx.exec(
+    'def total = 0; for (int i = 0; i < 36; i++) { def s = player.getInventory().items.get(i); if (!s.isEmpty()) total += s.getCount() }; return total',
+  ));
+}
+
 async function typedChat(ctx, command, shot) {
   const text = JSON.stringify(command);
   const parsed = await ctx.exec(
@@ -37,11 +43,11 @@ export default [
         await ctx.sleep(400);
         await typedChat(ctx, 'materione give corpus:gem_red Probe 5', 'typed-root-input');
         await ctx.waitForChat(/Given corpus:gem_red.*5/);
-        await ctx.waitForServerLog(/MATERIONE-GIVE-OK id=corpus:gem_red player=Probe amount=5/);
         const stack = await ctx.exec(
           "def s = player.getInventory().items.get(0); return s.getHoverName().getString() + ':' + s.getCount()",
         );
         ctx.expect(String(stack)).toBe('Red Gem:5');
+        ctx.expect(await inventoryCount(ctx)).toBe(5);
         await ctx.shot('typed-root-result');
       } finally {
         if (granted) await ctx.rcon('deop Probe');
@@ -162,10 +168,7 @@ export default [
       await ctx.waitForServerLog(/MATERIONE-GIVE-OK id=corpus:gem_red player=Probe amount=5/);
       // Sum every non-empty stack in the player inventory (indexed form —
       // DebugBridge wraps collections; closures do not resolve).
-      const total = await ctx.exec(
-        'def total = 0; for (int i = 0; i < 36; i++) { def s = player.getInventory().items.get(i); if (!s.isEmpty()) total += s.getCount() }; return total',
-      );
-      ctx.expect(Number(total)).toBe(5);
+      ctx.expect(await inventoryCount(ctx)).toBe(5);
     },
   }),
 

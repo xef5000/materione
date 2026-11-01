@@ -34,7 +34,7 @@
 //                                   the scene anchor (fresh baseline per test)
 //   ctx.expect(actual)            → assertions: toBe, toEqual, toContain,
 //                                   toMatch, toBeGreaterThan, toBeLessThan,
-//                                   toBeTruthy — failures carry
+//                                   toBeTruthy, not.toBe, not.toEqual - failures carry
 //                                   {operator, expected, actual} into the
 //                                   failure dossier
 //   ctx.sleep(ms), ctx.log(msg)   — pacing + transcript narration

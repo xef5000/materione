@@ -5,7 +5,7 @@
 //   node qa/runner.mjs check              # catalog integrity (CI-safe, no Minecraft)
 //   node qa/runner.mjs plan               # what needs testing at HEAD (ledger-driven)
 //   node qa/runner.mjs run [selectors]    # execute: ids, suite:<name>, all, --all,
-//                                         #          --no-build, --keep-server, --file
+//                                         #          --no-build, --keep-server, --no-ledger, --file
 //   node qa/runner.mjs report [runId]     # print a run summary
 //   node qa/runner.mjs file <runId> <id>  # file a GitHub issue from a failure dossier
 //   node qa/runner.mjs mark <id> pass|fail [--note s] [--shot p] [--by who]
@@ -17,6 +17,7 @@
 
 import { spawn, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
+import { isDeepStrictEqual } from 'node:util';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import readline from 'node:readline';
@@ -48,7 +49,7 @@ const PROJECT_OWNER = 'xef5000';
 const PROJECT_ID = process.env.MTR_PROJECT_ID ?? 'PVT_kwHOA9Lzdc4Bmaqo';
 
 class QaError extends Error {}
-class QaAssertionError extends Error {
+export class QaAssertionError extends Error {
   constructor(message, { operator, expected, actual }) {
     super(message);
     this.operator = operator;
@@ -57,10 +58,12 @@ class QaAssertionError extends Error {
   }
 }
 
-main(process.argv.slice(2)).catch((e) => {
-  process.stderr.write(`qa: ${redactEvidence(e.message ?? String(e))}\n`);
-  process.exit(e instanceof QaError ? 1 : 1);
-});
+if (process.argv[1] && pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url) {
+  main(process.argv.slice(2)).catch((e) => {
+    process.stderr.write(`qa: ${redactEvidence(e.message ?? String(e))}\n`);
+    process.exit(e instanceof QaError ? 1 : 1);
+  });
+}
 
 async function main(argv) {
   const command = argv.shift();
@@ -86,6 +89,7 @@ function usage() {
   run [selectors...]        run tests through the probe agent. Selectors: test
                             ids, suite:<name>, all. No selector = the due set
                             from plan. Flags: --all, --no-build, --keep-server,
+                            --no-ledger (local evidence only),
                             --file (auto-file issues for failures)
   report [runId]            print a run's summary
   file <runId> <testId>     promote a failure's evidence into qa/evidence/,
@@ -336,15 +340,17 @@ async function cmdRun(argv) {
     all: argv.includes('--all'),
     noBuild: argv.includes('--no-build'),
     keepServer: argv.includes('--keep-server'),
+    noLedger: argv.includes('--no-ledger'),
     file: argv.includes('--file'),
   };
+  if (flags.noLedger && flags.file) throw new QaError('--no-ledger cannot be combined with --file');
   const selectors = argv.filter((a) => !a.startsWith('--'));
   const tests = await loadCatalog();
   const byId = validateCatalog(tests);
   const head = headSha();
   const env = envKey();
   const dirty = isDirty();
-  if (dirty) {
+  if (dirty && !flags.noLedger) {
     process.stderr.write('qa: WARNING — the working tree is dirty; passes recorded this run are marked recorded-dirty and will not count as fresh.\n');
   }
 
@@ -440,10 +446,10 @@ async function cmdRun(argv) {
       }
       const started = Date.now();
       try {
-        const result = await runTest(test, agent, runDir, { head, dirty });
+        const result = await runTest(test, agent, runDir, { head, dirty, noLedger: flags.noLedger });
         outcomes.set(id, { outcome: result.outcome, ms: Date.now() - started, ...result.meta });
         const icon = result.outcome === 'pass' ? '✔' : result.outcome === 'visual' ? '👁' : '✘';
-        line(`${icon} ${id.padEnd(38)} ${result.outcome.toUpperCase().padEnd(7)} (${((Date.now() - started) / 1000).toFixed(1)}s)${result.meta?.dossier ? ` → ${result.meta.dossier}` : ''}${result.outcome === 'visual' ? ` → close with: runner mark ${id} pass|fail` : ''}`);
+        line(`${icon} ${id.padEnd(38)} ${result.outcome.toUpperCase().padEnd(7)} (${((Date.now() - started) / 1000).toFixed(1)}s)${result.meta?.dossier ? ` → ${result.meta.dossier}` : ''}${result.outcome === 'visual' && !flags.noLedger ? ` → close with: runner mark ${id} pass|fail` : ''}`);
       } catch (e) {
         if (e instanceof TestFailure) {
           outcomes.set(id, { outcome: 'fail', ms: Date.now() - started, error: e.message, dossier: e.dossier });
@@ -492,7 +498,7 @@ async function cmdRun(argv) {
   }
 }
 
-async function runTest(test, agent, runDir, { head, dirty }) {
+async function runTest(test, agent, runDir, { head, dirty, noLedger }) {
   const testDir = path.join(runDir, test.id);
   fs.mkdirSync(testDir, { recursive: true });
   const transcript = [];
@@ -536,10 +542,11 @@ async function runTest(test, agent, runDir, { head, dirty }) {
       entry.issue = previous.issue;
       if (previous.issueUrl) entry.issueUrl = previous.issueUrl;
     }
-    writeLedgerEntry(test, entry);
+    if (!noLedger) writeLedgerEntry(test, entry);
     transcript.push({ t: Date.now() - ms, kind: 'note', msg: `outcome: ${entry.result}` });
+    if (noLedger && ctx.eyesNote) transcript.push({ t: Date.now() - ms, kind: 'note', msg: `needs eyes: ${ctx.eyesNote}` });
     writeTranscript(testDir, transcript);
-    return { outcome: entry.result, meta: { evidence: ctx.shots } };
+    return { outcome: entry.result, meta: { evidence: ctx.shots, ...(noLedger && ctx.eyesNote ? { eyes: ctx.eyesNote } : {}) } };
   }
 
   // Failure: classify by environment health — a healthy environment means the
@@ -556,7 +563,7 @@ async function runTest(test, agent, runDir, { head, dirty }) {
     throw new QaError(`environment broke during ${test.id}: ${failureMessage(stepsError)}`);
   }
   const dossier = writeDossier({ test, testDir, transcript, error: stepsError, meta, ctx });
-  writeLedgerEntry(test, {
+  if (!noLedger) writeLedgerEntry(test, {
     sha: head, dirty, env: envKey(), def: test.defHash,
     result: 'fail', at: new Date(ms).toISOString(), run: path.basename(runDir),
     dossier: path.relative(ROOT, dossier),
@@ -788,16 +795,24 @@ function chatText(line) {
   return line?.plain ?? line?.text ?? line?.message ?? line?.content ?? JSON.stringify(line);
 }
 
-function makeExpect(actual) {
+export function makeExpect(actual) {
   const fail = (operator, expected, message) => {
     throw new QaAssertionError(message, { operator, expected, actual });
   };
   return {
+    not: {
+      toBe(expected) {
+        if (actual === expected) fail('not.toBe', expected, `expected a value other than ${trim(expected)}, got ${trim(actual)}`);
+      },
+      toEqual(expected) {
+        if (isDeepStrictEqual(actual, expected)) fail('not.toEqual', expected, `expected a structure other than ${trim(expected)}, got ${trim(actual)}`);
+      },
+    },
     toBe(expected) {
       if (actual !== expected) fail('toBe', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
     },
     toEqual(expected) {
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) fail('toEqual', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
+      if (!isDeepStrictEqual(actual, expected)) fail('toEqual', expected, `expected ${trim(expected)}, got ${trim(actual)}`);
     },
     toContain(sub) {
       if (!String(actual).includes(sub)) fail('toContain', sub, `expected output to contain ${trim(sub)}, got ${trim(actual)}`);
@@ -930,7 +945,7 @@ function pin(key) {
 
 function writeRunSummary({ runId, runDir, order, outcomes, head, env, dirty, infra, flags, runLog }) {
   const lines = [
-    '', `QA run ${runId} — ${short(head)}${dirty ? ' (dirty)' : ''} env ${env}`, '',
+    '', `QA run ${runId} — ${short(head)}${dirty ? ' (dirty)' : ''} env ${env}${flags.noLedger ? ' — local evidence only; ledger unchanged' : ''}`, '',
     ...order.map((id) => {
       const o = outcomes.get(id) ?? { outcome: 'skipped' };
       const note = o.dossier ? ` → ${o.dossier}` : o.error ? ` — ${o.error}` : '';
@@ -945,14 +960,16 @@ function writeRunSummary({ runId, runDir, order, outcomes, head, env, dirty, inf
   if (failures.length) {
     lines.push('', 'Next steps:');
     for (const id of failures) {
-      lines.push(flags.file
+      lines.push(flags.noLedger
+        ? `  local dossier: ${outcomes.get(id).dossier} (filing updates the ledger)`
+        : flags.file
         ? `  filed: ${outcomes.get(id).dossier}`
         : `  node qa/runner.mjs file ${runId} ${id}`);
     }
   }
   atomicWrite(path.join(runDir, 'summary.md'), `${lines.join('\n')}\n`);
   atomicWrite(path.join(runDir, 'summary.json'), `${JSON.stringify({
-    runId, head, env, dirty, infra, outcomes: Object.fromEntries(outcomes),
+    runId, head, env, dirty, infra, ...(flags.noLedger ? { noLedger: true } : {}), outcomes: Object.fromEntries(outcomes),
   }, null, 2)}\n`);
   if (runLog.length) atomicWrite(path.join(runDir, 'run.log'), `${runLog.join('\n')}\n`);
   return { lines };
