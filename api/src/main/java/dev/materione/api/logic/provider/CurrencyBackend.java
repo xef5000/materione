@@ -60,11 +60,11 @@ public interface CurrencyBackend {
 
     /**
      * Optional public identity of the currently bound provider, read on the lookup/availability
-     * owner. When supplied, the same object must be returned while that registration is unchanged;
-     * removal and re-registration must produce a different object, even for the same provider.
-     * Null means no additional token is available; it does not assert anything about private
-     * downstream state. Placeholders still check the currency, integration registration,
-     * availability, player identity, and applicable ownership requirements.
+     * owner. When supplied, the same object must be returned while that public binding is unchanged.
+     * A registration token may also distinguish removal and re-registration; an instance token
+     * does not claim that guarantee. Null means no additional token is available. Neither form
+     * asserts anything about private downstream state. Placeholders still check the currency,
+     * integration registration, availability, player identity, and applicable ownership requirements.
      */
     default Object readBindingIdentity() {
         return null;

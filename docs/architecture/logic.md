@@ -1698,7 +1698,7 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     formatted text delegates to the existing `format_currency` implementation for the explicit qualified id.
     A single typed bridge operation uses a consistent currency definition for both read and format, and fails
     unavailable if the definition, integration registration, availability or player changes during the read.
-    A backend may supply a public provider-registration token (`readBindingIdentity`), which is checked
+    A backend may supply a public provider instance or registration token (`readBindingIdentity`), which is checked
     before and after the read; XP uses its bound backend and Vault uses the registered service identity.
     On Paper the built-in `custom` integration reads through the current enabled PlaceholderAPI instance,
     checks the public registered-expansion snapshot around the callback, and resolves methods from that
