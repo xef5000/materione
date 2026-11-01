@@ -325,11 +325,13 @@ class CurrencyPlaceholderReadsTest {
     }
 
     @Test
-    void unknownProviderIncarnationIsUnavailableWithoutReadingIt() {
+    void missingOptionalProviderTokenDoesNotRejectAValidRead() {
         var fixture = new Fixture();
         fixture.bindingIdentity = null;
+        assertThat(fixture.expansion(false).onRequest(fixture.player, "balance_shop_gold")).isEqualTo("1250.5");
+        assertThat(fixture.reads).isEqualTo(1);
+        fixture.duringRead = () -> fixture.bindingIdentity = new Object();
         assertThat(fixture.expansion(false).onRequest(fixture.player, "balance_shop_gold")).isEmpty();
-        assertThat(fixture.reads).isZero();
     }
 
     @Test
@@ -345,12 +347,7 @@ class CurrencyPlaceholderReadsTest {
     }
 
     @Test
-    void customPlaceholderBackendFailsClosedWithoutProviderIncarnationProof() {
-        var backend = new CustomCurrencyIntegration().bind(ParamReader.of(Map.of(
-                "deposit-command", "deposit {player} {amount}",
-                "withdraw-command", "withdraw {player} {amount}",
-                "balance-placeholder", "%example_balance%")));
-        assertThat(backend.readBindingIdentity()).isNull();
+    void customPlaceholderBackendDoesNotClaimFoliaLookupSafety() {
         assertThat(new CustomCurrencyIntegration().lookupCapability().folia().available()).isFalse();
     }
 }

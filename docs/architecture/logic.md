@@ -1697,14 +1697,13 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     non-finite read returns empty and reports a rate-limited `MTR-0023`. Raw finite amounts use plain decimal text;
     formatted text delegates to the existing `format_currency` implementation for the explicit qualified id.
     A single typed bridge operation uses a consistent currency definition for both read and format, and fails
-    unavailable if the definition, registration incarnation, provider incarnation, availability or player changes
-    during the read. A backend must supply a stable provider-incarnation token (`readBindingIdentity`) or the
-    placeholder fails unavailable; XP uses its bound backend and Vault uses the registered service identity.
-    The built-in `custom` integration currently cannot expose such an identity: PlaceholderAPI's public
-    expansion objects and register/unregister events do not identify or version arbitrary downstream providers
-    an expansion may consult or replace internally. Its balance placeholders therefore return empty with a
-    diagnostic even on Paper, although ordinary custom currency actions retain their existing behavior. An
-    expansion object or the PlaceholderAPI plugin object alone is not proof of the backing provider incarnation.
+    unavailable if the definition, integration registration, availability or player changes during the read.
+    A backend may supply a public provider-registration token (`readBindingIdentity`), which is checked
+    before and after the read; XP uses its bound backend and Vault uses the registered service identity.
+    On Paper the built-in `custom` integration reads through the current enabled PlaceholderAPI instance,
+    checks the public registered-expansion snapshot around the callback, and resolves methods from that
+    instance's classloader rather than retaining stale methods. This trusts the public live-read contract,
+    not private downstream state within an expansion. Custom PlaceholderAPI reads remain unsupported on Folia.
     The live catalog and integration are re-resolved at use, without a scheduled wait or holding a registry
     monitor across provider code. Immutable id enumeration is safe on any thread; Paper rejects async
     callbacks before player or provider lookup. On Folia, an integration must explicitly declare an owner and

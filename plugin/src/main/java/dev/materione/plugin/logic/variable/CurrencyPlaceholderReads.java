@@ -102,9 +102,6 @@ public final class CurrencyPlaceholderReads implements CurrencyPlaceholderBridge
             return failed("currency binding or player changed during availability lookup");
         }
         Object binding = reads.lookup(backend::readBindingIdentity);
-        if (binding == null) {
-            return failed("currency provider identity is unavailable");
-        }
         reads.requirePlaceholderLookup(lookupCapability, player);
         reads.requirePlaceholderRead(backend, player);
         if (!current(catalog, currency, registration, viewer, player, formatted)) {
