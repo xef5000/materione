@@ -5,6 +5,7 @@ import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyIntegration;
+import dev.materione.api.logic.provider.CurrencyLookupCapability;
 import dev.materione.api.logic.provider.CurrencyReadCapability;
 import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.registry.ParameterSchema;
@@ -31,6 +32,11 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
     @Override
     public String id() {
         return "xp";
+    }
+
+    @Override
+    public CurrencyLookupCapability lookupCapability() {
+        return new CurrencyLookupCapability(Threading.ANY, Availability.AVAILABLE);
     }
 
     @Override
@@ -74,6 +80,21 @@ public final class XpCurrencyIntegration implements CurrencyIntegration {
         @Override
         public CurrencyReadCapability readCapability() {
             return new CurrencyReadCapability(Threading.PLAYER_REGION, Availability.AVAILABLE, null);
+        }
+
+        @Override
+        public boolean stableOnlineIdentityRead() {
+            return true;
+        }
+
+        @Override
+        public Object readBindingIdentity() {
+            return this;
+        }
+
+        @Override
+        public EconomyResult balanceForPlayer(Player player, UUID id) {
+            return new EconomyResult.Succeeded(levels ? player.getLevel() : player.getTotalExperience());
         }
 
         @Override
