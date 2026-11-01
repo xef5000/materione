@@ -709,7 +709,9 @@ Rules:
    interpreter talks to the world only through `LogicContext` facets and the `RunScheduler` port,
    so it is unit-tested without a server.
 4. **Size guard.** A build test fails any main-source class over **400 lines** in the new packages
-   above. Splitting is cheaper than an exception. Generated and test code is exempt.
+   above, as well as `content.gui.GuiType` and `GuiLayerParser` and its named helpers (#253).
+   It does not impose a new limit on the rest of the legacy `content.gui` package.
+   Splitting is cheaper than an exception. Generated and test code is exempt.
 5. **Typed parse at load.** No action or condition reads raw maps at run time (§4.1).
 6. **Every action and condition ships with** a self-description, a unit test of parse
    (accept and reject), a unit test of execute or test against a fake context, and, when
@@ -2093,9 +2095,9 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
     `requires` and needs no reload. It asks for a reload (`Server#reloadData`, which fires the COMMANDS event again with the
     built registries) only when a declared alias is missing from the tree or was built with another argument shape. Such
     a reload is **explicit**: it is logged as `MATERIONE-OPEN-TREE reload aliases=[...]`, and a request inside five seconds
-    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into the next swap after the
-    window. A deferred change therefore applies at the next swap after the window, or at a restart if no swap comes; the
-    registrar does not schedule a timer of its own. An alias the reload does not put in the tree is `MTR-0069`, and no
+    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into one scheduled retry after
+    the window. The retry reads the latest live aliases without another content swap; removed claims cancel it (#246). The
+    registrar cancels the timer on shutdown. An alias the reload does not put in the tree is `MTR-0069`, and no
     further reload is asked for it until the next COMMANDS event.
 
     **Measured:** unchanged content at boot causes zero `reloadData` calls. `PaperOpenCommandIT` asserts it (no
@@ -2305,22 +2307,37 @@ by the owner.
 
 **Deferred**
 
-12. **The crash journal.** While a window is open, the items in its input slots are not in the player's saved
+12. **The best-effort recovery journal, not an acknowledged crash checkpoint (#247).**
+    While a window is open, the items in its input slots are not in the player's saved
     inventory, so a hard crash after an autosave would lose them. The journal (`InputJournal`, with its Bukkit side
     `GuiJournal`) copies them into the player's persistent data under `materione:gui_inputs`. It holds exactly the
     items the player's current window holds in its input slots: it is written right after each change the server
     has already made (the manual moves, the `gui.slot_item` operations, a rewrite, a re-open), and one tick after a
     single-slot click or a drag, which the server applies after the handler returns. Every release (a close, a
     quit, a flow's close, a replacement, a removal) gives the items to the inventory and then mirrors the empty
-    window into the journal in the same tick, so a save never holds an item in both places. A join gives back
+    window into the journal in the same tick. A join gives back
     what the journal still holds, once: `restore` clears the journal before it hands the items out. The journal
     follows the player's current window, not the window that closed, so a stale window's close never clears the
     journal of the window that replaced it. The rules are unit-tested over a plain store (`InputJournalTest`),
-    including the normal-close case that must never return an item twice. The window of one tick between a click
-    and its journal write is the only exposure left: an item the server moved in that tick is lost if the server
-    dies before the next tick. The "dupes impossible" criterion rests on the checks above, the planning tests and
-    the journal's invariant. The headless harness cannot drive a player, so the in-game path is judged by the QA
-    catalog.
+    including the normal-close case that must never return an item twice. These tests establish the in-memory
+    journal invariant and normal recovery behavior, not process-crash durability. The one-tick mirror delay is
+    an exposure, but it is not the only proven persistence boundary: player inventory, cursor and PDC must be
+    checkpointed consistently with every autosave and disconnect save before no-loss/no-duplication can be claimed.
+
+    **Checkpoint feasibility outcome.** The supported Paper APIs do not expose an immutable owner-thread player
+    snapshot plus an asynchronous, ordered writer and definitive persistence acknowledgment. `Player.saveData()`
+    is synchronous and returns `void`; moving it off-owner would serialize live player state unsafely, while
+    invoking it on-owner violates D8's IO rule. A separate plugin journal or `.dat` replacement cannot coordinate
+    subsequent server saves. Pre-login gating alone does not supply the missing online checkpoint.
+    This was checked against Paper commit `73116ac9dd1d55c59db411a55de7e91e025a0c80`:
+    [CraftPlayer.saveData](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-server/src/main/java/org/bukkit/craftbukkit/entity/CraftPlayer.java#L1530-L1538),
+    [player-data persistence](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-server/patches/sources/net/minecraft/world/level/storage/PlayerDataStorage.java.patch#L14-L28),
+    and [autosave/disconnect ownership](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-server/patches/sources/net/minecraft/server/players/PlayerList.java.patch#L339-L345).
+    A server extension must coordinate all saves, checkpoint inventory/cursor/PDC plus a transaction marker, and
+    acknowledge an ordered asynchronous write before interaction resumes. The owner elected not to expand this
+    follow-up to that extension: #247 and the dependent consume-incoming trash action (#248, used by #222) remain
+    blocked. Existing input behavior stays enabled and best-effort; no crash-safety or transactional-consumption
+    guarantee is introduced. Live QA of normal input transfers cannot substitute for a process-kill checkpoint test.
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real

@@ -39,7 +39,7 @@ Materione's internals, only these markers.
 | `MATERIONE-GUI-FAILED reason=window gui=<id> player=<name> detail=<why>` | the server refused or could not open a GUI's window after its session was created; the session ended (#214) |
 | `MATERIONE-OPEN-TREE declared=<n> registered=<n>` | the server's COMMANDS event registered the open commands from the built registries (#215); printed at start and on each server reload that fires the event |
 | `MATERIONE-OPEN-TREE reload aliases=[<a>, …]` | a content swap asked for a server data reload, because an open command was missing from the tree or had a new argument shape (logic.md §23, decision 15). Never printed for an unchanged boot |
-| `MATERIONE-OPEN-TREE reload-deferred aliases=[<a>, …] reason=rate-limit` | such a request fell inside the five-second window after the previous reload and is coalesced into the next swap after it |
+| `MATERIONE-OPEN-TREE reload-deferred aliases=[<a>, …] reason=rate-limit` | such a request fell inside the five-second window after the previous reload; one scheduled retry applies the latest stale aliases after the window without another content swap (#246) |
 | `MATERIONE-OPEN-COMMAND alias=<alias> outcome=opened\|refused\|usage\|console` | a GUI's open command (`open: commands:`, #215) ran: `opened` or `refused` for a player (the refusal's reason is in chat), `usage` for an argument that does not read as its type, `console` for a console sender, which has no window |
 
 The `guilogic` fixture pack (#214) announces its own opens and closes on the console as

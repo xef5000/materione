@@ -14,6 +14,7 @@ import { test } from './_lib.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const SERVER_SAMPLE = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '..', '..',
@@ -24,6 +25,7 @@ const GUI_ITEMS = path.join(SERVER_SAMPLE, 'items', 'gui', 'qa_chest');
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const FONT_SOURCE = path.join(REPO, 'fonts', 'smallcaps');
 const FONT_FIXTURES = path.join(REPO, 'fixtures', 'gui', 'smallcaps');
+const requireWebui = createRequire(path.join(REPO, 'webui', 'package.json'));
 
 const STUDIO_COVERS = [
   'webui/src/lib/studio/gui/**',
@@ -501,10 +503,100 @@ export default [
   }),
 
   test({
+    id: 'gui.logic-tab-live-save',
+    title: 'sample:qa_chest Logic tab saves a player-message flow and node position to canonical YAML, reopens it, and runs it when the player opens the GUI',
+    dependsOn: ['gui.studio-new-chest'],
+    covers: [...LOGIC_COVERS, 'plugin/src/main/java/dev/materione/plugin/gui/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/action/MessageAction.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      ctx.expect(fs.existsSync(GUI_FILE)).toBe(false);
+      try {
+        const { parse } = requireWebui('yaml');
+        const page = await openNewChest(ctx);
+        const original = fs.readFileSync(GUI_FILE, 'utf8');
+        const starter = parse(original);
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByRole('button', { name: /add a trigger/i }).click();
+        await page.locator('[data-entry="trigger:gui.open"]').click();
+        const port = await page.locator('[data-node="behavior.0"][data-port="out"]').boundingBox();
+        await page.mouse.move(port.x + port.width / 2, port.y + port.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(port.x + port.width / 2 + 150, port.y + port.height / 2 + 150, { steps: 8 });
+        await page.mouse.up();
+        await page.locator('[data-entry="action:message"]').click();
+        const node = page.locator('.node[data-node="behavior.0.do.0"]');
+        await node.getByRole('textbox', { name: 'Send message value' }).fill('MATERIONE-QA-LOGIC-SAVED');
+        await page.keyboard.press('Enter');
+        const beforeMove = await node.evaluate((element) => ({
+          x: parseFloat(element.style.left), y: parseFloat(element.style.top),
+        }));
+        const head = await node.locator('header').boundingBox();
+        await page.mouse.move(head.x + 40, head.y + 8);
+        await page.mouse.down();
+        await page.mouse.move(head.x + 100, head.y + 88, { steps: 6 });
+        await page.mouse.up();
+        const position = await node.evaluate((element) => ({
+          x: parseFloat(element.style.left), y: parseFloat(element.style.top),
+        }));
+        ctx.expect(position.x).toBeGreaterThan(beforeMove.x + 20);
+        ctx.expect(position.y).toBeGreaterThan(beforeMove.y + 20);
+        ctx.expect((await page.locator('[data-status]').innerText()).trim()).toBe('Unsaved changes');
+        ctx.expect(fs.readFileSync(GUI_FILE, 'utf8')).toBe(original);
+
+        await page.getByRole('button', { name: 'Save', exact: true }).click();
+        await page.locator('[data-status]').filter({ hasText: 'Saved' }).waitFor({ state: 'visible', timeout: 20_000 });
+        const saved = fs.readFileSync(GUI_FILE, 'utf8');
+        const expected = structuredClone(starter);
+        expected.qa_chest.behavior = [{
+          on: 'gui.open',
+          do: [{ message: 'MATERIONE-QA-LOGIC-SAVED', node: position }],
+        }];
+        ctx.expect(parse(saved)).toEqual(expected);
+
+        await page.getByRole('button', { name: 'back to GUIs' }).click();
+        await page.getByRole('option', { name: /qa.chest/i }).dblclick();
+        await page.getByTestId('gui-art').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.locator('.node[data-node="behavior.0.do.0"]').waitFor({ state: 'visible', timeout: 30_000 });
+        ctx.expect(await page.locator('.node').count()).toBe(2);
+        ctx.expect(await page.locator('[data-wire]').count()).toBe(1);
+        ctx.expect(await page.locator('.node[data-node="behavior.0.do.0"] input.value').inputValue())
+          .toBe('MATERIONE-QA-LOGIC-SAVED');
+        ctx.expect(await page.locator('.node[data-node="behavior.0.do.0"]').evaluate((element) => ({
+          x: parseFloat(element.style.left), y: parseFloat(element.style.top),
+        }))).toEqual(position);
+        ctx.expect(fs.readFileSync(GUI_FILE, 'utf8')).toBe(saved);
+
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.reset();
+        await ctx.rcon('materione gui open sample:qa_chest Probe');
+        await ctx.waitForChat(/MATERIONE-QA-LOGIC-SAVED/);
+        await ctx.sleep(600);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.containerId'))).not.toBe(0);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.slots.size()'))).toBe(63);
+        await ctx.exec('player.closeContainer(); return "closed"');
+        await ctx.sleep(400);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.containerId'))).toBe(0);
+      } finally {
+        try {
+          await ctx.exec('player.closeContainer(); return "closed"');
+        } finally {
+          fs.rmSync(GUI_FILE, { force: true });
+          await ctx.rcon('materione reload');
+        }
+      }
+    },
+  }),
+
+  test({
     id: 'gui.logic-tab-visual',
     title: 'sample:qa_chest Logic tab: a flow built by dragging wires out of ports (open, sound, command, close), the search palette with an unavailable provider greyed, and a refused wire',
     mode: 'visual',
-    dependsOn: ['gui.studio-new-chest'],
+    dependsOn: ['gui.logic-tab-live-save'],
     covers: LOGIC_COVERS,
     timeoutMs: 240_000,
     steps: async (ctx) => {

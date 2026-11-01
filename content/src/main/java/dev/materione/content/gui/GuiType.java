@@ -9,27 +9,19 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.DiagnosticTarget;
 import dev.materione.api.diagnostics.Severity;
-import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
-import dev.materione.api.gui.GuiComponentConfiguration;
-import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.Registry;
-import dev.materione.api.registry.RegistryEntry;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.content.Templates;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.content.gui.logic.GuiRules;
-import dev.materione.core.document.LosslessYaml;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -55,15 +47,7 @@ public final class GuiType implements ContentType {
     /** The namespace an unqualified component name aliases, as with mechanics. */
     static final String BUILTIN_NAMESPACE = "materione";
 
-    /**
-     * Layer fields the gui type owns; everything else belongs to the component. {@code name} is common (the
-     * layers panel's label), and it is also handed to a component whose schema declares a {@code name}
-     * parameter, which is how an item layer names its item.
-     */
-    private static final Set<String> COMMON_FIELDS =
-            Set.of("id", "type", "name", "visible", "locked", "opacity", "visible_if");
-
-    private final Registry<GuiComponent> components;
+    private final GuiLayerParser layerParser;
     private final GuiRuleChecker ruleChecker;
 
     /**
@@ -79,7 +63,7 @@ public final class GuiType implements ContentType {
      *        in the diagnose stage (logic.md §10); {@link GuiRuleChecker#NONE} checks nothing
      */
     public GuiType(Registry<GuiComponent> components, GuiRuleChecker ruleChecker) {
-        this.components = Objects.requireNonNull(components, "components");
+        this.layerParser = new GuiLayerParser(Objects.requireNonNull(components, "components"));
         this.ruleChecker = Objects.requireNonNull(ruleChecker, "ruleChecker");
     }
 
@@ -180,7 +164,7 @@ public final class GuiType implements ContentType {
             return Optional.empty(); // unknown or diamond template — quarantine upstream
         }
         String title = Templates.text(merged, "title");
-        Integer rows = wholeNumber(merged.get("rows"));
+        Integer rows = GuiLayerParser.wholeNumber(merged.get("rows"));
         if (title == null || rows == null || rows < 1 || rows > MAX_ROWS) {
             return Optional.empty(); // a GUI needs a title and a valid chest size
         }
@@ -189,23 +173,12 @@ public final class GuiType implements ContentType {
             return Optional.empty();
         }
         List<?> entries = authored == null ? List.of() : (List<?>) authored;
-        var layers = new ArrayList<GuiLayer>();
-        var skipped = new ArrayList<GuiDefinition.SkippedLayer>();
-        var accepted = new HashSet<String>();
-        for (int index = 0; index < entries.size(); index++) {
-            try {
-                GuiLayer layer = layer(id, rows, entries.get(index), accepted);
-                accepted.add(layer.id());
-                layers.add(layer);
-            } catch (Rejection rejection) {
-                skipped.add(new GuiDefinition.SkippedLayer(
-                        index, rejection.layerId, rejection.type, rejection.getMessage()));
-            }
-        }
+        var parsedLayers = layerParser.parse(id, rows, entries);
         Object authoredRefresh = merged.get("refresh");
-        Integer clock = authoredRefresh == null ? null : wholeNumber(authoredRefresh);
+        Integer clock = authoredRefresh == null ? null : GuiLayerParser.wholeNumber(authoredRefresh);
         boolean clockOk = authoredRefresh == null || (clock != null && clock >= 1);
-        return Optional.of(new GuiDefinition(id, title, rows, layers, skipped, GuiRules.parse(merged), merged,
+        return Optional.of(new GuiDefinition(id, title, rows, parsedLayers.layers(), parsedLayers.skipped(),
+                GuiRules.parse(merged), merged,
                 clockOk && clock != null ? clock : 0,
                 clockOk ? null : "refresh is a whole number of ticks, at least 1, not " + authoredRefresh));
     }
@@ -333,155 +306,4 @@ public final class GuiType implements ContentType {
                 font.fontKey(), font.provider(), PackEmitter.FontMembership.STYLED_ONLY));
     }
 
-    // ------------------------------------------------------------------
-
-    /** Parses one authored layer or rejects it with the reason shown to the author. */
-    private GuiLayer layer(NamespacedId guiId, int rows, Object entry, Set<String> accepted) {
-        if (!(entry instanceof Map<?, ?> mapping)) {
-            throw new Rejection(null, null, "a layer must be a mapping of its fields");
-        }
-        Map<String, Object> fields = LosslessYaml.stringKeyed(mapping);
-        String layerId = fields.get("id") instanceof String text ? text : null;
-        String type = fields.get("type") instanceof String text && !text.isBlank() ? text : null;
-        if (layerId == null || !LAYER_ID.matcher(layerId).matches()) {
-            throw new Rejection(layerId, type, "id must match [a-z0-9_]+");
-        }
-        if (accepted.contains(layerId)) {
-            throw new Rejection(layerId, type, "duplicate layer id; the first layer with this id is kept");
-        }
-        if (type == null) {
-            throw new Rejection(layerId, null, "type is required and names a component");
-        }
-        NamespacedId componentId;
-        try {
-            componentId = type.contains(":")
-                    ? NamespacedId.parse(type)
-                    : NamespacedId.of(BUILTIN_NAMESPACE, type);
-        } catch (IllegalArgumentException malformed) {
-            throw new Rejection(layerId, type, "type '" + type + "' is not a valid component name");
-        }
-        GuiComponent component = components.get(componentId)
-                .map(RegistryEntry::entry)
-                .orElseThrow(() -> new Rejection(layerId, type, "unknown component '" + type + "'"));
-
-        String name = fields.get("name") instanceof String text && !text.isBlank() ? text : null;
-        boolean visible = flag(fields, "visible", true, layerId, type);
-        boolean locked = flag(fields, "locked", false, layerId, type);
-        int opacity = opacity(fields, layerId, type);
-        RenderTarget target = targetOf(component, layerId, type);
-        if (fields.containsKey("opacity") && target != RenderTarget.RASTER) {
-            throw new Rejection(layerId, type, "opacity applies to raster layers only");
-        }
-
-        Object visibleIf = visibleIf(fields, layerId, type);
-        // a component that declares a name parameter (the item layer's item name) receives the common name too
-        boolean takesName = declaresName(component);
-        var own = new LinkedHashMap<String, Object>();
-        fields.forEach((key, value) -> {
-            if (!COMMON_FIELDS.contains(key) || (takesName && "name".equals(key))) {
-                own.put(key, value);
-            }
-        });
-        CompiledGuiLayer compiled;
-        try {
-            compiled = component.parse(new GuiComponentConfiguration(guiId, layerId, rows, own));
-        } catch (IllegalArgumentException rejected) {
-            throw new Rejection(layerId, type, rejected.getMessage());
-        } catch (RuntimeException failure) {
-            // containment boundary: an addon's parser bug skips its layer, never the GUI
-            throw new Rejection(layerId, type, "component failed: " + failure);
-        }
-        if (compiled == null || compiled.target() != target) {
-            throw new Rejection(layerId, type, "component produced a layer for a different target");
-        }
-        if (visibleIf != null && !(compiled instanceof ItemComponent.Layer)) {
-            // a raster or text layer is drawn into the background or the title, which cannot change while
-            // the window is open until overlay glyphs exist (logic.md §6.4, #217)
-            throw new Rejection(layerId, type, "visible_if works on item layers in this build; "
-                    + "raster and text layers need overlay glyphs (logic.md §6.4, #217)");
-        }
-        return new GuiLayer(layerId, componentId, name, visible, locked, opacity, compiled, visibleIf);
-    }
-
-    /** Whether a component's schema declares a {@code name} parameter of its own. */
-    private static boolean declaresName(GuiComponent component) {
-        try {
-            return component.describe().parameters().stream().anyMatch(parameter -> "name".equals(parameter.id()));
-        } catch (RuntimeException failure) {
-            return false; // containment: a broken description receives only its own fields
-        }
-    }
-
-    /** The authored {@code visible_if}, kept as written when it has a condition's shape; null when absent. */
-    private static Object visibleIf(Map<String, Object> fields, String layerId, String type) {
-        if (!fields.containsKey("visible_if")) {
-            return null;
-        }
-        Object value = fields.get("visible_if");
-        if (value instanceof String || value instanceof Boolean || value instanceof List<?>
-                || value instanceof Map<?, ?>) {
-            return value;
-        }
-        throw new Rejection(layerId, type, "visible_if is a condition: an expression, a predicate or a list");
-    }
-
-    /** A component's target, read inside the layer's containment: a broken addon skips only its layer. */
-    private static RenderTarget targetOf(GuiComponent component, String layerId, String type) {
-        try {
-            RenderTarget target = component.target();
-            if (target == null) {
-                throw new IllegalStateException("no render target");
-            }
-            return target;
-        } catch (RuntimeException failure) {
-            throw new Rejection(layerId, type, "component failed: " + failure);
-        }
-    }
-
-    private static boolean flag(Map<String, Object> fields, String key, boolean fallback,
-            String layerId, String type) {
-        if (!fields.containsKey(key)) {
-            return fallback;
-        }
-        if (fields.get(key) instanceof Boolean value) {
-            return value;
-        }
-        throw new Rejection(layerId, type, key + " must be true or false");
-    }
-
-    private static int opacity(Map<String, Object> fields, String layerId, String type) {
-        if (!fields.containsKey("opacity")) {
-            return MAX_OPACITY;
-        }
-        Integer value = wholeNumber(fields.get("opacity"));
-        if (value == null || value < 0 || value > MAX_OPACITY) {
-            throw new Rejection(layerId, type, "opacity must be a whole number from 0 to " + MAX_OPACITY);
-        }
-        return value;
-    }
-
-    /** A whole number as authored (YAML may read it as any numeric type), or null. */
-    private static Integer wholeNumber(Object value) {
-        if (value instanceof Number number) {
-            double decimal = number.doubleValue();
-            if (Double.isFinite(decimal) && decimal == Math.rint(decimal)
-                    && decimal >= Integer.MIN_VALUE && decimal <= Integer.MAX_VALUE) {
-                return (int) decimal;
-            }
-        }
-        return null;
-    }
-
-    /** A layer rejected while parsing; caught per layer, never per GUI. */
-    private static final class Rejection extends RuntimeException {
-
-        private final String layerId;
-        private final String type;
-
-        Rejection(String layerId, String type, String reason) {
-            super(reason);
-            this.layerId = layerId;
-            this.type = type;
-        }
-    }
 }

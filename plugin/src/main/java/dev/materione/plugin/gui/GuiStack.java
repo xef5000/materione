@@ -91,7 +91,7 @@ public final class GuiStack {
                 (rule, context, owner) -> engine.interpreter().start(rule, context, owner), variables));
         Supplier<RuntimeGuis> view = guisOf(live);
         var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
-        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics);
+        this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
         this.windowListener = new GuiWindowListener(lifecycle, journal);
         this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
