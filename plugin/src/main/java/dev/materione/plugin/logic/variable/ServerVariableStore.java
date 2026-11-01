@@ -8,6 +8,8 @@ import com.google.gson.JsonParser;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
+import dev.materione.api.logic.variable.VariableOp;
+import dev.materione.api.logic.variable.VariableOps;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -35,6 +37,8 @@ public final class ServerVariableStore implements VariableStore {
     private final Path file;
     private final Map<String, Object> values = new LinkedHashMap<>();
     private boolean dirty;
+    private long revision;
+    private final Object flushLock = new Object();
 
     /**
      * Opens the store at {@code file}, reading it when it exists.
@@ -61,16 +65,46 @@ public final class ServerVariableStore implements VariableStore {
         if (value != null && !declaration.type().accepts(value)) {
             return false;
         }
+        Object canonical = value == null ? null : declaration.type().coerce(value).orElseThrow();
         synchronized (this) {
             String key = declaration.id().toString();
-            if (value == null) {
+            if (canonical == null) {
                 values.remove(key);
             } else {
-                values.put(key, value);
+                values.put(key, canonical);
             }
             dirty = true;
+            revision++;
         }
         return true;
+    }
+
+    @Override
+    public VariableOps.Outcome mutate(
+                VariableDeclaration declaration, UUID player, VariableOp operation, Object operand) {
+            var checked = VariableOps.apply(operation, declaration.type(), declaration.defaultValue(), operand);
+            if (!checked.ok()) return checked;
+            Object safeOperand = switch (operation) {
+                case SET -> checked.value();
+                case ADD, SUBTRACT, MULTIPLY -> dev.materione.api.logic.variable.VariableType.NUMBER
+                        .coerce(operand).orElseThrow();
+                default -> null;
+            };
+            synchronized (this) {
+                String key = declaration.id().toString();
+                Object current = values.getOrDefault(key, declaration.defaultValue());
+                var result = VariableOps.apply(operation, declaration.type(), current, safeOperand);
+                if (result.ok()) {
+                    if (result.value() == null) {
+                        values.remove(key);
+                    } else {
+                        values.put(key, result.value());
+                    }
+                    dirty = true;
+                    revision++;
+                }
+                return result;
+            }
     }
 
     /** True when a write has not reached the file yet. */
@@ -84,27 +118,33 @@ public final class ServerVariableStore implements VariableStore {
      *
      * @throws IOException when the file cannot be written; the store stays dirty and a later flush retries
      */
-    public synchronized void flush() throws IOException {
-        if (!dirty) {
-            return;
+    public void flush() throws IOException {
+        synchronized (flushLock) {
+            Map<String, Object> snapshot;
+            long savedRevision;
+            synchronized (this) {
+                if (!dirty) return;
+                snapshot = new LinkedHashMap<>(values);
+                savedRevision = revision;
+            }
+            var json = new JsonObject();
+            for (Map.Entry<String, Object> entry : snapshot.entrySet()) {
+                json.add(entry.getKey(), toJson(entry.getValue()));
+            }
+            Path parent = file.toAbsolutePath().getParent();
+            if (parent != null) Files.createDirectories(parent);
+            Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
+            Files.writeString(temporary, new GsonBuilder().setPrettyPrinting().create().toJson(json),
+                    StandardCharsets.UTF_8);
+            try {
+                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException unsupported) {
+                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+            synchronized (this) {
+                if (revision == savedRevision) dirty = false;
+            }
         }
-        var json = new JsonObject();
-        for (Map.Entry<String, Object> entry : values.entrySet()) {
-            json.add(entry.getKey(), toJson(entry.getValue()));
-        }
-        Path parent = file.toAbsolutePath().getParent();
-        if (parent != null) {
-            Files.createDirectories(parent);
-        }
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        Files.writeString(temporary, new GsonBuilder().setPrettyPrinting().create().toJson(json),
-                StandardCharsets.UTF_8);
-        try {
-            Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-        }
-        dirty = false;
     }
 
     private void load(Consumer<String> warnings) {

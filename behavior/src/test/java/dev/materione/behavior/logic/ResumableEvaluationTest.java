@@ -29,6 +29,45 @@ import org.junit.jupiter.api.Test;
 
 class ResumableEvaluationTest {
     @Test
+    void compositeConditionKeepsOneOriginAcrossSequentialChildren() {
+        var scheduler = new ManualScheduler();
+        var reads = new RunReadExecutor(scheduler, "player");
+        var calls = new ArrayList<String>();
+        ExpressionFunction global = new ExpressionFunction() {
+            @Override public String id() { return "global"; }
+            @Override public FunctionDescription describe() {
+                return FunctionDescription.of(new SelfDescription("Global", "", List.of(), "1"), ParameterType.BOOLEAN);
+            }
+            @Override public Object call(List<Object> args, LogicContext context) { throw new AssertionError(); }
+            @Override public CompletionStage<Object> callResumable(
+                    List<Object> args, LogicContext context, ReadExecutor executor) {
+                return executor.on(Threading.GLOBAL, () -> { calls.add("global"); return true; });
+            }
+        };
+        ExpressionFunction legacy = new ExpressionFunction() {
+            @Override public String id() { return "legacy"; }
+            @Override public FunctionDescription describe() {
+                return FunctionDescription.of(new SelfDescription("Legacy", "", List.of(), "1"), ParameterType.BOOLEAN);
+            }
+            @Override public Object call(List<Object> args, LogicContext context) {
+                assertThat(scheduler.current).isEqualTo(Threading.PLAYER_REGION);
+                calls.add("legacy");
+                return true;
+            }
+        };
+        var condition = new dev.materione.behavior.flow.AllCond(List.of(
+                new dev.materione.behavior.flow.ExpressionCond("global",
+                        new dev.materione.behavior.expr.ExprNode.Call("global", global, List.of())),
+                new dev.materione.behavior.flow.ExpressionCond("legacy",
+                        new dev.materione.behavior.expr.ExprNode.Call("legacy", legacy, List.of()))));
+        var result = dev.materione.behavior.flow.ResumableConditions
+                .test(condition, new MapLogicContext(Map.of()), reads).toCompletableFuture();
+        scheduler.runPending();
+        assertThat(result.join()).isTrue();
+        assertThat(calls).containsExactly("global", "legacy");
+    }
+
+    @Test
     void legacyFunctionReturnsToPlayerOwnerAfterGlobalArgument() {
         var scheduler = new ManualScheduler();
         var reads = new RunReadExecutor(scheduler, "player");

@@ -1440,11 +1440,14 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     Rule gates, conditions, action templates and computed values, and flow-call arguments use ordered
     nonblocking continuations. A continuation retains prior operands and does not replay a callback.
     Existing action and condition callbacks still run once on their declared owner; legacy expression
-    functions return to the expression's captured original owner after their arguments resolve. An
+    functions return to the evaluation's captured original owner after their arguments resolve. One
+    capture spans sequential action parameters, composite conditions, and flow-call arguments. An
     unidentifiable original owner is unavailable, not guessed. Addons that need a different hop inside
     a callback opt into the continuation API. A computed `set_var` operand resolves before the target's
-    current value is read and updated on its owner; server-scope `set_var` steps serialize on the global
-    owner. Live inventory and location predicates read their state after dynamic parameters resolve,
+    current value is read and updated on its owner. Server-scope `set_var` operations use the same
+    atomic in-memory mutation as all server-store writers, so they may run inline without a global hop;
+    operand evaluation and file flushing happen outside the mutation lock. Live inventory and location
+    predicates read their state after dynamic parameters resolve,
     while `is_near` still short-circuits an initial world mismatch before those parameters.
     Unsupported reads fail rather than become a value.
     For a cancellable pre-event, an evaluation requiring a hop before dispatch returns is unavailable

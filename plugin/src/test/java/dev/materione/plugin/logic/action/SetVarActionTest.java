@@ -214,13 +214,13 @@ class SetVarActionTest {
         }
 
         @Test
-        void playerWritesRunOnThePlayersRegionAndServerWritesOnGlobalOwner() {
+        void playerWritesRunOnThePlayersRegionAndServerWritesCanRunInline() {
             var player = action.parse(reader(params("var", "player.shop.coins", "value", 1)));
             var server = action.parse(reader(params("var", "server.shop.season", "value", "x")));
             var local = action.parse(reader(params("var", "n", "value", 1)));
 
             assertThat(action.threading(player)).isEqualTo(Threading.PLAYER_REGION);
-            assertThat(action.threading(server)).isEqualTo(Threading.GLOBAL);
+            assertThat(action.threading(server)).isEqualTo(Threading.ANY);
             assertThat(action.threading(local)).isEqualTo(Threading.ANY);
         }
 

@@ -45,4 +45,9 @@ public interface VariableBinding {
      * @return false when there is no holder for the scope (no player, an offline player) or the write failed
      */
     boolean store(VariableDeclaration declaration, Object value);
+
+    /** Atomically applies a pure operation with respect to every writer of this variable. */
+    default VariableOps.Outcome mutate(VariableDeclaration declaration, VariableOp operation, Object operand) {
+        return new VariableOps.Outcome(false, null, "atomic variable mutation is unsupported");
+    }
 }

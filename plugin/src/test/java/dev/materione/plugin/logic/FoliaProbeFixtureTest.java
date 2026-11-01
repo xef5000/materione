@@ -18,8 +18,15 @@ class FoliaProbeFixtureTest {
     void localFoliaItemsCompileThroughRealBuiltinVocabulary() throws Exception {
         var fixture = Path.of("..", "scripts", "probe", "fixtures", "folia250", "items", "folia250.yml");
         var definitions = LosslessYaml.parse(Files.readString(fixture)).data();
-        assertThat(definitions).hasSize(4);
-        var lookup = LogicTestSupport.withBuiltIns(new RegistryService()).lookup();
+        assertThat(definitions).hasSize(6);
+        var registries = new RegistryService();
+        LogicTestSupport.withBuiltIns(registries);
+        var variable = new dev.materione.api.logic.variable.VariableDeclaration(
+                NamespacedId.of("probe", "folia250_total"),
+                dev.materione.api.logic.variable.VariableScope.SERVER,
+                dev.materione.api.logic.variable.VariableType.NUMBER, 0, "");
+        var lookup = new dev.materione.behavior.logic.RegistryLogicLookup(registries,
+                id -> id.equals(variable.id()) ? java.util.Optional.of(variable) : java.util.Optional.empty());
         for (var entry : definitions.entrySet()) {
             var id = NamespacedId.of("probe", entry.getKey());
             @SuppressWarnings("unchecked")

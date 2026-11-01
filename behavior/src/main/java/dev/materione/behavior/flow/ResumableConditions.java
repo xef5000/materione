@@ -14,6 +14,10 @@ public final class ResumableConditions {
     private ResumableConditions() {}
 
     public static CompletionStage<Boolean> test(Condition condition, LogicContext context, ReadExecutor executor) {
+        return testScoped(condition, context, executor.captureOrigin());
+    }
+
+    private static CompletionStage<Boolean> testScoped(Condition condition, LogicContext context, ReadExecutor executor) {
         if (!executor.active()) {
             return CompletableFuture.failedFuture(new java.util.concurrent.CancellationException("run ended"));
         }
@@ -23,7 +27,7 @@ public final class ResumableConditions {
             case PredicateCond<?> predicate -> predicate(predicate, context, executor);
             case AllCond all -> all(all.of(), 0, context, executor);
             case AnyCond any -> any(any.of(), 0, context, executor);
-            case NotCond not -> test(not.inner(), context, executor).thenApply(value -> !value);
+            case NotCond not -> testScoped(not.inner(), context, executor).thenApply(value -> !value);
             case AtLeastCond minimum -> atLeast(minimum.of(), minimum.count(), 0, 0, context, executor);
         };
     }
@@ -40,7 +44,7 @@ public final class ResumableConditions {
         if (index == conditions.size()) {
             return CompletableFuture.completedFuture(true);
         }
-        return test(conditions.get(index), context, executor).thenCompose(value -> value
+        return testScoped(conditions.get(index), context, executor).thenCompose(value -> value
                 ? all(conditions, index + 1, context, executor) : CompletableFuture.completedFuture(false));
     }
 
@@ -49,7 +53,7 @@ public final class ResumableConditions {
         if (index == conditions.size()) {
             return CompletableFuture.completedFuture(false);
         }
-        return test(conditions.get(index), context, executor).thenCompose(value -> value
+        return testScoped(conditions.get(index), context, executor).thenCompose(value -> value
                 ? CompletableFuture.completedFuture(true) : any(conditions, index + 1, context, executor));
     }
 
@@ -61,7 +65,7 @@ public final class ResumableConditions {
         if (held + conditions.size() - index < needed) {
             return CompletableFuture.completedFuture(false);
         }
-        return test(conditions.get(index), context, executor).thenCompose(value ->
+        return testScoped(conditions.get(index), context, executor).thenCompose(value ->
                 atLeast(conditions, needed, index + 1, held + (value ? 1 : 0), context, executor));
     }
 }

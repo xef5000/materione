@@ -83,10 +83,13 @@ abstract class ControlSteps {
     }
 
     final boolean choose(FlowRun run, Frame frame, ChooseStep step) {
+        if (run.choiceReads == null) {
+            run.choiceReads = run.reads.captureOrigin();
+        }
         for (; run.choiceIndex < step.cases().size(); run.choiceIndex++) {
             int i = run.choiceIndex;
             ChooseStep.Case branch = step.cases().get(i);
-            if (!await(run, branch.path(), () -> ResumableConditions.test(branch.condition(), run.view(), run.reads))) {
+            if (!await(run, branch.path(), () -> ResumableConditions.test(branch.condition(), run.view(), run.choiceReads))) {
                 return false;
             }
             boolean holds = holds(run, branch.path());
@@ -163,13 +166,14 @@ abstract class ControlSteps {
         }
         if (run.callArgs == null) {
             run.callArgs = new LinkedHashMap<>();
+            run.callReads = run.reads.captureOrigin();
         }
         var entries = List.copyOf(step.args().entrySet());
         try {
             for (; run.callArgIndex < entries.size(); run.callArgIndex++) {
                 var entry = entries.get(run.callArgIndex);
                 ArgValue value = entry.getValue();
-                if (!await(run, step.path(), () -> value.resolveResumable(run.view(), run.reads))) {
+                if (!await(run, step.path(), () -> value.resolveResumable(run.view(), run.callReads))) {
                     return false;
                 }
                 run.callArgs.put(entry.getKey(), FlowInterpreter.take(run));

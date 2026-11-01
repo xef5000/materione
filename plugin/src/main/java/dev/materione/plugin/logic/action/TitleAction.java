@@ -98,9 +98,10 @@ public final class TitleAction implements ActionType<TitleAction.Params> {
         if (context.facet(Facets.PLAYER).isEmpty()) {
             return CompletableFuture.completedFuture(ActionOutcome.failed("event has no player"));
         }
-        return ResolvedText.resolve(params.title(), context, reads)
-                .thenCompose(title -> ResolvedText.resolve(params.subtitle(), context, reads)
-                        .thenCompose(subtitle -> reads.on(threading(), () -> execute(
+        var scoped = reads.captureOrigin();
+        return ResolvedText.resolve(params.title(), context, scoped)
+                .thenCompose(title -> ResolvedText.resolve(params.subtitle(), context, scoped)
+                        .thenCompose(subtitle -> scoped.on(threading(), () -> execute(
                                 new Params(title, subtitle, params.fadeIn(), params.stay(), params.fadeOut()), context))));
     }
 }

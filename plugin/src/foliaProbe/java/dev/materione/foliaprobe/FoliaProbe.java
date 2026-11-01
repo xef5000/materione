@@ -37,6 +37,18 @@ public final class FoliaProbe extends JavaPlugin implements Listener {
     }
 
     @Override public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
+        if (args.length == 1 && args[0].equals("rmw")) {
+            FoliaProbeVerification.rmw(this);
+            return true;
+        }
+        if (args.length == 2 && args[0].equals("offline")) {
+            try {
+                FoliaProbeVerification.offline(this, UUID.fromString(args[1]));
+                return true;
+            } catch (IllegalArgumentException invalid) {
+                return false;
+            }
+        }
         if (!(sender instanceof Player player) || args.length != 1 || !args[0].equals("migrate")) {
             return false;
         }

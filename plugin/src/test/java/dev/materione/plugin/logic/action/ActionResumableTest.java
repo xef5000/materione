@@ -35,6 +35,66 @@ import org.junit.jupiter.api.Test;
 
 class ActionResumableTest {
     @Test
+    void broadcastKeepsGlobalOriginAcrossPlayerReadAndTargetTemplate() {
+        var scheduler = new QueueScheduler();
+        scheduler.current = Threading.GLOBAL;
+        var reads = new RunReadExecutor(scheduler, "player");
+        var calls = new AtomicInteger();
+        var compiler = mixedOwnerCompiler(scheduler, Threading.PLAYER_REGION, Threading.GLOBAL, calls, "");
+        var params = new BroadcastAction.Params(compiler.template("${hop()}"), BroadcastAction.Scope.PERMISSION,
+                Optional.of(compiler.template("${legacy()}")));
+        var result = new BroadcastAction().executeResumable(params, new MapLogicContext(Map.of()), reads)
+                .toCompletableFuture();
+        scheduler.runNext();
+        scheduler.runNext();
+        assertThat(result.join().isOk()).isFalse(); // empty permission avoids invoking Bukkit
+        assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    void titleKeepsPlayerOriginAcrossGlobalReadAndSubtitleTemplate() {
+        var scheduler = new QueueScheduler();
+        var reads = new RunReadExecutor(scheduler, "player");
+        var calls = new AtomicInteger();
+        var compiler = mixedOwnerCompiler(scheduler, Threading.GLOBAL, Threading.PLAYER_REGION, calls, "subtitle");
+        var params = new TitleAction.Params(compiler.template("${hop()}"),
+                Optional.of(compiler.template("${legacy()}")), 1, 2, 3);
+        var player = new PlayerFake();
+        var result = new TitleAction().executeResumable(params, player.context(), reads).toCompletableFuture();
+        scheduler.runNext();
+        scheduler.runNext();
+        assertThat(result.join().isOk()).isTrue();
+        assertThat(calls).hasValue(1);
+    }
+
+    private static EngineExpressions mixedOwnerCompiler(
+            QueueScheduler scheduler, Threading hopOwner, Threading origin, AtomicInteger calls, String value) {
+        ExpressionFunction hop = new ExpressionFunction() {
+            @Override public String id() { return "hop"; }
+            @Override public FunctionDescription describe() {
+                return FunctionDescription.of(new SelfDescription("Hop", "", List.of(), "1"), ParameterType.STRING);
+            }
+            @Override public Object call(List<Object> args, LogicContext context) { throw new AssertionError(); }
+            @Override public CompletionStage<Object> callResumable(
+                    List<Object> args, LogicContext context, ReadExecutor reads) {
+                return reads.on(hopOwner, () -> "message");
+            }
+        };
+        ExpressionFunction legacy = new ExpressionFunction() {
+            @Override public String id() { return "legacy"; }
+            @Override public FunctionDescription describe() {
+                return FunctionDescription.of(new SelfDescription("Legacy", "", List.of(), "1"), ParameterType.STRING);
+            }
+            @Override public Object call(List<Object> args, LogicContext context) {
+                assertThat(scheduler.current).isEqualTo(origin);
+                calls.incrementAndGet();
+                return value;
+            }
+        };
+        return EngineExpressions.with(name -> Optional.of(name.equals("hop") ? hop : legacy));
+    }
+
+    @Test
     void messageWaitsForItsTemplateThenReturnsToThePlayerWithoutReplay() {
         var scheduler = new QueueScheduler();
         var reads = new RunReadExecutor(scheduler, "player");
@@ -139,34 +199,28 @@ class ActionResumableTest {
     }
 
     @Test
-    void concurrentServerVariableIncrementsSerializeOnGlobalOwner() throws Exception {
-        var global = Executors.newSingleThreadExecutor(r -> new Thread(r, "global-owner"));
+    void concurrentServerVariableIncrementsAreAtomicAcrossRegions() throws Exception {
         var regions = Executors.newFixedThreadPool(4);
         var started = new CountDownLatch(1);
         try {
-            ReadExecutor reads = new ReadExecutor() {
-                @Override public <T> CompletionStage<T> on(Threading owner, java.util.function.Supplier<T> action) {
-                    if (owner == Threading.GLOBAL) {
-                        return CompletableFuture.supplyAsync(action, global);
-                    }
-                    return CompletableFuture.completedFuture(action.get());
-                }
-            };
+            ReadExecutor reads = ReadExecutor.INLINE;
             var declaration = new VariableDeclaration(NamespacedId.of("shop", "total"),
                     VariableScope.SERVER, VariableType.NUMBER, 0, "");
-            var current = new AtomicReference<Object>(0d);
+            var store = new dev.materione.plugin.logic.variable.ServerVariableStore(
+                    java.nio.file.Path.of("build", "action-resumable-unwritten.json"), ignored -> {});
             var context = new MapLogicContext(Map.of()).withVariables(new VariableBinding() {
                 @Override public Optional<VariableDeclaration> declaration(NamespacedId id) {
                     return Optional.of(declaration);
                 }
                 @Override public Optional<Object> stored(VariableDeclaration ignored) {
-                    assertGlobalOwner();
-                    return Optional.of(current.get());
+                    return store.read(declaration, null);
                 }
                 @Override public boolean store(VariableDeclaration ignored, Object value) {
-                    assertGlobalOwner();
-                    current.set(value);
-                    return true;
+                    return store.write(declaration, null, value);
+                }
+                @Override public dev.materione.api.logic.variable.VariableOps.Outcome mutate(
+                        VariableDeclaration ignored, VariableOp op, Object operand) {
+                    return store.mutate(declaration, null, op, operand);
                 }
             });
             var params = new SetVarAction.Params(new SetVarAction.PersistentTarget(declaration),
@@ -188,15 +242,10 @@ class ActionResumableTest {
             }
             started.countDown();
             CompletableFuture.allOf(workers.toArray(CompletableFuture[]::new)).get(10, TimeUnit.SECONDS);
-            assertThat(current.get()).isEqualTo(400d);
+            assertThat(store.read(declaration, null)).contains(400d);
         } finally {
             regions.shutdownNow();
-            global.shutdownNow();
         }
-    }
-
-    private static void assertGlobalOwner() {
-        assertThat(Thread.currentThread().getName()).isEqualTo("global-owner");
     }
 
     private static final class QueueScheduler implements RunScheduler {
@@ -207,6 +256,7 @@ class ActionResumableTest {
         @Override public boolean canRunInline(Object anchor, Threading owner) {
             return owner == Threading.ANY || owner == current;
         }
+        @Override public Threading currentOwner(Object anchor) { return current; }
         @Override public Handle schedule(Object anchor, Threading owner, long ticks, Runnable task, Runnable retired) {
             var entry = new Task(owner, task);
             tasks.add(entry);

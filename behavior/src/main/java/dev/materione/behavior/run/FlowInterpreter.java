@@ -286,6 +286,8 @@ public final class FlowInterpreter extends FlowContinuations {
         run.evaluation = null;
         run.choiceIndex = 0;
         run.callArgs = null;
+        run.callReads = null;
+        run.choiceReads = null;
         run.callArgIndex = 0;
     }
 
