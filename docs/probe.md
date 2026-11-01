@@ -96,7 +96,8 @@ The selection does not change the Paper pin or validate version compatibility.
 
 The `:plugin:foliaProbeJar` task builds a **local-only** sentinel addon; it is not
 part of the production plugin. Its `folia250:sentinel` currency intentionally has
-no Folia read capability and logs `MTR250-UNSAFE-CALL` if invoked. The local-only
+no Folia lookup or read capability and logs `MTR250-UNSAFE-CALL` if its binding,
+availability or read callbacks are invoked. The local-only
 fixtures under `scripts/probe/fixtures/folia250/` exercise supported XP and player
 variables, unsupported `balance` and `has_money` pre-event gates, retirement, and
 entity migration. The addon's `/folia250 migrate` uses the entity scheduler and

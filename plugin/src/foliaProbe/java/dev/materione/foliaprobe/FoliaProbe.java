@@ -70,7 +70,12 @@ public final class FoliaProbe extends JavaPlugin implements Listener {
             return new SelfDescription("Unsafe sentinel", "Must not be called on Folia", List.of(), "1");
         }
         @Override public CurrencyBackend bind(ParamReader params) {
+            getLogger().severe("MTR250-UNSAFE-CALL bind");
             return new CurrencyBackend() {
+                @Override public dev.materione.api.logic.Availability availability() {
+                    getLogger().severe("MTR250-UNSAFE-CALL availability");
+                    return dev.materione.api.logic.Availability.AVAILABLE;
+                }
                 @Override public EconomyResult balance(UUID player) {
                     getLogger().severe("MTR250-UNSAFE-CALL balance");
                     return new EconomyResult.Succeeded(999);
