@@ -31,6 +31,9 @@ dependencies {
     compileOnly(libs.placeholderapi) {
         isTransitive = false
     }
+    testImplementation(libs.placeholderapi) {
+        isTransitive = false
+    }
 }
 
 // Explicit local-only addon for Folia ownership probes; never included in the production plugin jar.

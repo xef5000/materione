@@ -60,6 +60,34 @@ async function holdProbe(ctx, item) {
 }
 
 export default [
+  // Requires the public PlaceholderAPI plugin installed in the disposable probe server.
+  test({
+    id: 'logic.currency-xp-placeholders',
+    title: 'probe:qa_balance_xp PlaceholderAPI tokens show live raw and formatted levels, while an unknown token stays unresolved',
+    mode: 'auto',
+    covers: [
+      'integrations/src/main/java/dev/materione/integrations/variables/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/CurrencyPlaceholderReads.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/MaterionePlaceholders.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/currency/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/FormatCurrencyFunction.java',
+      'fixtures/packs/probe/currencies/qa_balance_xp.yml',
+      'fixtures/packs/probe/items/probe_balance_placeholder.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      ctx.expect(await ctx.rcon('plugins')).toContain('PlaceholderAPI');
+      await holdProbe(ctx, 'probe:probe_balance_placeholder');
+      await ctx.rcon('experience set Probe 3 levels');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/BALANCE raw=3 formatted=XP3\.00 unknown=%materione_balance_probe_missing%/);
+      await ctx.rcon('experience set Probe 12 levels');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/BALANCE raw=12 formatted=XP12\.00 unknown=%materione_balance_probe_missing%/);
+    },
+  }),
+
   // This is Paper parity evidence only; it is not a substitute for a Folia ownership run.
   test({
     id: 'logic.currency-live-read-surfaces',

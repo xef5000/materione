@@ -1453,7 +1453,8 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     opening, slot-change and inventory-click events are pre-events as well as cancellable Bukkit events.
     Generic PlaceholderAPI expansion is rejected on Folia, rather than assuming arbitrary installed
     expansions are safe; Paper's existing resolution is unchanged. Item-source adapter continuations
-    remain separate work (#251); currency placeholders remain separate work (#252).
+    remain separate work (#251). Direct requests to Materione's expansion follow the narrower currency
+    placeholder rules below rather than enabling arbitrary PlaceholderAPI expansion on Folia.
 
     **Player variables (#250):** live player PDC access is checked against the entity owner.
     Synchronous external API reads may use immutable last-acknowledged snapshots when called off-owner;
@@ -1471,9 +1472,9 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     integrations (item 13); `has_money` (#210,
     which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
     as: op` still uses the operator flag, not the permission provider (#208).
-27. **Balance placeholder follow-up (#252):** the expansion must expose `%materione_balance_<pack>_<id>%` (the raw
-    balance) and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). Its independent grammar
-    and typed bridge exist, but bootstrap wiring to the shared currency read service and end-to-end QA remain pending.
+27. **Balance placeholders (#252):** the expansion exposes `%materione_balance_<pack>_<id>%` (raw)
+    and `%materione_balance_<pack>_<id>_formatted%` (through the currency formatter), with the
+    owner and consistency rules described in §20.
 28. **For #210:** `has_money` takes `currency:` with the same resolution as the actions, and reads through the
     catalog like `take_money` does.
 29. **In-game money flows are not in the QA catalog.** `logic.providers-unavailable-without-vault` proves the
@@ -1690,17 +1691,30 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     plugin registers `GuiSessionsPort` over the live `GuiSessions`, which now remembers the last GUI a player had
     open (`GuiSessions.last`, set when a session is replaced or closes), and `GuiContexts` puts a
     `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map.
-    The #252 resolver accepts a typed currency bridge without changing the variable grammar; the production expansion
-    still leaves balance tokens unresolved until the bridge is wired. The resolver compares the complete encoded
+    The #252 resolver uses a typed currency bridge without changing the variable grammar. The resolver compares the complete encoded
     `<pack>_<id>` of every declared currency, including the `_formatted` form, and leaves collisions unresolved
     rather than guessing an underscore split. A recognized token with no viewer or an unavailable, failed, or
     non-finite read returns empty and reports a rate-limited `MTR-0023`. Raw finite amounts use plain decimal text;
     formatted text delegates to the existing `format_currency` implementation for the explicit qualified id.
-    A single typed bridge operation must use a consistent immutable currency binding and metadata for both read and
-    format, or fail unavailable if consistency cannot be proved through a replacement. The bridge must re-resolve
-    the catalog and backend at use, never wait on a scheduled future, and prove the required ownership before
-    catalog, availability, backend or player access even on Paper async callbacks. Offline identity and reconnect
-    races must be safe or report unavailable; no cached balance substitutes for a current read.
+    A single typed bridge operation uses a consistent currency definition for both read and format, and fails
+    unavailable if the definition, registration incarnation, provider incarnation, availability or player changes
+    during the read. A backend must supply a stable provider-incarnation token (`readBindingIdentity`) or the
+    placeholder fails unavailable; XP uses its bound backend and Vault uses the registered service identity.
+    The built-in `custom` integration currently cannot expose such an identity: PlaceholderAPI's public
+    expansion objects and register/unregister events do not identify or version arbitrary downstream providers
+    an expansion may consult or replace internally. Its balance placeholders therefore return empty with a
+    diagnostic even on Paper, although ordinary custom currency actions retain their existing behavior. An
+    expansion object or the PlaceholderAPI plugin object alone is not proof of the backing provider incarnation.
+    The live catalog and integration are re-resolved at use, without a scheduled wait or holding a registry
+    monitor across provider code. Immutable id enumeration is safe on any thread; Paper rejects async
+    callbacks before player or provider lookup. On Folia, an integration must explicitly declare an owner and
+    demonstrated safety for binding and availability (`CurrencyLookupCapability`), independently of the
+    backend's read capability. Both owners must be current without a hop. A backend must also explicitly
+    establish that its online or offline read remains safe across reconnects; unsupported declarations fail
+    unavailable. Native XP binds on any thread and reads the captured player on its region. A declared
+    GLOBAL or ANY provider, including offline reads with an explicit offline owner, can answer on its proven
+    owner. No cached balance substitutes for a current read. Recursive or simultaneous reads for the same
+    player and currency fail unavailable until the in-flight call finishes.
 
 **Diagnostics and the rest**
 

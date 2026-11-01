@@ -96,6 +96,14 @@ node qa/runner.mjs mark <id> pass|fail # close a needs-eyes verdict
 node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs # pure runner tests
 ```
 
+`logic.currency-xp-placeholders` requires the public PlaceholderAPI plugin in the disposable probe
+server. Before starting the runner, place the official pinned PlaceholderAPI 2.11.7 jar (SHA-256
+`f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d`) in
+`harness/build/probe/server/plugins/`; the probe preserves optional plugin jars when it resets its
+world. This is an opt-in local prerequisite, not a bundled dependency. Remove the jar when no longer
+testing that integration. The catalog entry checks that PlaceholderAPI is loaded before asserting
+the player-visible values.
+
 Run flags: `--no-build` (reuse the last `:plugin:shadowJar`), `--keep-server`
 (leave the probe up for poking), `--no-ledger` (leave the ledger untouched and
 keep results, transcripts, screenshots and failure dossiers local under

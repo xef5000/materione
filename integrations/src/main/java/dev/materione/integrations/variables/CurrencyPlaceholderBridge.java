@@ -8,8 +8,9 @@ import java.util.UUID;
 /**
  * Live currency access for synchronous placeholder requests. The implementation must re-resolve
  * the exact currency and backend at each use, and return a failure rather than wait for a thread
- * hop or access player, catalog, backend, or availability data without proof of the required
- * owner. This also applies to Paper async requests and to offline identities.
+ * hop or access player, binding, backend, or availability data without proof of the required
+ * owner. Immutable declared-id enumeration is safe on any thread. These rules also apply to
+ * Paper async requests and to offline identities.
  */
 public interface CurrencyPlaceholderBridge {
 

@@ -1,0 +1,5 @@
+qa_balance_xp:
+  integration: xp
+  unit: levels
+  symbol: "XP"
+  decimals: 2
