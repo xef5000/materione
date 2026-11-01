@@ -2066,9 +2066,9 @@ this PR; the surface is in [`plugin.md`](plugin.md) §5.
     `requires` and needs no reload. It asks for a reload (`Server#reloadData`, which fires the COMMANDS event again with the
     built registries) only when a declared alias is missing from the tree or was built with another argument shape. Such
     a reload is **explicit**: it is logged as `MATERIONE-OPEN-TREE reload aliases=[...]`, and a request inside five seconds
-    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into the next swap after the
-    window. A deferred change therefore applies at the next swap after the window, or at a restart if no swap comes; the
-    registrar does not schedule a timer of its own. An alias the reload does not put in the tree is `MTR-0069`, and no
+    of the previous reload is logged as `MATERIONE-OPEN-TREE reload-deferred` and coalesced into one scheduled retry after
+    the window. The retry reads the latest live aliases without another content swap; removed claims cancel it (#246). The
+    registrar cancels the timer on shutdown. An alias the reload does not put in the tree is `MTR-0069`, and no
     further reload is asked for it until the next COMMANDS event.
 
     **Measured:** unchanged content at boot causes zero `reloadData` calls. `PaperOpenCommandIT` asserts it (no
