@@ -44,6 +44,9 @@ Invariants:
   clean disable with a precise message; content load failures → diagnostics (D6).
 - **Nothing user-visible registers before its backing state is ready.** A command that would
   touch not-yet-loaded content doesn't exist yet, rather than erroring at use time.
+  The root command registers as a Paper `BasicCommand` during the COMMANDS lifecycle (#96).
+  Paper supplies a Brigadier greedy-string tail, so namespaced ids and multi-token input
+  reach the existing executor/completer without the old client-side quoting workaround.
 - Phases are **idempotent on re-run** (a reload re-executes 6→9; a full re-bootstrap 1→11).
 - **Shutdown is reverse-order** (transports → delivery → runtime → storage flush), with a hard
   timeout; unresponsive phases are abandoned with a warning, never blocking server stop.

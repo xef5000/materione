@@ -6,7 +6,88 @@ import { test } from './_lib.mjs';
 
 const COMMAND = 'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommand.java';
 
+async function inventoryCount(ctx) {
+  return Number(await ctx.exec(
+    'def total = 0; for (int i = 0; i < 36; i++) { def s = player.getInventory().items.get(i); if (!s.isEmpty()) total += s.getCount() }; return total',
+  ));
+}
+
+async function typedChat(ctx, command, shot) {
+  const text = JSON.stringify(command);
+  const parsed = await ctx.exec(
+    `def p = mc.getConnection().getCommands().parse(${text}, mc.getConnection().getSuggestionsProvider()); return 'remaining=' + p.getReader().getRemaining() + ';exceptions=' + p.getExceptions().size()`,
+  );
+  ctx.expect(String(parsed)).toBe('remaining=;exceptions=0');
+  await ctx.exec(
+    `mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen(${JSON.stringify('/' + command)}, false)); return 'typed'`,
+  );
+  await ctx.sleep(300);
+  await ctx.shot(shot);
+  ctx.expect(await ctx.exec(
+    'return mc.screen.keyPressed(new net.minecraft.client.input.KeyEvent(257, 0, 0))',
+  )).toBe(true);
+}
+
 export default [
+  test({
+    id: 'commands.typed-player-chat',
+    title: 'normal client chat accepts a namespaced item and multi-token /materione give tail without quoting, then delivers exactly five gems',
+    covers: [COMMAND, 'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommandAdapter.java',
+      'plugin/src/main/java/dev/materione/plugin/MaterionePlugin.java',
+      'fixtures/packs/corpus/items/**'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      const granted = (await ctx.rcon('op Probe')).includes('Made Probe a server operator');
+      try {
+        await ctx.sleep(400);
+        await typedChat(ctx, 'materione give corpus:gem_red Probe 5', 'typed-root-input');
+        await ctx.waitForChat(/Given corpus:gem_red.*5/);
+        const stack = await ctx.exec(
+          "def s = player.getInventory().items.get(0); return s.getHoverName().getString() + ':' + s.getCount()",
+        );
+        ctx.expect(String(stack)).toBe('Red Gem:5');
+        ctx.expect(await inventoryCount(ctx)).toBe(5);
+        await ctx.shot('typed-root-result');
+      } finally {
+        if (granted) await ctx.rcon('deop Probe');
+      }
+    },
+  }),
+
+  test({
+    id: 'commands.typed-gui-alias',
+    title: 'normal client chat opens /opentest tools, reports malformed choice usage, and runs the food denial without opening another window',
+    covers: ['plugin/src/main/java/dev/materione/plugin/gui/open/**',
+      'fixtures/packs/guilogic/guis/opener.yml'],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      const restoreOperator = (await ctx.rcon('deop Probe')).includes('Made Probe no longer a server operator');
+      try {
+        await ctx.sleep(400);
+        await typedChat(ctx, 'opentest tools', 'typed-alias-input');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=opened/);
+        await ctx.sleep(600);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.slots.size()'))).toBe(45);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.containerId'))).not.toBe(0);
+        await ctx.shot('typed-alias-window');
+        await ctx.exec('player.closeContainer(); return "closed"');
+        await typedChat(ctx, 'opentest nope', 'typed-alias-bad-argument');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=usage/);
+        await ctx.waitForChat(/usage: \/opentest/);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.containerId'))).toBe(0);
+        await typedChat(ctx, 'opentest food', 'typed-alias-denial');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=refused/);
+        await ctx.waitForChat(/No food here, pick another category\./);
+        ctx.expect(Number(await ctx.exec('return player.containerMenu.containerId'))).toBe(0);
+      } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
+        if (restoreOperator) await ctx.rcon('op Probe');
+      }
+    },
+  }),
+
   test({
     id: 'commands.version',
     title: '/materione version reports the running plugin version to the console',
@@ -87,10 +168,7 @@ export default [
       await ctx.waitForServerLog(/MATERIONE-GIVE-OK id=corpus:gem_red player=Probe amount=5/);
       // Sum every non-empty stack in the player inventory (indexed form —
       // DebugBridge wraps collections; closures do not resolve).
-      const total = await ctx.exec(
-        'def total = 0; for (int i = 0; i < 36; i++) { def s = player.getInventory().items.get(i); if (!s.isEmpty()) total += s.getCount() }; return total',
-      );
-      ctx.expect(Number(total)).toBe(5);
+      ctx.expect(await inventoryCount(ctx)).toBe(5);
     },
   }),
 

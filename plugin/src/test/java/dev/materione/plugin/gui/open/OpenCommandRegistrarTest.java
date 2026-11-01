@@ -7,6 +7,8 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.scheduling.ScheduledHandle;
+import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.gui.GuiFixture;
 import dev.materione.plugin.gui.RuntimeGuis;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
@@ -49,14 +51,67 @@ class OpenCommandRegistrarTest {
     private int reloads;
     /** The clock the reload rate limit reads, in nanoseconds. */
     private long now;
+    private List<QueuedTask> tasks;
+    private boolean schedulingFails;
+
+    private final class QueuedTask implements ScheduledHandle {
+        private final long due;
+        private final Runnable callback;
+        private boolean canceled;
+        private boolean ran;
+
+        QueuedTask(long ticks, Runnable callback) {
+            this.due = now + java.util.concurrent.TimeUnit.MILLISECONDS.toNanos(ticks * 50);
+            this.callback = callback;
+        }
+
+        @Override
+        public void cancel() {
+            canceled = true;
+        }
+    }
+
+    private SchedulingGateway scheduling() {
+        return (SchedulingGateway) Proxy.newProxyInstance(SchedulingGateway.class.getClassLoader(),
+                new Class<?>[] {SchedulingGateway.class}, (proxy, method, args) -> switch (method.getName()) {
+                    case "executeGlobalLater" -> {
+                        if (schedulingFails) {
+                            throw new IllegalStateException("scheduler stopped");
+                        }
+                        var queued = new QueuedTask((long) args[1], (Runnable) args[2]);
+                        tasks.add(queued);
+                        yield queued;
+                    }
+                    case "executeEntity" -> {
+                        ((Runnable) args[2]).run();
+                        yield null;
+                    }
+                    default -> throw new UnsupportedOperationException(method.getName());
+                });
+    }
+
+    private void runDue() {
+        for (QueuedTask task : List.copyOf(tasks)) {
+            if (!task.ran && !task.canceled && task.due <= now) {
+                task.ran = true;
+                task.callback.run();
+            }
+        }
+    }
+
+    private long pendingTasks() {
+        return tasks.stream().filter(task -> !task.ran && !task.canceled).count();
+    }
 
     @BeforeEach
     void setUp() {
         f = new GuiFixture();
         dispatcher = new CommandDispatcher<>();
         diagnostics = new ArrayList<>();
+        tasks = new ArrayList<>();
         handler = new OpenCommandHandler(plugin(), null, f::view, null, PlayerNames.NONE);
-        registrar = new OpenCommandRegistrar(plugin(), handler, f::view, f::view, diagnostics::add, () -> now);
+        registrar = new OpenCommandRegistrar(plugin(), handler, f::view, f::view, diagnostics::add,
+                () -> now, scheduling());
         commands = commandsOver(dispatcher);
         onReload = () -> registrar.onCommands(commands);
     }
@@ -65,7 +120,7 @@ class OpenCommandRegistrarTest {
     void theBootRegistersFromTheBuiltRegistriesAndAnUnchangedSwapReloadsNothing() {
         // at boot the COMMANDS event runs before the first apply: the live view is still empty, the built one is not
         var livesEmpty = new OpenCommandRegistrar(plugin(), handler, RuntimeGuis::empty, f::view, diagnostics::add,
-                () -> now);
+                () -> now, scheduling());
         f.gui(SHOP);
 
         livesEmpty.onCommands(commands);
@@ -115,10 +170,150 @@ class OpenCommandRegistrarTest {
         registrar.resync(f.view());
         assertThat(reloads).as("inside the window the request is deferred").isEqualTo(1);
 
-        now += java.util.concurrent.TimeUnit.SECONDS.toNanos(6);
-        registrar.resync(f.view());
-        assertThat(reloads).as("the next swap after the window asks for everything still stale").isEqualTo(2);
+        assertThat(pendingTasks()).isEqualTo(1);
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS - 1;
+        runDue();
+        assertThat(reloads).as("the timer cannot reload before the deadline").isEqualTo(1);
+        now++;
+        runDue();
+        assertThat(reloads).as("the timer applies the alias without another content swap").isEqualTo(2);
         assertThat(handler.declared("other")).isTrue();
+        assertThat(dispatcher.getRoot().getChild("other")).isNotNull();
+        assertThat(pendingTasks()).isZero();
+    }
+
+    @Test
+    void theRetryUsesTheLatestViewAndSeveralDeferredSwapsQueueOnlyOneTask() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        registrar.resync(f.view());
+        f.remove("other");
+        f.gui("latest: {title: Latest, rows: 1, layers: [], open: {commands: [latest]}}");
+        registrar.resync(f.view());
+
+        assertThat(pendingTasks()).isEqualTo(1);
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS;
+        runDue();
+
+        assertThat(reloads).isEqualTo(2);
+        assertThat(dispatcher.getRoot().getChild("latest")).isNotNull();
+        assertThat(dispatcher.getRoot().getChild("other")).isNull();
+        assertThat(handler.declared("other")).isFalse();
+    }
+
+    @Test
+    void removingEveryStaleAliasCancelsTheRetry() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        registrar.resync(f.view());
+        f.remove("other");
+        registrar.resync(f.view());
+
+        assertThat(pendingTasks()).isZero();
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS;
+        runDue();
+        assertThat(reloads).isEqualTo(1);
+    }
+
+    @Test
+    void aDeferredArgumentShapeChangeUpdatesTheTreeWithoutAnotherSwap() {
+        onReload = () -> {
+            dispatcher = new CommandDispatcher<>();
+            commands = commandsOver(dispatcher);
+            registrar.onCommands(commands);
+        };
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.remove("shop");
+        f.gui("""
+                shop:
+                  title: Shop
+                  rows: 1
+                  layers: []
+                  open:
+                    commands: [shop, store]
+                    args:
+                      - { name: quantity, type: int, default: 1 }
+                """);
+        registrar.resync(f.view());
+
+        assertThat(reloads).isEqualTo(1);
+        assertThat(pendingTasks()).isEqualTo(1);
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS;
+        runDue();
+
+        assertThat(reloads).isEqualTo(2);
+        assertThat(dispatcher.getRoot().getChild("shop").getChild("quantity")).isNotNull();
+        assertThat(dispatcher.getRoot().getChild("shop").getChild("category")).isNull();
+        assertThat(pendingTasks()).isZero();
+    }
+
+    @Test
+    void anExternalCommandsLifecycleEventCancelsTheNowUnnecessaryRetry() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        registrar.resync(f.view());
+
+        registrar.onCommands(commands);
+        assertThat(pendingTasks()).isZero();
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS;
+        runDue();
+
+        assertThat(reloads).isEqualTo(1);
+        assertThat(dispatcher.getRoot().getChild("other")).isNotNull();
+    }
+
+    @Test
+    void shutdownCancelsPendingWorkAndIgnoresLaterCallbacks() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        registrar.resync(f.view());
+        registrar.close();
+
+        assertThat(pendingTasks()).isZero();
+        now = OpenCommandRegistrar.MIN_RELOAD_NANOS;
+        runDue();
+        registrar.resync(f.view());
+        registrar.onCommands(commands);
+        assertThat(reloads).isEqualTo(1);
+        assertThat(dispatcher.getRoot().getChild("other")).isNull();
+    }
+
+    @Test
+    void aSchedulingFailureReportsTheUnappliedAliasInsteadOfSilentlyDroppingIt() {
+        f.gui(SHOP);
+        registrar.onCommands(commands);
+        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        registrar.resync(f.view());
+        now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
+        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        schedulingFails = true;
+        registrar.resync(f.view());
+
+        assertThat(pendingTasks()).isZero();
+        assertThat(diagnostics).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo(DiagnosticCodes.OPEN_TREE_RESYNC);
+            assertThat(diagnostic.message()).contains("'other'").contains("could not schedule");
+        });
     }
 
     private static final String SHOP = """

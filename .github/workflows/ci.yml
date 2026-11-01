@@ -53,7 +53,7 @@ jobs:
       # Minecraft. The in-game suite itself stays a local dev tool.
       - name: QA catalog check
         run: |
-          node --test qa/evidence-redaction.test.mjs
+          node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs
           node qa/runner.mjs check
 
       # The cloud editor must keep working with every released plugin

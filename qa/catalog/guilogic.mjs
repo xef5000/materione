@@ -47,6 +47,25 @@ function logCount(regex) {
   return fs.readFileSync(SERVER_LOG, 'utf8').split('\n').filter((line) => regex.test(line)).length;
 }
 
+async function slotStack(ctx, slot) {
+  return String(await ctx.exec(`def s = player.containerMenu.slots.get(${slot}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString() + ':' + s.getCount()`));
+}
+
+async function cursorStack(ctx) {
+  return String(await ctx.exec(`def s = player.containerMenu.getCarried()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString() + ':' + s.getCount()`));
+}
+
+async function inventoryCount(ctx, name) {
+  return Number(await ctx.exec(`def total = 0
+for (int i = 0; i < 36; i++) {
+  def s = player.getInventory().items.get(i)
+  if (!s.isEmpty() && s.getHoverName().getString() == '${name}') total += s.getCount()
+}
+return total`));
+}
+
 async function openMenu(ctx, args = 'page=2') {
   await ctx.reset();
   await ctx.rcon(`materione gui open guilogic:menu Probe ${args}`);
@@ -219,27 +238,95 @@ export default [
 
   test({
     id: 'guilogic.input-slots',
-    title: 'guilogic:trade (logic.md §25): a one-row chest of 45 slots (9 container, 36 player) opens and announces itself; a left click on an empty input slot with an empty cursor changes nothing and fires no gui.slot_change; the player inventory is free; closing the window by hand fires gui.close with reason=player and leaves the cursor empty',
-    covers: COVERS,
+    title: 'guilogic:trade accepts and returns corpus:gem_red, rejects dirt without moving it, conserves cursor and inventory items on player close and reopen, and leaves an empty click as a no-op',
+    covers: [...COVERS, 'fixtures/packs/corpus/items/gem_red.yml'],
     timeoutMs: 240_000,
     steps: async (ctx) => {
       try {
         await ctx.reset();
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await ctx.waitForServerLog(/MATERIONE-GIVE-OK id=corpus:gem_red player=Probe amount=3/);
+        await ctx.rcon('give Probe minecraft:dirt 2');
+        await ctx.sleep(600);
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+        ctx.expect(await inventoryCount(ctx, 'Dirt')).toBe(2);
         await ctx.rcon('materione gui open guilogic:trade Probe');
         await ctx.waitForServerLog(/MATERIONE-GUILOGIC-OPEN guilogic:trade/);
         await ctx.sleep(600); // the client finishes opening the window
         ctx.expect(await openSlots(ctx)).toBe(45);
 
         // an empty click on an input slot is no change: the server applies nothing and no rule runs
+        const changesBefore = logCount(/MATERIONE-GUILOGIC-SLOT/);
         await click(ctx, 4);
         await ctx.sleep(600);
-        ctx.expect(logCount(/MATERIONE-GUILOGIC-SLOT/)).toBe(0);
-        ctx.expect(String(await ctx.exec('return player.containerMenu.getCarried().isEmpty()'))).toBe('true');
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-SLOT/)).toBe(changesBefore);
+        ctx.expect(await slotStack(ctx, 4)).toBe('empty');
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
         ctx.expect(await containerOpen(ctx)).toBe(true);
+
+        // The nine-slot chest's player hotbar occupies raw slots 36..44.
+        ctx.expect(await slotStack(ctx, 36)).toBe('Red Gem:3');
+        ctx.expect(await slotStack(ctx, 37)).toBe('Dirt:2');
+        await click(ctx, 36);
+        await ctx.sleep(400);
+        ctx.expect(await cursorStack(ctx)).toBe('Red Gem:3');
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+        await click(ctx, 4);
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-SLOT slot=4 item=corpus:gem_red amount=3/);
+        await ctx.sleep(400);
+        ctx.expect(await slotStack(ctx, 4)).toBe('Red Gem:3');
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
+
+        await click(ctx, 4, 1);
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-SLOT slot=4 item=corpus:gem_red amount=1/);
+        await ctx.sleep(400);
+        ctx.expect(await slotStack(ctx, 4)).toBe('Red Gem:1');
+        ctx.expect(await cursorStack(ctx)).toBe('Red Gem:2');
+        await click(ctx, 36);
+        await ctx.sleep(400);
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(2);
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
+
+        await click(ctx, 37);
+        await ctx.sleep(400);
+        ctx.expect(await cursorStack(ctx)).toBe('Dirt:2');
+        const beforeReject = logCount(/MATERIONE-GUILOGIC-SLOT/);
+        await click(ctx, 5);
+        await ctx.sleep(600);
+        ctx.expect(await slotStack(ctx, 5)).toBe('empty');
+        ctx.expect(await slotStack(ctx, 4)).toBe('Red Gem:1');
+        ctx.expect(await cursorStack(ctx)).toBe('Dirt:2');
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-SLOT/)).toBe(beforeReject);
+        await click(ctx, 37);
+        await ctx.sleep(400);
+        ctx.expect(await inventoryCount(ctx, 'Dirt')).toBe(2);
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
+
+        const closesBefore = logCount(/MATERIONE-GUILOGIC-TRADE-CLOSED/);
+        await ctx.exec('player.closeContainer(); return "closed"');
+        await ctx.waitForServerLog(/MATERIONE-GUILOGIC-TRADE-CLOSED/);
+        await ctx.sleep(600);
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-TRADE-CLOSED/)).toBe(closesBefore + 1);
+        ctx.expect(await containerOpen(ctx)).toBe(false);
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+        ctx.expect(await inventoryCount(ctx, 'Dirt')).toBe(2);
+
+        await ctx.rcon('materione gui open guilogic:trade Probe');
+        await ctx.sleep(600);
+        ctx.expect(await openSlots(ctx)).toBe(45);
+        ctx.expect(await slotStack(ctx, 4)).toBe('empty');
+        ctx.expect(await slotStack(ctx, 5)).toBe('empty');
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+        await ctx.exec('player.closeContainer(); return "closed"');
+        await ctx.sleep(600);
+        ctx.expect(logCount(/MATERIONE-GUILOGIC-TRADE-CLOSED/)).toBe(closesBefore + 2);
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
+        ctx.expect(await inventoryCount(ctx, 'Dirt')).toBe(2);
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
       } finally {
         await closeWindow(ctx);
       }
-      await ctx.waitForServerLog(/MATERIONE-GUILOGIC-TRADE-CLOSED/);
     },
   }),
 ];

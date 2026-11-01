@@ -111,6 +111,19 @@ public final class OpenCommandRunner {
             if (log.readAll().substring(cursor).contains("alias=probe_open")) {
                 problems.add("probe_open still ran after a reload removed it");
             }
+            // A second change inside the rate-limit window must apply without a third content reload.
+            Files.writeString(workspace.root.resolve("plugins/Materione/content/packs/sample/" + GUI_PATH),
+                    guiYaml("probe_three", "probe_three"));
+            problems.addAll(expect(console, log, options, "materione reload", "MATERIONE-RELOAD-OK"));
+            if (log.awaitLine("MATERIONE-OPEN-TREE reload-deferred aliases=[probe_three]",
+                    options.commandTimeout()) == null) {
+                problems.add("probe_three did not exercise the five-second deferred path");
+            }
+            if (log.awaitLine("MATERIONE-OPEN-TREE reload aliases=[probe_three]", options.commandTimeout()) == null) {
+                problems.add("the deferred probe_three alias did not reload automatically");
+            }
+            problems.addAll(expect(console, log, options, "probe_three",
+                    "MATERIONE-OPEN-COMMAND alias=probe_three outcome=console"));
             console.send("stop");
             if (log.awaitLine("MATERIONE-BYE", options.stopTimeout()) == null) {
                 problems.add("MATERIONE-BYE missing after stop");

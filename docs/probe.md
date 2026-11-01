@@ -231,8 +231,8 @@ already asserts.
   `Optional<Component>`, `assetId()` is plain). Holder `.tags()` is always
   empty client-side for painting variants (the tag data never syncs) —
   placeable-pool questions are answered behaviorally (vanilla item placement)
-  or server-side, not by reading tags on the client. Dev commands travel as
-  raw packets (`mc.getConnection().@target.sendCommand(...)`, #96).
+  or server-side, not by reading tags on the client. Dev commands can use
+  normal chat input; the root's Paper lifecycle adapter resolves #96.
 - **Tool-gated hosts out-mine the hold**: hosts like bone block (~10s bare
   hand, ~0.4s with a diamond pickaxe) never finish inside a `mineAway` hold
   bare-handed — the runtime's break pipeline only fires when the vanilla
@@ -367,13 +367,15 @@ already asserts.
   the stop already swept the map), so stop-and-check in a bounded loop.
   Short sounds (<1s) are easy to miss entirely — assert playback on a long
   one (the sample anthem) and stop it after.
-- **Typed `/materione` arguments never reach the server**: the synced
-  client tree collapses everything after the literal into ONE
-  `StringArgumentType.string()` node, so the chat GUI rejects any
-  multi-word or colon-bearing argument client-side (#96). Send dev
-  commands as raw packets instead:
-  `mc.getConnection().@target.sendCommand('materione dev sound sample:anthem')`
-  — the server handler executes and the client hears it.
+- **Typed command acceptance (#96)**: `/materione` registers through Paper's
+  COMMANDS lifecycle as a `BasicCommand`, whose greedy-string tail accepts
+  multi-token input and namespaced ids without quoting. The existing handlers
+  retain their permissions and usage replies. `commands.typed-player-chat`
+  and `commands.typed-gui-alias` parse against the real client's dispatcher,
+  populate `ChatScreen(String, boolean)`, and press Enter through
+  `keyPressed(new KeyEvent(257, 0, 0))` (26.1.2). `probe command` and
+  `sendCommand` remain useful automation paths, but bypassing chat UI is not
+  evidence that a player can type an argumented command.
 - **Comparator output: read a wire's client state, not the NBT** — the
   comparator's cached `OutputSignal` block-entity field does not track the
   live value under setblock-driven tests. Orientation is subtle: a
