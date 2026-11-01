@@ -58,6 +58,22 @@ class ServerVariableAtomicityTest {
     }
 
     @Test
+    void arithmeticValidatesTheActualValueNotTheDeclarationDefault() {
+        var declaration = new VariableDeclaration(ID, VariableScope.SERVER, VariableType.NUMBER, 1e308, "");
+        var store = new ServerVariableStore(Path.of("build", "atomicity-unwritten.json"), ignored -> {});
+        assertThat(store.write(declaration, null, -1e308)).isTrue();
+        assertThat(store.mutate(declaration, null, VariableOp.ADD, 1e308).ok()).isTrue();
+        assertThat(store.read(declaration, null)).contains(0d);
+        assertThat(store.mutate(declaration, null, VariableOp.ADD, "not a number").ok()).isFalse();
+        assertThat(store.read(declaration, null)).contains(0d);
+        assertThat(store.write(declaration, null, 1e308)).isTrue();
+        assertThat(store.mutate(declaration, null, VariableOp.ADD, 1e308).ok()).isFalse();
+        assertThat(store.read(declaration, null)).contains(1e308);
+        assertThat(store.mutate(declaration, null, VariableOp.ADD, Double.POSITIVE_INFINITY).ok()).isFalse();
+        assertThat(store.read(declaration, null)).contains(1e308);
+    }
+
+    @Test
     void apiSetInterleavesBeforeAtomicAddWithoutBeingLostOrBlockedByOperand() throws Exception {
         var service = service();
         var entered = new CountDownLatch(1);

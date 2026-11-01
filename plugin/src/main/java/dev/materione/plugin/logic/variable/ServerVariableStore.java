@@ -10,6 +10,7 @@ import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
 import dev.materione.api.logic.variable.VariableOp;
 import dev.materione.api.logic.variable.VariableOps;
+import dev.materione.api.logic.variable.VariableType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -81,30 +82,31 @@ public final class ServerVariableStore implements VariableStore {
 
     @Override
     public VariableOps.Outcome mutate(
-                VariableDeclaration declaration, UUID player, VariableOp operation, Object operand) {
-            var checked = VariableOps.apply(operation, declaration.type(), declaration.defaultValue(), operand);
+            VariableDeclaration declaration, UUID player, VariableOp operation, Object operand) {
+        Object safeOperand = null;
+        if (operation == VariableOp.SET || operation == VariableOp.ADD
+                || operation == VariableOp.SUBTRACT || operation == VariableOp.MULTIPLY) {
+            var checked = operation == VariableOp.SET
+                    ? VariableOps.apply(VariableOp.SET, declaration.type(), null, operand)
+                    : VariableOps.apply(VariableOp.MULTIPLY, VariableType.NUMBER, 1d, operand);
             if (!checked.ok()) return checked;
-            Object safeOperand = switch (operation) {
-                case SET -> checked.value();
-                case ADD, SUBTRACT, MULTIPLY -> dev.materione.api.logic.variable.VariableType.NUMBER
-                        .coerce(operand).orElseThrow();
-                default -> null;
-            };
-            synchronized (this) {
-                String key = declaration.id().toString();
-                Object current = values.getOrDefault(key, declaration.defaultValue());
-                var result = VariableOps.apply(operation, declaration.type(), current, safeOperand);
-                if (result.ok()) {
-                    if (result.value() == null) {
-                        values.remove(key);
-                    } else {
-                        values.put(key, result.value());
-                    }
-                    dirty = true;
-                    revision++;
+            safeOperand = checked.value();
+        }
+        synchronized (this) {
+            String key = declaration.id().toString();
+            Object current = values.getOrDefault(key, declaration.defaultValue());
+            var result = VariableOps.apply(operation, declaration.type(), current, safeOperand);
+            if (result.ok()) {
+                if (result.value() == null) {
+                    values.remove(key);
+                } else {
+                    values.put(key, result.value());
                 }
-                return result;
+                dirty = true;
+                revision++;
             }
+            return result;
+        }
     }
 
     /** True when a write has not reached the file yet. */

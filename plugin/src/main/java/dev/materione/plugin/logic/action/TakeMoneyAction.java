@@ -18,6 +18,7 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
+import dev.materione.plugin.logic.currency.CurrencyReads;
 import java.util.List;
 import java.util.Objects;
 import org.bukkit.entity.Player;
@@ -34,10 +35,16 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
     public record Params(double amount, String currency) {}
 
     private final LogicProviders providers;
+    private final CurrencyReads reads;
 
     /** @param providers the provider slots, read on every run and availability check */
     public TakeMoneyAction(LogicProviders providers) {
+        this(providers, CurrencyReads.paper());
+    }
+
+    public TakeMoneyAction(LogicProviders providers, CurrencyReads reads) {
         this.providers = Objects.requireNonNull(providers, "providers");
+        this.reads = Objects.requireNonNull(reads, "reads");
     }
 
     @Override
@@ -105,7 +112,7 @@ public final class TakeMoneyAction implements ActionType<TakeMoneyAction.Params>
     @Override
     public Availability availability() {
         CurrencyCatalog catalog = providers.currencies();
-        Availability own = catalog.availability(catalog.defaultCurrency());
+        Availability own = reads.availabilityResolved(catalog, catalog.defaultCurrency());
         return own.available() ? Availability.AVAILABLE : own;
     }
 }

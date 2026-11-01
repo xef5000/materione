@@ -139,6 +139,13 @@ their callback. Repeat for the same identity after it reconnects: the test backe
 must reject the now-online identity. This is not a compatibility test for Vault,
 PlaceholderAPI or an arbitrary external SDK.
 
+To probe vocabulary on an editor-like async thread, set the disposable server's
+`default_currency` to `probe:folia250_unsafe` before startup, stage the sentinel
+currency fixture, and run `folia250 vocabulary`. `MTR250-VOCABULARY PASS` requires
+both money actions and `has_money` to be unavailable and no sentinel callbacks
+during vocabulary construction. Load-time configuration validation may bind the
+integration separately; it is not a read or a vocabulary callback.
+
 Stop the client and server gracefully, and remove the staged sentinel jar and
 all copied fixture files from the disposable server before the next Paper boot.
 Do not bless the QA ledger with this manual run: retain local evidence with the
