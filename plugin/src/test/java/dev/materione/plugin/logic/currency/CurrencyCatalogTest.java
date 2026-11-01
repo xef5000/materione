@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyBackend;
 import dev.materione.api.logic.provider.CurrencyIntegration;
@@ -113,6 +114,21 @@ class CurrencyCatalogTest {
         assertThat(xp.bind(ParamReader.of(Map.of("unit", "levels")))).isNotNull();
         assertThatThrownBy(() -> xp.bind(ParamReader.of(Map.of("unit", "gold"))))
                 .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("unit must be one of");
+    }
+
+    @Test
+    void readCapabilityRequiresAnExplicitFoliaDeclaration() {
+        var xp = new XpCurrencyIntegration().bind(ParamReader.of(Map.of()));
+        assertThat(xp.readCapability().owner()).isEqualTo(Threading.PLAYER_REGION);
+        assertThat(xp.readCapability().folia().available()).isTrue();
+        assertThat(xp.readCapability().offlineOwner()).isNull();
+
+        var custom = new CustomCurrencyIntegration().bind(ParamReader.of(Map.of(
+                "deposit-command", "give", "withdraw-command", "take", "balance-placeholder", "%x%")));
+        assertThat(custom.readCapability().owner()).isEqualTo(Threading.GLOBAL);
+        assertThat(custom.readCapability().folia().available()).isFalse();
+        assertThat(custom.readCapability().folia().reason()).contains("not declared");
+        assertThat(custom.readCapability().offlineOwner()).isNull();
     }
 
     @Test

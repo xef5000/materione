@@ -1,0 +1,4 @@
+qa_xp:
+  integration: xp
+  unit: levels
+  decimals: 0

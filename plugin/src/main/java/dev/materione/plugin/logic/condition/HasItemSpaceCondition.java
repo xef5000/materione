@@ -6,6 +6,8 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -22,6 +24,8 @@ import dev.materione.plugin.logic.support.Stacks;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -118,5 +122,39 @@ public final class HasItemSpaceCondition implements ConditionType<HasItemSpaceCo
         long room = ItemSlots.room(storage, ItemMatch.of(ref, Optional.empty()).predicate(),
                 template.getMaxStackSize());
         return room >= want.getAsInt();
+    }
+
+    @Override public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor reads) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        if (params.slots().isPresent()) {
+            return params.slots().get().resolveResumable(context, reads).thenCompose(slots ->
+                    reads.on(Threading.PLAYER_REGION, () -> {
+                        var want = slots.wholeValue(context);
+                        return want.isPresent() && ItemSlots.freeSlots(
+                                ItemSlots.storage(Stacks.contents(player.getInventory()))) >= want.getAsInt();
+                    }));
+        }
+        return params.amount().resolveResumable(context, reads).thenCompose(amount -> {
+            var want = amount.wholeValue(context);
+            if (want.isEmpty() || params.item().isEmpty()) {
+                return CompletableFuture.completedFuture(false);
+            }
+            return params.item().get().renderResumable(context, reads)
+                    .thenCompose(item -> reads.on(Threading.PLAYER_REGION, () -> {
+                        try {
+                            RuntimeRegistries registries = catalog.current().orElse(null);
+                            ItemRef ref = ItemRef.resolve(item.trim(), registries);
+                            ItemStack template = ItemTemplates.of(ref, registries);
+                            var storage = ItemSlots.storage(Stacks.contents(player.getInventory()));
+                            return ItemSlots.room(storage, ItemMatch.of(ref, Optional.empty()).predicate(),
+                                    template.getMaxStackSize()) >= want.getAsInt();
+                        } catch (IllegalArgumentException ignored) {
+                            return false;
+                        }
+                    }));
+        });
     }
 }

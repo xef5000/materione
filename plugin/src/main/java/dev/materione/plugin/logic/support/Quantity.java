@@ -2,10 +2,13 @@ package dev.materione.plugin.logic.support;
 
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * A numeric parameter that may be written as a number ({@code amount: 5}) or as a template that
@@ -17,6 +20,17 @@ import java.util.OptionalInt;
  * that renders fractional fails the step.
  */
 public record Quantity(double literal, TemplateText template, double min, double max, boolean whole) {
+
+    private record Resolved(String source) implements TemplateText {
+        @Override public String render(LogicContext context) { return source; }
+    }
+
+    /** Resolves a dynamic quantity once, leaving normal numeric validation to {@link #value}. */
+    public CompletionStage<Quantity> resolveResumable(LogicContext context, ReadExecutor reads) {
+        return template == null ? CompletableFuture.completedFuture(this)
+                : template.renderResumable(context, reads)
+                        .thenApply(text -> new Quantity(literal, new Resolved(text), min, max, whole));
+    }
 
     /** A required decimal quantity. */
     public static Quantity required(ParamReader params, String key, double min, double max) {

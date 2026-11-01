@@ -3,6 +3,7 @@ package dev.materione.plugin.logic.variable;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableStore;
+import dev.materione.api.logic.ReadUnavailableException;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
@@ -24,10 +25,31 @@ public final class PdcVariableStore implements VariableStore {
     private static final String NAMESPACE = "materione";
 
     private final Function<UUID, Optional<PersistentDataContainer>> holders;
+    private final Function<UUID, Access> access;
+    private final boolean strictReads;
+
+    /** Whether the holder is absent or the current thread owns it. */
+    public enum Access {
+        OFFLINE, OWNED, UNOWNED
+    }
 
     /** @param holders the container of an online player, or empty when the player is not online */
     public PdcVariableStore(Function<UUID, Optional<PersistentDataContainer>> holders) {
+        this(holders, ignored -> Access.OWNED, false);
+    }
+
+    /** The access probe is checked before looking up or touching a player's container. */
+    public PdcVariableStore(
+            Function<UUID, Optional<PersistentDataContainer>> holders, Function<UUID, Access> access) {
+        this(holders, access, true);
+    }
+
+    public PdcVariableStore(
+            Function<UUID, Optional<PersistentDataContainer>> holders, Function<UUID, Access> access,
+            boolean strictReads) {
         this.holders = holders;
+        this.access = access;
+        this.strictReads = strictReads;
     }
 
     @Override
@@ -37,23 +59,40 @@ public final class PdcVariableStore implements VariableStore {
 
     @Override
     public Optional<Object> read(VariableDeclaration declaration, UUID player) {
+        return readPlayer(declaration, player).value();
+    }
+
+    record PlayerRead(Optional<Object> value, boolean online) {}
+
+    PlayerRead readPlayer(VariableDeclaration declaration, UUID player) {
         if (player == null) {
-            return Optional.empty();
+            return new PlayerRead(Optional.empty(), false);
+        }
+        Access state = access.apply(player);
+        if (state == Access.OFFLINE) {
+            return new PlayerRead(Optional.empty(), false);
+        }
+        if (state != Access.OWNED) {
+            throw new ReadUnavailableException("player variable read requires the player's region");
         }
         Optional<PersistentDataContainer> container = holders.apply(player);
         if (container.isEmpty()) {
-            return Optional.empty();
+            return new PlayerRead(Optional.empty(), false);
         }
         NamespacedKey key = keyOf(declaration);
         try {
             PersistentDataContainer data = container.get();
-            return switch (declaration.type()) {
+            Optional<Object> value = switch (declaration.type()) {
                 case NUMBER -> Optional.<Object>ofNullable(data.get(key, PersistentDataType.DOUBLE));
                 case STRING -> Optional.<Object>ofNullable(data.get(key, PersistentDataType.STRING));
                 case BOOLEAN -> Optional.<Object>ofNullable(data.get(key, PersistentDataType.BOOLEAN));
             };
+            return new PlayerRead(value, true);
         } catch (RuntimeException stored) {
-            return Optional.empty(); // a value of another type than the declaration: absent, not a crash
+            if (strictReads) {
+                throw new ReadUnavailableException("player variable store could not be read: " + stored.getMessage());
+            }
+            return new PlayerRead(Optional.empty(), true); // a value of another type is absent
         }
     }
 
@@ -62,11 +101,14 @@ public final class PdcVariableStore implements VariableStore {
         if (player == null) {
             return false;
         }
-        Optional<PersistentDataContainer> container = holders.apply(player);
-        if (container.isEmpty()) {
+        if (access.apply(player) != Access.OWNED) {
             return false;
         }
         try {
+            Optional<PersistentDataContainer> container = holders.apply(player);
+            if (container.isEmpty()) {
+                return false;
+            }
             NamespacedKey key = keyOf(declaration);
             if (value == null) {
                 container.get().remove(key);

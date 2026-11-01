@@ -2,10 +2,13 @@ package dev.materione.behavior.run;
 
 import dev.materione.api.logic.Cancellation;
 import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.api.logic.ReadRetiredException;
 import dev.materione.behavior.flow.ArgValue;
 import dev.materione.behavior.flow.CallStep;
 import dev.materione.behavior.flow.ChooseStep;
 import dev.materione.behavior.flow.Condition;
+import dev.materione.behavior.flow.ResumableConditions;
 import dev.materione.behavior.flow.IfStep;
 import dev.materione.behavior.flow.RequireStep;
 import dev.materione.behavior.flow.Step;
@@ -15,13 +18,14 @@ import dev.materione.behavior.flow.WaitStep;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 
 /**
  * The control steps of the interpreter (logic.md §2.2): {@code if}, {@code choose}, {@code require},
  * {@code wait}, {@code stop} and {@code call}, and the condition evaluation they share. Split from
- * {@link FlowInterpreter} (which owns the loop, actions, suspension and ending) only so neither
- * class outgrows the size guard (logic.md §9 rule 4); {@code FlowInterpreter} is the single
- * subclass and supplies the primitives below.
+ * {@link FlowInterpreter} and {@link FlowContinuations} to keep each within the size guard
+ * (logic.md §9 rule 4); the interpreter supplies the primitives below.
  */
 abstract class ControlSteps {
 
@@ -55,6 +59,8 @@ abstract class ControlSteps {
 
     abstract int cancel(Object cancelKey);
 
+    abstract boolean await(FlowRun run, StepPath path, Supplier<? extends CompletionStage<?>> operation);
+
     static String reasonOf(RuntimeException e) {
         String message = e.getMessage();
         return message == null || message.isBlank() ? e.getClass().getSimpleName() : message;
@@ -63,31 +69,38 @@ abstract class ControlSteps {
     // --- steps ----------------------------------------------------------------------
 
     final boolean branch(FlowRun run, Frame frame, IfStep step) {
-        if (needsHop(run, step.path(), step.condition())) {
+        if (!await(run, step.path(), () -> ResumableConditions.test(step.condition(), run.view(), run.reads))) {
             return false;
         }
+        boolean holds = holds(run, step.path());
         consume(run, frame);
-        boolean holds = holds(run, step.condition(), step.path());
+        if (run.finished.get()) {
+            return false;
+        }
         emit(run, step.path(), TraceEvent.Type.BRANCH, holds ? "then" : "else");
         enter(run, frame, holds ? step.then() : step.otherwise());
         return true;
     }
 
     final boolean choose(FlowRun run, Frame frame, ChooseStep step) {
-        for (ChooseStep.Case branch : step.cases()) {
-            if (needsHop(run, step.path(), branch.condition())) {
+        for (; run.choiceIndex < step.cases().size(); run.choiceIndex++) {
+            int i = run.choiceIndex;
+            ChooseStep.Case branch = step.cases().get(i);
+            if (!await(run, branch.path(), () -> ResumableConditions.test(branch.condition(), run.view(), run.reads))) {
                 return false;
             }
-        }
-        consume(run, frame);
-        for (int i = 0; i < step.cases().size(); i++) {
-            ChooseStep.Case branch = step.cases().get(i);
-            if (holds(run, branch.condition(), branch.path())) {
+            boolean holds = holds(run, branch.path());
+            if (run.finished.get()) {
+                return false;
+            }
+            if (holds) {
+                consume(run, frame);
                 emit(run, step.path(), TraceEvent.Type.BRANCH, "case " + i);
                 enter(run, frame, branch.then());
                 return true;
             }
         }
+        consume(run, frame);
         emit(run, step.path(), TraceEvent.Type.BRANCH, "else");
         enter(run, frame, step.otherwise());
         return true;
@@ -148,22 +161,34 @@ abstract class ControlSteps {
             abort(run, step.path(), "calls nested deeper than " + budget.maxCallDepth());
             return false;
         }
-        var args = new LinkedHashMap<String, Object>();
+        if (run.callArgs == null) {
+            run.callArgs = new LinkedHashMap<>();
+        }
+        var entries = List.copyOf(step.args().entrySet());
         try {
-            for (var entry : step.args().entrySet()) {
+            for (; run.callArgIndex < entries.size(); run.callArgIndex++) {
+                var entry = entries.get(run.callArgIndex);
                 ArgValue value = entry.getValue();
-                args.put(entry.getKey(), value.resolve(run.view()));
+                if (!await(run, step.path(), () -> value.resolveResumable(run.view(), run.reads))) {
+                    return false;
+                }
+                run.callArgs.put(entry.getKey(), FlowInterpreter.take(run));
             }
         } catch (RuntimeException e) {
+            if (e instanceof ReadUnavailableException) {
+                failClosed(run, step.path(), e);
+                return false;
+            }
             consume(run, frame);
             return failure(run, step.path(), "call '" + step.flowId() + "' could not evaluate its arguments: "
                     + reasonOf(e), true);
         }
+        Map<String, Object> args = java.util.Collections.unmodifiableMap(run.callArgs);
         consume(run, frame);
         emit(run, step.path(), TraceEvent.Type.CALLED, step.flowId());
         if (!step.flow().steps().isEmpty()) {
             run.calls++;
-            push(run, Frame.call(step.flow().steps(), java.util.Collections.unmodifiableMap(args)));
+            push(run, Frame.call(step.flow().steps(), args));
         }
         return true;
     }
@@ -176,24 +201,25 @@ abstract class ControlSteps {
 
     // --- conditions -----------------------------------------------------------------
 
-    /** Predicates read live player state, so they are evaluated on the player's thread. */
-    final boolean needsHop(FlowRun run, StepPath path, Condition condition) {
-        if (!condition.readsLiveState() || run.hopped
-                || scheduler.canRunInline(run.owner().anchor(), Threading.PLAYER_REGION)) {
-            return false;
-        }
-        run.hopped = true;
-        return park(run, path, Threading.PLAYER_REGION, 0, false);
-    }
-
     /** A condition that cannot be evaluated counts as false: a broken check must never grant. */
-    final boolean holds(FlowRun run, Condition condition, StepPath path) {
+    final boolean holds(FlowRun run, StepPath path) {
         try {
-            return condition.test(run.view());
+            return Boolean.TRUE.equals(FlowInterpreter.take(run));
         } catch (RuntimeException e) {
+            if (e instanceof ReadUnavailableException) {
+                failClosed(run, path, e);
+                return false;
+            }
             reporter.failure(run.rule(), path, "condition failed: " + reasonOf(e));
             emit(run, path, TraceEvent.Type.STEP_FAILED, "condition failed: " + reasonOf(e));
             return false;
         }
+    }
+
+    final void failClosed(FlowRun run, StepPath path, RuntimeException failure) {
+        run.view().facet(Cancellation.FACET).ifPresent(Cancellation::request);
+        reporter.failure(run.rule(), path, "read unavailable: " + reasonOf(failure));
+        finish(run, failure instanceof ReadRetiredException ? RunOutcome.DROPPED : RunOutcome.ABORTED,
+                "read unavailable");
     }
 }

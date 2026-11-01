@@ -359,7 +359,7 @@ public final class ParseStage {
     private void parseDir(
             PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
         Path dirPath = packDir.resolve(dir);
-        String contentType = dir.endsWith("templates") ? "template" : dir.substring(0, dir.length() - 1);
+        String contentType = "currencies".equals(dir) ? "currency" : dir.substring(0, dir.length() - 1);
         // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
         // reported and skipped, its siblings still parse
         var yamls = PackLayout.contentDocuments(packDir, dir, failure -> context.diagnostics().publish(

@@ -1,5 +1,7 @@
 package dev.materione.api.logic;
 
+import java.util.concurrent.CompletionStage;
+
 /**
  * One action in the {@code actions} registry (logic.md §4.1): the verb a rule step runs
  * ({@code run_command}, {@code message}, later {@code take_money}, {@code gui.open}). Built-ins and
@@ -70,6 +72,15 @@ public interface ActionType<P> {
      * @return {@link ActionOutcome#OK}, or {@link ActionOutcome#failed} with a short reason
      */
     ActionOutcome execute(P params, LogicContext context);
+
+    /**
+     * Optional resumable execution. The default runs the legacy callback exactly once on its
+     * declared owner; it cannot suspend within that callback. Types that evaluate templates or
+     * expressions around side effects may override this and chain their operations explicitly.
+     */
+    default CompletionStage<ActionOutcome> executeResumable(P params, LogicContext context, ReadExecutor executor) {
+        return executor.on(threading(params), () -> execute(params, context));
+    }
 
     /**
      * Whether the server can run this action now (a provider may be missing). Read each time the

@@ -29,9 +29,8 @@ final class VaultCurrencyBackend implements CurrencyBackend {
     }
 
     /**
-     * Economies behind Vault (EssentialsX and the like) are written for the main thread and touch
-     * shared data, so they are {@code GLOBAL}. On Folia that means the global region, which is the
-     * correct place for them.
+     * The legacy money-action owner is {@code GLOBAL}. That does not establish that an arbitrary
+     * economy behind Vault is Folia-safe; read capability remains unsupported by default.
      */
     @Override
     public Threading threading() {

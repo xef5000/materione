@@ -6,6 +6,7 @@ import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.provider.Currency;
 import dev.materione.api.logic.provider.CurrencyBackend;
@@ -16,8 +17,10 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.plugin.logic.ProviderParams;
+import dev.materione.plugin.logic.currency.CurrencyReads;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 
 /**
@@ -27,11 +30,8 @@ import org.bukkit.entity.Player;
  * {@link ProviderParams#resolve}, otherwise the default. A currency that is unknown, or whose integration
  * cannot answer, is <em>false</em>, so a check on money the server cannot count never grants.
  *
- * <p><b>Threading.</b> A condition runs on the thread of the step that evaluates it, on the player's region
- * (logic.md §16, decision 17). The balance is read through the backend, which declares its own thread
- * ({@code vault} GLOBAL, {@code xp} PLAYER_REGION). On Paper every backend is safe here. On Folia a GLOBAL
- * backend is read from the player's region: the same gap {@code balance()} has (logic.md §18, item 25),
- * and it is closed by the same follow-up (a threading hook on predicates).
+ * <p>The shared read guard checks the backend's explicit Folia capability and the current owner;
+ * an unsafe synchronous read is unavailable rather than a false or guessed balance.
  */
 public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.Params> {
 
@@ -39,10 +39,16 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
     public record Params(double amount, String currency) {}
 
     private final LogicProviders providers;
+    private final CurrencyReads reads;
 
     /** @param providers the provider slots, read on every test and availability check */
     public HasMoneyCondition(LogicProviders providers) {
+        this(providers, CurrencyReads.paper());
+    }
+
+    public HasMoneyCondition(LogicProviders providers, CurrencyReads reads) {
         this.providers = Objects.requireNonNull(providers, "providers");
+        this.reads = Objects.requireNonNull(reads, "reads");
     }
 
     @Override
@@ -73,16 +79,34 @@ public final class HasMoneyCondition implements ConditionType<HasMoneyCondition.
         if (player == null) {
             return false;
         }
-        CurrencyCatalog catalog = providers.currencies();
-        Currency currency = ProviderParams.resolve(catalog, params.currency());
+
+        CurrencyCatalog catalog = reads.lookup(providers::currencies);
+        Currency currency = reads.lookup(() -> ProviderParams.resolve(catalog, params.currency()));
         if (currency == null) {
+            reads.unavailable("currency is unavailable");
             return false;
         }
-        CurrencyBackend backend = catalog.backend(currency).orElse(null);
+        CurrencyBackend backend = reads.lookup(() -> catalog.backend(currency).orElse(null));
         if (backend == null) {
+            reads.unavailable("currency has no available backend");
             return false;
         }
-        return backend.has(player.getUniqueId(), params.amount()) instanceof EconomyResult.Succeeded;
+        return reads.read(backend, player, () -> backend.has(player.getUniqueId(), params.amount()))
+                instanceof EconomyResult.Succeeded;
+    }
+
+    @Override
+    public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor executor) {
+        if (context.facet(Facets.PLAYER).isEmpty()) {
+            return executor.on(dev.materione.api.logic.Threading.ANY, () -> test(params, context));
+        }
+        return executor.on(dev.materione.api.logic.Threading.ANY, () -> {
+            CurrencyCatalog catalog = reads.lookup(providers::currencies);
+            Currency currency = reads.lookup(() -> ProviderParams.resolve(catalog, params.currency()));
+            return currency == null ? null : reads.lookup(() -> catalog.backend(currency).orElse(null));
+        }).thenCompose(backend -> backend == null
+                ? executor.on(dev.materione.api.logic.Threading.ANY, () -> test(params, context))
+                : reads.schedule(backend, executor, () -> test(params, context)));
     }
 
     /** Available when the default currency can be used, as for {@code take_money}. */

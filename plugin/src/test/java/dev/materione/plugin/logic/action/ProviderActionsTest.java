@@ -81,6 +81,12 @@ public class ProviderActionsTest {
         public String refusal;
         public boolean up = true;
         public Threading threading = Threading.GLOBAL;
+        public dev.materione.api.logic.provider.CurrencyReadCapability readCapability;
+
+        @Override
+        public dev.materione.api.logic.provider.CurrencyReadCapability readCapability() {
+            return readCapability == null ? CurrencyBackend.super.readCapability() : readCapability;
+        }
 
         @Override
         public Availability availability() {

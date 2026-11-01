@@ -7,6 +7,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.plugin.logic.action.PlayerFake;
 import dev.materione.plugin.logic.action.ProviderActionsTest;
+import dev.materione.api.logic.ReadUnavailableException;
+import dev.materione.plugin.logic.GatewayRunScheduler;
+import dev.materione.plugin.logic.currency.CurrencyReads;
+import dev.materione.api.logic.Availability;
+import dev.materione.api.logic.Threading;
+import dev.materione.api.logic.provider.CurrencyReadCapability;
+import dev.materione.behavior.run.RunReadExecutor;
+import dev.materione.behavior.run.RunScheduler;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -50,6 +58,49 @@ class HasMoneyConditionTest {
         providers.backend.balances.put(fake.uuid, 300.0);
         providers.vaultInstalled = false;
         assertThat(condition.test(condition.parse(reader(params("amount", 1))), fake.context())).isFalse();
+    }
+
+    @Test
+    void foliaDoesNotTreatAnUnverifiedGlobalProviderAsSafe() {
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) { return true; }
+            @Override public boolean onGlobalThread() { return true; }
+        };
+        var guarded = new HasMoneyCondition(providers, new CurrencyReads(true, probe));
+        var fake = new PlayerFake();
+        assertThatThrownBy(() -> guarded.test(guarded.parse(reader(params("amount", 1))), fake.context()))
+                .isInstanceOf(ReadUnavailableException.class).hasMessageContaining("not declared");
+    }
+
+    @Test
+    void resumablePredicateHopsToItsProviderAndReadsTheLatestBalance() {
+        var fake = new PlayerFake();
+        providers.backend.readCapability =
+                new CurrencyReadCapability(Threading.GLOBAL, Availability.AVAILABLE, null);
+        final boolean[] global = {false};
+        final Runnable[] pending = {null};
+        RunScheduler scheduler = new RunScheduler() {
+            @Override public boolean canRunInline(Object anchor, Threading owner) {
+                return owner == Threading.ANY || owner == Threading.GLOBAL && global[0];
+            }
+            @Override public Handle schedule(Object anchor, Threading owner, long ticks, Runnable task, Runnable retired) {
+                assertThat(owner).isEqualTo(Threading.GLOBAL);
+                pending[0] = task;
+                return () -> pending[0] = null;
+            }
+        };
+        var probe = new GatewayRunScheduler.ThreadProbe() {
+            @Override public boolean ownsEntity(org.bukkit.entity.Entity entity) { return !global[0]; }
+            @Override public boolean onGlobalThread() { return global[0]; }
+        };
+        var guarded = new HasMoneyCondition(providers, new CurrencyReads(true, probe));
+        var result = guarded.testResumable(guarded.parse(reader(params("amount", 5))), fake.context(),
+                new RunReadExecutor(scheduler, "player")).toCompletableFuture();
+        assertThat(result).isNotDone();
+        providers.backend.balances.put(fake.uuid, 8.0);
+        global[0] = true;
+        pending[0].run();
+        assertThat(result.join()).isTrue();
     }
 
     @Test

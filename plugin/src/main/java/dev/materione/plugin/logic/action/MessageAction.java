@@ -7,6 +7,7 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.registry.ParameterSchema;
@@ -14,6 +15,7 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.platform.text.MaterioneText;
 import java.util.List;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
@@ -58,8 +60,19 @@ public final class MessageAction implements ActionType<MessageAction.Params> {
 
     @Override
     public ActionOutcome execute(Params params, LogicContext context) {
-        var message = MaterioneText.parse(params.text().render(context));
-        if (params.target() == Target.BROADCAST) {
+        return send(params.target(), params.text().render(context), context);
+    }
+
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(
+            Params params, LogicContext context, ReadExecutor executor) {
+        return params.text().renderResumable(context, executor)
+                .thenCompose(text -> executor.on(threading(params), () -> send(params.target(), text, context)));
+    }
+
+    private static ActionOutcome send(Target target, String text, LogicContext context) {
+        var message = MaterioneText.parse(text);
+        if (target == Target.BROADCAST) {
             Bukkit.broadcast(message);
             return ActionOutcome.OK;
         }
@@ -67,7 +80,7 @@ public final class MessageAction implements ActionType<MessageAction.Params> {
         if (player == null) {
             return ActionOutcome.failed("event has no player");
         }
-        if (params.target() == Target.ACTIONBAR) {
+        if (target == Target.ACTIONBAR) {
             player.sendActionBar(message);
         } else {
             player.sendMessage(message);

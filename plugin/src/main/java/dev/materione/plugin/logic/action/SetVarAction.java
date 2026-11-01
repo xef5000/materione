@@ -9,6 +9,7 @@ import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
 import dev.materione.api.logic.ParseRejection;
+import dev.materione.api.logic.ReadExecutor;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.ValueExpression;
@@ -27,6 +28,8 @@ import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 
 /**
  * {@code set_var}: stores a value in a variable (logic.md §3.3).
@@ -108,12 +111,12 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
         return Threading.ANY;
     }
 
-    /** A declared player variable is read and written on the player's own thread. */
+    /** Player variables use their region; server-variable steps serialize on the global owner. */
     @Override
     public Threading threading(Params params) {
-        if (params.target() instanceof PersistentTarget persistent
-                && persistent.declaration().scope() == VariableScope.PLAYER) {
-            return Threading.PLAYER_REGION;
+        if (params.target() instanceof PersistentTarget persistent) {
+            return persistent.declaration().scope() == VariableScope.PLAYER
+                    ? Threading.PLAYER_REGION : Threading.GLOBAL;
         }
         return Threading.ANY;
     }
@@ -147,6 +150,81 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
             case SessionTarget session -> writeSession(session.name(), params, context);
             case PersistentTarget persistent -> writePersistent(persistent.declaration(), params, context);
         };
+    }
+
+    @Override
+    public CompletionStage<ActionOutcome> executeResumable(Params params, LogicContext context, ReadExecutor reads) {
+        Threading owner = params.target() instanceof PersistentTarget ? threading(params) : Threading.PLAYER_REGION;
+        return operandResumable(params, context, reads).thenCompose(value -> reads.on(owner, () -> {
+            var prepared = prepare(params, context);
+            if (prepared.failure() != null) {
+                return prepared.failure();
+            }
+            if (prepared.direct()) {
+                return execute(params, context);
+            }
+            return applyPrepared(params, context, prepared, value);
+        }));
+    }
+
+    private record Prepared(Object current, SessionVariables session, VariableBinding binding,
+                            ActionOutcome failure, boolean direct) {}
+
+    private static Prepared prepare(Params params, LogicContext context) {
+        return switch (params.target()) {
+            case LocalTarget local -> new Prepared(context.locals().get(local.name()), null, null, null,
+                    params.op() == VariableOp.REMOVE || params.op() == VariableOp.RESET);
+            case SessionTarget target -> {
+                SessionVariables session = context.facet(VariableFacets.SESSION).orElse(null);
+                if (session == null) {
+                    yield new Prepared(null, null, null,
+                            ActionOutcome.failed("session." + target.name() + ": no open gui"), false);
+                }
+                boolean direct = params.op() == VariableOp.REMOVE || params.op() == VariableOp.RESET;
+                yield new Prepared(direct ? null : session.get(target.name()).orElse(null), session, null, null, direct);
+            }
+            case PersistentTarget target -> {
+                VariableBinding binding = context.variables();
+                boolean needsCurrent = params.op() == VariableOp.ADD || params.op() == VariableOp.SUBTRACT
+                        || params.op() == VariableOp.MULTIPLY || params.op() == VariableOp.TOGGLE;
+                Object current = needsCurrent
+                        ? binding.stored(target.declaration()).orElse(target.declaration().defaultValue()) : null;
+                yield new Prepared(current, null, binding, null, false);
+            }
+        };
+    }
+
+    private static CompletionStage<Object> operandResumable(Params params, LogicContext context, ReadExecutor reads) {
+        return switch (params.value()) {
+            case Literal literal -> CompletableFuture.completedFuture(literal.value());
+            case Templated templated -> templated.text().renderResumable(context, reads).thenApply(value -> value);
+            case Computed computed -> computed.expression().evaluateResumable(context, reads);
+        };
+    }
+
+    private static ActionOutcome applyPrepared(Params params, LogicContext context, Prepared prepared, Object operand) {
+        VariableType type = params.target() instanceof PersistentTarget persistent
+                ? persistent.declaration().type() : null;
+        var result = VariableOps.apply(params.op(), type, prepared.current(), operand);
+        String name = switch (params.target()) {
+            case LocalTarget local -> local.name();
+            case SessionTarget session -> "session." + session.name();
+            case PersistentTarget persistent -> persistent.declaration().id().toString();
+        };
+        if (!result.ok()) {
+            return ActionOutcome.failed(name + ": " + result.reason());
+        }
+        switch (params.target()) {
+            case LocalTarget local -> context.locals().put(local.name(), result.value());
+            case SessionTarget session -> prepared.session().put(session.name(), result.value());
+            case PersistentTarget persistent -> {
+                if (!prepared.binding().store(persistent.declaration(), result.value())) {
+                    return ActionOutcome.failed(name + ": no holder for this "
+                            + persistent.declaration().scope().id() + " variable (is the player online?)");
+                }
+            }
+        }
+        return ActionOutcome.OK;
     }
 
     // --- load ---------------------------------------------------------------------

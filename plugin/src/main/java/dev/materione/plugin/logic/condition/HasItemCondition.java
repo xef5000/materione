@@ -6,6 +6,8 @@ import dev.materione.api.logic.Facets;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.LogicContext;
 import dev.materione.api.logic.ParamReader;
+import dev.materione.api.logic.ReadExecutor;
+import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TemplateText;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
@@ -22,6 +24,9 @@ import dev.materione.plugin.logic.support.Stacks;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import dev.materione.plugin.logic.support.ResolvedText;
 import org.bukkit.entity.Player;
 
 /**
@@ -119,8 +124,45 @@ public final class HasItemCondition implements ConditionType<HasItemCondition.Pa
         }
         ItemMatch match = new ItemMatch(ref, nonBlank(params.nameContains(), context),
                 nonBlank(params.loreContains(), context), params.ignoreCase(), params.strict());
+        return has(player, params, match, whole.getAsInt());
+    }
+
+    private static boolean has(Player player, Params params, ItemMatch match, int amount) {
         var slots = ItemSlots.included(Stacks.contents(player.getInventory()), params.armour(), params.offhand());
-        return InventoryPlan.count(slots, match.predicate()) >= whole.getAsInt();
+        return InventoryPlan.count(slots, match.predicate()) >= amount;
+    }
+
+    @Override public CompletionStage<Boolean> testResumable(Params params, LogicContext context, ReadExecutor reads) {
+        Player player = context.facet(Facets.PLAYER).orElse(null);
+        if (player == null) {
+            return CompletableFuture.completedFuture(false);
+        }
+        return params.amount().resolveResumable(context, reads).thenCompose(quantity -> {
+            var whole = quantity.wholeValue(context);
+            if (whole.isEmpty()) {
+                return CompletableFuture.completedFuture(false);
+            }
+            return reads.on(Threading.PLAYER_REGION, () -> catalog.current().orElse(null)).thenCompose(registries ->
+                    params.item().renderResumable(context, reads).thenCompose(item ->
+                            reads.on(Threading.PLAYER_REGION, () -> {
+                                try {
+                                    return ItemRef.resolve(item.trim(), registries);
+                                } catch (IllegalArgumentException ignored) {
+                                    return null;
+                                }
+                            })).thenCompose(ref -> {
+                                if (ref == null) {
+                                    return CompletableFuture.completedFuture(false);
+                                }
+                                return ResolvedText.resolve(params.nameContains(), context, reads).thenCompose(name ->
+                                        ResolvedText.resolve(params.loreContains(), context, reads)
+                                                .thenCompose(lore -> reads.on(Threading.PLAYER_REGION, () -> {
+                                                    ItemMatch match = new ItemMatch(ref, nonBlank(name, context),
+                                                            nonBlank(lore, context), params.ignoreCase(), params.strict());
+                                                    return has(player, params, match, whole.getAsInt());
+                                                })));
+                            }));
+        });
     }
 
     /** A rendered text, or empty when the author wrote none or it renders blank (as for {@code take_item}). */

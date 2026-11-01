@@ -1,0 +1,10 @@
+name: MaterioneFoliaProbe
+version: 1
+main: dev.materione.foliaprobe.FoliaProbe
+api-version: '1.21'
+folia-supported: true
+depend: [Materione]
+commands:
+  folia250:
+    description: Local-only safe-read probe controls
+    usage: /folia250 migrate

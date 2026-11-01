@@ -30,6 +30,7 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.server.PluginDisableEvent;
 import org.bukkit.plugin.Plugin;
 
@@ -96,7 +97,13 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         this.engine = scheduling == null || diagnostics == null
                 ? null
                 : new RuleEngine(
-                        new FlowInterpreter(new GatewayRunScheduler(host, scheduling), RunBudget.DEFAULT, diagnostics),
+                        new FlowInterpreter(new GatewayRunScheduler(host, scheduling,
+                                GatewayRunScheduler.ThreadProbe.SERVER,
+                                player -> {
+                                    if (variables != null) {
+                                        variables.invalidatePlayer(player);
+                                    }
+                                }), RunBudget.DEFAULT, diagnostics),
                         new CooldownStore());
         this.actions = new LogicRegistryImpl<>(registries, RegistryKeys.ACTIONS, erased(ActionType.class),
                 "action", ActionType::id, type -> type.describe().self());
@@ -166,6 +173,9 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
      * every successful swap, and with an empty view when nothing is live, so a removed currency leaves.
      */
     public void updateCurrencies(dev.materione.core.runtime.RuntimeRegistries live) {
+        if (variables != null) {
+            variables.invalidateSnapshots();
+        }
         var view = live == null ? null : live.view(dev.materione.core.runtime.RuntimeCurrencies.KEY);
         currencies.define(view == null ? List.of() : view.currencies());
     }
@@ -209,8 +219,18 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     /** A player left: their parked runs end (the entity scheduler would drop them anyway). */
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
+        if (variables != null) {
+            variables.invalidatePlayer(event.getPlayer().getUniqueId());
+        }
         if (engine != null) {
             engine.interpreter().cancelPlayer(event.getPlayer().getUniqueId().toString());
+        }
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent event) {
+        if (variables != null) {
+            variables.refreshPlayer(event.getPlayer().getUniqueId());
         }
     }
 
