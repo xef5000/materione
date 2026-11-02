@@ -39,13 +39,12 @@ public final class ClickRouter {
         }
     }
 
-    private final GuiLookup guis;
     private final GuiEvents events;
     private final LayerVisibility visibility;
     private final InputGuard guard;
 
     public ClickRouter(GuiLookup guis, GuiEvents events, LayerVisibility visibility, InputGuard guard) {
-        this.guis = Objects.requireNonNull(guis, "guis");
+        Objects.requireNonNull(guis, "guis");
         this.events = Objects.requireNonNull(events, "events");
         this.visibility = Objects.requireNonNull(visibility, "visibility");
         this.guard = Objects.requireNonNull(guard, "guard");
@@ -57,7 +56,7 @@ public final class ClickRouter {
         if (!session.isOpen()) {
             return Routed.NONE;
         }
-        Optional<RuntimeGuis.Live> found = guis.find(session.gui());
+        Optional<RuntimeGuis.Live> found = session.displayed();
         if (found.isEmpty()) {
             return Routed.NONE;
         }
@@ -87,7 +86,7 @@ public final class ClickRouter {
         if (!session.isOpen()) {
             return;
         }
-        guis.find(session.gui()).ifPresent(gui ->
+        session.displayed().ifPresent(gui ->
                 guard.during(viewer.id(), () -> events.outside(viewer, session, gui, kind)));
     }
 

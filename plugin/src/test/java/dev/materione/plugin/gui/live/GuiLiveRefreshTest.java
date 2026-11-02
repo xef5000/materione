@@ -191,6 +191,7 @@ class GuiLiveRefreshTest {
                       do:
                         - mark: "v1 ${gui.args.category} ${gui.session.tab}"
                 """);
+        f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
                 dev.materione.plugin.gui.input.ClickKind.LEFT, 0));
         assertThat(f.ran).containsExactly("mark:v1 tools weapons");
@@ -212,6 +213,7 @@ class GuiLiveRefreshTest {
                       do:
                         - mark: "v2 ${gui.args.category} ${gui.session.tab}"
                 """);
+        f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
                 dev.materione.plugin.gui.input.ClickKind.LEFT, 0));
 

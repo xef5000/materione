@@ -16,6 +16,11 @@ import dev.materione.plugin.gui.input.GuiInput;
 import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputSlotClicks;
+import dev.materione.plugin.gui.input.InputSlotOps;
+import dev.materione.plugin.gui.input.ClickRouter;
+import dev.materione.plugin.gui.input.ClickKind;
+import dev.materione.plugin.gui.input.GuiClick;
+import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.open.GuiOpener;
@@ -100,6 +105,11 @@ class OwnershipRefreshTransactionTest {
         exercise(false, false, false, true, false, true);
     }
 
+    @Test
+    void heldPresentationKeepsOldRulesAndInputPolicyWithoutRerendering() throws Exception {
+        exercise(true, false, false, true, false, false, true);
+    }
+
     private static void exercise(boolean cancel, boolean revert, boolean replace) throws Exception {
         exercise(cancel, revert, replace, false, false);
     }
@@ -111,6 +121,11 @@ class OwnershipRefreshTransactionTest {
 
     private static void exercise(boolean cancel, boolean revert, boolean replace, boolean dynamic, boolean fail,
             boolean unavailable) throws Exception {
+        exercise(cancel, revert, replace, dynamic, fail, unavailable, false);
+    }
+
+    private static void exercise(boolean cancel, boolean revert, boolean replace, boolean dynamic, boolean fail,
+            boolean unavailable, boolean publication) throws Exception {
         var oldServer = Bukkit.class.getDeclaredField("server");
         oldServer.setAccessible(true);
         Object previous = oldServer.get(null);
@@ -122,6 +137,7 @@ class OwnershipRefreshTransactionTest {
         var tasks = new ArrayList<Runnable>();
         var journalWrites = new AtomicInteger();
         var returns = new AtomicInteger();
+        var sourceReads = new AtomicInteger();
         var topRef = new AtomicReference<Inventory>();
         Server server = proxy(Server.class, (method, args) -> switch (method) {
             case "createInventory" -> {
@@ -165,6 +181,10 @@ class OwnershipRefreshTransactionTest {
                         + "      type: text\n      x: 8\n      y: 6\n      text: DYNAMIC\n"
                         + "      visible_if: \"gui.session.cover == true\"\n  behavior:");
             }
+            if (publication) {
+                yaml = yaml.replace("  behavior:", "  behavior:\n"
+                        + "    - on: gui.click\n      do: [{mark: OLD}]\n");
+            }
             var definition = fixture.definition(yaml);
             var nextGlyph = new AtomicInteger(0xE201);
             var compiled = GuiCompiler.compile(definition, 0xE200, ref -> Optional.empty(),
@@ -185,7 +205,7 @@ class OwnershipRefreshTransactionTest {
             PlayerInventory bag = proxy(PlayerInventory.class, (name, args) -> switch (name) {
                 case "getItem" -> bagItems[(int) args[0]];
                 case "setItem" -> { bagItems[(int) args[0]] = (ItemStack) args[1]; yield null; }
-                case "getItemInMainHand" -> FakeStack.of(1);
+                case "getItemInMainHand" -> { sourceReads.incrementAndGet(); yield FakeStack.of(1); }
                 case "addItem" -> {
                     returns.incrementAndGet();
                     ItemStack[] items = (ItemStack[]) args[0];
@@ -267,7 +287,69 @@ class OwnershipRefreshTransactionTest {
             });
             session.attach(menu);
             session.remember(initial);
+            session.displayed(live);
             menu.inputSlots(SetOf.inputs(live, session));
+            if (publication) {
+                String changedYaml = yaml.replace("input: true", "input: false")
+                        .replace("  behavior:", "    - id: newer\n      type: button\n"
+                                + "      x: 8\n      y: 18\n      width: 16\n      height: 16\n  behavior:")
+                        .replace("do: [{mark: OLD}]", "layer: newer\n      do: [{mark: NEW}]");
+                var glyph = new AtomicInteger(0xE201);
+                var newerCompiled = GuiCompiler.compile(fixture.definition(changedYaml), 0xE200,
+                        ref -> Optional.empty(), (layer, frame) -> glyph.getAndIncrement()).model();
+                var newer = RuntimeGuis.build(Map.of(newerCompiled.id(), newerCompiled), id -> Optional.empty(),
+                        id -> Optional.empty(), ignored -> { }, fixture.logic.lookup())
+                        .gui(newerCompiled.id()).orElseThrow();
+                published.set(newer);
+                var dispatched = new ArrayList<List<dev.materione.behavior.rule.Rule>>();
+                var eventRecorder = new GuiEvents((rules, event) -> {
+                    var copy = new ArrayList<dev.materione.behavior.rule.Rule>();
+                    rules.forEach(copy::add);
+                    dispatched.add(copy);
+                });
+                var lookup = new GuiLookup() {
+                    public Optional<RuntimeGuis.Live> find(dev.materione.api.NamespacedId id) {
+                        return Optional.of(published.get());
+                    }
+                    public java.util.Collection<dev.materione.api.NamespacedId> ids() { return List.of(live.id()); }
+                };
+                var router = new ClickRouter(lookup, eventRecorder, LayerVisibility.ALL, guard);
+                var clicks = new InputSlotClicks(lookup, sessions, eventRecorder, guard, journal);
+                var operations = new InputSlotOps(lookup, journal);
+                topItems[0] = FakeStack.of(5);
+                session.vars().put("cover", true);
+                host.rewrite(viewer, session, newer);
+                assertThat(session.displayed()).containsSame(live);
+                assertThat(clicks.policyOf(menu, player).slots().isInput(0)).isTrue();
+                assertThat(operations.peek(session, 0).amount()).isEqualTo(5);
+                assertThat(router.route(new GuiClick(viewer, session, 0, ClickKind.LEFT, 0)).layer()).isEmpty();
+                assertThat(dispatched).containsExactly(live.logic().unboundClickRules());
+                int readsAfterCandidate = sourceReads.get();
+                for (int tick = 0; tick < 100; tick++) {
+                    session.advanceWindowTicks(1);
+                    host.advance(viewer, session, newer);
+                    tasks.remove(0).run();
+                    assertThat(tasks).hasSize(1);
+                }
+                assertThat(sourceReads.get()).isEqualTo(readsAfterCandidate);
+                assertThat(session.windowTicks()).isEqualTo(100);
+                assertThat(amount(topItems[0])).isEqualTo(5);
+                assertThat(amount(cursor.get())).isEqualTo(2);
+                cursor.set(null);
+                tasks.remove(0).run();
+                assertThat(sourceReads.get()).isEqualTo(readsAfterCandidate + 1);
+                assertThat(session.displayed()).containsSame(newer);
+                assertThat(clicks.policyOf(menu, player).slots().isInput(0)).isFalse();
+                assertThat(operations.peek(session, 0).empty()).isTrue();
+                assertThat(router.route(new GuiClick(viewer, session, 0, ClickKind.LEFT, 0)).layer()).isEqualTo("newer");
+                assertThat(dispatched).hasSize(2);
+                assertThat(dispatched.get(1)).isEqualTo(newer.logic().clickRules("newer"));
+                assertThat(amount(topItems[0])).isEqualTo(1); // the new display item, not the returned input
+                assertThat(amount(bagItems[9])).isEqualTo(5);
+                assertThat(returns.get()).isEqualTo(1);
+                assertThat(sends.get()).isEqualTo(1);
+                return;
+            }
             if (unavailable) {
                 topItems[0] = FakeStack.of(5);
                 GuiLookup lookup = new GuiLookup() {

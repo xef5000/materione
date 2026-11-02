@@ -1,14 +1,13 @@
 package dev.materione.plugin.gui.input;
 
 /**
- * What a window's clicks are judged against, read from the live view when the click happens (logic.md
- * §25): the input slots and the lock of the GUI the window shows, or the fact that the window is no
- * longer the player's. A reload is therefore followed by the next click, with no copy to keep in step.
+ * What a window's clicks are judged against (logic.md §25): the input slots and lock of its displayed
+ * definition, or the fact that the window is no longer the player's.
  *
  * @param menu whether the window is a {@code GuiMenu} (a GUI session's window); false for the older
  *     GUIs, which keep the behaviour they had before input slots
- * @param live whether the session behind the window is open, the player's current one and its GUI is live
- * @param slots the input slots and lock of the live GUI; {@link InputSlots#NONE} otherwise
+ * @param live whether the session behind the window is open, current and has a displayed definition
+ * @param slots the displayed input slots and lock; {@link InputSlots#NONE} otherwise
  */
 public record WindowPolicy(boolean menu, boolean live, InputSlots slots) {
 

@@ -9,6 +9,10 @@ import java.util.function.BiFunction;
 final class HeldTitleRefresh {
     private final ConcurrentHashMap<GuiSession, Pending> pending = new ConcurrentHashMap<>();
 
+    boolean pending(GuiSession session) {
+        return pending.containsKey(session);
+    }
+
     void ensure(GuiSession session, Runnable retry, BiFunction<Runnable, Runnable, ScheduledHandle> schedule) {
         Pending next = new Pending();
         if (pending.putIfAbsent(session, next) != null) {

@@ -221,6 +221,7 @@ public final class GuiFixture {
                 }
                 log.add(what + " " + gui.id().value());
                 session.attach(this);
+                session.displayed(gui);
                 shapes.put(session, new Shape(gui.title(), gui.rows()));
                 opened.accept(gui);
             };
@@ -239,11 +240,13 @@ public final class GuiFixture {
         @Override
         public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("rewrite " + gui.id().value());
+            session.displayed(gui);
         }
 
         @Override
         public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("advance " + gui.id().value());
+            session.displayed(gui);
         }
 
         @Override

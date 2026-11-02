@@ -494,10 +494,12 @@ their order relative to conditional raster pieces is preserved.
 - A changed rich title is sent to the existing native server menu; unchanged titles are not sent.
   No Bukkit inventory open or close is performed for that refresh.
 - When a non-structural refresh would change the title while the cursor holds an item, the
-  entire displayed render, its hitboxes and input ownership remain frozen. An owned retry
+  entire displayed render, its definition (including click and input rules), hitboxes and input
+  ownership remain frozen together. An owned retry checks only ownership and cursor while held, and
   resolves the latest live GUI and state after the cursor clears, even without a refresh clock;
   intermediate frames are not replayed. The window clock keeps advancing. Item-only updates
-  whose title is unchanged still apply. Structural reopens retain their existing policy.
+  whose title is unchanged still apply when no title change is pending; once pending, the
+  whole presentation stays frozen until release. Structural reopens retain their existing policy.
 - The cost is one codepoint per raster frame in a dynamic GUI, plus its transparent background;
   the block has 5,888 codepoints
   (`U+E200`–`U+F8FF`).

@@ -18,11 +18,9 @@ import org.bukkit.inventory.meta.Damageable;
  */
 public final class InputSlotOps implements InputSlotPort {
 
-    private final GuiLookup guis;
     private final GuiJournal journal;
 
     public InputSlotOps(GuiLookup guis, GuiJournal journal) {
-        this.guis = guis;
         this.journal = journal;
     }
 
@@ -85,12 +83,12 @@ public final class InputSlotOps implements InputSlotPort {
         return Optional.empty();
     }
 
-    /** The window's inventory, when {@code slot} is an input slot of the session's live GUI and its window is showing. */
+    /** The window's inventory, when {@code slot} belongs to its displayed input policy. */
     private Optional<Inventory> inputInventory(GuiSession session, int slot) {
         if (!session.isOpen() || !(session.window() instanceof GuiMenu menu)) {
             return Optional.empty();
         }
-        Optional<RuntimeGuis.Live> live = guis.find(session.gui());
+        Optional<RuntimeGuis.Live> live = session.displayed();
         if (live.isEmpty() || !live.get().inputs().isInput(slot) || !menu.inputSlots().contains(slot)) {
             return Optional.empty();
         }

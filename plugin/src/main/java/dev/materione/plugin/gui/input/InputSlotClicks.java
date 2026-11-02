@@ -40,7 +40,6 @@ import org.bukkit.inventory.PlayerInventory;
  */
 public final class InputSlotClicks {
 
-    private final GuiLookup guis;
     private final GuiSessions sessions;
     private final GuiEvents events;
     private final InputGuard guard;
@@ -48,14 +47,13 @@ public final class InputSlotClicks {
 
     public InputSlotClicks(GuiLookup guis, GuiSessions sessions, GuiEvents events, InputGuard guard,
             GuiJournal journal) {
-        this.guis = guis;
         this.sessions = sessions;
         this.events = events;
         this.guard = guard;
         this.journal = journal;
     }
 
-    /** The policy of a window for the viewer who clicked it, read from the live view now. */
+    /** The policy of the presentation currently displayed to the viewer. */
     public WindowPolicy policyOf(PluginGui gui, HumanEntity who) {
         if (!(gui instanceof GuiMenu menu)) {
             return WindowPolicy.LEGACY;
@@ -349,11 +347,11 @@ public final class InputSlotClicks {
 
     private Optional<RuntimeGuis.Live> liveOf(GuiMenu menu, HumanEntity who) {
         GuiSession session = menu.session();
-        if (!(who instanceof Player player) || !session.isOpen()
+        if (!(who instanceof Player player) || !session.isOpen() || session.window() != menu
                 || sessions.current(player.getUniqueId()).filter(current -> current == session).isEmpty()) {
             return Optional.empty();
         }
-        return guis.find(session.gui());
+        return session.displayed();
     }
 
     /** Runs {@code work} with the player marked as mid-click, and returns what it returned. */
