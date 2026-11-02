@@ -17,7 +17,7 @@ public final class MaterionePlaceholders extends PlaceholderExpansion {
     private final VariablePlaceholders resolver;
     private final String version;
 
-    private MaterionePlaceholders(VariablePlaceholders resolver, String version) {
+    MaterionePlaceholders(VariablePlaceholders resolver, String version) {
         this.resolver = resolver;
         this.version = version;
     }

@@ -1,0 +1,4 @@
+qa_balance_lookup_unsafe:
+  integration: "mtr252:lookup_unsafe"
+  symbol: "L"
+  decimals: 2

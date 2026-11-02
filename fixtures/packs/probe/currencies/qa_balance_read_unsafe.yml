@@ -1,0 +1,4 @@
+qa_balance_read_unsafe:
+  integration: "mtr252:read_unsafe"
+  symbol: "R"
+  decimals: 2

@@ -1,0 +1,7 @@
+probe_balance_placeholder:
+  material: COMPASS
+  display_name: "Balance Placeholder Probe"
+  behavior:
+    - on: click:right
+      do:
+        - message: "BALANCE raw=%materione_balance_probe_qa_balance_xp% formatted=%materione_balance_probe_qa_balance_xp_formatted% unknown=%materione_balance_probe_missing%"

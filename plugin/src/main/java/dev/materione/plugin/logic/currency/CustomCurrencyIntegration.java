@@ -10,10 +10,14 @@ import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
 import java.lang.reflect.Method;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.Function;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
+import org.bukkit.plugin.Plugin;
 
 /**
  * The {@code custom} integration (logic.md §18): a currency a plugin of the server runs, driven by a
@@ -28,7 +32,17 @@ import org.bukkit.OfflinePlayer;
 public final class CustomCurrencyIntegration implements CurrencyIntegration {
 
     private static final String PLACEHOLDER_API = "PlaceholderAPI";
-    private static volatile Method setPlaceholders;
+    private final PapiAccess papi;
+    private final Function<UUID, OfflinePlayer> accounts;
+
+    public CustomCurrencyIntegration() {
+        this(new BukkitPapiAccess(), Bukkit::getOfflinePlayer);
+    }
+
+    CustomCurrencyIntegration(PapiAccess papi, Function<UUID, OfflinePlayer> accounts) {
+        this.papi = papi;
+        this.accounts = accounts;
+    }
 
     @Override
     public String id() {
@@ -54,7 +68,7 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
         return new CustomBackend(
                 config.text("deposit-command"),
                 config.text("withdraw-command"),
-                config.text("balance-placeholder"));
+                config.text("balance-placeholder"), papi, accounts);
     }
 
     private static final class CustomBackend implements CurrencyBackend {
@@ -62,11 +76,16 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
         private final String depositCommand;
         private final String withdrawCommand;
         private final String placeholder;
+        private final PapiAccess papi;
+        private final Function<UUID, OfflinePlayer> accounts;
 
-        CustomBackend(String depositCommand, String withdrawCommand, String placeholder) {
+        CustomBackend(String depositCommand, String withdrawCommand, String placeholder,
+                PapiAccess papi, Function<UUID, OfflinePlayer> accounts) {
             this.depositCommand = stripSlash(depositCommand);
             this.withdrawCommand = stripSlash(withdrawCommand);
             this.placeholder = placeholder;
+            this.papi = papi;
+            this.accounts = accounts;
         }
 
         /**
@@ -82,17 +101,29 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
 
         @Override
         public Availability availability() {
-            return Bukkit.getPluginManager().isPluginEnabled(PLACEHOLDER_API)
+            return papi.current() != null
                     ? Availability.AVAILABLE
                     : Availability.unavailable("PlaceholderAPI is not installed (the custom currency reads its balance through it)");
         }
 
         @Override
+        public Object readBindingIdentity() {
+            return papi.current();
+        }
+
+        @Override
         public EconomyResult balance(UUID player) {
-            OfflinePlayer account = Bukkit.getOfflinePlayer(player);
             String text;
             try {
-                text = placeholders(account, placeholder);
+                Object binding = papi.current();
+                if (binding == null) {
+                    return new EconomyResult.Failed("PlaceholderAPI is unavailable");
+                }
+                Map<String, ?> expansions = new HashMap<>(papi.expansions(binding));
+                text = papi.replace(binding, accounts.apply(player), placeholder);
+                if (papi.current() != binding || !sameExpansions(expansions, papi.expansions(binding))) {
+                    return new EconomyResult.Failed("PlaceholderAPI or its registered expansions changed during the balance read");
+                }
             } catch (ReflectiveOperationException | RuntimeException e) {
                 return new EconomyResult.Failed("PlaceholderAPI could not read the balance: " + e.getMessage());
             }
@@ -153,14 +184,50 @@ public final class CustomCurrencyIntegration implements CurrencyIntegration {
         }
     }
 
-    /** Reads a PlaceholderAPI token for {@code player}, reflectively, so no compile dependency is needed. */
-    static String placeholders(OfflinePlayer player, String text) throws ReflectiveOperationException {
-        Method method = setPlaceholders;
-        if (method == null) {
-            Class<?> api = Class.forName("me.clip.placeholderapi.PlaceholderAPI");
-            method = api.getMethod("setPlaceholders", OfflinePlayer.class, String.class);
-            setPlaceholders = method;
+    private static boolean sameExpansions(Map<String, ?> before, Map<String, ?> after) {
+        if (!before.keySet().equals(after.keySet())) {
+            return false;
         }
-        return (String) method.invoke(null, player, text);
+        for (String id : before.keySet()) {
+            if (before.get(id) != after.get(id)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    interface PapiAccess {
+        Object current();
+        Map<String, ?> expansions(Object binding) throws ReflectiveOperationException;
+        String replace(Object binding, OfflinePlayer player, String text) throws ReflectiveOperationException;
+    }
+
+    private static final class BukkitPapiAccess implements PapiAccess {
+        @Override
+        public Object current() {
+            Plugin plugin = Bukkit.getPluginManager().getPlugin(PLACEHOLDER_API);
+            return plugin != null && plugin.isEnabled() ? plugin : null;
+        }
+
+        private Class<?> api(Object binding) throws ReflectiveOperationException {
+            ClassLoader loader = binding.getClass().getClassLoader();
+            Class<?> pluginClass = Class.forName("me.clip.placeholderapi.PlaceholderAPIPlugin", true, loader);
+            if (pluginClass.getMethod("getInstance").invoke(null) != binding) {
+                throw new IllegalStateException("PlaceholderAPI instance is no longer current");
+            }
+            return Class.forName("me.clip.placeholderapi.PlaceholderAPI", true, loader);
+        }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public Map<String, ?> expansions(Object binding) throws ReflectiveOperationException {
+            return (Map<String, ?>) api(binding).getMethod("getPlaceholders").invoke(null);
+        }
+
+        @Override
+        public String replace(Object binding, OfflinePlayer player, String text) throws ReflectiveOperationException {
+            Method method = api(binding).getMethod("setPlaceholders", OfflinePlayer.class, String.class);
+            return (String) method.invoke(null, player, text);
+        }
     }
 }
