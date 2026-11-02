@@ -259,9 +259,10 @@ class OwnershipRefreshTransactionTest {
             var problems = new ArrayList<String>();
             var host = new BukkitWindowHost(plugin, scheduling, input, guard, journal, renderer,
                     titles, (code, gui, layer, message) -> problems.add(code.code() + ":" + message));
+            var published = new AtomicReference<>(live);
             host.bindReconciler((who, current) -> {
                 if (sessions.current(playerId).filter(s -> s == current).isPresent()) {
-                    host.rewrite(who, current, live);
+                    host.rewrite(who, current, published.get());
                 }
             });
             session.attach(menu);
@@ -371,6 +372,13 @@ class OwnershipRefreshTransactionTest {
                 assertThat(tasks).hasSize(1);
                 session.vars().put("cover", false);
                 session.vars().put("cover", true);
+                if (!fail) {
+                    var newestGlyph = new AtomicInteger(0xE201);
+                    var newest = GuiCompiler.compile(fixture.definition(yaml.replace("DYNAMIC", "LATEST")),
+                            0xE200, ref -> Optional.empty(), (layer, frame) -> newestGlyph.getAndIncrement()).model();
+                    published.set(RuntimeGuis.build(Map.of(newest.id(), newest), id -> Optional.empty(),
+                            id -> Optional.empty(), ignored -> { }, fixture.logic.lookup()).gui(newest.id()).orElseThrow());
+                }
                 cursor.set(null);
             }
             tasks.remove(0).run();
@@ -390,6 +398,7 @@ class OwnershipRefreshTransactionTest {
                 }
                 assertThat(closes.get()).isZero();
                 assertThat(menu.title()).isNotEqualTo(initial.title());
+                assertThat(menu.title()).contains("LATEST").doesNotContain("DYNAMIC");
             }
             if (revert || replace) {
                 assertThat(menu.inputSlots()).contains(0);
@@ -405,7 +414,7 @@ class OwnershipRefreshTransactionTest {
             assertThat(amount(topItems[0])).isEqualTo(1); // the visible display item is not player-owned
             assertThat(amount(bagItems[9])).isEqualTo(5);
             if (dynamic) {
-                host.rewrite(viewer, session, live);
+                host.rewrite(viewer, session, published.get());
                 assertThat(sends.get()).isEqualTo(1);
                 assertThat(session.window()).isSameAs(menu);
             }
