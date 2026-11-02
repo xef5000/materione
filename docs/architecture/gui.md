@@ -318,6 +318,11 @@ only (§9.4).
   is opened by `GuiOpener`, the one open path, which creates the player's `GuiSession` (arguments, session
   variables, back stack) and fires `gui.opening` and `gui.open` (logic.md §6.1, §21); `GuiRuntime` is the
   API facade in front of it, and `GuiMenu` is the window holder that knows its session.
+  When an initial open is deferred through a click, it opens only the same immutable live definition
+  that passed admission and `gui.opening`. If a swap replaces or removes that definition before display,
+  the pending open fails closed, reports `MATERIONE-GUI-FAILED` and tells the viewer to retry; it does
+  not rerun admission or opening rules. A new live view invalidates the pending open even if its authored
+  GUI looks unchanged. A superseding session is never closed by the stale callback.
 - *Clicks.* `GuiListener` routes three targets: the GUI's own slots and the outside of the window are
   cancelled, and the viewer's inventory stays live except the two actions that would move items into or
   out of the GUI (shift-move, double-click collection). The table is `GuiListener.route`, unit-tested.

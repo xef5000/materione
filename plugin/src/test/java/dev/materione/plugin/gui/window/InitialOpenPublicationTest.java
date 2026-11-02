@@ -18,6 +18,8 @@ import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.open.GuiOpener;
 import dev.materione.plugin.gui.open.OpenRequest;
+import dev.materione.plugin.gui.open.OpenSpecGate;
+import dev.materione.plugin.gui.open.PlayerNames;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.session.GuiSession;
@@ -30,6 +32,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Material;
@@ -43,6 +47,7 @@ import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.plugin.Plugin;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -50,8 +55,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Isolated
 class InitialOpenPublicationTest {
     @ParameterizedTest
-    @ValueSource(strings = {"new-layout", "removed", "unsupported", "newer-session"})
-    void deferredOpenUsesPublishedDefinitionAndNeverDisturbsNewerOwnership(String scenario) throws Exception {
+    @ValueSource(strings = {"unchanged", "republished-identical", "new-layout", "removed", "unsupported",
+            "permission", "cancel", "arguments", "newer-session"})
+    void deferredOpenUsesOnlyAdmittedDefinitionAndNeverDisturbsNewerOwnership(String scenario) throws Exception {
         var serverField = Bukkit.class.getDeclaredField("server");
         serverField.setAccessible(true);
         Object previousServer = serverField.get(null);
@@ -63,6 +69,9 @@ class InitialOpenPublicationTest {
         var opens = new AtomicInteger();
         var closes = new AtomicInteger();
         var returned = new AtomicInteger();
+        var admissions = new AtomicInteger();
+        var messages = new ArrayList<String>();
+        var logs = new ArrayList<String>();
         var cursor = new AtomicReference<ItemStack>(ReopenCoalescingTest.FakeStack.of(2));
         Server server = proxy(Server.class, (method, args) -> switch (method) {
             case "createInventory" -> {
@@ -117,6 +126,12 @@ class InitialOpenPublicationTest {
                 case "openInventory" -> { opens.incrementAndGet(); top.set((Inventory) args[0]); yield view; }
                 case "closeInventory" -> { closes.incrementAndGet(); top.set(null); yield null; }
                 case "getPersistentDataContainer" -> pdc;
+                case "sendMessage" -> {
+                    if (args.length > 0 && args[0] instanceof Component message) {
+                        messages.add(PlainTextComponentSerializer.plainText().serialize(message));
+                    }
+                    yield null;
+                }
                 default -> null;
             });
             playerRef.set(player);
@@ -152,19 +167,41 @@ class InitialOpenPublicationTest {
             var ticker = new GuiTicker(guis, fixture.events, (who, ticks, task, retired) -> { }, host);
             var lifecycle = new GuiLifecycle(guis, fixture.sessions, fixture.events, host);
             var refresh = new GuiLiveRefresh(plugin, scheduling, guis, fixture.sessions, host, lifecycle, ticker);
-            var opener = new GuiOpener(guis, fixture.sessions, fixture.events, host, ticker,
-                    java.util.logging.Logger.getAnonymousLogger());
+            var logger = java.util.logging.Logger.getAnonymousLogger();
+            logger.setUseParentHandlers(false);
+            logger.addHandler(new java.util.logging.Handler() {
+                public void publish(java.util.logging.LogRecord record) { logs.add(record.getMessage()); }
+                public void flush() {}
+                public void close() {}
+            });
+            var opener = new GuiOpener(guis, fixture.sessions, fixture.events, host, ticker, logger);
+            var gate = new OpenSpecGate((who, node) -> false, PlayerNames.NONE, (rule, context, owner) -> { });
+            opener.gate((who, gui, args) -> { admissions.incrementAndGet(); return gate.admit(who, gui, args); });
             var pending = new AtomicReference<GuiSession>();
 
             guard.during(id, () -> {
-                var result = opener.open(OpenRequest.of(viewer, first.id(), Map.of(), OpenRequest.Cause.API));
+                var result = opener.open(OpenRequest.of(viewer, first.id(), Map.of("amount", "invalid"),
+                        OpenRequest.Cause.API));
                 assertThat(result.ok()).isTrue();
                 pending.set(result.session());
                 assertThat(oldMenu.getInventory().getItem(0)).isNull();
                 assertThat(returned.get()).isEqualTo(5);
-                published.set(scenario.equals("removed") ? null
-                        : scenario.equals("unsupported") ? ReopenCoalescingTest.dynamic(fixture, base("trade", 3, 4))
-                        : fixture.gui(gui("trade", 3, 4, "B")));
+                RuntimeGuis.Live latest = switch (scenario) {
+                    case "unchanged" -> first;
+                    case "republished-identical" -> fixture.gui(gui("trade", 1, 0, "A"));
+                    case "removed" -> null;
+                    case "unsupported" -> ReopenCoalescingTest.dynamic(fixture, base("trade", 3, 4));
+                    case "permission" -> fixture.gui(gui("trade", 3, 4, "B",
+                            "  open:\n    permission: locked.use\n", false));
+                    case "arguments" -> fixture.gui(gui("trade", 3, 4, "B",
+                            "  open:\n    args:\n      - {name: amount, type: int}\n", false));
+                    case "cancel" -> fixture.gui(gui("trade", 3, 4, "B", "", true));
+                    default -> fixture.gui(gui("trade", 3, 4, "B"));
+                };
+                published.set(latest);
+                if (scenario.equals("permission") || scenario.equals("arguments")) {
+                    assertThat(gate.admit(viewer, latest, Map.of("amount", "invalid")).allowed()).isFalse();
+                }
                 try {
                     var method = GuiLiveRefresh.class.getDeclaredMethod("refreshViewer",
                             Viewer.class, GuiSession.class, Optional.class);
@@ -191,42 +228,59 @@ class InitialOpenPublicationTest {
             assertThat(returned.get()).isEqualTo(5);
             assertThat(cursor.get().getAmount()).isEqualTo(2);
             assertThat(oldMenu.getInventory().getItem(0)).isNull();
-            assertThat(fixture.ran).doesNotContain("mark:A");
-            if (scenario.equals("new-layout")) {
+            assertThat(fixture.ran).doesNotContain("mark:B-opening", "mark:B");
+            if (scenario.equals("unchanged")) {
                 assertThat(fixture.sessions.current(id)).containsSame(pending.get());
                 var menu = (GuiMenu) pending.get().window();
-                assertThat(menu.rows()).isEqualTo(3);
-                assertThat(menu.baseTitle()).isEqualTo(published.get().title());
-                assertThat(menu.inputSlots()).contains(0).doesNotContain(4);
-                assertThat(menu.getInventory().getItem(4).getAmount()).isEqualTo(1);
+                assertThat(menu.rows()).isEqualTo(1);
+                assertThat(menu.baseTitle()).isEqualTo(first.title());
+                assertThat(menu.inputSlots()).contains(1).doesNotContain(0);
+                assertThat(menu.getInventory().getItem(0).getAmount()).isEqualTo(1);
                 assertThat(top.get()).isSameAs(menu.getInventory());
-                assertThat(fixture.ran).containsExactly("mark:B");
+                assertThat(fixture.ran).containsExactly("mark:A-opening", "mark:A");
                 assertThat(opens.get()).isEqualTo(1);
                 assertThat(closes.get()).isZero();
                 assertThat(diagnostics).isEmpty();
+                assertThat(messages).isEmpty();
+                assertThat(logs).isEmpty();
             } else if (scenario.equals("newer-session")) {
                 assertThat(fixture.sessions.current(id)).containsSame(replacement);
                 assertThat(replacement.isOpen()).isTrue();
                 assertThat(pending.get().isOpen()).isFalse();
                 assertThat(top.get()).isSameAs(((GuiMenu) replacement.window()).getInventory());
                 assertThat(((GuiMenu) replacement.window()).getInventory().getItem(1).getAmount()).isEqualTo(7);
-                assertThat(fixture.ran).containsExactly("mark:newer");
+                assertThat(fixture.ran).containsExactly("mark:A-opening", "mark:newer-opening", "mark:newer");
                 assertThat(opens.get()).isEqualTo(1);
                 assertThat(closes.get()).isZero();
                 assertThat(diagnostics).isEmpty();
+                assertThat(messages).isEmpty();
+                assertThat(logs).isEmpty();
             } else {
                 assertThat(fixture.sessions.current(id)).isEmpty();
                 assertThat(pending.get().isOpen()).isFalse();
                 assertThat(top.get()).isNull();
-                assertThat(fixture.ran).isEmpty();
+                assertThat(fixture.ran).containsExactly("mark:A-opening");
                 assertThat(opens.get()).isZero();
                 assertThat(closes.get()).isEqualTo(1);
-                assertThat(diagnostics).hasSize(scenario.equals("unsupported") ? 1 : 0);
+                assertThat(diagnostics).isEmpty();
+                assertThat(messages).containsExactly(WindowHost.OPEN_DEFINITION_CHANGED);
+                assertThat(logs).singleElement().asString().contains("MATERIONE-GUI-FAILED")
+                        .contains(WindowHost.OPEN_DEFINITION_CHANGED);
             }
+            assertThat(admissions.get()).isEqualTo(scenario.equals("newer-session") ? 2 : 1);
         } finally {
             serverField.set(null, previousServer);
             blockType.set(Material.DIAMOND, previousBlockType);
         }
+    }
+
+    @Test
+    void changedOpeningRuleActuallyCancelsWhenAppliedToItsOwnOpen() {
+        var fixture = new GuiFixture();
+        var changed = fixture.gui(gui("trade", 3, 4, "B", "", true));
+        var session = new GuiSession(fixture.viewer.id(), fixture.viewer.name(), changed.id(), Map.of());
+        assertThat(fixture.events.opening(fixture.viewer, session, changed)).isTrue();
+        assertThat(fixture.ran).containsExactly("mark:B-opening");
     }
 
     private static String base(String id, int rows, int displaySlot) {
@@ -244,8 +298,16 @@ class InitialOpenPublicationTest {
     }
 
     private static String gui(String id, int rows, int displaySlot, String mark) {
-        return base(id, rows, displaySlot) + """
+        return gui(id, rows, displaySlot, mark, "", false);
+    }
+
+    private static String gui(String id, int rows, int displaySlot, String mark, String open, boolean cancel) {
+        return base(id, rows, displaySlot) + open + """
                   behavior:
+                    - on: gui.opening
+                      do:
+                        - mark: %s-opening
+                """.formatted(mark) + (cancel ? "        - cancel: true\n" : "") + """
                     - on: gui.open
                       do:
                         - mark: %s

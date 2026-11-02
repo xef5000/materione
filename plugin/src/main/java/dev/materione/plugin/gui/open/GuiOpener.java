@@ -14,6 +14,8 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 
 /**
  * The one way a GUI opens (logic.md §6.1). The command, the runtime API (and with it the editor's
@@ -109,12 +111,17 @@ public final class GuiOpener {
             if (sessions.end(session, CloseReason.REMOVED) && previous != null) {
                 windows.closeOwned(viewer, previous);
             }
+            if (WindowHost.OPEN_DEFINITION_CHANGED.equals(reason)
+                    && viewer.player() != null && viewer.player().isOnline()) {
+                viewer.player().sendMessage(Component.text(reason, NamedTextColor.RED));
+            }
             log.warning("MATERIONE-GUI-FAILED reason=window gui=" + gui.id() + " player=" + viewer.name()
                     + " detail=" + reason);
         };
         windows.open(viewer, session, () -> sessions.current(viewer.id())
                 .filter(current -> current == session && session.isOpen())
-                .flatMap(current -> guis.find(current.gui())), resolved -> {
+                .flatMap(current -> guis.find(current.gui()))
+                .filter(current -> current == gui), resolved -> {
             events.opened(viewer, session, resolved);
             ticker.ensure(viewer, session);
         }, failed);

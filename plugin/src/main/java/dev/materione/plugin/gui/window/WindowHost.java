@@ -18,6 +18,8 @@ import java.util.function.Supplier;
  */
 public interface WindowHost {
 
+    String OPEN_DEFINITION_CHANGED = "The GUI changed or was removed while opening; please try again.";
+
     /** A known reason this GUI cannot be opened, checked before replacing the current session. */
     default java.util.Optional<String> unavailable(RuntimeGuis.Live gui) {
         return java.util.Optional.empty();
@@ -28,7 +30,8 @@ public interface WindowHost {
 
     /**
      * Resolves the still-current session's live GUI on the viewer thread immediately before rendering
-     * and showing it. The opened callback receives that same definition; an empty resolution fails.
+     * and showing it. The opened callback receives that same definition; an empty resolution fails
+     * with {@link #OPEN_DEFINITION_CHANGED}.
      * Either callback may run a tick later when the viewer is mid-click.
      */
     void open(Viewer viewer, GuiSession session, Supplier<Optional<RuntimeGuis.Live>> resolve,

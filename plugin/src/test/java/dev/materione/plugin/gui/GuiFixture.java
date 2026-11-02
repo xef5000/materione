@@ -216,7 +216,7 @@ public final class GuiFixture {
                 }
                 var gui = resolve.get().orElse(null);
                 if (gui == null) {
-                    failed.accept("the GUI or session is no longer live");
+                    failed.accept(OPEN_DEFINITION_CHANGED);
                     return;
                 }
                 log.add(what + " " + gui.id().value());

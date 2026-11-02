@@ -94,7 +94,7 @@ public final class BukkitWindowHost implements WindowHost {
         later(viewer, () -> {
             Optional<RuntimeGuis.Live> current = resolve.get();
             if (current.isEmpty()) {
-                failed.accept("the GUI or session is no longer live");
+                failed.accept(OPEN_DEFINITION_CHANGED);
                 return;
             }
             RuntimeGuis.Live gui = current.get();
