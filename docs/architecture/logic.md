@@ -501,7 +501,7 @@ their order relative to conditional raster pieces is preserved.
 Text layers with templates, and conditional text, are re-laid out per render through the same
 title assembler. The default-font width table (#202) makes arbitrary text measurable.
 
-**Paper API research, not real-client verification.** Paper's
+**Paper API research and native verification.** Paper's
 [`InventoryView#setTitle(String)` on 1.21.4](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
 and [26.1.2](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
 is deprecated as unsupported and accepts a legacy string, not an Adventure component. The
@@ -514,10 +514,16 @@ for 1.21.4 and 26.1.2 it resolves Paper's native packet and Adventure bridge sig
 component with the current server menu ID, and resynchronizes its contents and cursor. An
 unsupported version or signature refuses dynamic-visual opens (`MTR-0073`); a failure during
 refresh closes the window through the normal return path rather than continuing with a stale title
-and newer click policy. There is no silent reopen fallback. Packet delivery preserves the **server**
-menu and session, not necessarily the **client** screen or menu object: an open-screen packet can
-reconstruct those client objects. Actual client screenshots, cursor/input conservation, quick-craft
-and drag interactions, flicker, and both version-specific implementations remain unverified.
+and newer click policy. There is no silent reopen fallback. The opt-in 1.21.4 protocol-client
+test checks the native server menu and session, rich title packets, cursor and input conservation,
+and absence of close packets; it does not test client rendering or pointer gestures.
+
+On a vanilla 26.1.2 client, screenshots showed conditional overlays and a physical shift-click
+transferred the input items. The open-screen packet reconstructed the **client** screen and menu
+while retaining the server menu and session. A physical quick-craft drag held across an animation
+update was canceled by that reconstruction; the observed items remained on the cursor, but the
+gesture did not continue. This is a known interaction limitation, not evidence that all drag
+interactions or flicker are absent.
 
 ### 6.5 Input slots and the player's inventory
 
