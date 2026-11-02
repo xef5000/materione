@@ -221,6 +221,9 @@ already asserts.
   value (`mc.level.getClass()`) reflects the bridge wrapper, not the
   Minecraft object — enumerate the mapped CLASS instead:
   `Class.forName('net.minecraft.client.multiplayer.ClientLevel').getMethods()`.
+  A static registry lookup also needs the underlying object: passing a wrapped
+  item to `BuiltInRegistries.ITEM.getKey(item)` can silently return the default
+  `minecraft:air`; use `BuiltInRegistries.ITEM.getKey(item.@target)` instead.
 - **Client light reads (26.1.2)**:
   `mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, new net.minecraft.core.BlockPos(x, y, z))`
   returns the block-light layer the client's light engine received — the

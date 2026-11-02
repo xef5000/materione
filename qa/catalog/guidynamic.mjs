@@ -4,7 +4,7 @@
 // shows (the slot's item type) and takes screenshots for the visual verdict; the server console marker
 // `MATERIONE-GUILOGIC-DYNAMIC-OPEN` confirms which GUI and argument opened.
 
-import { test } from './_lib.mjs';
+import { test, slotType } from './_lib.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,14 +18,8 @@ const COVERS = [
   'content/src/main/java/dev/materione/content/gui/**',
   'content/src/main/java/dev/materione/content/gui/item/**',
   'fixtures/packs/guilogic/guis/dynamic.yml',
+  'qa/catalog/_lib.mjs',
 ];
-
-/** The item type the open container shows in a slot, as the client holds it (for example DIAMOND, AIR). */
-async function slotType(ctx, slot) {
-  return String(await ctx.exec(
-    `return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(` +
-    `player.containerMenu.slots.get(${slot}).getItem().getItem()).toString()`));
-}
 
 async function openDynamic(ctx, args) {
   await ctx.reset();

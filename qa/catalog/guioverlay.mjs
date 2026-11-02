@@ -1,10 +1,11 @@
-import { test } from './_lib.mjs';
+import { test, slotType } from './_lib.mjs';
 
 const covers = [
   'content/src/main/java/dev/materione/content/gui/**',
   'plugin/src/main/java/dev/materione/plugin/gui/**',
   'pack/src/main/java/dev/materione/pack/allocation/**',
   'fixtures/packs/overlay/**',
+  'qa/catalog/_lib.mjs',
 ];
 
 async function click(ctx, slot = 11, kind = 'PICKUP') {
@@ -45,11 +46,6 @@ return total`));
 
 async function assertNoDrops(ctx) {
   ctx.expect(await ctx.rcon('execute at Probe if entity @e[type=item,distance=..16]')).toBe('Test failed');
-}
-
-async function slotType(ctx, slot) {
-  return String(await ctx.exec(`return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(
-    player.containerMenu.slots.get(${slot}).getItem().getItem()).toString()`));
 }
 
 async function waitForSlot(ctx, slot, expected) {

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import catalog from './catalog/guioverlay.mjs';
+import { slotType } from './catalog/_lib.mjs';
 
 function fakeContext(changeId) {
   let visible = false;
@@ -53,4 +54,19 @@ test('quick-craft conservation query counts carried and indexed menu stacks', ()
   assert.match(source, /for \(int i = 0; i < player\.containerMenu\.slots\.size\(\); i\+\+\)/);
   assert.match(source, /player\.containerMenu\.slots\.get\(i\)\.getItem\(\)/);
   assert.doesNotMatch(source, /for \(def s : stacks\)/);
+});
+
+test('slot registry query unwraps the item before the static lookup (simulated bridge)', async () => {
+  const calls = [];
+  const ctx = { exec: async (script) => {
+    calls.push(script);
+    // Model the bridge failure mode; this is not a native Minecraft execution.
+    return script.includes('getKey(item.@target)') ? 'minecraft:diamond' : 'minecraft:air';
+  } };
+  assert.equal(await slotType(ctx, 11), 'minecraft:diamond');
+  assert.match(calls[0], /slots\.get\(11\)\.getItem\(\)\.getItem\(\)/);
+  assert.match(calls[0], /BuiltInRegistries\.ITEM\.getKey\(item\.@target\)/);
+  await assert.rejects(slotType(ctx, -1), /nonnegative integer/);
+  await assert.rejects(slotType(ctx, '11'), /nonnegative integer/);
+  assert.equal(calls.length, 1);
 });

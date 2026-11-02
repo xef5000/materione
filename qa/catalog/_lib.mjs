@@ -75,3 +75,10 @@ export async function typedChat(ctx, command, shot, { waitForTree = false } = {}
     'return mc.screen.keyPressed(new net.minecraft.client.input.KeyEvent(257, 0, 0))',
   )).toBe(true);
 }
+
+/** Read a client menu slot's item registry id; the static registry needs the wrapped item's target. */
+export async function slotType(ctx, slot) {
+  if (!Number.isInteger(slot) || slot < 0) throw new Error('slot must be a nonnegative integer');
+  return String(await ctx.exec(`def item = player.containerMenu.slots.get(${slot}).getItem().getItem()
+return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item.@target).toString()`));
+}
