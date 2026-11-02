@@ -182,6 +182,9 @@ class InitialOpenPublicationTest {
                 replacement = opener.open(OpenRequest.of(viewer, newerGui.id(), Map.of(), OpenRequest.Cause.API))
                         .session();
                 assertThat(replacement).isNotNull();
+                var replacementMenu = (GuiMenu) replacement.window();
+                assertThat(replacementMenu.inputSlots()).contains(1);
+                replacementMenu.getInventory().setItem(1, ReopenCoalescingTest.FakeStack.of(7));
             }
             tasks.get(0).run();
 
@@ -206,6 +209,7 @@ class InitialOpenPublicationTest {
                 assertThat(replacement.isOpen()).isTrue();
                 assertThat(pending.get().isOpen()).isFalse();
                 assertThat(top.get()).isSameAs(((GuiMenu) replacement.window()).getInventory());
+                assertThat(((GuiMenu) replacement.window()).getInventory().getItem(1).getAmount()).isEqualTo(7);
                 assertThat(fixture.ran).containsExactly("mark:newer");
                 assertThat(opens.get()).isEqualTo(1);
                 assertThat(closes.get()).isZero();
