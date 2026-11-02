@@ -122,6 +122,10 @@ lockfile and preserves the server and bot logs in `harness/build/work/rich-title
 This is protocol and server-state evidence only: it does **not** show vanilla
 client screen reconstruction, pixels, flicker or physical mouse drag. Those
 remain separate real-client checks on the 26.x probe.
+For an explicitly staged local 26.x probe, the same test-only observer supports
+`floorprobe observe Probe` followed by `floorprobe observed Probe`: it reports
+server menu identity, session, clock, item state and visible coverage without
+seeding or altering the player's items. This does not itself simulate a drag.
 
 The client assertions and the library's real 1.21.4 packet codec can be checked
 without booting a server:

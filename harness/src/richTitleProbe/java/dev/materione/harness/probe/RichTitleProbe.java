@@ -37,29 +37,35 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
 
     @EventHandler
     public void opened(InventoryOpenEvent event) {
-        if (event.getPlayer().getName().equals("FloorBot")) opens++;
+        if (tracked(event.getPlayer().getName())) opens++;
     }
 
     @EventHandler
     public void closed(InventoryCloseEvent event) {
-        if (event.getPlayer().getName().equals("FloorBot")) closes++;
+        if (tracked(event.getPlayer().getName())) closes++;
     }
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         String stage = args.length == 0 ? "" : args[0];
         try {
-            Player player = Bukkit.getPlayerExact("FloorBot");
+            Player player = Bukkit.getPlayerExact(args.length > 1 ? args[1] : "FloorBot");
             require(player != null && player.isOnline(), "player is not online");
             if (stage.equals("start")) {
                 start(player);
+            } else if (stage.equals("observe")) {
+                capture(player);
+                clock = (long) call(session, "windowTicks");
+            } else if (stage.equals("observed")) {
+                observe(player);
             } else if (stage.equals("shown") || stage.equals("hidden") || stage.equals("steady")) {
                 check(player, stage.equals("shown"), stage.equals("steady"));
             } else {
                 throw new IllegalArgumentException("unknown stage");
             }
             getLogger().info("MATERIONE-FLOOR-PROBE stage=" + stage + " ok=true id=" + nativeId
-                    + " session=" + call(session, "serial") + " ticks=" + call(session, "windowTicks"));
+                    + " native=" + System.identityHashCode(nativeMenu) + " session=" + call(session, "serial")
+                    + " ticks=" + call(session, "windowTicks"));
         } catch (Exception failure) {
             getLogger().severe("MATERIONE-FLOOR-PROBE stage=" + stage + " ok=false error=" + failure);
         }
@@ -67,6 +73,15 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
     }
 
     private void start(Player player) throws Exception {
+        capture(player);
+        inventory.setItem(0, new ItemStack(Material.DIAMOND, 3));
+        player.setItemOnCursor(new ItemStack(Material.EMERALD, 2));
+        player.updateInventory();
+        clock = (long) call(session, "windowTicks");
+        check(player, false, false);
+    }
+
+    private void capture(Player player) throws Exception {
         inventory = player.getOpenInventory().getTopInventory();
         holder = inventory.getHolder();
         require(holder != null && holder.getClass().getName().equals("dev.materione.plugin.gui.GuiMenu"),
@@ -77,11 +92,29 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
         require(nativeId != 0, "native menu id is zero");
         baselineOpens = opens;
         baselineCloses = closes;
-        inventory.setItem(0, new ItemStack(Material.DIAMOND, 3));
-        player.setItemOnCursor(new ItemStack(Material.EMERALD, 2));
-        player.updateInventory();
-        clock = (long) call(session, "windowTicks");
-        check(player, false, false);
+    }
+
+    private void observe(Player player) throws Exception {
+        require(inventory != null && player.getOpenInventory().getTopInventory() == inventory, "inventory changed");
+        require(inventory.getHolder() == holder && call(holder, "session") == session, "window/session changed");
+        require(nativeMenu(player) == nativeMenu && id(nativeMenu) == nativeId, "server native menu/id changed");
+        require(opens == baselineOpens && closes == baselineCloses, "Bukkit open/close event fired");
+        require((boolean) call(session, "isOpen"), "session ended");
+        long now = (long) call(session, "windowTicks");
+        require(now >= clock, "window clock reset");
+        clock = now;
+        Object rendered = call(session, "rendered");
+        getLogger().info("MATERIONE-FLOOR-STATE slot0=" + describe(inventory.getItem(0))
+                + " cursor=" + describe(player.getItemOnCursor()) + " inputs=" + call(holder, "inputSlots")
+                + " hidden=" + call(rendered, "hidden") + " coverage=" + call(rendered, "coverage"));
+    }
+
+    private static String describe(ItemStack stack) {
+        return stack == null || stack.getType().isAir() ? "empty" : stack.getType() + ":" + stack.getAmount();
+    }
+
+    private static boolean tracked(String name) {
+        return name.equals("FloorBot") || name.equals("Probe");
     }
 
     private void check(Player player, boolean selected, boolean steady) throws Exception {
