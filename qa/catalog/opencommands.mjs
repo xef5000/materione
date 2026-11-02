@@ -5,7 +5,7 @@
 // contract in harness/README.md), the chat the player sees, and whether the container opened; the visual entry
 // captures the window.
 
-import { test } from './_lib.mjs';
+import { test, typedChat } from './_lib.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,6 +21,8 @@ const COVERS = [
   'behavior/src/main/java/dev/materione/behavior/flow/FlowCompiler.java',
   'content/src/main/java/dev/materione/content/gui/**',
   'fixtures/packs/guilogic/**',
+  'qa/catalog/_lib.mjs',
+  'scripts/probe/command.mjs',
 ];
 
 /** How many slots the open container has: a one-row GUI has 9 chest slots and the 36 of the player's inventory. */
@@ -30,6 +32,12 @@ async function openSlots(ctx) {
 
 async function containerOpen(ctx) {
   return Number(await ctx.exec('return player.containerMenu.containerId')) !== 0;
+}
+
+async function prepare(ctx) {
+  await ctx.reset();
+  await ctx.exec('player.closeContainer(); return "closed"');
+  await ctx.sleep(400);
 }
 
 export default [
@@ -42,7 +50,7 @@ export default [
       const original = fs.existsSync(ALIAS_FILE) ? fs.readFileSync(ALIAS_FILE, 'utf8') : null;
       const yaml = (alias) => `qa_auto_alias:\n  title: Automatic alias\n  rows: 1\n  layers: []\n  open:\n    commands: [${alias}]\n`;
       try {
-        await ctx.reset();
+        await prepare(ctx);
         fs.mkdirSync(path.dirname(ALIAS_FILE), { recursive: true });
         fs.writeFileSync(ALIAS_FILE, yaml('qa_auto_first'));
         await ctx.rcon('materione reload');
@@ -51,7 +59,7 @@ export default [
         await ctx.rcon('materione reload');
         await ctx.waitForServerLog(/MATERIONE-OPEN-TREE reload-deferred aliases=.*qa_auto_second/);
         await ctx.waitForServerLog(/MATERIONE-OPEN-TREE reload aliases=.*qa_auto_second/);
-        await ctx.command('qa_auto_second');
+        await typedChat(ctx, 'qa_auto_second', undefined, { waitForTree: true });
         await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=qa_auto_second outcome=opened/);
         ctx.expect(await containerOpen(ctx)).toBeTruthy();
         ctx.expect(await openSlots(ctx)).toBe(45);
@@ -70,12 +78,16 @@ export default [
     covers: COVERS,
     timeoutMs: 180_000,
     steps: async (ctx) => {
-      await ctx.reset();
-      await ctx.command('opentest tools');
-      await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=opened/);
-      await ctx.sleep(600); // the client finishes opening the window
-      ctx.expect(await containerOpen(ctx)).toBeTruthy();
-      ctx.expect(await openSlots(ctx)).toBe(45);
+      try {
+        await prepare(ctx);
+        await typedChat(ctx, 'opentest tools');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=opened/);
+        await ctx.sleep(600); // the client finishes opening the window
+        ctx.expect(await containerOpen(ctx)).toBeTruthy();
+        ctx.expect(await openSlots(ctx)).toBe(45);
+      } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
+      }
     },
   }),
 
@@ -85,11 +97,15 @@ export default [
     covers: COVERS,
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await ctx.reset();
-      await ctx.command('opentest nope');
-      await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=usage/);
-      await ctx.waitForChat(/usage: \/opentest/);
-      ctx.expect(await containerOpen(ctx)).toBe(false);
+      try {
+        await prepare(ctx);
+        await typedChat(ctx, 'opentest nope');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=usage/);
+        await ctx.waitForChat(/usage: \/opentest/);
+        ctx.expect(await containerOpen(ctx)).toBe(false);
+      } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
+      }
     },
   }),
 
@@ -99,14 +115,15 @@ export default [
     covers: COVERS,
     timeoutMs: 120_000,
     steps: async (ctx) => {
-      await ctx.reset();
+      await prepare(ctx);
       const restoreOperator = (await ctx.rcon('deop Probe')).includes('Made Probe no longer a server operator');
       try {
-        await ctx.command('opentest food');
+        await typedChat(ctx, 'opentest food');
         await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=refused/);
         await ctx.waitForChat(/No food here, pick another category\./);
         ctx.expect(await containerOpen(ctx)).toBe(false);
       } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
         if (restoreOperator) await ctx.rcon('op Probe');
       }
     },
@@ -120,15 +137,19 @@ export default [
     dependsOn: ['opencommands.typed-command-opens-the-gui'],
     timeoutMs: 180_000,
     steps: async (ctx) => {
-      await ctx.reset();
-      await ctx.command('opentest tools');
-      await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=opened/);
-      await ctx.sleep(600);
-      await ctx.shot('opencommands-opener');
-      ctx.needsEyes(
-        'the window is a one-row chest titled "Opener", with the heading "OPENER" in small caps at the top left '
-          + 'and an empty row of container slots, opened by typing /opentest tools',
-      );
+      try {
+        await prepare(ctx);
+        await typedChat(ctx, 'opentest tools');
+        await ctx.waitForServerLog(/MATERIONE-OPEN-COMMAND alias=opentest outcome=opened/);
+        await ctx.sleep(600);
+        await ctx.shot('opencommands-opener');
+        ctx.needsEyes(
+          'the window is a one-row chest titled "Opener", with the heading "OPENER" in small caps at the top left '
+            + 'and an empty row of container slots, opened by typing /opentest tools',
+        );
+      } finally {
+        await ctx.exec('player.closeContainer(); return "closed"');
+      }
     },
   }),
 ];

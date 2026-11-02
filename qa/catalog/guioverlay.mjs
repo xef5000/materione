@@ -1,10 +1,11 @@
-import { test } from './_lib.mjs';
+import { test, slotType } from './_lib.mjs';
 
 const covers = [
   'content/src/main/java/dev/materione/content/gui/**',
   'plugin/src/main/java/dev/materione/plugin/gui/**',
   'pack/src/main/java/dev/materione/pack/allocation/**',
   'fixtures/packs/overlay/**',
+  'qa/catalog/_lib.mjs',
 ];
 
 async function click(ctx, slot = 11, kind = 'PICKUP') {
@@ -17,7 +18,7 @@ async function title(ctx) {
 }
 
 async function windowState(ctx) {
-  return String(await ctx.exec(`return (mc.screen != null) + ':' + player.containerMenu.containerId + ':' +
+  return String(await ctx.exec(`return String.valueOf(mc.screen != null) + ':' + player.containerMenu.containerId + ':' +
     player.containerMenu.slots.size()`));
 }
 
@@ -43,13 +44,9 @@ for (int i = 0; i < 36; i++) {
 return total`));
 }
 
-async function assertNoDrops(ctx) {
-  ctx.expect(await ctx.rcon('execute at Probe if entity @e[type=item,distance=..16]')).toBe('Test failed');
-}
-
-async function slotType(ctx, slot) {
-  return String(await ctx.exec(`return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(
-    player.containerMenu.slots.get(${slot}).getItem().getItem()).toString()`));
+export async function assertNoDrops(ctx) {
+  ctx.expect(await ctx.rcon('execute at Probe unless entity @e[type=item,distance=..16] run list'))
+    .toMatch(/^There are \d+ of a max of \d+ players online:.*\bProbe\b/);
 }
 
 async function waitForSlot(ctx, slot, expected) {
@@ -298,20 +295,24 @@ export default [
           net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
 mc.gameMode.handleContainerInput(player.containerMenu.containerId, 0, 1,
           net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
-return 'quick-craft started; screen=' + System.identityHashCode(mc.screen) +
-  ' client-menu=' + System.identityHashCode(player.containerMenu)`);
+return 'quick-craft started; screen=' + System.identityHashCode(mc.screen.@target) +
+  ' client-menu=' + System.identityHashCode(player.containerMenu.@target)`);
         await ctx.sleep(1600);
         ctx.expect(await title(ctx)).toBe(first);
         ctx.expect(await assertOpen(ctx, 45)).toBe(id);
         await ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, -999, 2,
           net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
-return 'quick-craft ended; screen=' + System.identityHashCode(mc.screen) +
-  ' client-menu=' + System.identityHashCode(player.containerMenu)`);
+return 'quick-craft ended; screen=' + System.identityHashCode(mc.screen.@target) +
+  ' client-menu=' + System.identityHashCode(player.containerMenu.@target)`);
         await ctx.sleep(500);
-        const total = Number(await ctx.exec(`def total = 0
-def stacks = [player.containerMenu.getCarried()]
-for (int i = 0; i < player.containerMenu.slots.size(); i++) stacks.add(player.containerMenu.slots.get(i).getItem())
-for (def s : stacks) if (!s.isEmpty() && s.getHoverName().getString() == 'Red Gem') total += s.getCount()
+        const total = Number(await ctx.exec(`def menu = player.containerMenu.@target
+def total = 0
+def carried = menu.getCarried()
+if (!carried.isEmpty() && carried.getHoverName().getString() == 'Red Gem') total += carried.getCount()
+for (int i = 0; i < menu.slots.size(); i++) {
+  def s = menu.slots.get(i).getItem()
+  if (!s.isEmpty() && s.getHoverName().getString() == 'Red Gem') total += s.getCount()
+}
 return total`));
         ctx.expect(total).toBe(3);
         await assertNoDrops(ctx);

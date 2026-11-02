@@ -4,7 +4,7 @@
 // shows (the slot's item type) and takes screenshots for the visual verdict; the server console marker
 // `MATERIONE-GUILOGIC-DYNAMIC-OPEN` confirms which GUI and argument opened.
 
-import { test } from './_lib.mjs';
+import { test, slotType } from './_lib.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -18,14 +18,8 @@ const COVERS = [
   'content/src/main/java/dev/materione/content/gui/**',
   'content/src/main/java/dev/materione/content/gui/item/**',
   'fixtures/packs/guilogic/guis/dynamic.yml',
+  'qa/catalog/_lib.mjs',
 ];
-
-/** The item type the open container shows in a slot, as the client holds it (for example DIAMOND, AIR). */
-async function slotType(ctx, slot) {
-  return String(await ctx.exec(
-    `return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(` +
-    `player.containerMenu.slots.get(${slot}).getItem().getItem()).toString()`));
-}
 
 async function openDynamic(ctx, args) {
   await ctx.reset();
@@ -83,6 +77,9 @@ export default [
         ctx.expect(await slotType(ctx, 11)).toBe('minecraft:diamond');
         await ctx.shot('dynamic-conditional-shown');
         ctx.expect(logCount(/MTR-0073/)).toBe(0); // a failing condition would have been reported
+        ctx.needsEyes(
+          'Compare dynamic-conditional-hidden and dynamic-conditional-shown: slot 11 (second row, third column) is empty in the first and shows a diamond in the second, with no barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
@@ -102,6 +99,9 @@ export default [
         ctx.expect(await slotType(ctx, 13)).toBe('minecraft:player_head');
         ctx.expect(logCount(/MTR-0072/)).toBe(0); // the probe player is online, so the head resolves
         await ctx.shot('dynamic-viewer-head');
+        ctx.needsEyes(
+          'In dynamic-viewer-head, slot 13 (second row, fifth column) shows a rendered player head, not an empty slot, barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
@@ -130,6 +130,9 @@ export default [
         const frames = ['minecraft:redstone_block', 'minecraft:emerald'];
         ctx.expect(frames.includes(first) && frames.includes(second)).toBe(true);
         ctx.expect(second).not.toBe(first);
+        ctx.needsEyes(
+          'Compare dynamic-animated-first and dynamic-animated-second: slot 15 (second row, seventh column) changes between a redstone block and an emerald, without a barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
