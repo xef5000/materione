@@ -102,15 +102,20 @@ public final class GuiOpener {
         var synchronousFailure = new AtomicReference<String>();
         Consumer<String> failed = reason -> {
             synchronousFailure.set(reason);
-            if (sessions.current(viewer.id()).filter(current -> current == session).isPresent()
-                    && sessions.end(session, CloseReason.REMOVED) && previous != null) {
+            if (sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
+                session.end(CloseReason.REMOVED);
+                return;
+            }
+            if (sessions.end(session, CloseReason.REMOVED) && previous != null) {
                 windows.closeOwned(viewer, previous);
             }
             log.warning("MATERIONE-GUI-FAILED reason=window gui=" + gui.id() + " player=" + viewer.name()
                     + " detail=" + reason);
         };
-        windows.open(viewer, session, gui, () -> {
-            events.opened(viewer, session, gui);
+        windows.open(viewer, session, () -> sessions.current(viewer.id())
+                .filter(current -> current == session && session.isOpen())
+                .flatMap(current -> guis.find(current.gui())), resolved -> {
+            events.opened(viewer, session, resolved);
             ticker.ensure(viewer, session);
         }, failed);
         String failure = synchronousFailure.get();

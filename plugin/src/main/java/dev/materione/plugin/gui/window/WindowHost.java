@@ -3,8 +3,10 @@ package dev.materione.plugin.gui.window;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.session.GuiSession;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /**
  * The server-facing half of opening and closing a GUI: creates the window, shows it, hides it,
@@ -25,11 +27,12 @@ public interface WindowHost {
     default void bindReconciler(BiConsumer<Viewer, GuiSession> reconcile) {}
 
     /**
-     * Shows {@code gui} to the viewer for {@code session}, replacing whatever window they have.
-     * Either {@code opened} runs once the window is up (possibly a tick later, when the viewer is
-     * mid-click), or {@code failed} runs with the reason; exactly one of them.
+     * Resolves the still-current session's live GUI on the viewer thread immediately before rendering
+     * and showing it. The opened callback receives that same definition; an empty resolution fails.
+     * Either callback may run a tick later when the viewer is mid-click.
      */
-    void open(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened, Consumer<String> failed);
+    void open(Viewer viewer, GuiSession session, Supplier<Optional<RuntimeGuis.Live>> resolve,
+            Consumer<RuntimeGuis.Live> opened, Consumer<String> failed);
 
     /**
      * Opens a new window for the same session after the GUI's title or size changed (the cursor item

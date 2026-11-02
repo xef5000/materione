@@ -22,6 +22,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -87,10 +88,18 @@ public final class BukkitWindowHost implements WindowHost {
     }
 
     @Override
-    public void open(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
-            Consumer<String> failed) {
+    public void open(Viewer viewer, GuiSession session, Supplier<Optional<RuntimeGuis.Live>> resolve,
+            Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
         titleRefreshes.invalidate(session);
-        show(viewer, session, gui, false, opened, failed);
+        later(viewer, () -> {
+            Optional<RuntimeGuis.Live> current = resolve.get();
+            if (current.isEmpty()) {
+                failed.accept("the GUI or session is no longer live");
+                return;
+            }
+            RuntimeGuis.Live gui = current.get();
+            show(viewer, session, gui, false, () -> opened.accept(gui), failed);
+        }, () -> failed.accept("the player left before the window opened"));
     }
 
     @Override

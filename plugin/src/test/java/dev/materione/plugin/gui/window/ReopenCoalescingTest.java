@@ -261,7 +261,7 @@ class ReopenCoalescingTest {
                 """.formatted(rows, rows, displaySlot);
     }
 
-    private static RuntimeGuis.Live dynamic(GuiFixture fixture, String yaml) {
+    static RuntimeGuis.Live dynamic(GuiFixture fixture, String yaml) {
         var definition = fixture.definition(yaml + """
                     - id: label
                       type: text
@@ -282,8 +282,8 @@ class ReopenCoalescingTest {
                 gui.logic(), gui.inputs(), gui.open(), gui.placements(), gui.refresh(), gui.items(), gui.visuals());
     }
 
-    private interface Call { Object apply(String name, Object[] args); }
-    private static <T> T proxy(Class<T> type, Call call) {
+    interface Call { Object apply(String name, Object[] args); }
+    static <T> T proxy(Class<T> type, Call call) {
         return type.cast(Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[] {type}, (proxy, method, args) -> {
             Object value = call.apply(method.getName(), args == null ? new Object[0] : args);
             if (value == null && method.getReturnType().isPrimitive()) {
@@ -297,7 +297,7 @@ class ReopenCoalescingTest {
         }));
     }
 
-    private static final class FakeStack extends ItemStack {
+    static final class FakeStack extends ItemStack {
         private int amount;
         private FakeStack() { super(Material.DIAMOND); }
         static FakeStack of(int amount) {
