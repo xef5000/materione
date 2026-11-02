@@ -1,0 +1,10 @@
+name: MaterionePlaceholderProbe
+version: 1
+main: dev.materione.placeholderprobe.PlaceholderProbe
+api-version: '1.21'
+folia-supported: true
+depend: [Materione, PlaceholderAPI]
+commands:
+  mtr252:
+    description: Local-only currency placeholder probe controls
+    usage: /mtr252 value <number>|register|unregister|sample <player>|stats|papi-disable <player>

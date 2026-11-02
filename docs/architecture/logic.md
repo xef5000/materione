@@ -1460,7 +1460,8 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     opening, slot-change and inventory-click events are pre-events as well as cancellable Bukkit events.
     Generic PlaceholderAPI expansion is rejected on Folia, rather than assuming arbitrary installed
     expansions are safe; Paper's existing resolution is unchanged. Item-source adapter continuations
-    remain separate work (#251); currency placeholders remain separate work (#252).
+    remain separate work (#251). Direct requests to Materione's expansion follow the narrower currency
+    placeholder rules below rather than enabling arbitrary PlaceholderAPI expansion on Folia.
 
     **Player variables (#250):** live player PDC access is checked against the entity owner.
     Synchronous external API reads may use immutable last-acknowledged snapshots when called off-owner;
@@ -1478,8 +1479,9 @@ the owner's permission, and ItemsAPI is not a dependency. The SPI shapes are in 
     integrations (item 13); `has_money` (#210,
     which takes `currency:` too); no per-player target and no duration on the permission actions; `run_command
     as: op` still uses the operator flag, not the permission provider (#208).
-27. **For #211:** the PlaceholderAPI expansion must expose `%materione_balance_<pack>_<id>%` (the raw balance)
-    and `%materione_balance_<pack>_<id>_formatted%` (through `format_currency`). The expansion is #211's work.
+27. **Balance placeholders (#252):** the expansion exposes `%materione_balance_<pack>_<id>%` (raw)
+    and `%materione_balance_<pack>_<id>_formatted%` (through the currency formatter), with the
+    owner and consistency rules described in §20.
 28. **For #210:** `has_money` takes `currency:` with the same resolution as the actions, and reads through the
     catalog like `take_money` does.
 29. **In-game money flows are not in the QA catalog.** `logic.providers-unavailable-without-vault` proves the
@@ -1695,9 +1697,30 @@ are in `dev.materione.plugin.logic.variable` and `dev.materione.plugin.command.V
     until the GUI runtime (#214) registers one with `VariableService.guiSessions`. *Closed after #214 merged:* the
     plugin registers `GuiSessionsPort` over the live `GuiSessions`, which now remembers the last GUI a player had
     open (`GuiSessions.last`, set when a session is replaced or closes), and `GuiContexts` puts a
-    `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map. The `balance` placeholders for
-    currencies (#233) are reserved and resolve to null; #233 adds its branch beside `var_` and does not touch the
-    resolver's grammar.
+    `GuiSessionVariables` facet into every GUI run, so `vars.session.x` and `gui.session.x` are one map.
+    The #252 resolver uses a typed currency bridge without changing the variable grammar. The resolver compares the complete encoded
+    `<pack>_<id>` of every declared currency, including the `_formatted` form, and leaves collisions unresolved
+    rather than guessing an underscore split. A recognized token with no viewer or an unavailable, failed, or
+    non-finite read returns empty and reports a rate-limited `MTR-0023`. Raw finite amounts use plain decimal text;
+    formatted text delegates to the existing `format_currency` implementation for the explicit qualified id.
+    A single typed bridge operation uses a consistent currency definition for both read and format, and fails
+    unavailable if the definition, integration registration, availability or player changes during the read.
+    A backend may supply a public provider instance or registration token (`readBindingIdentity`), which is checked
+    before and after the read; XP uses its bound backend and Vault uses the registered service identity.
+    On Paper the built-in `custom` integration reads through the current enabled PlaceholderAPI instance,
+    checks the public registered-expansion snapshot around the callback, and resolves methods from that
+    instance's classloader rather than retaining stale methods. This trusts the public live-read contract,
+    not private downstream state within an expansion. Custom PlaceholderAPI reads remain unsupported on Folia.
+    The live catalog and integration are re-resolved at use, without a scheduled wait or holding a registry
+    monitor across provider code. Immutable id enumeration is safe on any thread; Paper rejects async
+    callbacks before player or provider lookup. On Folia, an integration must explicitly declare an owner and
+    demonstrated safety for binding and availability (`CurrencyLookupCapability`), independently of the
+    backend's read capability. Both owners must be current without a hop. A backend must also explicitly
+    establish that its online or offline read remains safe across reconnects; unsupported declarations fail
+    unavailable. Native XP binds on any thread and reads the captured player on its region. A declared
+    GLOBAL or ANY provider, including offline reads with an explicit offline owner, can answer on its proven
+    owner. No cached balance substitutes for a current read. Recursive or simultaneous reads for the same
+    player and currency fail unavailable until the in-flight call finishes.
 
 **Diagnostics and the rest**
 

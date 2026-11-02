@@ -337,17 +337,22 @@ public final class MaterionePlugin extends JavaPlugin {
                 variables);
         // the item actions read the live registries: empty until the first apply, then the current set;
         // the GUI actions reach the GUI runtime through the bridge it binds into once it is built
+        boolean folia = descriptorOrNull() == null || descriptorOrNull().folia();
+        var threadProbe = dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER;
+        var currencyReads = new dev.materione.plugin.logic.currency.CurrencyReads(folia, threadProbe);
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
-                guiBridge,
-                new dev.materione.plugin.logic.currency.CurrencyReads(
-                        descriptorOrNull() == null || descriptorOrNull().folia(),
-                        dev.materione.plugin.logic.GatewayRunScheduler.ThreadProbe.SERVER));
+                guiBridge, currencyReads);
         registerProviders();
         // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {
             dev.materione.plugin.logic.variable.MaterionePlaceholders.installIfPresent(
-                    new dev.materione.integrations.variables.VariablePlaceholders(variables.api(), variables::guiSessions),
+                    new dev.materione.integrations.variables.VariablePlaceholders(
+                            variables.api(), variables::guiSessions,
+                            new dev.materione.plugin.logic.variable.CurrencyPlaceholderReads(
+                                    logic.providers(), logic.currencyIntegrations(), currencyReads, threadProbe,
+                                    org.bukkit.Bukkit::getPlayer, folia),
+                            diagnostics::publish),
                     "1");
         }
         // the debounced server flush: every 5 seconds, what changed since the last one is written

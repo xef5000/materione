@@ -5,17 +5,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 import dev.materione.api.ApiResult;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
+import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
+import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.variable.GuiSessionPort;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.api.logic.variable.VariableScope;
 import dev.materione.api.logic.variable.VariableType;
 import dev.materione.api.logic.variable.VariablesApi;
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
 class VariablePlaceholdersTest {
@@ -142,10 +147,165 @@ class VariablePlaceholdersTest {
     }
 
     @Test
-    void theBalanceSeamIsNotImplementedYet() {
-        // currencies (#233) add their branch beside var_; until then the token is left alone
+    void withoutABridgeBalanceTokensRemainUnresolved() {
         assertThat(resolve("balance_shop_gold", STEVE)).isNull();
         assertThat(resolve("balance_shop_gold_formatted", STEVE)).isNull();
+    }
+
+    private static final class BalanceBridge implements CurrencyPlaceholderBridge {
+        List<NamespacedId> ids = new ArrayList<>();
+        EconomyResult result = new EconomyResult.Succeeded(0);
+        NamespacedId readId;
+        UUID readViewer;
+        NamespacedId formattedId;
+        int reads;
+        boolean throwsOnRead;
+        boolean throwsOnCatalog;
+        boolean throwsOnFormat;
+        String formatted = "formatted";
+
+        @Override
+        public Collection<NamespacedId> currencies() {
+            if (throwsOnCatalog) {
+                throw new IllegalStateException("catalog unavailable");
+            }
+            return ids;
+        }
+
+        @Override
+        public Balance read(NamespacedId currency, UUID viewer, boolean wantsFormatting) {
+            reads++;
+            readId = currency;
+            readViewer = viewer;
+            if (throwsOnRead) {
+                throw new IllegalStateException("provider removed");
+            }
+            if (wantsFormatting) {
+                formattedId = currency;
+                if (throwsOnFormat) {
+                    throw new IllegalStateException("format failure");
+                }
+            }
+            return new Balance(result, wantsFormatting ? formatted : null);
+        }
+    }
+
+    @Test
+    void balanceMatchesExactDeclaredIdsAndRejectsAllEncodingCollisions() {
+        var bridge = new BalanceBridge();
+        NamespacedId id = NamespacedId.of("shop_pack", "gold_coins");
+        bridge.ids.add(id);
+        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, d -> { });
+        assertThat(resolver.resolve("balance_shop_pack_gold_coins", STEVE, n -> Optional.empty())).isEqualTo("0");
+        assertThat(bridge.readId).isEqualTo(id);
+        assertThat(bridge.readViewer).isEqualTo(STEVE);
+        assertThat(resolver.resolve("balance_shop_pack_gold_coins_formatted", STEVE, n -> Optional.empty()))
+                .isEqualTo("formatted");
+        assertThat(bridge.formattedId).isEqualTo(id);
+        assertThat(resolver.resolve("balance_shop_pack_gold", STEVE, n -> Optional.empty())).isNull();
+        bridge.ids.add(NamespacedId.of("shop", "pack_gold_coins"));
+        assertThat(resolver.resolve("balance_shop_pack_gold_coins", STEVE, n -> Optional.empty())).isNull();
+        assertThat(resolver.resolve("balance_shop_pack_gold_coins_formatted", STEVE, n -> Optional.empty())).isNull();
+        bridge.ids.remove(1);
+        bridge.ids.add(NamespacedId.of("shop_pack", "gold_coins_formatted"));
+        assertThat(resolver.resolve("balance_shop_pack_gold_coins_formatted", STEVE, n -> Optional.empty())).isNull();
+        assertThat(bridge.reads).isEqualTo(2);
+    }
+
+    @Test
+    void rawBalancesUsePlainFiniteDecimalAndTheBridgeIsQueriedEveryTime() {
+        var bridge = new BalanceBridge();
+        bridge.ids.add(NamespacedId.of("shop", "gold"));
+        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, d -> { });
+        double[] values = {0, -12.5, 1e-12, 1e20, Double.MIN_VALUE};
+        String[] expected = {"0", "-12.5", "0.000000000001", "100000000000000000000",
+                java.math.BigDecimal.valueOf(Double.MIN_VALUE).toPlainString()};
+        for (int i = 0; i < values.length; i++) {
+            bridge.result = new EconomyResult.Succeeded(values[i]);
+            assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEqualTo(expected[i]);
+        }
+        assertThat(bridge.reads).isEqualTo(values.length);
+        bridge.ids.clear();
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isNull();
+        assertThat(bridge.reads).isEqualTo(values.length);
+    }
+
+    @Test
+    void failuresNeverBecomeBalancesAndDiagnosticsAreRateLimitedPerCurrency() {
+        var bridge = new BalanceBridge();
+        NamespacedId gold = NamespacedId.of("shop", "gold");
+        bridge.ids.add(gold);
+        bridge.ids.add(NamespacedId.of("shop", "silver"));
+        var diagnostics = new ArrayList<Diagnostic>();
+        var clock = new AtomicLong(1000);
+        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, diagnostics::add, clock::get);
+        assertThat(resolver.resolve("balance_shop_gold", null, n -> Optional.empty())).isEmpty();
+        assertThat(bridge.reads).isZero();
+        bridge.result = new EconomyResult.Failed("not installed");
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEmpty();
+        assertThat(diagnostics).hasSize(1);
+        assertThat(diagnostics.get(0).code()).isEqualTo(DiagnosticCodes.ACTION_FAILED);
+        assertThat(diagnostics.get(0).resource()).isEqualTo(gold);
+        assertThat(resolver.resolve("balance_shop_silver", STEVE, n -> Optional.empty())).isEmpty();
+        assertThat(diagnostics).hasSize(2);
+        clock.addAndGet(1000);
+        bridge.result = new EconomyResult.InsufficientFunds(100);
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEmpty();
+        bridge.result = new EconomyResult.Succeeded(Double.POSITIVE_INFINITY);
+        clock.addAndGet(1000);
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEmpty();
+        bridge.result = null;
+        clock.addAndGet(1000);
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEmpty();
+        bridge.throwsOnRead = true;
+        clock.addAndGet(1000);
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isEmpty();
+        assertThat(diagnostics.get(diagnostics.size() - 1).message()).contains("provider removed");
+        bridge.throwsOnRead = false;
+        bridge.result = new EconomyResult.Succeeded(12);
+        bridge.formatted = null;
+        clock.addAndGet(1000);
+        assertThat(resolver.resolve("balance_shop_gold_formatted", STEVE, n -> Optional.empty())).isEmpty();
+        bridge.throwsOnFormat = true;
+        clock.addAndGet(1000);
+        assertThat(resolver.resolve("balance_shop_gold_formatted", STEVE, n -> Optional.empty())).isEmpty();
+        bridge.throwsOnCatalog = true;
+        assertThat(resolver.resolve("balance_shop_gold", STEVE, n -> Optional.empty())).isNull();
+        assertThat(diagnostics.get(diagnostics.size() - 1).message()).contains("catalog unavailable");
+        bridge.throwsOnCatalog = false;
+        bridge.formatted = "new provider";
+        bridge.throwsOnFormat = false;
+        assertThat(resolver.resolve("balance_shop_gold_formatted", STEVE, n -> Optional.empty()))
+                .isEqualTo("new provider");
+    }
+
+    @Test
+    void formattedReadRejectsReplacementInsteadOfCombiningDifferentBindings() {
+        var id = NamespacedId.of("shop", "gold");
+        var diagnostics = new ArrayList<Diagnostic>();
+        var bridge = new CurrencyPlaceholderBridge() {
+            String binding = "old";
+
+            @Override
+            public Collection<NamespacedId> currencies() {
+                return List.of(id);
+            }
+
+            @Override
+            public Balance read(NamespacedId currency, UUID viewer, boolean formatted) {
+                String readBinding = binding;
+                double amount = 1250;
+                binding = "replacement";
+                if (!readBinding.equals(binding)) {
+                    return new Balance(new EconomyResult.Failed("currency binding replaced"), null);
+                }
+                return new Balance(new EconomyResult.Succeeded(amount), formatted ? readBinding + amount : null);
+            }
+        };
+        var resolver = new VariablePlaceholders(api, () -> GuiSessionPort.NONE, bridge, diagnostics::add);
+        assertThat(resolver.resolve("balance_shop_gold_formatted", STEVE, n -> Optional.empty())).isEmpty();
+        assertThat(diagnostics).singleElement().extracting(Diagnostic::message).asString()
+                .contains("currency binding replaced");
     }
 
     @Test

@@ -60,6 +60,71 @@ async function holdProbe(ctx, item) {
 }
 
 export default [
+  // Requires the public PlaceholderAPI plugin installed in the disposable probe server.
+  test({
+    id: 'logic.currency-xp-placeholders',
+    title: 'probe:qa_balance_xp PlaceholderAPI tokens show live raw and formatted levels, while an unknown token stays unresolved',
+    mode: 'auto',
+    covers: [
+      'integrations/src/main/java/dev/materione/integrations/variables/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/CurrencyPlaceholderReads.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/MaterionePlaceholders.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/currency/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/FormatCurrencyFunction.java',
+      'fixtures/packs/probe/currencies/qa_balance_xp.yml',
+      'fixtures/packs/probe/items/probe_balance_placeholder.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      ctx.expect(await ctx.rcon('plugins')).toContain('PlaceholderAPI');
+      await holdProbe(ctx, 'probe:probe_balance_placeholder');
+      await ctx.rcon('experience set Probe 3 levels');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/BALANCE raw=3 formatted=XP3\.00 unknown=%materione_balance_probe_missing%/);
+      await ctx.rcon('experience set Probe 12 levels');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/BALANCE raw=12 formatted=XP12\.00 unknown=%materione_balance_probe_missing%/);
+    },
+  }),
+
+  // Requires the pinned PlaceholderAPI jar and the local-only placeholder-probe addon.
+  test({
+    id: 'logic.currency-custom-placeholders',
+    title: 'probe:qa_balance_custom reads a registered PlaceholderAPI expansion live and reacts to its lifecycle on Paper',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/currency/CustomCurrencyIntegration.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/CurrencyPlaceholderReads.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/variable/MaterionePlaceholders.java',
+      'plugin/src/placeholderProbe/**',
+      'fixtures/packs/probe/currencies/qa_balance_custom.yml',
+      'fixtures/packs/probe/currencies/qa_balance_lookup_unsafe.yml',
+      'fixtures/packs/probe/currencies/qa_balance_read_unsafe.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      ctx.expect(await ctx.rcon('plugins')).toContain('PlaceholderAPI');
+      ctx.expect(await ctx.rcon('plugins')).toContain('MaterionePlaceholderProbe');
+      ctx.expect(await ctx.rcon('mtr252 value 3')).toContain('MTR252-VALUE 3');
+      await ctx.rcon('experience set Probe 3 levels');
+      await ctx.rcon('mtr252 sample Probe');
+      await ctx.waitForServerLog(/MTR252-SAMPLE xp=3 xpFormatted=XP3\.00 custom=3 customFormatted=C3\.00/);
+      ctx.expect(await ctx.rcon('mtr252 value 12')).toContain('MTR252-VALUE 12');
+      await ctx.rcon('experience set Probe 12 levels');
+      await ctx.rcon('mtr252 sample Probe');
+      await ctx.waitForServerLog(/MTR252-SAMPLE xp=12 xpFormatted=XP12\.00 custom=12 customFormatted=C12\.00/);
+      ctx.expect(await ctx.rcon('mtr252 unregister')).toContain('MTR252-UNREGISTER true');
+      await ctx.rcon('mtr252 sample Probe');
+      await ctx.waitForServerLog(/MTR252-SAMPLE xp=12 xpFormatted=XP12\.00 custom= customFormatted= unsafeLookup=/);
+      ctx.expect(await ctx.rcon('mtr252 register')).toContain('MTR252-REGISTER true');
+      ctx.expect(await ctx.rcon('mtr252 value 27')).toContain('MTR252-VALUE 27');
+      await ctx.rcon('mtr252 sample Probe');
+      await ctx.waitForServerLog(/MTR252-SAMPLE xp=12 xpFormatted=XP12\.00 custom=27 customFormatted=C27\.00/);
+    },
+  }),
+
   // This is Paper parity evidence only; it is not a substitute for a Folia ownership run.
   test({
     id: 'logic.currency-live-read-surfaces',

@@ -14,8 +14,12 @@ import dev.materione.api.logic.provider.EconomyResult;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.logic.provider.PermissionProvider;
 import dev.materione.api.logic.provider.ServerTransfer;
+import dev.materione.api.logic.variable.GuiSessionPort;
+import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.registry.SelfDescription;
 import dev.materione.behavior.logic.MapLogicContext;
+import dev.materione.integrations.variables.CurrencyPlaceholderBridge;
+import dev.materione.integrations.variables.VariablePlaceholders;
 import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
 import dev.materione.plugin.logic.currency.CurrencyReads;
 import dev.materione.plugin.logic.GatewayRunScheduler;
@@ -28,6 +32,7 @@ import dev.materione.behavior.run.RunReadExecutor;
 import dev.materione.behavior.run.RunScheduler;
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -171,6 +176,36 @@ class CurrencyFunctionsTest {
         assertThat(format.call(List.of(1.0, "nope"), context)).isNull();
         assertThat(format.call(List.of("x", "shop:gems"), context)).isNull();
         assertThat(format.call(List.of(Double.NaN, "shop:gems"), context)).isNull();
+    }
+
+    @Test
+    void formattedPlaceholderDelegatesTheExplicitCurrencyToTheExistingFormatter() {
+        var providers = new Providers(0);
+        var format = new FormatCurrencyFunction(providers);
+        var context = new MapLogicContext(Map.of());
+        VariablesApi unusedVariables = (VariablesApi) Proxy.newProxyInstance(VariablesApi.class.getClassLoader(),
+                new Class<?>[] {VariablesApi.class}, (proxy, method, args) -> {
+                    throw new AssertionError("unexpected variable access");
+                });
+        var bridge = new CurrencyPlaceholderBridge() {
+            @Override
+            public Collection<NamespacedId> currencies() {
+                return providers.currencies().all().stream().map(Currency::id).toList();
+            }
+
+            @Override
+            public Balance read(NamespacedId currency, UUID viewer, boolean formatted) {
+                double amount = -1250.5;
+                String text = formatted ? (String) format.call(List.of(amount, currency.toString()), context) : null;
+                return new Balance(new EconomyResult.Succeeded(amount), text);
+            }
+        };
+        var resolver = new VariablePlaceholders(unusedVariables, () -> GuiSessionPort.NONE, bridge,
+                diagnostic -> { throw new AssertionError(diagnostic); });
+        assertThat(resolver.resolve("balance_shop_dollars_formatted", ALEX, name -> Optional.empty()))
+                .isEqualTo("-$1,250.50");
+        assertThat(resolver.resolve("balance_shop_gems_formatted", ALEX, name -> Optional.empty()))
+                .isEqualTo("-G$1,251");
     }
 
     @Test

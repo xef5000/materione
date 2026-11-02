@@ -57,7 +57,15 @@ public final class FormatCurrencyFunction implements ExpressionFunction {
         if (currency == null) {
             return null;
         }
-        String digits = String.format(Locale.ROOT, "%,." + currency.decimals() + "f", Math.abs(amount.get()));
-        return (amount.get() < 0 ? "-" : "") + currency.symbol() + digits;
+        return format(amount.get(), currency);
+    }
+
+    /** Formats against an already resolved immutable currency definition. */
+    public static String format(double amount, Currency currency) {
+        if (!Double.isFinite(amount) || currency == null) {
+            return null;
+        }
+        String digits = String.format(Locale.ROOT, "%,." + currency.decimals() + "f", Math.abs(amount));
+        return (amount < 0 ? "-" : "") + currency.symbol() + digits;
     }
 }
