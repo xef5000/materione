@@ -82,6 +82,12 @@ node scripts/probe/probe.mjs exec "return player.blockPosition().toShortString()
 node scripts/probe/probe.mjs quit && node scripts/probe/probe.mjs down
 ```
 
+`probe command` and the agent's `command` accept a single-line command with
+zero or one leading slash (outer whitespace is trimmed); empty bodies,
+multiple leading slashes and newlines are rejected. The pinned DebugBridge
+`runCommand` receives the slash-free body and adds the chat slash itself.
+This automation path is not a test of typed chat acceptance.
+
 The client window pops up on the desktop while it runs — that is expected
 (real rendering is the point). The window can be covered or minimized-adjacent;
 avoid *minimizing* it (the framebuffer stops updating).
@@ -436,7 +442,7 @@ already asserts.
   COMMANDS lifecycle as a `BasicCommand`, whose greedy-string tail accepts
   multi-token input and namespaced ids without quoting. The existing handlers
   retain their permissions and usage replies. `commands.typed-player-chat`
-  and `commands.typed-gui-alias` parse against the real client's dispatcher,
+  and `commands.typed-gui-alias`, as well as `opencommands` cases, parse against the real client's dispatcher,
   populate `ChatScreen(String, boolean)`, and press Enter through
   `keyPressed(new KeyEvent(257, 0, 0))` (26.1.2). `probe command` and
   `sendCommand` remain useful automation paths, but bypassing chat UI is not

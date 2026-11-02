@@ -37,3 +37,8 @@ detail:
       layer: up
       do:
         - gui.back
+    - on: gui.close
+      do:
+        - run_command:
+            command: "say MATERIONE-GUILOGIC-CLOSE ${gui.id} reason=${close.reason}"
+            as: console

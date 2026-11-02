@@ -25,6 +25,7 @@ import crypto from 'node:crypto';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { localServerOverride } from './local-server.mjs';
+import { commandBody } from './command.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const PROBE = path.join(ROOT, 'harness', 'build', 'probe');
@@ -768,9 +769,9 @@ async function cmdExec() {
 }
 
 async function cmdRunCommand() {
-  let command = args.filter((a) => !a.startsWith('--')).join(' ');
-  if (!command) fail(`usage: probe command '/give Probe minecraft:diamond 1'`);
-  if (!command.startsWith('/')) command = `/${command}`;
+  let command;
+  try { command = commandBody(args.join(' ')); }
+  catch (error) { fail(error.message); }
   await bridged((call) => call('runCommand', { command }, 30_000), printResult);
 }
 
@@ -833,8 +834,9 @@ async function cmdAgent() {
       }, () => {});
     },
     command: (a) => {
-      if (!a?.command) throw new ProbeError('command requires args.command');
-      const asPlayer = a.command.startsWith('/') ? a.command : `/${a.command}`;
+      let asPlayer;
+      try { asPlayer = commandBody(a?.command); }
+      catch (error) { throw new ProbeError(error.message); }
       return bridged(async (call) => {
         const msg = await call('runCommand', { command: asPlayer }, 30_000);
         if (!msg.success) throw new ProbeError(`bridge runCommand failed: ${msg.error ?? '(no error)'}`);

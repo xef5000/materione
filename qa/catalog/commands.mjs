@@ -2,7 +2,7 @@
 // These are auto tests — the runner judges them from console replies, server
 // markers (harness/README.md contract) and client-side Groovy.
 
-import { test } from './_lib.mjs';
+import { test, typedChat } from './_lib.mjs';
 
 const COMMAND = 'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommand.java';
 
@@ -12,28 +12,13 @@ async function inventoryCount(ctx) {
   ));
 }
 
-async function typedChat(ctx, command, shot) {
-  const text = JSON.stringify(command);
-  const parsed = await ctx.exec(
-    `def p = mc.getConnection().getCommands().parse(${text}, mc.getConnection().getSuggestionsProvider()); return 'remaining=' + p.getReader().getRemaining() + ';exceptions=' + p.getExceptions().size()`,
-  );
-  ctx.expect(String(parsed)).toBe('remaining=;exceptions=0');
-  await ctx.exec(
-    `mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen(${JSON.stringify('/' + command)}, false)); return 'typed'`,
-  );
-  await ctx.sleep(300);
-  await ctx.shot(shot);
-  ctx.expect(await ctx.exec(
-    'return mc.screen.keyPressed(new net.minecraft.client.input.KeyEvent(257, 0, 0))',
-  )).toBe(true);
-}
-
 export default [
   test({
     id: 'commands.typed-player-chat',
     title: 'normal client chat accepts a namespaced item and multi-token /materione give tail without quoting, then delivers exactly five gems',
     covers: [COMMAND, 'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommandAdapter.java',
       'plugin/src/main/java/dev/materione/plugin/MaterionePlugin.java',
+      'qa/catalog/_lib.mjs', 'scripts/probe/command.mjs',
       'fixtures/packs/corpus/items/**'],
     timeoutMs: 180_000,
     steps: async (ctx) => {
@@ -59,6 +44,7 @@ export default [
     id: 'commands.typed-gui-alias',
     title: 'normal client chat opens /opentest tools, reports malformed choice usage, and runs the food denial without opening another window',
     covers: ['plugin/src/main/java/dev/materione/plugin/gui/open/**',
+      'qa/catalog/_lib.mjs', 'scripts/probe/command.mjs',
       'fixtures/packs/guilogic/guis/opener.yml'],
     timeoutMs: 180_000,
     steps: async (ctx) => {

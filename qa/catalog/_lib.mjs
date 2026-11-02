@@ -1,4 +1,5 @@
 // Catalog authoring library for the in-game QA suite (issue #38).
+import { commandBody } from '../../scripts/probe/command.mjs';
 //
 // A catalog file (`qa/catalog/<suite>.mjs`) default-exports an array of tests
 // built with `test()`. The runner (`qa/runner.mjs`) loads every catalog file,
@@ -53,4 +54,24 @@ export function test(def) {
     }
   }
   return def;
+}
+
+/** Enter a command through the 26.1.2 client dispatcher and ChatScreen, not runCommand. */
+export async function typedChat(ctx, command, shot, { waitForTree = false } = {}) {
+  const body = commandBody(command);
+  const literal = (text) => JSON.stringify(text).replace(/\$/g, '\\$');
+  const parse = `def p = mc.getConnection().getCommands().parse(${literal(body)}, mc.getConnection().getSuggestionsProvider()); return 'remaining=' + p.getReader().getRemaining() + ';exceptions=' + p.getExceptions().size()`;
+  let parsed;
+  for (let attempt = 0; attempt < (waitForTree ? 40 : 1); attempt++) {
+    parsed = String(await ctx.exec(parse));
+    if (parsed === 'remaining=;exceptions=0') break;
+    if (waitForTree && attempt < 39) await ctx.sleep(250);
+  }
+  ctx.expect(parsed).toBe('remaining=;exceptions=0');
+  await ctx.exec(`mc.setScreen(new net.minecraft.client.gui.screens.ChatScreen(${literal('/' + body)}, false)); return 'typed'`);
+  await ctx.sleep(300);
+  if (shot) await ctx.shot(shot);
+  ctx.expect(await ctx.exec(
+    'return mc.screen.keyPressed(new net.minecraft.client.input.KeyEvent(257, 0, 0))',
+  )).toBe(true);
 }

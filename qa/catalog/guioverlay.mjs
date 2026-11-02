@@ -17,7 +17,7 @@ async function title(ctx) {
 }
 
 async function windowState(ctx) {
-  return String(await ctx.exec(`return (mc.screen != null) + ':' + player.containerMenu.containerId + ':' +
+  return String(await ctx.exec(`return String.valueOf(mc.screen != null) + ':' + player.containerMenu.containerId + ':' +
     player.containerMenu.slots.size()`));
 }
 
@@ -309,9 +309,12 @@ return 'quick-craft ended; screen=' + System.identityHashCode(mc.screen) +
   ' client-menu=' + System.identityHashCode(player.containerMenu)`);
         await ctx.sleep(500);
         const total = Number(await ctx.exec(`def total = 0
-def stacks = [player.containerMenu.getCarried()]
-for (int i = 0; i < player.containerMenu.slots.size(); i++) stacks.add(player.containerMenu.slots.get(i).getItem())
-for (def s : stacks) if (!s.isEmpty() && s.getHoverName().getString() == 'Red Gem') total += s.getCount()
+def carried = player.containerMenu.getCarried()
+if (!carried.isEmpty() && carried.getHoverName().getString() == 'Red Gem') total += carried.getCount()
+for (int i = 0; i < player.containerMenu.slots.size(); i++) {
+  def s = player.containerMenu.slots.get(i).getItem()
+  if (!s.isEmpty() && s.getHoverName().getString() == 'Red Gem') total += s.getCount()
+}
 return total`));
         ctx.expect(total).toBe(3);
         await assertNoDrops(ctx);
