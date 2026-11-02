@@ -25,12 +25,18 @@ export function assertNoClose(tracker, baseline, windowId) {
   assert.deepEqual(tracker.snapshot(windowId), baseline, 'server sent a close_window packet');
 }
 
-export function assertFullState(packet, windowId) {
+export function assertFullState(packet, windowId, held = true) {
   assert.equal(packet?.windowId, windowId, 'full state belongs to the current native menu');
   assert.equal(packet.items?.[0]?.itemId, data.itemsByName.diamond.id, 'input material');
   assert.equal(packet.items?.[0]?.itemCount, 3, 'input count');
-  assert.equal(packet.carriedItem?.itemId, data.itemsByName.emerald.id, 'cursor material');
-  assert.equal(packet.carriedItem?.itemCount, 2, 'cursor count');
+  if (held) {
+    assert.equal(packet.carriedItem?.itemId, data.itemsByName.emerald.id, 'cursor material');
+    assert.equal(packet.carriedItem?.itemCount, 2, 'cursor count');
+  } else {
+    assert.ok(!packet.carriedItem?.itemCount, 'cursor must be empty');
+    assert.equal(packet.items?.[9]?.itemId, data.itemsByName.emerald.id, 'returned cursor material');
+    assert.equal(packet.items?.[9]?.itemCount, 2, 'returned cursor count');
+  }
 }
 
 export function assertRichTitle(title, shown) {
@@ -114,7 +120,29 @@ async function main() {
         baselineCloses = closes.snapshot(currentId);
         assertRichTitle(latestOpen.windowTitle, false);
         assertFullState(latestFull, currentId);
-      } else if (stage === 'shown' || stage === 'hidden') {
+      } else if (stage === 'held' || stage === 'reverted') {
+        const oldOpens = opens;
+        client.write('window_click', { windowId: currentId, stateId, slot: 8, mouseButton: 0,
+          mode: 0, changedSlots: [], cursorItem: cursor });
+        await pause(1200);
+        assert.equal(opens, oldOpens, 'title changed while cursor was held');
+        assertRichTitle(latestOpen.windowTitle, false);
+        assertNoClose(closes, baselineCloses, currentId);
+        assertFullState(latestFull, currentId);
+      } else if (stage === 'release') {
+        const oldOpens = opens;
+        const oldFullStates = fullStates;
+        client.write('window_click', { windowId: currentId, stateId, slot: 9, mouseButton: 0,
+          mode: 0, changedSlots: [{ location: 9, item: cursor }], cursorItem: { itemCount: 0 } });
+        cursor = { itemCount: 0 };
+        await waitFor(() => opens > oldOpens && fullStates > oldFullStates && fullStates > fullStatesAtOpen,
+          'latest title after cursor cleared');
+        assert.equal(opens, oldOpens + 1, 'one latest title after cursor cleared');
+        assert.equal(latestOpen.windowId, currentId);
+        assertNoClose(closes, baselineCloses, currentId);
+        assertRichTitle(latestOpen.windowTitle, true);
+        assertFullState(latestFull, currentId, false);
+      } else if (stage === 'hidden') {
         const oldOpens = opens;
         const oldFullStates = fullStates;
         client.write('window_click', { windowId: currentId, stateId, slot: 8, mouseButton: 0,
@@ -124,14 +152,14 @@ async function main() {
         assert.equal(opens, oldOpens + 1, 'one title packet per changed render');
         assert.equal(latestOpen.windowId, currentId, 'native container id changed');
         assertNoClose(closes, baselineCloses, currentId);
-        assertRichTitle(latestOpen.windowTitle, stage === 'shown');
-        assertFullState(latestFull, currentId);
+        assertRichTitle(latestOpen.windowTitle, false);
+        assertFullState(latestFull, currentId, false);
       } else if (stage === 'steady') {
         const before = opens;
         await pause(1600); // more than two refresh periods at 10 ticks
         assert.equal(opens, before, 'unchanged title was sent again');
         assertNoClose(closes, baselineCloses, currentId);
-        assertFullState(latestFull, currentId);
+        assertFullState(latestFull, currentId, false);
       } else if (stage === 'stop') {
         console.log('MATERIONE-FLOOR-BOT stage=stop ok=true');
         break;

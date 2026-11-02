@@ -81,7 +81,13 @@ public final class RichTitleFloorRunner {
                     if (!field(serverStart, "id").equals(field(clientStart, "id"))) {
                         throw new IOException("client window id differs from the server native menu id");
                     }
-                    botCommand(client, botLog, options, "shown");
+                    botCommand(client, botLog, options, "held");
+                    command(console, serverLog, options, "floorprobe held", "MATERIONE-FLOOR-PROBE stage=held ok=true");
+                    botCommand(client, botLog, options, "reverted");
+                    command(console, serverLog, options, "floorprobe held", "MATERIONE-FLOOR-PROBE stage=held ok=true");
+                    botCommand(client, botLog, options, "held");
+                    command(console, serverLog, options, "floorprobe held", "MATERIONE-FLOOR-PROBE stage=held ok=true");
+                    botCommand(client, botLog, options, "release");
                     command(console, serverLog, options, "floorprobe shown", "MATERIONE-FLOOR-PROBE stage=shown ok=true");
                     botCommand(client, botLog, options, "steady");
                     botCommand(client, botLog, options, "hidden");

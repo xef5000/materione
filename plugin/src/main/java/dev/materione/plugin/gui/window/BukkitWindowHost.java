@@ -53,6 +53,7 @@ public final class BukkitWindowHost implements WindowHost {
     private final RichTitleTransport titles;
     private final RenderReporter reporter;
     private final TitleRefreshQueue titleRefreshes = new TitleRefreshQueue();
+    private final HeldTitleRefresh heldTitles = new HeldTitleRefresh();
     private BiConsumer<Viewer, GuiSession> reconcile;
 
     public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
@@ -91,6 +92,7 @@ public final class BukkitWindowHost implements WindowHost {
     public void open(Viewer viewer, GuiSession session, Supplier<Optional<RuntimeGuis.Live>> resolve,
             Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
         titleRefreshes.invalidate(session);
+        heldTitles.cancel(session);
         later(viewer, () -> {
             Optional<RuntimeGuis.Live> current = resolve.get();
             if (current.isEmpty()) {
@@ -106,6 +108,7 @@ public final class BukkitWindowHost implements WindowHost {
     public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
             Consumer<String> failed) {
         Object expectedWindow = session.window();
+        heldTitles.cancel(session);
         titleRefreshes.update(session, true, guard.dispatching(viewer.id()),
                 () -> show(viewer, session, gui, true, opened, failed),
                 () -> reconcile(viewer, session, expectedWindow), (task, retired) -> later(viewer, task, retired));
@@ -198,6 +201,7 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public void closeOwned(Viewer viewer, GuiSession session) {
+        heldTitles.cancel(session);
         later(viewer, () -> {
             if (menuOf(viewer, session).isPresent()) {
                 viewer.player().closeInventory();
@@ -207,6 +211,7 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public void releaseInputs(Viewer viewer, GuiSession session) {
+        heldTitles.cancel(session);
         Player player = viewer.player();
         if (session.window() instanceof GuiMenu menu) {
             InputReturns.release(player, menu);
@@ -244,6 +249,13 @@ public final class BukkitWindowHost implements WindowHost {
             }
             Rendered next = renderer.render(viewer, session, gui, full, session.windowTicks());
             boolean changed = !menu.title().equals(next.title());
+            ItemStack carried = viewer.player().getItemOnCursor();
+            if (changed && carried != null && !carried.getType().isAir()) {
+                heldTitles.ensure(session, () -> reconcile(viewer, session, menu),
+                        (task, retired) -> scheduling.executeEntityLater(plugin, viewer.player(), 1, task, retired));
+                return;
+            }
+            heldTitles.cancel(session);
             Set<Integer> now = slotsOf(gui, next);
             boolean ownershipChanged = !menu.inputSlots().equals(now);
             titleRefreshes.update(session, changed || ownershipChanged, guard.dispatching(viewer.id()), () -> {

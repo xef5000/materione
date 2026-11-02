@@ -493,6 +493,11 @@ their order relative to conditional raster pieces is preserved.
 
 - A changed rich title is sent to the existing native server menu; unchanged titles are not sent.
   No Bukkit inventory open or close is performed for that refresh.
+- When a non-structural refresh would change the title while the cursor holds an item, the
+  entire displayed render, its hitboxes and input ownership remain frozen. An owned retry
+  resolves the latest live GUI and state after the cursor clears, even without a refresh clock;
+  intermediate frames are not replayed. The window clock keeps advancing. Item-only updates
+  whose title is unchanged still apply. Structural reopens retain their existing policy.
 - The cost is one codepoint per raster frame in a dynamic GUI, plus its transparent background;
   the block has 5,888 codepoints
   (`U+E200`–`U+F8FF`).
@@ -521,9 +526,10 @@ and absence of close packets; it does not test client rendering or pointer gestu
 On a vanilla 26.1.2 client, screenshots showed conditional overlays and a physical shift-click
 transferred the input items. The open-screen packet reconstructed the **client** screen and menu
 while retaining the server menu and session. A physical quick-craft drag held across an animation
-update was canceled by that reconstruction; the observed items remained on the cursor, but the
-gesture did not continue. This is a known interaction limitation, not evidence that all drag
-interactions or flicker are absent.
+update was canceled by that reconstruction before the held-cursor deferral policy above was
+added; the observed items remained on the cursor. Deferral avoids sending a changed title while
+the server sees a held cursor, but does not promise atomic delivery, protect every structural
+reopen or establish that all drag interruptions and flicker are absent.
 
 ### 6.5 Input slots and the player's inventory
 

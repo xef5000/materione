@@ -86,6 +86,16 @@ class OwnershipRefreshTransactionTest {
     }
 
     @Test
+    void revertedHeldTitleNeverFlashesAndKeepsInput() throws Exception {
+        exercise(true, true, false, true, false);
+    }
+
+    @Test
+    void heldTitleRetryCannotTouchAReplacementSession() throws Exception {
+        exercise(false, false, true, true, false);
+    }
+
+    @Test
     void unsupportedTransportRejectsDynamicVisualWindowBeforeOpening() throws Exception {
         exercise(false, false, false, true, false, true);
     }
@@ -185,7 +195,7 @@ class OwnershipRefreshTransactionTest {
                 default -> null;
             });
             var playerRef = new AtomicReference<Player>();
-            var cursor = FakeStack.of(2);
+            var cursor = new AtomicReference<ItemStack>(FakeStack.of(2));
             var opens = new AtomicInteger();
             var closes = new AtomicInteger();
             InventoryView view = proxy(InventoryView.class, (name, args) -> switch (name) {
@@ -204,7 +214,7 @@ class OwnershipRefreshTransactionTest {
                 case "getGameMode" -> GameMode.SURVIVAL;
                 case "getInventory" -> bag;
                 case "getOpenInventory" -> view;
-                case "getItemOnCursor" -> cursor;
+                case "getItemOnCursor" -> cursor.get();
                 case "openInventory" -> { opens.incrementAndGet(); yield null; }
                 case "closeInventory" -> { closes.incrementAndGet(); yield null; }
                 case "getPersistentDataContainer" -> pdc;
@@ -238,7 +248,7 @@ class OwnershipRefreshTransactionTest {
                 public boolean available() { return !unavailable; }
                 public String send(Player who, Inventory expected, net.kyori.adventure.text.Component title) {
                     sends.incrementAndGet();
-                    assertThat(who.getItemOnCursor()).isSameAs(cursor);
+                    assertThat(who.getItemOnCursor()).isNull();
                     assertThat(expected).isSameAs(menu.getInventory());
                     assertThat(session.window()).isSameAs(menu);
                     assertThat(menu.inputSlots()).contains(0);
@@ -249,7 +259,11 @@ class OwnershipRefreshTransactionTest {
             var problems = new ArrayList<String>();
             var host = new BukkitWindowHost(plugin, scheduling, input, guard, journal, renderer,
                     titles, (code, gui, layer, message) -> problems.add(code.code() + ":" + message));
-            host.bindReconciler((who, current) -> host.rewrite(who, current, live));
+            host.bindReconciler((who, current) -> {
+                if (sessions.current(playerId).filter(s -> s == current).isPresent()) {
+                    host.rewrite(who, current, live);
+                }
+            });
             session.attach(menu);
             session.remember(initial);
             menu.inputSlots(SetOf.inputs(live, session));
@@ -332,11 +346,38 @@ class OwnershipRefreshTransactionTest {
                 sessions.end(session, CloseReason.REPLACED);
                 sessions.begin(new GuiSession(playerId, "Probe", compiled.id(), Map.of()));
             }
+            if (dynamic) {
+                var displayed = session.rendered();
+                if (revert || replace) {
+                    tasks.remove(0).run();
+                    assertThat(session.rendered()).isSameAs(displayed);
+                    assertThat(menu.title()).isEqualTo(initial.title());
+                    assertThat(menu.inputSlots()).contains(0);
+                    assertThat(sends.get()).isZero();
+                    assertThat(returns.get()).isZero();
+                    assertThat(cursor.get().getAmount()).isEqualTo(2);
+                    return;
+                }
+                session.advanceWindowTicks(13);
+                tasks.remove(0).run();
+                assertThat(session.rendered()).isSameAs(displayed);
+                assertThat(menu.title()).isEqualTo(initial.title());
+                assertThat(session.windowTicks()).isEqualTo(13);
+                assertThat(menu.inputSlots()).contains(0);
+                assertThat(amount(topItems[0])).isEqualTo(5);
+                assertThat(returns.get()).isZero();
+                assertThat(sends.get()).isZero();
+                assertThat(cursor.get().getAmount()).isEqualTo(2);
+                assertThat(tasks).hasSize(1);
+                session.vars().put("cover", false);
+                session.vars().put("cover", true);
+                cursor.set(null);
+            }
             tasks.remove(0).run();
             if (dynamic) {
                 assertThat(sends.get()).isEqualTo(1);
                 assertThat(session.window()).isSameAs(menu);
-                assertThat(player.getItemOnCursor()).isSameAs(cursor);
+                assertThat(player.getItemOnCursor()).isNull();
                 assertThat(opens.get()).isZero();
                 if (fail) {
                     assertThat(problems).singleElement().asString().contains("MTR-0073", "unavailable");

@@ -111,7 +111,7 @@ async function openAnimation(ctx) {
 export default [
   test({
     id: 'guioverlay.toggle-auto',
-    title: 'overlay:tabs toggles conditional image and templated text in the same GUI session',
+    title: 'overlay:tabs defers visibility while carrying an item and resumes in the same GUI session',
     covers,
     timeoutMs: 120_000,
     steps: async (ctx) => {
@@ -123,13 +123,20 @@ export default [
         await ctx.sleep(400);
         ctx.expect(await stack(ctx, 'player.containerMenu.getCarried()')).toBe('Red Gem:3');
         await click(ctx);
+        await stableWindow(ctx, 63, 'Red Gem:3');
+        await waitForTitle(ctx, false);
+        await click(ctx, 54);
         await waitForTitle(ctx, true);
         ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
-        await stableWindow(ctx, 63, 'Red Gem:3');
+        await stableWindow(ctx, 63, 'empty');
+        await click(ctx, 54);
         await click(ctx);
+        await stableWindow(ctx, 63, 'Red Gem:3');
+        await waitForTitle(ctx, true);
+        await click(ctx, 54);
         await waitForTitle(ctx, false);
         ctx.expect(await assertOpen(ctx, 63)).toBe(containerId);
-        await stableWindow(ctx, 63, 'Red Gem:3');
+        await stableWindow(ctx, 63, 'empty');
       } finally {
         await ctx.exec("player.closeContainer(); return 'closed'");
       }
@@ -137,7 +144,7 @@ export default [
   }),
   test({
     id: 'guioverlay.toggle-visual',
-    title: 'overlay:tabs shows and hides the selected image and ACTIVE Probe label when toggled',
+    title: 'overlay:tabs keeps old art while carrying an item, then displays the selected image and label',
     mode: 'visual',
     dependsOn: ['guioverlay.toggle-auto'],
     covers,
@@ -148,11 +155,15 @@ export default [
         await waitForTitle(ctx, false);
         await assertOpen(ctx, 63);
         await ctx.shot('tab-hidden');
+        await click(ctx, 54);
         await click(ctx);
+        await stableWindow(ctx, 63, 'Red Gem:3');
+        await ctx.shot('tab-held');
+        await click(ctx, 54);
         await waitForTitle(ctx, true);
         await assertOpen(ctx, 63);
         await ctx.shot('tab-shown');
-        ctx.needsEyes('Compare screenshots: the selected image and ACTIVE Probe text are absent before and visible after the toggle; background and slot items remain stable.');
+        ctx.needsEyes('The held-cursor screenshot retains the old art; after placing the item, the selected image and ACTIVE Probe text appear. Background and slot items remain stable.');
       } finally {
         await ctx.exec("player.closeContainer(); return 'closed'");
       }
@@ -267,7 +278,7 @@ export default [
   }),
   test({
     id: 'guioverlay.animation-quick-craft',
-    title: 'overlay:animation_input conserves gems across a frame change during packet-driven quick-craft and later shift-out',
+    title: 'overlay:animation_input freezes its frame while carrying gems and resumes after packet-driven quick-craft',
     covers: [...covers, 'fixtures/packs/corpus/items/gem_red.yml'],
     timeoutMs: 120_000,
     steps: async (ctx) => {
@@ -289,7 +300,8 @@ mc.gameMode.handleContainerInput(player.containerMenu.containerId, 0, 1,
           net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
 return 'quick-craft started; screen=' + System.identityHashCode(mc.screen) +
   ' client-menu=' + System.identityHashCode(player.containerMenu)`);
-        await waitForDifferentTitle(ctx, first);
+        await ctx.sleep(1600);
+        ctx.expect(await title(ctx)).toBe(first);
         ctx.expect(await assertOpen(ctx, 45)).toBe(id);
         await ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, -999, 2,
           net.minecraft.world.inventory.ContainerInput.QUICK_CRAFT, player)
@@ -309,6 +321,7 @@ return total`));
           await ctx.sleep(300);
         }
         ctx.expect(await stack(ctx, 'player.containerMenu.slots.get(0).getItem()')).toBe('Red Gem:3');
+        await waitForDifferentTitle(ctx, first);
         await click(ctx, 0, 'QUICK_MOVE');
         await ctx.sleep(500);
         ctx.expect(await assertOpen(ctx, 45)).toBe(id);

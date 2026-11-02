@@ -58,8 +58,9 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
                 clock = (long) call(session, "windowTicks");
             } else if (stage.equals("observed")) {
                 observe(player);
-            } else if (stage.equals("shown") || stage.equals("hidden") || stage.equals("steady")) {
-                check(player, stage.equals("shown"), stage.equals("steady"));
+            } else if (stage.equals("shown") || stage.equals("hidden") || stage.equals("steady")
+                    || stage.equals("held")) {
+                check(player, stage.equals("shown"), stage.equals("steady"), stage.equals("held"));
             } else {
                 throw new IllegalArgumentException("unknown stage");
             }
@@ -78,7 +79,7 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
         player.setItemOnCursor(new ItemStack(Material.EMERALD, 2));
         player.updateInventory();
         clock = (long) call(session, "windowTicks");
-        check(player, false, false);
+        check(player, false, false, true);
     }
 
     private void capture(Player player) throws Exception {
@@ -117,7 +118,7 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
         return name.equals("FloorBot") || name.equals("Probe");
     }
 
-    private void check(Player player, boolean selected, boolean steady) throws Exception {
+    private void check(Player player, boolean selected, boolean steady, boolean held) throws Exception {
         require(inventory != null && player.getOpenInventory().getTopInventory() == inventory, "inventory changed");
         require(inventory.getHolder() == holder && call(holder, "session") == session, "window/session changed");
         require(nativeMenu(player) == nativeMenu && id(nativeMenu) == nativeId, "server native menu/id changed");
@@ -127,7 +128,12 @@ public final class RichTitleProbe extends JavaPlugin implements Listener {
         require(now >= clock && (!steady || now > clock), "window clock reset or did not advance");
         clock = now;
         require(stack(inventory.getItem(0), Material.DIAMOND, 3), "input stack changed");
-        require(stack(player.getItemOnCursor(), Material.EMERALD, 2), "cursor stack changed");
+        if (held) {
+            require(stack(player.getItemOnCursor(), Material.EMERALD, 2), "cursor stack changed");
+        } else {
+            require(player.getItemOnCursor().getType().isAir(), "cursor is not empty");
+            require(stack(player.getInventory().getItem(9), Material.EMERALD, 2), "carried stack was not conserved");
+        }
         @SuppressWarnings("unchecked")
         Set<Integer> inputs = (Set<Integer>) call(holder, "inputSlots");
         require(inputs.contains(0), "input ownership lost");

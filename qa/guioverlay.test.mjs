@@ -4,8 +4,15 @@ import catalog from './catalog/guioverlay.mjs';
 
 function fakeContext(changeId) {
   let visible = false;
+  let requested = false;
   let cursor = false;
   let id = 42;
+  function apply() {
+    if (!cursor && visible !== requested) {
+      visible = requested;
+      if (changeId) id++;
+    }
+  }
   return {
     reset: async () => {},
     rcon: async () => {},
@@ -17,10 +24,13 @@ function fakeContext(changeId) {
       if (script.includes("mc.screen == null ? ''")) return visible ? 'ACTIVE Probe' : 'background';
       if (script.includes("player.containerMenu.slots.size()")) return `true:${id}:63`;
       if (script.includes('getHoverName()')) return cursor ? 'Red Gem:3' : 'empty';
-      if (script.includes('containerId, 54,')) cursor = true;
+      if (script.includes('containerId, 54,')) {
+        cursor = !cursor;
+        apply();
+      }
       if (script.includes('containerId, 11,')) {
-        visible = !visible;
-        if (changeId) id++;
+        requested = !requested;
+        apply();
       }
       return 'clicked';
     },
