@@ -1,0 +1,9 @@
+name: MaterioneFloorProbe
+version: '1'
+main: dev.materione.harness.probe.RichTitleProbe
+api-version: '1.21'
+depend: [Materione]
+commands:
+  floorprobe:
+    description: Test-only rich title floor assertions
+    permission: materione.floorprobe

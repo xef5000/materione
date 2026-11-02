@@ -94,6 +94,43 @@ Manually debugging a boot (also from IntelliJ — `application` run config on
 workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 `logs/latest.log`.
 
+### Opt-in rich-title floor test
+
+The headless protocol test for #217 uses the pinned Paper **1.21.4** server and
+a disposable test-only observer plugin. It is skipped unless explicitly enabled;
+the ordinary integration task does not install or run the protocol client. With
+Node 22 or newer and the ports reserved for this run:
+
+```powershell
+Push-Location harness\protocol
+npm.cmd ci --ignore-scripts
+Pop-Location
+.\gradlew.bat :harness:integrationTest --tests dev.materione.harness.PaperRichTitleFloorIT '-Pharness.richTitleFloor=true'
+```
+
+`harness/protocol/package-lock.json` pins the public `minecraft-protocol`
+1.68.0 (BSD-3-Clause) and `minecraft-data` 3.119.0 (MIT) client dependencies.
+The lockfile also pins their transitive dependencies; `npm.cmd ci --ignore-scripts`
+installs them only into the ignored `harness/protocol/node_modules`. The
+scenario installs no helper in the
+product jar. It checks component font data and full inventory packets from
+real production GUI updates, server-native menu/id and session identity, clock,
+open/close events, absence of clientbound close-window packets, cursor, input and
+visibility-dependent hitboxes. The runner
+prints SHA-256 fingerprints of the Paper, product and observer jars, fixture and
+lockfile and preserves the server and bot logs in `harness/build/work/rich-title-floor/`.
+This is protocol and server-state evidence only: it does **not** show vanilla
+client screen reconstruction, pixels, flicker or physical mouse drag. Those
+remain separate real-client checks on the 26.x probe.
+
+The client assertions and the library's real 1.21.4 packet codec can be checked
+without booting a server:
+
+```powershell
+node --test harness\protocol\floor-bot.test.mjs
+.\gradlew.bat :harness:richTitleProbeJar :harness:testClasses '-Pharness.richTitleFloor=true'
+```
+
 ## Scenarios
 
 - `PaperBootstrapIT` — the M1 exit gate, live on Paper: boot with the
@@ -125,7 +162,7 @@ workspace under `harness/build/work/<scenario>/` including `stdout.log` and
 
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 
-The tiers above are headless — no client ever joins, so visual failure modes
+The tiers above are headless — the opt-in protocol client does not render, so visual failure modes
 (tofu glyphs, checkerboarded models) stay invisible to them. The **probe
 loop** complements them locally: a second Paper pin (`paper-probe-*`, the
 26.x seam) plus a real windowed client joined via the DebugBridge bridge mod,

@@ -26,6 +26,16 @@ dependencies {
     // wired into testImplementation by the library conventions)
 }
 
+// A test-only Paper plugin observes native state in the opt-in floor scenario; it is never shipped.
+val richTitleProbe = sourceSets.create("richTitleProbe")
+dependencies {
+    add(richTitleProbe.compileOnlyConfigurationName, libs.paper.api)
+}
+val richTitleProbeJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("rich-title-probe")
+    from(richTitleProbe.output)
+}
+
 val catalog = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
 val paperUrl = catalog.findVersion("paper-harness-url").get().requiredVersion
 val paperSha256 = catalog.findVersion("paper-harness-sha256").get().requiredVersion
@@ -61,6 +71,16 @@ val integrationTest by tasks.registering(Test::class) {
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
+    if (providers.gradleProperty("harness.richTitleFloor").orNull == "true") {
+        dependsOn(richTitleProbeJar)
+        testLogging.showStandardStreams = true
+        systemProperty("harness.richTitleFloor", "true")
+        systemProperty("harness.richTitleProbeJar", richTitleProbeJar.get().archiveFile.get().asFile.absolutePath)
+        systemProperty("harness.protocolDir", layout.projectDirectory.dir("protocol").asFile.absolutePath)
+        systemProperty("harness.paperSha256", paperSha256)
+        inputs.file(richTitleProbeJar.flatMap { it.archiveFile })
+        inputs.files(fileTree(layout.projectDirectory.dir("protocol")) { exclude("node_modules/**") })
+    }
     // Ports for the boots this run starts. The defaults are the CI pins (25599, 8089, 8090); a local run
     // whose ports another server holds passes -Pharness.serverPort=… -Pharness.editorPort=… -Pharness.deliveryPort=…
     for (port in listOf("harness.serverPort", "harness.editorPort", "harness.deliveryPort")) {

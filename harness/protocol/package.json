@@ -1,0 +1,12 @@
+{
+  "name": "materione-paper-floor-protocol",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "minecraft-data": "3.119.0",
+    "minecraft-protocol": "1.68.0"
+  }
+}
