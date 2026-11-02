@@ -77,6 +77,9 @@ export default [
         ctx.expect(await slotType(ctx, 11)).toBe('minecraft:diamond');
         await ctx.shot('dynamic-conditional-shown');
         ctx.expect(logCount(/MTR-0073/)).toBe(0); // a failing condition would have been reported
+        ctx.needsEyes(
+          'Compare dynamic-conditional-hidden and dynamic-conditional-shown: slot 11 (second row, third column) is empty in the first and shows a diamond in the second, with no barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
@@ -96,6 +99,9 @@ export default [
         ctx.expect(await slotType(ctx, 13)).toBe('minecraft:player_head');
         ctx.expect(logCount(/MTR-0072/)).toBe(0); // the probe player is online, so the head resolves
         await ctx.shot('dynamic-viewer-head');
+        ctx.needsEyes(
+          'In dynamic-viewer-head, slot 13 (second row, fifth column) shows a rendered player head, not an empty slot, barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
@@ -124,6 +130,9 @@ export default [
         const frames = ['minecraft:redstone_block', 'minecraft:emerald'];
         ctx.expect(frames.includes(first) && frames.includes(second)).toBe(true);
         ctx.expect(second).not.toBe(first);
+        ctx.needsEyes(
+          'Compare dynamic-animated-first and dynamic-animated-second: slot 15 (second row, seventh column) changes between a redstone block and an emerald, without a barrier or missing texture.',
+        );
       } finally {
         await closeWindow(ctx);
       }
