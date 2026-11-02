@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import fs from 'node:fs';
-import catalog from './catalog/guioverlay.mjs';
+import catalog, { assertNoDrops } from './catalog/guioverlay.mjs';
 import dynamicCatalog from './catalog/guidynamic.mjs';
 import { slotType } from './catalog/_lib.mjs';
 
@@ -52,10 +52,29 @@ test('toggle-auto records the original container ID across both title changes', 
 test('quick-craft conservation query counts carried and indexed menu stacks', () => {
   const entry = catalog.find((item) => item.id === 'guioverlay.animation-quick-craft');
   const source = entry.steps.toString();
-  assert.match(source, /def carried = player\.containerMenu\.getCarried\(\)/);
-  assert.match(source, /for \(int i = 0; i < player\.containerMenu\.slots\.size\(\); i\+\+\)/);
-  assert.match(source, /player\.containerMenu\.slots\.get\(i\)\.getItem\(\)/);
+  assert.match(source, /def menu = player\.containerMenu\.@target/);
+  assert.match(source, /def carried = menu\.getCarried\(\)/);
+  assert.match(source, /for \(int i = 0; i < menu\.slots\.size\(\); i\+\+\)/);
+  assert.match(source, /menu\.slots\.get\(i\)\.getItem\(\)/);
   assert.doesNotMatch(source, /for \(def s : stacks\)/);
+  assert.equal((source.match(/System\.identityHashCode\(mc\.screen\.@target\)/g) || []).length, 2);
+  assert.equal((source.match(/System\.identityHashCode\(player\.containerMenu\.@target\)/g) || []).length, 2);
+});
+
+test('no-drops check requires a positive player-list reply (simulated RCON)', async () => {
+  const commands = [];
+  function ctx(reply) {
+    return {
+      rcon: async (command) => { commands.push(command); return reply; },
+      expect: (actual) => ({ toMatch: (pattern) => assert.match(actual, pattern) }),
+    };
+  }
+  await assertNoDrops(ctx('There are 1 of a max of 4 players online: Probe'));
+  await assertNoDrops(ctx('There are 3 of a max of 4 players online: Alice, Probe, Bob'));
+  await assert.rejects(assertNoDrops(ctx('')), assert.AssertionError);
+  await assert.rejects(assertNoDrops(ctx('There are 1 of a max of 4 players online: NotProbe')), assert.AssertionError);
+  assert.ok(commands.every((command) =>
+    command === 'execute at Probe unless entity @e[type=item,distance=..16] run list'));
 });
 
 test('slot registry query unwraps the item before the static lookup (simulated bridge)', async () => {
