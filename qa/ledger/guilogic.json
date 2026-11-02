@@ -1,0 +1,125 @@
+{
+  "guilogic.click-message-sound": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "8e06212ebc6eac403e7eaa848efccc7aa6227755d73a605b0a17e3d64fcfe1a7",
+    "result": "pass",
+    "at": "2026-11-02T05:04:37.737Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guilogic.close": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "8dbe10fbf7447e739e666534c1f9152458bfeb7592a9fd85015c80e960090cfe",
+    "result": "pass",
+    "at": "2026-11-02T05:04:45.072Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guilogic.open-and-back": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "1a534ebbe34b3e6ec6f3e71daa6a8bba977ccf6de4d6139fd7a1b18727a77519",
+    "result": "pass",
+    "at": "2026-11-02T05:04:52.637Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guilogic.live-refresh-keeps-session": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "b65e965be22ba845b47adce921b5159cae36898df7715636c2ad6b681c9a1184",
+    "result": "pass",
+    "at": "2026-11-02T05:05:01.044Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guilogic.visual": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "c5645c9e133c1cf4edfbff5da14b8867166b151d73f41c83f25dd46136df9a6f",
+    "result": "pass",
+    "at": "2026-11-02T05:05:07.217Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "guilogic:menu is a three-row chest with the heading \"MENU\" in small caps at the top left and three raised button squares in the middle row at the 3rd, 5th and 7th slots; the window did not change when the ping button was clicked and the chat shows \"Pong from ping (slot 11, left)\"; the detail GUI is a one-row chest headed \"DETAIL\" with one raised button in its middle slot and the chat shows \"Detail of sword\".",
+    "markedAt": "2026-11-02T05:14:32.559Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 menu, ping and detail screenshots: readable MENU/DETAIL, matching button regions and visible Ping/detail chat feedback."
+  },
+  "guilogic.input-slots": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "8d4ee5ef1fb4e303b5e20df1bd453ffa9d4d5bb85a9b0397c10ee435644f5f84",
+    "result": "pass",
+    "at": "2026-11-02T05:06:42.261Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  }
+}

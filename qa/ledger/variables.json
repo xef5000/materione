@@ -1,0 +1,122 @@
+{
+  "variables.set-and-get-player": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "ef703cd731cb190dce472c3b6410044e2a1aba74f9b3c02c6c1dd6ef1f0b4ca2",
+    "result": "pass",
+    "at": "2026-11-02T05:11:26.238Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "variables.last-write-wins": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "62fb82a18b6d00cfed2cb292374c296cc8cbfce0d95c98983db6495d18c4efd4",
+    "result": "pass",
+    "at": "2026-11-02T05:11:28.234Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "variables.synchronous-read-after-player-write": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "620e4a2d20fbce2db15017443d28afae2fe94a53c3eeb829b307bf82f05cae76",
+    "result": "pass",
+    "at": "2026-11-02T05:11:30.864Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "variables.server-scope-ignores-the-player": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "3d4e906fe3aefe834dea9ac3da35ed0491ab5159b97681861f88bc26716616ee",
+    "result": "pass",
+    "at": "2026-11-02T05:11:32.872Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "variables.type-mismatch-is-refused": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "c388abe1621ed485237c7d3b5b1744763dd6fc1b5d9bd71c1f32ce6b871befd2",
+    "result": "pass",
+    "at": "2026-11-02T05:11:35.141Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "variables.undeclared-is-refused": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "eb506eb60118a4728828cabc12dd12750156f58df4b89bd7ad5c2f79081f9bc2",
+    "result": "pass",
+    "at": "2026-11-02T05:11:36.854Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  }
+}

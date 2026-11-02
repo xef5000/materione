@@ -1,0 +1,91 @@
+{
+  "guidynamic.open-states": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "2436291efe88f8af9c316e1afd17084b908848f7c5f7de92855d261c1df9ee5c",
+    "result": "pass",
+    "at": "2026-11-02T05:04:14.358Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guidynamic.conditional-item": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "bbdab3cd072cc7b458191bb362bc603b96606a28b5606ab109f329c1b4f5d526",
+    "result": "pass",
+    "at": "2026-11-02T05:04:21.411Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "Compare dynamic-conditional-hidden and dynamic-conditional-shown: slot 11 (second row, third column) is empty in the first and shows a diamond in the second, with no barrier or missing texture.",
+    "markedAt": "2026-11-02T05:14:32.302Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 hidden/shown screenshots: slot11 changes from empty to diamond; no barrier or missing texture."
+  },
+  "guidynamic.viewer-head": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "f503fc4762045f9b7104e28c5b3d981c928add99c640221d572f21ae82db8c7c",
+    "result": "pass",
+    "at": "2026-11-02T05:04:25.731Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "In dynamic-viewer-head, slot 13 (second row, fifth column) shows a rendered player head, not an empty slot, barrier or missing texture.",
+    "markedAt": "2026-11-02T05:14:32.392Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 viewer-head screenshot: slot13 renders the player head, not air, barrier or checkerboard."
+  },
+  "guidynamic.animated-slot": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "19f65bd2b395e166bc4f41b9024c814c8d6b99e0647a88a33aaeff46b696a9f6",
+    "result": "pass",
+    "at": "2026-11-02T05:04:31.722Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "Compare dynamic-animated-first and dynamic-animated-second: slot 15 (second row, seventh column) changes between a redstone block and an emerald, without a barrier or missing texture.",
+    "markedAt": "2026-11-02T05:14:32.475Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 animation pair: slot15 changes emerald to redstone block; both textures render correctly."
+  }
+}

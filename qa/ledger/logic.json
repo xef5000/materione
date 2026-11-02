@@ -1,0 +1,62 @@
+{
+  "logic.currency-live-read-surfaces": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "1a3983b1b2dca5d94f60dc2e7d0b12f3f782c57d46da314425e47e4d4c093155",
+    "result": "pass",
+    "at": "2026-11-02T05:11:13.804Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "logic.currency-xp-placeholders": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "b05e709f6a3891121a6e00eaca630d7c6aad9bd529dbad25d367ebd92948fddd",
+    "result": "pass",
+    "at": "2026-11-02T05:11:19.374Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "logic.currency-custom-placeholders": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "f0d29fae5bdf426be6cfa0b0a286d35a6583581c93349a64cdb539ac14a032db",
+    "result": "pass",
+    "at": "2026-11-02T05:11:24.251Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  }
+}

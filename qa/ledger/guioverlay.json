@@ -1,0 +1,128 @@
+{
+  "guioverlay.toggle-auto": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "2f4711c954b1e308868a9cf59d9f9d5dc4b08c0781844eef4b718e9e0605930a",
+    "result": "pass",
+    "at": "2026-11-02T05:07:38.584Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guioverlay.toggle-visual": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "2cdda9e87323209716e3372e9a4a0bc871ec47d70f2a8049b58d944af0e9e6db",
+    "result": "pass",
+    "at": "2026-11-02T05:07:52.532Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "The held-cursor screenshot retains the old art; after placing the item, the selected image and ACTIVE Probe text appear. Background and slot items remain stable.",
+    "markedAt": "2026-11-02T05:14:32.731Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 hidden/held/shown screenshots: overlay stays hidden while three gems are carried, then ACTIVE Probe and image appear after return; no missing glyphs."
+  },
+  "guioverlay.input-ownership": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "4ebf8087aa3bbb76c4a4fb87d7e56712e464d9d25b6f5dff5864eeae3b7829e3",
+    "result": "pass",
+    "at": "2026-11-02T05:10:29.288Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guioverlay.animation-auto": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "0c996f29202e7445e6cf35db74a2ac8cfb8e773d0e69a0111131fc34ee367a9d",
+    "result": "pass",
+    "at": "2026-11-02T05:10:38.837Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "guioverlay.animation-visual": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "0222f73abcd7ae99bc916a1367d7fc8e4794d3b5a9fd4379d59a72894d841b42",
+    "result": "pass",
+    "at": "2026-11-02T05:10:44.747Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "The banner moves between the two positions; the background and container remain stable.",
+    "markedAt": "2026-11-02T05:14:32.823Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 animation pair: rainbow image moves between distinct positions without a checkerboard or tofu glyph."
+  },
+  "guioverlay.animation-quick-craft": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "47abd38736307c80b76595b4ba535e287c7309e4ac876c1a10c8c3d7677da330",
+    "result": "pass",
+    "at": "2026-11-02T05:11:04.174Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  }
+}

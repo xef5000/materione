@@ -1,0 +1,105 @@
+{
+  "opencommands.deferred-alias-applies-automatically": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "63b477bb6e4f8697f08156c302123935954a672a94956697e500d2ecd6dee415",
+    "result": "pass",
+    "at": "2026-11-02T05:03:45.301Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "opencommands.typed-command-opens-the-gui": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "b68c6e55e26339b1c0f52494f885320cc513e5451dc308eed70ac813b740aebe",
+    "result": "pass",
+    "at": "2026-11-02T05:03:51.399Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "opencommands.bad-argument-answers-with-usage": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "52b5b39c5b3d34f14d2281027ddb0e3bd8398b09ec075facf2c007024d5a5da5",
+    "result": "pass",
+    "at": "2026-11-02T05:03:55.920Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "opencommands.failed-requirement-denies-with-its-message": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "fd25650297eaa1d1cc654a12ee511c79eec0b4b3a39e6f96cb579be6906c5d03",
+    "result": "pass",
+    "at": "2026-11-02T05:04:01.505Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "opencommands.window-matches-the-open-block": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "14f55ecfd9c21e9191b2fb8fb22604fce2f0ea464b03633c06acec29dd63bfd1",
+    "result": "pass",
+    "at": "2026-11-02T05:04:07.079Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "the window is a one-row chest titled \"Opener\", with the heading \"OPENER\" in small caps at the top left and an empty row of container slots, opened by typing /opentest tools",
+    "markedAt": "2026-11-02T05:14:32.218Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 opener screenshot: one-row empty chest, readable OPENER heading; typed chat path passed."
+  }
+}

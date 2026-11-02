@@ -1,0 +1,65 @@
+{
+  "gui.studio-new-chest": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "6d685527c5aa57974692d56f177a5cd580ed18f3b29ca442e316696ac0556dab",
+    "result": "pass",
+    "at": "2026-11-02T05:06:48.481Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "gui.logic-tab-live-save": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "b2351a07667adca0393149660690b92ed5457447f0489d6b5335e178618eb0c7",
+    "result": "pass",
+    "at": "2026-11-02T05:06:56.517Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "gui.logic-tab-visual": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "1648f039200db2956f04b0b24df64dc2e479031845d17d27ddac8642c0a22d44",
+    "result": "pass",
+    "at": "2026-11-02T05:07:01.677Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": "the Logic tab shows the four-node flow as colour-coded nodes (amber trigger, blue Play sound, slate Run command, purple Close GUI) joined by stepped pixel wires in the colour of the node they leave, with square ports on the node edges and a dust pixel at every bend; the empty state is readable and offers Add a trigger; the palette is grouped (Triggers first), searchable, and the Economy entries are greyed with the Vault reason rather than hidden; while a wire is dragged onto an already-fed node the status line says why in one line and the loose wire is dashed; the chrome uses the editor tokens (navy surfaces, orange only for the primary action and focus) and nothing overflows horizontally.",
+    "markedAt": "2026-11-02T05:14:32.644Z",
+    "markedBy": "Copilot",
+    "note": "Reviewed main0aff run05-02-31 four browser captures: readable empty prompt; four colored nodes and wires without overflow; unavailable money palette explains Vault; refused fan-out wire is dashed with clear status."
+  }
+}
