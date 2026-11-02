@@ -11,6 +11,7 @@ import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
@@ -110,7 +111,8 @@ public final class RuntimeGuis {
             out.put(gui.id(), new Live(
                     gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
                     OpenPlan.compile(gui.id(), gui.rules(), logic),
-                    gui.placements(), gui.refresh(), compileItems(gui, logic)));
+                    gui.placements(), gui.refresh(), compileItems(gui, logic),
+                    gui.visuals() == null ? null : TitleProgram.compile(gui.id(), gui.visuals(), logic).program()));
         }
         return new RuntimeGuis(out);
     }
@@ -209,7 +211,8 @@ public final class RuntimeGuis {
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
-            List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items) {
+            List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items,
+            TitleProgram visuals) {
 
         public Live {
             slots = List.copyOf(slots);
@@ -218,6 +221,12 @@ public final class RuntimeGuis {
             inputs = inputs == null ? InputSlots.NONE : inputs;
             placements = List.copyOf(placements);
             items = List.copyOf(items);
+        }
+
+        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
+                List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items, null);
         }
 
         /** A GUI with input slots, and no {@code open:} block, per-viewer layers or clock. */
@@ -265,6 +274,13 @@ public final class RuntimeGuis {
                     period = gcd(period, layer.frameEvery());
                 }
             }
+            if (visuals != null) {
+                for (var piece : visuals.plan().pieces()) {
+                    if (piece instanceof dev.materione.content.gui.GuiVisualPlan.Raster raster && raster.every() > 0) {
+                        period = gcd(period, raster.every());
+                    }
+                }
+            }
             return period;
         }
 
@@ -280,6 +296,10 @@ public final class RuntimeGuis {
                 return false;
             }
             if (refresh != previous.refresh || !placements.equals(previous.placements)) {
+                return false;
+            }
+            if (!Objects.equals(visuals == null ? null : visuals.plan(),
+                    previous.visuals == null ? null : previous.visuals.plan())) {
                 return false;
             }
             for (int index = 0; index < slots.size(); index++) {

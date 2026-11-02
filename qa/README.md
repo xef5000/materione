@@ -93,7 +93,7 @@ node qa/runner.mjs run [selectors]     # execute; selectors: ids, suite:<n>, all
 node qa/runner.mjs report [runId]      # print a run summary
 node qa/runner.mjs file <runId> <id>   # dossier → GitHub issue + board
 node qa/runner.mjs mark <id> pass|fail # close a needs-eyes verdict
-node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs # pure runner tests
+node --test qa/evidence-redaction.test.mjs qa/runner.test.mjs qa/guioverlay.test.mjs # pure QA tests
 ```
 
 `logic.currency-xp-placeholders` requires the public PlaceholderAPI plugin in the disposable probe

@@ -31,7 +31,7 @@ import java.util.List;
 public record CompiledGui(
         NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
         ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
-        List<Placement> placements, int refresh) {
+        List<Placement> placements, int refresh, GuiVisualPlan visuals) {
 
     /** The canvas width of every chest GUI (vanilla container width). */
     public static final int WIDTH = 176;
@@ -49,6 +49,12 @@ public record CompiledGui(
     }
 
     /** A GUI with playerInventory and inputs, and no per-viewer items or clock. */
+    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
+            List<Placement> placements, int refresh) {
+        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh, null);
+    }
+
     public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs) {
         this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, List.of(), 0);

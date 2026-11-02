@@ -807,6 +807,28 @@ class PackCompilerTest {
                             "assets/mixed/font/gui/default_y18.json",
                             "assets/mixed/font/glyphs.json");
         }
+
+    }
+
+    @Test
+    void conditionalImageAndTextCompileThroughThePackPipeline(@TempDir Path tempDir) throws IOException {
+        Path pack = tempDir.resolve("packs/overlay");
+        Path fixture = GoldenFiles.fixturesRoot().resolve("packs/overlay");
+        writePackSkeleton(pack, "overlay");
+        writeFile(pack.resolve("guis/tabs.yml"), Files.readAllBytes(fixture.resolve("guis/tabs.yml")));
+        writeFile(pack.resolve("assets/textures/gui/banner_strip.png"),
+                Files.readAllBytes(fixture.resolve("assets/textures/gui/banner_strip.png")));
+        var outcome = compilePack(tempDir, "overlay",
+                AllocationTable.load(tempDir.resolve("storage-overlay/allocation.bin")),
+                List.of(new GuiType(guiComponents())));
+        try (ZipFile zip = new ZipFile(outcome.stagedZip().toFile())) {
+            assertThat(entryNames(zip).toList())
+                    .contains("assets/overlay/textures/font/materione/gui_overlay/74616273/73656c6563746564/0.png",
+                            "assets/overlay/font/gui.json",
+                            "assets/overlay/font/gui/default_y20.json");
+            assertThat(entryText(zip, "assets/overlay/font/gui.json"))
+                    .contains("gui_overlay/74616273/73656c6563746564/0.png");
+        }
     }
 
     /** A pack with only GUI text references no GUI font, so its default font keeps only shift. */

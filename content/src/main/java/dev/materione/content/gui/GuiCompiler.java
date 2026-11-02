@@ -21,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 
 /**
  * The pure GUI compiler (gui.md §4): a parsed {@link GuiDefinition} becomes a
@@ -50,6 +51,13 @@ public final class GuiCompiler {
      * @param textures pixel access to the owning pack's textures
      */
     public static GuiCompilation compile(GuiDefinition gui, int backgroundCodepoint, TextureSource textures) {
+        return compile(gui, backgroundCodepoint, textures, (layer, frame) -> {
+            throw new IllegalStateException("overlay allocations are required for dynamic GUI visuals");
+        });
+    }
+
+    public static GuiCompilation compile(GuiDefinition gui, int backgroundCodepoint, TextureSource textures,
+            BiFunction<GuiLayer, Integer, Integer> overlayCodepoint) {
         var report = new Report();
         String namespace = gui.id().namespace();
         int width = CompiledGui.WIDTH;
@@ -57,7 +65,8 @@ public final class GuiCompiler {
         TextureSource bound = reference -> textures.texture(
                 reference.contains(":") ? reference : namespace + ":" + reference);
 
-        ArgbCanvas background = flatten(width, height, gui.layers(), bound,
+        boolean dynamicVisuals = GuiVisualCompiler.needed(gui);
+        ArgbCanvas background = dynamicVisuals ? new ArgbCanvas(width, height) : flatten(width, height, gui.layers(), bound,
                 (layer, reason) -> report.skip(gui, layer.id(), reason));
 
         var runs = new ArrayList<TextRun>();
@@ -68,7 +77,7 @@ public final class GuiCompiler {
             if (!layer.visible()) {
                 continue;
             }
-            if (layer.compiled().target() == RenderTarget.TEXT) {
+            if (layer.compiled().target() == RenderTarget.TEXT && !dynamicVisuals) {
                 collectText(gui, layer.id(), layer.compiled(), runs, report);
             } else if (layer.compiled() instanceof ItemComponent.Layer item) {
                 items.add(new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item));
@@ -104,6 +113,10 @@ public final class GuiCompiler {
         if (smallcapsUsed) {
             assets.put(GuiFonts.smallcapsAsset(namespace), SmallcapsFont.sheetPng());
         }
+        GuiVisualPlan visuals = dynamicVisuals
+                ? GuiVisualCompiler.compile(gui, backgroundCodepoint, bound, overlayCodepoint, assets, fonts,
+                        (layer, reason) -> report.skip(gui, layer.id(), reason))
+                : null;
 
         var slotList = new ArrayList<CompiledGui.Slot>();
         slots.forEach((slot, placement) -> slotList.add(new CompiledGui.Slot(slot, placement.item(), placement.amount())));
@@ -111,27 +124,38 @@ public final class GuiCompiler {
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
         var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
                 PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
-                placements, gui.refresh());
+                placements, gui.refresh(), visuals);
         return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
     }
 
     /**
-     * The input slots (logic.md §25): every container slot whose topmost clickable layer is a visible
-     * input {@code slots} layer. A slot under a button or an item is not an input slot, because the
-     * layer above it takes the click.
+     * Potential input slots: retain a well under layers whose visibility or footprint can change.
+     * A permanently covering layer still blocks it. The window selects effective inputs per render.
      */
     static List<CompiledGui.Input> inputsOf(GuiDefinition gui, ClickMap clicks) {
         var accepts = new LinkedHashMap<String, Object>();
+        var variable = new java.util.HashSet<String>();
         for (GuiLayer layer : gui.layers()) {
             if (layer.visible() && layer.compiled() instanceof SlotsComponent.Layer wells && wells.input()) {
                 accepts.put(layer.id(), wells.accept());
+            }
+            if (layer.visibleIf() != null || layer.frames() != null
+                    || (layer.compiled() instanceof TextComponent.Layer text
+                            && dev.materione.content.gui.item.GuiTemplates.isTemplated(text.text()))) {
+                variable.add(layer.id());
             }
         }
         var inputs = new ArrayList<CompiledGui.Input>();
         for (int slot = 0; slot < gui.rows() * 9; slot++) {
             List<String> top = clicks.layersAt(slot);
-            if (!top.isEmpty() && accepts.containsKey(top.get(0))) {
-                inputs.add(new CompiledGui.Input(slot, top.get(0), accepts.get(top.get(0))));
+            for (String layer : top) {
+                if (accepts.containsKey(layer)) {
+                    inputs.add(new CompiledGui.Input(slot, layer, accepts.get(layer)));
+                    break;
+                }
+                if (!variable.contains(layer)) {
+                    break;
+                }
             }
         }
         return inputs;

@@ -194,28 +194,36 @@ public final class GuiFixture {
         public String failOpenWith;
 
         @Override
-        public void open(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
-                Consumer<String> failed) {
-            show("open", session, gui, opened, failed);
+        public void open(Viewer viewer, GuiSession session,
+                java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
+                Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
+            show("open", session, resolve, opened, failed);
         }
 
         @Override
         public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
                 Consumer<String> failed) {
-            show("reopen", session, gui, opened, failed);
+            show("reopen", session, () -> java.util.Optional.of(gui), ignored -> opened.run(), failed);
         }
 
-        private void show(String what, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
-                Consumer<String> failed) {
+        private void show(String what, GuiSession session,
+                java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
+                Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
             Runnable task = () -> {
                 if (failOpenWith != null) {
                     failed.accept(failOpenWith);
                     return;
                 }
+                var gui = resolve.get().orElse(null);
+                if (gui == null) {
+                    failed.accept(OPEN_DEFINITION_CHANGED);
+                    return;
+                }
                 log.add(what + " " + gui.id().value());
                 session.attach(this);
+                session.displayed(gui);
                 shapes.put(session, new Shape(gui.title(), gui.rows()));
-                opened.run();
+                opened.accept(gui);
             };
             if (defer) {
                 deferred.add(task);
@@ -232,11 +240,13 @@ public final class GuiFixture {
         @Override
         public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("rewrite " + gui.id().value());
+            session.displayed(gui);
         }
 
         @Override
         public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("advance " + gui.id().value());
+            session.displayed(gui);
         }
 
         @Override

@@ -1,9 +1,11 @@
 package dev.materione.plugin.gui;
 
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.platform.PlatformDescriptor;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.runtime.RuntimeRegistries;
+import dev.materione.platform.gui.PaperRichTitles;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.event.RuleDispatcher;
 import dev.materione.plugin.gui.input.ClickRouter;
@@ -66,21 +68,29 @@ public final class GuiStack {
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built) {
-        this(plugin, scheduling, live, engine, visibility, diagnostics, built, null);
+        this(plugin, scheduling, live, engine, visibility, diagnostics, built, null, null);
     }
 
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, VariableService variables) {
+        this(plugin, scheduling, live, engine, visibility, diagnostics, built, null, variables);
+    }
+
+    public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
+            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
+            Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables) {
         GuiLookup guis = GuiLookup.over(live);
         InputGuard guard = new InputGuard();
         RuleDispatcher dispatcher = engine::fire;
         GuiEvents events = new GuiEvents(dispatcher, variables);
         this.router = new ClickRouter(guis, events, visibility, guard);
         GuiJournal journal = new GuiJournal(plugin, scheduling, sessions);
-        GuiRenderer renderer = new GuiRenderer(new LoggingRenderReporter(plugin.getLogger()), variables);
+        var reporter = new LoggingRenderReporter(plugin.getLogger());
+        GuiRenderer renderer = new GuiRenderer(reporter, variables);
         WindowHost windows = new BukkitWindowHost(
-                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer);
+                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer,
+                PaperRichTitles.create(platform), reporter);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
                         plugin, viewer.player(), ticks, task, retired),

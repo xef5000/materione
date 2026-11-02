@@ -160,11 +160,25 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         GuiDefinition gui = check.gui();
         // the same compile the pack runs, for the per-layer outcome: the codepoint comes from the
         // preview view, so this allocates nothing and the background bytes are the check's
-        int codepoint = GuiBackgrounds.codepoint(
-                previewAllocations.get().range(gui.id(), GuiBackgrounds.ALLOCATION_KIND, 1).start());
-        GuiCompilation compiled = GuiCompiler.compile(gui, codepoint, textures.value());
+        Allocations preview = previewAllocations.get();
+        int codepoint = GuiBackgrounds.codepoint(preview.range(gui.id(), GuiBackgrounds.ALLOCATION_KIND, 1).start());
+        GuiCompilation compiled = GuiCompiler.compile(gui, codepoint, textures.value(), (layer, frame) ->
+                GuiBackgrounds.codepoint(preview.range(GuiOverlayKeys.allocation(gui.id(), layer.id(), frame),
+                        GuiBackgrounds.ALLOCATION_KIND, 1).start()));
+        byte[] previewBackground = check.background();
+        if (compiled.model().visuals() != null) {
+            var layers = gui.layers().stream().map(layer -> layer.frames() == null ? layer
+                    : new GuiLayer(layer.id(), layer.component(), layer.name(), layer.visible(), layer.locked(),
+                            layer.opacity(), layer.frames().layers().get(0), layer.visibleIf())).toList();
+            TextureSource bound = reference -> textures.value().texture(
+                    reference.contains(":") ? reference : gui.id().namespace() + ":" + reference);
+            var canvas = GuiCompiler.flatten(CompiledGui.WIDTH, CompiledGui.height(gui.rows()), layers, bound,
+                    (layer, reason) -> { });
+            previewBackground = dev.materione.content.gui.raster.PngEncoder.encodeRgba(
+                    canvas.width(), canvas.height(), canvas.toArray());
+        }
         return ApiResult.ok(new GuiRender(
-                CompiledGui.WIDTH, CompiledGui.height(gui.rows()), check.background(),
+                CompiledGui.WIDTH, CompiledGui.height(gui.rows()), previewBackground,
                 layerRenders(gui, compiled.layers()), check.diagnostics()));
     }
 

@@ -26,7 +26,13 @@ public record GuiLayer(
         boolean locked,
         int opacity,
         CompiledGuiLayer compiled,
-        Object visibleIf) {
+        Object visibleIf,
+        GuiRasterFrames frames) {
+
+    public GuiLayer(String id, NamespacedId component, String name, boolean visible, boolean locked, int opacity,
+            CompiledGuiLayer compiled, Object visibleIf) {
+        this(id, component, name, visible, locked, opacity, compiled, visibleIf, null);
+    }
 
     /** A layer with no {@code visible_if}. */
     public GuiLayer(

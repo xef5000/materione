@@ -20,6 +20,7 @@ import org.bukkit.inventory.Inventory;
 public final class GuiRenderer {
 
     private final SlotRenderer slots;
+    private final TitleRenderer titles;
     private final VariableService variables;
 
     /** @param reporter where a problem the render worked around goes, rate-limited by the caller */
@@ -29,6 +30,7 @@ public final class GuiRenderer {
 
     public GuiRenderer(RenderReporter reporter, VariableService variables) {
         this.slots = new SlotRenderer(reporter);
+        this.titles = new TitleRenderer(reporter);
         this.variables = variables;
     }
 
@@ -41,7 +43,20 @@ public final class GuiRenderer {
      */
     public Rendered render(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full, long ticks) {
         LogicContext context = GuiContexts.build(viewer, session, Map.of(), variables);
-        return slots.render(gui, context, ticks, full ? null : session.rendered());
+        Rendered slotRender = slots.render(gui, context, ticks, full ? null : session.rendered());
+        Rendered rendered;
+        if (gui.visuals() == null) {
+            rendered = new Rendered(slotRender.slots(), slotRender.hidden(), slotRender.resolved(), gui.title(), Map.of());
+        } else {
+            var title = titles.render(gui.id(), gui.rows(), gui.visuals(), context, ticks);
+            var hidden = new java.util.HashSet<>(slotRender.hidden());
+            hidden.addAll(title.hidden());
+            rendered = new Rendered(slotRender.slots(), hidden, slotRender.resolved(), title.title(), title.coverage());
+        }
+        var owned = gui.inputs().effective(gui.clicks(), rendered);
+        var slots = new java.util.HashMap<>(rendered.slots());
+        owned.all().forEach(input -> slots.remove(input.slot()));
+        return new Rendered(slots, rendered.hidden(), rendered.resolved(), rendered.title(), rendered.coverage());
     }
 
     /**
@@ -53,6 +68,10 @@ public final class GuiRenderer {
     public void paint(Inventory inventory, Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full) {
         Rendered previous = session.rendered();
         Rendered next = render(viewer, session, gui, full, session.windowTicks());
+        paint(inventory, session, previous, next);
+    }
+
+    public void paint(Inventory inventory, GuiSession session, Rendered previous, Rendered next) {
         RenderDiff.apply(previous.slots(), next.slots(), (slot, appearance) ->
                 inventory.setItem(slot, appearance == null ? null : AppearanceStacks.build(appearance)));
         session.remember(next);

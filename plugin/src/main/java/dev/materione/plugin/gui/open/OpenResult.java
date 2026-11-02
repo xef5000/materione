@@ -4,8 +4,9 @@ import dev.materione.plugin.gui.session.GuiSession;
 
 /**
  * What {@link GuiOpener#open} did. {@link Outcome#OPENED} means the session exists and the window is
- * opening (it is up at once, or on the viewer's next tick when they were mid-click); every other
- * outcome left the viewer's windows and sessions as they were.
+ * opening (it is up at once, or on the viewer's next tick when they were mid-click). A known admission
+ * failure leaves the viewer's windows and sessions as they were; an unexpected host failure can occur
+ * after the prior session has been retired and its window is then closed.
  *
  * @param session the new session, for {@link Outcome#OPENED}
  * @param reason why not, for every other outcome

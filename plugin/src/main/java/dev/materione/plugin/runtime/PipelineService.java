@@ -722,7 +722,12 @@ public final class PipelineService {
         try {
             out.put(gui.id(), GuiCompiler.compile(
                     gui, GuiBackgrounds.codepoint(number),
-                    new PackTextures(pack.id(), pack.directory())).model());
+                    new PackTextures(pack.id(), pack.directory()), (layer, frame) -> {
+                        var key = dev.materione.content.gui.GuiOverlayKeys.allocation(gui.id(), layer.id(), frame);
+                        String value = allocation.allocationOf(key, GuiBackgrounds.ALLOCATION_KIND)
+                                .orElseThrow(() -> new IllegalStateException("missing overlay allocation " + key));
+                        return GuiBackgrounds.codepoint(dev.materione.api.content.AllocatedRange.parse(value).start());
+                    }).model());
         } catch (RuntimeException e) {
             diagnostics.publish(Diagnostic.error(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,

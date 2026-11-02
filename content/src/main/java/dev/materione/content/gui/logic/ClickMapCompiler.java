@@ -56,7 +56,22 @@ public final class ClickMapCompiler {
             if (!layer.visible() || skipped.contains(layer.id())) {
                 continue;
             }
-            for (int slot : coveredSlots(area(layer, textures), gui.rows())) {
+            var covered = new java.util.TreeSet<>(coveredSlots(area(layer, textures), gui.rows()));
+            if (layer.frames() != null) {
+                for (var frame : layer.frames().layers()) {
+                    try {
+                        covered.addAll(coveredSlots(frame.clickArea(textures), gui.rows()));
+                    } catch (RuntimeException ignored) {
+                        // A broken frame cannot receive clicks.
+                    }
+                }
+            }
+            if (layer.compiled() instanceof dev.materione.content.gui.TextComponent.Layer text
+                    && dev.materione.content.gui.item.GuiTemplates.isTemplated(text.text())) {
+                covered.addAll(coveredSlots(new ClickArea.Rect(text.x(), text.y(), 2048,
+                        text.font() == dev.materione.api.gui.TitleSink.Font.SMALLCAPS ? 16 : 8), gui.rows()));
+            }
+            for (int slot : covered) {
                 perSlot.get(slot).add(layer.id());
             }
         }

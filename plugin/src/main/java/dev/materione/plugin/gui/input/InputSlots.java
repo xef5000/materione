@@ -6,6 +6,8 @@ import dev.materione.behavior.flow.Condition;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
 import dev.materione.content.gui.CompiledGui;
+import dev.materione.content.gui.logic.ClickMap;
+import dev.materione.plugin.gui.render.Rendered;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Map;
@@ -120,6 +122,30 @@ public final class InputSlots {
     /** Every input slot, in slot order. */
     public Collection<Input> all() {
         return bySlot.values();
+    }
+
+    /** Restricts policy to the slots currently owned by this window. */
+    public InputSlots only(java.util.Set<Integer> slots) {
+        return of(bySlot.values().stream().filter(input -> slots.contains(input.slot())).toList(), locked);
+    }
+
+    /** Selects inputs from the layers actually displayed in this render. */
+    public InputSlots effective(ClickMap clicks, Rendered rendered) {
+        var active = new ArrayList<Input>();
+        for (Input input : bySlot.values()) {
+            for (String layer : clicks.layersAt(input.slot())) {
+                if (rendered.hidden().contains(layer)
+                        || (rendered.coverage().containsKey(layer)
+                            && !rendered.coverage().get(layer).contains(input.slot()))) {
+                    continue;
+                }
+                if (layer.equals(input.layer())) {
+                    active.add(input);
+                }
+                break;
+            }
+        }
+        return of(active, locked);
     }
 
     /** Whether the viewer's own inventory is locked (logic.md §6.5). */

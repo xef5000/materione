@@ -52,6 +52,7 @@ public final class GuiLiveRefresh {
         this.windows = windows;
         this.lifecycle = lifecycle;
         this.ticker = ticker;
+        windows.bindReconciler((viewer, session) -> refreshViewer(viewer, session, guis.find(session.gui())));
     }
 
     /**
@@ -83,7 +84,7 @@ public final class GuiLiveRefresh {
             scheduling.executeEntity(plugin, player, () -> {
                 Viewer viewer = Viewer.of(player);
                 if (refresh) {
-                    refreshViewer(viewer, session, now);
+                    refreshViewer(viewer, session, guis.find(session.gui()));
                 } else {
                     ticker.ensure(viewer, session);
                 }
@@ -108,7 +109,8 @@ public final class GuiLiveRefresh {
     /** One viewer's window brought up to date. Runs on the viewer's own thread. */
     void refreshViewer(Viewer viewer, GuiSession session, Optional<RuntimeGuis.Live> now) {
         Player player = viewer.player();
-        if (player == null || !player.isOnline() || !session.isOpen()) {
+        if (player == null || !player.isOnline() || !session.isOpen()
+                || sessions.current(session.player()).filter(current -> current == session).isEmpty()) {
             return;
         }
         Optional<WindowHost.Shape> shape = windows.shape(viewer, session);
@@ -125,8 +127,16 @@ public final class GuiLiveRefresh {
                 plugin.getLogger().info("MATERIONE-GUI-REFRESH-CLOSED id=" + session.gui()
                         + " player=" + viewer.name());
             }
-            case REOPEN -> windows.reopen(viewer, session, now.orElseThrow(), () -> ticker.ensure(viewer, session),
-                    reason -> lifecycle.removed(viewer, session));
+            case REOPEN -> {
+                Object requestedWindow = session.window();
+                windows.reopen(viewer, session, now.orElseThrow(), () -> ticker.ensure(viewer, session),
+                        reason -> {
+                            if (session.isOpen() && session.window() == requestedWindow) {
+                                lifecycle.removed(viewer, session);
+                                windows.closeOwned(viewer, session);
+                            }
+                        });
+            }
             case UPDATE_CONTENTS -> {
                 windows.rewrite(viewer, session, now.orElseThrow());
                 ticker.ensure(viewer, session);

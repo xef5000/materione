@@ -130,6 +130,11 @@ public final class AllocationTable {
         }
         if (existing != null
                 && AllocatedRange.parse(existing.value()).count() >= count) {
+            if (!live.containsKey(key)) {
+                tombstones.remove(key);
+                live.put(key, existing);
+                pending.add(record(KIND_ADD, existing));
+            }
             return AllocatedRange.parse(existing.value());
         }
         int last = counters.getOrDefault(kind, 0);
@@ -151,49 +156,30 @@ public final class AllocationTable {
 
     /**
      * A non-persisting view for previews (gui.md §10 #8): it answers what
-     * {@link #allocate} and {@link #range} would answer, with the same values,
-     * but binds nothing, counts nothing and writes nothing. A draft compiled
-     * through it leaves the durable table exactly as it was.
+     * {@link #allocate} and {@link #range} would answer from the table's state
+     * at the time of this call. Allocations are tracked within the preview so
+     * multiple resources cannot receive the same value, but never affect the
+     * durable table or write to disk.
      */
-    public Allocations preview() {
+    public synchronized Allocations preview() {
+        AllocationTable shadow = new AllocationTable(file);
+        shadow.live.putAll(live);
+        shadow.tombstones.putAll(tombstones);
+        shadow.counters.putAll(counters);
         return new Allocations() {
             @Override
             public String allocate(NamespacedId resource, String kind) {
-                synchronized (AllocationTable.this) {
-                    String key = key(resource, kind);
-                    Entry liveEntry = live.get(key);
-                    if (liveEntry != null) {
-                        return liveEntry.value();
-                    }
-                    Entry tombstoned = tombstones.get(key);
-                    if (tombstoned != null) {
-                        return tombstoned.value();
-                    }
-                    return Integer.toString(counters.getOrDefault(kind, 0) + 1);
-                }
+                return shadow.allocate(resource, kind);
             }
 
             @Override
             public AllocatedRange range(NamespacedId resource, String kind, int count) {
-                if (count < 1) {
-                    throw new IllegalArgumentException("range count must be >= 1: " + count);
-                }
-                synchronized (AllocationTable.this) {
-                    String key = key(resource, kind);
-                    Entry existing = live.get(key);
-                    if (existing == null) {
-                        existing = tombstones.get(key);
-                    }
-                    if (existing != null && AllocatedRange.parse(existing.value()).count() >= count) {
-                        return AllocatedRange.parse(existing.value());
-                    }
-                    return new AllocatedRange(counters.getOrDefault(kind, 0) + 1, count);
-                }
+                return shadow.range(resource, kind, count);
             }
 
             @Override
             public Optional<String> lookup(NamespacedId resource, String kind) {
-                return allocationOf(resource, kind);
+                return shadow.allocationOf(resource, kind);
             }
         };
     }

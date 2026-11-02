@@ -422,11 +422,20 @@ shop:
 3. **Parse and validate `args`.** Argument types are `string`, `int`, `number`, `player`,
    `boolean` and `choice`. A failure sends a usage message that is generated from the schema.
 4. **Evaluate `open.requirement`.** When it fails, run `deny`. The bypass permission is
-   `materione.gui.bypass.<pack>.<id>`.
+   `materione.gui.bypass.<pack>.<id>`. A known unavailable window capability also refuses here,
+   before the previous session or its input ownership is changed.
 5. **Fire `gui.opening`.** The event is cancellable, so a flow may `stop: {cancel: true}`.
 6. **Create the `GuiSession`.**
 7. **Render (§6.3) and open.**
 8. **Fire `gui.open`.**
+
+An unexpected immediate host failure returns `FAILED`; if it follows replacement, the retired
+window is closed only while it is still the viewer's window. Deferred failures perform the same
+session-identity check. A failed shape-reload reopen ends its session, returns inputs once and
+closes that session's still-visible window; a stale failure cannot close a newer window, even
+within the same session. Rewrites, shape changes and unsupported-title closes requested during
+an inventory transaction coalesce; at execution the live resolver checks the owned session and
+window again and chooses the action from the current published GUI, including removal.
 
 **Command registration.** Commands register through Paper's Brigadier lifecycle and are re-synced
 to clients after a reload. An argument mismatch must not reproduce #96 (the client's synced tree
@@ -465,7 +474,8 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
   order, and layer order *is* priority, so authors see it.
 - **Templated item overrides.** On item layers, `name`, `lore` (`lore_mode: replace|append|prepend`),
   `amount` and `glint` are templates, and `item:` is an item source (§4.4).
-- **Animation.** `frames: {every: <ticks>, items: [sources...]}` on item layers.
+- **Animation.** `frames: {every: <ticks>, items: [sources...]}` on item layers;
+  raster layers opt in with `materione:overlay_frames: {every: <ticks>, layers: [component-field patches...]}` (§6.4).
 - **Dynamic detection.** A layer is *dynamic* when it has `visible_if`, a template, a templated
   source or `frames`. The compiler records this, and refresh re-evaluates **only** dynamic layers.
 - **`refresh: <ticks>`** on the GUI sets the clock (default off; `gui.refresh` forces a render).
@@ -474,19 +484,54 @@ falls inside the layer's rectangle (buttons, text, images), or when the slot is 
 
 ### 6.4 Conditional raster and dynamic title text
 
-The background is one flattened glyph (gui.md §4), so raster layers cannot toggle at runtime.
-**Decision:** a raster layer (`panel`, `image`, `paint`, `button`) with `visible_if` or `frames`
-does not flatten. It compiles to its **own overlay glyph**: its own codepoint, from the
-`gui-background` allocation. The title assembler then includes or omits it per render, at its
-place in the layer order.
+Static-only GUIs retain their flattened glyph (gui.md §4). When a GUI has conditional or
+animated raster or conditional or templated text, its background glyph is transparent and
+every visible raster layer compiles to its **own overlay glyph**, with a separate glyph per
+frame. The title assembler includes or omits each piece per render, raster first and then text,
+retaining authored order within each target. Static raster pieces also remain individual so
+their order relative to conditional raster pieces is preserved.
 
-- A title change re-sends the title (`InventoryView#setTitle`) without re-opening the window. This
-  needs verification on 1.21.4 and 26.x as part of the issue.
-- The cost is one codepoint per dynamic raster layer; the block has about 14k.
+- A changed rich title is sent to the existing native server menu; unchanged titles are not sent.
+  No Bukkit inventory open or close is performed for that refresh.
+- When a non-structural refresh would change the title while the cursor holds an item, the
+  entire displayed render, its definition (including click and input rules), hitboxes and input
+  ownership remain frozen together. An owned retry checks only ownership and cursor while held, and
+  resolves the latest live GUI and state after the cursor clears, even without a refresh clock;
+  intermediate frames are not replayed. The window clock keeps advancing. Item-only updates
+  whose title is unchanged still apply when no title change is pending; once pending, the
+  whole presentation stays frozen until release. Structural reopens retain their existing policy.
+- The cost is one codepoint per raster frame in a dynamic GUI, plus its transparent background;
+  the block has 5,888 codepoints
+  (`U+E200`–`U+F8FF`).
 - This gives tabs, toggles, selected states and progress art, which neither incumbent can do.
 
 Text layers with templates, and conditional text, are re-laid out per render through the same
 title assembler. The default-font width table (#202) makes arbitrary text measurable.
+
+**Paper API research and native verification.** Paper's
+[`InventoryView#setTitle(String)` on 1.21.4](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
+and [26.1.2](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-api/src/main/java/org/bukkit/inventory/InventoryView.java)
+is deprecated as unsupported and accepts a legacy string, not an Adventure component. The
+[1.21.4 implementation](https://github.com/PaperMC/Paper/blob/73116ac9dd1d55c59db411a55de7e91e025a0c80/paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryView.java)
+sends an open-screen packet then calls `updateInventory`; the
+[26.1.2 implementation](https://github.com/PaperMC/Paper/blob/e4e17fc90d31c3dca6de8bebc87c741749f8f3df/paper-server/src/main/java/org/bukkit/craftbukkit/inventory/CraftInventoryView.java)
+sends that packet then `sendAllDataToRemote`. Neither API can represent the custom font
+components required by this GUI title. The owner selected a pinned platform transport instead:
+for 1.21.4 and 26.1.2 it resolves Paper's native packet and Adventure bridge signatures, sends the
+component with the current server menu ID, and resynchronizes its contents and cursor. An
+unsupported version or signature refuses dynamic-visual opens (`MTR-0073`); a failure during
+refresh closes the window through the normal return path rather than continuing with a stale title
+and newer click policy. There is no silent reopen fallback. The opt-in 1.21.4 protocol-client
+test checks the native server menu and session, rich title packets, cursor and input conservation,
+and absence of close packets; it does not test client rendering or pointer gestures.
+
+On a vanilla 26.1.2 client, screenshots showed conditional overlays and a physical shift-click
+transferred the input items. The open-screen packet reconstructed the **client** screen and menu
+while retaining the server menu and session. A physical quick-craft drag held across an animation
+update was canceled by that reconstruction before the held-cursor deferral policy above was
+added; the observed items remained on the cursor. Deferral avoids sending a changed title while
+the server sees a held cursor, but does not promise atomic delivery, protect every structural
+reopen or establish that all drag interruptions and flicker are absent.
 
 ### 6.5 Input slots and the player's inventory
 
@@ -1771,7 +1816,8 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 4. **A window is its session's window only while the host says so.** `GuiMenu` points at the session, and
    the session records which window currently shows it (`attach`). A close event for any other window (the
    old one when the host re-opens, or when one GUI replaces another) is not the player closing. The listener
-   compares and ignores. This is what lets a title change re-open a window without ending the session.
+   compares and ignores. This lets a shape-changing reload re-open without ending the session; dynamic
+   title refreshes do not use that reopen path (§6.4).
 
 **The opener**
 
@@ -1903,7 +1949,7 @@ Each is reversible by the owner. The code is in `plugin.gui..`, `plugin.logic.ac
 |---|---|
 | #215 open commands | `GuiOpener.gate(OpenGate)` for permission, typed args, requirement, deny and bypass; `OpenSpec` beside `GuiRules` in `content.gui.logic`; `GuiRuntime` and the command already pass the arguments through. |
 | #216 dynamic slots | `LayerVisibility` (the router already asks it); `WindowRenderer` becomes the per-session renderer, and `gui.refresh` re-renders through it; the click map keeps conditional layers in and asks per click. |
-| #217 overlays | The title is assembled per GUI by the compiler; `WindowHost.reopen` is the title-change path. |
+| #217 overlays | The title is assembled per render; the pinned platform transport resends a changed title to the existing server menu (§6.4). |
 | #218 input slots | The `GuiListener.route` policy table gains its rows; `GuiInput.click` is where `gui.slot_change` and `gui.click_inventory` fire from; `GuiEvents` fires them. |
 | #211 variables | `GuiSession.vars()` is a live, concurrent map the session scope can write through and back a session facet with, and `GuiSessions.current(player)` / `SessionHistory` are what `%materione_gui_open%` and `%materione_gui_last%` read; nothing here depends on the variables work. |
 | #219 lists | `GuiSession.pages()`; `ClickArea.Slots` for a list's slots; `GuiEvents.click` takes extra context for `entry.*`. |
@@ -2174,11 +2220,11 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
    predicate or a composite. The gui type keeps the authored value; the engine compiles it when the live view is
    built, through `FlowCompiler.compileCondition`, so `content` stays rule-free. Its `${root}`s are checked against the
    GUI's roots (`player`, `server`, `vars`, `gui`; `MTR-0060`). The condition's own problems keep their codes.
-2. **Only item layers honour `visible_if` in this build.** A raster or text layer (`panel`, `button`, `slots`,
+2. **At #216 only item layers honoured `visible_if`.** A raster or text layer (`panel`, `button`, `slots`,
    `image`, `paint`, `text`) is drawn into the background or the title, which cannot change while a window is open
    until overlay glyphs exist (§6.4, #217). A `visible_if` on one of them skips that layer (`MTR-0052`) with the
    reason in its message, rather than shipping a layer that silently ignores its condition. #217 lifts the
-   restriction. This is where the design's "every layer" is narrower than written.
+   restriction for supported raster and text layers (§6.4). Conditional input-slot layers remain rejected.
 3. **`name` means two things on an item layer, and the file does not change.** It is the layers-panel label on every
    layer, and on an item layer it is the item's display name, a template (§6.3). The value reaches a component only
    when the component's schema declares a `name` parameter, so a component that does not declare it still receives
@@ -2267,11 +2313,39 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
 
 **Deferred**
 
-- Raster and text `visible_if` and their animation: #217 (overlay glyphs, §6.4).
+- Raster and text `visible_if` and raster animation were deferred to #217 (§6.4).
 - `item-sources` in the behaviour vocabulary (`VocabularyBuilder`) and the editor's palette for them: with the Logic
   tab (#223, #224). The studio's layer inspector reads the new fields from the self-description, but no inspector
   control for `visible_if` or `frames` is designed here.
 - The click policy for input slots: #218.
+
+---
+
+### Decisions taken in #217 (conditional title overlays)
+
+- Each GUI/layer/frame has an unambiguous synthetic allocation identity in `gui-background`.
+  Allocations remain reserved when unused; an explicitly tombstoned identity is reactivated
+  with its original codepoint.
+  Compilation rejects a GUI on exhaustion rather than writing a partial pack. Preview uses an
+  independent snapshot and reserves provisional values without altering durable allocations.
+- `materione:overlay_frames` contains `every` (positive ticks) and a non-empty `layers` list (up to 256).
+  Each entry patches component-specific fields over the base layer; identity, opacity,
+  conditions and nested overlay frames cannot vary. A component that declares that namespaced
+  field owns it instead, and existing component-owned `frames` is untouched. A GUI's refresh clock includes the frame period.
+  Input slot layers cannot be conditional or animated; existing input ownership is unchanged.
+- Text templates use the existing expression engine and are validated again after expansion.
+  Invalid conditions hide their layer; a failed expansion omits its text and reports the
+  existing `MTR-0073` dynamic-layer diagnostic. Click routing uses the last rendered visibility
+  and current frame or expanded text footprint, not hidden layers or stale geometry.
+- Dynamic title changes use the pinned platform transport (§6.4), not `openInventory`: the server
+  menu, session and clock remain the same. A shape-changing reload still uses the existing reopen
+  path, which attempts to carry cursor and inputs. Neither path establishes crash durability.
+- Conditional and animated overlays are retained as potential input blockers; the displayed
+  visibility and current footprint decide which authored input slots are active. An input
+  becoming covered returns its item through the existing input-return path. Deferred title
+  or ownership-changing refreshes during a click run after the transaction, are superseded
+  by newer refreshes and re-render when they run. A `gui.slot_change` pre-event therefore
+  cannot return a stack while the same shift transfer is still applying it.
 
 ---
 
@@ -2318,7 +2392,7 @@ by the owner.
    variables. One that does not compile, or throws while tested, accepts nothing (`MTR-0074`).
 8. **Returns.** Items in input slots go back on every end of a session (close by the player, quit, a flow's close,
    replacement, removal) and on every window close, including a window that was replaced. The player's inventory
-   gets them first; what does not fit drops at their feet. A re-open (a title or size change) carries them to the
+   gets them first; what does not fit drops at their feet. A shape-changing reload's re-open carries them to the
    new window, and a rewrite keeps them in slots that are still inputs and returns the rest. Nothing is deleted unless
    a flow says so (`gui.slot_item: {op: clear}`).
 9. **`gui.click_inventory` fires for every click in the viewer's inventory while the window is open**, whatever

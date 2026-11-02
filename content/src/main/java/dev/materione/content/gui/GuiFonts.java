@@ -58,6 +58,10 @@ final class GuiFonts {
                 GuiTitle.ascentFor(0), height, List.of(String.valueOf((char) codepoint)));
     }
 
+    static Map<String, Object> bitmapProvider(String texture, int codepoint, int height) {
+        return bitmap(texture, GuiTitle.ascentFor(0), height, List.of(String.valueOf((char) codepoint)));
+    }
+
     /** The providers of one small-caps offset font: the space advance, then the sheet for row {@code y}. */
     static List<Map<String, Object>> smallcaps(String namespace, int y) {
         var providers = new ArrayList<Map<String, Object>>();

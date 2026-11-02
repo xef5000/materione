@@ -18,6 +18,7 @@ import java.util.Set;
 /** Parses ordered GUI layers, quarantining each rejected layer independently. */
 final class GuiLayerParser {
 
+    static final String OVERLAY_FRAMES = "materione:overlay_frames";
     /** Common fields are withheld except for name when the component declares it. */
     private static final Set<String> COMMON_FIELDS =
             Set.of("id", "type", "name", "visible", "locked", "opacity", "visible_if");
@@ -87,15 +88,21 @@ final class GuiLayerParser {
 
         Object visibleIf = visibleIf(fields, layerId, type);
         boolean takesName = declaresName(component);
+        boolean overlayFrames = target == RenderTarget.RASTER && fields.containsKey(OVERLAY_FRAMES)
+                && !declares(component, OVERLAY_FRAMES, true);
         var own = new LinkedHashMap<String, Object>();
         fields.forEach((key, value) -> {
-            if (!COMMON_FIELDS.contains(key) || (takesName && "name".equals(key))) {
+            if ((!COMMON_FIELDS.contains(key) || (takesName && "name".equals(key)))
+                    && !(overlayFrames && key.equals(OVERLAY_FRAMES))) {
                 own.put(key, value);
             }
         });
         CompiledGuiLayer compiled;
+        GuiRasterFrames frames;
         try {
             compiled = component.parse(new GuiComponentConfiguration(guiId, layerId, rows, own));
+            frames = overlayFrames
+                    ? GuiRasterFrames.parse(fields.get(OVERLAY_FRAMES), component, guiId, layerId, rows, own) : null;
         } catch (IllegalArgumentException rejected) {
             throw new Rejection(layerId, type, rejected.getMessage());
         } catch (RuntimeException failure) {
@@ -105,19 +112,24 @@ final class GuiLayerParser {
         if (compiled == null || compiled.target() != target) {
             throw new Rejection(layerId, type, "component produced a layer for a different target");
         }
-        if (visibleIf != null && !(compiled instanceof ItemComponent.Layer)) {
-            // Raster and text layers need overlay glyphs before they can change in an open window (#217).
-            throw new Rejection(layerId, type, "visible_if works on item layers in this build; "
-                    + "raster and text layers need overlay glyphs (logic.md §6.4, #217)");
+        if ((visibleIf != null || frames != null) && compiled instanceof SlotsComponent.Layer wells && wells.input()) {
+            throw new Rejection(layerId, type, "input slot layers cannot be conditional or animated");
         }
-        return new GuiLayer(layerId, componentId, name, visible, locked, opacity, compiled, visibleIf);
+        if (visibleIf != null && target == RenderTarget.SLOT && !(compiled instanceof ItemComponent.Layer)) {
+            throw new Rejection(layerId, type, "visible_if is not supported by this slot component");
+        }
+        return new GuiLayer(layerId, componentId, name, visible, locked, opacity, compiled, visibleIf, frames);
     }
 
     private static boolean declaresName(GuiComponent component) {
+        return declares(component, "name", false);
+    }
+
+    private static boolean declares(GuiComponent component, String name, boolean onFailure) {
         try {
-            return component.describe().parameters().stream().anyMatch(parameter -> "name".equals(parameter.id()));
+            return component.describe().parameters().stream().anyMatch(parameter -> name.equals(parameter.id()));
         } catch (RuntimeException failure) {
-            return false; // containment: a broken description receives only its own fields
+            return onFailure;
         }
     }
 

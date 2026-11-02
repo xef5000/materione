@@ -2,6 +2,7 @@ package dev.materione.plugin.gui.session;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ContextFacet;
+import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.render.Rendered;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -49,6 +50,7 @@ public final class GuiSession {
     private volatile long elapsedTicks;
     private volatile long windowTicks;
     private volatile Rendered rendered = Rendered.EMPTY;
+    private volatile RuntimeGuis.Live displayed;
     private volatile Object window;
 
     /**
@@ -162,6 +164,16 @@ public final class GuiSession {
     /** Records a render of the window (the paint path). */
     public void remember(Rendered next) {
         rendered = next;
+    }
+
+    /** The immutable definition whose presentation is currently installed in this window. */
+    public java.util.Optional<RuntimeGuis.Live> displayed() {
+        return java.util.Optional.ofNullable(displayed);
+    }
+
+    /** Records the definition after its presentation and input ownership have been installed. */
+    public void displayed(RuntimeGuis.Live gui) {
+        displayed = gui;
     }
 
     /** A new window: nothing is shown yet, and its clock starts at zero (so an animation starts at its first frame). */

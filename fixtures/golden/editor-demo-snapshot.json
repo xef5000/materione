@@ -9680,7 +9680,7 @@
           },
           {
             "advanced": false,
-            "description": "Ordered layers, bottom to top; each layer is one component instance",
+            "description": "Ordered layers, bottom to top; each layer is one component instance. Raster layers may animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}",
             "id": "layers",
             "label": "Layers",
             "nested": [
@@ -9765,7 +9765,7 @@
               },
               {
                 "advanced": true,
-                "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. Item layers only in this build: the layer order is its priority, and the topmost visible layer of a slot wins",
+                "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. The layer order is its priority, and the topmost visible layer of a slot wins",
                 "id": "visible_if",
                 "label": "Visible if",
                 "order": 35,
@@ -9773,6 +9773,17 @@
                 "section": "identity",
                 "type": "raw",
                 "uiHint": "text"
+              },
+              {
+                "advanced": true,
+                "description": "Raster animation: {every: ticks, layers: [component-field patches]}",
+                "id": "materione:overlay_frames",
+                "label": "Materione:overlay Frames",
+                "order": 0,
+                "required": false,
+                "section": "general",
+                "type": "raw",
+                "uiHint": "advanced"
               }
             ],
             "order": 0,
@@ -15726,7 +15737,7 @@
         },
         {
           "advanced": false,
-          "description": "Ordered layers, bottom to top; each layer is one component instance",
+          "description": "Ordered layers, bottom to top; each layer is one component instance. Raster layers may animate with materione:overlay_frames: {every: ticks, layers: [component-field patches]}",
           "id": "layers",
           "label": "Layers",
           "nested": [
@@ -15811,7 +15822,7 @@
             },
             {
               "advanced": true,
-              "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. Item layers only in this build: the layer order is its priority, and the topmost visible layer of a slot wins",
+              "description": "A condition (an expression, a predicate or a composite, as in a rule's require) that decides whether the layer is shown, checked on every render. The layer order is its priority, and the topmost visible layer of a slot wins",
               "id": "visible_if",
               "label": "Visible if",
               "order": 35,
@@ -15819,6 +15830,17 @@
               "section": "identity",
               "type": "raw",
               "uiHint": "text"
+            },
+            {
+              "advanced": true,
+              "description": "Raster animation: {every: ticks, layers: [component-field patches]}",
+              "id": "materione:overlay_frames",
+              "label": "Materione:overlay Frames",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
             }
           ],
           "order": 0,

@@ -201,6 +201,37 @@ class GuiCompilerTest {
         assertThat(GuiBackgrounds.fits(5889)).isFalse();
     }
 
+    @Test
+    void overlayExhaustionQuarantinesTheGuiWithoutEmittingAssets() {
+        var gui = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
+                GuiTestSupport.layer("panel", "panel", "width", 20, "height", 20, "visible_if", true)));
+        var emitter = new Recording(TextureSource.NONE);
+        var allocations = new Allocations() {
+            int next = 5888;
+
+            @Override
+            public String allocate(NamespacedId id, String kind) {
+                return Integer.toString(next++);
+            }
+
+            @Override
+            public AllocatedRange range(NamespacedId id, String kind, int count) {
+                return new AllocatedRange(next++, count);
+            }
+
+            @Override
+            public Optional<String> lookup(NamespacedId id, String kind) {
+                return Optional.empty();
+            }
+        };
+        assertThatThrownBy(() -> GuiTestSupport.type().compile(gui, gui.id(), emitter, allocations))
+                .isInstanceOf(CompileRejectException.class)
+                .satisfies(error -> assertThat(((CompileRejectException) error).code())
+                        .isEqualTo(DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED));
+        assertThat(emitter.assets).isEmpty();
+        assertThat(emitter.fonts).isEmpty();
+    }
+
     // --- helpers ---------------------------------------------------------------
 
     private static GuiCompilation compile(Map<String, Object> layers, int codepoint, TextureSource textures) {

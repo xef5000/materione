@@ -1,0 +1,35 @@
+floor:
+  title: Floor title transport
+  rows: 1
+  refresh: 10
+  player_inventory: free
+  layers:
+    - {id: frame, type: panel, x: 0, y: 0, width: 176, height: 132}
+    - {id: input, type: slots, region: container, input: true}
+    - {id: toggle, type: button, x: 152, y: 18, width: 16, height: 16}
+    - id: selected
+      type: image
+      image: gui/banner_strip
+      x: 80
+      y: 18
+      width: 20
+      height: 16
+      visible_if: "gui.session.selected == true"
+    - id: label
+      type: text
+      x: 80
+      y: 6
+      text: ACTIVE
+      font: default
+      visible_if: "gui.session.selected == true"
+  behavior:
+    - on: gui.open
+      do:
+        - set_var: {var: session.selected, value: false}
+        - run_command: {command: "say MATERIONE-FLOOR-OPEN", as: console}
+    - on: gui.click
+      layer: toggle
+      do:
+        - set_var: {var: session.selected, op: toggle}
+        - gui.refresh
+        - run_command: {command: "say MATERIONE-FLOOR-TOGGLE", as: console}

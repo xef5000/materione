@@ -171,7 +171,7 @@ class ItemLayerTest {
     }
 
     @Test
-    void visibleIfIsAcceptedOnItemLayersAndRejectedOtherwiseWithItsReason() {
+    void visibleIfIsAcceptedOnItemAndTextLayersAndRejectsBadShapes() {
         var definition = gui(
                 item("shown", "slot", 4, "item", "minecraft:stone", "visible_if", List.of("player.level > 1")),
                 Map.of("id", "label", "type", "text", "x", 8, "y", 6, "text", "Hi",
@@ -179,7 +179,7 @@ class ItemLayerTest {
                 item("shape", "slot", 5, "item", "minecraft:stone", "visible_if", 3));
 
         assertThat(skipReason(definition, "shown")).isNull();
-        assertThat(skipReason(definition, "label")).contains("visible_if works on item layers");
+        assertThat(skipReason(definition, "label")).isNull();
         assertThat(skipReason(definition, "shape")).contains("visible_if is a condition");
     }
 

@@ -1,0 +1,30 @@
+animation_input:
+  title: Overlay interaction
+  rows: 1
+  refresh: 5
+  player_inventory: free
+  layers:
+    - {id: background, type: panel, x: 0, y: 0, width: 176, height: 132}
+    - id: gems
+      type: slots
+      region: container
+      input: true
+      accept: "${slot.item == 'corpus:gem_red'}"
+    - id: moving
+      type: image
+      image: gui/banner_strip
+      x: 72
+      y: 4
+      width: 20
+      height: 8
+      materione:overlay_frames:
+        every: 40
+        layers:
+          - {x: 72}
+          - {x: 104}
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-OVERLAY-INTERACTION-OPEN"
+            as: console

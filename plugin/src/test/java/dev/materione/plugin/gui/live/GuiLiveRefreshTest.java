@@ -89,6 +89,57 @@ class GuiLiveRefreshTest {
     }
 
     @Test
+    void failedShapeReopenEndsSessionReturnsInputsOnceAndClosesItsWindow() {
+        reloadWith(shop("Market", 4));
+        f.windows.failOpenWith = "transport unavailable";
+
+        f.refresh.refreshViewer(f.viewer, session, now());
+
+        assertThat(session.endedBecause()).isEqualTo(CloseReason.REMOVED);
+        assertThat(f.sessions.current(f.viewer.id())).isEmpty();
+        assertThat(f.windows.released).containsExactly(session);
+        assertThat(f.windows.log).containsExactly("close");
+        f.lifecycle.windowClosed(f.viewer, session, CloseReason.PLAYER);
+        assertThat(f.windows.released).containsExactly(session);
+    }
+
+    @Test
+    void staleDeferredReopenFailureDoesNotCloseNewSession() {
+        reloadWith(shop("Market", 4));
+        f.windows.defer = true;
+        f.windows.failOpenWith = "server refused";
+        f.refresh.refreshViewer(f.viewer, session, now());
+        f.sessions.end(session, CloseReason.REPLACED);
+        var replacement = new GuiSession(f.viewer.id(), f.viewer.name(), GuiFixture.id("shop"), Map.of());
+        f.sessions.begin(replacement);
+
+        f.windows.deferred.forEach(Runnable::run);
+
+        assertThat(f.sessions.current(f.viewer.id())).containsSame(replacement);
+        assertThat(replacement.isOpen()).isTrue();
+        assertThat(f.windows.log).isEmpty();
+        assertThat(f.windows.released).isEmpty();
+    }
+
+    @Test
+    void staleDeferredFailureDoesNotEndANewerWindowOfTheSameSession() {
+        reloadWith(shop("Market", 4));
+        f.windows.defer = true;
+        f.windows.failOpenWith = "old request";
+        f.refresh.refreshViewer(f.viewer, session, now());
+        var newerWindow = new Object();
+        session.attach(newerWindow);
+
+        f.windows.deferred.forEach(Runnable::run);
+
+        assertThat(session.isOpen()).isTrue();
+        assertThat(f.sessions.current(f.viewer.id())).containsSame(session);
+        assertThat(session.window()).isSameAs(newerWindow);
+        assertThat(f.windows.log).isEmpty();
+        assertThat(f.windows.released).isEmpty();
+    }
+
+    @Test
     void aGuiThatIsGoneEndsItsSessionClosesTheWindowAndTellsTheViewer() {
         f.sessions.history(f.viewer.id()).push(session.snapshot());
         f.remove("shop");
@@ -140,6 +191,7 @@ class GuiLiveRefreshTest {
                       do:
                         - mark: "v1 ${gui.args.category} ${gui.session.tab}"
                 """);
+        f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
                 dev.materione.plugin.gui.input.ClickKind.LEFT, 0));
         assertThat(f.ran).containsExactly("mark:v1 tools weapons");
@@ -161,6 +213,7 @@ class GuiLiveRefreshTest {
                       do:
                         - mark: "v2 ${gui.args.category} ${gui.session.tab}"
                 """);
+        f.refresh.refreshViewer(f.viewer, session, now());
         f.router.route(new dev.materione.plugin.gui.input.GuiClick(f.viewer, session, 0,
                 dev.materione.plugin.gui.input.ClickKind.LEFT, 0));
 
