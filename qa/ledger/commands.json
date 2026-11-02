@@ -1,12 +1,22 @@
 {
   "commands.version": {
-    "sha": "85fbed03ff4154d9e35ba6badd727ee0dce0bef7",
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
     "dirty": false,
-    "env": "f29751d62d53",
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
     "def": "3ea4945cd2390e62bd043d3a69045bc76bd40040749fa9d92d64a096924cbb0c",
     "result": "pass",
-    "at": "2026-10-24T20:03:39.019Z",
-    "run": "run-2026-10-24T20-02-33",
+    "at": "2026-11-02T05:11:05.915Z",
+    "run": "run-2026-11-02T05-02-31",
     "eyes": null
   },
   "commands.unknown-subcommand": {
@@ -30,13 +40,23 @@
     "eyes": null
   },
   "commands.give-basic": {
-    "sha": "85fbed03ff4154d9e35ba6badd727ee0dce0bef7",
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
     "dirty": false,
-    "env": "f29751d62d53",
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
     "def": "7958c826ba1978645de8797dc5b76b92bcdf311c6ab567518e65afdeebe511f0",
     "result": "pass",
-    "at": "2026-10-24T20:03:42.989Z",
-    "run": "run-2026-10-24T20-02-33",
+    "at": "2026-11-02T05:11:09.384Z",
+    "run": "run-2026-11-02T05-02-31",
     "eyes": null
   },
   "commands.give-amount": {
@@ -67,6 +87,46 @@
     "result": "pass",
     "at": "2026-10-12T18:31:25.233Z",
     "run": "run-2026-10-12T18-27-17",
+    "eyes": null
+  },
+  "commands.typed-player-chat": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "991fc7e02f386e96869ecad221bf20ba25c464e0f5b77f5da1432f6f726dc52e",
+    "result": "pass",
+    "at": "2026-11-02T05:03:24.686Z",
+    "run": "run-2026-11-02T05-02-31",
+    "eyes": null
+  },
+  "commands.typed-gui-alias": {
+    "sha": "0affd792b83d6fed1912d3c01c806e6f47e54c1d",
+    "dirty": false,
+    "env": "25372e136fba",
+    "runtimePlugins": [
+      {
+        "name": "MaterionePlaceholderProbe.jar",
+        "sha256": "bf4ce40e3c226bfa70eed6fbf4a6183a1dea9258f667dff3f68bed74df4d4403"
+      },
+      {
+        "name": "PlaceholderAPI-2.11.7.jar",
+        "sha256": "f5a4ea718baaab6118cfe8f3983ea3a5660af1ee8572360182a3d1b6dbf2eb5d"
+      }
+    ],
+    "def": "b45f6b4f9d472cde0d8dc3ef8f03b0d721be7989e3fde57c5ed2c38cd86e7c19",
+    "result": "pass",
+    "at": "2026-11-02T05:03:34.151Z",
+    "run": "run-2026-11-02T05-02-31",
     "eyes": null
   }
 }
