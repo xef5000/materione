@@ -533,6 +533,8 @@ added; the observed items remained on the cursor. Deferral avoids sending a chan
 the server sees a held cursor, but does not promise atomic delivery, protect every structural
 reopen or establish that all drag interruptions and flicker are absent.
 
+The decisions taken in #217 are recorded in §27.
+
 ### 6.5 Input slots and the player's inventory
 
 - **Input slots.** A `slots` layer may set `input: true` (with an optional `accept: <condition>` on
@@ -2321,34 +2323,6 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
 
 ---
 
-### Decisions taken in #217 (conditional title overlays)
-
-- Each GUI/layer/frame has an unambiguous synthetic allocation identity in `gui-background`.
-  Allocations remain reserved when unused; an explicitly tombstoned identity is reactivated
-  with its original codepoint.
-  Compilation rejects a GUI on exhaustion rather than writing a partial pack. Preview uses an
-  independent snapshot and reserves provisional values without altering durable allocations.
-- `materione:overlay_frames` contains `every` (positive ticks) and a non-empty `layers` list (up to 256).
-  Each entry patches component-specific fields over the base layer; identity, opacity,
-  conditions and nested overlay frames cannot vary. A component that declares that namespaced
-  field owns it instead, and existing component-owned `frames` is untouched. A GUI's refresh clock includes the frame period.
-  Input slot layers cannot be conditional or animated; existing input ownership is unchanged.
-- Text templates use the existing expression engine and are validated again after expansion.
-  Invalid conditions hide their layer; a failed expansion omits its text and reports the
-  existing `MTR-0073` dynamic-layer diagnostic. Click routing uses the last rendered visibility
-  and current frame or expanded text footprint, not hidden layers or stale geometry.
-- Dynamic title changes use the pinned platform transport (§6.4), not `openInventory`: the server
-  menu, session and clock remain the same. A shape-changing reload still uses the existing reopen
-  path, which attempts to carry cursor and inputs. Neither path establishes crash durability.
-- Conditional and animated overlays are retained as potential input blockers; the displayed
-  visibility and current footprint decide which authored input slots are active. An input
-  becoming covered returns its item through the existing input-return path. Deferred title
-  or ownership-changing refreshes during a click run after the transaction, are superseded
-  by newer refreshes and re-render when they run. A `gui.slot_change` pre-event therefore
-  cannot return a stack while the same shift transfer is still applying it.
-
----
-
 ## 25. Decisions taken in #218 (G5: input slots, gui.slot_change, player_inventory: locked, click-policy rows)
 
 #218 ships §6.5, including the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
@@ -2566,3 +2540,36 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 - Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
   a node and what follows it).
 - Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.
+
+---
+
+## 27. Decisions taken in #217 (G4: overlay glyphs and dynamic titles)
+
+- Each GUI/layer/frame has an unambiguous synthetic allocation identity in `gui-background`.
+  Allocations remain reserved when unused; an explicitly tombstoned identity is reactivated
+  with its original codepoint.
+  Compilation rejects a GUI on exhaustion rather than writing a partial pack. Preview uses an
+  independent snapshot and reserves provisional values without altering durable allocations.
+- `materione:overlay_frames` contains `every` (positive ticks) and a non-empty `layers` list (up to 256).
+  Each entry patches component-specific fields over the base layer; identity, opacity,
+  conditions and nested overlay frames cannot vary. A component that declares that namespaced
+  field owns it instead, and existing component-owned `frames` is untouched. A GUI's refresh clock includes the frame period.
+  Input slot layers cannot be conditional or animated; existing input ownership is unchanged.
+- Text templates use the existing expression engine and are validated again after expansion.
+  Invalid conditions hide their layer; a failed expansion omits its text and reports the
+  existing `MTR-0073` dynamic-layer diagnostic. Click routing uses the last rendered visibility
+  and current frame or expanded text footprint, not hidden layers or stale geometry.
+- Dynamic title changes use the pinned platform transport (§6.4), not `openInventory`: the server
+  menu, session and clock remain the same. A shape-changing reload still uses the existing reopen
+  path, which attempts to carry cursor and inputs. Neither path establishes crash durability.
+- Conditional and animated overlays are retained as potential input blockers; the displayed
+  visibility and current footprint decide which authored input slots are active. An input
+  becoming covered returns its item through the existing input-return path. Deferred title
+  or ownership-changing refreshes during a click run after the transaction, are superseded
+  by newer refreshes and re-render when they run. A `gui.slot_change` pre-event therefore
+  cannot return a stack while the same shift transfer is still applying it.
+- setTitle was not measured on a real client. Its cursor reset, item flicker and open-container
+  side effects on 1.21.4 and 26.1.2 are unknown from this work. The Paper source shows that it sends an
+  open-screen packet (§6.4), the same packet family the rich-title transport sends, and the held-cursor and
+  flicker observations in §6.4 are for that transport only. setTitle is not used because it takes a legacy
+  `String` and cannot carry the font components, so this work makes no claim about its client behaviour.
