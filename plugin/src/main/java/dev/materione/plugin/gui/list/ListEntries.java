@@ -15,7 +15,7 @@ import java.util.Map;
  * Arranges a list's entries for one render (logic.md §6.7): the filter keeps the entries that show, then the sort
  * orders them. Paging comes after, in {@link ListPager}, so the page count is the count of the arranged entries.
  *
- * <p>Pure apart from the reporter. A filter that throws leaves its entry out and is reported ({@code MTR-0082}); the
+ * <p>Pure apart from the reporter. A filter that throws leaves its entry out and is reported ({@code MTR-0078}); the
  * other entries still show. Sorting cannot fail: an entry with no value for the field goes last, and values that are
  * not both numbers compare as text.
  */

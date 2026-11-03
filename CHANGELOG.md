@@ -18,9 +18,18 @@ releases may change file formats, settings and the public API.
   the public API, each with a typed entry schema and a `cached` flag. `gui.page: {list, to}` moves a list to `next`,
   `previous`, `first`, `last` or a page number and fires the new `gui.page` trigger once per page change. A click on
   an entry runs the list's rules with that entry as `entry.*`, and an empty slot runs none. The page and its count
-  are readable in text and items as `gui.page.<list>.number` and `.count`. Diagnostics MTR-0081 to MTR-0084. Not yet
+  are readable in text and items as `gui.page.<list>.number` and `.count`. Diagnostics MTR-0077 to MTR-0080. Not yet
   shipped: a search filter and the prompt that writes it (#220), and list sources in the editor's vocabulary
   (with the node inspector, #224).
+- **Conditional and animated GUI overlays, templated title text and held-cursor title refreshes (logic.md §6.4, §27, #217).**
+  A GUI's raster layers accept `visible_if` and `materione:overlay_frames`, and its text layers accept `visible_if`
+  and templates. Each visible raster layer of such a GUI compiles to its own overlay glyph per frame, from the GUI's
+  durable `gui-background` allocation, and the title is assembled per render in layer order, so tabs, toggles,
+  selected states and progress art work. A changed title goes to the open menu without reopening the window; an
+  unchanged one is not sent. While the cursor holds an item, a title change waits with its click rules and hitboxes,
+  and the latest state applies once the cursor is released, with the window clock still advancing. A pending initial
+  open whose GUI was replaced before it opens fails closed, and the viewer is asked to retry. On a server without the
+  Paper rich-title transport, a dynamic-visual GUI does not open (`MTR-0073`). No new diagnostic codes.
 - **Input slots and the player's inventory (logic.md §6.5, §25, #218).** A `slots` layer with
   `input: true` lets players put items into its container slots, optionally limited by an `accept:`
   condition on `slot.item`. Items placed there go back to the player when the window closes, quits or is
@@ -38,7 +47,7 @@ releases may change file formats, settings and the public API.
   `player_slot: main_hand` shows the viewer's item. `frames: {every, items}` animates a slot. A GUI can set
   `refresh: <ticks>` to re-render its dynamic layers on a clock. An unknown head or a missing item shows a
   barrier item with the reason in its lore, never air. Only the changed slots are written to the window.
-  Diagnostics `MTR-0070` to `MTR-0073`. Raster and text layers cannot be conditional yet (#217).
+  Diagnostics `MTR-0070` to `MTR-0073`.
 - **Item sources are a registry (logic.md §4.4, api.md §3.11).** `LogicApi.itemSources()` takes an
   `ItemSource`, and the built-ins register through it: `materione:item`, `materione:head` and
   `materione:player_slot`. The optional `hdb`, `itemsadder`, `nexo` and `mmoitems` sources register while

@@ -248,7 +248,7 @@ public final class SlotRenderer {
         }
     }
 
-    /** Reports one list source failure: the entries of a list that could not be read (MTR-0083). */
+    /** Reports one list source failure: the entries of a list that could not be read (MTR-0079). */
     void reportSource(NamespacedId gui, String layerId, String reason) {
         reporter.problem(DiagnosticCodes.GUI_LIST_SOURCE_FAILED, gui, layerId, reason);
     }

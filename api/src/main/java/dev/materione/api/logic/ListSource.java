@@ -40,7 +40,7 @@ public interface ListSource<P> {
 
     /**
      * The entries for the viewer in {@code context}, before the list filters and sorts them. A throw is
-     * contained by the caller: the list shows no entries and the failure is reported (MTR-0083).
+     * contained by the caller: the list shows no entries and the failure is reported (MTR-0079).
      *
      * @return the entries in the source's own order; never null
      */

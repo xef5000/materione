@@ -35,7 +35,7 @@ public interface ListBinding {
 
     /**
      * What a read produced: the entries, or the reason it failed (the list then shows nothing and the reason is
-     * reported as {@code MTR-0083}).
+     * reported as {@code MTR-0079}).
      *
      * @param entries the entries in the source's order; empty on failure
      * @param failure why the read failed, or null when it did not

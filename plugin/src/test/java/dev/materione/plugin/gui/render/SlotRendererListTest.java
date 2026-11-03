@@ -185,7 +185,7 @@ class SlotRendererListTest {
         Rendered rendered = new SlotRenderer(reports).render(gui, window(Map.of()), 0, null);
 
         assertThat(rendered.slots()).isEmpty();
-        assertThat(reports.codes).containsExactly("MTR-0083");
+        assertThat(reports.codes).containsExactly("MTR-0079");
         assertThat(reports.messages.get(0)).contains("the variable is not declared");
     }
 

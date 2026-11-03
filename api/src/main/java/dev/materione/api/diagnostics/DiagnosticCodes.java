@@ -405,28 +405,28 @@ public final class DiagnosticCodes {
      * (logic.md §4.5, §6.7). The list is left out of the window; the rest of the GUI still shows.
      */
     public static final DiagnosticCode GUI_LIST_SOURCE_INVALID =
-            new DiagnosticCode("MTR-0081", Severity.WARN, "GUI list source unknown or rejected; list left out");
+            new DiagnosticCode("MTR-0077", Severity.WARN, "GUI list source unknown or rejected; list left out");
 
     /**
      * A list's {@code filter:} failed while the window rendered (logic.md §6.7): the entry it threw on is left out of
      * the list and the others still show. Rate-limited per list. (A sort cannot fail: a missing value goes last.)
      */
     public static final DiagnosticCode GUI_LIST_ENTRY_FAILED =
-            new DiagnosticCode("MTR-0082", Severity.WARN, "GUI list filter failed while rendering");
+            new DiagnosticCode("MTR-0078", Severity.WARN, "GUI list filter failed while rendering");
 
     /**
      * A list's source could not read its entries while the window rendered (logic.md §4.5): the source threw or
      * a variable it reads is not declared. The list shows no entries until the next read. Rate-limited per list.
      */
     public static final DiagnosticCode GUI_LIST_SOURCE_FAILED =
-            new DiagnosticCode("MTR-0083", Severity.WARN, "GUI list source failed while rendering; no entries shown");
+            new DiagnosticCode("MTR-0079", Severity.WARN, "GUI list source failed while rendering; no entries shown");
 
     /**
      * A slot of a list is also an input slot (logic.md §25): the player's items own it, so the list's entry is not
      * shown there and the click on it is the input's. The list's other slots still show their entries.
      */
     public static final DiagnosticCode GUI_LIST_SLOT_INPUT =
-            new DiagnosticCode("MTR-0084", Severity.WARN, "GUI list slot is an input slot; the entry is not shown there");
+            new DiagnosticCode("MTR-0080", Severity.WARN, "GUI list slot is an input slot; the entry is not shown there");
 
     /**
      * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a

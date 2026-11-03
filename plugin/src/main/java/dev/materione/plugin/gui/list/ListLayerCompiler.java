@@ -27,7 +27,7 @@ import java.util.function.Consumer;
  * Pure: it reads the registries through {@link LogicLookup} and touches no server, so the diagnose stage and the
  * live view compile the same way.
  *
- * <p>A list that cannot be compiled is left out ({@code MTR-0081} when its source is unknown or rejects its
+ * <p>A list that cannot be compiled is left out ({@code MTR-0077} when its source is unknown or rejects its
  * parameters), and the rest of the GUI still shows. The entry template is an item layer compiled with the entry
  * roots, so every rule about item sources and overrides applies to it unchanged.
  */
@@ -57,7 +57,7 @@ public final class ListLayerCompiler {
     /**
      * The GUI's list layers, compiled against the registries for a live view (logic.md §6.7). A list whose source
      * does not compile is left out; its problem was reported by the diagnose stage. A list slot that is an input slot
-     * is reported ({@code MTR-0084}): the player's items own it, so its entry is not shown there.
+     * is reported ({@code MTR-0080}): the player's items own it, so its entry is not shown there.
      */
     public static List<CompiledListLayer> compileAll(
             CompiledGui gui, LogicLookup logic, InputSlots inputs, Consumer<Diagnostic> diagnostics) {
