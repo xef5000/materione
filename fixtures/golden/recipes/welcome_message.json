@@ -1,0 +1,16 @@
+{
+  "recipe": "welcome_message",
+  "params": {
+    "text": "<gold>Welcome to the shop!"
+  },
+  "rules": [
+    {
+      "on": "gui.open",
+      "do": [
+        {
+          "message": "<gold>Welcome to the shop!"
+        }
+      ]
+    }
+  ]
+}

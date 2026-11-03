@@ -374,8 +374,10 @@ ops, each a translator over `AuthoringApi.logic()` (api.md §3.12, logic.md §19
 `logic.vocabulary` (the behavior vocabulary), `logic.get` (`{pack, path}`, the typed rules and flows),
 `logic.edit` (`{pack, path, rev, edits}`, the edits as `{op: addRule|removeRules|reorderRules|patchRule|insertStep|
 patchStep|moveStep|removeStep|setNodePosition|addFlow|removeFlow|renameFlow, …}`), `logic.validate`
-(`{pack, resource, behavior, flows, trigger}`, a draft, no write) and `logic.instantiate` (`{recipe, params}`, refused
-until the recipe registry lands, #222). A refused edit's error names the step path in its `resource` field (the wire's
+(`{pack, resource, behavior, flows, trigger}`, a draft, no write) and `logic.instantiate` (`{recipe, params}`, no write;
+answers `{rules, warnings}`, or a refusal with `MTR-0008` for an unknown recipe, `MTR-0086` for a parameter and
+`MTR-0087` for an expansion that does not validate, logic.md §30, #222). The vocabulary carries `recipes` (each with
+its typed `params`), so the palette and the parameter forms come from the same list the API reads. A refused edit's error names the step path in its `resource` field (the wire's
 target slot, as the other editor ops use it). The SPA's wrappers
 are `webui/src/lib/logic/server.ts`, which checks `hasCapability(…, 'logic')` before it calls any of them. The frames are
 pinned by `fixtures/protocol/editor-logic-v1.json`: `LogicAuthoringOpsTest` (JVM) regenerates and checks them, and

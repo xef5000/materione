@@ -1,0 +1,15 @@
+{
+  "recipe": "close_button",
+  "params": {
+    "layer": "close"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "close",
+      "do": [
+        "gui.close"
+      ]
+    }
+  ]
+}

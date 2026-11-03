@@ -36,7 +36,9 @@ class DiagnosticCodesTest {
         // MTR-0072 GUI item source unresolved at render, MTR-0073 GUI dynamic layer failed at render:
         // logic.md §24, #216;
         // MTR-0074 input accept invalid, MTR-0075 static item in an input slot, MTR-0076 input setting ignored:
-        // logic.md §25, #218)
-        assertThat(DiagnosticCodes.all()).hasSize(80);
+        // logic.md §25, #218;
+        // MTR-0085 recipe does not load, MTR-0086 recipe parameter refused, MTR-0087 recipe expansion does not validate,
+        // MTR-0088 recipe action unavailable: logic.md §30, #222)
+        assertThat(DiagnosticCodes.all()).hasSize(84);
     }
 }

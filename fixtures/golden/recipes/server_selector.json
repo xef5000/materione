@@ -1,0 +1,21 @@
+{
+  "recipe": "server_selector",
+  "params": {
+    "layer": "lobby",
+    "server": "lobby"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "lobby",
+      "do": [
+        {
+          "message": "<gray>Connecting to lobby..."
+        },
+        {
+          "connect": "lobby"
+        }
+      ]
+    }
+  ]
+}

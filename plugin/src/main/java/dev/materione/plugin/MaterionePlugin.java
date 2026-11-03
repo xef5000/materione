@@ -343,6 +343,8 @@ public final class MaterionePlugin extends JavaPlugin {
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
                 guiBridge, currencyReads);
+        // the v1 recipes (logic.md §7.5, §30): YAML in the jar, registered through the same logic API as addons
+        dev.materione.plugin.logic.recipe.BuiltinRecipes.register(logic, this, diagnostics::publish);
         registerProviders();
         // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {

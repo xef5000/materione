@@ -4,6 +4,7 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.api.logic.variable.VariableDeclaration;
@@ -64,6 +65,11 @@ public final class RegistryLogicLookup implements LogicLookup {
     public Optional<dev.materione.api.logic.ListSource<?>> listSource(String authoredId) {
         return find(RegistryKeys.LIST_SOURCES, authoredId, dev.materione.api.logic.ListSource.class)
                 .map(source -> (dev.materione.api.logic.ListSource<?>) source);
+    }
+
+    @Override
+    public Optional<Recipe> recipe(String authoredId) {
+        return find(RegistryKeys.RECIPES, authoredId, Recipe.class);
     }
 
     @Override
