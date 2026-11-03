@@ -346,7 +346,6 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0060", Severity.WARN, "Unknown variable root for this trigger");
 
     /**
-<<<<<<< HEAD
      * A GUI item layer names an item source the server does not provide, or the source rejects its
      * parameters (logic.md §4.4, §6.3). The layer is left out of the window; the rest of the GUI still
      * shows. Optional integrations are not this case: while their plugin is absent the layer shows a
@@ -400,6 +399,34 @@ public final class DiagnosticCodes {
      */
     public static final DiagnosticCode GUI_INPUT_SETTING_IGNORED =
             new DiagnosticCode("MTR-0076", Severity.WARN, "Input-slot setting ignored; the GUI loads without it");
+
+    /**
+     * A GUI {@code list} names a list source the server does not provide, or the source rejects its parameters
+     * (logic.md §4.5, §6.7). The list is left out of the window; the rest of the GUI still shows.
+     */
+    public static final DiagnosticCode GUI_LIST_SOURCE_INVALID =
+            new DiagnosticCode("MTR-0081", Severity.WARN, "GUI list source unknown or rejected; list left out");
+
+    /**
+     * A list's {@code filter:} failed while the window rendered (logic.md §6.7): the entry it threw on is left out of
+     * the list and the others still show. Rate-limited per list. (A sort cannot fail: a missing value goes last.)
+     */
+    public static final DiagnosticCode GUI_LIST_ENTRY_FAILED =
+            new DiagnosticCode("MTR-0082", Severity.WARN, "GUI list filter failed while rendering");
+
+    /**
+     * A list's source could not read its entries while the window rendered (logic.md §4.5): the source threw or
+     * a variable it reads is not declared. The list shows no entries until the next read. Rate-limited per list.
+     */
+    public static final DiagnosticCode GUI_LIST_SOURCE_FAILED =
+            new DiagnosticCode("MTR-0083", Severity.WARN, "GUI list source failed while rendering; no entries shown");
+
+    /**
+     * A slot of a list is also an input slot (logic.md §25): the player's items own it, so the list's entry is not
+     * shown there and the click on it is the input's. The list's other slots still show their entries.
+     */
+    public static final DiagnosticCode GUI_LIST_SLOT_INPUT =
+            new DiagnosticCode("MTR-0084", Severity.WARN, "GUI list slot is an input slot; the entry is not shown there");
 
     /**
      * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a
@@ -493,6 +520,10 @@ public final class DiagnosticCodes {
             INPUT_ACCEPT_INVALID,
             INPUT_STATIC_ITEM_IGNORED,
             GUI_INPUT_SETTING_IGNORED,
+            GUI_LIST_SOURCE_INVALID,
+            GUI_LIST_ENTRY_FAILED,
+            GUI_LIST_SOURCE_FAILED,
+            GUI_LIST_SLOT_INPUT,
             VARIABLE_UNDECLARED,
             VARIABLE_TYPE_MISMATCH,
             VARIABLE_STORE_FAILED,

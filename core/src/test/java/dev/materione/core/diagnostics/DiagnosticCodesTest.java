@@ -37,6 +37,6 @@ class DiagnosticCodesTest {
         // logic.md §24, #216;
         // MTR-0074 input accept invalid, MTR-0075 static item in an input slot, MTR-0076 input setting ignored:
         // logic.md §25, #218)
-        assertThat(DiagnosticCodes.all()).hasSize(76);
+        assertThat(DiagnosticCodes.all()).hasSize(80);
     }
 }

@@ -9,6 +9,18 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Lists and pagination in GUIs (logic.md §6.7, §4.5, §28, #219).** A `list` component fills a run of
+  slots with one page of entries: `slots` (a range with skipped columns, or an explicit list), `source`,
+  `filter` (a condition over `entry.*`), `sort` (a field, optionally `{by, order: desc}`) and an `entry:` item
+  template with `entry.*` in scope, so the entries take the same name, lore, amount and glint overrides as item
+  layers. Entries come from a list source: `online_players`, `pack_items`, `variable` (a declared string variable,
+  split by a separator) or `static` (entries written in the layer). `LogicApi.listSources()` registers more, through
+  the public API, each with a typed entry schema and a `cached` flag. `gui.page: {list, to}` moves a list to `next`,
+  `previous`, `first`, `last` or a page number and fires the new `gui.page` trigger once per page change. A click on
+  an entry runs the list's rules with that entry as `entry.*`, and an empty slot runs none. The page and its count
+  are readable in text and items as `gui.page.<list>.number` and `.count`. Diagnostics MTR-0081 to MTR-0084. Not yet
+  shipped: a search filter and the prompt that writes it (#220), and list sources in the editor's vocabulary
+  (with the node inspector, #224).
 - **Input slots and the player's inventory (logic.md §6.5, §25, #218).** A `slots` layer with
   `input: true` lets players put items into its container slots, optionally limited by an `accept:`
   condition on `slot.item`. Items placed there go back to the player when the window closes, quits or is

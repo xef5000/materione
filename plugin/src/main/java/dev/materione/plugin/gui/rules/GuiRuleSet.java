@@ -32,6 +32,8 @@ public final class GuiRuleSet {
     public static final String TICK = "gui.tick";
     /** A change an input slot is about to take (logic.md §25); a rule can refuse it. */
     public static final String SLOT_CHANGE = "gui.slot_change";
+    /** A list of the GUI changed its page (logic.md §6.7), after the window shows the new page. */
+    public static final String PAGE = "gui.page";
     /** A click in the viewer's own inventory while the GUI is open (logic.md §6.2). */
     public static final String CLICK_INVENTORY = "gui.click_inventory";
 

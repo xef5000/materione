@@ -138,7 +138,7 @@ describe('helpers', () => {
 
 describe('the gui-components registry description', () => {
   it('is read from the describe answer\'s guiComponents, and refused when absent', () => {
-    expect(readRegistry({ guiComponents: registry.components })!.components).toHaveLength(7);
+    expect(readRegistry({ guiComponents: registry.components })!.components).toHaveLength(8);
     expect(readRegistry({ types: [] })).toBeNull();
     expect(readRegistry(null)).toBeNull();
   });
@@ -151,10 +151,10 @@ describe('the gui-components registry description', () => {
     expect(componentOf(registry, 'nope')).toBeUndefined();
   });
 
-  it('describes the seven v1 components with their render targets', () => {
+  it('describes the eight built-in components with their render targets', () => {
     expect(registry.components.map((component) => [component.id, component.target])).toEqual([
       ['materione:panel', 'raster'], ['materione:slots', 'raster'], ['materione:image', 'raster'], ['materione:paint', 'raster'],
-      ['materione:button', 'raster'], ['materione:text', 'text'], ['materione:item', 'slot'],
+      ['materione:button', 'raster'], ['materione:text', 'text'], ['materione:item', 'slot'], ['materione:list', 'slot'],
     ]);
   });
 

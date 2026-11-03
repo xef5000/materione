@@ -161,7 +161,7 @@ targets exactly one:
 |---|---|---|
 | `RASTER` | Pixels baked into a background bitmap glyph placed in the **title** with shift tags, covering the vanilla screen texture | `panel`, `slots`, `image`, `paint`, `button` |
 | `TEXT` | Styled title text positioned with shift tags and per-offset fonts | `text` |
-| `SLOT` | A real item in a container slot | `item` |
+| `SLOT` | A real item in a container slot | `item`; `list` (a page of entries per viewer, logic.md §6.7, §28) |
 
 **Z-order is honored within a target and fixed across targets** by the client's draw order
 (raster under text; slot items relative to the title is the open question in §9). The studio

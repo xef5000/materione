@@ -43,7 +43,10 @@ import dev.materione.plugin.logic.action.gui.BackGuiAction;
 import dev.materione.plugin.logic.action.gui.CloseGuiAction;
 import dev.materione.plugin.logic.action.gui.OpenGuiAction;
 import dev.materione.plugin.logic.action.gui.GuiSlotItemAction;
+import dev.materione.plugin.logic.action.gui.PageGuiAction;
 import dev.materione.plugin.logic.action.gui.RefreshGuiAction;
+import dev.materione.api.logic.ListSource;
+import dev.materione.plugin.gui.list.BuiltinListSources;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.plugin.logic.condition.HasExpCondition;
 import dev.materione.plugin.logic.condition.HasItemCondition;
@@ -154,7 +157,8 @@ public final class BuiltinLogic {
                 new CloseGuiAction(bridge),
                 new BackGuiAction(bridge),
                 new RefreshGuiAction(bridge),
-                new GuiSlotItemAction(bridge));
+                new GuiSlotItemAction(bridge),
+                new PageGuiAction(bridge));
     }
 
     /**
@@ -215,6 +219,10 @@ public final class BuiltinLogic {
         // item sources of GUI item layers (logic.md §4.4): materione:item, materione:head, materione:player_slot
         for (dev.materione.api.logic.ItemSource<?> source : dev.materione.plugin.logic.item.BuiltinItemSources.all(items)) {
             api.itemSources().register(owner, builtIn(source.id()), source);
+        }
+        // list sources of GUI list components (logic.md §4.5, §6.7): online_players, pack_items, variable, static
+        for (ListSource<?> source : BuiltinListSources.all(items)) {
+            api.listSources().register(owner, builtIn(source.id()), source);
         }
         // built-in conditions (logic.md §22, #210): their own block, after the rest
         for (ConditionType<?> condition : conditions(api.providers(), guis, items, slots, reads)) {

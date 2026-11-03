@@ -12,9 +12,11 @@ import dev.materione.content.gui.CompiledGui;
 import dev.materione.content.gui.GuiDefinition;
 import dev.materione.content.gui.GuiLayer;
 import dev.materione.content.gui.ItemComponent;
+import dev.materione.content.gui.ListComponent;
 import dev.materione.content.gui.SlotsComponent;
 import dev.materione.content.gui.logic.GuiRuleChecker;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
+import dev.materione.plugin.gui.list.ListLayerCompiler;
 import dev.materione.plugin.gui.dynamic.TitleProgram;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
@@ -103,12 +105,16 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
     public List<Diagnostic> checkLayers(GuiDefinition gui) {
         LogicLookup registries = lookup.get();
         var compiler = new ItemLayerCompiler(registries);
+        var lists = new ListLayerCompiler(registries);
         var out = new ArrayList<Diagnostic>();
         for (int index = 0; index < gui.layers().size(); index++) {
             GuiLayer layer = gui.layers().get(index);
             if (layer.visible() && layer.compiled() instanceof ItemComponent.Layer item) {
                 var placement = new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item);
                 out.addAll(compiler.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
+            } else if (layer.visible() && layer.compiled() instanceof ListComponent.Layer list) {
+                var placement = new CompiledGui.ListPlacement(layer.id(), index, list);
+                out.addAll(lists.compile(gui.id(), authoredIndex(gui, layer.id()), placement).problems());
             } else if (layer.visible() && layer.compiled().target() != dev.materione.api.gui.RenderTarget.SLOT) {
                 var pieces = new ArrayList<dev.materione.content.gui.GuiVisualPlan.Piece>();
                 int authored = authoredIndex(gui, layer.id());

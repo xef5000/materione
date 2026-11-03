@@ -70,6 +70,13 @@ public interface LogicApi {
     LogicRegistry<ItemSource<?>> itemSources();
 
     /**
+     * The {@code list-sources} registry: where a GUI {@code list} component's entries come from (logic.md §4.5,
+     * §6.7). The built-ins are {@code online_players}, {@code pack_items}, {@code variable} and {@code static};
+     * an addon registers its own under its namespace. A late registration takes effect on the next reload.
+     */
+    LogicRegistry<ListSource<?>> listSources();
+
+    /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the
      * registries on every call: triggers (filters, context schema, cancellability, who fires them),
      * actions, conditions, step kinds, categories, expression functions and mechanics, with

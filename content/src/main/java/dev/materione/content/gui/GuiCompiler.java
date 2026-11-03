@@ -72,6 +72,7 @@ public final class GuiCompiler {
         var runs = new ArrayList<TextRun>();
         var slots = new LinkedHashMap<Integer, SlotPlacement>();
         var items = new ArrayList<CompiledGui.Placement>();
+        var lists = new ArrayList<CompiledGui.ListPlacement>();
         for (int index = 0; index < gui.layers().size(); index++) {
             GuiLayer layer = gui.layers().get(index);
             if (!layer.visible()) {
@@ -81,6 +82,8 @@ public final class GuiCompiler {
                 collectText(gui, layer.id(), layer.compiled(), runs, report);
             } else if (layer.compiled() instanceof ItemComponent.Layer item) {
                 items.add(new CompiledGui.Placement(layer.id(), index, item.slot(), layer.visibleIf(), item));
+            } else if (layer.compiled() instanceof ListComponent.Layer list) {
+                lists.add(new CompiledGui.ListPlacement(layer.id(), index, list));
             } else if (layer.compiled().target() == RenderTarget.SLOT) {
                 collectSlots(gui, layer.id(), layer.compiled(), slots, report);
             }
@@ -124,7 +127,7 @@ public final class GuiCompiler {
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
         var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
                 PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
-                placements, gui.refresh(), visuals);
+                placements, gui.refresh(), visuals, lists);
         return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
     }
 

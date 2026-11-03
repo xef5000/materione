@@ -32,6 +32,9 @@ public final class RegistryKeys {
     /** {@link dev.materione.api.logic.ItemSource} implementations: where a GUI item layer's item comes from (logic.md §4.4). */
     public static final RegistryKey ITEM_SOURCES = new RegistryKey("item-sources");
 
+    /** {@link dev.materione.api.logic.ListSource} implementations: where a GUI list's entries come from (logic.md §4.5). */
+    public static final RegistryKey LIST_SOURCES = new RegistryKey("list-sources");
+
     /** Delivery hosting backends (master §8.4). */
     public static final RegistryKey DELIVERY_BACKENDS = new RegistryKey("delivery-backends");
 

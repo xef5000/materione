@@ -16,6 +16,7 @@ import dev.materione.plugin.gui.input.InputSlotClicks;
 import dev.materione.plugin.gui.input.InputSlotOps;
 import dev.materione.plugin.gui.input.InventoryInput;
 import dev.materione.plugin.gui.input.LayerVisibility;
+import dev.materione.plugin.gui.list.GuiPages;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
 import dev.materione.plugin.gui.open.GuiLifecycle;
 import dev.materione.plugin.gui.render.GuiRenderer;
@@ -106,7 +107,7 @@ public final class GuiStack {
         this.windowListener = new GuiWindowListener(lifecycle, journal);
         this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
         this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh,
-                new InputSlotOps(guis, journal));
+                new InputSlotOps(guis, journal), new GuiPages(events, refresh));
     }
 
     /** The input-slot rules the click router consults (logic.md §25). */

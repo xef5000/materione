@@ -20,9 +20,9 @@ class GuiTriggersTest {
     }
 
     @Test
-    void theEightTriggersAreFiredByGuis() {
+    void theNineTriggersAreFiredByGuis() {
         assertThat(GuiTriggers.all()).extracting(TriggerType::id).containsExactly(
-                "gui.opening", "gui.open", "gui.close", "gui.click", "gui.click_outside", "gui.tick",
+                "gui.opening", "gui.open", "gui.close", "gui.click", "gui.click_outside", "gui.tick", "gui.page",
                 "gui.slot_change", "gui.click_inventory");
         assertThat(GuiTriggers.all()).allSatisfy(trigger -> {
             assertThat(trigger.describe().firedBy()).containsExactly("gui");
@@ -41,6 +41,14 @@ class GuiTriggersTest {
         assertThat(contextPaths("gui.slot_change")).contains("slot.index", "slot.item", "slot.amount", "slot.previous");
         assertThat(trigger("gui.slot_change").describe().filters()).extracting(ParameterSchema::id)
                 .containsExactly("layer");
+    }
+
+    @Test
+    void guiPageFiltersOnTheListAndCarriesTheNewPageAndItsCount() {
+        assertThat(contextPaths("gui.page")).contains("page.index", "page.count", "gui.page.*");
+        assertThat(trigger("gui.page").describe().filters()).extracting(ParameterSchema::id)
+                .containsExactly("layer");
+        assertThat(contextPaths("gui.click")).contains("entry.*");
     }
 
     @Test

@@ -17,6 +17,6 @@ public final class GuiComponents {
     public static List<GuiComponent> builtins() {
         return List.of(
                 new PanelComponent(), new SlotsComponent(), new ImageComponent(), new PaintComponent(),
-                new ButtonComponent(), new TextComponent(), new ItemComponent());
+                new ButtonComponent(), new TextComponent(), new ItemComponent(), new ListComponent());
     }
 }

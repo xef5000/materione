@@ -166,7 +166,7 @@ class GuiAuthoringApiTest {
         var components = gui.components();
         assertThat(components).extracting(component -> component.id().toString())
                 .containsExactly("materione:panel", "materione:slots", "materione:image", "materione:paint",
-                        "materione:button", "materione:text", "materione:item");
+                        "materione:button", "materione:text", "materione:item", "materione:list");
         assertThat(components.get(0).target()).isEqualTo(RenderTarget.RASTER);
         assertThat(components.get(6).target()).isEqualTo(RenderTarget.SLOT);
     }

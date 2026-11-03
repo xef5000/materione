@@ -563,22 +563,27 @@ the prompt had to close it (chat, sign). Search in lists is this plus a filter (
 - id: players
   type: list
   slots: { from: 10, to: 34, skip_columns: [0, 8] }   # or an explicit slot list
-  source: { type: online_players, sort: name }         # ListSource SPI (§4.5)
-  filter: "${contains(lower(entry.name), lower(vars.session.search))}"
+  source: online_players                               # ListSource SPI (§4.5)
+  sort: name                                           # filter, then sort, then page (§28)
+  filter: "${entry.level > 1}"                         # a condition over entry.*
   entry:                                               # per-entry item template, entry.* in scope
     item: { head: { player: "${entry.name}" } }
     name: "<yellow>${entry.name}"
     lore: ["<gray>Click to teleport"]
 ```
 
-- **State.** Page state is per session per list (`gui.page.<list>`).
-- **Paging actions.** `gui.page: {list, to: next|previous|first|last|<n>}`. It fires `gui.page`.
+- **State.** Page state is per session per list (`gui.page.<list>`: `number` and `count`).
+- **Paging actions.** `gui.page: {list, to: next|previous|first|last|<n>}`. It fires `gui.page`, once per
+  page change.
 - **Context.** Clicks on a list slot carry `entry.*` in context, so a single rule handles every
   entry.
-- **Ordering.** Sources sort and filter **before** paging, and page count is exposed for
+- **Ordering.** Sources are filtered and sorted **before** paging, and page count is exposed for
   "Page 2/5" text.
 - **Large sources.** A source that is expensive (for example all items of all packs) declares
   itself `cached`, and the session snapshots it on open and on `gui.refresh`, not on every tick.
+
+As built (#219): the decisions, the diagnostics (`MTR-0081` to `MTR-0084`) and the seams for search (#220) are
+in §28.
 
 ---
 
@@ -770,7 +775,8 @@ The implementing PRs assign codes from `MTR-0057` upwards and document them in p
 took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
-`MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); the next free code is `MTR-0077`.
+`MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0081` to `MTR-0084` (§28), leaving
+`MTR-0077` to `MTR-0080` to the PR that reserved them and the next free code after them.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -2566,3 +2572,132 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 - Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
   a node and what follows it).
 - Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.
+
+---
+
+## 28. Decisions taken in #219 (G6: the list component, list sources, paging and `gui.page`)
+
+#219 ships §6.7 and the `ListSource` SPI of §4.5. A list is a GUI component that fills a run of slots with one page of
+entries; the window resolves it per viewer and per page, through the same renderer, diff and click map as the item
+layers of G3 (§24) and the input rules of G5 (§25). The code is in `api.logic` (`ListSource`, `ListSourceDescription`),
+`behavior.logic` (`OverlayLogicContext`), `content.gui` (`ListComponent`, `content.gui.list`), and `plugin.gui.list`
+(the compiled layer, the binding, the paging math, the page service and the built-in sources), with the renderer,
+router and refresh changes in `plugin.gui.render`, `plugin.gui.input`, `plugin.gui.live` and `plugin.gui.event`.
+Where the design left a choice open, these are the choices. Each is reversible by the owner.
+
+**The component and its placement**
+
+1. **`list` is a SLOT component that places nothing statically.** Its `placeSlots` is empty, and the GUI compiler
+   routes a `ListComponent.Layer` to `CompiledGui.lists` (a `ListPlacement`), not to the static slot table or the item
+   placements. A list is always dynamic: its entries depend on the viewer and the page, so it is re-read on every
+   partial render, unless its source is cached (decision 12).
+2. **The fields are `slots`, `source`, `filter`, `sort` and `entry`; `visible_if` is not accepted on a list.** A list
+   with any other key is rejected with its reason (`MTR-0052`, the existing layer-skip code). The shape of each field
+   is checked at load: `slots` is a range `{from, to, skip_columns}` or an explicit list of slots in the GUI's rows,
+   with no slot repeated; `source` is a name, a mapping with `type` and the source's parameters, or a mapping with
+   `entries` (the static source); `filter` is a condition, shaped as `visible_if` is; `sort` is a field name or
+   `{by, order}`.
+3. **The entry template is an item layer.** `entry:` is parsed by `ItemComponent` itself, with a placeholder slot, so
+   `item`, `name`, `lore`, `lore_mode`, `amount`, `glint` and `frames` mean exactly what they mean on an item layer
+   (§6.3). It is compiled by `ItemLayerCompiler` with the roots `player`, `server`, `vars`, `gui` and `entry`
+   (`ENTRY_ROOTS`), so the item sources and the overrides are the G3 ones and no second renderer exists. An `entry:`
+   that names a slot is rejected: the list's slots place its entries.
+
+**Sources (§4.5)**
+
+4. **`ListSource<P>` is an `api.logic` SPI** with `parse(ParamReader)` (pure, typed at load) and
+   `entries(P, LogicContext)`, which returns the entries as flat maps. It is registered through
+   `LogicApi.listSources()` under `RegistryKeys.LIST_SOURCES` (`list-sources`), and `LogicLookup.listSource` resolves an
+   author's name against it. A late registration takes effect on the next reload, as for item sources.
+5. **`ListSourceDescription` carries the entry schema and the `cached` flag.** `entry` is the list of `entry.*`
+   variables the entries carry, with types, so the editor can offer them; a source whose fields are the author's own
+   declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12). The description
+   is in the registry, so the editor reads it from there. **Deferred:** the vocabulary does not yet carry list sources,
+   so the Logic tab cannot autocomplete `entry.*` from it. This is the same gap item sources have (§26), and it is
+   closed with the node inspector (#224), not here.
+6. **Four built-ins, registered through the public API like an addon's (`materione:`).** `online_players` (`name`,
+   `uuid`, and `exclude_viewer`; the viewer's own state is never read, because a list on one viewer's thread must not
+   touch another player's state on Folia). `pack_items` (`pack`, the shorthand; each live item of a pack as `item`;
+   cached). `variable` (`var`, the shorthand, a declared player or server string variable, split by `separator`; a
+   bare name takes the pack of the resource). `static` (`entries:`, a list of mappings of text, numbers and booleans).
+7. **`variable` reads a string, because the declared types have no list type.** Declared variables are number, string
+   and boolean (§3.2), so a "variable list" is a declared string whose pieces are separated by a separator. This is
+   the closest reading of "a variable list" without a new variable type, which is #211's to add and is not in this
+   change. Reversing it means a `list` variable type with its own store and `set_var` operations.
+
+**Filter, sort, and paging**
+
+8. **Order: filter, then sort, then page (§6.7).** The filter runs once per entry with `entry.*` in scope, through an
+   `OverlayLogicContext`, which answers `entry.*` from the entry and everything else from the window's context. It
+   allocates no copy of the window's tree, so a window with forty-five entries costs one small object per entry. A
+   filter that throws leaves its entry out and is reported (`MTR-0082`). The sort is stable, compares numbers as
+   numbers and everything else as text (case-insensitively, then exactly), and puts an entry with no value for the
+   field last whatever the direction.
+9. **The `sort:` is on the list, not on the source.** One mechanism, applied to every source after the filter, so a source
+   never has to sort its own entries. §6.7's example is corrected to match (`source: online_players`, `sort: name`).
+10. **The page state is per session per list, in `GuiSession.pages()`, as `{number, count}`.** The renderer writes the
+    count it computed and the number it clamped, before the window's title is laid out, so a text or an item name can
+    read `gui.page.<list>.number` and `gui.page.<list>.count` (for "Page 2 of 5"). A page past the end is clamped, not
+    refused. The stored state survives a reload (the session carries on, §21 decision 17) and is what `gui.back` restores.
+
+**Slots and clicks**
+
+11. **A visible list owns its slots, in entry order.** Entry *k* of the page goes in slot *k* of the list's slot list,
+    so an entry's slot is stable. A slot a higher layer decided (an item, a button, an input) is left to that layer, and
+    the entry for it is not shown there; a slot past the page's last entry is emptied, so a lower static item never
+    shows through a list. An input slot is the player's (§25): its entry is dropped at render (the window already
+    removes owned input slots), and building the live view reports it as `MTR-0084`. A list slot is therefore never an
+    input slot, as §25 requires.
+12. **A cached source is read on a full render, and kept between partial renders.** The rendered window keeps the
+    entries each list read (`Rendered.lists().entries()`). A cached list reuses them on the refresh clock and on a page
+    change, and reads its source again only when the window opens or `gui.refresh` or a reload rewrites it. `pack_items`
+    is cached; `online_players`, `variable` and `static` are read on every render, which is cheap for them.
+13. **A click on a list slot runs the list's rules with that entry, and an empty slot runs none.** The router asks the
+    window what it shows (`Rendered.lists().shownAt(slot)`, §21 decision 14), so the entry is the one the player
+    sees, and `entry.*` is read from it. A click on a slot that shows no entry skips the list and falls through to the
+    layers under it, and then to the rules with no `layer:` filter, as any unclaimed click does (§21 decision 11). A rule
+    that should catch every empty list slot therefore names the slots it means (`slot:`), as the roster fixture does.
+14. **The entry is a snapshot of the window's last render.** `entry.*` is the entry that was shown when the click was
+    routed, not a fresh read of the source, so a click on a row that moved on the same tick runs the rule for the row
+    the player saw.
+
+**Paging and `gui.page`**
+
+15. **`gui.page: {list, to}` is one action, one class (`PageGuiAction`).** `to` is `next`, `previous`, `first`, `last`, a
+    page number, or a template that renders one of those (an unknown word is a load-time refusal, `MTR-0057`). It runs
+    in the window's own session, as `gui.refresh` does (`no open gui` otherwise), and it goes through `GuiPages`, the one
+    service: it stores the new page, repaints the window partially (so a cached list keeps its snapshot), and then
+    fires `gui.page` with the page the window now shows.
+16. **`gui.page` fires only when the page changes.** A step past the last page, or before the first, moves nothing and
+    fires nothing, so a rule on `gui.page` runs once per real change and an arrow on the last page is a quiet no-op.
+    An action whose list the window does not have fails with its reason (`no list named 'x' in this GUI`).
+17. **The `gui.page` trigger** has one filter, `layer` (the list's id), and two context variables: `page.index` (the
+    page now shown, from 1) and `page.count` (at least 1). It is not cancellable: the page has moved by the time it runs.
+    The trigger list grows from eight to nine, and the trigger ordering in the editor follows `GuiTriggers.all()`.
+
+**Refresh, reload and the budget**
+
+18. **A reload compares the authored lists, not the bindings.** `Live.sameAs` compares the `ListPlacement`s, which are
+    records of authored values. A compiled binding has identity equality, so comparing it would make every reload of a
+    GUI with a list a change.
+19. **The refresh budget holds.** `DynamicListsPerfTest` runs one refresh pass for 50 windows of a 45-slot list, with
+    a filter, a sort and every entry's item re-read on every pass (the worst case: an uncached source). It measured
+    **0.55 ms** per pass (best of three) against a budget of 2 ms (plugin.md §9), and the existing dynamic-slot pass
+    measured 0.32 ms on the same machine. The pass measures the decision and the diff; the Bukkit stacks of changed slots
+    are outside it, as in G3 (§24, decision 18).
+
+**Diagnostics and seams**
+
+20. **Four codes (plugin.md §5):** `MTR-0081` (a list source is unknown or rejected; the list is left out, at the layer's
+    `source` field, from the diagnose stage and from the live view), `MTR-0082` (a filter threw at render, rate-limited),
+    `MTR-0083` (a source could not read at render, the list shows nothing, rate-limited) and `MTR-0084` (a list slot is an
+    input slot, reported when the live view is built). `MTR-0077` to `MTR-0080` belong to a parallel PR and are reconciled
+    at merge, as §27's number was.
+21. **The seam for search (#220, G7).** A list's filter is one condition over `entry.*`, applied in `ListEntries.arrange`
+    and nowhere else. A search is a second condition the prompt writes into a session variable (`gui.session.search`),
+    ANDed with the author's filter in that one method; the page state, the snapshot and the click routing are unchanged.
+    G7 adds the prompt and the input method, not a second list path. Nothing here implements prompts.
+22. **Seams for later.** A list takes no `visible_if` (decision 2); a later issue may lift that for the slots a list fills.
+    The `variable` source reads a string until a list variable type exists (decision 7). The QA entry for the paged list
+    uses the `roster` fixture, whose entries are static, so the client run does not depend on who is online; the
+    `online_players` path is covered by unit tests and is not part of that run.

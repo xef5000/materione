@@ -50,6 +50,7 @@ describe('the palette', () => {
       'gui.click',
       'gui.click_outside',
       'gui.tick',
+      'gui.page',
       'gui.slot_change',
       'gui.click_inventory',
     ]);

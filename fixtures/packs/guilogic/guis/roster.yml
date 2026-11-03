@@ -1,0 +1,74 @@
+# A paged, filtered list (logic.md §6.7): twelve static entries, of which the filter keeps nine (level above 1),
+# sorted by name, seven to a page, so two pages. Clicking an entry names it on the console (MATERIONE-ROSTER-PICK);
+# the arrows page the list, and the page indicator is a templated item name that reads the list's page state, so
+# the window shows "Page 2 of 2" after the arrow is clicked. The QA catalog (qa/catalog/guilogic.mjs) pages through it.
+roster:
+  title: Roster
+  rows: 3
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: players
+      type: list
+      slots: { from: 10, to: 16 }
+      source:
+        entries:
+          - { name: Ada, level: 3 }
+          - { name: Bob, level: 1 }
+          - { name: Cy, level: 5 }
+          - { name: Dee, level: 2 }
+          - { name: Eve, level: 4 }
+          - { name: Fay, level: 6 }
+          - { name: Gus, level: 2 }
+          - { name: Hal, level: 1 }
+          - { name: Ivy, level: 7 }
+          - { name: Jo, level: 0 }
+          - { name: Kit, level: 4 }
+          - { name: Lu, level: 3 }
+      filter: "${entry.level > 1}"
+      sort: name
+      entry:
+        item: minecraft:player_head
+        name: "<yellow>${entry.name}"
+        lore: ["<gray>Click to pick"]
+    - id: info
+      type: item
+      slot: 4
+      item: minecraft:paper
+      name: "<white>Page ${gui.page.players.number} of ${gui.page.players.count}"
+    - id: previous
+      type: item
+      slot: 20
+      item: minecraft:arrow
+      name: "<gray>Previous page"
+    - id: next
+      type: item
+      slot: 24
+      item: minecraft:arrow
+      name: "<gray>Next page"
+  behavior:
+    - on: gui.click
+      layer: players
+      do:
+        - message: "<green>Picked ${entry.name} (slot ${click.slot})"
+        - run_command:
+            command: "say MATERIONE-ROSTER-PICK ${entry.name}"
+            as: console
+    - on: gui.click
+      layer: next
+      do:
+        - gui.page: { list: players, to: next }
+    - on: gui.click
+      layer: previous
+      do:
+        - gui.page: { list: players, to: previous }
+    - on: gui.page
+      layer: players
+      do:
+        - run_command:
+            command: "say MATERIONE-ROSTER-PAGE ${page.index} of ${page.count}"
+            as: console
