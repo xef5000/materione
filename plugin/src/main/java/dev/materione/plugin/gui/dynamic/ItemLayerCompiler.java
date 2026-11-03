@@ -40,6 +40,9 @@ public final class ItemLayerCompiler {
     /** The variable roots an item layer may read: the viewer, the server, run variables and the GUI itself. */
     public static final Set<String> ROOTS = Set.of("player", "server", "vars", "gui");
 
+    /** The roots of a list's entry template (logic.md §6.7): the item layer's roots and the entry being shown. */
+    public static final Set<String> ENTRY_ROOTS = Set.of("player", "server", "vars", "gui", "entry");
+
     /** Source names of the optional integrations, by the plugin each one needs. */
     static final Map<String, String> OPTIONAL_SOURCES = Map.of(
             "hdb", "HeadDatabase",
@@ -62,11 +65,21 @@ public final class ItemLayerCompiler {
 
     private final LogicLookup lookup;
     private final ExpressionCompiler expressions;
+    private final Set<String> roots;
 
     /** @param lookup the registries conditions, functions and item sources resolve against */
     public ItemLayerCompiler(LogicLookup lookup) {
+        this(lookup, ROOTS);
+    }
+
+    /**
+     * @param lookup the registries conditions, functions and item sources resolve against
+     * @param roots the variable roots the layer may read ({@link #ROOTS}, or {@link #ENTRY_ROOTS} for a list entry)
+     */
+    public ItemLayerCompiler(LogicLookup lookup, Set<String> roots) {
         this.lookup = lookup;
         this.expressions = EngineExpressions.with(lookup.functions());
+        this.roots = Set.copyOf(roots);
     }
 
     /**
@@ -90,7 +103,7 @@ public final class ItemLayerCompiler {
         Condition condition = null;
         if (placement.visibleIf() != null) {
             var compiled = FlowCompiler.compileCondition(
-                    gui, "layer " + placement.layerId(), placement.visibleIf(), ROOTS, lookup);
+                    gui, "layer " + placement.layerId(), placement.visibleIf(), roots, lookup);
             for (Diagnostic problem : compiled.problems()) {
                 problems.add(retarget(problem, gui, index, "visible_if"));
             }
@@ -160,23 +173,7 @@ public final class ItemLayerCompiler {
 
     /** A scalar payload is the source's shorthand: {@code player_slot: main_hand} reads as {@code {slot: main_hand}}. */
     private ParamReader paramsOf(ItemSource<?> source, Object payload) {
-        if (payload instanceof Map<?, ?> mapping) {
-            var params = new java.util.LinkedHashMap<String, Object>();
-            mapping.forEach((key, value) -> {
-                if (!(key instanceof String name)) {
-                    throw new IllegalArgumentException("parameter names are text");
-                }
-                params.put(name, value);
-            });
-            return ParamReader.of(params, expressions);
-        }
-        String shorthand = source.describe().shorthand();
-        if (shorthand == null) {
-            throw new IllegalArgumentException("takes a mapping of parameters, not a single value");
-        }
-        // a number or a boolean as written (hdb: 12345) is its text, which is how a source reads it
-        Object text = payload instanceof String ? payload : String.valueOf(payload);
-        return ParamReader.of(Map.of(shorthand, text), expressions);
+        return SourcePayload.params(source.describe().shorthand(), payload, expressions);
     }
 
     /** The plugin an optional source needs, when {@code id} is one of them and the registry lacks it. */
@@ -225,10 +222,10 @@ public final class ItemLayerCompiler {
             ExprRoots.collect(expression.tree(), found);
         }
         for (String root : found) {
-            if (!ROOTS.contains(root)) {
+            if (!roots.contains(root)) {
                 problems.add(new Diagnostic(DiagnosticCodes.FLOW_UNKNOWN_CONTEXT_ROOT, Severity.WARN,
                         "GUI " + gui + " layer item " + field + " reads '" + root + "', which is not a variable of a GUI layer",
-                        gui, null, "known roots: " + String.join(", ", new java.util.TreeSet<>(ROOTS))
+                        gui, null, "known roots: " + String.join(", ", new java.util.TreeSet<>(roots))
                                 + "; the value reads as empty until fixed",
                         target(index, field)));
             }

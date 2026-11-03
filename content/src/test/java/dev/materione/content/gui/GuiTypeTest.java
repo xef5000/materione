@@ -328,10 +328,10 @@ class GuiTypeTest {
             }
         }
         assertThat(GuiComponents.builtins()).extracting(GuiComponent::name)
-                .containsExactly("panel", "slots", "image", "paint", "button", "text", "item");
+                .containsExactly("panel", "slots", "image", "paint", "button", "text", "item", "list");
         var textTargets = GuiComponents.builtins().stream().map(GuiComponent::target).toList();
         assertThat(textTargets).containsExactly(RenderTarget.RASTER, RenderTarget.RASTER, RenderTarget.RASTER,
-                RenderTarget.RASTER, RenderTarget.RASTER, RenderTarget.TEXT, RenderTarget.SLOT);
+                RenderTarget.RASTER, RenderTarget.RASTER, RenderTarget.TEXT, RenderTarget.SLOT, RenderTarget.SLOT);
     }
 
     @Test

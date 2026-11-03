@@ -6,8 +6,11 @@ import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
+import dev.materione.plugin.gui.list.CompiledListLayer;
+import dev.materione.plugin.gui.render.Rendered;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -67,9 +70,19 @@ public final class ClickRouter {
                         && !session.rendered().coverage().get(layer).contains(click.slot()))) {
                 continue;
             }
+            // a list answers only the slots it shows an entry in: an empty slot runs none of its rules (logic.md §6.7)
+            Map<String, Object> entry = null;
+            if (isList(gui, layer)) {
+                Optional<Rendered.ListRender.Shown> shown = session.rendered().lists().shownAt(click.slot())
+                        .filter(showing -> showing.layer().equals(layer));
+                if (shown.isEmpty()) {
+                    continue;
+                }
+                entry = shown.get().entry();
+            }
             List<Rule> matching = matching(gui.logic().clickRules(layer), facts(layer, click));
             if (!matching.isEmpty()) {
-                dispatch(click, layer, matching);
+                dispatch(click, layer, matching, entry);
                 return new Routed(layer, matching);
             }
         }
@@ -77,8 +90,17 @@ public final class ClickRouter {
         if (fallback.isEmpty()) {
             return Routed.NONE;
         }
-        dispatch(click, "", fallback);
+        dispatch(click, "", fallback, null);
         return new Routed("", fallback);
+    }
+
+    private static boolean isList(RuntimeGuis.Live gui, String layer) {
+        for (CompiledListLayer list : gui.lists()) {
+            if (list.layerId().equals(layer)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Runs the {@code gui.click_outside} rules for a click outside the window. */
@@ -90,9 +112,9 @@ public final class ClickRouter {
                 guard.during(viewer.id(), () -> events.outside(viewer, session, gui, kind)));
     }
 
-    private void dispatch(GuiClick click, String layer, List<Rule> rules) {
+    private void dispatch(GuiClick click, String layer, List<Rule> rules, Map<String, Object> entry) {
         guard.during(click.viewer().id(), () -> events.click(
-                click.viewer(), click.session(), rules, layer, click.slot(), click.kind(), click.key()));
+                click.viewer(), click.session(), rules, layer, click.slot(), click.kind(), click.key(), entry));
     }
 
     private static List<Rule> matching(List<Rule> candidates, FilterFacts facts) {

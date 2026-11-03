@@ -153,7 +153,7 @@ test('the layers panel renames, hides, locks and reorders; the badge says what t
 test('adds components from the registry palette, schema-derived inspector, then saves ONE transaction with the paint asset', async ({ page }) => {
   await openShop(page);
   await expect(page.getByRole('region', { name: 'Components' }).getByRole('button')).toHaveText(
-    ['Panel', 'Slots', 'Image', 'Paint', 'Button', 'Text', 'Item']);
+    ['Panel', 'Slots', 'Image', 'Paint', 'Button', 'Text', 'Item', 'List']);
   await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Panel' }).click();
   await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Paint' }).click();
   await expect(page.locator('.layers .row .name').first()).toHaveText('Paint');

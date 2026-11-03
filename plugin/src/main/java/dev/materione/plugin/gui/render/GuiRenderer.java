@@ -35,7 +35,9 @@ public final class GuiRenderer {
     }
 
     /**
-     * Renders the GUI for the viewer without writing it anywhere.
+     * Renders the GUI for the viewer. The one state it writes is the page each of the GUI's lists showed, which the
+     * session keeps (logic.md §6.7): it is recorded before the title is laid out, so a title that reads
+     * {@code gui.page.<list>.count} sees this render's count. Nothing is written to the window.
      *
      * @param full true to re-read every layer (a reload or {@code gui.refresh}); false to re-read only the
      *     dynamic layers (the refresh clock)
@@ -44,19 +46,27 @@ public final class GuiRenderer {
     public Rendered render(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full, long ticks) {
         LogicContext context = GuiContexts.build(viewer, session, Map.of(), variables);
         Rendered slotRender = slots.render(gui, context, ticks, full ? null : session.rendered());
+        recordPages(session, slotRender.lists());
         Rendered rendered;
         if (gui.visuals() == null) {
-            rendered = new Rendered(slotRender.slots(), slotRender.hidden(), slotRender.resolved(), gui.title(), Map.of());
+            rendered = new Rendered(slotRender.slots(), slotRender.hidden(), slotRender.resolved(), gui.title(), Map.of(),
+                    slotRender.lists());
         } else {
             var title = titles.render(gui.id(), gui.rows(), gui.visuals(), context, ticks);
             var hidden = new java.util.HashSet<>(slotRender.hidden());
             hidden.addAll(title.hidden());
-            rendered = new Rendered(slotRender.slots(), hidden, slotRender.resolved(), title.title(), title.coverage());
+            rendered = new Rendered(slotRender.slots(), hidden, slotRender.resolved(), title.title(), title.coverage(),
+                    slotRender.lists());
         }
         var owned = gui.inputs().effective(gui.clicks(), rendered);
         var slots = new java.util.HashMap<>(rendered.slots());
-        owned.all().forEach(input -> slots.remove(input.slot()));
-        return new Rendered(slots, rendered.hidden(), rendered.resolved(), rendered.title(), rendered.coverage());
+        var shown = new java.util.HashMap<>(rendered.lists().shown());
+        owned.all().forEach(input -> {
+            slots.remove(input.slot());
+            shown.remove(input.slot()); // an input slot's entry is not shown, so a click there is the input's
+        });
+        var lists = new Rendered.ListRender(shown, rendered.lists().entries(), rendered.lists().pages());
+        return new Rendered(slots, rendered.hidden(), rendered.resolved(), rendered.title(), rendered.coverage(), lists);
     }
 
     /**
@@ -75,5 +85,15 @@ public final class GuiRenderer {
         RenderDiff.apply(previous.slots(), next.slots(), (slot, appearance) ->
                 inventory.setItem(slot, appearance == null ? null : AppearanceStacks.build(appearance)));
         session.remember(next);
+    }
+
+    /** Keeps the page of each list in the session, so {@code gui.page} and the page's text read this render's state. */
+    private static void recordPages(GuiSession session, Rendered.ListRender lists) {
+        lists.pages().forEach((layer, page) -> {
+            Map<String, Object> value = page.toMap();
+            if (!value.equals(session.pages().get(layer))) {
+                session.pages().put(layer, value);
+            }
+        });
     }
 }

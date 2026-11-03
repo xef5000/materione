@@ -102,12 +102,38 @@ public final class GuiLiveRefresh {
         if (now.isEmpty() || windows.shape(viewer, session).isEmpty()) {
             return false;
         }
-        refreshViewer(viewer, session, now);
+        refreshViewer(viewer, session, now, true);
         return true;
     }
 
-    /** One viewer's window brought up to date. Runs on the viewer's own thread. */
+    /**
+     * Repaints the dynamic layers of the viewer's window (logic.md §6.7): what a page change needs. Every list
+     * re-reads its page from the entries it has, so a cached source is not read again; the GUI itself is
+     * brought up to date first, as a refresh does.
+     *
+     * @return false when the GUI is no longer live or the viewer's window is not this session's
+     */
+    public boolean repaint(Viewer viewer, GuiSession session) {
+        Optional<RuntimeGuis.Live> now = guis.find(session.gui());
+        if (now.isEmpty() || windows.shape(viewer, session).isEmpty()) {
+            return false;
+        }
+        refreshViewer(viewer, session, now, false);
+        return true;
+    }
+
+    /** One viewer's window brought up to date, every layer read again. Runs on the viewer's own thread. */
     void refreshViewer(Viewer viewer, GuiSession session, Optional<RuntimeGuis.Live> now) {
+        refreshViewer(viewer, session, now, true);
+    }
+
+    /**
+     * One viewer's window brought up to date. Runs on the viewer's own thread.
+     *
+     * @param full true to read every layer again (a reload, {@code gui.refresh}); false to read the dynamic layers
+     *     and keep the cached entries of the lists (a page change)
+     */
+    void refreshViewer(Viewer viewer, GuiSession session, Optional<RuntimeGuis.Live> now, boolean full) {
         Player player = viewer.player();
         if (player == null || !player.isOnline() || !session.isOpen()
                 || sessions.current(session.player()).filter(current -> current == session).isEmpty()) {
@@ -138,7 +164,11 @@ public final class GuiLiveRefresh {
                         });
             }
             case UPDATE_CONTENTS -> {
-                windows.rewrite(viewer, session, now.orElseThrow());
+                if (full) {
+                    windows.rewrite(viewer, session, now.orElseThrow());
+                } else {
+                    windows.advance(viewer, session, now.orElseThrow());
+                }
                 ticker.ensure(viewer, session);
             }
         }

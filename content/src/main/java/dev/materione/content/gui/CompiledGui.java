@@ -27,11 +27,13 @@ import java.util.List;
  * @param inputs the container slots that take the player's items, by slot, sorted (logic.md §25)
  * @param placements the per-viewer item layers, in layer order (logic.md §6.3)
  * @param refresh the {@code refresh:} clock in ticks, 0 when off (logic.md §6.3)
+ * @param visuals the dynamic title and overlay plan, or null for a static GUI
+ * @param lists the GUI's {@code list} layers, in layer order, resolved per viewer and page (logic.md §6.7)
  */
 public record CompiledGui(
         NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
         ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
-        List<Placement> placements, int refresh, GuiVisualPlan visuals) {
+        List<Placement> placements, int refresh, GuiVisualPlan visuals, List<ListPlacement> lists) {
 
     /** The canvas width of every chest GUI (vanilla container width). */
     public static final int WIDTH = 176;
@@ -43,9 +45,18 @@ public record CompiledGui(
         playerInventory = playerInventory == null ? PlayerInventory.FREE : playerInventory;
         inputs = List.copyOf(inputs);
         placements = List.copyOf(placements);
+        lists = lists == null ? List.of() : List.copyOf(lists);
         if (refresh < 0) {
             throw new IllegalArgumentException("refresh is 0 (off) or a whole number of ticks");
         }
+    }
+
+    /** A GUI with no list layers. */
+    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
+            List<Placement> placements, int refresh, GuiVisualPlan visuals) {
+        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh,
+                visuals, List.of());
     }
 
     /** A GUI with playerInventory and inputs, and no per-viewer items or clock. */
@@ -122,4 +133,14 @@ public record CompiledGui(
             return visibleIf != null || item.dynamic();
         }
     }
+
+    /**
+     * One {@code list} layer, resolved per viewer and page when the window renders (logic.md §6.7). A list is
+     * always dynamic: its entries depend on the viewer and the page.
+     *
+     * @param layerId the layer's id
+     * @param order the layer's index in the GUI's layer list: a higher index is a higher layer
+     * @param list the parsed list: its slots, source, filter, sort and entry template
+     */
+    public record ListPlacement(String layerId, int order, dev.materione.content.gui.ListComponent.Layer list) {}
 }

@@ -36,6 +36,14 @@ public interface LogicLookup {
         return Optional.empty();
     }
 
+    /**
+     * The list source an author's key names ({@code online_players}, {@code example:weather_list}). Empty by
+     * default, so a lookup with no list-source registry rejects every source.
+     */
+    default Optional<dev.materione.api.logic.ListSource<?>> listSource(String authoredId) {
+        return Optional.empty();
+    }
+
     /** True when {@code authoredId} names a registered trigger. */
     boolean triggerKnown(String authoredId);
 

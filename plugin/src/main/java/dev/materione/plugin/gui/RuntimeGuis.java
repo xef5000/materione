@@ -12,6 +12,8 @@ import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.plugin.gui.dynamic.CompiledItemLayer;
 import dev.materione.plugin.gui.dynamic.ItemLayerCompiler;
 import dev.materione.plugin.gui.dynamic.TitleProgram;
+import dev.materione.plugin.gui.list.CompiledListLayer;
+import dev.materione.plugin.gui.list.ListLayerCompiler;
 import dev.materione.plugin.gui.input.InputSlots;
 import dev.materione.plugin.gui.open.OpenPlan;
 import dev.materione.plugin.gui.rules.GuiRuleSet;
@@ -112,7 +114,8 @@ public final class RuntimeGuis {
                     gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
                     OpenPlan.compile(gui.id(), gui.rules(), logic),
                     gui.placements(), gui.refresh(), compileItems(gui, logic),
-                    gui.visuals() == null ? null : TitleProgram.compile(gui.id(), gui.visuals(), logic).program()));
+                    gui.visuals() == null ? null : TitleProgram.compile(gui.id(), gui.visuals(), logic).program(),
+                    logic == null ? List.of() : ListLayerCompiler.compileAll(gui, logic, inputs, diagnostics)));
         }
         return new RuntimeGuis(out);
     }
@@ -131,6 +134,11 @@ public final class RuntimeGuis {
             compiler.compile(gui.id(), placement.order(), placement).layer().ifPresent(out::add);
         }
         return List.copyOf(out);
+    }
+
+    /** The authored list layers of a live view, the part a reload compares (the compiled bindings have identity only). */
+    private static List<CompiledGui.ListPlacement> authoredLists(List<CompiledListLayer> layers) {
+        return layers.stream().map(CompiledListLayer::authored).toList();
     }
 
     /** The greatest common divisor, with 0 as the identity: the clock of a set of periods. */
@@ -207,12 +215,14 @@ public final class RuntimeGuis {
      * @param placements the GUI's per-viewer item layers as authored, compared on a reload
      * @param refresh the {@code refresh:} clock in ticks, 0 when off
      * @param items the per-viewer item layers, compiled, in layer order
+     * @param visuals the compiled dynamic title and overlays, or null for a static title
+     * @param lists the GUI's list layers, compiled, in layer order (logic.md §6.7)
      */
     public record Live(
             NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
             List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items,
-            TitleProgram visuals) {
+            TitleProgram visuals, List<CompiledListLayer> lists) {
 
         public Live {
             slots = List.copyOf(slots);
@@ -221,6 +231,15 @@ public final class RuntimeGuis {
             inputs = inputs == null ? InputSlots.NONE : inputs;
             placements = List.copyOf(placements);
             items = List.copyOf(items);
+            lists = lists == null ? List.of() : List.copyOf(lists);
+        }
+
+        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
+                List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items,
+                TitleProgram visuals) {
+            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items,
+                    visuals, List.of());
         }
 
         public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
@@ -296,6 +315,9 @@ public final class RuntimeGuis {
                 return false;
             }
             if (refresh != previous.refresh || !placements.equals(previous.placements)) {
+                return false;
+            }
+            if (!authoredLists(lists).equals(authoredLists(previous.lists))) {
                 return false;
             }
             if (!Objects.equals(visuals == null ? null : visuals.plan(),

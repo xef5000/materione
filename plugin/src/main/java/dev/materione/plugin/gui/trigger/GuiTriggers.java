@@ -26,7 +26,7 @@ public final class GuiTriggers {
 
     private GuiTriggers() {}
 
-    /** The eight triggers, in the order the editor lists them. */
+    /** The nine triggers, in the order the editor lists them. */
     public static List<TriggerType> all() {
         return List.of(
                 trigger(GuiRuleSet.OPENING, "GUI opening",
@@ -49,7 +49,9 @@ public final class GuiTriggers {
                                 ContextVariable.of("click.key", ParameterType.INTEGER,
                                         "The hotbar key 1 to 9 of a number_key click, else 0"),
                                 ContextVariable.of("layer.id", ParameterType.STRING,
-                                        "The layer that took the click, blank for a rule with no layer filter")),
+                                        "The layer that took the click, blank for a rule with no layer filter"),
+                                ContextVariable.of("entry.*", ParameterType.RAW,
+                                        "A field of the list entry the clicked slot shows, when it shows one (logic.md §6.7)")),
                         List.of(filter("layer", ParameterType.STRING, List.of(),
                                         "Only clicks on this layer (an id, or a list of ids)", null),
                                 filter("slot", ParameterType.INTEGER, List.of(),
@@ -68,6 +70,15 @@ public final class GuiTriggers {
                         "Every so many ticks while the GUI is open; nothing runs when the GUI has no tick rule",
                         List.of(), List.of(requiredFilter("every", ParameterType.INTEGER,
                                 "Run every this many ticks (20 is a second); at least 1", 1.0)),
+                        false),
+                trigger(GuiRuleSet.PAGE, "GUI list page",
+                        "A list of the GUI changed its page (gui.page); the window already shows the new page",
+                        List.of(ContextVariable.of("page.index", ParameterType.INTEGER,
+                                        "The page now shown, from 1"),
+                                ContextVariable.of("page.count", ParameterType.INTEGER,
+                                        "How many pages the list has, at least 1")),
+                        List.of(filter("layer", ParameterType.STRING, List.of(),
+                                "Only this list (an id, or a list of ids)", null)),
                         false),
                 trigger(GuiRuleSet.SLOT_CHANGE, "GUI input slot change",
                         "The player is about to put an item into, or take one out of, an input slot. The change "

@@ -391,6 +391,41 @@
           "available": true,
           "category": "gui",
           "deferred": false,
+          "description": "Moves a list of the open GUI to another page: next, previous, first, last, or a page number. The window shows the page and gui.page runs",
+          "displayName": "Page list",
+          "id": "gui.page",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The list layer's id",
+              "id": "list",
+              "label": "List",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "next, previous, first, last, or a page number; a template may give one",
+              "id": "to",
+              "label": "To",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "gui",
+          "deferred": false,
           "description": "Re-renders the open GUI in place",
           "displayName": "Refresh GUI",
           "id": "gui.refresh",
@@ -1820,6 +1855,15 @@
             "gui"
           ],
           "id": "gui.tick"
+        },
+        {
+          "description": "A list of the GUI changed its page (gui.page); the window already shows the new page",
+          "details": [],
+          "displayName": "GUI list page",
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.page"
         },
         {
           "description": "The player is about to put an item into, or take one out of, an input slot. The change happens unless a rule cancels it, which reverts it",
@@ -5650,6 +5694,12 @@
               "hosts": [],
               "path": "layer.id",
               "type": "string"
+            },
+            {
+              "description": "A field of the list entry the clicked slot shows, when it shows one (logic.md §6.7)",
+              "hosts": [],
+              "path": "entry.*",
+              "type": "raw"
             }
           ],
           "description": "The player clicks a slot of the GUI. The click is always cancelled; the topmost showing layer with a matching rule runs it",
@@ -5948,6 +5998,130 @@
             "gui"
           ],
           "id": "gui.tick",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "0.1.0"
+        },
+        {
+          "cancellable": false,
+          "context": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "player.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "player.uuid",
+              "type": "string"
+            },
+            {
+              "description": "survival, creative, adventure or spectator",
+              "hosts": [],
+              "path": "player.gamemode",
+              "type": "string"
+            },
+            {
+              "description": "Whether the player is sneaking",
+              "hosts": [],
+              "path": "player.sneaking",
+              "type": "boolean"
+            },
+            {
+              "description": "Whether the player is an operator",
+              "hosts": [],
+              "path": "player.op",
+              "type": "boolean"
+            },
+            {
+              "description": "The player's health",
+              "hosts": [],
+              "path": "player.health",
+              "type": "decimal"
+            },
+            {
+              "description": "The player's experience level",
+              "hosts": [],
+              "path": "player.level",
+              "type": "integer"
+            },
+            {
+              "description": "Players online",
+              "hosts": [],
+              "path": "server.online",
+              "type": "integer"
+            },
+            {
+              "description": "Player slots",
+              "hosts": [],
+              "path": "server.max",
+              "type": "integer"
+            },
+            {
+              "description": "The GUI's id, pack:name",
+              "hosts": [],
+              "path": "gui.id",
+              "type": "string"
+            },
+            {
+              "description": "An argument the GUI was opened with",
+              "hosts": [],
+              "path": "gui.args.*",
+              "type": "string"
+            },
+            {
+              "description": "A session variable of this open GUI",
+              "hosts": [],
+              "path": "gui.session.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page state of a list in this GUI",
+              "hosts": [],
+              "path": "gui.page.*",
+              "type": "raw"
+            },
+            {
+              "description": "Variables written earlier in this run by set_var",
+              "hosts": [],
+              "path": "vars.*",
+              "type": "raw"
+            },
+            {
+              "description": "The page now shown, from 1",
+              "hosts": [],
+              "path": "page.index",
+              "type": "integer"
+            },
+            {
+              "description": "How many pages the list has, at least 1",
+              "hosts": [],
+              "path": "page.count",
+              "type": "integer"
+            }
+          ],
+          "description": "A list of the GUI changed its page (gui.page); the window already shows the new page",
+          "details": [],
+          "displayName": "GUI list page",
+          "filters": [
+            {
+              "advanced": false,
+              "description": "Only this list (an id, or a list of ids)",
+              "id": "layer",
+              "label": "Layer",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "firedBy": [
+            "gui"
+          ],
+          "id": "gui.page",
           "parameters": [],
           "registeredBy": "materione",
           "sinceVersion": "0.1.0"
@@ -6793,6 +6967,76 @@
             "required": false,
             "section": "appearance",
             "type": "string",
+            "uiHint": "text"
+          }
+        ],
+        "registeredBy": "materione",
+        "sinceVersion": "1.0.0",
+        "target": "slot"
+      },
+      {
+        "description": "A page of entries (online players, a pack's items, a variable's values, or entries written here) in a run of slots, filtered, sorted and paged, each shown by an item template",
+        "displayName": "List",
+        "id": "materione:list",
+        "parameters": [
+          {
+            "advanced": false,
+            "description": "The slots the entries fill, in entry order: { from, to, skip_columns } or a list of slot numbers",
+            "example": "{from: 10, to: 34}",
+            "id": "slots",
+            "label": "Slots",
+            "order": 10,
+            "required": true,
+            "section": "placement",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The list source: a name (online_players), or a mapping with type and the source's parameters ({type: pack_items, pack: shop}), or {entries: [...]}",
+            "example": "online_players",
+            "id": "source",
+            "label": "Source",
+            "order": 20,
+            "required": true,
+            "section": "entries",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "Which entries show: a condition over entry.* (an expression, a predicate or a list)",
+            "example": "${contains(lower(entry.name), 'a')}",
+            "id": "filter",
+            "label": "Filter",
+            "order": 30,
+            "required": false,
+            "section": "entries",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
+            "advanced": true,
+            "description": "The order of the entries: a field name, or {by: <field>, order: asc|desc}",
+            "example": "name",
+            "id": "sort",
+            "label": "Sort",
+            "order": 40,
+            "required": false,
+            "section": "entries",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
+            "advanced": false,
+            "description": "The item each entry shows: the fields of an item layer (item, name, lore, lore_mode, amount, glint), with entry.* in scope",
+            "example": "item: head",
+            "id": "entry",
+            "label": "Entry",
+            "order": 50,
+            "required": true,
+            "section": "appearance",
+            "type": "raw",
             "uiHint": "text"
           }
         ],

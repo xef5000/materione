@@ -61,6 +61,12 @@ public final class RegistryLogicLookup implements LogicLookup {
     }
 
     @Override
+    public Optional<dev.materione.api.logic.ListSource<?>> listSource(String authoredId) {
+        return find(RegistryKeys.LIST_SOURCES, authoredId, dev.materione.api.logic.ListSource.class)
+                .map(source -> (dev.materione.api.logic.ListSource<?>) source);
+    }
+
+    @Override
     public boolean triggerKnown(String authoredId) {
         return find(RegistryKeys.TRIGGERS, authoredId, TriggerType.class).isPresent();
     }

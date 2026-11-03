@@ -96,14 +96,41 @@ public final class GuiEvents {
      */
     public void click(
             Viewer viewer, GuiSession session, List<Rule> rules, String layer, int slot, ClickKind kind, int key) {
+        click(viewer, session, rules, layer, slot, kind, key, null);
+    }
+
+    /**
+     * As above, for a click on a list slot: {@code entry} is the entry the slot shows, read as {@code entry.*}, so
+     * one rule serves every entry (logic.md §6.7). Null for a click that shows no entry.
+     */
+    public void click(
+            Viewer viewer, GuiSession session, List<Rule> rules, String layer, int slot, ClickKind kind, int key,
+            Map<String, Object> entry) {
         var extra = new java.util.LinkedHashMap<String, Object>(GuiContexts.click(kind.id(), slot, key));
         extra.put("layer", Map.of("id", layer));
+        if (entry != null) {
+            extra.put("entry", entry);
+        }
         fire(GuiRuleSet.CLICK, rules, viewer, session, key2 -> switch (key2) {
             case "layer" -> layer.isEmpty() ? null : layer;
             case "slot" -> Integer.toString(slot);
             case "click" -> kind.id();
             default -> null;
         }, extra);
+    }
+
+    /**
+     * Fires {@code gui.page} after a list of the window moved to another page (logic.md §6.7). The window already
+     * shows the new page when the rules run.
+     *
+     * @param list the list that moved
+     * @param index the page now shown, from 1
+     * @param count the pages the list has, at least 1
+     */
+    public void paged(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, String list, int index, int count) {
+        fire(GuiRuleSet.PAGE, gui.logic().rules(GuiRuleSet.PAGE), viewer, session,
+                key -> "layer".equals(key) ? list : null,
+                Map.of("page", Map.of("index", index, "count", count)));
     }
 
     /**

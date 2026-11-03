@@ -118,6 +118,6 @@ describe('against the server', () => {
     expect(response.ok).toBe(true);
     const data = (response as { data: { guiComponents: { id: string }[] } }).data;
     expect(data.guiComponents.map((component) => component.id)).toEqual(
-      ['materione:panel', 'materione:slots', 'materione:image', 'materione:paint', 'materione:button', 'materione:text', 'materione:item']);
+      ['materione:panel', 'materione:slots', 'materione:image', 'materione:paint', 'materione:button', 'materione:text', 'materione:item', 'materione:list']);
   });
 });

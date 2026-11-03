@@ -79,6 +79,19 @@ async function closeWindow(ctx) {
   } catch { /* nothing open */ }
 }
 
+/** Opens guilogic:roster for the probe player (the roster's rows are static: no other player is needed). */
+async function openRoster(ctx) {
+  await ctx.reset();
+  await ctx.rcon('materione gui open guilogic:roster Probe');
+  await ctx.sleep(900); // the client finishes opening the window
+}
+
+/** What a container slot shows: the item's name, or "empty". */
+async function slotName(ctx, slot) {
+  return String(await ctx.exec(`def s = player.containerMenu.slots.get(${slot}).getItem()
+return s.isEmpty() ? 'empty' : s.getHoverName().getString()`));
+}
+
 export default [
   test({
     id: 'guilogic.click-message-sound',
@@ -324,6 +337,72 @@ export default [
         ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(3);
         ctx.expect(await inventoryCount(ctx, 'Dirt')).toBe(2);
         ctx.expect(await cursorStack(ctx)).toBe('empty');
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  // A paged, filtered list (logic.md §6.7, issue 219): the roster fixture is nine kept entries, seven to a page.
+  test({
+    id: 'guilogic.roster-paged',
+    title: 'guilogic:roster, a list of twelve entries of which the level filter keeps nine, sorted by name and seven to a page: page 1 shows Ada to Ivy in slots 10 to 16 with "Page 1 of 2" in the top middle; the next arrow (slot 24) shows Kit and Lu and logs MATERIONE-ROSTER-PAGE 2 of 2; a click on Kit (slot 10) says "Picked Kit (slot 10)" and logs MATERIONE-ROSTER-PICK Kit; a click on an empty slot does nothing; the previous arrow (slot 20) returns to page 1',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await openRoster(ctx);
+        ctx.expect(await slotName(ctx, 10)).toBe('Ada');
+        ctx.expect(await slotName(ctx, 16)).toBe('Ivy');
+        ctx.expect(await slotName(ctx, 17)).toBe('empty');
+        ctx.expect(await slotName(ctx, 4)).toBe('Page 1 of 2');
+
+        await click(ctx, 24);
+        await ctx.waitForServerLog(/MATERIONE-ROSTER-PAGE 2 of 2/);
+        ctx.expect(await slotName(ctx, 10)).toBe('Kit');
+        ctx.expect(await slotName(ctx, 11)).toBe('Lu');
+        ctx.expect(await slotName(ctx, 12)).toBe('empty');
+        ctx.expect(await slotName(ctx, 4)).toBe('Page 2 of 2');
+
+        const before = (await ctx.chat()).length;
+        await click(ctx, 12);
+        await ctx.sleep(600);
+        ctx.expect((await ctx.chat()).length).toBe(before);
+
+        await click(ctx, 10);
+        await ctx.waitForChat(/Picked Kit \(slot 10\)/);
+        await ctx.waitForServerLog(/MATERIONE-ROSTER-PICK Kit/);
+
+        await click(ctx, 20);
+        await ctx.waitForServerLog(/MATERIONE-ROSTER-PAGE 1 of 2/);
+        ctx.expect(await slotName(ctx, 10)).toBe('Ada');
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'guilogic.roster-visual',
+    title: 'guilogic:roster as a player sees it: page 1 with its seven entry heads in the middle row and "Page 1 of 2" in the top middle, and page 2 after the next arrow with two heads and "Page 2 of 2"',
+    mode: 'visual',
+    covers: COVERS,
+    dependsOn: ['guilogic.roster-paged'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      try {
+        await openRoster(ctx);
+        await ctx.shot('guilogic-roster-page1');
+        await click(ctx, 24);
+        await ctx.waitForServerLog(/MATERIONE-ROSTER-PAGE 2 of 2/);
+        await ctx.sleep(600);
+        await ctx.shot('guilogic-roster-page2');
+        ctx.needsEyes(
+          'guilogic:roster is a three-row chest. On the first screenshot the middle row holds seven player heads '
+            + 'named Ada, Cy, Dee, Eve, Fay, Gus and Ivy, the top middle slot is a paper named "Page 1 of 2", and '
+            + 'the arrows are in the row below. On the second screenshot the first two heads of the middle row are '
+            + 'Kit and Lu, the rest of that row is empty, and the paper reads "Page 2 of 2".',
+        );
       } finally {
         await closeWindow(ctx);
       }

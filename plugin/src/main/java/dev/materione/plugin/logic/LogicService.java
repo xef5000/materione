@@ -4,6 +4,7 @@ import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.ItemSource;
+import dev.materione.api.logic.ListSource;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.TriggerType;
@@ -55,6 +56,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<ExpressionFunction> functions;
     private final LogicRegistryImpl<CurrencyIntegration> currencyIntegrations;
     private final LogicRegistryImpl<ItemSource<?>> itemSources;
+    private final LogicRegistryImpl<ListSource<?>> listSources;
     private final MaterioneCurrencyCatalog currencies;
     private final LogicProvidersImpl providers;
     private final RuleEngine engine;
@@ -118,6 +120,8 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
                 integration -> integration.describe());
         this.itemSources = new LogicRegistryImpl<>(registries, RegistryKeys.ITEM_SOURCES, erased(ItemSource.class),
                 "item source", ItemSource::id, source -> source.describe().self());
+        this.listSources = new LogicRegistryImpl<>(registries, RegistryKeys.LIST_SOURCES, erased(ListSource.class),
+                "list source", ListSource::id, source -> source.describe().self());
         this.currencies = new MaterioneCurrencyCatalog(currencyIntegrations::resolve, defaultCurrency);
         Objects.requireNonNull(host, "host").getServer().getPluginManager().registerEvents(this, host);
         // the session-only Bukkit permission provider is the default (logic.md §4.5)
@@ -154,6 +158,12 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     @Override
     public LogicRegistry<CurrencyIntegration> currencyIntegrations() {
         return currencyIntegrations;
+    }
+
+    /** The {@code list-sources} registry (logic.md §4.5, §6.7). */
+    @Override
+    public LogicRegistry<ListSource<?>> listSources() {
+        return listSources;
     }
 
     /** The {@code item-sources} registry (logic.md §4.4). */
@@ -248,6 +258,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         functions.ownerDisabled(owner);
         currencyIntegrations.ownerDisabled(owner);
         itemSources.ownerDisabled(owner);
+        listSources.ownerDisabled(owner);
         providers.ownerDisabled(owner);
     }
 
@@ -264,6 +275,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         functions.close();
         currencyIntegrations.close();
         itemSources.close();
+        listSources.close();
         HandlerList.unregisterAll(this);
     }
 }

@@ -9,6 +9,18 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Lists and pagination in GUIs (logic.md §6.7, §4.5, §28, #219).** A `list` component fills a run of
+  slots with one page of entries: `slots` (a range with skipped columns, or an explicit list), `source`,
+  `filter` (a condition over `entry.*`), `sort` (a field, optionally `{by, order: desc}`) and an `entry:` item
+  template with `entry.*` in scope, so the entries take the same name, lore, amount and glint overrides as item
+  layers. Entries come from a list source: `online_players`, `pack_items`, `variable` (a declared string variable,
+  split by a separator) or `static` (entries written in the layer). `LogicApi.listSources()` registers more, through
+  the public API, each with a typed entry schema and a `cached` flag. `gui.page: {list, to}` moves a list to `next`,
+  `previous`, `first`, `last` or a page number and fires the new `gui.page` trigger once per page change. A click on
+  an entry runs the list's rules with that entry as `entry.*`, and an empty slot runs none. The page and its count
+  are readable in text and items as `gui.page.<list>.number` and `.count`. Diagnostics MTR-0077 to MTR-0080. Not yet
+  shipped: a search filter and the prompt that writes it (#220), and list sources in the editor's vocabulary
+  (with the node inspector, #224).
 - **Conditional and animated GUI overlays, templated title text and held-cursor title refreshes (logic.md §6.4, §27, #217).**
   A GUI's raster layers accept `visible_if` and `materione:overlay_frames`, and its text layers accept `visible_if`
   and templates. Each visible raster layer of such a GUI compiles to its own overlay glyph per frame, from the GUI's

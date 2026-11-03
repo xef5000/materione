@@ -27,6 +27,7 @@ import dev.materione.content.gui.GuiDefinition;
 import dev.materione.content.gui.GuiType;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.gui.event.GuiEvents;
+import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.input.ClickRouter;
 import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.LayerVisibility;
@@ -121,7 +122,8 @@ public final class GuiFixture {
         lifecycle = new GuiLifecycle(guis, sessions, events, windows);
         opener = new GuiOpener(guis, sessions, events, windows, ticker, Logger.getAnonymousLogger());
         refresh = new GuiLiveRefresh(plugin(), null, guis, sessions, windows, lifecycle, ticker);
-        bridge.bind(new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh, inputPort));
+        bridge.bind(new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh, inputPort,
+                new dev.materione.plugin.gui.list.GuiPages(events, refresh)));
     }
 
     private GuiLookup lookup() {
@@ -193,20 +195,26 @@ public final class GuiFixture {
         public boolean defer;
         public String failOpenWith;
 
+        /**
+         * When set, the window renders what the real host would paint and remembers it on the session, so a test
+         * can read the slots, the entries under the cursor and the page state (logic.md §6.7). Off by default.
+         */
+        public GuiRenderer renderer;
+
         @Override
         public void open(Viewer viewer, GuiSession session,
                 java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
                 Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
-            show("open", session, resolve, opened, failed);
+            show("open", viewer, session, resolve, opened, failed);
         }
 
         @Override
         public void reopen(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, Runnable opened,
                 Consumer<String> failed) {
-            show("reopen", session, () -> java.util.Optional.of(gui), ignored -> opened.run(), failed);
+            show("reopen", viewer, session, () -> java.util.Optional.of(gui), ignored -> opened.run(), failed);
         }
 
-        private void show(String what, GuiSession session,
+        private void show(String what, Viewer viewer, GuiSession session,
                 java.util.function.Supplier<java.util.Optional<RuntimeGuis.Live>> resolve,
                 Consumer<RuntimeGuis.Live> opened, Consumer<String> failed) {
             Runnable task = () -> {
@@ -223,12 +231,19 @@ public final class GuiFixture {
                 session.attach(this);
                 session.displayed(gui);
                 shapes.put(session, new Shape(gui.title(), gui.rows()));
+                paint(viewer, session, gui, true);
                 opened.accept(gui);
             };
             if (defer) {
                 deferred.add(task);
             } else {
                 task.run();
+            }
+        }
+
+        private void paint(Viewer viewer, GuiSession session, RuntimeGuis.Live gui, boolean full) {
+            if (renderer != null) {
+                session.remember(renderer.render(viewer, session, gui, full, session.windowTicks()));
             }
         }
 
@@ -241,12 +256,14 @@ public final class GuiFixture {
         public void rewrite(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("rewrite " + gui.id().value());
             session.displayed(gui);
+            paint(viewer, session, gui, true);
         }
 
         @Override
         public void advance(Viewer viewer, GuiSession session, RuntimeGuis.Live gui) {
             log.add("advance " + gui.id().value());
             session.displayed(gui);
+            paint(viewer, session, gui, false);
         }
 
         @Override
