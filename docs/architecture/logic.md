@@ -309,7 +309,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 | `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
-| `InputMethod` | `prompt` (§6.6) | chat, sign, anvil | dialogs (#6) |
+| `InputMethod` | `prompt` (§6.6) | chat, anvil; sign registered but unavailable on this build (§29) | dialogs (#6) |
 | `ListSource` | the `list` component (§6.7) | online players, a pack's items, a variable list, static `entries:` | addon sources |
 
 Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
@@ -2715,7 +2715,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 #220 ships §6.6 and the search seam of §28.21. A `prompt` step parks its run, asks the player for a line of text through
 an `InputMethod`, writes the answer to a run-local or session variable and resumes. The code is in `api.logic`
 (`InputMethod`, `InputMethodDescription`, `ActionType.takesElse()`), `behavior.flow` (`StepCompiler`), `plugin.gui.prompt`
-(the registry, the three methods and the listener), `plugin.logic.action.PromptAction` and `plugin.gui.list` (the search).
+(the registry, the methods and the listener), `plugin.logic.action.PromptAction` and `plugin.gui.list` (the search).
 Where the design left a choice open, these are the choices. Each is reversible by the owner.
 
 **The step and the run**
@@ -2743,8 +2743,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 5. **Timeouts are in seconds, 1 to 600, default 60.** The prompt schedules its own timeout on the player's entity
    scheduler and cancels it when the question ends. Seconds, not ticks, because a player reads a timeout in seconds
    (`wait` stays in ticks, §16 decision 6).
-6. **Empty and cancel-word answers are unanswered.** A blank answer (a sign closed with nothing written, an anvil with no
-   name) is "no answer", and the cancel word (default `cancel`, compared ignoring case; `cancel_word: ""` turns it off)
+6. **Empty and cancel-word answers are unanswered.** A blank answer (an anvil with no name) is "no answer", and the cancel word (default `cancel`, compared ignoring case; `cancel_word: ""` turns it off)
    is "the player cancelled". Both run the `else:`. A search that must clear its text uses `set_var`, not an empty answer.
 7. **One question per player.** A prompt started while another waits is refused at once with `FAILED`, the player is
    told ("You are already answering a question; finish that one first."), and the run ends through its `else:` like any
@@ -2754,7 +2753,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 **The window**
 
 8. **A question hides the player's window, and the session lives on; the window is shown again for the same session.** A
-   chat, sign or anvil question must take the window away, because a player cannot type in chat with a container open.
+   chat or anvil question must take the window away, because a player cannot type in chat with a container open.
    The session is marked `prompting` (`GuiSession.prompting`), its input items go back to the player, and its window
    closes (`GuiLifecycle.hideForPrompt`). Nothing fires: no `gui.close`, and no `gui.open` when the window returns. The
    close that the hide causes is ignored by `windowClosed` while the session is prompting, so it does not end the session.
@@ -2783,9 +2782,15 @@ Where the design left a choice open, these are the choices. Each is reversible b
 13. **Chat (`materione:chat`).** The question is a chat line. The chat listener cancels the next message from a player who
     is being asked, so it is not broadcast, and hands its text to the method on the player's thread. The listener asks
     the method whether the player awaits before it cancels, so no other chat is touched.
-14. **Sign (`materione:sign`).** The client edits only a real sign, so the method places one in the top, empty block of
-    the player's column, opens its editor, and restores the original block when the prompt ends. The answer is the sign's
-    lines joined by a space. A column with no free block refuses the question (`MTR-0084`). **Not verified in a client.**
+14. **Sign (`materione:sign`) is registered and unavailable on this build.** The first design placed a real sign block in
+    the world for the editor and restored it afterwards. That was rejected: a crash, restart or chunk unload between the
+    two steps leaves a sign in the world that other players see, and it can collide with region protection and block
+    loggers. The client-only replacement needs Paper's `Player#openVirtualSign(Position, Side)`, which is in the 26.x API
+    (`paper-api-26.1.2`, `Player.java`) and **not in the 1.21.4 API this build compiles against**; the answer comes back on
+    `UncheckedSignChangeEvent`, also 26.x only. The 1.21.4 `sendBlockChange` and `sendBlockUpdate` can show a sign to a
+    client but cannot receive an edit, so no closer 1.21.4 path exists. The method therefore reports `Availability`
+    unavailable with that reason; a prompt refuses it before anything is hidden or pending (`MTR-0084`), and the studio
+    can grey it out. The method never touches the world. A 26.x path goes behind the modern seam as a follow-up.
 15. **Anvil (`materione:anvil`).** `MenuType.ANVIL` opens an anvil with a name tag in its first slot, named with the
     question. The player takes the result from slot 2, which is the answer: the click is cancelled, so the item is never
     given, and only once the rename text is non-blank. Closing the anvil without taking the result is no answer. The
@@ -2819,7 +2824,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
     is where the Logic tab reads both.
 21. **Verification.** Headless: the engine (`PromptStepTest`), the registry (`PromptServiceTest`, `PromptActionTest`), the
     chat adapter on a real `AsyncChatEvent` (`PromptListenerTest`), the search filter (`ListSearchFilterTest`) and the
-    search key's shape (`ListSearchTest`). The GUI-visible path (the hide, the chat line, the sign editor, the anvil and
-    the window shown again) is in the QA catalog (`guilogic.search-recipe`, `guilogic.chat-prompt`) and was **not run
-    against a client** in this change. The sign and anvil methods are **not verified in a client**: the 26.x probe loop
-    was not available on the machine that wrote them.
+    search key's shape (`ListSearchTest`), and the sign method's refusal (`SignInputTest`, `PromptServiceTest`). The
+    GUI-visible path (the hide, the chat line, the anvil and the window shown again) is in the QA catalog
+    (`guilogic.search-recipe`, `guilogic.chat-prompt-cancel`) and was **not run against a client** in this change. The
+    anvil method is **not verified in a client**: the 26.x probe loop was not available on the machine that wrote it.

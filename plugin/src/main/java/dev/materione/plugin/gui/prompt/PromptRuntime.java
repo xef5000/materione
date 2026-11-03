@@ -40,6 +40,6 @@ public record PromptRuntime(PromptService service, ChatInput chat, SignInput sig
 
     /** The adapter for the events the methods listen to. Register it once with the server. */
     public Listener listener(Plugin plugin, SchedulingGateway scheduling) {
-        return new PromptListener(plugin, scheduling, service, chat, sign, anvil);
+        return new PromptListener(plugin, scheduling, service, chat, anvil);
     }
 }

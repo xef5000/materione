@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.InputMethod;
 import dev.materione.api.logic.InputMethodDescription;
 import dev.materione.api.registry.SelfDescription;
@@ -161,6 +162,24 @@ class PromptServiceTest {
     }
 
     @Test
+    void anUnavailableMethodIsRefusedBeforeAnythingIsHiddenOrPending() {
+        var replies = new ArrayList<PromptReply>();
+        method.availability = Availability.unavailable("no client-only editor on this build");
+
+        CompletableFuture<ActionOutcome> outcome = service.begin(request("cancel", 60, replies)).toCompletableFuture();
+
+        assertThat(outcome.join()).isEqualTo(
+                ActionOutcome.failed("the input method is unavailable: no client-only editor on this build"));
+        assertThat(replies).isEmpty();
+        assertThat(method.asked).isZero();
+        assertThat(method.dismissed).isZero();
+        assertThat(gateway.pending(1)).isFalse();
+        assertThat(gateway.pending(60 * 20L)).isFalse();
+        assertThat(diagnostics).extracting(Diagnostic::code).containsExactly(DiagnosticCodes.PROMPT_METHOD_FAILED);
+        assertThat(messages).anySatisfy(line -> assertThat(line).contains("cannot be asked right now"));
+    }
+
+    @Test
     void aMethodStartIsNeverRunInlineWithTheBegin() {
         var replies = new ArrayList<PromptReply>();
         service.begin(request("cancel", 60, replies));
@@ -195,6 +214,7 @@ class PromptServiceTest {
         String question;
         Reply reply;
         RuntimeException failOnAsk;
+        Availability availability = Availability.AVAILABLE;
 
         @Override
         public String id() {
@@ -204,6 +224,11 @@ class PromptServiceTest {
         @Override
         public InputMethodDescription describe() {
             return InputMethodDescription.of(SelfDescription.of("Fake", "test method"), true);
+        }
+
+        @Override
+        public Availability availability() {
+            return availability;
         }
 
         @Override

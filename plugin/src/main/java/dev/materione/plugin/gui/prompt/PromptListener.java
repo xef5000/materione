@@ -7,14 +7,11 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.block.SignChangeEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.plugin.Plugin;
-
-import java.util.stream.Collectors;
 
 /**
  * The adapter for the events a prompt listens to (logic.md §6.6, §9 rule 1): chat, a sign editor's result, an
@@ -31,16 +28,14 @@ public final class PromptListener implements Listener {
     private final SchedulingGateway scheduling;
     private final PromptService prompts;
     private final ChatInput chat;
-    private final SignInput sign;
     private final AnvilInput anvil;
 
     public PromptListener(Plugin plugin, SchedulingGateway scheduling, PromptService prompts,
-            ChatInput chat, SignInput sign, AnvilInput anvil) {
+            ChatInput chat, AnvilInput anvil) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.prompts = prompts;
         this.chat = chat;
-        this.sign = sign;
         this.anvil = anvil;
     }
 
@@ -54,20 +49,6 @@ public final class PromptListener implements Listener {
         event.setCancelled(true);
         String text = PlainTextComponentSerializer.plainText().serialize(event.message());
         scheduling.executeEntity(plugin, player, () -> chat.offer(player.getUniqueId(), text));
-    }
-
-    /** The sign editor of a question closed: its lines are the answer, and the sign itself is never stored. */
-    @EventHandler(priority = EventPriority.LOW, ignoreCancelled = true)
-    public void onSignChange(SignChangeEvent event) {
-        Player player = event.getPlayer();
-        if (!sign.awaits(player.getUniqueId())) {
-            return;
-        }
-        event.setCancelled(true);
-        var plain = PlainTextComponentSerializer.plainText();
-        String text = event.lines().stream().map(plain::serialize).filter(line -> !line.isBlank())
-                .collect(Collectors.joining(" "));
-        sign.edited(player.getUniqueId(), event.getBlock().getLocation(), text);
     }
 
     /** A click on the anvil's result, once something is typed, is the answer: the item is not given. */

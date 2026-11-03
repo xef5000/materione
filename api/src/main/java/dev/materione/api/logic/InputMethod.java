@@ -4,7 +4,8 @@ import org.bukkit.entity.Player;
 
 /**
  * How a {@code prompt} step asks a player for a line of text and gets it back (logic.md §4.5, §6.6): the SPI
- * behind {@code method:}. The built-ins are {@code chat}, {@code sign} and {@code anvil}; the dialog method
+ * behind {@code method:}. The built-ins are {@code chat}, {@code anvil} and {@code sign}, which is unavailable on this
+ * build (logic.md §29); the dialog method
  * arrives with dialogs (#6). An addon registers its own method under its namespace through
  * {@link LogicApi#inputMethods()}.
  *

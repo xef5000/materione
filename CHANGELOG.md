@@ -12,15 +12,16 @@ releases may change file formats, settings and the public API.
 - **Prompts and list search in GUIs (logic.md §6.6, §29, §28.21, #220).** A `prompt` step parks its run, asks the
   player for a line of text and writes the answer to a run-local or session variable (`var: answer` or
   `var: session.search`), then resumes. Three input methods, registered through the new `LogicApi.inputMethods()`
-  (`InputMethod` SPI): `chat` (the answer is the next chat line, not broadcast), `sign` (a sign editor on a temporary
-  sign) and `anvil` (the answer is the name typed in an anvil). A question takes `method`, `text`, `var`, `timeout`
+  (`InputMethod` SPI): `chat` (the answer is the next chat line, not broadcast) and `anvil` (the answer is the name typed
+  in an anvil). `sign` is registered but unavailable on this build: its client-only editor needs Paper's
+  `Player#openVirtualSign`, which is in the 26.x API only (logic.md §29). A question takes `method`, `text`, `var`, `timeout`
   (seconds, 1 to 600, default 60) and `cancel_word` (default `cancel`). An unanswered question, a cancel word, a
   timeout, or a quit runs the step's `else:` and ends the run. The window a chat, sign or anvil question needs is hidden
   for the question and shown again for the same session. One question per player at a time. A list takes
   `search: {fields: [...], var: ...}` (default `var: search`): the text in the session variable keeps the entries whose
   fields contain it, ignoring case, so a prompt into `session.search` and a `gui.refresh` make a search. The `guilogic`
-  fixture has the recipe (`guilogic:search`). Diagnostics MTR-0081 to MTR-0084. The sign and anvil methods are not yet
-  verified in a client, and the QA entries for them were not run.
+  fixture has the recipe (`guilogic:search`). Diagnostics MTR-0081 to MTR-0084. The anvil method is not yet
+  verified in a client, and the QA entries were not run against one.
 - **Lists and pagination in GUIs (logic.md §6.7, §4.5, §28, #219).** A `list` component fills a run of
   slots with one page of entries: `slots` (a range with skipped columns, or an explicit list), `source`,
   `filter` (a condition over `entry.*`), `sort` (a field, optionally `{by, order: desc}`) and an `entry:` item

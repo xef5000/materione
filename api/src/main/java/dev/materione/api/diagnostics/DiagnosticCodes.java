@@ -450,7 +450,8 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0083", Severity.WARN, "GUI could not be shown again after a prompt");
 
     /**
-     * A prompt's input method could not start for the player (logic.md §6.6): no free block for a sign editor, an
+     * A prompt's input method could not start for the player (logic.md §6.6): the method is unavailable on this build
+     * (the sign editor, until a client-only path exists, logic.md §29), an
      * anvil the server refused, or a session variable with no open GUI. The step takes its {@code else:}; the rate
      * limit keeps a broken method from flooding the log.
      */

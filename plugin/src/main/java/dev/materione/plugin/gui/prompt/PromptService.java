@@ -4,6 +4,7 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCode;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.ActionOutcome;
+import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.InputMethod;
 import dev.materione.api.scheduling.ScheduledHandle;
 import dev.materione.api.scheduling.SchedulingGateway;
@@ -124,6 +125,15 @@ public final class PromptService {
      */
     public CompletionStage<ActionOutcome> begin(Request request) {
         UUID id = request.player().getUniqueId();
+        Availability available = request.method().availability();
+        if (!available.available()) {
+            // refused before anything is hidden or pending: a method this build cannot run never touches the player's state
+            report(DiagnosticCodes.PROMPT_METHOD_FAILED, "prompt method '" + request.method().id()
+                    + "' is unavailable on this build: " + available.reason());
+            tell(request.player(), "This question cannot be asked right now: " + available.reason(), NamedTextColor.RED);
+            return CompletableFuture.completedFuture(
+                    ActionOutcome.failed("the input method is unavailable: " + available.reason()));
+        }
         Pending earlier = pending.get(id);
         if (earlier != null) {
             if (earlier.live()) {

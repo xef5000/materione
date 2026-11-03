@@ -43,7 +43,7 @@ import org.bukkit.entity.Player;
  * run without one. The engine wraps the step in a {@code require} for this ({@link ActionType#takesElse()}).
  *
  * <p>One question per player at a time. A prompt started while another waits is refused: the run ends through its
- * {@code else:} and the player is told. A window the player has open is hidden for a chat, sign or anvil question and
+ * {@code else:} and the player is told. A window the player has open is hidden for a chat or anvil question and
  * shown again with the answer, for the same session, so the rest of the run still reaches the GUI.
  *
  * <p>Declared variables cannot be answered into: a persistent target is rejected at load ({@code MTR-0082}), and so is
@@ -94,7 +94,7 @@ public final class PromptAction implements ActionType<PromptAction.Params> {
     @Override
     public ActionDescription describe() {
         return ActionDescription.of(new SelfDescription("Prompt",
-                "Asks the player for a line of text (in chat, on a sign or in an anvil) and writes the answer to a "
+                "Asks the player for a line of text (in chat or in an anvil) and writes the answer to a "
                         + "variable; an unanswered question runs its else: and ends the run",
                 List.of(
                         new ParameterSchema("method", ParameterType.STRING, false, "chat",

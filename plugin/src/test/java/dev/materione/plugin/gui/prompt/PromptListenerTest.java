@@ -26,7 +26,7 @@ class PromptListenerTest {
     private final PromptListener listener = new PromptListener(PromptServiceTest.plugin(), gateway,
             new PromptService(PromptServiceTest.plugin(), gateway, new dev.materione.plugin.gui.GuiBridge(),
                     ignored -> { }),
-            chat, new SignInput(), new AnvilInput());
+            chat, new AnvilInput());
 
     private AsyncChatEvent chatting(String text) {
         Component message = Component.text(text);

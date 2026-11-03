@@ -1,39 +1,31 @@
 package dev.materione.plugin.gui.prompt;
 
+import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.InputMethod;
 import dev.materione.api.logic.InputMethodDescription;
 import dev.materione.api.registry.SelfDescription;
 import java.util.List;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Location;
-import org.bukkit.Material;
-import org.bukkit.block.Block;
-import org.bukkit.block.BlockState;
-import org.bukkit.block.Sign;
-import org.bukkit.block.data.BlockData;
-import org.bukkit.block.sign.Side;
 import org.bukkit.entity.Player;
 
 /**
- * {@code materione:sign} (logic.md §6.6): the player writes the answer on a sign editor. The client can only edit a
- * real sign, so the method places one in the empty top block of the player's column for the question and removes it
- * when the prompt ends. The block must be air; a column with no free block refuses the question.
+ * {@code materione:sign} (logic.md §6.6, §29): reserved for a client-only sign editor, and unavailable on this build.
  *
- * <p>The editor's text is the answer, its lines joined by a space. An editor closed with nothing written is no answer.
+ * <p>The method is registered so the studio can show it and say why it cannot run. It never touches the world. The
+ * first design placed a real sign block for the editor and restored it afterwards; a crash between the two left a
+ * sign in the world that other players could see, so that design is gone. A client-only editor needs Paper's
+ * {@code Player#openVirtualSign(Position, Side)}, which exists only in the 26.x API that this build does not compile
+ * against (the 1.21.4 floor has no client-only sign editor: its sign editor needs a real server-side sign). Until a
+ * 26.x path lands behind the modern seam, {@link #availability} is unavailable and a prompt refuses to ask with this
+ * reason ({@code MTR-0084}). Chat and anvil answer every question that sign would have.
  */
 public final class SignInput implements InputMethod {
 
     /** The name an author writes. */
     public static final String ID = "sign";
 
-    private final Map<UUID, Editor> editors = new ConcurrentHashMap<>();
-
-    /** One open editor: where its sign is, what was there before, and where the answer goes. */
-    private record Editor(Reply reply, Location at, BlockData original) {}
+    /** Why the method cannot run on this build, as the studio and the player see it. */
+    static final String UNAVAILABLE_REASON = "the client-only sign editor needs Paper's Player#openVirtualSign, "
+            + "which this build's 1.21.4 API does not have; use chat or anvil";
 
     @Override
     public String id() {
@@ -43,73 +35,24 @@ public final class SignInput implements InputMethod {
     @Override
     public InputMethodDescription describe() {
         return InputMethodDescription.of(new SelfDescription("Sign",
-                "The player writes the answer on a sign editor that opens for them", List.of(), "1.0.0"), true);
+                "The player writes the answer on a sign editor (unavailable until a client-only editor is wired)",
+                List.of(), "1.0.0"), true);
     }
 
+    @Override
+    public Availability availability() {
+        return Availability.unavailable(UNAVAILABLE_REASON);
+    }
+
+    /** Never reached through a prompt, which refuses an unavailable method first; throws for a direct caller. */
     @Override
     public void ask(Player player, String prompt, Reply reply) {
-        Block block = freeBlock(player);
-        BlockData original = block.getBlockData();
-        block.setBlockData(Material.OAK_SIGN.createBlockData(), false);
-        BlockState state = block.getState();
-        if (!(state instanceof Sign sign)) {
-            block.setBlockData(original, false);
-            throw new IllegalStateException("the sign could not be placed for the editor");
-        }
-        editors.put(player.getUniqueId(), new Editor(reply, block.getLocation(), original));
-        try {
-            player.openSign(sign, Side.FRONT);
-        } catch (RuntimeException failure) {
-            editors.remove(player.getUniqueId());
-            block.setBlockData(original, false);
-            throw failure;
-        }
-        player.sendMessage(Component.text(prompt, NamedTextColor.AQUA));
+        throw new IllegalStateException(UNAVAILABLE_REASON);
     }
 
+    /** Nothing was opened, so there is nothing to undo, and the world is never touched. */
     @Override
     public void dismiss(Player player) {
-        Editor editor = editors.remove(player.getUniqueId());
-        if (editor != null) {
-            restore(editor);
-        }
-    }
-
-    /** Whether the player has a sign editor open for a question. Read from the event thread. */
-    public boolean awaits(UUID player) {
-        return editors.containsKey(player);
-    }
-
-    /**
-     * The editor of the player's question was closed with these lines. Call on the player's thread.
-     *
-     * @return whether the sign was the question's editor
-     */
-    public boolean edited(UUID player, Location where, String text) {
-        Editor editor = editors.get(player);
-        if (editor == null || !sameBlock(editor.at(), where)) {
-            return false;
-        }
-        editor.reply().answer(text);
-        return true;
-    }
-
-    private static Block freeBlock(Player player) {
-        Location at = player.getLocation();
-        Block block = at.getWorld().getBlockAt(at.getBlockX(), at.getWorld().getMaxHeight() - 1, at.getBlockZ());
-        if (!block.getType().isAir()) {
-            throw new IllegalStateException("there is no free block above the player for the sign editor");
-        }
-        return block;
-    }
-
-    private static void restore(Editor editor) {
-        Block block = editor.at().getBlock();
-        block.setBlockData(editor.original(), false);
-    }
-
-    private static boolean sameBlock(Location a, Location b) {
-        return a.getWorld() != null && a.getWorld().equals(b.getWorld())
-                && a.getBlockX() == b.getBlockX() && a.getBlockY() == b.getBlockY() && a.getBlockZ() == b.getBlockZ();
+        // no state, no block: a sign prompt cannot open anything on this build
     }
 }
