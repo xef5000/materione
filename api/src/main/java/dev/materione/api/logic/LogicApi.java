@@ -77,6 +77,13 @@ public interface LogicApi {
     LogicRegistry<ListSource<?>> listSources();
 
     /**
+     * The {@code input-methods} registry: how a {@code prompt} step asks a player for text (logic.md §4.5, §6.6).
+     * The built-ins are {@code materione:chat}, {@code materione:sign} and {@code materione:anvil}; an addon
+     * registers its own under its namespace. A late registration takes effect on the next reload.
+     */
+    LogicRegistry<InputMethod> inputMethods();
+
+    /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the
      * registries on every call: triggers (filters, context schema, cancellability, who fires them),
      * actions, conditions, step kinds, categories, expression functions and mechanics, with

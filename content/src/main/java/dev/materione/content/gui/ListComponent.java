@@ -9,6 +9,7 @@ import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.ParameterSchema;
 import dev.materione.api.registry.ParameterType;
 import dev.materione.api.registry.SelfDescription;
+import dev.materione.content.gui.list.ListSearch;
 import dev.materione.content.gui.list.ListSlots;
 import dev.materione.content.gui.list.ListSort;
 import dev.materione.content.gui.list.ListSpec;
@@ -29,7 +30,7 @@ import java.util.Set;
  */
 public final class ListComponent implements GuiComponent {
 
-    private static final Set<String> FIELDS = Set.of("slots", "source", "filter", "sort", "entry");
+    private static final Set<String> FIELDS = Set.of("slots", "source", "filter", "sort", "search", "entry");
     private static final List<String> REQUIRED = List.of("slots", "source", "entry");
 
     @Override
@@ -63,6 +64,11 @@ public final class ListComponent implements GuiComponent {
                                 "The order of the entries: a field name, or {by: <field>, order: asc|desc}", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Sort", "entries", 40, true, "text", "", "name")),
+                        new ParameterSchema("search", ParameterType.RAW, false, null,
+                                "Which entries a search keeps: { fields: [name] }, matched against the text in "
+                                        + "gui.session.search (or var:), ignoring case", null, null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Search", "entries", 35, true, "text", "", "{fields: [name]}")),
                         new ParameterSchema("entry", ParameterType.RAW, true, null,
                                 "The item each entry shows: the fields of an item layer (item, name, lore, lore_mode, "
                                         + "amount, glint), with entry.* in scope", null, null)
@@ -109,9 +115,17 @@ public final class ListComponent implements GuiComponent {
                 throw fail(configuration, rejected.getMessage());
             }
         }
+        ListSearch search = null;
+        if (raw.get("search") != null) {
+            try {
+                search = ListSearch.parse(raw.get("search"));
+            } catch (IllegalArgumentException rejected) {
+                throw fail(configuration, rejected.getMessage());
+            }
+        }
         Object filter = filterOf(configuration, raw.get("filter"));
         ItemComponent.Layer entry = entryOf(configuration, raw.get("entry"));
-        return new Layer(slots, source, filter, sort, entry);
+        return new Layer(slots, source, filter, sort, search, entry);
     }
 
     /** The filter as authored: a condition, shaped as a {@code visible_if} is. The engine compiles it. */
@@ -163,10 +177,12 @@ public final class ListComponent implements GuiComponent {
      * @param source the list source as authored
      * @param filter the authored filter condition, or null when every entry shows
      * @param sort the order of the entries, or null for the source's own order
+     * @param search which fields a session search keeps, or null when the list is not searchable
      * @param entry the item template every entry is shown with (its slot is a placeholder)
      */
     public record Layer(
-            List<Integer> slots, ListSpec source, Object filter, ListSort sort, ItemComponent.Layer entry)
+            List<Integer> slots, ListSpec source, Object filter, ListSort sort, ListSearch search,
+            ItemComponent.Layer entry)
             implements CompiledGuiLayer {
 
         public Layer {

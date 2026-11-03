@@ -47,6 +47,7 @@ public final class GuiSession {
     private final AtomicReference<CloseReason> ended = new AtomicReference<>();
     private final AtomicBoolean ticking = new AtomicBoolean();
     private final AtomicBoolean clocking = new AtomicBoolean();
+    private volatile boolean prompting;
     private volatile long elapsedTicks;
     private volatile long windowTicks;
     private volatile Rendered rendered = Rendered.EMPTY;
@@ -100,6 +101,19 @@ public final class GuiSession {
     /** Per-list page state ({@code gui.page.<list>}); the seam the list component fills. */
     public Map<String, Object> pages() {
         return pages;
+    }
+
+    /**
+     * Whether a prompt holds this session (logic.md §6.6): its window was hidden so the player can answer in chat, a
+     * sign or an anvil. The session is still open and still the player's; its window is not closed by the player.
+     */
+    public boolean prompting() {
+        return prompting;
+    }
+
+    /** Marks the session as held by a prompt, or released from it. */
+    public void prompting(boolean holding) {
+        prompting = holding;
     }
 
     /** True until the session ends. */

@@ -36,7 +36,10 @@ class DiagnosticCodesTest {
         // MTR-0072 GUI item source unresolved at render, MTR-0073 GUI dynamic layer failed at render:
         // logic.md §24, #216;
         // MTR-0074 input accept invalid, MTR-0075 static item in an input slot, MTR-0076 input setting ignored:
-        // logic.md §25, #218)
-        assertThat(DiagnosticCodes.all()).hasSize(80);
+        // logic.md §25, #218;
+        // MTR-0077 to MTR-0080 GUI list source, filter, read and input-slot problems: logic.md §28, #219;
+        // MTR-0081 prompt names an unknown input method, MTR-0082 prompt answers into a persistent variable,
+        // MTR-0083 GUI not shown again after a prompt, MTR-0084 input method could not start: logic.md §6.6, §29, #220)
+        assertThat(DiagnosticCodes.all()).hasSize(84);
     }
 }

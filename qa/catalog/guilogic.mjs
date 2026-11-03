@@ -21,6 +21,7 @@ const MENU_FILE = path.join(ROOT, 'harness', 'build', 'probe', 'server', 'plugin
 const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/gui/**',
   'plugin/src/main/java/dev/materione/plugin/logic/action/gui/**',
+  'plugin/src/main/java/dev/materione/plugin/logic/action/PromptAction.java',
   'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
   'content/src/main/java/dev/materione/content/gui/**',
   'behavior/src/main/java/dev/materione/behavior/flow/TriggerFilters.java',
@@ -403,6 +404,78 @@ export default [
             + 'the arrows are in the row below. On the second screenshot the first two heads of the middle row are '
             + 'Kit and Lu, the rest of that row is empty, and the paper reads "Page 2 of 2".',
         );
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  // --- #220: prompts and list search (fixtures/packs/guilogic/guis/search.yml) ------------------------------------
+  // Written against the probe client and NOT RUN in the change that added them: the 26.x probe loop was not available
+  // to that change. The chat line is sent through the client's own connection, so the server's chat listener is what
+  // is judged, as a real message would be.
+
+  test({
+    id: 'guilogic.search-recipe',
+    title: 'guilogic:search: the four items show sorted; the search button asks in chat, the window closes for the question, a typed "dia" comes back as the answer, the window reopens with the two matching items and the same session, and the clear button shows all four again',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione gui open guilogic:search Probe');
+        await ctx.sleep(900);
+        ctx.expect(await slotName(ctx, 10)).toBe('Diamond');
+        ctx.expect(await slotName(ctx, 11)).toBe('diamond block');
+        ctx.expect(await slotName(ctx, 12)).toBe('Gold ingot');
+        ctx.expect(await slotName(ctx, 13)).toBe('Iron');
+
+        await click(ctx, 20);
+        await ctx.waitForChat(/Type an item name to search/);
+        await ctx.sleep(400);
+        ctx.expect(await containerOpen(ctx)).toBe(false); // the window is hidden for the question
+        const before = (await ctx.chat()).length;
+        await ctx.exec(`mc.player.connection.sendChat('dia'); return 'sent'`);
+        await ctx.sleep(900);
+        ctx.expect((await ctx.chat()).length).toBe(before); // the answer is not broadcast
+
+        await ctx.sleep(600);
+        ctx.expect(await containerOpen(ctx)).toBe(true); // the window came back for the same session
+        ctx.expect(await slotName(ctx, 10)).toBe('Diamond');
+        ctx.expect(await slotName(ctx, 11)).toBe('diamond block');
+        ctx.expect(await slotName(ctx, 12)).toBe('empty');
+
+        await click(ctx, 24);
+        await ctx.sleep(600);
+        ctx.expect(await slotName(ctx, 12)).toBe('Gold ingot');
+        ctx.expect(await slotName(ctx, 13)).toBe('Iron');
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'guilogic.chat-prompt-cancel',
+    title: 'guilogic:search: a cancel word in chat ends the question, the else message runs, and the window comes back with all four items unchanged',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.reset();
+        await ctx.rcon('materione gui open guilogic:search Probe');
+        await ctx.sleep(900);
+
+        await click(ctx, 20);
+        await ctx.waitForChat(/Type an item name to search/);
+        await ctx.sleep(400);
+        await ctx.exec(`mc.player.connection.sendChat('cancel'); return 'sent'`);
+        await ctx.waitForChat(/Search cancelled\./);
+        await ctx.sleep(600);
+
+        ctx.expect(await containerOpen(ctx)).toBe(true);
+        ctx.expect(await slotName(ctx, 13)).toBe('Iron');
+        ctx.expect(await slotName(ctx, 12)).toBe('Gold ingot');
       } finally {
         await closeWindow(ctx);
       }

@@ -135,7 +135,7 @@ public final class ListLayerCompiler {
         problems.addAll(entry.problems());
         CompiledItemLayer template = entry.layer().orElseThrow(Rejected::new);
         return new CompiledListLayer(placement.layerId(), placement.order(), list.slots(), binding,
-                source.describe().cached(), filter, list.sort(), template, placement);
+                source.describe().cached(), filter, list.sort(), list.search(), template, placement);
     }
 
     private static Diagnostic invalid(NamespacedId gui, int index, String field, String message, String hint) {

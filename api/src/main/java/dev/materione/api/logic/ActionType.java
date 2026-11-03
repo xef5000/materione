@@ -90,4 +90,15 @@ public interface ActionType<P> {
     default Availability availability() {
         return Availability.AVAILABLE;
     }
+
+    /**
+     * Whether this action asks the player a question, so its step may carry an {@code else:} (logic.md §6.6).
+     * Such a step runs as a {@code require} around the action: when the question goes unanswered (a decline, a
+     * cancel word, a timeout) the {@code else:} steps run and the run ends, exactly as a failed {@code require}
+     * does. The engine wraps every step of such a type this way, with an empty {@code else:} when none is
+     * written, so an unanswered question never lets the steps after it run. Only the prompt is one today.
+     */
+    default boolean takesElse() {
+        return false;
+    }
 }

@@ -81,7 +81,7 @@ final class StepCompiler {
         Map<String, Object> shape = shapeOf(raw, path);
         String control = controlKey(shape, path);
         if (control == null) {
-            return actions.compile(shape, path);
+            return action(shape, path);
         }
         Object payload = shape.get(control);
         return switch (control) {
@@ -135,6 +135,34 @@ final class StepCompiler {
             }
         }
         return found;
+    }
+
+    /**
+     * An action step. An action that asks a question ({@link dev.materione.api.logic.ActionType#takesElse()}) always
+     * runs as a {@link RequireStep} around itself, so an unanswered question ends the run; its {@code else:} is what
+     * runs first (logic.md §6.6). Any other action takes no {@code else:}.
+     */
+    private Step action(Map<String, Object> shape, StepPath path) {
+        boolean hasElse = shape.containsKey("else");
+        Map<String, Object> action = shape;
+        if (hasElse) {
+            action = new LinkedHashMap<>(shape);
+            action.remove("else");
+        }
+        Step compiled = actions.compile(action, path);
+        if (compiled instanceof ActionStep<?> step && step.type().takesElse()) {
+            if (step.chance() < 1) {
+                // a skipped question would let the steps after it run with no answer: the guard is not optional
+                throw unit.structural(path.child(ActionStep.CHANCE_KEY), "a question takes no chance:",
+                        "a question is always asked; put an if around it to decide whether to ask");
+            }
+            return new RequireStep(path, List.of(step), list(shape.get("else"), path.child("else")), false);
+        }
+        if (hasElse) {
+            throw unit.structural(path.child("else"), "'else' does not belong on this action",
+                    "only an action that asks a question takes an else (prompt)");
+        }
+        return compiled;
     }
 
     // --- branches -------------------------------------------------------------------

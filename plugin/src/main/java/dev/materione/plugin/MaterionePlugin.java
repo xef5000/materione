@@ -343,6 +343,12 @@ public final class MaterionePlugin extends JavaPlugin {
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
                 guiBridge, currencyReads);
+        // the prompt step and its three input methods (logic.md §6.6); the listener feeds the methods the chat,
+        // sign and anvil events they wait for
+        var prompts = dev.materione.plugin.gui.prompt.PromptRuntime.create(this, scheduling, guiBridge,
+                diagnostics::publish);
+        dev.materione.plugin.logic.BuiltinLogic.registerPrompts(logic, this, prompts);
+        getServer().getPluginManager().registerEvents(prompts.listener(this, scheduling), this);
         registerProviders();
         // %materione_var_…% and %materione_gui_…% for PlaceholderAPI, when it is enabled (soft-depend)
         if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI")) {

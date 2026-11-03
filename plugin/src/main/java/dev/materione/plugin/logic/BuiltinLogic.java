@@ -4,7 +4,10 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.InputMethod;
 import dev.materione.api.logic.LogicApi;
+import dev.materione.plugin.gui.prompt.PromptRuntime;
+import dev.materione.plugin.logic.action.PromptAction;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.LogicProviders;
@@ -120,6 +123,18 @@ public final class BuiltinLogic {
                 new GiveExpAction(),
                 new TakeExpAction()));
         return List.copyOf(actions);
+    }
+
+    /**
+     * The prompt step and its input methods (logic.md §6.6): {@code chat}, {@code sign} and {@code anvil}, then the
+     * {@code prompt} action, which resolves its {@code method:} through the methods registered just before it.
+     */
+    public static void registerPrompts(LogicApi api, Plugin owner, PromptRuntime prompts) {
+        for (InputMethod method : prompts.methods()) {
+            api.inputMethods().register(owner, builtIn(method.id()), method);
+        }
+        api.actions().register(owner, builtIn("prompt"),
+                new PromptAction(api.inputMethods(), prompts.service()));
     }
 
     /** The built-in expression functions (logic.md §4.2): pure, typed, and callable from any expression. */
