@@ -176,7 +176,8 @@ the same function, so the pack and the running server cannot disagree):
    is source-over composited onto the output with the layer's `opacity` (a group opacity, so a
    layer's own pixels never blend with each other). Pixel rules are below. Hidden layers are
    skipped. A layer whose component throws (a missing texture, say) draws nothing and is
-   reported as `MTR-0052`; the others still draw.
+   reported as `MTR-0052`; the others still draw. A GUI with dynamic visuals (step 7) does not
+   flatten: its background is transparent.
 2. **Encode** the canvas with the in-repo `PngEncoder` (RGBA8, the three chunks `IHDR`, `IDAT`,
    `IEND`, filter type 0, deflate level 6). The pack writes it at
    `assets/<ns>/textures/font/materione/gui/<id>.png`. Bytes are stable for a given JDK; the
@@ -190,7 +191,9 @@ the same function, so the pack and the running server cannot disagree):
 4. **Title.** One MiniMessage string, built by `GuiTitle` (the exact arithmetic is below):
    `<shift:-8><font:<ns>:gui><#FFFFFF>{cp}</font><shift:8−advance>`, then per text run
    `<shift:Δ><font:<ns>:gui/<font>_y<y>><#RRGGBB>text</font>`. The background is white so no
-   text colour tints it. The runtime model carries the title; nothing else is sent.
+   text colour tints it. The runtime model carries the title; nothing else is sent. For a GUI
+   with dynamic visuals this string holds only the background glyph, and the rest is assembled
+   per render (step 7).
 5. **Offset fonts**, generated once per `(font, y)` actually used, merged per pack like glyph
    fonts (identical providers from several GUIs are emitted once):
    - `<ns>:gui/smallcaps_y<Y>` = `[space {" ": 4}, {type: bitmap, file: <ns>:font/materione/smallcaps.png,
@@ -204,6 +207,30 @@ the same function, so the pack and the running server cannot disagree):
    the same slot replaces an earlier one, and the earlier layer is reported (`MTR-0052`).
    References resolve at apply time like recipe results: a missing item is a diagnostic and an
    empty slot, never a crash.
+7. **Dynamic visuals (#217; logic.md §6.4, §27).** A GUI takes this path when
+   `GuiVisualCompiler.needed` holds: a visible raster layer has `visible_if` or `frames`, or a
+   visible text layer has `visible_if` or a template. Its title cannot be fixed at compile time,
+   so the compiler emits pieces for the window to assemble per render instead:
+   - **The background is transparent.** `GuiCompiler.compile` starts from an empty canvas
+     instead of step 1's flatten, so the PNG of step 2 is blank. The background glyph of step 3
+     stays first in the title and carries no ink.
+   - **Each visible raster layer is its own overlay glyph**, one per frame (a layer without
+     `frames` has one). Static layers are included, so authored order holds between conditional
+     and static pieces. Each codepoint is a further allocation of kind `gui-background`, keyed by
+     the identity `minecraft:materione_gui_overlay/<hex namespace>/<hex gui>/<hex layer>/<frame>`
+     (`GuiOverlayKeys.allocation`), so it is durable like the background's and never reused. Its
+     texture is `assets/<ns>/textures/font/materione/gui_overlay/<hex gui>/<hex layer>/<frame>.png`,
+     with a bitmap provider in `<ns>:gui` as in step 3. Exhausting the block quarantines the GUI
+     with `MTR-0053`, as for the background.
+   - **Each visible text layer is a piece.** A templated run is expanded and laid out again per
+     render with the widths of §9.4. A rendered value that breaks the text rules (*Text
+     characters*, below) is not drawn and reports `MTR-0073`.
+   - **`TitleRenderer` assembles the title per render**, in layer order: the background glyph,
+     then each piece whose `visible_if` holds. A false condition hides its layer; a failing one
+     hides it and reports `MTR-0073`. A layer's click footprint is its visible frame's, not the
+     authored one.
+   - **Only a changed title is sent.** The window compares the rendered string with the one it
+     last sent and sends nothing when they match. Held-cursor deferral is in logic.md §6.4.
 
 **Title geometry (verified against the 26.1.2 client jar).** The arithmetic below is read from
 the client's bytecode, not from memory; the probe loop (`docs/probe.md`) still has to confirm
