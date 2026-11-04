@@ -995,6 +995,52 @@ public final class EditorContentOps {
             functions.add(json);
         }
         object.add("functions", functions);
+        // recipes (logic.md §4.6, §30): the name, the help text and the typed parameters the editor's form is drawn from
+        var recipes = new com.google.gson.JsonArray();
+        for (var recipe : vocabulary.recipes()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", recipe.id());
+            json.addProperty("displayName", recipe.description().name());
+            json.addProperty("description", recipe.description().description());
+            var recipeParams = new com.google.gson.JsonArray();
+            for (var param : recipe.description().params()) {
+                recipeParams.add(recipeParamJson(param));
+            }
+            json.add("params", recipeParams);
+            json.addProperty("registeredBy", recipe.registeredBy());
+            recipes.add(json);
+        }
+        object.add("recipes", recipes);
+    }
+
+    /** One recipe parameter: its kind, whether it is required, its default, range and, for a variable, its declaration. */
+    private static JsonObject recipeParamJson(dev.materione.api.logic.RecipeParam param) {
+        JsonObject json = new JsonObject();
+        json.addProperty("name", param.name());
+        json.addProperty("type", param.type().id());
+        json.addProperty("required", param.required());
+        Object fallback = param.defaultValue();
+        if (fallback instanceof Number number) {
+            json.addProperty("default", number);
+        } else if (fallback instanceof Boolean flag) {
+            json.addProperty("default", flag);
+        } else if (fallback != null) {
+            json.addProperty("default", fallback.toString());
+        }
+        json.addProperty("description", param.description());
+        if (param.min() != null) {
+            json.addProperty("min", param.min());
+        }
+        if (param.max() != null) {
+            json.addProperty("max", param.max());
+        }
+        if (param.scope() != null) {
+            json.addProperty("scope", param.scope().id());
+        }
+        if (param.valueType() != null) {
+            json.addProperty("valueType", param.valueType().id());
+        }
+        return json;
     }
 
     /** {@code available} always; {@code unavailableReason} only when it is false (the editor greys the entry out). */

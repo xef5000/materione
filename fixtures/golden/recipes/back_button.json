@@ -1,0 +1,15 @@
+{
+  "recipe": "back_button",
+  "params": {
+    "layer": "back"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "back",
+      "do": [
+        "gui.back"
+      ]
+    }
+  ]
+}

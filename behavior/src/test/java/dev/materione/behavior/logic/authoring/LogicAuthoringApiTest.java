@@ -479,12 +479,14 @@ class LogicAuthoringApiTest {
     }
 
     @Test
-    void instantiateRefusesEveryRecipeUntilTheRegistryArrives() {
+    void instantiateRefusesAnUnknownRecipeAndWritesNothing() {
         ApiResult<List<Map<String, Object>>> result = logic.instantiate(
                 new LogicAuthoringApi.InstantiateRequest("pay_to_receive", Map.of()));
 
         assertThat(result.ok()).isFalse();
+        assertThat(result.diagnostics().get(0).code().code()).isEqualTo("MTR-0008");
         assertThat(result.diagnostics().get(0).message()).contains("unknown recipe 'pay_to_receive'");
+        assertThat(revision()).isEqualTo(1);
     }
 
     // ------------------------------------------------------------------

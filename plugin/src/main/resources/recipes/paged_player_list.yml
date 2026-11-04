@@ -1,0 +1,23 @@
+# Paged player list (logic.md §6.7, §28, §7.5): previous and next buttons page a list layer. The list layer
+# itself (type: list, source: online_players) is placed in the GUI; this recipe writes the two buttons' rules.
+name: Paged player list
+description: Adds previous and next buttons that page a list layer. The list layer is placed in the GUI with type list; this recipe writes the buttons' rules.
+params:
+  list:
+    type: string
+    description: The id of the list layer to page
+  previous:
+    type: string
+    description: The id of the previous-page button
+  next:
+    type: string
+    description: The id of the next-page button
+rules:
+  - on: gui.click
+    layer: "{{previous}}"
+    do:
+      - gui.page: { list: "{{list}}", to: previous }
+  - on: gui.click
+    layer: "{{next}}"
+    do:
+      - gui.page: { list: "{{list}}", to: next }

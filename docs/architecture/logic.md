@@ -659,7 +659,7 @@ Recipes (§4.6) are listed with a one-line description, and inserting one expand
 The v1 recipes are:
 
 - Pay to receive
-- Trash slot
+- Trash slot (blocked on #248, so not shipped by #222; §30)
 - Close button
 - Welcome message
 - Confirm dialog (a sub-GUI with yes and no)
@@ -780,7 +780,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29), so the next free code is `MTR-0085`.
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30), so the next free code is `MTR-0089`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -1628,6 +1628,7 @@ side). The surface is [`api.md`](api.md) §3.12, the wire is [`web.md`](web.md) 
     engine answers every call with `MTR-0011` (`UnavailableLogicAuthoring`), so the rest of the API keeps working.
 16. **`instantiate` is defined and refused.** It takes a recipe id and parameters and returns the steps it expands to. The
     recipe registry and the v1 recipes are #222, so every recipe is refused as unknown (`MTR-0008`). It never writes.
+    *(Superseded by §30: #222 shipped the registry, and `instantiate` now expands recipes into rules.)*
 17. **The variables ops are not here.** `logic.variables.get/set` depend on #211 and are not added; the seam is the
     `logic` capability, which they will join under the same gate.
 18. **Five ops, one capability.** `logic.vocabulary`, `logic.get`, `logic.edit`, `logic.validate` and `logic.instantiate` are
@@ -2828,3 +2829,108 @@ Where the design left a choice open, these are the choices. Each is reversible b
     GUI-visible path (the hide, the chat line, the anvil and the window shown again) is in the QA catalog
     (`guilogic.search-recipe`, `guilogic.chat-prompt-cancel`) and was **not run against a client** in this change. The
     anvil method is **not verified in a client**: the 26.x probe loop was not available on the machine that wrote it.
+
+---
+
+## 30. Decisions taken in #222 (A2: the recipe registry and the v1 recipes)
+
+#222 ships §4.6 (recipes), the expansion behind §8's `instantiate`, and the v1 recipes of §7.5 except the trash slot. A
+recipe is a registry entry (`api.logic.Recipe`, with `RecipeDescription`, `RecipeParam` and `RecipeParamType`), its
+template form is `api.logic.RecipeTemplate`, the expansion is `behavior.logic.recipe` (`RecipeExpander`, `RecipeParams`,
+`RecipeAvailability`), and the built-ins are YAML resources in `plugin/src/main/resources/recipes/` loaded by
+`plugin.logic.recipe.BuiltinRecipes`. Each choice below is reversible by the owner.
+
+**The registry and the expansion**
+
+1. **A recipe is a registry entry, read at use.** `LogicApi.recipes()` is a `LogicRegistry<Recipe>` under
+   `RegistryKeys.RECIPES`, registered like an action (D5) and owned by its plugin. `instantiate` and the vocabulary read it
+   on each call, so a late addon registration needs no reload.
+2. **A recipe expands to rules, not to bare steps.** Each expansion is a complete rule, or a small set of rules, with its
+   trigger and filters (`on: gui.click`, `layer:`), so one result is one insertion and the trigger is never left to the
+   author. The wire key is `rules`; the #221 stub's `steps` key was never read by a client, so it is renamed.
+3. **Parameters are typed and checked before anything expands.** The kinds are `string`, `number` (a Double), `integer` (an
+   Integer), `boolean` and `variable` (a qualified `pack:key` naming a declared variable whose scope and value type the
+   recipe declares). A name the recipe does not declare, a required one left out, a value of the wrong kind or out of its
+   range, and a variable that is undeclared or declared with the wrong scope or type are all `MTR-0086`. Every problem is
+   reported at once, and nothing expands. Defaults are filled in before the expansion runs.
+4. **Templates use `{{name}}`.** A string that is exactly `{{name}}` takes the parameter's typed value, so a number stays a
+   number. A placeholder inside longer text takes the value as text, a whole number without its decimal point. A blank
+   optional text parameter removes the key or list item that holds it, so an optional `currency:` is absent when blank and
+   the default currency applies. `${…}` and `%…%` pass through untouched and are not evaluated at expansion. There is no
+   escape; Materione's templates never contain `{{`.
+5. **The expansion is validated by the same compiler that loads a file.** After expansion `FlowCompiler` compiles the
+   rules with the registries' lookup. A problem of any kind refuses the request (`MTR-0087`, with the compiler's own
+   problems after it), so "the expanded steps validate cleanly" holds on every call, not only in the tests.
+6. **`instantiate` never writes.** The caller inserts the returned rules through `logic.edit` (`AddRule`), in one
+   transaction with its revision check. The recipe is not persisted (§4.6), and the rules it wrote are ordinary content
+   from then on (D1).
+7. **An unknown recipe is `MTR-0008`** (as #221 chose), with a hint to call `logic.vocabulary`.
+8. **Availability is a warning, not a refusal.** The expansion walks the actions it contains, branches included, and
+   reports each action the server cannot run now, once, with the action's own reason (`MTR-0088`). Without an economy,
+   `pay_to_receive` carries one warning for `take_money`. Conditions are not checked here; they are evaluated where they
+   are used.
+
+**The v1 recipes**
+
+9. **Eight recipes ship.** Each is one YAML resource, and its expansion is rules that use only actions, conditions and
+   triggers already registered:
+
+   | Recipe | Trigger | Expands to | Parameters (default in brackets) |
+   |---|---|---|---|
+   | `pay_to_receive` | `gui.click` on `layer` | `require`: `take_money`, then `give_item`; `else`: a message; then `gui.refresh` | `layer`, `price` (≥ 0.01), `currency` (blank: default), `item`, `amount` (1), `message` |
+   | `close_button` | `gui.click` on `layer` | `gui.close` | `layer` |
+   | `welcome_message` | `gui.open` | a message | `text` |
+   | `confirm_dialog` | `gui.click` on `layer` | `gui.open` of `dialog` with a `question` argument | `layer`, `dialog`, `question` (*Are you sure?*) |
+   | `paged_player_list` | two `gui.click` rules | `gui.page` to `previous` and to `next` of `list` | `list`, `previous`, `next` |
+   | `toggle_setting` | `gui.click` on `layer` | `set_var … toggle`; `if` the variable is `true`, a message; `gui.refresh` | `layer`, `variable` (a declared player boolean), `on_message`, `off_message` |
+   | `server_selector` | `gui.click` on `layer` | a message, then `connect` to `server` | `layer`, `server` |
+   | `back_button` | `gui.click` on `layer` | `gui.back` | `layer` |
+
+10. **Trash slot: blocked on #248, not shipped.** §25 decision 12 and the owner's decision stand. The trash recipe needs a
+    consume-incoming action, which the engine does not have. Nothing merged can express it safely. `gui.slot_change` fires
+    before the change (§25 decision 4), so a `gui.slot_item: {op: clear}` there would clear what the slot already holds,
+    not the item being dropped in, and clearing after the change races the player's next click. The recipe is not
+    registered, and a test pins its absence (`BuiltinRecipesTest`). It ships when #248 lands.
+11. **The confirm dialog writes the opening rule only.** The confirm GUI's yes and no buttons are a separate resource.
+    `instantiate` writes one resource's rules, and the logic API has no cross-resource write. The recipe names the contract
+    the confirm GUI follows (a `question` argument, declared under its `open:` block). The Recipes panel (#225) may offer to
+    create the confirm GUI alongside the rule.
+12. **Recipes write rules, not layers.** A list, its buttons and the overlays are GUI layers, edited through `gui.edit`. A
+    recipe's rules refer to those layers by id, and the author places the layers in the Design tab. Writing both in one
+    request would need a second transaction across two APIs, which the authoring surface does not offer. A rule that names
+    a layer which does not exist is reported on the GUI (`GuiRuleDiagnoser`), not by `instantiate`.
+13. **The toggle recipe requires a declared variable.** A variable is declared in a `variables/` document, which is another
+    resource, so the recipe takes the variable as a parameter, checks its declaration (scope `player`, type `boolean`), and
+    never writes the declaration. An undeclared name is refused with its file to create.
+14. **Numbers keep the kind the step reads.** A `number` parameter is a Double, which `take_money`'s decimal amount reads.
+    An `integer` is an Integer, which `give_item`'s count reads. Neither is coerced to text by a whole-value placeholder.
+
+**Registration and wire**
+
+15. **Built-ins register as addons do.** `BuiltinRecipes` reads each `recipes/<id>.yml` from the jar, parses it with
+    `LosslessYaml` (the `on:` key normalised as everywhere else), and registers it under `materione:` through
+    `LogicApi.recipes()`. A resource that does not load is left out with `MTR-0085`, and the others still register, so a
+    broken recipe never stops the logic. `RecipeTemplate` is public in `api.logic`, so an addon with its own YAML can parse
+    it and register the result.
+16. **The vocabulary gains `recipes`, additively.** Each entry is `{id, displayName, description, params, registeredBy}`,
+    and each param is `{name, type, required, default?, description, min?, max?, scope?, valueType?}`. The vocabulary
+    stays version 2 (§14 decision 13): the change adds a key and removes none. The logic protocol golden and the editor's
+    demo snapshot change by that addition, and by the new `logic.instantiate` answer.
+17. **`logic.instantiate` answers `{rules, warnings}`.** A refusal keeps its diagnostics; the warnings of a successful
+    expansion are the `MTR-0088` entries.
+
+**Verification.** `RecipeTemplateTest` (the template's parse accepts and rejects, its fills, and its copy), `RecipeExpanderTest`
+(parameter checks, variable checks, the compiler's verdict, availability and a throwing expansion, against a fake lookup),
+`BuiltinRecipesTest` (each v1 recipe loads from its resource, expands with a fixed sample, validates against the real
+built-in registries, and matches `fixtures/golden/recipes/<id>.json`; the eight are listed in the vocabulary; a bad
+parameter is refused). `LogicAuthoringApiTest` pins the unknown-recipe refusal and that nothing is written. Recipe output is
+ordinary rules whose actions are already catalogued in the logic QA suite, so #222 adds no QA catalog entry: no
+player-visible behavior is new.
+
+**Diagnostics.** `MTR-0085` (a recipe resource does not load, warning), `MTR-0086` (a parameter refused, error),
+`MTR-0087` (an expansion refused, error) and `MTR-0088` (an action unavailable, warning), documented in plugin.md §5. The
+next free code is `MTR-0089` (§10).
+
+**Deferred.** The trash slot (#248). Recipes that write GUI layers, in the same transaction as their rules (a `gui.edit`
+and `logic.edit` pair would need one). Conditions in the availability warning. An addon's YAML resource registered through
+a loader, not only through the `Recipe` interface.

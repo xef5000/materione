@@ -1,0 +1,39 @@
+# Pay to receive (logic.md §7.5, §30): a click takes a price, and gives an item when the payment succeeds.
+# take_money fails and takes nothing when the balance is short, so the require step stops before give_item.
+name: Pay to receive
+description: Takes a price from the player and gives them an item when they can pay. When they cannot, the message is shown and nothing changes.
+params:
+  layer:
+    type: string
+    description: The id of the button layer that charges the player
+  price:
+    type: number
+    min: 0.01
+    description: The price to take, in the currency
+  currency:
+    type: string
+    default: ""
+    description: The currency id, such as gems or shop:gems; blank for the default currency
+  item:
+    type: string
+    description: The item to give, as a Materione id or minecraft:<material>
+  amount:
+    type: integer
+    default: 1
+    min: 1
+    max: 2304
+    description: How many of the item to give
+  message:
+    type: string
+    default: "<red>You cannot afford that."
+    description: Shown to the player when the payment fails
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - require:
+          - take_money: { amount: "{{price}}", currency: "{{currency}}" }
+          - give_item: { item: "{{item}}", amount: "{{amount}}" }
+        else:
+          - message: "{{message}}"
+      - gui.refresh

@@ -1,0 +1,23 @@
+{
+  "recipe": "confirm_dialog",
+  "params": {
+    "layer": "sell",
+    "dialog": "sample:confirm"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "sell",
+      "do": [
+        {
+          "gui.open": {
+            "gui": "sample:confirm",
+            "args": {
+              "question": "<yellow>Are you sure?"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

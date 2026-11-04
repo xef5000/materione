@@ -1,0 +1,12 @@
+# Close button (logic.md §7.5, §30): a click on the button closes the GUI the flow belongs to.
+name: Close button
+description: Closes the GUI when the button is clicked.
+params:
+  layer:
+    type: string
+    description: The id of the button layer
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - gui.close

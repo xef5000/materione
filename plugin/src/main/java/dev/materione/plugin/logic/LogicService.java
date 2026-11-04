@@ -8,6 +8,7 @@ import dev.materione.api.logic.ItemSource;
 import dev.materione.api.logic.ListSource;
 import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
+import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.TriggerType;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.logic.provider.CurrencyIntegration;
@@ -59,6 +60,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicRegistryImpl<ItemSource<?>> itemSources;
     private final LogicRegistryImpl<ListSource<?>> listSources;
     private final LogicRegistryImpl<InputMethod> inputMethods;
+    private final LogicRegistryImpl<Recipe> recipes;
     private final MaterioneCurrencyCatalog currencies;
     private final LogicProvidersImpl providers;
     private final RuleEngine engine;
@@ -126,6 +128,8 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
                 "list source", ListSource::id, source -> source.describe().self());
         this.inputMethods = new LogicRegistryImpl<>(registries, RegistryKeys.INPUT_METHODS, InputMethod.class,
                 "input method", InputMethod::id, method -> method.describe().self());
+        this.recipes = new LogicRegistryImpl<>(registries, RegistryKeys.RECIPES, Recipe.class, "recipe",
+                Recipe::id, recipe -> recipe.describe().self());
         this.currencies = new MaterioneCurrencyCatalog(currencyIntegrations::resolve, defaultCurrency);
         Objects.requireNonNull(host, "host").getServer().getPluginManager().registerEvents(this, host);
         // the session-only Bukkit permission provider is the default (logic.md §4.5)
@@ -174,6 +178,12 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     @Override
     public LogicRegistry<InputMethod> inputMethods() {
         return inputMethods;
+    }
+
+    /** The {@code recipes} registry (logic.md §4.6, §30). */
+    @Override
+    public LogicRegistry<Recipe> recipes() {
+        return recipes;
     }
 
     /** The {@code item-sources} registry (logic.md §4.4). */
@@ -270,6 +280,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         itemSources.ownerDisabled(owner);
         listSources.ownerDisabled(owner);
         inputMethods.ownerDisabled(owner);
+        recipes.ownerDisabled(owner);
         providers.ownerDisabled(owner);
     }
 
@@ -288,6 +299,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
         itemSources.close();
         listSources.close();
         inputMethods.close();
+        recipes.close();
         HandlerList.unregisterAll(this);
     }
 }

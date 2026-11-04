@@ -128,7 +128,8 @@ public final class LogicAuthoringOps {
                     return EditorContentOps.error(request, result.diagnostics(), null, null);
                 }
                 JsonObject payload = new JsonObject();
-                payload.add("steps", EditorContentOps.jsonOf(result.value()));
+                payload.add("rules", EditorContentOps.jsonOf(result.value()));
+                payload.add("warnings", GuiAuthoringOps.diagnosticsJson(result.diagnostics()));
                 return Wire.Response.success(request, payload);
             } catch (IllegalArgumentException e) {
                 return EditorContentOps.badRequest(request, e.getMessage());

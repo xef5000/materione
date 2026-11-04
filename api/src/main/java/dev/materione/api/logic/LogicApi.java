@@ -84,6 +84,14 @@ public interface LogicApi {
     LogicRegistry<InputMethod> inputMethods();
 
     /**
+     * The {@code recipes} registry: parameterized fragments the editor inserts and {@code instantiate} expands into
+     * ordinary rules (logic.md §4.6, §30). The built-ins are the v1 recipes, {@code materione:pay_to_receive} and the
+     * rest; an addon registers its own under its namespace. A recipe is read when it is used, so a late registration
+     * is visible at once to the editor and to {@code instantiate}, and it needs no reload.
+     */
+    LogicRegistry<Recipe> recipes();
+
+    /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the
      * registries on every call: triggers (filters, context schema, cancellability, who fires them),
      * actions, conditions, step kinds, categories, expression functions and mechanics, with

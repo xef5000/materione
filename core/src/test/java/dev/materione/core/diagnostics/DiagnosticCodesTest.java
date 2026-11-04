@@ -39,7 +39,9 @@ class DiagnosticCodesTest {
         // logic.md §25, #218;
         // MTR-0077 to MTR-0080 GUI list source, filter, read and input-slot problems: logic.md §28, #219;
         // MTR-0081 prompt names an unknown input method, MTR-0082 prompt answers into a persistent variable,
-        // MTR-0083 GUI not shown again after a prompt, MTR-0084 input method could not start: logic.md §6.6, §29, #220)
-        assertThat(DiagnosticCodes.all()).hasSize(84);
+        // MTR-0083 GUI not shown again after a prompt, MTR-0084 input method could not start: logic.md §6.6, §29, #220;
+        // MTR-0085 recipe does not load, MTR-0086 recipe parameter refused, MTR-0087 recipe expansion does not validate,
+        // MTR-0088 recipe action unavailable: logic.md §30, #222)
+        assertThat(DiagnosticCodes.all()).hasSize(88);
     }
 }

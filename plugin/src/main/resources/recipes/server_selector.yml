@@ -1,0 +1,16 @@
+# Server selector (logic.md §7.5, §30): a click tells the player, then sends them to another server (connect, L7).
+name: Server selector
+description: Sends the player to another server when the button is clicked. The server must be known to the proxy, or the transfer packet must be configured.
+params:
+  layer:
+    type: string
+    description: The id of the button
+  server:
+    type: string
+    description: The target server's name, as the proxy knows it
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - message: "<gray>Connecting to {{server}}..."
+      - connect: "{{server}}"

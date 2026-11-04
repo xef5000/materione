@@ -22,6 +22,13 @@ releases may change file formats, settings and the public API.
   fields contain it, ignoring case, so a prompt into `session.search` and a `gui.refresh` make a search. The `guilogic`
   fixture has the recipe (`guilogic:search`). Diagnostics MTR-0081 to MTR-0084. The anvil method is not yet
   verified in a client, and the QA entries were not run against one.
+- **Recipes: parameterized rule fragments that expand into ordinary rules (logic.md §4.6, §30, #222).** A recipe
+  has a name, help text and typed parameters (text, numbers, whole numbers, flags, and declared variables), and expands
+  server-side into rules that the flow compiler validates before anything is written. `LogicApi.recipes()` registers
+  more, through the public API. Eight v1 recipes ship as YAML in the jar: pay to receive, close button, welcome message,
+  confirm dialog, paged player list, toggle setting, server selector and back button. The trash slot is not shipped:
+  it is blocked on #248. `logic.instantiate` answers the rules and their warnings and writes nothing; the vocabulary
+  lists the recipes with their parameters. Diagnostics MTR-0085 to MTR-0088.
 - **Lists and pagination in GUIs (logic.md §6.7, §4.5, §28, #219).** A `list` component fills a run of
   slots with one page of entries: `slots` (a range with skipped columns, or an explicit list), `source`,
   `filter` (a condition over `entry.*`), `sort` (a field, optionally `{by, order: desc}`) and an `entry:` item
