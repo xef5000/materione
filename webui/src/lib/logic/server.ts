@@ -144,7 +144,10 @@ export async function logicValidate(channel: RpcChannel, draft: LogicDraftReques
   return (data.diagnostics as LogicDiagnostic[] | undefined) ?? [];
 }
 
-/** `logic.instantiate`: the steps a recipe expands to. Refused until the recipe registry lands (issue 222). */
+/**
+ * `logic.instantiate`: the rules a recipe expands to (logic.md §30). Nothing is written; the caller inserts the rules
+ * through `logic.edit`. A bad parameter or an expansion that does not validate is refused with its diagnostics.
+ */
 export async function logicInstantiate(
   channel: RpcChannel,
   recipe: string,
@@ -152,7 +155,7 @@ export async function logicInstantiate(
 ): Promise<unknown[]> {
   const response = await channel.call('logic.instantiate', { recipe, params });
   const data = unwrap(response);
-  return (data.steps as unknown[] | undefined) ?? [];
+  return (data.rules as unknown[] | undefined) ?? [];
 }
 
 /** `logic.vocabulary`: the behavior vocabulary, built-in and addon alike. */

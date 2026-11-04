@@ -4,6 +4,7 @@ import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.FunctionDescription;
 import dev.materione.api.logic.LogicCategory;
+import dev.materione.api.logic.RecipeDescription;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TriggerDescription;
 import java.util.List;
@@ -35,6 +36,7 @@ import java.util.Objects;
  * @param steps       the engine-owned step kinds, supported or not
  * @param categories  every palette category in use: the eight built-ins first, then addon-added ones
  * @param functions   registered expression functions, sorted by id
+ * @param recipes     registered recipes, sorted by id (logic.md §4.6, §30)
  */
 public record BehaviorVocabulary(
         List<Event> events,
@@ -46,7 +48,8 @@ public record BehaviorVocabulary(
         List<Condition> conditions,
         List<StepKind> steps,
         List<LogicCategory> categories,
-        List<Function> functions) {
+        List<Function> functions,
+        List<Recipe> recipes) {
 
     /** The vocabulary schema version this record models. */
     public static final int VERSION = 2;
@@ -62,9 +65,26 @@ public record BehaviorVocabulary(
         steps = steps == null ? List.of() : List.copyOf(steps);
         categories = categories == null ? List.of() : List.copyOf(categories);
         functions = functions == null ? List.of() : List.copyOf(functions);
+        recipes = recipes == null ? List.of() : List.copyOf(recipes);
     }
 
-    /** The version-1 shape: no triggers, conditions, steps, categories or functions. */
+    /** The shape before recipes (logic.md §30): the same members, without {@code recipes}. */
+    public BehaviorVocabulary(
+            List<Event> events,
+            List<Action> actions,
+            List<ParameterSchema> ruleOptions,
+            List<ParameterSchema> actionOptions,
+            List<Mechanic> mechanics,
+            List<Trigger> triggers,
+            List<Condition> conditions,
+            List<StepKind> steps,
+            List<LogicCategory> categories,
+            List<Function> functions) {
+        this(events, actions, ruleOptions, actionOptions, mechanics, triggers, conditions, steps, categories,
+                functions, List.of());
+    }
+
+    /** The version-1 shape: no triggers, conditions, steps, categories, functions or recipes. */
     public BehaviorVocabulary(
             List<Event> events,
             List<Action> actions,
@@ -72,7 +92,7 @@ public record BehaviorVocabulary(
             List<ParameterSchema> actionOptions,
             List<Mechanic> mechanics) {
         this(events, actions, ruleOptions, actionOptions, mechanics,
-                List.of(), List.of(), List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static BehaviorVocabulary empty() {
@@ -81,7 +101,7 @@ public record BehaviorVocabulary(
 
     public BehaviorVocabulary withMechanics(List<Mechanic> registered) {
         return new BehaviorVocabulary(events, actions, ruleOptions, actionOptions, registered,
-                triggers, conditions, steps, categories, functions);
+                triggers, conditions, steps, categories, functions, recipes);
     }
 
     /**
@@ -172,6 +192,21 @@ public record BehaviorVocabulary(
      */
     public record Function(String id, FunctionDescription description, String registeredBy) {
         public Function {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(description, "description");
+            registeredBy = registeredBy == null ? "" : registeredBy;
+        }
+    }
+
+    /**
+     * One registered recipe (logic.md §4.6, §30): the parameterized fragment the editor offers, with its typed parameters.
+     *
+     * @param id           the recipe key as authors write it ({@code pay_to_receive}; addon recipes are qualified)
+     * @param description  its name, help text and parameters
+     * @param registeredBy owning plugin name
+     */
+    public record Recipe(String id, RecipeDescription description, String registeredBy) {
+        public Recipe {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(description, "description");
             registeredBy = registeredBy == null ? "" : registeredBy;

@@ -439,6 +439,17 @@ A step that fails while a flow runs is still `MTR-0023`: an action that returns 
 an action that throws (always), and a condition that cannot be evaluated (the condition then counts as
 false). A `FAILED` inside a `require` is control flow and appears only in the run trace.
 
+The recipe registry ([`logic.md`](logic.md) §30, #222) adds four codes. The first is a load warning for a built-in
+or addon recipe resource; the other three answer `instantiate`, and every one is a refusal or a warning on that
+request, never a change to a file:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0085` | warning | A recipe resource does not load: its YAML does not parse, its template is malformed (an unknown key, a placeholder that names no parameter, a bad type or range), or the registry refuses it. The recipe is left out and the rest of the logic loads. Fix the named resource, then reload. |
+| `MTR-0086` | error | `instantiate` refused a parameter: a name the recipe does not declare, a required one missing, a value that does not fit its type or range, or a variable that is not declared with the recipe's scope and value type. Every problem is listed at once, and nothing is expanded. |
+| `MTR-0087` | error | `instantiate` refused an expansion: it does not validate under the flow compiler (the compiler's own problems follow it), or the recipe failed while expanding. Nothing is returned. A recipe author fixes the recipe; an author of a request fixes nothing here. |
+| `MTR-0088` | warning | An expansion uses an action this server cannot run right now, such as a payment with no economy. The expansion is still returned, with the warning; the reason is the action's own availability reason. |
+
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
 meaning and step paths as for items (`gui.validate` returns them for a `saved` or `yaml` source). `MTR-0021`

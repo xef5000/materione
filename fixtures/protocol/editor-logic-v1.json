@@ -25,7 +25,8 @@
         "conditions": [],
         "steps": [],
         "categories": [],
-        "functions": []
+        "functions": [],
+        "recipes": []
       }
     }
   },
@@ -277,7 +278,8 @@
       "ok": false,
       "error": {
         "code": "MTR-0008",
-        "message": "unknown recipe 'pay_to_receive': the recipe registry arrives with #222"
+        "message": "unknown recipe 'pay_to_receive': no recipe with that id is registered",
+        "hint": "list the recipes the server has with logic.vocabulary"
       }
     }
   }

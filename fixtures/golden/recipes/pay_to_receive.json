@@ -1,0 +1,39 @@
+{
+  "recipe": "pay_to_receive",
+  "params": {
+    "layer": "buy",
+    "price": 250,
+    "currency": "",
+    "item": "minecraft:diamond",
+    "amount": 2
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "buy",
+      "do": [
+        {
+          "require": [
+            {
+              "take_money": {
+                "amount": 250.0
+              }
+            },
+            {
+              "give_item": {
+                "item": "minecraft:diamond",
+                "amount": 2
+              }
+            }
+          ],
+          "else": [
+            {
+              "message": "<red>You cannot afford that."
+            }
+          ]
+        },
+        "gui.refresh"
+      ]
+    }
+  ]
+}

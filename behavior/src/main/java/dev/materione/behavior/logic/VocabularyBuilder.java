@@ -7,6 +7,7 @@ import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
 import dev.materione.api.logic.LogicCategory;
+import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.Threading;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.TriggerType;
@@ -54,7 +55,22 @@ public final class VocabularyBuilder {
                 conditions,
                 StepKinds.all(),
                 categories(actions, conditions),
-                functions(registries));
+                functions(registries),
+                recipes(registries));
+    }
+
+    /** The registered recipes, sorted by id (logic.md §4.6, §30). A recipe whose description throws is left out. */
+    private static List<BehaviorVocabulary.Recipe> recipes(RegistryView registries) {
+        var out = new ArrayList<BehaviorVocabulary.Recipe>();
+        for (RegistryEntry<?> entry : entries(registries, RegistryKeys.RECIPES)) {
+            if (!(entry.entry() instanceof Recipe recipe)) {
+                continue;
+            }
+            attempt(recipe::describe).ifPresent(description -> out.add(new BehaviorVocabulary.Recipe(
+                    LogicIds.display(entry.id()), description, entry.registeredBy())));
+        }
+        out.sort(Comparator.comparing(BehaviorVocabulary.Recipe::id));
+        return List.copyOf(out);
     }
 
     private static List<BehaviorVocabulary.Trigger> triggers(RegistryView registries) {

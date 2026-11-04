@@ -1,0 +1,34 @@
+{
+  "recipe": "paged_player_list",
+  "params": {
+    "list": "roster",
+    "previous": "prev",
+    "next": "next"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "prev",
+      "do": [
+        {
+          "gui.page": {
+            "list": "roster",
+            "to": "previous"
+          }
+        }
+      ]
+    },
+    {
+      "on": "gui.click",
+      "layer": "next",
+      "do": [
+        {
+          "gui.page": {
+            "list": "roster",
+            "to": "next"
+          }
+        }
+      ]
+    }
+  ]
+}

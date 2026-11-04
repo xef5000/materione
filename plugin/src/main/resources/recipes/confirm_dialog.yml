@@ -1,0 +1,23 @@
+# Confirm dialog (logic.md §7.5, §30): the button opens a confirm GUI. The yes and no buttons belong to that GUI,
+# which is a separate resource: instantiate writes one resource, so this recipe writes only the opening rule.
+name: Confirm dialog
+description: Opens a confirm GUI with a question when the button is clicked. The confirm GUI is its own resource, with a question argument and its yes and no buttons; this recipe writes the opening rule only.
+params:
+  layer:
+    type: string
+    description: The id of the button that asks first
+  dialog:
+    type: string
+    description: The confirm GUI, as pack:id. It opens with a question argument
+  question:
+    type: string
+    default: "<yellow>Are you sure?"
+    description: The question the confirm GUI shows
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - gui.open:
+          gui: "{{dialog}}"
+          args:
+            question: "{{question}}"

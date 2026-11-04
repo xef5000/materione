@@ -1,0 +1,33 @@
+# Toggle setting (logic.md §7.5, §30): a click flips a declared player boolean and tells the player the new state.
+# The variable is declared in a variables file of its pack first (instantiate checks it; it does not write it).
+name: Toggle setting
+description: Flips a declared player boolean when the button is clicked, then tells the player the new state. The variable must already be declared in a variables file of its pack.
+params:
+  layer:
+    type: string
+    description: The id of the button that flips the setting
+  variable:
+    type: variable
+    scope: player
+    value_type: boolean
+    description: The declared player boolean, as pack:key
+  on_message:
+    type: string
+    default: "<green>Enabled."
+    description: Shown to the player when the setting turns on
+  off_message:
+    type: string
+    default: "<red>Disabled."
+    description: Shown to the player when the setting turns off
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - set_var: { var: "{{variable}}", op: toggle }
+      - if:
+          var: { var: "{{variable}}", value: true }
+        then:
+          - message: "{{on_message}}"
+        else:
+          - message: "{{off_message}}"
+      - gui.refresh

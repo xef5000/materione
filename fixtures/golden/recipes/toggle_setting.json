@@ -1,0 +1,40 @@
+{
+  "recipe": "toggle_setting",
+  "params": {
+    "layer": "pvp",
+    "variable": "sample:pvp"
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "pvp",
+      "do": [
+        {
+          "set_var": {
+            "var": "sample:pvp",
+            "op": "toggle"
+          }
+        },
+        {
+          "if": {
+            "var": {
+              "var": "sample:pvp",
+              "value": true
+            }
+          },
+          "then": [
+            {
+              "message": "<green>Enabled."
+            }
+          ],
+          "else": [
+            {
+              "message": "<red>Disabled."
+            }
+          ]
+        },
+        "gui.refresh"
+      ]
+    }
+  ]
+}

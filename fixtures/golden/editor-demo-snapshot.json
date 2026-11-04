@@ -2684,6 +2684,209 @@
           "sinceVersion": "2.0.0"
         }
       ],
+      "recipes": [
+        {
+          "description": "Returns the player to the GUI they came from when the button is clicked.",
+          "displayName": "Back button",
+          "id": "back_button",
+          "params": [
+            {
+              "description": "The id of the button",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Closes the GUI when the button is clicked.",
+          "displayName": "Close button",
+          "id": "close_button",
+          "params": [
+            {
+              "description": "The id of the button layer",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Opens a confirm GUI with a question when the button is clicked. The confirm GUI is its own resource, with a question argument and its yes and no buttons; this recipe writes the opening rule only.",
+          "displayName": "Confirm dialog",
+          "id": "confirm_dialog",
+          "params": [
+            {
+              "description": "The id of the button that asks first",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The confirm GUI, as pack:id. It opens with a question argument",
+              "name": "dialog",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "default": "<yellow>Are you sure?",
+              "description": "The question the confirm GUI shows",
+              "name": "question",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Adds previous and next buttons that page a list layer. The list layer is placed in the GUI with type list; this recipe writes the buttons' rules.",
+          "displayName": "Paged player list",
+          "id": "paged_player_list",
+          "params": [
+            {
+              "description": "The id of the list layer to page",
+              "name": "list",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The id of the previous-page button",
+              "name": "previous",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The id of the next-page button",
+              "name": "next",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Takes a price from the player and gives them an item when they can pay. When they cannot, the message is shown and nothing changes.",
+          "displayName": "Pay to receive",
+          "id": "pay_to_receive",
+          "params": [
+            {
+              "description": "The id of the button layer that charges the player",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The price to take, in the currency",
+              "min": 0.01,
+              "name": "price",
+              "required": true,
+              "type": "number"
+            },
+            {
+              "default": "",
+              "description": "The currency id, such as gems or shop:gems; blank for the default currency",
+              "name": "currency",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "The item to give, as a Materione id or minecraft:<material>",
+              "name": "item",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "default": 1,
+              "description": "How many of the item to give",
+              "max": 2304.0,
+              "min": 1.0,
+              "name": "amount",
+              "required": false,
+              "type": "integer"
+            },
+            {
+              "default": "<red>You cannot afford that.",
+              "description": "Shown to the player when the payment fails",
+              "name": "message",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Sends the player to another server when the button is clicked. The server must be known to the proxy, or the transfer packet must be configured.",
+          "displayName": "Server selector",
+          "id": "server_selector",
+          "params": [
+            {
+              "description": "The id of the button",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The target server's name, as the proxy knows it",
+              "name": "server",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Flips a declared player boolean when the button is clicked, then tells the player the new state. The variable must already be declared in a variables file of its pack.",
+          "displayName": "Toggle setting",
+          "id": "toggle_setting",
+          "params": [
+            {
+              "description": "The id of the button that flips the setting",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "description": "The declared player boolean, as pack:key",
+              "name": "variable",
+              "required": true,
+              "scope": "player",
+              "type": "variable",
+              "valueType": "boolean"
+            },
+            {
+              "default": "<green>Enabled.",
+              "description": "Shown to the player when the setting turns on",
+              "name": "on_message",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "default": "<red>Disabled.",
+              "description": "Shown to the player when the setting turns off",
+              "name": "off_message",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Sends the player a message each time the GUI opens.",
+          "displayName": "Welcome message",
+          "id": "welcome_message",
+          "params": [
+            {
+              "description": "The message. Rich text and ${...} or %placeholder% templates are allowed",
+              "name": "text",
+              "required": true,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        }
+      ],
       "ruleOptions": [
         {
           "advanced": false,

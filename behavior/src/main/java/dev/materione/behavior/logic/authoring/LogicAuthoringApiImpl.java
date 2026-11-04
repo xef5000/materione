@@ -14,6 +14,7 @@ import dev.materione.api.logic.LogicAuthoringApi;
 import dev.materione.api.logic.LogicEdit;
 import dev.materione.behavior.flow.FlowCompiler;
 import dev.materione.behavior.logic.LogicLookup;
+import dev.materione.behavior.logic.recipe.RecipeExpander;
 import dev.materione.behavior.rule.ParsedRules;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -38,6 +39,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
 
     private final AuthoringApi authoring;
     private final LogicLookup lookup;
+    private final RecipeExpander recipes;
 
     /**
      * @param authoring the authoring API the reads and the writes go through
@@ -46,6 +48,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
     public LogicAuthoringApiImpl(AuthoringApi authoring, LogicLookup lookup) {
         this.authoring = Objects.requireNonNull(authoring, "authoring");
         this.lookup = Objects.requireNonNull(lookup, "lookup");
+        this.recipes = new RecipeExpander(this.lookup);
     }
 
     /** A resource's authored mapping, with the file it lives in. */
@@ -123,8 +126,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
 
     @Override
     public ApiResult<List<Map<String, Object>>> instantiate(InstantiateRequest request) {
-        return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_SCHEMA_INVALID,
-                "unknown recipe '" + request.recipe() + "': the recipe registry arrives with #222"));
+        return recipes.expand(request);
     }
 
     // ------------------------------------------------------------------

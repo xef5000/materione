@@ -3,6 +3,7 @@ package dev.materione.behavior.logic;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ActionType;
 import dev.materione.api.logic.ConditionType;
+import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.TriggerDescription;
 import dev.materione.api.logic.variable.VariableDeclaration;
 import dev.materione.behavior.expr.FunctionResolver;
@@ -41,6 +42,14 @@ public interface LogicLookup {
      * default, so a lookup with no list-source registry rejects every source.
      */
     default Optional<dev.materione.api.logic.ListSource<?>> listSource(String authoredId) {
+        return Optional.empty();
+    }
+
+    /**
+     * The recipe an author's spelling names ({@code pay_to_receive}, {@code example:greet}). Empty by default, so a
+     * lookup with no recipe registry refuses every recipe as unknown (logic.md §30).
+     */
+    default Optional<Recipe> recipe(String authoredId) {
         return Optional.empty();
     }
 

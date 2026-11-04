@@ -46,8 +46,10 @@ public interface LogicAuthoringApi {
     ApiResult<List<Diagnostic>> validate(LogicDraft draft);
 
     /**
-     * Expands a recipe into steps (logic.md §4.6). The recipe registry arrives with #222; until then
-     * every recipe is refused as unknown. Never writes.
+     * Expands a recipe into ordinary rules (logic.md §4.6, §30): the parameters are checked against the recipe's
+     * description (a bad one is {@code MTR-0086}, and nothing is expanded), the rules are checked by the flow
+     * compiler (one that does not validate is {@code MTR-0087}), and the rules come back for the caller to write
+     * through {@link #edit}. A recipe the server does not know is refused as unknown ({@code MTR-0008}). Never writes.
      */
     ApiResult<List<Map<String, Object>>> instantiate(InstantiateRequest request);
 

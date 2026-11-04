@@ -450,6 +450,34 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode VARIABLE_STORE_FAILED =
             new DiagnosticCode("MTR-0065", Severity.WARN, "Variable store could not be read or written");
 
+    /**
+     * A recipe resource does not load (logic.md §30): its YAML does not parse, its template is malformed, or the
+     * registry refuses it. The recipe is left out and the rest of the logic loads.
+     */
+    public static final DiagnosticCode RECIPE_LOAD_FAILED =
+            new DiagnosticCode("MTR-0085", Severity.WARN, "Recipe does not load; it is not available");
+
+    /**
+     * An {@code instantiate} request names a parameter the recipe does not declare, omits a required one, or gives a
+     * value that does not fit its type, range or declared variable (logic.md §30). Nothing is expanded.
+     */
+    public static final DiagnosticCode RECIPE_PARAMETER_REFUSED =
+            new DiagnosticCode("MTR-0086", Severity.ERROR, "Recipe parameter is missing, unknown or does not fit");
+
+    /**
+     * A recipe's expansion does not validate against the flow compiler, or the recipe failed while expanding
+     * (logic.md §30). Nothing is returned; the problems listed after this one say what is wrong.
+     */
+    public static final DiagnosticCode RECIPE_EXPANSION_REFUSED =
+            new DiagnosticCode("MTR-0087", Severity.ERROR, "Recipe expansion does not validate");
+
+    /**
+     * An expansion uses an action this server cannot run right now, such as a payment without an economy
+     * (logic.md §30). The expansion is still returned; the warning travels with it.
+     */
+    public static final DiagnosticCode RECIPE_ACTION_UNAVAILABLE =
+            new DiagnosticCode("MTR-0088", Severity.WARN, "Recipe uses an action this server cannot run now");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -530,7 +558,11 @@ public final class DiagnosticCodes {
             OPEN_ARGUMENT_INVALID,
             OPEN_COMMAND_CONFLICT,
             OPEN_REQUIREMENT_INVALID,
-            OPEN_TREE_RESYNC);
+            OPEN_TREE_RESYNC,
+            RECIPE_LOAD_FAILED,
+            RECIPE_PARAMETER_REFUSED,
+            RECIPE_EXPANSION_REFUSED,
+            RECIPE_ACTION_UNAVAILABLE);
 
     private DiagnosticCodes() {}
 

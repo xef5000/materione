@@ -1,0 +1,11 @@
+# Welcome message (logic.md §7.5, §30): each time the GUI opens, the player reads the text.
+name: Welcome message
+description: Sends the player a message each time the GUI opens.
+params:
+  text:
+    type: string
+    description: The message. Rich text and ${...} or %placeholder% templates are allowed
+rules:
+  - on: gui.open
+    do:
+      - message: "{{text}}"

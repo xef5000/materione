@@ -1,0 +1,12 @@
+# Back button (logic.md §4.1, §7.5, §30): a click returns to the GUI the player came from.
+name: Back button
+description: Returns the player to the GUI they came from when the button is clicked.
+params:
+  layer:
+    type: string
+    description: The id of the button
+rules:
+  - on: gui.click
+    layer: "{{layer}}"
+    do:
+      - gui.back

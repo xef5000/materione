@@ -19,10 +19,16 @@ public final class LogicTestSupport {
         return new LogicService(host(), registries);
     }
 
-    /** A logic service with Materione's own triggers and actions registered, as the plugin does at boot. */
+    /**
+     * A logic service with Materione's own triggers, actions and v1 recipes registered, as the plugin does at boot.
+     * A recipe that does not load fails the test: the built-ins must always load.
+     */
     public static LogicService withBuiltIns(RegistryService registries) {
         LogicService service = newService(registries);
         BuiltinLogic.register(service, owner("materione"), dev.materione.plugin.logic.support.ItemCatalog.none());
+        dev.materione.plugin.logic.recipe.BuiltinRecipes.register(service, owner("materione"), diagnostic -> {
+            throw new IllegalStateException("built-in recipe did not load: " + diagnostic.message());
+        });
         return service;
     }
 
