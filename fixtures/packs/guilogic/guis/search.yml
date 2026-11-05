@@ -1,0 +1,60 @@
+# The search recipe (logic.md §6.6, §28.21, #220): prompt -> session variable -> list search. The search button asks
+# for an item name in chat (the window hides for the question and comes back with the answer, for the same session);
+# the list keeps the entries whose name contains the answer, ignoring case, and gui.refresh shows the result. A
+# cancelled or empty question runs its else (a message) and ends that run; the window comes back either way. The
+# clear button empties the search. The QA catalog (qa/catalog/guilogic.mjs) asks through it.
+search:
+  title: Search
+  rows: 3
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "SEARCH"
+      font: smallcaps
+      color: "#404040"
+    - id: items
+      type: list
+      slots: { from: 10, to: 16 }
+      source:
+        entries:
+          - { name: Diamond, price: 40 }
+          - { name: Gold ingot, price: 12 }
+          - { name: diamond block, price: 360 }
+          - { name: Iron, price: 6 }
+      sort: name
+      search: { fields: [name] }
+      entry:
+        item: minecraft:paper
+        name: "<yellow>${entry.name}"
+        lore: ["<gray>${entry.price} coins"]
+    - id: ask
+      type: item
+      slot: 20
+      item: minecraft:compass
+      name: "<white>Search"
+    - id: clear
+      type: item
+      slot: 24
+      item: minecraft:barrier
+      name: "<gray>Clear search"
+  behavior:
+    - on: gui.click
+      layer: ask
+      do:
+        - prompt: { text: "Type an item name to search, or cancel", var: session.search, timeout: 60 }
+          else:
+            - message: "<gray>Search cancelled."
+        - gui.refresh
+    - on: gui.click
+      layer: clear
+      do:
+        - set_var: { var: session.search, value: "" }
+        - gui.refresh

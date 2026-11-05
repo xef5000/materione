@@ -309,7 +309,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 | `CurrencyCatalog` (named currencies, §18: each reaches its money through a `CurrencyIntegration`) | `has_money`, `give_money`, `take_money`, `balance()`, `format_currency()` | `materione:money`, bound to Vault; unavailable (with the reason) until Vault's economy runs | Vault (`vault`), the XP integration (`xp`), the command pair (`custom`); addons register more |
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
-| `InputMethod` | `prompt` (§6.6) | chat, sign, anvil | dialogs (#6) |
+| `InputMethod` | `prompt` (§6.6) | chat, anvil; sign registered but unavailable on this build (§29) | dialogs (#6) |
 | `ListSource` | the `list` component (§6.7) | online players, a pack's items, a variable list, static `entries:` | addon sources |
 
 Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
@@ -557,6 +557,8 @@ asks through the chosen `InputMethod`, writes the answer to `var` (session or lo
 A timeout or cancel resumes into the step's `else:` branch. The GUI is re-opened afterwards when
 the prompt had to close it (chat, sign). Search in lists is this plus a filter (§6.7).
 
+As built (#220): the decisions, the diagnostics (`MTR-0081` to `MTR-0084`) and the search key are in §29.
+
 ### 6.7 Lists and pagination
 
 `list` is a component with target `SLOT`:
@@ -585,7 +587,7 @@ the prompt had to close it (chat, sign). Search in lists is this plus a filter (
   itself `cached`, and the session snapshots it on open and on `gui.refresh`, not on every tick.
 
 As built (#219): the decisions, the diagnostics (`MTR-0077` to `MTR-0080`) and the seams for search (#220) are
-in §28.
+in §28. The search key is built (#220, §29).
 
 ---
 
@@ -777,9 +779,8 @@ The implementing PRs assign codes from `MTR-0057` upwards and document them in p
 took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` (a call that cannot be
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
-`MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #222 took
-`MTR-0085` to `MTR-0088` (§30). `MTR-0081` to `MTR-0084` are held by a parallel change, so the next free code after
-both is `MTR-0089`.
+`MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30), so the next free code is `MTR-0089`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -2709,6 +2710,125 @@ Where the design left a choice open, these are the choices. Each is reversible b
     The `variable` source reads a string until a list variable type exists (decision 7). The QA entry for the paged list
     uses the `roster` fixture, whose entries are static, so the client run does not depend on who is online; the
     `online_players` path is covered by unit tests and is not part of that run.
+
+## 29. Decisions taken in #220 (G7: the prompt action, input methods and list search)
+
+#220 ships §6.6 and the search seam of §28.21. A `prompt` step parks its run, asks the player for a line of text through
+an `InputMethod`, writes the answer to a run-local or session variable and resumes. The code is in `api.logic`
+(`InputMethod`, `InputMethodDescription`, `ActionType.takesElse()`), `behavior.flow` (`StepCompiler`), `plugin.gui.prompt`
+(the registry, the methods and the listener), `plugin.logic.action.PromptAction` and `plugin.gui.list` (the search).
+Where the design left a choice open, these are the choices. Each is reversible by the owner.
+
+**The step and the run**
+
+1. **`prompt` is one action, one class, and it parks through the interpreter's existing `await`.** Its `executeResumable`
+   returns the stage the prompt settles, so the run parks as any read does (§5.2) and counts against the player's parked
+   budget (`MTR-0059` when the budget is spent). The interpreter's loop did not change.
+2. **An unanswered question ends the run, and its `else:` runs first.** A question that is declined, cancelled by its
+   cancel word, timed out, or left by a quit is an unanswered outcome. The steps after the prompt were written to use the
+   answer, so they must not run without one. The engine therefore compiles every action whose type says `takesElse()` as
+   a `require` around itself, with its `else:` as the require's else (`ActionType.takesElse`, §4.1). A question with no
+   `else:` ends the run as a `require` does, quietly. A question takes no `chance:`: a skipped question would let the
+   steps after it run with no answer, so `chance` below 1 is a structural refusal (the rule is skipped, `MTR-0021`), and
+   an `if` decides whether to ask. Rejected alternative: an `else:` on any action, which would be a second way to write
+   `require`; the flag keeps the grammar small and lets the vocabulary say which types take one.
+3. **An `else:` on any other action is a structural error**, and the rule is skipped, as for a step that mixes kinds. The
+   authoring shape (`StepShape`) accepts `else` beside any action and leaves the refusal to the compiler, so `validate`
+   and the load report the same thing. An unanswered question is not diagnosed: nothing is reported for a player who
+   cancels.
+4. **The answer goes to `var`, parsed as `set_var` parses it, but narrower.** A run-local name, or `session.<name>`. A
+   persistent name (`player.x`, `server.pack.x`) is refused at load with `MTR-0082`: a question is not a declared write,
+   and a typed number variable cannot take what a player types. A session target with no open GUI fails at run time and
+   is reported (`MTR-0084`). The write happens on the player's thread, in the same callback that ends the question, so a
+   run cancelled while it waited still gets its window back.
+5. **Timeouts are in seconds, 1 to 600, default 60.** The prompt schedules its own timeout on the player's entity
+   scheduler and cancels it when the question ends. Seconds, not ticks, because a player reads a timeout in seconds
+   (`wait` stays in ticks, §16 decision 6).
+6. **Empty and cancel-word answers are unanswered.** A blank answer (an anvil with no name) is "no answer", and the cancel word (default `cancel`, compared ignoring case; `cancel_word: ""` turns it off)
+   is "the player cancelled". Both run the `else:`. A search that must clear its text uses `set_var`, not an empty answer.
+7. **One question per player.** A prompt started while another waits is refused at once with `FAILED`, the player is
+   told ("You are already answering a question; finish that one first."), and the run ends through its `else:` like any
+   unanswered question. A waiting question whose run was cancelled is superseded, not refused: the stale one ends
+   unanswered and the new one starts. The run's liveness is read from its `ReadExecutor`, which closes with the run.
+
+**The window**
+
+8. **A question hides the player's window, and the session lives on; the window is shown again for the same session.** A
+   chat or anvil question must take the window away, because a player cannot type in chat with a container open.
+   The session is marked `prompting` (`GuiSession.prompting`), its input items go back to the player, and its window
+   closes (`GuiLifecycle.hideForPrompt`). Nothing fires: no `gui.close`, and no `gui.open` when the window returns. The
+   close that the hide causes is ignored by `windowClosed` while the session is prompting, so it does not end the session.
+   **Deviation from the §21 seam note**, which named `GuiOpener` with a restore. A re-open through the opener makes a new
+   session, and the run that is waiting holds the old one in its context, so every GUI action after the prompt
+   (`gui.refresh`, `set_var` into the session) would fail with `no open gui`. The search recipe depends on exactly those
+   actions. The window returns through `WindowHost.open` for the same session (`GuiLifecycle.showAfterPrompt`), with the
+   GUI as it is now; a GUI that is gone ends its session as `removed`.
+9. **The window comes back when the player has not moved on.** The return is skipped when the player's current session is
+   no longer the hidden one (they opened another GUI, from a command, while the question waited). A return the host
+   refuses, or a GUI that went away, is reported (`MTR-0083`) and the player is told. A player who left gets no window.
+10. **Which window is hidden.** The player's current open session, when the method closes the window
+    (`InputMethodDescription.closesWindow`). It is the run's own session in practice; a command that opens a GUI while a
+    question waits makes that one the one hidden and shown again.
+11. **A method is asked after the window has gone.** It is asked two ticks after the prompt starts when the prompt hid a
+    window (the window closes on the next tick, or at once when the player is not mid-click), and one tick after
+    otherwise. The tick counts are a heuristic. A method that needs the window gone must not assume more than that.
+
+**The input methods**
+
+12. **`InputMethod` is an `api.logic` SPI, registered through `LogicApi.inputMethods()`** under
+    `RegistryKeys.INPUT_METHODS`. A method asks (`ask`, on the player's thread; it may throw to refuse), answers through
+    the `Reply` it was given (from any thread: the prompt hops to the player's thread before it settles), and is dismissed
+    once when the prompt ends, whatever ended it. `closesWindow` is in its description, so a dialog (#6) can say it leaves
+    the window in place. The methods are not in the vocabulary yet, as list sources are not (§28.5).
+13. **Chat (`materione:chat`).** The question is a chat line. The chat listener cancels the next message from a player who
+    is being asked, so it is not broadcast, and hands its text to the method on the player's thread. The listener asks
+    the method whether the player awaits before it cancels, so no other chat is touched.
+14. **Sign (`materione:sign`) is registered and unavailable on this build.** The first design placed a real sign block in
+    the world for the editor and restored it afterwards. That was rejected: a crash, restart or chunk unload between the
+    two steps leaves a sign in the world that other players see, and it can collide with region protection and block
+    loggers. The client-only replacement needs Paper's `Player#openVirtualSign(Position, Side)`, which is in the 26.x API
+    (`paper-api-26.1.2`, `Player.java`) and **not in the 1.21.4 API this build compiles against**; the answer comes back on
+    `UncheckedSignChangeEvent`, also 26.x only. The 1.21.4 `sendBlockChange` and `sendBlockUpdate` can show a sign to a
+    client but cannot receive an edit, so no closer 1.21.4 path exists. The method therefore reports `Availability`
+    unavailable with that reason; a prompt refuses it before anything is hidden or pending (`MTR-0084`), and the studio
+    can grey it out. The method never touches the world. A 26.x path goes behind the modern seam as a follow-up.
+15. **Anvil (`materione:anvil`).** `MenuType.ANVIL` opens an anvil with a name tag in its first slot, named with the
+    question. The player takes the result from slot 2, which is the answer: the click is cancelled, so the item is never
+    given, and only once the rename text is non-blank. Closing the anvil without taking the result is no answer. The
+    method closes the anvil itself when the prompt ends. **Not verified in a client.**
+16. **Listeners are adapters (R10).** `PromptListener` holds no policy: it asks a method, cancels an event that is an
+    answer, and hands the answer on. It reads no state of its own.
+
+**The search key (§28.21)**
+
+17. **`search:` on a list is `{fields: [...], var: <name>}`.** The fields are the entry fields a search text is matched
+    against (case-insensitive substring, any listed field); `var` names the session variable the text is read from,
+    default `search`. A prompt writes its answer there (`var: session.search`). A list without `search:` ignores the
+    session text. The seam is `ListEntries.arrange`, and only there: the search is a second keep-condition ANDed with the
+    author's `filter:`, applied before the sort and the paging (§6.7 order). An empty or unset search keeps every entry,
+    so a list is unfiltered until a search is made. Rejected alternative: asking authors to write the match inside
+    `filter:` with `lower`, `contains` and a default for a missing variable. The expression language has no null default,
+    so the match would fail on the first render, before any search.
+
+**Diagnostics (plugin.md §5)**
+
+18. **Four codes, `MTR-0081` to `MTR-0084`.** `MTR-0081` (error, load): an unknown input method. `MTR-0082` (error,
+    load): a persistent or malformed answer target. `MTR-0083` (warning, run time): a hidden GUI could not be shown again.
+    `MTR-0084` (warning, run time): an input method could not start, or a session answer had no open GUI. The run-time
+    codes are published through `PromptService.report`, at most once per code per five seconds. `DiagnosticCodesTest` is
+    pinned at 84.
+
+**Seams and what is deferred**
+
+19. **Dialogs (#6)** add an `InputMethod` with `closesWindow` false. Nothing else changes.
+20. **Vocabulary.** Neither input methods nor the `takesElse` flag are in the vocabulary yet. The node inspector (#224)
+    is where the Logic tab reads both.
+21. **Verification.** Headless: the engine (`PromptStepTest`), the registry (`PromptServiceTest`, `PromptActionTest`), the
+    chat adapter on a real `AsyncChatEvent` (`PromptListenerTest`), the search filter (`ListSearchFilterTest`) and the
+    search key's shape (`ListSearchTest`), and the sign method's refusal (`SignInputTest`, `PromptServiceTest`). The
+    GUI-visible path (the hide, the chat line, the anvil and the window shown again) is in the QA catalog
+    (`guilogic.search-recipe`, `guilogic.chat-prompt-cancel`) and was **not run against a client** in this change. The
+    anvil method is **not verified in a client**: the 26.x probe loop was not available on the machine that wrote it.
 
 ---
 

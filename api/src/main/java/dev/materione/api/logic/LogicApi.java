@@ -77,6 +77,13 @@ public interface LogicApi {
     LogicRegistry<ListSource<?>> listSources();
 
     /**
+     * The {@code input-methods} registry: how a {@code prompt} step asks a player for text (logic.md §4.5, §6.6).
+     * The built-ins are {@code materione:chat}, {@code materione:sign} and {@code materione:anvil}; an addon
+     * registers its own under its namespace. A late registration takes effect on the next reload.
+     */
+    LogicRegistry<InputMethod> inputMethods();
+
+    /**
      * The {@code recipes} registry: parameterized fragments the editor inserts and {@code instantiate} expands into
      * ordinary rules (logic.md §4.6, §30). The built-ins are the v1 recipes, {@code materione:pay_to_receive} and the
      * rest; an addon registers its own under its namespace. A recipe is read when it is used, so a late registration

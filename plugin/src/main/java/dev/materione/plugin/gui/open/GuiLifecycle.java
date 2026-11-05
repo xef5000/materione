@@ -1,6 +1,7 @@
 package dev.materione.plugin.gui.open;
 
 import dev.materione.plugin.gui.GuiLookup;
+import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.session.CloseReason;
@@ -53,7 +54,50 @@ public final class GuiLifecycle {
      * @param reason {@code player}, or {@code quit} when the cause was the disconnect
      */
     public void windowClosed(Viewer viewer, GuiSession session, CloseReason reason) {
+        if (session.prompting()) {
+            return; // the window closed for a prompt (logic.md §6.6): the player has not left the menu
+        }
         end(viewer, session, reason);
+    }
+
+    /**
+     * A prompt takes the player's window away so they can answer (logic.md §6.6). The session stays open, is marked as
+     * held, and its input items go back to the player; the window closes on the viewer's next tick (or at once when
+     * they are not mid-click). Nothing fires: the GUI did not close as far as its session is concerned.
+     */
+    public void hideForPrompt(Viewer viewer, GuiSession session) {
+        session.prompting(true);
+        windows.releaseInputs(viewer, session);
+        windows.closeOwned(viewer, session);
+    }
+
+    /**
+     * The prompt is over: the session is released and its window is shown again, for the same session, with the
+     * GUI as it is now. If the GUI is gone the session ends as removed.
+     *
+     * @param failed told the reason when the window could not be shown
+     * @return whether a window is coming back (false when the session is no longer the player's, or ended)
+     */
+    public boolean showAfterPrompt(Viewer viewer, GuiSession session, java.util.function.Consumer<String> failed) {
+        session.prompting(false);
+        if (!session.isOpen() || sessions.current(viewer.id()).filter(current -> current == session).isEmpty()) {
+            return false;
+        }
+        java.util.Optional<RuntimeGuis.Live> gui = guis.find(session.gui());
+        if (gui.isEmpty()) {
+            removed(viewer, session);
+            failed.accept("the menu is no longer available");
+            return false;
+        }
+        windows.open(viewer, session,
+                () -> sessions.current(viewer.id())
+                        .filter(current -> current == session && session.isOpen())
+                        .flatMap(current -> guis.find(current.gui())),
+                ignored -> { }, reason -> {
+                    removed(viewer, session);
+                    failed.accept(reason);
+                });
+        return true;
     }
 
     /** The player left: ends their session (if the window close did not already) and forgets their back stack. */

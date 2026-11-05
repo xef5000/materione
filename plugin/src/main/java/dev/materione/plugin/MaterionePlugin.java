@@ -343,6 +343,12 @@ public final class MaterionePlugin extends JavaPlugin {
         dev.materione.plugin.logic.BuiltinLogic.register(logic, this,
                 () -> java.util.Optional.ofNullable(pipeline.runtime()).map(runtime -> runtime.registries()),
                 guiBridge, currencyReads);
+        // the prompt step and its three input methods (logic.md §6.6); the listener feeds the methods the chat,
+        // sign and anvil events they wait for
+        var prompts = dev.materione.plugin.gui.prompt.PromptRuntime.create(this, scheduling, guiBridge,
+                diagnostics::publish);
+        dev.materione.plugin.logic.BuiltinLogic.registerPrompts(logic, this, prompts);
+        getServer().getPluginManager().registerEvents(prompts.listener(this, scheduling), this);
         // the v1 recipes (logic.md §7.5, §30): YAML in the jar, registered through the same logic API as addons
         dev.materione.plugin.logic.recipe.BuiltinRecipes.register(logic, this, diagnostics::publish);
         registerProviders();

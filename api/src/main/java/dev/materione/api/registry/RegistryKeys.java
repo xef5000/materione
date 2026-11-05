@@ -35,6 +35,9 @@ public final class RegistryKeys {
     /** {@link dev.materione.api.logic.ListSource} implementations: where a GUI list's entries come from (logic.md §4.5). */
     public static final RegistryKey LIST_SOURCES = new RegistryKey("list-sources");
 
+    /** {@link dev.materione.api.logic.InputMethod} implementations: how a {@code prompt} step asks for text (logic.md §6.6). */
+    public static final RegistryKey INPUT_METHODS = new RegistryKey("input-methods");
+
     /** {@link dev.materione.api.logic.Recipe} implementations: parameterized rule fragments the editor inserts (logic.md §4.6, §30). */
     public static final RegistryKey RECIPES = new RegistryKey("recipes");
 

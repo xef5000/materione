@@ -429,6 +429,36 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0080", Severity.WARN, "GUI list slot is an input slot; the entry is not shown there");
 
     /**
+     * A {@code prompt} names an input method no one registered (logic.md §6.6). The step is skipped at load; the
+     * other methods are {@code chat}, {@code sign} and {@code anvil}.
+     */
+    public static final DiagnosticCode PROMPT_METHOD_UNKNOWN =
+            new DiagnosticCode("MTR-0081", Severity.ERROR, "Prompt names an unknown input method");
+
+    /**
+     * A {@code prompt} writes its answer to a persistent variable, or to a name that is not a run-local or session
+     * variable (logic.md §6.6). A prompt answers into the run or the open GUI only; the step is skipped at load.
+     */
+    public static final DiagnosticCode PROMPT_TARGET_INVALID =
+            new DiagnosticCode("MTR-0082", Severity.ERROR, "Prompt answer must go to a run-local or session variable");
+
+    /**
+     * The GUI a prompt hid could not be shown again when the prompt ended (logic.md §6.6): the window was refused
+     * or the GUI went away while the player answered. The player is told; the session ends if the GUI is gone.
+     */
+    public static final DiagnosticCode PROMPT_WINDOW_LOST =
+            new DiagnosticCode("MTR-0083", Severity.WARN, "GUI could not be shown again after a prompt");
+
+    /**
+     * A prompt's input method could not start for the player (logic.md §6.6): the method is unavailable on this build
+     * (the sign editor, until a client-only path exists, logic.md §29), an
+     * anvil the server refused, or a session variable with no open GUI. The step takes its {@code else:}; the rate
+     * limit keeps a broken method from flooding the log.
+     */
+    public static final DiagnosticCode PROMPT_METHOD_FAILED =
+            new DiagnosticCode("MTR-0084", Severity.WARN, "Prompt input method could not start for the player");
+
+    /**
      * A {@code set_var} names a persistent variable that is not declared, or a name reserved for a
      * scope (logic.md §3.2, §20). The step is skipped at load, so a typo never creates a key.
      */
@@ -552,6 +582,10 @@ public final class DiagnosticCodes {
             GUI_LIST_ENTRY_FAILED,
             GUI_LIST_SOURCE_FAILED,
             GUI_LIST_SLOT_INPUT,
+            PROMPT_METHOD_UNKNOWN,
+            PROMPT_TARGET_INVALID,
+            PROMPT_WINDOW_LOST,
+            PROMPT_METHOD_FAILED,
             VARIABLE_UNDECLARED,
             VARIABLE_TYPE_MISMATCH,
             VARIABLE_STORE_FAILED,

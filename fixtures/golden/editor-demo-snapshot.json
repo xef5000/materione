@@ -7231,6 +7231,18 @@
             "uiHint": "text"
           },
           {
+            "advanced": true,
+            "description": "Which entries a search keeps: { fields: [name] }, matched against the text in gui.session.search (or var:), ignoring case",
+            "example": "{fields: [name]}",
+            "id": "search",
+            "label": "Search",
+            "order": 35,
+            "required": false,
+            "section": "entries",
+            "type": "raw",
+            "uiHint": "text"
+          },
+          {
             "advanced": false,
             "description": "The item each entry shows: the fields of an item layer (item, name, lore, lore_mode, amount, glint), with entry.* in scope",
             "example": "item: head",

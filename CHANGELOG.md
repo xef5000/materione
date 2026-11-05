@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Prompts and list search in GUIs (logic.md §6.6, §29, §28.21, #220).** A `prompt` step parks its run, asks the
+  player for a line of text and writes the answer to a run-local or session variable (`var: answer` or
+  `var: session.search`), then resumes. Three input methods, registered through the new `LogicApi.inputMethods()`
+  (`InputMethod` SPI): `chat` (the answer is the next chat line, not broadcast) and `anvil` (the answer is the name typed
+  in an anvil). `sign` is registered but unavailable on this build: its client-only editor needs Paper's
+  `Player#openVirtualSign`, which is in the 26.x API only (logic.md §29). A question takes `method`, `text`, `var`, `timeout`
+  (seconds, 1 to 600, default 60) and `cancel_word` (default `cancel`). An unanswered question, a cancel word, a
+  timeout, or a quit runs the step's `else:` and ends the run. The window a chat, sign or anvil question needs is hidden
+  for the question and shown again for the same session. One question per player at a time. A list takes
+  `search: {fields: [...], var: ...}` (default `var: search`): the text in the session variable keeps the entries whose
+  fields contain it, ignoring case, so a prompt into `session.search` and a `gui.refresh` make a search. The `guilogic`
+  fixture has the recipe (`guilogic:search`). Diagnostics MTR-0081 to MTR-0084. The anvil method is not yet
+  verified in a client, and the QA entries were not run against one.
 - **Recipes: parameterized rule fragments that expand into ordinary rules (logic.md §4.6, §30, #222).** A recipe
   has a name, help text and typed parameters (text, numbers, whole numbers, flags, and declared variables), and expands
   server-side into rules that the flow compiler validates before anything is written. `LogicApi.recipes()` registers
@@ -26,8 +39,7 @@ releases may change file formats, settings and the public API.
   `previous`, `first`, `last` or a page number and fires the new `gui.page` trigger once per page change. A click on
   an entry runs the list's rules with that entry as `entry.*`, and an empty slot runs none. The page and its count
   are readable in text and items as `gui.page.<list>.number` and `.count`. Diagnostics MTR-0077 to MTR-0080. Not yet
-  shipped: a search filter and the prompt that writes it (#220), and list sources in the editor's vocabulary
-  (with the node inspector, #224).
+  shipped: list sources in the editor's vocabulary (with the node inspector, #224).
 - **Conditional and animated GUI overlays, templated title text and held-cursor title refreshes (logic.md §6.4, §27, #217).**
   A GUI's raster layers accept `visible_if` and `materione:overlay_frames`, and its text layers accept `visible_if`
   and templates. Each visible raster layer of such a GUI compiles to its own overlay glyph per frame, from the GUI's
