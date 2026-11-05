@@ -96,7 +96,7 @@ public final class SetVarAction implements ActionType<SetVarAction.Params> {
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, false, null,
                                 "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
-                                null, null),
+                                null, null).withWidget("variable", ""),
                         new ParameterSchema("name", ParameterType.STRING, false, null,
                                 "Run-local variable name (the M2 spelling of var:)", null, null),
                         new ParameterSchema("op", ParameterType.STRING, false, "set",

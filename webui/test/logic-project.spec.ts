@@ -64,6 +64,39 @@ describe('projection round trip', () => {
     expect(back).toEqual(entry.block);
   });
 
+  it.each(all.map((entry) => [entry.name, entry] as const))('%s: with takesElse actions drawn as branches, the round trip is the same', (_name, entry) => {
+    const graph = project(entry.block, { takesElse: (action) => action === 'prompt' });
+    expect(JSON.stringify(unproject(graph))).toBe(JSON.stringify(entry.block));
+  });
+
+  it('an action that takes an else: draws it as a branch, carries its steps, and keeps a stray else on one that does not', () => {
+    const block: LogicBlock = {
+      behavior: [
+        {
+          on: 'gui.click',
+          do: [
+            { prompt: { text: 'Name?', var: 'session.q' }, else: [{ message: 'gave up' }], node: { x: 8, y: 4 } },
+            { message: 'hi', else: [{ message: 'stray' }] },
+          ],
+        },
+      ],
+    };
+    const graph = project(block, { takesElse: (action) => action === 'prompt' });
+    const prompt = graph.byId.get('behavior.0.do.0')!;
+    expect(prompt.ports.map((port) => port.id)).toEqual(['after', 'else']);
+    expect(prompt.ports[1]).toMatchObject({ list: 'behavior.0.do.0.else', exists: true });
+    expect(targetOf(graph, 'behavior.0.do.0', 'else')).toBe('behavior.0.do.0.else.0');
+    expect(prompt.position).toEqual({ x: 8, y: 4 });
+    expect(Object.keys(prompt.authored.own ?? {})).not.toContain('else');
+    // an action that does not ask a question is not given a branch: its else: stays in the node's own keys
+    expect(graph.byId.get('behavior.0.do.1')!.ports.map((port) => port.id)).toEqual(['after']);
+    expect(graph.byId.has('behavior.0.do.1.else.0')).toBe(false);
+    expect(JSON.stringify(unproject(graph))).toBe(JSON.stringify(block));
+    // the empty branch the file does not have is a port that does not exist yet
+    const bare = project({ behavior: [{ on: 'gui.click', do: [{ prompt: { text: 'x', var: 'a' } }] }] }, { takesElse: () => true });
+    expect(bare.byId.get('behavior.0.do.0')!.ports[1]).toMatchObject({ id: 'else', exists: false });
+  });
+
   it.each(all.map((entry) => [entry.name, entry] as const))('%s: no join, no fan-out, no cycle', (_name, entry) => {
     const graph = project(entry.block);
     const fed = new Set<string>();

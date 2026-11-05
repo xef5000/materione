@@ -95,11 +95,21 @@ function nodeKindOf(kind: string): NodeKind {
   return STEP_KINDS.has(kind) ? (kind as NodeKind) : 'action';
 }
 
+/**
+ * What the vocabulary adds to the projection: the actions whose step may carry an `else:` (the `prompt` action,
+ * logic.md section 29). Without it every action is a node with one `after` port, and an `else:` it carries stays in
+ * the node's authored map, written back untouched.
+ */
+export interface ProjectOptions {
+  takesElse?: (action: string) => boolean;
+}
+
 /** The port ids a kind's branch keys map to. */
-function branchPorts(kind: NodeKind): Record<string, string> {
+function branchPorts(kind: NodeKind, asksQuestion: boolean): Record<string, string> {
   if (kind === 'if') return { then: 'then', else: 'else' };
   if (kind === 'require') return { require: 'steps', else: 'failed' };
   if (kind === 'choose') return { else: 'else' };
+  if (kind === 'action' && asksQuestion) return { else: 'else' };
   return {};
 }
 
@@ -108,6 +118,8 @@ function branchPorts(kind: NodeKind): Record<string, string> {
 class Builder {
   readonly nodes: GraphNode[] = [];
   readonly edges: GraphEdge[] = [];
+
+  constructor(private readonly options: ProjectOptions) {}
 
   edge(from: string, port: string, to: string): void {
     this.edges.push({ id: `${portKey(from, port)}>${to}`, from, port, to });
@@ -128,7 +140,7 @@ class Builder {
     const kind = nodeKindOf(stepKind(raw));
     const op = kind === 'action' ? stepKind(raw) : kind;
     const map = isRecord(raw) ? raw : null;
-    const branches = branchPorts(kind);
+    const branches = branchPorts(kind, kind === 'action' && !!this.options.takesElse?.(op));
     const ports: PortInfo[] = [{ id: 'after', label: 'after', list, sibling: true, exists: true }];
     const authored: Authored = map ? { keys: Object.keys(map) } : { literal: { value: raw } };
     const own: Json = {};
@@ -151,6 +163,8 @@ class Builder {
     } else if (kind === 'require') {
       ports.push(this.branchPort(map, 'require', 'steps', 'steps', id));
       ports.push(this.branchPort(map, 'else', 'failed', 'failed', id));
+    } else if (kind === 'action' && branches.else) {
+      ports.push(this.branchPort(map, 'else', 'else', 'else', id));
     } else if (kind === 'choose') {
       const cases = map && Array.isArray(map.choose) ? map.choose : null;
       if (cases) authored.cases = [];
@@ -203,8 +217,8 @@ function optionsOf(map: Json, skip: ReadonlySet<string>): Json {
 }
 
 /** The graph of a logic block: rules first, in order, then the named flows, in order. */
-export function project(block: LogicBlock): Graph {
-  const builder = new Builder();
+export function project(block: LogicBlock, options: ProjectOptions = {}): Graph {
+  const builder = new Builder(options);
   (block.behavior ?? []).forEach((rule, index) => {
     const id = `behavior.${index}`;
     const map = isRecord(rule) ? rule : {};

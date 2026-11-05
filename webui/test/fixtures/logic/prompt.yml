@@ -1,0 +1,14 @@
+# A question with its else: a prompt asks the player and its else: runs when it goes unanswered (logic.md section 29)
+ask:
+  behavior:
+    - on: gui.click
+      layer: search
+      do:
+        - prompt:
+            method: chat
+            text: "Search for an item"
+            var: session.search
+            timeout: 30
+          else:
+            - message: "<red>No search, then."
+        - gui.refresh

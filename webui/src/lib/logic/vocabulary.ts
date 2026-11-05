@@ -21,6 +21,56 @@ export interface ParamInfo {
   description?: string;
   label?: string;
   allowedValues?: string[];
+  /** The widget the self-description asks for (`text`, `number`, `select`, `toggle`, `list`, `item`, `sound`, `variable`, ...). */
+  uiHint?: string;
+  referenceKind?: string;
+  example?: string;
+  /** The description files it under advanced: the inspector folds it away until asked. */
+  advanced?: boolean;
+  min?: number;
+  max?: number;
+  /** Labelled choices of an enum, when the description gives them. */
+  options?: { value: string; label: string; description: string }[];
+}
+
+/** One variable of a context schema (logic.md section 2.6): a dotted path, a trailing `.*` standing for a family. */
+export interface ContextVar {
+  path: string;
+  type: string;
+  description: string;
+  hosts: string[];
+}
+
+/** One expression function: its name, its signature and what it returns. */
+export interface FunctionEntry {
+  id: string;
+  displayName: string;
+  description: string;
+  returns: string;
+  minArguments: number;
+  maxArguments: number;
+  variadic: boolean;
+  parameters: ParamInfo[];
+}
+
+/** A PlaceholderAPI expansion the server knows (`%token%`), when the vocabulary lists them. */
+export interface PlaceholderEntry {
+  token: string;
+  description: string;
+}
+
+/** A list source (G6), an item source (G3) or an input method (G7), as the inspector offers them. */
+export interface SourceEntry extends Availability {
+  id: string;
+  displayName: string;
+  description: string;
+  shorthand?: string;
+  parameters: ParamInfo[];
+  /** A list source's entry schema: the `entry.*` variables its rows carry. */
+  entry: ContextVar[];
+  /** An input method closes the player's window while it asks. */
+  closesWindow?: boolean;
+  registeredBy?: string;
 }
 
 export interface Availability {
@@ -38,6 +88,8 @@ export interface ActionEntry extends Availability {
   shorthand?: string;
   parameters: ParamInfo[];
   registeredBy?: string;
+  /** The step may carry an `else:` that runs when the action goes unanswered (the `prompt` action; logic.md section 29). */
+  takesElse: boolean;
 }
 
 export interface ConditionEntry extends Availability {
@@ -57,6 +109,8 @@ export interface TriggerEntry {
   firedBy: string[];
   details: string[];
   filters: ParamInfo[];
+  /** The variables the trigger guarantees its rules (logic.md section 2.6). */
+  context: ContextVar[];
 }
 
 export interface StepKindEntry {
@@ -79,6 +133,19 @@ export interface Vocabulary {
   triggers: Map<string, TriggerEntry>;
   steps: Map<string, StepKindEntry>;
   categories: CategoryEntry[];
+  functions: FunctionEntry[];
+  /** The options any rule may carry besides `on`/`if`/`do`, and any action besides its own key. */
+  ruleOptions: ParamInfo[];
+  actionOptions: ParamInfo[];
+  listSources: Map<string, SourceEntry>;
+  itemSources: Map<string, SourceEntry>;
+  inputMethods: Map<string, SourceEntry>;
+  /**
+   * The PlaceholderAPI expansions the server publishes. `logic.vocabulary` does not carry them yet (logic.md section
+   * 31), so this is empty today and the template field offers only the expansions Materione itself defines; the key is
+   * read when a server starts sending `placeholders: [{token, description}]`.
+   */
+  placeholders: PlaceholderEntry[];
 }
 
 function text(value: unknown, fallback = ''): string {
@@ -95,7 +162,48 @@ function params(value: unknown): ParamInfo[] {
     description: typeof entry.description === 'string' ? entry.description : undefined,
     label: typeof entry.label === 'string' ? entry.label : undefined,
     allowedValues: Array.isArray(entry.allowedValues) ? entry.allowedValues.filter((v): v is string => typeof v === 'string') : undefined,
+    uiHint: typeof entry.uiHint === 'string' ? entry.uiHint : undefined,
+    referenceKind: typeof entry.referenceKind === 'string' && entry.referenceKind ? entry.referenceKind : undefined,
+    example: typeof entry.example === 'string' && entry.example ? entry.example : undefined,
+    advanced: entry.advanced === true || undefined,
+    min: typeof entry.min === 'number' ? entry.min : undefined,
+    max: typeof entry.max === 'number' ? entry.max : undefined,
+    options: Array.isArray(entry.options)
+      ? entry.options.filter(isRecord).map((option) => ({
+          value: text(option.value),
+          label: text(option.label, text(option.value)),
+          description: text(option.description),
+        }))
+      : undefined,
   }));
+}
+
+function contextVars(value: unknown): ContextVar[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter(isRecord)
+    .map((entry) => ({ path: text(entry.path), type: text(entry.type, 'raw'), description: text(entry.description), hosts: strings(entry.hosts) }))
+    .filter((entry) => entry.path);
+}
+
+function sourceEntries(value: unknown): Map<string, SourceEntry> {
+  const out = new Map<string, SourceEntry>();
+  for (const entry of Array.isArray(value) ? value.filter(isRecord) : []) {
+    const id = text(entry.id);
+    if (!id) continue;
+    out.set(id, {
+      id,
+      displayName: text(entry.displayName, id),
+      description: text(entry.description),
+      shorthand: typeof entry.shorthand === 'string' ? entry.shorthand : undefined,
+      parameters: params(entry.parameters),
+      entry: contextVars(entry.entry),
+      closesWindow: typeof entry.closesWindow === 'boolean' ? entry.closesWindow : undefined,
+      registeredBy: typeof entry.registeredBy === 'string' ? entry.registeredBy : undefined,
+      ...availability(entry),
+    });
+  }
+  return out;
 }
 
 function availability(entry: Json): Availability {
@@ -123,6 +231,7 @@ export function readVocabulary(raw: unknown): Vocabulary | null {
       shorthand: typeof entry.shorthand === 'string' ? entry.shorthand : undefined,
       parameters: params(entry.parameters),
       registeredBy: typeof entry.registeredBy === 'string' ? entry.registeredBy : undefined,
+      takesElse: entry.takesElse === true,
       ...availability(entry),
     });
   }
@@ -151,6 +260,7 @@ export function readVocabulary(raw: unknown): Vocabulary | null {
       firedBy: strings(entry.firedBy),
       details: strings(entry.details),
       filters: params(entry.filters),
+      context: contextVars(entry.context),
     });
   }
   const steps = new Map<string, StepKindEntry>();
@@ -164,7 +274,35 @@ export function readVocabulary(raw: unknown): Vocabulary | null {
     displayName: text(entry.displayName, text(entry.id)),
     builtIn: entry.builtIn === true,
   })).filter((entry) => entry.id);
-  return { version: typeof raw.version === 'number' ? raw.version : 1, actions, conditions, triggers, steps, categories };
+  const functions = (Array.isArray(raw.functions) ? raw.functions.filter(isRecord) : [])
+    .map((entry): FunctionEntry => ({
+      id: text(entry.id),
+      displayName: text(entry.displayName, text(entry.id)),
+      description: text(entry.description),
+      returns: text(entry.returns, 'raw'),
+      minArguments: typeof entry.minArguments === 'number' ? entry.minArguments : 0,
+      maxArguments: typeof entry.maxArguments === 'number' ? entry.maxArguments : 0,
+      variadic: entry.variadic === true,
+      parameters: params(entry.parameters),
+    }))
+    .filter((entry) => entry.id);
+  return {
+    version: typeof raw.version === 'number' ? raw.version : 1,
+    actions,
+    conditions,
+    triggers,
+    steps,
+    categories,
+    functions,
+    ruleOptions: params(raw.ruleOptions),
+    actionOptions: params(raw.actionOptions),
+    listSources: sourceEntries(raw.listSources),
+    itemSources: sourceEntries(raw.itemSources),
+    inputMethods: sourceEntries(raw.inputMethods),
+    placeholders: (Array.isArray(raw.placeholders) ? raw.placeholders.filter(isRecord) : [])
+      .map((entry) => ({ token: text(entry.token, text(entry.id)), description: text(entry.description) }))
+      .filter((entry) => entry.token),
+  };
 }
 
 // ------------------------------------------------------------------ colour and icon by category
@@ -239,9 +377,13 @@ export function defaultActionStep(entry: ActionEntry): unknown {
   return { [entry.id]: {} };
 }
 
+/** The payload a new predicate starts with: its shorthand parameter's starting value, else an empty mapping. */
+export function defaultConditionPayload(entry: ConditionEntry): unknown {
+  return entry.shorthand ? starting(shorthandParam(entry)) : {};
+}
+
 export function defaultConditionStep(entry: ConditionEntry): unknown {
-  const value = entry.shorthand ? starting(shorthandParam(entry)) : {};
-  return { if: { [entry.id]: value }, then: [] };
+  return { if: { [entry.id]: defaultConditionPayload(entry) }, then: [] };
 }
 
 /** The new rule for a trigger. */

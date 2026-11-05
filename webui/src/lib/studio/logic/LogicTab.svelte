@@ -11,6 +11,7 @@
   import { revealInAdvanced, session } from '../../state.svelte';
   import type { ResourceRef } from '../../api';
   import LogicCanvas from './LogicCanvas.svelte';
+  import LogicInspector from './inspector/LogicInspector.svelte';
 
   let { logic, resource, active = true }: { logic: LogicCanvasState; resource: ResourceRef; active?: boolean } = $props();
 
@@ -80,7 +81,10 @@
       <p class="banner warn" role="status">This file is read-only in the studio, so its logic is too.</p>
     {/if}
 
-    <LogicCanvas canvas={logic} {active} />
+    <div class="work">
+      <LogicCanvas canvas={logic} {active} />
+      <LogicInspector canvas={logic} />
+    </div>
 
     <footer class="statusbar">
       <span class="sel" data-testid="logic-selection">{description}</span>
@@ -95,6 +99,12 @@
     display: flex;
     flex: 1 1 0;
     flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+  .work {
+    display: flex;
+    flex: 1 1 0;
     min-width: 0;
     min-height: 0;
   }

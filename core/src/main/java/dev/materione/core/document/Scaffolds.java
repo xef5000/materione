@@ -18,7 +18,7 @@ public final class Scaffolds {
     /** Type directories with a scaffold ({@code pack.yml} is createPack's). */
     public static final List<String> SCAFFOLD_TYPES =
             List.of("items", "blocks", "furnitures", "recipes", "templates", "glyphs", "sounds", "paintings", "effects",
-                    "guis");
+                    "guis", "variables");
 
     /**
      * @param path pack-relative path; the first segment picks the scaffold
@@ -38,6 +38,7 @@ public final class Scaffolds {
             case "paintings" -> painting(name);
             case "effects" -> effect(name);
             case "guis" -> gui(name);
+            case "variables" -> variable(name);
             default -> throw new IllegalArgumentException(
                     "no scaffold for '" + dir + "' — create documents under "
                             + SCAFFOLD_TYPES);
@@ -152,6 +153,19 @@ public final class Scaffolds {
                 + "    - id: wells\n"
                 + "      type: slots\n"
                 + "      region: all\n";
+    }
+
+    /**
+     * The first variable of a pack's {@code variables/} file (logic.md section 3.2, 31): a player number that starts
+     * at zero. The studio's "declare variable" shortcut creates the file with this and then sets the author's scope,
+     * type, default and description through the ordinary field edits.
+     */
+    private static String variable(String id) {
+        return "# " + id + " — created by the Materione editor\n"
+                + id + ":\n"
+                + "  scope: player # player | server\n"
+                + "  type: number # number | string | boolean\n"
+                + "  default: 0\n";
     }
 
     private static String sound(String id) {

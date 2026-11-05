@@ -635,9 +635,11 @@ player's thread anyway.
 - **Animation.** The current trace (§7.6) animates the edges.
 - **Theme.** Nodes use the studio's Minecraft-flavoured panels (gui.md §6). Field editors are typed
   from the self-description: item pickers reuse the item browser, sound pickers the sound catalog,
-  and variables are a dropdown of declared variables.
+  and variables are a dropdown of declared variables. They live in the **inspector** beside the canvas
+  (shipped in #224, §31).
 - **Template fields.** A template field autocompletes `${` from the trigger's context schema (§2.6)
-  and `%` from known PlaceholderAPI expansions.
+  and `%` from known PlaceholderAPI expansions (§31 decision 10: the ones Materione defines; the server does not
+  publish the rest yet).
 - **Palette.** The palette is grouped as Triggers, then the action categories, then Conditions,
   Flow and Recipes. It is searchable (`/`), and it is entirely derived from the vocabulary op
   (§8). An unavailable provider greys out its actions with the reason.
@@ -2326,7 +2328,7 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
 
 - Raster and text `visible_if` and raster animation were deferred to #217 (§6.4).
 - `item-sources` in the behaviour vocabulary (`VocabularyBuilder`) and the editor's palette for them: with the Logic
-  tab (#223, #224). The studio's layer inspector reads the new fields from the self-description, but no inspector
+  tab (#223, #224; the vocabulary part shipped in §31 decision 17). The studio's layer inspector reads the new fields from the self-description, but no inspector
   control for `visible_if` or `frames` is designed here.
 - The click policy for input slots: #218.
 
@@ -2528,7 +2530,8 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 15. **One inline field per node, until the inspector (#224).** An action, `if`, `wait` or `call` with a one-line
     value edits it in place (`patchStep`); a trigger edits its selector. Everything else is read-only on the
     node. This is a stop-gap so a flow can be built end to end; typed fields, template autocomplete and
-    condition stacks are #224.
+    condition stacks are #224. *Shipped in §31: the inspector is the full editor, and the inline field stays as the
+    quick edit of a one-line value.*
 16. **The compiler's verdict is drawn on the nodes.** The draft is sent to `logic.validate` once editing pauses
     (the Design tab's pause), and each diagnostic goes to the deepest node whose step path is a prefix of its
     `field`. The vocabulary adds the two things only it knows: an unknown or unavailable action.
@@ -2544,8 +2547,8 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 
 **Deferred**
 
-- The node inspector, typed fields and condition stacks (#224); the Script tab, Design ↔ Logic linkage and the
-  recipes panel (#225); the live trace (#226).
+- ~~The node inspector, typed fields and condition stacks (#224)~~ (shipped, §31); the Script tab, Design ↔ Logic
+  linkage and the recipes panel (#225); the live trace (#226).
 - Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
   a node and what follows it).
 - Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.
@@ -2624,7 +2627,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    declares the family `entry.*`. `cached` says the entries are expensive to read (decision 12). The description
    is in the registry, so the editor reads it from there. **Deferred:** the vocabulary does not yet carry list sources,
    so the Logic tab cannot autocomplete `entry.*` from it. This is the same gap item sources have (§26), and it is
-   closed with the node inspector (#224), not here.
+   closed with the node inspector (#224), not here. *Closed in §31 (decisions 9 and 17).*
 6. **Four built-ins, registered through the public API like an addon's (`materione:`).** `online_players` (`name`,
    `uuid`, and `exclude_viewer`; the viewer's own state is never read, because a list on one viewer's thread must not
    touch another player's state on Folia). `pack_items` (`pack`, the shorthand; each live item of a pack as `item`;
@@ -2822,7 +2825,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 
 19. **Dialogs (#6)** add an `InputMethod` with `closesWindow` false. Nothing else changes.
 20. **Vocabulary.** Neither input methods nor the `takesElse` flag are in the vocabulary yet. The node inspector (#224)
-    is where the Logic tab reads both.
+    is where the Logic tab reads both. *Closed in §31 (decisions 17 to 19).*
 21. **Verification.** Headless: the engine (`PromptStepTest`), the registry (`PromptServiceTest`, `PromptActionTest`), the
     chat adapter on a real `AsyncChatEvent` (`PromptListenerTest`), the search filter (`ListSearchFilterTest`) and the
     search key's shape (`ListSearchTest`), and the sign method's refusal (`SignInputTest`, `PromptServiceTest`). The
@@ -2934,3 +2937,158 @@ next free code is `MTR-0089` (§10).
 **Deferred.** The trash slot (#248). Recipes that write GUI layers, in the same transaction as their rules (a `gui.edit`
 and `logic.edit` pair would need one). Conditions in the availability warning. An addon's YAML resource registered through
 a loader, not only through the `Recipe` interface.
+
+
+---
+
+## 31. Decisions taken in #224 (W2: the node inspector)
+
+#224 shipped §7.3's field editors: an **inspector** beside the Logic canvas, in which the selected node's every parameter is
+a typed field drawn from the node type's self-description, a template field with autocomplete and inline validation, a
+condition stack, and a variable picker with a "declare new" shortcut. It also closes the vocabulary gaps earlier sections
+deferred to it (§24, §28.5, §29.20). The code is `webui/src/lib/logic/` (pure rules: `params`, `condition`, `template`,
+`scope`, `variables`, `edit-plan`, `diagnose`, `verdicts`, `control-params`, and `inspector.svelte.ts`) and
+`webui/src/lib/studio/logic/inspector/` (the components). The plugin side adds keys to `logic.vocabulary` and nothing else.
+Each decision is reversible by the owner.
+
+**The inspector edits the document, nothing else (D1, D6)**
+
+1. **An inspector edit is a plan, and a plan is the same `LogicEdit`s the canvas makes.** A field change becomes
+   `patchStep` (a step's own value or an option), `patchRule` (a rule's filter, option or `if:`), or, where a branch key
+   would be patched, the replacement §26 decision 10 describes: a `choose` case's condition and a bare step's first
+   parameter (`- gui.close` has nothing to patch) replace the step with a copy at the same path, keeping its `node:`
+   and everything under it. Each commit is one history command, so Ctrl+Z is the shared undo, and Save replays the
+   edits through `logic.edit`. The panel keeps no model: its open/closed state is the only thing it remembers, in
+   `localStorage` as a per-viewer convenience, and every field reads the file back.
+2. **A payload is written back in the form the author chose.** `writeParam` keeps a scalar that still holds only the
+   shorthand parameter a scalar (`sound: x`), turns it into a mapping when another parameter is set (`{sound: x,
+   volume: 2}`), keeps a mapping a mapping and key order as it was, and removes a key when an optional parameter is
+   cleared instead of writing a blank. The shape is the compiler's (`Shapes.paramsOf`): a scalar or list fills the
+   shorthand.
+3. **The inline field on the node stays.** §26 decision 15 called it a stop-gap "until the inspector". It is kept as the
+   quick edit of a one-line value (and the keyboard route `Enter`); the inspector is the full editor. Both write the same
+   plan, so there is no second path.
+
+**Fields come from the self-description**
+
+4. **One function picks the field.** `baseKind(param)` reads the widget hint (`uiHint`), then the allowed values, then the
+   type: `item` the item browser (a pick writes `pack:id`, since a bare id resolves in the `materione` namespace), `sound`
+   a text field with the packs' sound events as suggestions, `variable` the variable picker, `input-method` the input
+   method chooser, `color` the studio's colour field, `reference` a text field with the matching resources offered,
+   `toggle`/boolean a checkbox, `select`/enum a choice (segments up to four values, else a select), `number` a number
+   field clamped to the description's range, `list` rows, `advanced`/`raw` JSON, anything else the template field.
+5. **A value a field cannot hold falls back; it is never lost.** `kindFor(param, value)` shows a template where a number,
+   toggle or choice holds text (`${price}`), rows where a scalar parameter holds a list (`layer: [a, b]`), and JSON where
+   it holds a mapping. A number, toggle or choice can be switched to an expression by hand. An unknown widget hint is plain
+   text. Parameters the description files as `advanced` are folded away.
+6. **The plugin names the widgets, in the self-description.** Built-in parameters gain widget hints through the new
+   `ParameterSchema.withWidget`: the `item` of `give_item`, `take_item` and `has_item`; the `sound` of `sound` and
+   `stop_sound`; the `var` of `set_var`, the `var` condition and `prompt`; the `method` of `prompt` (`input-method`). The
+   type and the validation are unchanged, and a client that does not know a hint draws the text field it drew before. An
+   addon gets the same by calling `withWidget`.
+7. **Keys the server does not describe are kept and shown read-only.** An unknown parameter of an action or condition, an
+   unknown rule key and an unknown step option are listed under "Other keys" exactly as written. An action no registry knows
+   says so, with its settings editable as raw JSON. A prompt that names a method this server cannot use keeps it selected,
+   with the reason. Nothing is dropped (master §5.6); a Playwright spec edits next to such keys and compares the saved file.
+8. **The engine's own steps have their keys described in the editor.** `wait` (`ticks`), `stop` (`cancel`,
+   `cancel_session_runs`) and `call` (`flow`, `with`) are part of the closed grammar (§2.2), and the vocabulary lists the
+   kinds but not their keys. `control-params.ts` describes them as `ParamInfo`, so the same fields and the same payload
+   rules draw them. A named flow's inspector renames it (`renameFlow`, which rewrites its calls, §19 decision 5).
+
+**The template field**
+
+9. **`${` completes from one scope.** `scopeFor` collects, at the selected node: the trigger's context schema filtered to the
+   host (§2.6), the declared variables as `vars.<scope>.<pack>.<key>` (§20 decision 4), the run-local and session names the
+   rule's `set_var` and `prompt` steps write (`vars.name`, `vars.session.name`), `args.*` and the `with:` keys of the calls
+   in a named flow (whose context is that of the rules that call it), and, for a rule on a list layer, the concrete
+   `entry.<field>` paths the list source declares (§28.5). Completion offers the next path segment, with the value's type,
+   and the expression functions with their signature and return type (`contains(text, part)`, from the vocabulary).
+   Accepting a finished path closes the `${`. A condition row is an expression, so it completes bare names too.
+10. **`%` completes from the expansions Materione defines, and the vocabulary has no list of the rest.** The offered tokens are
+    `%materione_gui_open%`, `%materione_gui_last%` and `%materione_var_<pack>_<key>%` per declared variable (§3.3, §20
+    decision 18). The server does not publish the PlaceholderAPI expansions that are installed, so `%vault_eco_balance%`
+    cannot be offered, and no data source was invented. **Hook:** `readVocabulary` reads an optional `placeholders:
+    [{token, description}]` into the same list, so a server that starts sending one is picked up with no editor change.
+11. **Two validations, one authority.** The field lints locally and at once what the compiler would also say about a template: an
+    unclosed `${`, a root the trigger does not provide, a function nothing registers. The compiler's verdict (`logic.validate`)
+    is asked about the text **while it is being typed**: once typing pauses (350 ms) the plan is applied to a copy of the
+    block and sent as a draft, so the document is not touched and nothing is written. The draft's diagnostics replace the
+    node's verdict in the inspector until the value commits, and then the canvas's own check takes over (§26 decision 16). A
+    value commits on Enter or blur, never per keystroke.
+12. **A diagnostic is drawn on the field when it can be told which.** The compiler reports a step path, so the canvas draws a
+    diagnostic on the node. The inspector additionally puts it on a field when its path goes on into the field's key
+    (`behavior.0.on`, `behavior.0.do.1.if`), when its message quotes the parameter's name, or when it quotes a token the
+    field's text holds (the compiler's `'bogus' is not a variable ...` lands on the template that says `bogus`). Anything
+    else stays on the node: the compiler's verdict is the compiler's, and the editor does not guess past it. The flag keeps
+    its step path (`verdicts.ts`).
+
+**The condition stack**
+
+13. **The stack edits the authored value by path.** A condition is an expression, a boolean, a one-key mapping (a registered
+    predicate or `all`, `any`, `not`, `at_least: {count, of}`) or a list (which is `all`), the grammar of `ConditionCompiler`.
+    `condition.ts` reads it into a tree with a path per node and edits it immutably: replace, add, remove, move, wrap in a
+    composite, switch `all` and `any`, set a count. A shape the editor does not draw is shown as JSON and survives every
+    edit around it. Predicates are listed from the vocabulary with their typed fields (the same form as an action's), an
+    unavailable one is greyed with the reason, and a new one starts with its shorthand parameter's starting value. A second
+    condition turns a lone one into a list; the old one's meaning is kept when the root is not an `all`.
+14. **Where a stack appears.** A rule's `if:` (optional; cleared with `unset`), an `if` step (it always holds one: removing the
+    last row writes `${true}`) and each case of a `choose` (replaced in place). `require` has no condition, it is a guard over
+    steps (§2.2), so its inspector explains the guard and the `failed` output. The pay-to-receive flow of §2.1 is a rule on
+    `gui.click` whose `require` holds `take_money` and `give_item`, with the message on `failed`.
+
+**Variables**
+
+15. **The picker lists declared variables, then session and run-local names.** Declared player and server variables come from
+    the packs' `variables/` files, read with the ordinary `browse.get`, and are written `pack:key`, so the scope comes from
+    the declaration and a typo cannot create a second key (§20 decision 5). Session names (`session.page`) and run-local
+    names are the ones the flow's `set_var` and `prompt` steps write; a name typed that is none of them is allowed, because
+    those need no declaration.
+16. **"Declare new" is a file edit.** It writes the declaration into the pack's variables file with `authoring.setFields` (a new
+    top-level key, which the lossless layer inserts), and creates `variables/<pack>.yml` with `edit.create` first when the pack has
+    none. That needed one plugin change: `Scaffolds` had no starter for `variables`, so `variables` joins `SCAFFOLD_TYPES`
+    with a one-variable starter (a player number); the studio then sets the scope, type, default and note the author chose. The key
+    is checked locally (lowercase, digits, `_`; not a scope word; not already declared in the pack) before anything is written. The
+    declaration is written at once, not at the GUI's Save: it is a different file, so it is its own revision, as the Assets
+    workspace's uploads are. Nothing is kept in the editor.
+
+**The vocabulary, caught up**
+
+17. **`logic.vocabulary` gains `listSources`, `itemSources`, `inputMethods` and `takesElse`, additively.** The vocabulary stays version
+    2 (§14 decision 13, §30 decision 16): keys are added, none removed. A list source is `{id, displayName, description,
+    parameters, shorthand?, entry: [{path, type, description, hosts}], cached, registeredBy}`, an item source the same without
+    `entry` and `cached`, an input method `{id, ..., closesWindow, available, unavailableReason?, registeredBy}`, and an action
+    that asks a question carries `takesElse: true` (written only when true). They are read from the registries by
+    `VocabularyBuilder`, like everything else in it. `BehaviorVocabulary` and its `Action` keep their old constructors. The
+    recorded demo snapshot now registers the prompt step and its methods, as the plugin's boot does, so the editor tests run
+    against `sign` unavailable with its real reason.
+18. **A `takesElse` action projects an `else` port, like `if`'s.** `project(block, {takesElse})` gives such an action `after` and
+    `else` ports; the branch's steps are chained from `else`, `planInsert` creates the missing list by replacing the step with a
+    copy that has it (§26 decision 10), and `unproject` rebuilds the node byte for byte. Without the vocabulary (not loaded yet)
+    the same file projects without the port and its `else:` rides in the node's own keys, so loading and saving is lossless
+    either way. A step that is not such an action keeps a stray `else:` in its keys as before.
+19. **The input method chooser is the vocabulary's.** An available method can be picked; an unavailable one is drawn greyed and
+    dashed, cannot be picked, and its reason is written under the control. Item sources and list sources are read and kept
+    in the editor's vocabulary, and the list source's entry schema is used for `entry.*` completion (decision 9); the GUI
+    studio's layer inspector (`source:` of a list, an item layer's source) was not changed here.
+
+**Layout**
+
+20. **The inspector sits beside the canvas and always takes its place.** It collapses to a rail (the canvas never reflows under the
+    author while a node is selected or deselected), is `clamp(280px, 30%, 380px)` wide, and the page never scrolls sideways. The
+    canvas now shares its row with it, so the existing wire-drag spec frames the whole graph first (`0`) and drops on a header's
+    centre instead of a fixed offset.
+
+**Verification.** `webui/test/logic-inspector.spec.ts` (field kinds, payload writes, the condition stack, completion, lint, variables
+and their declaration over a recording channel, the plans, diagnostics attribution, against the recorded real vocabulary),
+`logic-project.spec.ts` (the `takesElse` round trip over every logic fixture), the Playwright spec
+`webui/browser/specs/logic-inspector.pw.ts` (the pay-to-receive flow authored with no YAML and compared with the saved file; a
+diagnostic on the right node and field; draft validation while typing; `%` and function completion; the picker and a declared
+variable; the condition stack; the prompt step with `sign` greyed and its `else` branch; unknown keys kept), and on the plugin
+side `VocabularySourcesTest` and `VocabularySourcesJsonTest`. The QA catalog has `gui.logic-inspector-live-save` (auto, against the
+real local app: a message completed from the trigger context, saved and run) and `gui.logic-inspector-visual` (screenshots). They
+were authored and pass `qa/runner.mjs check`; they were **not run against a client** in this change.
+
+**Deferred.** The Script tab, Design to Logic linkage and the Recipes panel (#225); the live trace (#226). The GUI studio's layer
+inspector does not offer the item sources and list sources it now has in the vocabulary (the Design tab's own controls). A
+key/value editor for a `call`'s arguments (they are JSON for now). Multi-select, copy and paste on the canvas. The PlaceholderAPI
+list of installed expansions (decision 10).

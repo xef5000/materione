@@ -47,7 +47,7 @@ public final class SoundAction implements ActionType<SoundAction.Params> {
         return new ActionDescription(new SelfDescription("Play sound", "Plays a sound to the player, their world or the server",
                 List.of(
                         new ParameterSchema("sound", ParameterType.STRING, true, null,
-                                "Sound key, e.g. minecraft:block.note_block.pling", null, null),
+                                "Sound key, e.g. minecraft:block.note_block.pling", null, null).withWidget("sound", ""),
                         new ParameterSchema("volume", ParameterType.DECIMAL, false, "1", "Volume", null, null),
                         new ParameterSchema("pitch", ParameterType.DECIMAL, false, "1", "Pitch", null, null),
                         new ParameterSchema("scope", ParameterType.ENUM, false, "player",

@@ -51,6 +51,16 @@ public record ParameterSchema(
     }
 
     /**
+     * This parameter drawn with a named widget (for example {@code item}, {@code sound} or {@code variable}) instead
+     * of the plain text its type implies; the type and the validation are unchanged (logic.md section 31).
+     */
+    public ParameterSchema withWidget(String widget, String referenceKind) {
+        return withEditor(new EditorMetadata(editor.label(), editor.section(), editor.order(), editor.advanced(),
+                widget, referenceKind, editor.example(), editor.module(), editor.category(), editor.icon(),
+                editor.summary(), editor.options(), editor.min(), editor.max(), editor.unit()));
+    }
+
+    /**
      * Compatibility accessor for older editor clients. New clients must use
      * {@link #editor()} so widgets are explicit rather than inferred in the SPA.
      */

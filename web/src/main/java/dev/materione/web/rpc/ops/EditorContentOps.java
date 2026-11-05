@@ -902,6 +902,10 @@ public final class EditorContentOps {
             if (!action.registeredBy().isBlank()) {
                 json.addProperty("registeredBy", action.registeredBy());
             }
+            if (action.takesElse()) {
+                // only the types that ask a question carry it (logic.md §29, §31): the editor draws an else: branch
+                json.addProperty("takesElse", true);
+            }
             actions.add(json);
         }
         object.add("actions", actions);
@@ -933,16 +937,7 @@ public final class EditorContentOps {
             json.add("details", strings(description.details()));
             json.add("firedBy", strings(description.firedBy()));
             json.add("filters", params(description.filters()));
-            var context = new com.google.gson.JsonArray();
-            for (var variable : description.context()) {
-                JsonObject entry = new JsonObject();
-                entry.addProperty("path", variable.path());
-                entry.addProperty("type", variable.type().name().toLowerCase(java.util.Locale.ROOT));
-                entry.addProperty("description", variable.description());
-                entry.add("hosts", strings(variable.hosts()));
-                context.add(entry);
-            }
-            json.add("context", context);
+            json.add("context", contextJson(description.context()));
             json.addProperty("cancellable", description.cancellable());
             json.addProperty("registeredBy", trigger.registeredBy());
             triggers.add(json);
@@ -1011,6 +1006,66 @@ public final class EditorContentOps {
             recipes.add(json);
         }
         object.add("recipes", recipes);
+        sourcesInto(object, vocabulary);
+    }
+
+    /**
+     * The list sources, item sources and input methods (logic.md §31), additive keys of the version-2 vocabulary: the
+     * editor offers a method's availability and a list source's entry fields from here instead of keeping a list.
+     */
+    private static void sourcesInto(
+            JsonObject object, dev.materione.api.registry.BehaviorVocabulary vocabulary) {
+        var listSources = new com.google.gson.JsonArray();
+        for (var source : vocabulary.listSources()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", source.id());
+            describeInto(json, source.description().self());
+            if (source.description().shorthand() != null) {
+                json.addProperty("shorthand", source.description().shorthand());
+            }
+            json.add("entry", contextJson(source.description().entry()));
+            json.addProperty("cached", source.description().cached());
+            json.addProperty("registeredBy", source.registeredBy());
+            listSources.add(json);
+        }
+        object.add("listSources", listSources);
+        var itemSources = new com.google.gson.JsonArray();
+        for (var source : vocabulary.itemSources()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", source.id());
+            describeInto(json, source.description().self());
+            if (source.description().shorthand() != null) {
+                json.addProperty("shorthand", source.description().shorthand());
+            }
+            json.addProperty("registeredBy", source.registeredBy());
+            itemSources.add(json);
+        }
+        object.add("itemSources", itemSources);
+        var inputMethods = new com.google.gson.JsonArray();
+        for (var method : vocabulary.inputMethods()) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", method.id());
+            describeInto(json, method.description().self());
+            json.addProperty("closesWindow", method.description().closesWindow());
+            availabilityInto(json, method.availability());
+            json.addProperty("registeredBy", method.registeredBy());
+            inputMethods.add(json);
+        }
+        object.add("inputMethods", inputMethods);
+    }
+
+    /** A context schema: each variable's path, value kind, one line and the hosts that fill it. */
+    private static com.google.gson.JsonArray contextJson(List<dev.materione.api.logic.ContextVariable> variables) {
+        var context = new com.google.gson.JsonArray();
+        for (var variable : variables) {
+            JsonObject entry = new JsonObject();
+            entry.addProperty("path", variable.path());
+            entry.addProperty("type", variable.type().name().toLowerCase(java.util.Locale.ROOT));
+            entry.addProperty("description", variable.description());
+            entry.add("hosts", strings(variable.hosts()));
+            context.add(entry);
+        }
+        return context;
     }
 
     /** One recipe parameter: its kind, whether it is required, its default, range and, for a variable, its declaration. */
