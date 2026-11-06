@@ -803,6 +803,26 @@ function isWriteOperation(op: string): boolean {
   );
 }
 
+/** The rules the fixture's recipe stand-in writes: the shapes of fixtures/golden/recipes/<id>.json. */
+const RECIPE_RULES: Record<string, (params: Record<string, unknown>) => Record<string, unknown>[]> = {
+  pay_to_receive: (p) => [{
+    on: 'gui.click', layer: p.layer,
+    do: [
+      {
+        require: [
+          { take_money: { amount: p.price, ...(p.currency ? { currency: p.currency } : {}) } },
+          { give_item: { item: p.item, amount: p.amount } },
+        ],
+        else: [{ message: p.message }],
+      },
+      'gui.refresh',
+    ],
+  }],
+  close_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['gui.close'] }],
+  back_button: (p) => [{ on: 'gui.click', layer: p.layer, do: ['gui.back'] }],
+  welcome_message: (p) => [{ on: 'gui.open', do: [{ message: p.text }] }],
+};
+
 export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls {
   readonly #documents = initialDocuments();
   readonly #calls: RecordedRpcCall[] = [];
@@ -885,6 +905,17 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
               { prompt: { text: 'Name it', var: 'session.name', method: 'sign' }, else: [{ message: 'gave up' }] },
             ],
           },
+        ];
+        document.raw = serializeFixtureYaml(document.parsed);
+      }
+      if (options.seed === 'linkage') {
+        // the Design/Logic linkage's fixtures (issue #225): the buy button has a rule, the sword has a rule with a step the
+        // compiler flags (an empty value), and one rule is shared between the apple and the coin
+        const document = this.#documents.get(`${PACK}/guis/shop/main.yml`)!;
+        document.parsed.main!.behavior = [
+          { on: 'gui.click', layer: 'buy', do: [{ message: 'hello' }] },
+          { on: 'gui.click', layer: 'sword', do: [{ sound: '' }] },
+          { on: 'gui.click', layer: ['apple', 'coin'], do: ['gui.refresh'] },
         ];
         document.raw = serializeFixtureYaml(document.parsed);
       }
@@ -1161,6 +1192,8 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.success(op, this.logicVocabulary());
       case 'logic.validate':
         return this.logicValidate(op, payload);
+      case 'logic.instantiate':
+        return this.logicInstantiate(op, payload);
       case 'logic.edit':
         return this.logicEdit(op, payload);
       case 'logic.trace.subscribe':
@@ -1569,6 +1602,54 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       walk(rule.do, ['behavior', String(r), 'do']);
     });
     return this.success(op, { diagnostics });
+  }
+
+  /**
+   * `logic.instantiate`: a stand-in for the server's recipe expansion (logic.md section 30) for the recipes the specs use. The
+   * parameters are checked against the recorded vocabulary, the rules are the shape the real recipe writes, and an action
+   * the vocabulary marks unavailable comes back as the `MTR-0088` warning, as on a server with no economy.
+   */
+  private logicInstantiate(op: string, payload: Record<string, unknown>): Response {
+    const recipeId = stringValue(payload.recipe);
+    const vocabulary = this.logicVocabulary() as unknown as {
+      recipes: { id: string; params: { name: string; type: string; required: boolean; default?: unknown; min?: number }[] }[];
+      actions: { id: string; available?: boolean; unavailableReason?: string }[];
+    };
+    const recipe = vocabulary.recipes.find((entry) => entry.id === recipeId);
+    const expand = RECIPE_RULES[recipeId];
+    if (!recipe || !expand) return this.failure(op, 'MTR-0008', `unknown recipe '${recipeId}'; call logic.vocabulary for the registered ones`);
+    const given = isRecord(payload.params) ? payload.params : {};
+    const params: Record<string, unknown> = {};
+    const problems: string[] = [];
+    for (const param of recipe.params) {
+      const value = given[param.name] ?? param.default;
+      if (value === undefined || value === '') {
+        if (param.required) problems.push(`${param.name} is required`);
+        continue;
+      }
+      if ((param.type === 'number' || param.type === 'integer') && typeof value !== 'number') problems.push(`${param.name} must be a number`);
+      else if (typeof value === 'number' && param.min !== undefined && value < param.min) problems.push(`${param.name} must be at least ${param.min}`);
+      params[param.name] = value;
+    }
+    if (problems.length > 0) return this.failure(op, 'MTR-0086', `recipe '${recipeId}': ${problems.join('; ')}`);
+    const rules = expand(params);
+    const used = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (typeof node === 'string') used.add(node);
+      else if (Array.isArray(node)) node.forEach(walk);
+      else if (isRecord(node)) for (const [key, value] of Object.entries(node)) {
+        if (['then', 'else', 'require', 'choose', 'do'].includes(key)) walk(value);
+        else used.add(key);
+      }
+    };
+    for (const rule of rules) walk(rule.do);
+    const warnings = vocabulary.actions
+      .filter((action) => used.has(action.id) && action.available === false)
+      .map((action) => ({
+        code: 'MTR-0088', severity: 'warn', field: [],
+        message: `recipe '${recipeId}' uses ${action.id}, which this server cannot run now: ${action.unavailableReason ?? 'it is unavailable'}`,
+      }));
+    return this.success(op, { rules, warnings });
   }
 
   /** The GUIs the live trace is open for (logic.trace.subscribe), so a test can see the studio asked and let go. */

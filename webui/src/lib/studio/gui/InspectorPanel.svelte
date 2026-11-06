@@ -17,6 +17,8 @@
   import { MAX_ROWS, MIN_ROWS, canvasSize } from '../../gui/chest';
   import { formatColor } from '../../gui/raster/color';
   import { RAISED_DEFAULT, SLOT_DEFAULT, bareType } from '../../gui/raster/flatten';
+  import type { LinkageState } from '../../logic/linkage/linkage.svelte';
+  import LayerLogicSection from '../logic/linkage/LayerLogicSection.svelte';
   import ColorField from './ColorField.svelte';
   import ImageExtras from './ImageExtras.svelte';
   import ItemExtras from './ItemExtras.svelte';
@@ -28,9 +30,11 @@
     studio: GuiStudioState;
     /** Texture references the pack offers (assets/textures/**.png), for image fields. */
     textures: string[];
+    /** The Design/Logic seam (logic.md section 7.4): the layer's rules, "Add click logic" and the logic diagnostics. */
+    links?: LinkageState;
   }
 
-  let { studio, textures }: Props = $props();
+  let { studio, textures, links }: Props = $props();
 
   const GEOMETRY = ['x', 'y', 'width', 'height'];
   const selected = $derived(studio.selected);
@@ -176,6 +180,10 @@
         onclick={() => studio.run(ops.setLocked(studio.doc, layer.id, !locked))}><Icon name={locked ? 'lock' : 'lock-open'} size={16} /></button>
     </header>
     {#if locked}<p class="note"><Icon name="lock" size={14} /> Locked: unlock to edit.</p>{/if}
+
+    {#if links}
+      <LayerLogicSection {links} {layer} disabled={studio.readOnly} />
+    {/if}
 
     {#if can?.movable && !can.slotBound}
       <section class="group">

@@ -158,6 +158,28 @@ export async function logicInstantiate(
   return (data.rules as unknown[] | undefined) ?? [];
 }
 
+/** What `logic.instantiate` answers: the rules, and the warnings of an expansion that is valid but cannot all run here. */
+export interface Instantiated {
+  rules: unknown[];
+  warnings: LogicDiagnostic[];
+}
+
+/**
+ * `logic.instantiate` with its warnings (logic.md section 30, decision 17): `MTR-0088` names an action the server cannot run now,
+ * and the Recipes panel shows it before the author keeps the rules. A refusal rejects with the server's diagnostics.
+ */
+export async function logicExpand(
+  channel: RpcChannel,
+  recipe: string,
+  params: Record<string, unknown> = {},
+): Promise<Instantiated> {
+  const data = unwrap(await channel.call('logic.instantiate', { recipe, params }));
+  return {
+    rules: (data.rules as unknown[] | undefined) ?? [],
+    warnings: (data.warnings as LogicDiagnostic[] | undefined) ?? [],
+  };
+}
+
 /** `logic.vocabulary`: the behavior vocabulary, built-in and addon alike. */
 export async function logicVocabulary(channel: RpcChannel): Promise<LogicVocabulary> {
   return unwrap(await channel.call('logic.vocabulary', {})) as unknown as LogicVocabulary;

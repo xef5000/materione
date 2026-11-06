@@ -46,6 +46,17 @@ describe('the save plan', () => {
     expect(both.edits.map((edit) => edit.field)).toEqual([['main', 'title'], ['main', 'layers']]);
   });
 
+  it('sends the open: block (the Script tab edits it) as its own field, and removes it when it is taken out', async () => {
+    const gui = parseGui((await read()).parsed, 'main')!;
+    const withOpen = { ...gui.doc, rest: { ...gui.doc.rest, open: { commands: ['shop'] } } };
+    expect(planSave(gui.location.prefix, gui.doc, withOpen, new Map()).edits).toEqual([{ field: ['main', 'open'], value: { commands: ['shop'] } }]);
+    expect(planSave(gui.location.prefix, withOpen, gui.doc, new Map()).edits).toEqual([{ field: ['main', 'open'], remove: true }]);
+    expect(isEmptyPlan(planSave(gui.location.prefix, withOpen, withOpen, new Map()))).toBe(true);
+    // behavior: and flows: are not this plan's: they travel as logic.edit
+    const withLogic = { ...gui.doc, rest: { ...gui.doc.rest, behavior: [{ on: 'gui.open' }], flows: { f: [] } } };
+    expect(isEmptyPlan(planSave(gui.location.prefix, gui.doc, withLogic, new Map()))).toBe(true);
+  });
+
   it('names a paint layer\'s PNG after the document and the layer', () => {
     expect(paintReference('guis/shop/main.yml', 'art')).toBe('gui/shop/main/art');
     expect(paintReference('guis/hud.yml', 'bg')).toBe('gui/hud/bg');

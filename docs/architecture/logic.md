@@ -604,6 +604,10 @@ through the same authoring API (§8):
 
 There is no editor-only model (D1). The undo history is shared across tabs.
 
+*As built (#225, §33):* the three tabs are Design, Logic and Script. A Script edit is a history command like a canvas gesture, so
+Ctrl+Z from any tab undoes it, and the dirty marker and Save are shared; `behavior:` and `flows:` reach the file as `logic.edit`s and
+`open:` with the layers' own save. Text that does not parse is kept as a draft and never saved (§33 decisions 8 to 14).
+
 ### 7.2 Graph projection (lossless)
 
 The canvas is a deterministic projection of the rules:
@@ -642,7 +646,7 @@ player's thread anyway.
   publish the rest yet).
 - **Palette.** The palette is grouped as Triggers, then the action categories, then Conditions,
   Flow and Recipes. It is searchable (`/`), and it is entirely derived from the vocabulary op
-  (§8). An unavailable provider greys out its actions with the reason.
+  (§8). *(As built, the palette lists nodes; the recipes are the Recipes panel of §7.5, which is where §33 put them.)* An unavailable provider greys out its actions with the reason.
 
 ### 7.4 Design ↔ Logic linkage
 
@@ -654,6 +658,12 @@ player's thread anyway.
   rules asks whether to delete or detach them.
 - **Across tabs.** Validation diagnostics carry step paths and are drawn on the node in Logic and
   on the layer in Design.
+
+*As built (#225, §33 decisions 1 to 7):* the link is the rule's `layer:` filter, read from the file (nothing is stored). "Add click
+logic" sits in a Logic section of the Design inspector for a button, an item or a list; a trigger node shows the layer's thumbnail and
+name and, on hover or focus, a mini preview of the whole GUI with the layer outlined; a layer's row wears a bolt (a button that opens
+the rule); a diagnostic is drawn on the layer's row and, with its step path, in the inspector; and deleting layers that have rules asks
+whether to delete the rules or keep them without the layer filter, as one undo step. A rule shared with a layer that stays is never removed.
 
 ### 7.5 Recipes panel
 
@@ -669,6 +679,11 @@ The v1 recipes are:
 - Toggle setting (a player boolean variable with an on/off overlay)
 - Server selector (`connect` plus an online-count placeholder)
 - Back button
+
+*As built (#225, §33 decisions 15 to 19):* the panel lists the vocabulary's recipes with a name and a line each, draws the chosen
+recipe's parameters with the inspector's typed fields (a parameter that names a layer is a choice of the GUI's layers), has the
+server expand it (`logic.instantiate`), shows the `MTR-0088` warnings and inserts the rules with one undo step. A recipe the server
+cannot run here is greyed with its reason and can still be inserted ("Insert anyway"). The trash slot is not listed.
 
 ### 7.6 Live trace (debugging)
 
@@ -2557,8 +2572,8 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 
 **Deferred**
 
-- ~~The node inspector, typed fields and condition stacks (#224)~~ (shipped, §31); the Script tab, Design ↔ Logic
-  linkage and the recipes panel (#225); the live trace (shipped in #226, §32).
+- ~~The node inspector, typed fields and condition stacks (#224)~~ (shipped, §31); ~~the Script tab, Design ↔ Logic
+  linkage and the recipes panel (#225)~~ (shipped, §33); ~~the live trace (#226)~~ (shipped, §32).
 - Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
   a node and what follows it).
 - Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.
@@ -2907,7 +2922,7 @@ template form is `api.logic.RecipeTemplate`, the expansion is `behavior.logic.re
 11. **The confirm dialog writes the opening rule only.** The confirm GUI's yes and no buttons are a separate resource.
     `instantiate` writes one resource's rules, and the logic API has no cross-resource write. The recipe names the contract
     the confirm GUI follows (a `question` argument, declared under its `open:` block). The Recipes panel (#225) may offer to
-    create the confirm GUI alongside the rule.
+    create the confirm GUI alongside the rule. *(Not done in #225: the panel inserts the opening rule only, §33 decision 19.)*
 12. **Recipes write rules, not layers.** A list, its buttons and the overlays are GUI layers, edited through `gui.edit`. A
     recipe's rules refer to those layers by id, and the author places the layers in the Design tab. Writing both in one
     request would need a second transaction across two APIs, which the authoring surface does not offer. A rule that names
@@ -3098,7 +3113,7 @@ side `VocabularySourcesTest` and `VocabularySourcesJsonTest`. The QA catalog has
 real local app: a message completed from the trigger context, saved and run) and `gui.logic-inspector-visual` (screenshots). They
 were authored and pass `qa/runner.mjs check`; they were **not run against a client** in this change.
 
-**Deferred.** The Script tab, Design to Logic linkage and the Recipes panel (#225); the live trace (shipped in #226, §32). The GUI studio's layer
+**Deferred.** ~~The Script tab, Design to Logic linkage and the Recipes panel~~ (shipped in #225, §33); the live trace (shipped in #226, §32). The GUI studio's layer
 inspector does not offer the item sources and list sources it now has in the vocabulary (the Design tab's own controls). A
 key/value editor for a `call`'s arguments (they are JSON for now). Multi-select, copy and paste on the canvas. The PlaceholderAPI
 list of installed expansions (decision 10).
@@ -3229,3 +3244,126 @@ authored and pass `qa/runner.mjs check`; they were **not run against a client** 
 live server and the in-game click path is the QA entries'. Tracing item, block and furniture rules (their resources are not opened in the
 studio's Logic tab yet; the API and the stream already carry any resource). An `allPlayers` switch in the UI. Replaying or pausing a trace,
 and keeping a history of runs. Translating paths through unsaved edits (decision 16).
+
+
+---
+
+## 33. Decisions taken in #225 (W3: Design↔Logic linkage, the Script tab and the Recipes panel)
+
+#225 shipped the rest of §7: the Design tab and the Logic tab know about each other (§7.4), the **Script** tab is the third view
+of the one document (§7.1), and the **Recipes** panel inserts the server's recipes (§7.5). Everything is in the studio: no op, no
+wire shape, no diagnostic code and no plugin class changed, so the editor-compat check and every protocol golden are untouched.
+The pure rules are `webui/src/lib/logic/linkage/`, `.../script/` and `.../recipes/`; the components are
+`webui/src/lib/studio/logic/linkage/`, `.../script/` and `.../recipes/`. Each decision is reversible by the owner.
+
+**Design ↔ Logic linkage (§7.4)**
+
+1. **The link is the `layer:` filter, and nothing else.** A rule belongs to a layer when its `layer:` filter names it (a text, or a
+   list of texts). The bolt, the count, the thumbnail and the diagnostics are all read from the rules as they stand
+   (`layers.ts`: `layersOfRule`, `rulesOfLayer`, `ruleCounts`, `layerOfNode`, `layerFlags`), so there is no table to keep in step and
+   no second source of truth (D1). A rule that names two layers counts for both.
+2. **"Add click logic" is offered for a button, an item or a list** (`CLICKABLE`), in a new **Logic** section at the top of the
+   Design inspector. It plans `addRule {on: gui.click, layer: <id>, do: []}` at the end of `behavior:` and runs it through the
+   canvas, so it is one history command and one `logic.edit` on save (D6). Then the studio shows the Logic tab with the new trigger
+   selected and framed. The button is disabled until the logic is editable (the `logic` capability and the vocabulary), with the
+   reason as its tooltip. A layer that already has rules reads "N rules answer clicks on this layer" and offers **Open in Logic** and
+   "Add another click rule". `LinkageState.view` holds the tab, so a gesture in one tab can open another.
+3. **The tabs are Design, Logic and Script, and the logic is read whichever shows.** The vocabulary is read, and the draft checked
+   once editing pauses, by the studio and not by the Logic tab, because the bolt and the diagnostics are drawn in Design. This
+   moved the `scheduleCheck` effect from `LogicCanvas` to `GuiStudio`; the behaviour on the Logic tab is the same.
+4. **A trigger shows its layer.** On a trigger node the `layer:` line is replaced by the layer's thumbnail (the part of the
+   composited GUI the layer covers, drawn nearest-neighbour), its name and, when different, its id. Hovering or focusing the node
+   shows a **mini preview** (the whole GUI at 176 px, the layer outlined in the trigger colour, bottom-left of the canvas, no pointer
+   events) so the author sees where on the screen the rule lives. It is drawn from the same raster as the Design canvas.
+5. **The bolt is a button.** A layer with rules wears a bolt in the layers panel (with the count when it is more than one); clicking
+   it opens the first rule in Logic. It is on every layer a shared rule names.
+6. **A diagnostic is drawn on the layer.** The compiler's verdict on any node of a rule (§26 decision 16) goes to the layers the rule
+   names: a triangle on the layer's row and, in the inspector's Logic section, each message with the **step path** it was reported
+   at. The server's static layer checks (a `layer:` that names no layer, §21) are `gui.validate` diagnostics, not step-path
+   verdicts, and stay where they were (the banner above the studio).
+7. **Deleting layers that have rules asks.** `GuiStudioState.deleteSelection` first asks `deleteGuard` (set by the linkage); when
+   rules name the layers (and the logic can be edited faithfully) the deletion waits for the author's choice:
+   *Delete the rules* removes the rules filtered **only** to the deleted layers; *Keep the rules* takes the layer filter off them
+   (`patchRule … unset: [layer]`). A rule shared with a layer that stays is **never removed**: the deleted layer is taken off its
+   list. Both are one history command (`Together`: the layer removal and the logic edits, carrying the logic effect so the save
+   replays it through `logic.edit` and an undo of a saved deletion replays the inverse). The dialog says that a rule with no layer
+   filter answers any click no other rule claimed (§21), so detaching is a choice, not a default. A layer with no rules is deleted at
+   once, and a cancelled dialog changes nothing.
+
+**The Script tab (§7.1)**
+
+8. **The text is the document's `open:`, `behavior:` and `flows:`, in that order, as YAML** (`formatScript`), and nothing else of the
+   resource: another top-level key in the text is refused with a line ("not edited here"), a section of the wrong shape is
+   refused at its line, and a syntax error is shown at its line and column. A key with nothing under it is no section.
+9. **A draft is committed when it parses and typing pauses (700 ms), as one history command; it is also committed on Save, on
+   leaving the tab and before an undo or redo.** The commit is a `ScriptEdit` command, so Ctrl+Z from any tab undoes it, Redo
+   redoes it and the dirty marker and Save are shared with Design and Logic. A commit does not coalesce with the next one (the
+   edits log of §26 decision 5 assumes one command per entry).
+10. **A commit is `LogicEdit`s.** `planBlockChange` turns a change of the two blocks into `removeRules` and `addRule` for the rules
+    between the common head and tail (a rule that did not change is never rewritten) and `removeFlow` and `addFlow` for the flows
+    after the common head (so the order of `flows:` is exactly the text's). They are applied locally with `applyWithInverse`, so
+    the server's own refusals (a rule with no `on:`, a step naming two kinds) refuse the commit with their step path, drawn on the
+    line. The `open:` block is a plain field of the GUI and is saved with the layers' own `authoring.setFields` (`planSave` gains
+    `open`: set, or removed when taken out); `behavior:` and `flows:` stay out of that plan.
+11. **Never destroys the file.** A draft that does not parse, or that the edits refuse, is never committed and never lost: the text
+    stays, with the error on its line and in the state pill (`data-state`), through tab switches. A document that changes under an
+    uncommitted draft (a Logic edit, an undo) marks the draft stale, keeps it and offers *Apply my draft* or *Discard my draft*;
+    with no draft the text simply follows the document. Opening the tab, or leaving it, rewrites nothing: the document is never
+    rebuilt from its own text unless something was typed.
+12. **Lossless to the section.** A section the text leaves equal to the document is not written (so its comments and layout stay in
+    the file), and a value is carried whole, so unknown keys inside a rule, a step or `open:` survive (tested over every logic
+    fixture). A comment *inside* a section that is rewritten is lost, exactly as for a canvas edit (§19 decision 6: the server
+    writes `behavior:` and `flows:` whole); comments elsewhere in the file are kept. A list-item path in `LosslessYamlDocument`
+    would lift this.
+13. **Live validation is the compiler's.** Every draft that parses is sent to `logic.validate` (450 ms after typing pauses) and each
+    diagnostic is drawn on the line its step path names (`lineOfPath`, which falls back to the deepest place the text has), as a
+    gutter mark and a row in the problems list that jumps to the line. The `open:` block is not part of `logic.validate`; its shape
+    problems come back from `gui.validate` and the save.
+14. **A plain editor.** The editor is a textarea with a line-number gutter, no editor dependency (a code editor is a heavy addition
+    for three small sections). Tab indents two spaces and Escape then Tab leaves it. Syntax colouring and completion are not here.
+    The tab needs the `logic` capability and shows the script read-only with a notice without it.
+
+**The Recipes panel (§7.5)**
+
+15. **The list is the vocabulary's** (`Vocabulary.recipes`, read from `recipes` in `logic.vocabulary`): a name and the one-line
+    description, in the server's order. A server that lists none (an older plugin) shows an empty panel with a sentence.
+16. **The form is the inspector's.** A recipe parameter becomes the typed field the inspector draws for the same kind
+    (`paramInfo`): a number or integer field clamped to its range, a toggle, the variable picker (with "Declare a new variable"),
+    the template field for text. A parameter that names a layer (`layer`, `list`, `previous`, `next`, or a description that says
+    layer) is a choice of the GUI's layers, and `layer` starts as the layer selected in Design. Required parameters left blank
+    disable Insert, with the names as its tooltip.
+17. **Insert is the server's expansion and one undo step.** The panel calls `logic.instantiate`, shows what came back, and inserts
+    the rules with `addRule` edits at the end of `behavior:` through the canvas (`planInsertRecipe`): one history command, one
+    `logic.edit` on save, the first new trigger selected. The parameters sent are the form's non-blank values, so an optional
+    parameter's default is the recipe's. A refusal (`MTR-0086`, `MTR-0087`) is shown in the panel and nothing is inserted; the
+    `MTR-0088` warnings of an expansion that is valid but writes an action this server cannot run are shown with the insertion
+    (`logicExpand` returns `{rules, warnings}`; the older `logicInstantiate` still returns the rules).
+18. **Availability is found by asking, and greyed does not mean blocked.** The vocabulary does not say which recipes write an
+    action the server cannot run, but the expansion does (§30 decision 8). So when the panel first opens it expands each recipe
+    once with stand-in values of the right kinds (`standIns`; a recipe that needs a declared variable cannot be probed and is
+    left as available), in parallel, and writes nothing. A recipe whose expansion warns is greyed with the server's reason (an
+    entry that carries `available: false` in the vocabulary is greyed with its `unavailableReason`, so a server that learns to say
+    it needs no probe). A greyed recipe can still be inserted, labelled *Insert anyway*, because the server treats availability
+    as a warning, not a refusal (§30): the author may be building the GUI before installing the economy. (Reversible: block it,
+    as the palette does for an unavailable action.)
+19. **The trash slot is not listed** (blocked on #248, §30 decision 10), and the confirm dialog's own GUI is not created from the
+    panel (§30 decision 11: no cross-resource write in the authoring API).
+
+**Verification.** vitest: `logic-linkage.spec.ts` (layer to rule mapping, verdicts to layers, the add plan, delete and detach with
+shared rules and their inverses, the layer and rules as one command), `logic-script.spec.ts` (the text round trip over every logic
+fixture, the errors and their lines, `lineOfPath`, merging into the document, the block edits applied to the target, the command),
+`logic-recipes.spec.ts` (the real recorded registry, the parameter mapping, the stand-ins, the insertion plan, the expansion's
+warnings), and `gui-save.spec.ts` (`open:` in the save plan). Playwright on the `?logic` fixture (`logic-linkage.pw.ts`,
+`logic-script.pw.ts`, `logic-recipes.pw.ts`; the fixture gains `seed=linkage` and a `logic.instantiate` stand-in that writes the
+recipes' golden shapes): Add click logic, the bolt, the hover highlight, delete with each choice, a shared rule, cancel, the
+diagnostic on the layer, a Script edit saved as `removeRules`/`addRule`, `open:` saved with the layers, an invalid draft kept
+across tabs and a stale one, a refused edit, line diagnostics, undo across the tabs, Ctrl+S flushing a draft, and Pay to receive
+saved as the expected YAML. One existing assertion changed: `logic-inspector.pw.ts` now expects the trigger to show the layer's
+name and `data-layer` where it expected the text `layer: buy`. The QA catalog has `gui.logic-linkage-live-save` (auto, against the
+real local app) and `gui.logic-linkage-visual` (screenshots of the studio flow); they were authored and pass
+`qa/runner.mjs check` but were **not run against a client** in this change.
+
+**Deferred.** Creating the confirm dialog's GUI from the Recipes panel (§30 decision 11). A server-side `available` flag on each
+recipe in the vocabulary, which would replace the probe. "Add click logic" for a multi-selection. Syntax colouring, completion and
+inline `open:` validation in the Script tab. Keeping comments inside the three sections (a list-item path in `LosslessYamlDocument`).
+Showing the linkage for item, block and furniture resources (only the GUI studio hosts the Logic tab).

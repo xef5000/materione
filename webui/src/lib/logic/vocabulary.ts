@@ -10,6 +10,7 @@
  * Pure of the DOM.
  */
 import type { IconName } from '../components/icons';
+import { readRecipes, type RecipeEntry } from './recipes/recipes';
 import { isRecord, type Json } from './tree';
 
 /** One parameter of an action, a condition or a trigger filter, as the self-description lists it. */
@@ -140,6 +141,8 @@ export interface Vocabulary {
   listSources: Map<string, SourceEntry>;
   itemSources: Map<string, SourceEntry>;
   inputMethods: Map<string, SourceEntry>;
+  /** The recipe registry (logic.md section 30): what the Recipes panel lists. Empty on a server that predates recipes. */
+  recipes: Map<string, RecipeEntry>;
   /**
    * The PlaceholderAPI expansions the server publishes. `logic.vocabulary` does not carry them yet (logic.md section
    * 31), so this is empty today and the template field offers only the expansions Materione itself defines; the key is
@@ -299,6 +302,7 @@ export function readVocabulary(raw: unknown): Vocabulary | null {
     listSources: sourceEntries(raw.listSources),
     itemSources: sourceEntries(raw.itemSources),
     inputMethods: sourceEntries(raw.inputMethods),
+    recipes: readRecipes(raw.recipes),
     placeholders: (Array.isArray(raw.placeholders) ? raw.placeholders.filter(isRecord) : [])
       .map((entry) => ({ token: text(entry.token, text(entry.id)), description: text(entry.description) }))
       .filter((entry) => entry.token),

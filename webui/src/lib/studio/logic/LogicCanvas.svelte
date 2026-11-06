@@ -19,9 +19,9 @@
   import { planConnect, planMoveChain, slotOf } from '../../logic/plan';
   import { portKey } from '../../logic/project';
   import { toWorld } from '../../logic/viewport';
-  import { session } from '../../state.svelte';
   import LogicNode from './LogicNode.svelte';
   import LogicPalette from './LogicPalette.svelte';
+  import LayerMiniPreview from './linkage/LayerMiniPreview.svelte';
 
   let { canvas, active = true }: { canvas: LogicCanvasState; active?: boolean } = $props();
 
@@ -55,6 +55,11 @@
         canvas.fit();
         canvas.glide = false;
       }
+      if (canvas.focusOnShow && node.clientWidth > 0) {
+        // opened from a layer's bolt or "Add click logic": bring the node it chose into view
+        canvas.focusOnShow = false;
+        if (canvas.selection) canvas.frame();
+      }
     });
     observer.observe(node);
     return () => observer.disconnect();
@@ -81,13 +86,6 @@
     if (!id || !followFocus || !stage) return;
     followFocus = false;
     stage.querySelector<HTMLElement>(`[data-node="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
-  });
-
-  // The compiler's verdict follows the draft: asked again once editing pauses.
-  $effect(() => {
-    void canvas.block;
-    void canvas.status;
-    canvas.scheduleCheck(session.channel);
   });
 
   // ---------------------------------------------------------------- pointer
@@ -423,6 +421,10 @@
       <p>A rule starts with a trigger: when something happens, steps run.</p>
       <button type="button" class="start" onclick={() => canvas.openPalette()}>Add a trigger <kbd>/</kbd></button>
     </div>
+  {/if}
+
+  {#if canvas.links?.hovered}
+    <LayerMiniPreview studio={canvas.gui} layerId={canvas.links.hovered} />
   {/if}
 
   {#if canvas.palette}
