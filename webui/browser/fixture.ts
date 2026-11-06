@@ -18,6 +18,8 @@ async function startFixture(): Promise<void> {
     modules: params.has('modules'),
     gui: params.has('gui'),
     logic: params.has('logic'),
+    economy: params.has('economy'),
+    seed: params.get('seed') ?? '',
     rows: Number(params.get('rows')) || 0,
   });
   adapter.setPushHandler(handlePush);

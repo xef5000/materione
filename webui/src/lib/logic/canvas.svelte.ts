@@ -14,7 +14,11 @@ import {
   planRemove, planRemoveCase, planSetValue, refuse, tipOf, type NameOf, type Plan, type Slot,
 } from './plan';
 import { project, type Graph, type GraphNode } from './project';
-import { logicApiAvailable, logicValidate, logicVocabulary, type LogicDiagnostic } from './server';
+import { logicApiAvailable, logicValidate, logicVocabulary } from './server';
+import { verdictsOf, type NodeFlag } from './verdicts';
+import { InspectorState } from './inspector.svelte';
+
+export type { NodeFlag } from './verdicts';
 import { blockOf, blockProblems, type LogicBlock } from './tree';
 import {
   categoryColor, defaultRule, nodeCategory, paletteGroups, readVocabulary, searchPalette, stepFor,
@@ -26,11 +30,6 @@ import { frameView, revealRect, stepZoom, wheelZoom, zoomAt, type Size, type Vie
 const CHECK_PAUSE_MS = 400;
 /** A refusal stays in the status line this long. */
 const SAY_MS = 7000;
-
-export interface NodeFlag {
-  severity: 'error' | 'warn' | 'info';
-  message: string;
-}
 
 export interface PaletteState {
   /** Where the entry goes; null when there is no rule yet to put a step in. */
@@ -79,6 +78,8 @@ export class LogicCanvasState {
   checking = $state(false);
 
   editable: boolean;
+  /** The node inspector: scope, declared variables and the way an inspector edit reaches the document. */
+  readonly inspector: InspectorState;
   selected: GraphNode | null;
   groups: PaletteGroup[];
 
@@ -87,12 +88,13 @@ export class LogicCanvasState {
     this.host = host;
     this.block = $derived(blockOf(this.gui.doc.rest));
     this.problems = $derived(blockProblems(this.gui.doc.rest));
-    this.graph = $derived(project(this.block));
+    this.graph = $derived(project(this.block, { takesElse: (action) => this.vocabulary?.actions.get(action)?.takesElse === true }));
     this.placed = $derived(layout(this.graph, this.dragging));
     this.routes = $derived(wires(this.graph, this.placed.rects));
     this.editable = $derived(!this.gui.readOnly && this.problems.length === 0 && this.status === 'ready');
     this.selected = $derived(this.selection ? this.graph.byId.get(this.selection) ?? null : null);
     this.groups = $derived(this.vocabulary ? paletteGroups(this.vocabulary, { host: this.host }) : []);
+    this.inspector = new InspectorState(this);
   }
 
   // ------------------------------------------------------------------ names
@@ -437,20 +439,4 @@ export class LogicCanvasState {
     if (done) this.palette = null;
     return done;
   }
-}
-
-/** Maps the compiler's step-path diagnostics onto nodes: the deepest node whose path is a prefix of the diagnostic's. */
-export function verdictsOf(graph: Graph, diagnostics: readonly LogicDiagnostic[]): Map<string, NodeFlag[]> {
-  const out = new Map<string, NodeFlag[]>();
-  for (const diagnostic of diagnostics) {
-    const path = (diagnostic.field ?? []).join('.');
-    let best: string | null = null;
-    for (const node of graph.nodes) {
-      if ((path === node.id || path.startsWith(`${node.id}.`)) && (best === null || node.id.length > best.length)) best = node.id;
-    }
-    if (!best) continue;
-    const severity = diagnostic.severity === 'error' || diagnostic.severity === 'info' ? diagnostic.severity : 'warn';
-    out.set(best, [...(out.get(best) ?? []), { severity, message: `${diagnostic.code}: ${diagnostic.message}` }]);
-  }
-  return out;
 }

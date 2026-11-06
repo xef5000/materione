@@ -608,7 +608,7 @@ function parseEdits(value: unknown): FieldEdit[] | null {
   if (!Array.isArray(value)) return null;
   const edits: FieldEdit[] = [];
   for (const entry of value) {
-    if (!isRecord(entry) || !stringArray(entry.field) || entry.field.length < 2) return null;
+    if (!isRecord(entry) || !stringArray(entry.field) || entry.field.length < 1) return null;
     if (entry.remove === true) {
       if ('value' in entry) return null;
       edits.push({ field: entry.field, value: undefined, remove: true });
@@ -839,14 +839,17 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #guided: boolean;
   readonly #modules: boolean;
   readonly #gui: boolean;
+  /** `?logic&economy`: a server with an economy provider, so the money actions and conditions are available. */
+  readonly #economy: boolean;
   /** Only the `?logic` fixture advertises a capability list (the GUI and logic APIs); the others have no blob, like the demo. */
   readonly blob?: SessionBlob;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; rows?: number } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; economy?: boolean; seed?: string; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
     this.#gui = !!(options.gui || options.logic);
+    this.#economy = options.economy ?? false;
     if (options.logic) {
       this.blob = { sessionId: 'fixture', protocolVersions: [1], capabilities: ['gui', 'logic'], pluginSigningPubKey: new Uint8Array(32) };
     }
@@ -856,6 +859,35 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       this.#resources.push({ pack: PACK, type: 'guis', path: 'guis/shop/main.yml', id: 'main' });
       this.#documents.set(`${PACK}/guis/shop/main.yml`,
         makeDocument('guis/shop/main.yml', 1, parseYaml(sampleGuiRaw()) as Record<string, Record<string, unknown>>));
+      if (options.logic) {
+        // the node inspector's fixtures (issue #224): a declared-variables file and a pack sound to pick from
+        this.#resources.push(
+          { pack: PACK, type: 'variables', path: 'variables/shop.yml', id: 'coins' },
+          { pack: PACK, type: 'variables', path: 'variables/shop.yml', id: 'vip' },
+          { pack: PACK, type: 'sounds', path: 'sounds/chime.yml', id: 'chime' },
+        );
+        this.#documents.set(`${PACK}/variables/shop.yml`, makeDocument('variables/shop.yml', 1, {
+          coins: { scope: 'player', type: 'number', default: 0, description: 'Shop coins' },
+          vip: { scope: 'player', type: 'boolean', default: false },
+        }));
+        this.#documents.set(`${PACK}/sounds/chime.yml`, makeDocument('sounds/chime.yml', 1, { chime: { sounds: ['chime'] } }));
+      }
+      if (options.seed === 'odd') {
+        // a shop screen whose logic carries what this server does not describe (issue #224, the lossless rule): an unknown
+        // rule key, an unknown action parameter, an action nothing registers, and a question with its else branch
+        const document = this.#documents.get(`${PACK}/guis/shop/main.yml`)!;
+        document.parsed.main!.behavior = [
+          {
+            on: 'gui.click', layer: 'buy', mystery: 7,
+            do: [
+              { sound: { sound: 'block.chest.open', volume: 1, shiny: true } },
+              { future_action: { a: 1 } },
+              { prompt: { text: 'Name it', var: 'session.name', method: 'sign' }, else: [{ message: 'gave up' }] },
+            ],
+          },
+        ];
+        document.raw = serializeFixtureYaml(document.parsed);
+      }
       for (const sample of SAMPLE_GUI_ASSETS) {
         this.#assets.set(assetPath(PACK, sample.path), { path: sample.path, kind: 'png', data: sample.data, bytes: sample.data.length });
       }
@@ -1101,12 +1133,14 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.getDocument(op, payload);
       case 'edit.put':
         return this.putDocument(op, payload);
+      case 'edit.create':
+        return this.createDocument(op, payload);
       case 'authoring.setFields':
         return this.setFields(op, payload);
       case 'gui.validate':
         return this.success(op, { diagnostics: [] });
       case 'logic.vocabulary':
-        return this.success(op, structuredClone(goldenSnapshot.describe.behavior));
+        return this.success(op, this.logicVocabulary());
       case 'logic.validate':
         return this.logicValidate(op, payload);
       case 'logic.edit':
@@ -1401,6 +1435,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const parsed = structuredClone(document.parsed);
     for (const edit of edits) {
       const root = edit.field[0];
+      if (root && edit.field.length === 1 && !edit.remove && !parsed[root] && isRecord(edit.value)) {
+        parsed[root] = structuredClone(edit.value) as Record<string, unknown>; // a new top-level key, as the lossless layer writes it
+        continue;
+      }
       if (!root || !parsed[root]) {
         return this.failure(op, 'MTR-0009', 'fixture resource root not found');
       }
@@ -1423,20 +1461,90 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     return this.success(op, { rev: document.rev });
   }
 
-  /** A stand-in for the compiler: a step whose primary value is empty is the one thing it flags here. */
+  /** The server's recorded vocabulary; `?economy` marks the money actions and conditions available, as a server with an economy would. */
+  private logicVocabulary(): Record<string, unknown> {
+    const vocabulary = structuredClone(goldenSnapshot.describe.behavior) as unknown as Record<string, unknown>;
+    if (!this.#economy) return vocabulary;
+    for (const key of ['actions', 'conditions'] as const) {
+      for (const entry of vocabulary[key] as Record<string, unknown>[]) {
+        if (entry.category === 'economy') {
+          entry.available = true;
+          delete entry.unavailableReason;
+        }
+      }
+    }
+    return vocabulary;
+  }
+
+  /** edit.create: a new document from the server's recorded starter for its type directory. */
+  private createDocument(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const path = stringValue(payload.path);
+    const directory = path.split('/')[0] ?? '';
+    const starters = goldenSnapshot.scaffolds as Record<string, string>;
+    const starter = starters[directory];
+    if (!starter) return this.failure(op, 'MTR-0008', `no scaffold for '${directory}'`);
+    if (this.#documents.has(`${pack}/${path}`)) return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
+    const id = stringValue(payload.id) || (path.split('/').pop() ?? '').replace(/\.ya?ml$/, '');
+    const parsed = parseYaml(starter.replaceAll('demo_scaffold', id)) as Record<string, Record<string, unknown>>;
+    const created = makeDocument(path, 1, parsed);
+    this.#documents.set(`${pack}/${path}`, created);
+    this.#resources.push({ pack, type: directory, path, id });
+    return this.success(op, { rev: 1, raw: created.raw, parsed: structuredClone(created.parsed) });
+  }
+
+  /**
+   * A stand-in for the compiler. A step whose primary value is empty is flagged, as is a template that names a root
+   * its rule's trigger does not provide (the compiler's "unknown root" warning, checked against the recorded
+   * trigger schemas), so the node inspector's diagnostics can be tested against a server-shaped answer.
+   */
   private logicValidate(op: string, payload: Record<string, unknown>): Response {
     const diagnostics: unknown[] = [];
     const behavior = Array.isArray(payload.behavior) ? payload.behavior : [];
+    const triggers = (goldenSnapshot.describe.behavior as unknown as { triggers: { id: string; context: { path: string }[] }[] }).triggers;
     behavior.forEach((rule, r) => {
-      const steps = isLogicRecord(rule) && Array.isArray(rule.do) ? rule.do : [];
-      steps.forEach((step, s) => {
-        if (isLogicRecord(step) && Object.values(step).some((value) => value === '')) {
-          diagnostics.push({
-            code: 'MTR-0057', severity: 'warn', message: 'an action is missing its value',
-            field: ['behavior', String(r), 'do', String(s)],
-          });
-        }
-      });
+      if (!isLogicRecord(rule)) return;
+      const on = typeof rule.on === 'string' ? rule.on : '';
+      const trigger = triggers.find((entry) => entry.id === on) ?? triggers.find((entry) => entry.id === on.split(':')[0]);
+      const roots = new Set<string>(['vars', ...(trigger?.context ?? []).map((variable) => variable.path.split('.')[0]!)]);
+      const walk = (steps: unknown, path: string[]): void => {
+        if (!Array.isArray(steps)) return;
+        steps.forEach((step, index) => {
+          if (!isLogicRecord(step)) return;
+          const at = [...path, String(index)];
+          if (Object.values(step).some((value) => value === '')) {
+            diagnostics.push({ code: 'MTR-0057', severity: 'warn', message: 'an action is missing its value', field: at });
+          }
+          // the compiler's unknown-root warning (MTR-0060), against the trigger's recorded context schema
+          const seen = new Set<string>();
+          const scan = (value: unknown): void => {
+            if (typeof value === 'string') {
+              for (const body of value.matchAll(/\$\{([^}]*)\}/g)) {
+                for (const name of (body[1] ?? '').replace(/'[^']*'|"[^"]*"/g, ' ').matchAll(/[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_*]+)*(?!\w*\()/g)) {
+                  const root = name[0].split('.')[0]!;
+                  if (!['true', 'false', 'null'].includes(root) && !roots.has(root) && !seen.has(root)) {
+                    seen.add(root);
+                    diagnostics.push({
+                      code: 'MTR-0060', severity: 'warn', field: at,
+                      message: `'${root}' is not a variable of this trigger's context`,
+                    });
+                  }
+                }
+              }
+            } else if (isLogicRecord(value)) {
+              for (const [key, each] of Object.entries(value)) if (!['then', 'else', 'require', 'choose'].includes(key)) scan(each);
+            }
+          };
+          scan(step);
+          for (const key of ['then', 'else', 'require']) walk(step[key], [...at, key]);
+          if (Array.isArray(step.choose)) {
+            step.choose.forEach((entry, c) => {
+              if (isLogicRecord(entry)) walk(entry.then, [...at, 'choose', String(c), 'then']);
+            });
+          }
+        });
+      };
+      walk(rule.do, ['behavior', String(r), 'do']);
     });
     return this.success(op, { diagnostics });
   }

@@ -3,6 +3,9 @@ package dev.materione.api.registry;
 import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.FunctionDescription;
+import dev.materione.api.logic.InputMethodDescription;
+import dev.materione.api.logic.ItemSourceDescription;
+import dev.materione.api.logic.ListSourceDescription;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.RecipeDescription;
 import dev.materione.api.logic.Threading;
@@ -37,6 +40,9 @@ import java.util.Objects;
  * @param categories  every palette category in use: the eight built-ins first, then addon-added ones
  * @param functions   registered expression functions, sorted by id
  * @param recipes     registered recipes, sorted by id (logic.md §4.6, §30)
+ * @param listSources registered list sources, sorted by id (logic.md §4.5, §28, §31)
+ * @param itemSources registered item sources, sorted by id (logic.md §4.4, §31)
+ * @param inputMethods registered input methods of the {@code prompt} step, sorted by id (logic.md §4.5, §29, §31)
  */
 public record BehaviorVocabulary(
         List<Event> events,
@@ -49,7 +55,10 @@ public record BehaviorVocabulary(
         List<StepKind> steps,
         List<LogicCategory> categories,
         List<Function> functions,
-        List<Recipe> recipes) {
+        List<Recipe> recipes,
+        List<ListSourceEntry> listSources,
+        List<ItemSourceEntry> itemSources,
+        List<InputMethodEntry> inputMethods) {
 
     /** The vocabulary schema version this record models. */
     public static final int VERSION = 2;
@@ -66,6 +75,26 @@ public record BehaviorVocabulary(
         categories = categories == null ? List.of() : List.copyOf(categories);
         functions = functions == null ? List.of() : List.copyOf(functions);
         recipes = recipes == null ? List.of() : List.copyOf(recipes);
+        listSources = listSources == null ? List.of() : List.copyOf(listSources);
+        itemSources = itemSources == null ? List.of() : List.copyOf(itemSources);
+        inputMethods = inputMethods == null ? List.of() : List.copyOf(inputMethods);
+    }
+
+    /** The shape before the source and method registries (logic.md §31): the same members, without them. */
+    public BehaviorVocabulary(
+            List<Event> events,
+            List<Action> actions,
+            List<ParameterSchema> ruleOptions,
+            List<ParameterSchema> actionOptions,
+            List<Mechanic> mechanics,
+            List<Trigger> triggers,
+            List<Condition> conditions,
+            List<StepKind> steps,
+            List<LogicCategory> categories,
+            List<Function> functions,
+            List<Recipe> recipes) {
+        this(events, actions, ruleOptions, actionOptions, mechanics, triggers, conditions, steps, categories,
+                functions, recipes, List.of(), List.of(), List.of());
     }
 
     /** The shape before recipes (logic.md §30): the same members, without {@code recipes}. */
@@ -81,7 +110,7 @@ public record BehaviorVocabulary(
             List<LogicCategory> categories,
             List<Function> functions) {
         this(events, actions, ruleOptions, actionOptions, mechanics, triggers, conditions, steps, categories,
-                functions, List.of());
+                functions, List.of(), List.of(), List.of(), List.of());
     }
 
     /** The version-1 shape: no triggers, conditions, steps, categories, functions or recipes. */
@@ -92,7 +121,7 @@ public record BehaviorVocabulary(
             List<ParameterSchema> actionOptions,
             List<Mechanic> mechanics) {
         this(events, actions, ruleOptions, actionOptions, mechanics,
-                List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
+                List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
     }
 
     public static BehaviorVocabulary empty() {
@@ -101,7 +130,7 @@ public record BehaviorVocabulary(
 
     public BehaviorVocabulary withMechanics(List<Mechanic> registered) {
         return new BehaviorVocabulary(events, actions, ruleOptions, actionOptions, registered,
-                triggers, conditions, steps, categories, functions, recipes);
+                triggers, conditions, steps, categories, functions, recipes, listSources, itemSources, inputMethods);
     }
 
     /**
@@ -135,18 +164,27 @@ public record BehaviorVocabulary(
      * @param threading    the declared thread, or {@code null} for an undescribed action
      * @param availability whether the server can run it now, with the reason when it cannot
      * @param registeredBy owning plugin name, or blank when unknown
+     * @param takesElse    true when the step may carry an {@code else:} that runs when the action goes
+     *                     unanswered (logic.md §29, {@code ActionType.takesElse()}); the editor draws it as a branch
      */
     public record Action(String id, SelfDescription description, String shorthand, boolean deferred,
-            LogicCategory category, Threading threading, Availability availability, String registeredBy) {
+            LogicCategory category, Threading threading, Availability availability, String registeredBy,
+            boolean takesElse) {
         public Action {
             Objects.requireNonNull(id, "id");
             availability = availability == null ? Availability.AVAILABLE : availability;
             registeredBy = registeredBy == null ? "" : registeredBy;
         }
 
+        /** The shape before {@code takesElse} (logic.md §31): an action with no {@code else:} branch. */
+        public Action(String id, SelfDescription description, String shorthand, boolean deferred,
+                LogicCategory category, Threading threading, Availability availability, String registeredBy) {
+            this(id, description, shorthand, deferred, category, threading, availability, registeredBy, false);
+        }
+
         /** Version-1 shape: no category, threading, availability or owner. */
         public Action(String id, SelfDescription description, String shorthand, boolean deferred) {
-            this(id, description, shorthand, deferred, null, null, Availability.AVAILABLE, "");
+            this(id, description, shorthand, deferred, null, null, Availability.AVAILABLE, "", false);
         }
     }
 
@@ -209,6 +247,54 @@ public record BehaviorVocabulary(
         public Recipe {
             Objects.requireNonNull(id, "id");
             Objects.requireNonNull(description, "description");
+            registeredBy = registeredBy == null ? "" : registeredBy;
+        }
+    }
+
+    /**
+     * One registered list source (logic.md §4.5, §28): where a GUI {@code list} component's entries come from.
+     *
+     * @param id           the source key as authors write it ({@code online_players})
+     * @param description  its name, parameters, shorthand, entry schema and whether it is cached
+     * @param registeredBy owning plugin name
+     */
+    public record ListSourceEntry(String id, ListSourceDescription description, String registeredBy) {
+        public ListSourceEntry {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(description, "description");
+            registeredBy = registeredBy == null ? "" : registeredBy;
+        }
+    }
+
+    /**
+     * One registered item source (logic.md §4.4): where a GUI item layer's item comes from.
+     *
+     * @param id           the source key as authors write it ({@code head})
+     * @param description  its name, parameters and shorthand
+     * @param registeredBy owning plugin name
+     */
+    public record ItemSourceEntry(String id, ItemSourceDescription description, String registeredBy) {
+        public ItemSourceEntry {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(description, "description");
+            registeredBy = registeredBy == null ? "" : registeredBy;
+        }
+    }
+
+    /**
+     * One registered input method (logic.md §4.5, §29): how a {@code prompt} step asks a player for text.
+     *
+     * @param id           the method key as authors write it ({@code chat})
+     * @param description  its name, parameters and whether it closes the player's window
+     * @param availability whether the server can use it now (the sign editor is unavailable on this build)
+     * @param registeredBy owning plugin name
+     */
+    public record InputMethodEntry(String id, InputMethodDescription description, Availability availability,
+            String registeredBy) {
+        public InputMethodEntry {
+            Objects.requireNonNull(id, "id");
+            Objects.requireNonNull(description, "description");
+            availability = availability == null ? Availability.AVAILABLE : availability;
             registeredBy = registeredBy == null ? "" : registeredBy;
         }
     }

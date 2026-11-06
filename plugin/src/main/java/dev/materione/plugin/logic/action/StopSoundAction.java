@@ -44,7 +44,7 @@ public final class StopSoundAction implements ActionType<StopSoundAction.Params>
                 "Stops a sound, a sound category, or everything playing for the player",
                 List.of(
                         new ParameterSchema("sound", ParameterType.STRING, false, null,
-                                "Sound key to stop, e.g. minecraft:music.game", null, null),
+                                "Sound key to stop, e.g. minecraft:music.game", null, null).withWidget("sound", ""),
                         new ParameterSchema("category", ParameterType.ENUM, false, null,
                                 "Sound category to stop", categoryNames(), null)),
                 "2.0.0"), LogicCategory.PLAYER, "sound");

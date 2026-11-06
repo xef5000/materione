@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The node inspector in the Logic tab (logic.md §7.3, §31, #224).** Select a node and its every parameter is a field drawn
+  from the node's self-description: the item browser for items, the packs' sound events for sounds, a colour field, number
+  fields clamped to their range, toggles, choices, rows for lists, and JSON for what no field can hold. Keys the server does
+  not describe are listed read-only and kept. Template fields complete `${` from the trigger's context, the declared variables,
+  the variables the flow writes, the list entry fields and the expression functions (with signatures), and `%` from the
+  expansions Materione defines; they flag unknown names at once, and ask the compiler about the text while you type. The
+  condition stack edits a rule's `if:`, an `if` step and each `choose` case: predicates with typed fields, expressions,
+  `all`, `any`, `not` and `at_least`, nested, reordered. The variable picker lists declared variables and "Declare a new
+  variable" writes the declaration into the pack's `variables/` file. A `prompt` step shows its input methods (the sign editor
+  greyed with its reason) and draws its `else:` as a branch. Every edit is the same `logic.edit` plan the canvas makes, in the
+  shared undo history. `logic.vocabulary` gains `listSources`, `itemSources`, `inputMethods` and `takesElse`, and the built-in
+  item, sound, variable and prompt-method parameters carry widget hints (`ParameterSchema.withWidget`). `variables` joins the
+  New-document starters. No new diagnostic codes.
 - **Prompts and list search in GUIs (logic.md §6.6, §29, §28.21, #220).** A `prompt` step parks its run, asks the
   player for a line of text and writes the answer to a run-local or session variable (`var: answer` or
   `var: session.search`), then resumes. Three input methods, registered through the new `LogicApi.inputMethods()`

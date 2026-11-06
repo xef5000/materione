@@ -54,7 +54,7 @@ public final class GiveItemAction implements ActionType<GiveItemAction.Params> {
                 "Gives the player a Materione item or a vanilla item; overflow drops at their feet",
                 List.of(
                         new ParameterSchema("item", ParameterType.STRING, true, null,
-                                "Materione item id, or minecraft:<material>", null, null),
+                                "Materione item id, or minecraft:<material>", null, null).withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
                                 "How many", null, null)),
                 "2.0.0"), LogicCategory.PLAYER, "item");

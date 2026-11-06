@@ -91,7 +91,7 @@ public final class VarCondition implements ConditionType<VarCondition.Params> {
                 List.of(
                         new ParameterSchema("var", ParameterType.STRING, true, null,
                                 "Variable: a local name, session.<name>, player.<key> or server.<pack>.<key>",
-                                null, null),
+                                null, null).withWidget("variable", ""),
                         new ParameterSchema("op", ParameterType.ENUM, false, "==", "How to compare", SYMBOLS, null),
                         new ParameterSchema("value", ParameterType.STRING, true, null,
                                 "Value to compare with, or ${expression}", null, null)),

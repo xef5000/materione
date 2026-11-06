@@ -253,7 +253,7 @@ export function planConnect(
 
 // ------------------------------------------------------------------ a switch's cases
 
-function replaceStep(node: GraphNode, next: Json): LogicEdit[] {
+export function replaceStep(node: GraphNode, next: Json): LogicEdit[] {
   return [
     { op: 'removeStep', path: node.id },
     { op: 'insertStep', path: node.id, step: next },

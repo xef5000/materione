@@ -245,7 +245,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             },
             {
               "advanced": false,
@@ -602,6 +602,83 @@
         },
         {
           "available": true,
+          "category": "gui",
+          "deferred": false,
+          "description": "Asks the player for a line of text (in chat or in an anvil) and writes the answer to a variable; an unanswered question runs its else: and ends the run",
+          "displayName": "Prompt",
+          "id": "prompt",
+          "parameters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "chat",
+                "sign",
+                "anvil"
+              ],
+              "default": "chat",
+              "description": "How the player answers",
+              "id": "method",
+              "label": "Method",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "input-method"
+            },
+            {
+              "advanced": false,
+              "description": "What the player is asked; a template may use variables",
+              "id": "text",
+              "label": "Text",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "Where the answer goes: a run-local name, or session.<name> for the open GUI",
+              "id": "var",
+              "label": "Var",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "variable"
+            },
+            {
+              "advanced": false,
+              "default": "60",
+              "description": "Seconds the player has to answer, from 1 to 600",
+              "id": "timeout",
+              "label": "Timeout",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "default": "cancel",
+              "description": "A word that cancels the question; empty for none",
+              "id": "cancel_word",
+              "label": "Cancel Word",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "takesElse": true,
+          "threading": "player_region"
+        },
+        {
+          "available": true,
           "category": "server",
           "deferred": true,
           "description": "Runs a server command; %player% and ${...} are filled in",
@@ -659,7 +736,7 @@
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             },
             {
               "advanced": false,
@@ -726,7 +803,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "sound"
             },
             {
               "advanced": false,
@@ -792,7 +869,7 @@
               "required": false,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "sound"
             },
             {
               "advanced": false,
@@ -881,7 +958,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             },
             {
               "advanced": false,
@@ -1224,7 +1301,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "item"
             },
             {
               "advanced": false,
@@ -1612,7 +1689,7 @@
               "required": true,
               "section": "general",
               "type": "string",
-              "uiHint": "text"
+              "uiHint": "variable"
             },
             {
               "advanced": false,
@@ -2513,6 +2590,272 @@
           "returns": "string",
           "sinceVersion": "2.0.0",
           "variadic": false
+        }
+      ],
+      "inputMethods": [
+        {
+          "available": true,
+          "closesWindow": true,
+          "description": "The player types the answer as an item's name in an anvil",
+          "displayName": "Anvil",
+          "id": "anvil",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "available": true,
+          "closesWindow": true,
+          "description": "The player types the answer in chat; the message is not broadcast",
+          "displayName": "Chat",
+          "id": "chat",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "available": false,
+          "closesWindow": true,
+          "description": "The player writes the answer on a sign editor (unavailable until a client-only editor is wired)",
+          "displayName": "Sign",
+          "id": "sign",
+          "parameters": [],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0",
+          "unavailableReason": "the client-only sign editor needs Paper's Player#openVirtualSign, which this build's 1.21.4 API does not have; use chat or anvil"
+        }
+      ],
+      "itemSources": [
+        {
+          "description": "A player head: a player's skin, a texture hash or URL, or a base64 textures value. Give exactly one",
+          "displayName": "Head",
+          "id": "head",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "A player's name, or ${player.name} for the viewer",
+              "id": "player",
+              "label": "Player",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "A skin hash, or its textures.minecraft.net URL",
+              "id": "texture",
+              "label": "Texture",
+              "order": 0,
+              "required": false,
+              "section": "appearance",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "A base64 textures value, as a server stores it",
+              "id": "base64",
+              "label": "Base64",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "description": "A Materione item or a vanilla material, by id, or a template that renders one",
+          "displayName": "Item",
+          "id": "item",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "ns:id, minecraft:material, or a template such as ${entry.item}",
+              "id": "item",
+              "label": "Item",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "item",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "description": "The viewer's own item in a hand or armour slot, shown as it is",
+          "displayName": "Player slot",
+          "id": "player_slot",
+          "parameters": [
+            {
+              "advanced": false,
+              "allowedValues": [
+                "main_hand",
+                "off_hand",
+                "helmet",
+                "chestplate",
+                "leggings",
+                "boots"
+              ],
+              "description": "Which of the viewer's slots to show",
+              "id": "slot",
+              "label": "Slot",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "slot",
+          "sinceVersion": "1.0.0"
+        }
+      ],
+      "listSources": [
+        {
+          "cached": false,
+          "description": "Every online player, by name and UUID",
+          "displayName": "Online players",
+          "entry": [
+            {
+              "description": "The player's name",
+              "hosts": [],
+              "path": "entry.name",
+              "type": "string"
+            },
+            {
+              "description": "The player's UUID",
+              "hosts": [],
+              "path": "entry.uuid",
+              "type": "string"
+            }
+          ],
+          "id": "online_players",
+          "parameters": [
+            {
+              "advanced": false,
+              "default": "false",
+              "description": "Leave the viewer out of the list",
+              "id": "exclude_viewer",
+              "label": "Exclude Viewer",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "boolean",
+              "uiHint": "toggle"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "cached": true,
+          "description": "Every live item of one pack, by its id",
+          "displayName": "Pack items",
+          "entry": [
+            {
+              "description": "The item's id, pack:name",
+              "hosts": [],
+              "path": "entry.item",
+              "type": "string"
+            }
+          ],
+          "id": "pack_items",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The pack's namespace, such as shop",
+              "id": "pack",
+              "label": "Pack",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "pack",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "cached": false,
+          "description": "Entries written in the layer, each a mapping of fields",
+          "displayName": "Static entries",
+          "entry": [
+            {
+              "description": "A field of the entry, as written",
+              "hosts": [],
+              "path": "entry.*",
+              "type": "raw"
+            }
+          ],
+          "id": "static",
+          "parameters": [
+            {
+              "advanced": true,
+              "description": "The entries: a list of mappings",
+              "id": "entries",
+              "label": "Entries",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "raw",
+              "uiHint": "advanced"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "cached": false,
+          "description": "The pieces of a declared player or server string variable, separated by a separator",
+          "displayName": "Variable list",
+          "entry": [
+            {
+              "description": "One piece of the variable's text",
+              "hosts": [],
+              "path": "entry.value",
+              "type": "string"
+            }
+          ],
+          "id": "variable",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The declared variable, pack:key",
+              "id": "var",
+              "label": "Var",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "default": ",",
+              "description": "What separates the pieces",
+              "id": "separator",
+              "label": "Separator",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "var",
+          "sinceVersion": "1.0.0"
         }
       ],
       "mechanics": [
@@ -13286,7 +13629,8 @@
     "paintings": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: painting/demo_scaffold # exactly 16 px per block\n  width: 1\n  height: 1\n  # author: \"Unknown\"\n  # title: \"Demo Scaffold\"\n  # placeable: false — join the vanilla random-placement pool\n  # Paintings apply at the next server restart (world datapack).\n",
     "recipes": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  type: shaped # shaped | shapeless | furnace\n  result: demo_scaffold\n  shape:\n    - \" A \"\n    - \" B \"\n    - \" A \"\n  ingredients:\n    A: minecraft:stone\n    B: minecraft:stick\n",
     "sounds": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  sounds:\n    - demo_scaffold # upload the .ogg to assets/sounds/\n  # subtitle: \"Demo Scaffold\"\n  # volume: 1.0\n  # pitch: 1.0\n  # jukebox: — turn this sound into a music-disc song\n  #   description: \"Demo Scaffold\"\n  #   duration: 90\n  #   comparator_output: 7\n  #   range: 1.0\n",
-    "templates": "# Shared inheritance base: definitions pull this in via `template:`\n# and override individual fields.\ndemo_scaffold:\n  material: PAPER\n"
+    "templates": "# Shared inheritance base: definitions pull this in via `template:`\n# and override individual fields.\ndemo_scaffold:\n  material: PAPER\n",
+    "variables": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  scope: player # player | server\n  type: number # number | string | boolean\n  default: 0\n"
   },
   "session": {
     "editorMode": "cloud",

@@ -593,6 +593,127 @@ export default [
   }),
 
   test({
+    id: 'gui.logic-inspector-live-save',
+    title: 'sample:qa_chest Logic inspector: a message whose template is completed from the trigger context (${player.name}) is authored without typing YAML, saved to canonical YAML, and runs when the player opens the GUI',
+    dependsOn: ['gui.logic-tab-live-save'],
+    covers: [...LOGIC_COVERS, 'plugin/src/main/java/dev/materione/plugin/gui/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/action/MessageAction.java',
+      'plugin/src/main/java/dev/materione/plugin/runtime/PipelineService.java',
+      'api/src/main/java/dev/materione/api/registry/BehaviorVocabulary.java',
+      'behavior/src/main/java/dev/materione/behavior/logic/VocabularyBuilder.java'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      ctx.expect(fs.existsSync(GUI_FILE)).toBe(false);
+      try {
+        const { parse } = requireWebui('yaml');
+        const page = await openNewChest(ctx);
+        const starter = parse(fs.readFileSync(GUI_FILE, 'utf8'));
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByRole('button', { name: /add a trigger/i }).click();
+        await page.locator('[data-entry="trigger:gui.open"]').click();
+        const port = await page.locator('[data-node="behavior.0"][data-port="out"]').boundingBox();
+        await page.mouse.move(port.x + port.width / 2, port.y + port.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(port.x + port.width / 2 - 20, port.y + port.height / 2 + 80, { steps: 8 });
+        await page.mouse.up();
+        await page.locator('[data-entry="action:message"]').click();
+        const inspector = page.getByTestId('logic-inspector');
+        const text = inspector.getByRole('combobox', { name: 'Text' });
+        await text.click();
+        await page.keyboard.type('${pl');
+        await inspector.getByRole('option', { name: /^player\./ }).waitFor({ state: 'visible', timeout: 10_000 });
+        await page.keyboard.press('Enter');
+        await page.keyboard.type('na');
+        await inspector.getByRole('option', { name: /player\.name/ }).waitFor({ state: 'visible', timeout: 10_000 });
+        await page.keyboard.press('Enter');
+        await page.keyboard.type(' MATERIONE-QA-INSPECTOR-SAVED');
+        await page.keyboard.press('Enter');
+        ctx.expect(await text.inputValue()).toBe('${player.name} MATERIONE-QA-INSPECTOR-SAVED');
+        ctx.expect(await inspector.locator('[data-lint]').count()).toBe(0);
+        await page.getByRole('button', { name: 'Save', exact: true }).click();
+        await page.locator('[data-status]').filter({ hasText: 'Saved' }).waitFor({ state: 'visible', timeout: 20_000 });
+        const expected = structuredClone(starter);
+        expected.qa_chest.behavior = [{ on: 'gui.open', do: [{ message: '${player.name} MATERIONE-QA-INSPECTOR-SAVED' }] }];
+        ctx.expect(parse(fs.readFileSync(GUI_FILE, 'utf8'))).toEqual(expected);
+
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.reset();
+        await ctx.rcon('materione gui open sample:qa_chest Probe');
+        await ctx.waitForChat(/Probe MATERIONE-QA-INSPECTOR-SAVED/);
+        await ctx.exec('player.closeContainer(); return "closed"');
+      } finally {
+        try {
+          await ctx.exec('player.closeContainer(); return "closed"');
+        } finally {
+          fs.rmSync(GUI_FILE, { force: true });
+          await ctx.rcon('materione reload');
+        }
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.logic-inspector-visual',
+    title: 'sample:qa_chest Logic inspector: typed fields for an action, the template field with its completion list and an inline diagnostic, the condition stack, and the prompt step with the unavailable sign method greyed',
+    mode: 'visual',
+    dependsOn: ['gui.logic-inspector-live-save'],
+    covers: [...LOGIC_COVERS, 'api/src/main/java/dev/materione/api/registry/BehaviorVocabulary.java',
+      'behavior/src/main/java/dev/materione/behavior/logic/VocabularyBuilder.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/action/PromptAction.java'],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByRole('button', { name: /add a trigger/i }).click();
+        await page.locator('[data-entry="trigger:gui.click"]').click();
+        const dragOut = async (node, port) => {
+          const box = await page.locator('[data-node="' + node + '"][data-port="' + port + '"]').boundingBox();
+          const x = box.x + box.width / 2;
+          const y = box.y + box.height / 2;
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x - 20, y + 60, { steps: 4 });
+          await page.mouse.move(x - 40, y + 140, { steps: 4 });
+          await page.mouse.up();
+        };
+        const inspector = page.getByTestId('logic-inspector');
+        await ctx.browser.browserShot('logic-inspector-trigger');
+        await dragOut('behavior.0', 'out');
+        await page.locator('[data-entry="control:if"]').click();
+        await inspector.getByRole('combobox', { name: 'Kind of condition' }).selectOption('predicate');
+        await inspector.getByRole('button', { name: 'Also require an expression' }).click();
+        await ctx.browser.browserShot('logic-inspector-condition-stack');
+        await page.getByTestId('logic-canvas').focus();
+        await page.keyboard.press('0');
+        await dragOut('behavior.0.do.0', 'then');
+        await page.locator('[data-entry="action:message"]').click();
+        const text = inspector.getByRole('combobox', { name: 'Text' });
+        await text.click();
+        await page.keyboard.type('Hello ${');
+        await ctx.browser.browserShot('logic-inspector-completion');
+        await text.fill('Hello ${bogus.value}');
+        await page.keyboard.press('Enter');
+        await ctx.sleep(1500);
+        await ctx.browser.browserShot('logic-inspector-diagnostic');
+        await page.getByTestId('logic-canvas').focus();
+        await page.keyboard.press('0');
+        await dragOut('behavior.0.do.0', 'after');
+        await page.locator('[data-entry="action:prompt"]').click();
+        await ctx.browser.browserShot('logic-inspector-prompt');
+        ctx.needsEyes(
+          'the inspector is a panel to the right of the canvas that never overflows horizontally; the trigger shows its filters with the GUI layers offered, the if node shows a stack of condition rows (a typed predicate row, then a second row) with add, move and remove controls; the template field shows a completion list under it with roots such as player. and functions with their signatures, then, for the unknown name, an amber line on the field and an amber triangle on the message node only; the prompt step shows its input methods as choices with Sign greyed and dashed and the reason written below, and the node has an else port beside its after port; the chrome uses the editor tokens (navy surfaces, orange only for the primary action and focus).',
+        );
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
     id: 'gui.logic-tab-visual',
     title: 'sample:qa_chest Logic tab: a flow built by dragging wires out of ports (open, sound, command, close), the search palette with an unavailable provider greyed, and a refused wire',
     mode: 'visual',

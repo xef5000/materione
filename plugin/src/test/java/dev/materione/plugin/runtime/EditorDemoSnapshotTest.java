@@ -112,6 +112,11 @@ class EditorDemoSnapshotTest {
         var mechanics = new MechanicsService(host, diagnostics, scheduling, pipeline.runtime(), registries);
         mechanics.registerNatives(registries);
         var logic = dev.materione.plugin.logic.LogicTestSupport.withBuiltIns(registries);
+        // the prompt step and its input methods, registered as the plugin's boot does (logic.md section 29, 31)
+        dev.materione.plugin.logic.BuiltinLogic.registerPrompts(logic,
+                dev.materione.plugin.logic.LogicTestSupport.owner("materione"),
+                dev.materione.plugin.gui.prompt.PromptRuntime.create(
+                        host, scheduling, new dev.materione.plugin.gui.GuiBridge(), diagnostic -> { }));
 
         var settingsService = new SettingsService();
         var settings = settingsService.load(root.resolve("settings"));

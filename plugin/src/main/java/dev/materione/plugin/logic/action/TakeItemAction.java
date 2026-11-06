@@ -60,7 +60,7 @@ public final class TakeItemAction implements ActionType<TakeItemAction.Params> {
                 "Removes items from the player; fails and takes nothing when they hold too few",
                 List.of(
                         new ParameterSchema("item", ParameterType.STRING, true, null,
-                                "Materione item id, or minecraft:<material>", null, null),
+                                "Materione item id, or minecraft:<material>", null, null).withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
                                 "How many to take", null, null),
                         new ParameterSchema("name_contains", ParameterType.STRING, false, null,

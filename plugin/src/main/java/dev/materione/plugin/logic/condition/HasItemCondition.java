@@ -71,7 +71,7 @@ public final class HasItemCondition implements ConditionType<HasItemCondition.Pa
                 "True when the player holds at least the amount of an item, matching by id or material, name and lore",
                 List.of(
                         new ParameterSchema("item", ParameterType.STRING, true, null,
-                                "Materione item id, or minecraft:<material>", null, null),
+                                "Materione item id, or minecraft:<material>", null, null).withWidget("item", ""),
                         new ParameterSchema("amount", ParameterType.INTEGER, false, "1",
                                 "How many must be held, across stacks", null, null),
                         new ParameterSchema("name_contains", ParameterType.STRING, false, null,

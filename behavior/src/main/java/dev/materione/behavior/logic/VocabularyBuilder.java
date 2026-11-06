@@ -6,6 +6,9 @@ import dev.materione.api.logic.Availability;
 import dev.materione.api.logic.ConditionDescription;
 import dev.materione.api.logic.ConditionType;
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.InputMethod;
+import dev.materione.api.logic.ItemSource;
+import dev.materione.api.logic.ListSource;
 import dev.materione.api.logic.LogicCategory;
 import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.Threading;
@@ -56,7 +59,56 @@ public final class VocabularyBuilder {
                 StepKinds.all(),
                 categories(actions, conditions),
                 functions(registries),
-                recipes(registries));
+                recipes(registries),
+                listSources(registries),
+                itemSources(registries),
+                inputMethods(registries));
+    }
+
+    /** The registered list sources, sorted by id (logic.md §28, §31). A source whose description throws is left out. */
+    private static List<BehaviorVocabulary.ListSourceEntry> listSources(RegistryView registries) {
+        var out = new ArrayList<BehaviorVocabulary.ListSourceEntry>();
+        for (RegistryEntry<?> entry : entries(registries, RegistryKeys.LIST_SOURCES)) {
+            if (!(entry.entry() instanceof ListSource<?> source)) {
+                continue;
+            }
+            attempt(source::describe).ifPresent(description -> out.add(new BehaviorVocabulary.ListSourceEntry(
+                    LogicIds.display(entry.id()), description, entry.registeredBy())));
+        }
+        out.sort(Comparator.comparing(BehaviorVocabulary.ListSourceEntry::id));
+        return List.copyOf(out);
+    }
+
+    /** The registered item sources, sorted by id (logic.md §4.4, §31). A source whose description throws is left out. */
+    private static List<BehaviorVocabulary.ItemSourceEntry> itemSources(RegistryView registries) {
+        var out = new ArrayList<BehaviorVocabulary.ItemSourceEntry>();
+        for (RegistryEntry<?> entry : entries(registries, RegistryKeys.ITEM_SOURCES)) {
+            if (!(entry.entry() instanceof ItemSource<?> source)) {
+                continue;
+            }
+            attempt(source::describe).ifPresent(description -> out.add(new BehaviorVocabulary.ItemSourceEntry(
+                    LogicIds.display(entry.id()), description, entry.registeredBy())));
+        }
+        out.sort(Comparator.comparing(BehaviorVocabulary.ItemSourceEntry::id));
+        return List.copyOf(out);
+    }
+
+    /**
+     * The registered input methods, sorted by id (logic.md §29, §31), each with its availability: the sign editor
+     * is registered and unavailable on a build without the 26.x API, and the editor greys it with the reason.
+     */
+    private static List<BehaviorVocabulary.InputMethodEntry> inputMethods(RegistryView registries) {
+        var out = new ArrayList<BehaviorVocabulary.InputMethodEntry>();
+        for (RegistryEntry<?> entry : entries(registries, RegistryKeys.INPUT_METHODS)) {
+            if (!(entry.entry() instanceof InputMethod method)) {
+                continue;
+            }
+            attempt(method::describe).ifPresent(description -> out.add(new BehaviorVocabulary.InputMethodEntry(
+                    LogicIds.display(entry.id()), description, availability(method::availability),
+                    entry.registeredBy())));
+        }
+        out.sort(Comparator.comparing(BehaviorVocabulary.InputMethodEntry::id));
+        return List.copyOf(out);
     }
 
     /** The registered recipes, sorted by id (logic.md §4.6, §30). A recipe whose description throws is left out. */
@@ -113,7 +165,8 @@ public final class VocabularyBuilder {
                     description.map(ActionDescription::category).orElse(null),
                     threading,
                     availability(type::availability),
-                    entry.registeredBy()));
+                    entry.registeredBy(),
+                    attempt(type::takesElse).orElse(false)));
         }
         out.sort(Comparator.comparing(BehaviorVocabulary.Action::id));
         return List.copyOf(out);
