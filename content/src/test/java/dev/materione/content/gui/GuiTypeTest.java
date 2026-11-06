@@ -208,6 +208,30 @@ class GuiTypeTest {
     }
 
     @Test
+    void anIdYamlReadAsABooleanOrANumberSaysSoAndNamesTheLayer() {
+        var type = new GuiType(components());
+        var definition = LosslessYaml.parse("""
+                title: T
+                rows: 1
+                layers:
+                  - {id: yes, type: panel, width: 10, height: 10}
+                  - {id: 7, type: panel, width: 10, height: 10}
+                  - {id: "no", type: panel, width: 10, height: 10}
+                """).data();
+        GuiDefinition gui = (GuiDefinition) type.parse(GUI, definition, Map.of()).orElseThrow();
+        assertThat(gui.layers()).extracting(GuiLayer::id).containsExactly("no");
+        assertThat(gui.skipped()).satisfiesExactly(
+                first -> {
+                    assertThat(first.layerId()).isEqualTo("true");
+                    assertThat(first.reason()).contains("read as the boolean true").contains("id: \"yes\"");
+                },
+                second -> {
+                    assertThat(second.layerId()).isEqualTo("7");
+                    assertThat(second.reason()).contains("id: \"7\"");
+                });
+    }
+
+    @Test
     void addonComponentsResolveThroughTheRegistryAndAContainedFailureSkipsOnlyItsLayer() throws IOException {
         var tag = new TagComponent();
         var broken = new BrokenComponent();

@@ -178,6 +178,15 @@ releases may change file formats, settings and the public API.
   session-bound challenge); any other outcome stays on the cloud silently.
 - `/materione editor local` now says the link only works from a computer that can reach the port.
 
+### Fixed
+
+- **A GUI layer skipped for its id or its text now says why (`MTR-0052`).** A layer id YAML reads as
+  a boolean (`yes`, `no`, `on`, `off`) or a number used to report only "id must match [a-z0-9_]+"
+  with no layer named; it now names the value it read and says to quote it (`id: "yes"`). A text
+  layer in a GUI with dynamic layers was skipped with "text contains unsupported characters or has
+  an invalid row"; it now gives the same reason a static GUI does, such as "text may not contain
+  <, \, & or §" for a formatting tag (a text layer is coloured with its `color` field).
+
 ### Added
 
 - **The logic has a typed authoring API and web ops (logic.md §8, §19; api.md §3.12).** `authoring().logic()`

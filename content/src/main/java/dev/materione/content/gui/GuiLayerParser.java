@@ -54,8 +54,18 @@ final class GuiLayerParser {
             throw new Rejection(null, null, "a layer must be a mapping of its fields");
         }
         Map<String, Object> fields = LosslessYaml.stringKeyed(mapping);
-        String layerId = fields.get("id") instanceof String text ? text : null;
+        Object rawId = fields.get("id");
         String type = fields.get("type") instanceof String text && !text.isBlank() ? text : null;
+        if (rawId instanceof Boolean flag) {
+            // YAML reads yes, no, on, off, true and false as booleans, so the author's word is gone.
+            throw new Rejection(String.valueOf(flag), type, "id was read as the boolean " + flag
+                    + " (YAML reads yes, no, on and off as booleans); quote it, as id: \"yes\", or choose another id");
+        }
+        if (rawId != null && !(rawId instanceof String)) {
+            throw new Rejection(String.valueOf(rawId), type, "id must be text matching [a-z0-9_]+; quote it, as id: \""
+                    + rawId + "\"");
+        }
+        String layerId = (String) rawId;
         if (layerId == null || !GuiType.LAYER_ID.matcher(layerId).matches()) {
             throw new Rejection(layerId, type, "id must match [a-z0-9_]+");
         }
