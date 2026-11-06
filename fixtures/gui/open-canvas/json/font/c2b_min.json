@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2b_min.png",
+   "ascent": 53,
+   "height": 53,
+   "chars": [
+    "\ue000"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_viol.png",
+   "ascent": 53,
+   "height": 32,
+   "chars": [
+    "\ue007"
+   ]
+  }
+ ]
+}

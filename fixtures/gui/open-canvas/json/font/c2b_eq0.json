@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2b_eq0.png",
+   "ascent": 10,
+   "height": 10,
+   "chars": [
+    "\ue002"
+   ]
+  }
+ ]
+}
