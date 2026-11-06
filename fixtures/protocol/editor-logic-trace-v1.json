@@ -1,0 +1,149 @@
+{
+  "meta": {
+    "file": "editor-logic-trace-v1.json",
+    "name": "materione live trace op frames",
+    "version": 1
+  },
+  "subscribe": {
+    "request": {
+      "op": "logic.trace.subscribe",
+      "id": "t-0",
+      "payload": {
+        "resource": "demo:shop"
+      }
+    },
+    "response": {
+      "op": "logic.trace.subscribe",
+      "id": "t-0",
+      "ok": true,
+      "data": {
+        "subscribed": true,
+        "resource": "demo:shop",
+        "scope": "player",
+        "leaseSeconds": 300,
+        "limits": {
+          "eventsPerSecond": 200,
+          "maxEntriesPerRun": 256,
+          "maxBatch": 128
+        }
+      }
+    }
+  },
+  "subscribeAll": {
+    "request": {
+      "op": "logic.trace.subscribe",
+      "id": "t-1",
+      "payload": {
+        "resource": "demo:shop",
+        "allPlayers": true
+      }
+    },
+    "response": {
+      "op": "logic.trace.subscribe",
+      "id": "t-1",
+      "ok": true,
+      "data": {
+        "subscribed": true,
+        "resource": "demo:shop",
+        "scope": "all",
+        "leaseSeconds": 300,
+        "limits": {
+          "eventsPerSecond": 200,
+          "maxEntriesPerRun": 256,
+          "maxBatch": 128
+        }
+      }
+    }
+  },
+  "subscribeRefused": {
+    "request": {
+      "op": "logic.trace.subscribe",
+      "id": "t-2",
+      "payload": {
+        "resource": "bad"
+      }
+    },
+    "response": {
+      "op": "logic.trace.subscribe",
+      "id": "t-2",
+      "ok": false,
+      "error": {
+        "code": "MTR-0008",
+        "message": "'resource' must be a resource id such as pack:name"
+      }
+    }
+  },
+  "push": {
+    "id": "trace-1",
+    "op": "push.logic.trace",
+    "payload": {
+      "entries": [
+        {
+          "at": 1000000,
+          "kind": "run-started",
+          "path": "behavior.0",
+          "rule": "demo:shop#0",
+          "run": 11
+        },
+        {
+          "at": 1000000,
+          "kind": "ran",
+          "path": "behavior.0.do.0",
+          "rule": "demo:shop#0",
+          "run": 11
+        },
+        {
+          "at": 1000000,
+          "detail": "then",
+          "kind": "branch",
+          "path": "behavior.0.do.1",
+          "rule": "demo:shop#0",
+          "run": 11
+        },
+        {
+          "at": 1000000,
+          "detail": "not enough money",
+          "kind": "failed",
+          "path": "behavior.0.do.1.then.0",
+          "rule": "demo:shop#0",
+          "run": 11
+        },
+        {
+          "at": 1000000,
+          "detail": "chance 0.5",
+          "kind": "skipped",
+          "path": "behavior.0.do.2",
+          "rule": "demo:shop#0",
+          "run": 11
+        },
+        {
+          "at": 1000000,
+          "detail": "FINISHED",
+          "kind": "run-ended",
+          "path": "behavior.0",
+          "rule": "demo:shop#0",
+          "run": 11
+        }
+      ],
+      "resource": "demo:shop",
+      "seq": 1
+    }
+  },
+  "unsubscribe": {
+    "request": {
+      "op": "logic.trace.unsubscribe",
+      "id": "t-3",
+      "payload": {
+        "resource": "demo:shop"
+      }
+    },
+    "response": {
+      "op": "logic.trace.unsubscribe",
+      "id": "t-3",
+      "ok": true,
+      "data": {
+        "unsubscribed": 1
+      }
+    }
+  }
+}

@@ -9,6 +9,14 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Live trace for GUI logic (logic.md §7.6, §32, #226).** Turn on "Live trace" in the Logic tab, click in game, and the GUI's rules
+  run on the canvas: the wires and nodes the click went through light up one after the other, the steps it did not reach are dimmed,
+  a failed action shows its reason on its node, and a notice says when the server dropped entries. It is off by default, per GUI and
+  per session, scoped to your own clicks, and fades by itself. The API is `api.logic().traces().subscribe(filter, listener)`
+  (`LogicTraces`: opt-in by player and resource, rate-limited at 200 entries a second, capped at 256 steps a run and 8 subscriptions,
+  and free while nobody subscribes); the web ops are `logic.trace.subscribe` and `logic.trace.unsubscribe`, which stream
+  `push.logic.trace` frames sized for the cloud relay. A `stop` step and a budget-aborted step now appear in the trace.
+  `MTR-0089` (a subscription refused at its cap).
 - **The node inspector in the Logic tab (logic.md §7.3, §31, #224).** Select a node and its every parameter is a field drawn
   from the node's self-description: the item browser for items, the packs' sound events for sounds, a colour field, number
   fields clamped to their range, toggles, choices, rows for lists, and JSON for what no field can hold. Keys the server does

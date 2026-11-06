@@ -368,19 +368,26 @@
     Delete removes the selected node. F frames it. Control Z undoes.
   </p>
 
-  <div class="world" role="tree" aria-label="Nodes" class:glide={canvas.glide} style={worldStyle} ontransitionend={() => (canvas.glide = false)}>
+  <div class="world" role="tree" aria-label="Nodes" class:glide={canvas.glide} class:tracing={canvas.trace.showing} style={worldStyle} ontransitionend={() => (canvas.glide = false)}>
     <svg class="wires" width="1" height="1" aria-hidden="true">
       {#each canvas.routes as wire (wire.edge.id)}
         {@const source = canvas.graph.byId.get(wire.edge.from)!}
         {@const end = wire.points[wire.points.length - 1]!}
+        {@const reached = canvas.trace.lit.get(wire.edge.id)}
         <g
           class="wire"
           class:lit={selectedId === wire.edge.from || selectedId === wire.edge.to}
-          style="--w:{canvas.colorOf(source)}"
+          class:ran={reached !== undefined}
+          style="--w:{canvas.colorOf(source)};--i:{reached ?? 0}"
           data-wire={wire.edge.id}
+          data-ran={reached !== undefined ? 'true' : undefined}
         >
           <path class="shade" d={pathOf(wire.points)} />
           <path class="line" d={pathOf(wire.points)} />
+          {#if reached !== undefined}
+            <!-- the run along this wire: drawn in from the source, one wire after another -->
+            <path class="pulse" d={pathOf(wire.points)} pathLength="1" />
+          {/if}
           {#each wire.points.slice(1, -1) as corner, index (index)}
             <rect class="dust" x={corner.x - 3} y={corner.y - 3} width="6" height="6" />
           {/each}
@@ -402,6 +409,12 @@
       {/if}
     {/each}
   </div>
+
+  {#if canvas.trace.enabled && canvas.trace.view.dropped > 0}
+    <p class="dropnote" role="status" data-testid="logic-trace-dropped">
+      Trace truncated: the server dropped {canvas.trace.view.dropped} entr{canvas.trace.view.dropped === 1 ? 'y' : 'ies'} (its rate and size caps).
+    </p>
+  {/if}
 
   {#if canvas.graph.nodes.length === 0}
     <div class="overlay" data-testid="logic-empty">
@@ -482,6 +495,68 @@
   .wire.lit .line {
     stroke: var(--w);
     stroke-width: 4;
+  }
+  /* A run on screen (the live trace): what it went along is lit, what it did not reach is dim. */
+  .wire {
+    transition: opacity var(--motion-base) var(--ease-standard);
+  }
+  .world.tracing .wire:not(.ran) {
+    opacity: 0.25;
+  }
+  .wire.ran .line {
+    stroke: var(--w);
+    stroke-width: 4;
+  }
+  .wire .pulse {
+    fill: none;
+    stroke: var(--logic-trace-pulse);
+    stroke-width: 4;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    shape-rendering: crispEdges;
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+    opacity: 0.85;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .wire .pulse {
+      animation: pulse-in 360ms var(--ease-standard) both;
+      animation-delay: calc(var(--i) * 110ms);
+    }
+  }
+  /* reduced motion: no animation, the wire is simply lit and its pulse is a quiet static highlight */
+  @media (prefers-reduced-motion: reduce) {
+    .wire .pulse {
+      opacity: 0.35;
+    }
+  }
+  @keyframes pulse-in {
+    from {
+      stroke-dashoffset: 1;
+      opacity: 0.95;
+    }
+    70% {
+      stroke-dashoffset: 0;
+      opacity: 0.95;
+    }
+    to {
+      stroke-dashoffset: 0;
+      opacity: 0.35;
+    }
+  }
+  .dropnote {
+    position: absolute;
+    right: var(--space-3);
+    top: var(--space-3);
+    max-width: min(360px, calc(100% - var(--space-6)));
+    margin: 0;
+    padding: var(--space-1) var(--space-3);
+    background: var(--warn-bg);
+    border: 1px solid var(--warn);
+    border-radius: var(--radius);
+    color: var(--warn);
+    font-size: var(--text-xs);
+    pointer-events: none;
   }
   .wire.ghost .line {
     stroke: var(--w);

@@ -41,7 +41,8 @@ class DiagnosticCodesTest {
         // MTR-0081 prompt names an unknown input method, MTR-0082 prompt answers into a persistent variable,
         // MTR-0083 GUI not shown again after a prompt, MTR-0084 input method could not start: logic.md §6.6, §29, #220;
         // MTR-0085 recipe does not load, MTR-0086 recipe parameter refused, MTR-0087 recipe expansion does not validate,
-        // MTR-0088 recipe action unavailable: logic.md §30, #222)
-        assertThat(DiagnosticCodes.all()).hasSize(88);
+        // MTR-0088 recipe action unavailable: logic.md §30, #222;
+        // MTR-0089 live trace subscription refused: logic.md §32, #226)
+        assertThat(DiagnosticCodes.all()).hasSize(89);
     }
 }

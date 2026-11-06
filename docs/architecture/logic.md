@@ -632,7 +632,7 @@ player's thread anyway.
   in the studio's tokens: trigger amber, player blue, gui purple, economy gold, data teal, world
   green, server slate and flow white.
 - **Edges.** Exec edges are pixel-stepped "redstone" wires in the source port's colour.
-- **Animation.** The current trace (§7.6) animates the edges.
+- **Animation.** The current trace (§7.6, §32) animates the edges, and stands still under `prefers-reduced-motion`.
 - **Theme.** Nodes use the studio's Minecraft-flavoured panels (gui.md §6). Field editors are typed
   from the self-description: item pickers reuse the item browser, sound pickers the sound catalog,
   and variables are a dropdown of declared variables. They live in the **inspector** beside the canvas
@@ -677,6 +677,11 @@ outcomes) streams to the studio. It is opt-in per session and per GUI, rate-limi
 Executed edges light up, and a failed action shows its reason on the node. Nothing in either
 incumbent compares to this, and it falls out of §5.2's step-boundary events at little cost.
 
+*As built (#226, §32):* `api.logic().traces().subscribe(filter, listener)` hears batches of entries (a step path, a kind, a
+reason, a run id); the web ops `logic.trace.subscribe` and `logic.trace.unsubscribe` open and close a leased, capped stream of
+`push.logic.trace` frames to the one editor session; and the Logic tab's "Live trace" toggle lights the executed wires and
+nodes, dims what the run did not reach, puts a failure's reason on its node and says when the server dropped entries.
+
 ---
 
 ## 8. API and wire parity
@@ -694,7 +699,7 @@ Everything the studio does is an API call first (the #204 rule: web → api only
 | Declared variables | the `variables` content type, through ordinary authoring | existing `authoring.*` |
 | Read and write player or server variables | `MaterioneAPI.logic().variables()` (needs `materione.var`) | `logic.variables.get/set` (admin-gated) |
 | Open a GUI with args | `RuntimeApi.gui().open(player, id, args)` | `runtime.openGui` (gains `args`) |
-| Live trace | `MaterioneAPI.logic().traces().subscribe(filter)` | `logic.trace.subscribe` (stream) |
+| Live trace | `MaterioneAPI.logic().traces().subscribe(filter, listener)` | `logic.trace.subscribe` and `logic.trace.unsubscribe`, streaming `push.logic.trace` frames (§32) |
 
 The `logic` capability gates every new op in `SessionBlob` and `editor-op-gates.json`, as `gui`
 did (gui.md §10, decisions taken in #185). The editor-compat check stays green against every
@@ -712,18 +717,22 @@ api/     dev.materione.api.logic           ActionType, ConditionType, TriggerTyp
                                             ItemSource, ListSource, InputMethod, LogicContext,
                                             ContextFacet<T>, ParamReader, ActionOutcome, LogicApi, Recipe
 api/     dev.materione.api.logic.provider  EconomyProvider, PermissionProvider, ServerTransfer
+api/     dev.materione.api.logic.trace     (#226) LogicTraces, TraceFilter, TraceEntry, TraceKind, TraceBatch, TraceListener, TraceSubscription,
+                                            TraceLimits
 behavior/ dev.materione.behavior.logic     (#207) LogicLookup, RegistryLogicLookup, MapLogicContext, EngineExpressions,
                                             BuiltinTriggers, StepKinds, VocabularyBuilder, LogicIds
 behavior/ dev.materione.behavior.flow      (#208) Step (sealed), Condition (sealed), FlowCompiler, StepPath, one record per
                                             step and condition kind; RuleCompiler, StepCompiler, ConditionCompiler, FlowSet
 behavior/ dev.materione.behavior.run       (#208) FlowInterpreter (+ ControlSteps), FlowRun, Frame, RunBudget, TraceEvent,
                                             TraceSink, RunScheduler (port), RunRegistry, RunReporter
+behavior/ dev.materione.behavior.run.trace (#226) TraceHub (the sink and the API), TraceQueue (the per-subscription limits)
 behavior/ dev.materione.behavior.expr      + FunctionCall node, function registry binding
 content/ dev.materione.content.gui.logic   (#214) ClickMap, ClickMapCompiler, GuiRules, GuiRuleChecker; (#215) OpenSpec;
                                             (#216) dynamic-layer analysis
 content/ dev.materione.content.variable    VariablesType (the `variables` content type)
 plugin/  dev.materione.plugin.logic        LogicService (wires registries ↔ interpreter ↔ scheduler), GatewayRunScheduler, LogicRegistryImpl,
                                             BuiltinLogic (the built-ins, registered through the public API)
+plugin/  dev.materione.plugin.logic.trace     (#226) TracePump (installs the sink and ticks the hub while someone subscribes)
 plugin/  dev.materione.plugin.logic.action    one class per action (≤ ~150 lines each)
 plugin/  dev.materione.plugin.logic.support   shared action helpers (Quantity, ItemRef, InventoryPlan, Stacks); not actions (§17)
 plugin/  dev.materione.plugin.logic.condition one class per condition
@@ -749,6 +758,7 @@ plugin/  dev.materione.plugin.gui.prompt   ChatInput, SignInput, AnvilInput
 integrations/ vault, luckperms, placeholderapi (expansion), headdatabase, …  (soft-depend adapters)
 webui/   src/lib/logic/                    graph projection, layout, edit commands, vocabulary client
 webui/   src/lib/logic/canvas/             node canvas, ports, wires, palette, inspector
+webui/   src/lib/logic/trace.ts, trace.svelte.ts  (#226) the live trace: path to node, the fold of a stream, the toggle
 ```
 
 Rules:
@@ -782,7 +792,7 @@ took `MTR-0057` (a step the registry or its type rejects); #208 took `MTR-0058` 
 linked), `MTR-0059` (a run budget) and `MTR-0060` (an unknown `${root}`); #214 needed no new code (§21);
 #211 took `MTR-0063` to `MTR-0065` (§20); #215 took `MTR-0066` to `MTR-0069` (§23); #216 took `MTR-0070` to
 `MTR-0073` (§24); #218 took `MTR-0074` to `MTR-0076` (§25); #219 took `MTR-0077` to `MTR-0080` (§28); #220 took
-`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30), so the next free code is `MTR-0089`.
+`MTR-0081` to `MTR-0084` (§29); #222 took `MTR-0085` to `MTR-0088` (§30); #226 took `MTR-0089` (§32), so the next free code is `MTR-0090`.
 Each row below names the class of problem, and every one carries a step path where one applies.
 
 | Problem | Severity | Effect |
@@ -2548,7 +2558,7 @@ rules) and `webui/src/lib/studio/logic/` (the components). Each decision is reve
 **Deferred**
 
 - ~~The node inspector, typed fields and condition stacks (#224)~~ (shipped, §31); the Script tab, Design ↔ Logic
-  linkage and the recipes panel (#225); the live trace (#226).
+  linkage and the recipes panel (#225); the live trace (shipped in #226, §32).
 - Multi-select, copy and paste, and moving a single node out of the middle of a chain (the chain-lift above moves
   a node and what follows it).
 - Dragging a flow entry (a named flow has no position) and creating a `call`'s target flow from the node.
@@ -3088,7 +3098,134 @@ side `VocabularySourcesTest` and `VocabularySourcesJsonTest`. The QA catalog has
 real local app: a message completed from the trigger context, saved and run) and `gui.logic-inspector-visual` (screenshots). They
 were authored and pass `qa/runner.mjs check`; they were **not run against a client** in this change.
 
-**Deferred.** The Script tab, Design to Logic linkage and the Recipes panel (#225); the live trace (#226). The GUI studio's layer
+**Deferred.** The Script tab, Design to Logic linkage and the Recipes panel (#225); the live trace (shipped in #226, §32). The GUI studio's layer
 inspector does not offer the item sources and list sources it now has in the vocabulary (the Design tab's own controls). A
 key/value editor for a `call`'s arguments (they are JSON for now). Multi-select, copy and paste on the canvas. The PlaceholderAPI
 list of installed expansions (decision 10).
+
+
+---
+
+
+---
+
+## 32. Decisions taken in #226 (W4: the live trace)
+
+#226 shipped §7.6: a studio that is connected hears what a GUI's rules do while a player clicks, and the Logic canvas draws it. The
+engine already emitted step-boundary events (§16 decision 20); this adds the subscription API on top of them, the two web ops and
+the stream, and the canvas animation. The code is `dev.materione.api.logic.trace` (the contract), `dev.materione.behavior.run.trace`
+(the hub, Bukkit-free), `dev.materione.plugin.logic.trace` (the pump, an adapter), `LogicTraceOps` in `web`, and
+`webui/src/lib/logic/trace.ts` and `trace.svelte.ts` with the node and wire styling in `webui/src/lib/studio/logic/`. Each decision is
+reversible by the owner.
+
+**The API: `LogicApi.traces()`**
+
+1. **Subscribe with a filter, hear batches.** `api.logic().traces().subscribe(filter, listener)` returns an `ApiResult<TraceSubscription>`;
+   closing the subscription unsubscribes (idempotent, never throws). A `TraceFilter` is `{players, resources}` and **must name at least
+   one**: there is no "everything" subscription, so a trace is opt-in per player and per GUI by construction, and the constructor
+   rejects an empty filter. An empty `players` means any player, an empty `resources` any resource. A `TraceEntry` is `{runId, resource,
+   rule, player, path, kind, detail, atMillis}`; `path` is the step path of §16 decision 2, the one the diagnostics use. `TraceKind` is
+   the interpreter's event type renamed for a reader (`RAN` for `STEP_OK`, `FAILED` for `STEP_FAILED`, and so on), with the wire name
+   lower-cased with dashes (`ran`, `require-failed`). A listener receives a `TraceBatch {entries, dropped}`: the entries since the last
+   delivery, oldest first, and how many the subscription lost on the way.
+2. **The engine's event grew two fields and two events.** `TraceEvent` now carries the rule's owning `resource` (a GUI's `pack:id`) and the
+   run's `player`, so a filter can match without the hub reaching into the run. A `stop` step now emits a `STEP_OK` at its own path before the
+   run ends, and a run aborted by its budget emits a `STEP_FAILED` at the step that hit it with the reason, so both nodes can light and say
+   why. Nothing else about the interpreter changed.
+3. **The hub is a sink, filtered per subscription.** `TraceHub` implements `TraceSink` and `LogicTraces`. An engine thread calls `accept`; for
+   each subscription whose filter matches it builds one `TraceEntry` (shared by the subscriptions that want it) and offers it to that
+   subscription's bounded `TraceQueue`. A listener is never called from the engine thread: a host pump calls `flush()`, which hands each
+   queue's batch to its listener. A listener that throws loses its batch and nothing else. A queue holds its own lock for a few field
+   updates, so a subscriber can never stall a run.
+4. **Free when nobody subscribes.** The hub is installed as the interpreter's sink only while it holds at least one subscription (the first
+   `subscribe` installs it, the last `close` removes it, through the hub's activity callback), so with none the interpreter builds no events
+   at all (§16 decision 20), and nothing is scheduled. `FlowDispatchPerfTest` (the 0.5 ms p99 click-to-first-action budget, plugin.md §9)
+   runs with no sink and is unchanged.
+5. **The pump is an adapter.** `TracePump` (`plugin.logic.trace`) installs the sink and arms `SchedulingGateway.executeGlobalLater` every
+   10 ticks while the hub is active, calling `hub.flush()`. It starts no thread (R5), owns no policy and is the only place the sink is wired.
+   The 10 ticks (half a second) is the delivery cadence: at most two batches a second per subscription, which is also what bounds the
+   relay's cost (decision 8).
+
+**The limits**
+
+6. **Every limit drops and says so.** `TraceLimits.DEFAULT`, and why each number:
+
+   | Limit | Value | Why |
+   |---|---|---|
+   | Entries per second, per subscription | 200 | A token bucket whose capacity is one second's worth, so a click of ten steps (about 25 entries) goes through whole and a click storm is held to the rate. A person cannot click 8 times a second in a menu; 200 is generous for a human and tight for a loop. |
+   | Step entries per run, per subscription | 256 | A run may take 1,000 steps (§5.3); the studio draws a graph a person reads, which never needs more. A run's start and end entries are exempt, so a run that hit the cap still shows how it ended. |
+   | Pending entries, per subscription | 512 | The queue between two pumps. At 200 a second it holds five pumps' worth; anything past it is dropped, so memory is bounded however slow the listener. |
+   | Entries per delivery | 128 | A pump's worth at the entry rate is 100, so 128 is one frame; it also keeps a frame well under the relay's size limit (decision 8). The rest waits for the next pump. |
+   | Subscriptions, server-wide | 8 | A debugging aid: more than a few authors tracing at once is a mistake. A ninth subscribe is refused with `MTR-0089`, and a closed one frees its slot. |
+   | Detail, per entry | 160 characters | A reason is a sentence; a longer one is cut with an ellipsis. |
+
+   A drop is counted, never thrown: the next batch carries `dropped` (a batch may carry only a drop), and the stream reports it to the studio.
+7. **One new code.** `MTR-0089` (warning, "Live trace subscription refused; limit reached") answers `subscribe` when the server's cap is reached,
+   documented in plugin.md §5. The per-session cap (decision 9) uses the same code.
+
+**The web ops**
+
+8. **`logic.trace.subscribe` and `logic.trace.unsubscribe`, with `push.logic.trace` frames.** Both ops are gated on the `logic` capability
+   (`editor-op-gates.json`, `since: post-0.1.0`) and are pure translators over `LogicTraces` (R9). The editor protocol has no per-request
+   streaming reply, so the stream is the existing push channel, addressed to the one session that asked (the diagnostics and reload pushes
+   go to every session). A frame is `{op: "push.logic.trace", id: "trace-<n>", payload: {resource, seq, entries: [{run, rule, path, kind,
+   detail?, at}], dropped?}}`. It is sized for the relay (web.md §3.2: frames up to 1 MiB, a retention cap of 2,000 frames or 16 MiB per
+   channel): at most two frames a second per subscription, at most 128 entries each, rule and path and detail cut at 160 characters, and a
+   frame is halved until it fits 48 KiB (what falls off is counted in `dropped`). The relay stores each frame as a D1 row; a stream that runs
+   continuously costs at most two rows a second per traced GUI, and nothing at all while nobody clicks. Cost model (CLAUDE.md): no new
+   deployed infrastructure, no Worker or relay change; the free-tier line item affected is D1 rows written, bounded by the cadence and the
+   lease below.
+9. **Scope, lease and caps.** `subscribe {resource, allPlayers?}` traces one GUI for the calling session, scoped to **the player who opened the
+   session** unless `allPlayers` is set; a console session has no player and traces everyone's runs of the GUI (the reply says which:
+   `scope: "player" | "all"`). The studio never sets `allPlayers`; the op carries it for an API client. The subscription is a **lease** of
+   `leaseSeconds` (300): the studio renews it by subscribing again, every 40% of the lease, and a lease that lapses closes the subscription. A
+   session that ended closes it too, at the next delivery or the next subscribe, so a closed browser tab cannot hold one of the eight slots.
+   A session holds at most four GUIs at once. Subscribing again for a GUI renews its lease and does not open a second subscription; the same
+   GUI with the other scope replaces it. `unsubscribe {resource?}` closes one, or all of the session's when no resource is named, and answers
+   how many closed.
+10. **A malformed request is a bad request.** A `resource` that is missing or not `pack:name` is `MTR-0008`, as the other ops answer it; a
+    session that is not active is the same. The cap is `MTR-0089`.
+
+**The canvas**
+
+11. **A toggle in the Logic tab, off by default, per GUI.** "Live trace" sits in the toolbar. The choice lives on the GUI's canvas state, not in
+    `localStorage`, so it is per GUI and per tab and never persists across a reload (opt-in every time). While the toggle is on, the tab
+    holds the server lease; leaving the tab, closing the GUI or losing the connection lets it go (`detach`) and returning takes it again (`attach`),
+    keeping the author's choice. A refusal (the cap) or a server without the logic API is said in the toolbar and the toggle stays where it was
+    put.
+12. **Step paths map to nodes the way diagnostics do.** `nodeOfPath` picks the deepest node whose id is the path or a prefix of it, the rule
+    §26 decision 16 uses for the compiler's verdict, so `behavior.0.do.1.if` lands on the `if` node and a path no node has is ignored. A
+    node that ran lights up (a coloured ring) and so does the wire that feeds it: every edge whose target ran, failed or is waiting. Skipped
+    steps are marked, and their wire stays dark. A branch not taken, and every rule the click did not run, stay as they are, and while a run is
+    on screen everything the run did not reach is dimmed (nodes to 45%, wires to 25%), so the path through the graph reads at a glance. A
+    run that has not arrived yet dims nothing.
+13. **A failure shows its reason on the node.** A failed action, a failed `require` and a run the budget aborted put the reason in a pill
+    under the node and in the node's header badge, the same `flag` badge a compiler verdict wears (§26 decision 16), as an error with the text
+    "Failed in the last run: ...". A failure is never overwritten by a later success on the same node, because the node's job is to show what went
+    wrong. A skipped step wears an info badge.
+14. **Runs clear each other, and the picture fades.** A rule starting clears that rule's lane, and a `call` clears the flow it enters, so the next
+    click replaces the last one without touching another rule's picture. The whole picture fades 8 seconds after the last entry. The server's
+    drop count is shown as a notice on the canvas ("Trace truncated: the server dropped N entries") until the picture clears.
+15. **Motion respects `prefers-reduced-motion`.** With motion, a lit wire draws a bright pulse from its source and a lit node eases in, each
+    delayed by the order its target was reached, so the run is seen travelling; with reduced motion nothing animates and the wires and nodes are
+    simply lit. The wires use the source colour; the pulse is the new token `--logic-trace-pulse`.
+16. **The trace follows the saved file, and says so.** The server runs the rules it loaded, so the paths it reports are the saved file's. With
+    unsaved edits the toolbar says a node moved or inserted may not line up until Save. The studio does not try to translate paths through the
+    draft.
+
+**Verification.** `TraceHubTest` (behavior: the filter, the rate limit, the per-run step cap, the pending cap, the batch size, the subscription
+cap and its code, the drop marker, activity callbacks, a throwing listener, and a real interpreter run), `LogicTraceOpsTest` (web: the ops
+over the real hub, scope, lease, session end, caps, the frame trim, and the goldens `fixtures/protocol/editor-logic-trace-v1.json`),
+`LogicTraceIntegrationTest` (plugin, headless: a rule compiled by the real compiler fired through the real `LogicService` engine; the
+subscription hears the step paths of that run on the pump's tick; the sink and the pump follow the first and last subscription; a click
+storm of 2,000 clicks is held to the rate limit while the engine runs every action), `PaperGuiRuntimeIT` step 9 (a live Paper server: the ops
+over the real handshake, the per-session cap and `MTR-0089`), webui `test/logic-trace.spec.ts` (the goldens through the wrappers, path to
+node and wire, the fold of a stream, the toggle's life cycle), the Playwright spec `webui/browser/specs/logic-trace.pw.ts` (lit wires and
+dim branches, a failure reason on its node, a skip, replacement, the drop notice, the fade, the cap, leaving the tab, reduced motion) and the QA
+entries `logic.trace-stream` (auto: a real client click lights the node the studio shows) and `logic.trace-canvas-visual`. The QA entries were
+authored and pass `qa/runner.mjs check`; they were **not run against a client** in this change.
+
+**Deferred.** A click that makes a trace needs a client, and the Paper harness is headless, so the harness proves the ops and the wiring on a
+live server and the in-game click path is the QA entries'. Tracing item, block and furniture rules (their resources are not opened in the
+studio's Logic tab yet; the API and the stream already carry any resource). An `allPlayers` switch in the UI. Replaying or pausing a trace,
+and keeping a history of runs. Translating paths through unsaved edits (decision 16).

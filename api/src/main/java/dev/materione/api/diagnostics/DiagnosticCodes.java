@@ -508,6 +508,13 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode RECIPE_ACTION_UNAVAILABLE =
             new DiagnosticCode("MTR-0088", Severity.WARN, "Recipe uses an action this server cannot run now");
 
+    /**
+     * A live-trace subscription was refused (logic.md §32): the server already holds its maximum number of
+     * concurrent trace subscriptions. Nothing is subscribed; the caller can retry after closing one.
+     */
+    public static final DiagnosticCode TRACE_REFUSED =
+            new DiagnosticCode("MTR-0089", Severity.WARN, "Live trace subscription refused; limit reached");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -596,7 +603,8 @@ public final class DiagnosticCodes {
             RECIPE_LOAD_FAILED,
             RECIPE_PARAMETER_REFUSED,
             RECIPE_EXPANSION_REFUSED,
-            RECIPE_ACTION_UNAVAILABLE);
+            RECIPE_ACTION_UNAVAILABLE,
+            TRACE_REFUSED);
 
     private DiagnosticCodes() {}
 

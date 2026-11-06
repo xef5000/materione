@@ -21,11 +21,9 @@
  *       it must run under; the engine, not the action, dispatches through the thread gateway.
  * </ul>
  *
- * <h2>Seams for later work</h2>
+ * <h2>Live traces</h2>
  *
- * <p>{@code LogicApi} deliberately has no {@code variables()} or {@code traces()} yet. The
- * variable stores arrive with the variables work (logic.md §3, §13 L5) and the run trace with the
- * live-trace work (§7.6, §13 W4); each adds its accessor to {@code LogicApi} then, so nothing here
- * pretends to behaviour it does not have.
+ * <p>{@code LogicApi.traces()} (logic.md §7.6, §32) subscribes to the step-boundary events of the runs a
+ * filter selects. It is opt-in, rate-limited and capped, and costs the engine nothing while nobody listens.
  */
 package dev.materione.api.logic;

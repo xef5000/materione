@@ -386,6 +386,14 @@ pinned by `fixtures/protocol/editor-logic-v1.json`: `LogicAuthoringOpsTest` (JVM
 `webui/test/logic-ops.spec.ts` (vitest) checks that each wrapper sends the golden request byte for byte. The variables
 ops (`logic.variables.*`) are not here; they wait on #211 and join under the same capability.
 
+*As built (live trace, #226):* `logic.trace.subscribe` (`{resource, allPlayers?}`; answers `{subscribed, resource, scope, leaseSeconds,
+limits}`) opens a stream of `push.logic.trace` frames (`{resource, seq, entries: [{run, rule, path, kind, detail?, at}], dropped?}`) to
+the one editor session that asked, and `logic.trace.unsubscribe` (`{resource?}`; answers `{unsubscribed}`) closes it. Both are under the
+`logic` capability. The stream is opt-in per session and per GUI, scoped to the session's own player unless `allPlayers` is set, held on a
+5-minute lease the studio renews, and limited to 4 GUIs per session and 8 per server (`MTR-0089`). It is shaped for the relay: at most
+two frames a second, 128 entries and 48 KiB a frame, so a continuous stream costs at most two D1 frame rows a second and an idle one
+nothing (logic.md §32). The goldens are `fixtures/protocol/editor-logic-trace-v1.json` (`LogicTraceOpsTest`, `webui/test/logic-trace.spec.ts`).
+
 *As built (GUI `open:`, #221):* `gui.edit` takes `{op: "setOpen", open}` (the block, or null to remove it), and
 `gui.get`/`gui.edit` return the block as `open` when the GUI has one (gui.md §6.1, logic.md §19). `gui.validate` adds the
 block's shape problems and the logic compiler's problems for the GUI's `behavior:` and `flows:`. These are wire-additive:

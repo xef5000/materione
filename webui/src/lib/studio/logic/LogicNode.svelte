@@ -41,7 +41,10 @@
   const color = $derived(canvas.colorOf(node));
   const icon = $derived(KIND_ICONS[node.kind] ?? categoryIcon(category));
   const title = $derived(canvas.nameOf(node));
-  const flags = $derived(canvas.flagsOf(node));
+  const ran = $derived(canvas.trace.of(node.id));
+  const traceFlag = $derived(canvas.traceFlagOf(node));
+  const tracing = $derived(canvas.trace.showing);
+  const flags = $derived(traceFlag ? [...canvas.flagsOf(node), traceFlag] : canvas.flagsOf(node));
   const worst = $derived(flags.find((flag) => flag.severity === 'error') ?? flags.find((flag) => flag.severity === 'warn') ?? flags[0]);
   const key = $derived(valueKey(node));
   const editable = $derived(canvas.editable && key !== null && isLine(node.kind === 'action' ? node.value : node.kind === 'trigger' ? node.op : node.value));
@@ -93,14 +96,19 @@
   class="node"
   class:selected
   class:trigger={node.kind === 'trigger'}
+  class:ran={ran?.state === 'ran'}
+  class:failed={ran?.state === 'failed'}
+  class:waiting={ran?.state === 'waiting'}
+  class:dim={tracing && !ran}
   role="treeitem"
   aria-selected={selected}
   aria-label="{title}{text ? `: ${text}` : ''}"
   data-node={node.id}
   data-kind={node.kind}
   data-op={node.op}
+  data-trace={ran?.state}
   tabindex={tab ? 0 : -1}
-  style="left:{rect.x}px;top:{rect.y}px;width:{rect.w}px;height:{rect.h}px;--c:{color}"
+  style="left:{rect.x}px;top:{rect.y}px;width:{rect.w}px;height:{rect.h}px;--c:{color};--i:{ran?.order ?? 0}"
   title={description}
 >
   <header data-node-head>
@@ -146,6 +154,13 @@
     <span class="port in" data-port-in data-node={node.id} aria-hidden="true" style="top:{portOffset(0)}px"></span>
   {/if}
 
+  {#if ran?.state === 'failed'}
+    <!-- what went wrong in the last run, on the node itself -->
+    <p class="reason" role="status" data-testid="logic-trace-reason" title={ran.detail || 'The server gave no reason.'}>
+      <Icon name="triangle-alert" size={12} /> <span>{ran.detail || 'Failed'}</span>
+    </p>
+  {/if}
+
   {#each node.ports as port, index (port.id)}
     {@const taken = canvas.graph.leaving.has(portKey(node.id, port.id))}
     <div class="plabel" style="top:{HEAD + index * ROW}px;height:{ROW}px">
@@ -181,8 +196,67 @@
     touch-action: none;
     cursor: grab;
     transition:
+      opacity var(--motion-base) var(--ease-standard),
       border-color var(--motion-fast) var(--ease-standard),
       box-shadow var(--motion-fast) var(--ease-standard);
+  }
+  /* a run on screen (the live trace): what it did is lit, what it did not reach is dim */
+  .node.dim {
+    opacity: 0.45;
+  }
+  .node.ran {
+    border-color: var(--c);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--c) 60%, transparent), var(--shadow-1);
+  }
+  .node.failed {
+    border-color: var(--error);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--error) 65%, transparent), var(--shadow-1);
+  }
+  .node.waiting {
+    border-style: dashed;
+    border-color: var(--c);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .node.ran,
+    .node.failed {
+      animation: light-up 320ms var(--ease-standard) both;
+      animation-delay: calc(var(--i) * 110ms);
+    }
+  }
+  @keyframes light-up {
+    from {
+      opacity: 0.45;
+      transform: scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .reason {
+    position: absolute;
+    left: 0;
+    top: 100%;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    box-sizing: border-box;
+    max-width: 100%;
+    margin: var(--space-1) 0 0;
+    padding: 1px var(--space-2);
+    background: var(--error-bg);
+    border: 1px solid var(--error);
+    border-radius: var(--radius-sm);
+    color: var(--error);
+    font-size: var(--text-xs);
+    pointer-events: none;
+  }
+  .reason span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .node:hover {
     border-color: color-mix(in srgb, var(--c) 60%, var(--border-strong));

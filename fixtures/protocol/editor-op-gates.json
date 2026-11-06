@@ -9,6 +9,8 @@
     "logic.edit": { "capability": "logic", "since": "post-0.1.0" },
     "logic.get": { "capability": "logic", "since": "post-0.1.0" },
     "logic.instantiate": { "capability": "logic", "since": "post-0.1.0" },
+    "logic.trace.subscribe": { "capability": "logic", "since": "post-0.1.0" },
+    "logic.trace.unsubscribe": { "capability": "logic", "since": "post-0.1.0" },
     "logic.validate": { "capability": "logic", "since": "post-0.1.0" },
     "logic.vocabulary": { "capability": "logic", "since": "post-0.1.0" },
     "runtime.openGui": { "capability": "gui", "since": "post-0.1.0" },

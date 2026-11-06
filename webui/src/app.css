@@ -111,6 +111,8 @@
   --logic-stage: #061424;
   --logic-grid: rgb(255 255 255 / 0.07);
   --logic-wire-shade: rgb(0 0 0 / 0.55);
+  /* the live trace (logic.md section 7.6): the bright pulse that runs down a wire the run went along */
+  --logic-trace-pulse: #ffffff;
 
   /* type: a 7-step scale on Inter, with the mono stack for ids and code */
   --font-sans: 'Inter Variable', Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;

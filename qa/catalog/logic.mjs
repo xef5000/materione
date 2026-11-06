@@ -59,6 +59,42 @@ async function holdProbe(ctx, item) {
   await ctx.exec('player.getInventory().selected = 0');
 }
 
+// The live trace (issue 226, logic.md section 7.6, 32): the studio's Logic tab streams what a GUI's rules do while a
+// real client clicks. The guilogic menu's ping button (slot 11) runs behavior.1 (message, sound, run_command) on a
+// left click and behavior.2 on a right click; a console editor session traces every player's runs of the GUI.
+const TRACE_COVERS = [
+  'api/src/main/java/dev/materione/api/logic/trace/**',
+  'behavior/src/main/java/dev/materione/behavior/run/trace/**',
+  'behavior/src/main/java/dev/materione/behavior/run/FlowInterpreter.java',
+  'plugin/src/main/java/dev/materione/plugin/logic/trace/**',
+  'plugin/src/main/java/dev/materione/plugin/logic/LogicService.java',
+  'web/src/main/java/dev/materione/web/rpc/ops/LogicTraceOps.java',
+  'webui/src/lib/logic/trace.ts',
+  'webui/src/lib/logic/trace.svelte.ts',
+  'webui/src/lib/studio/logic/**',
+  'fixtures/packs/guilogic/**',
+];
+
+/** A real container click from the client: button 0 is a left click, 1 a right click. */
+function clickSlot(ctx, slot, button = 0) {
+  return ctx.exec(`mc.gameMode.handleContainerInput(player.containerMenu.containerId, ${slot}, ${button}, net.minecraft.world.inventory.ContainerInput.PICKUP, player)
+return 'clicked'`);
+}
+
+/** Opens guilogic:menu in the real editor's Logic tab with the live trace on, and returns the page. */
+async function openTracedMenu(ctx) {
+  const page = await ctx.browser.openEditor();
+  await page.getByLabel('project').selectOption('guilogic');
+  await page.getByRole('button', { name: 'Content', exact: true }).click();
+  await page.getByRole('navigation', { name: 'content types' }).getByRole('button', { name: 'GUIs' }).click();
+  await page.getByRole('option', { name: /menu/i }).dblclick();
+  await page.getByRole('tab', { name: 'Logic' }).click();
+  await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('logic-trace-toggle').click();
+  await page.locator('[data-testid="logic-trace-status"][data-trace-status="live"]').waitFor({ timeout: 30_000 });
+  return page;
+}
+
 export default [
   // Requires the public PlaceholderAPI plugin installed in the disposable probe server.
   test({
@@ -385,6 +421,80 @@ export default [
       await ctx.rcon('materione reload');
       await ctx.waitForServerLog(/MATERIONE-RELOAD-OK items=\d+/);
       await ctx.waitForServerLog(/MATERIONE-LOGIC-OK currency=materione:money available=false transfer=none unavailable=give_money,take_money,connect/);
+    },
+  }),
+
+  test({
+    id: 'logic.trace-stream',
+    title: 'with the studio\'s Live trace on for guilogic:menu, a real left click on the ping button lights behavior.1 and its three steps in the Logic tab, the right-click rule and the open rule stay dark, and turning the trace off stops the stream',
+    mode: 'auto',
+    covers: TRACE_COVERS,
+    dependsOn: ['guilogic.click-message-sound'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione gui open guilogic:menu Probe page=2');
+      await ctx.waitForServerLog(/MATERIONE-GUILOGIC-OPEN guilogic:menu/);
+      await ctx.sleep(600); // the client finishes opening the window
+      try {
+        const page = await openTracedMenu(ctx);
+        const node = (id) => page.locator(`.node[data-node="${id}"]`);
+
+        await clickSlot(ctx, 11); // left click: message, sound, run_command
+        await ctx.waitForChat(/Pong from ping \(slot 11, left\)/);
+        for (const id of ['behavior.1', 'behavior.1.do.0', 'behavior.1.do.1', 'behavior.1.do.2']) {
+          await node(id).and(page.locator('[data-trace="ran"]')).waitFor({ timeout: 15_000 });
+        }
+        // what the click did not run stays dark: the right-click rule and the open rule
+        ctx.expect(await page.locator('.node[data-node="behavior.2"][data-trace]').count()).toBe(0);
+        ctx.expect(await page.locator('.node[data-node="behavior.0"][data-trace]').count()).toBe(0);
+        ctx.expect(await page.locator('[data-wire="behavior.1|out>behavior.1.do.0"][data-ran="true"]').count()).toBe(1);
+
+        // turning the trace off lets go of the server: the next click draws nothing
+        await page.getByTestId('logic-trace-toggle').click();
+        await page.locator('.node[data-trace]').first().waitFor({ state: 'detached', timeout: 15_000 });
+        await clickSlot(ctx, 11, 1); // right click
+        await ctx.waitForChat(/Right click on ping/);
+        await ctx.sleep(1500);
+        ctx.expect(await page.locator('.node[data-trace]').count()).toBe(0);
+      } finally {
+        try {
+          await ctx.exec('player.closeContainer(); return "closed"');
+        } catch { /* nothing open */ }
+      }
+    },
+  }),
+
+  test({
+    id: 'logic.trace-canvas-visual',
+    title: 'the Logic tab\'s Live trace after a real click on guilogic:menu\'s ping button: the executed wires light one after the other, what the click did not reach is dim, and the picture fades away by itself',
+    mode: 'visual',
+    covers: TRACE_COVERS,
+    dependsOn: ['logic.trace-stream'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      await ctx.reset();
+      await ctx.rcon('materione gui open guilogic:menu Probe page=2');
+      await ctx.waitForServerLog(/MATERIONE-GUILOGIC-OPEN guilogic:menu/);
+      await ctx.sleep(600);
+      try {
+        const page = await openTracedMenu(ctx);
+        await ctx.browser.browserShot('logic-trace-armed', '[data-testid="logic-tab"]');
+        await clickSlot(ctx, 11);
+        await ctx.waitForChat(/Pong from ping/);
+        await page.locator('.node[data-node="behavior.1.do.2"][data-trace="ran"]').waitFor({ timeout: 15_000 });
+        await ctx.browser.browserShot('logic-trace-after-click', '[data-testid="logic-tab"]');
+        ctx.needsEyes(
+          'the Logic tab of guilogic:menu with the Live trace toggle pressed: after the ping click the "gui.click" rule '
+            + 'of the ping button and its three steps (message, sound, run command) are lit with their wires drawn in '
+            + 'order, while the gui.open rule, the right-click rule and the other buttons\' rules are dimmed; no node '
+            + 'shows a failure and no truncation notice is shown. With the toggle off (first shot) nothing is dimmed.',
+        );
+      } finally {
+        try {
+          await ctx.exec('player.closeContainer(); return "closed"');
+        } catch { /* nothing open */ }
+      }
     },
   }),
 ];

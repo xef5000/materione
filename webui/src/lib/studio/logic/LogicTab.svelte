@@ -4,6 +4,7 @@
    * graph. It has no model of its own. What it edits is the studio's document, through the studio's history,
    * so Save, Ctrl+Z and the dirty marker are shared with Design, and what it saves goes through `logic.edit`.
    */
+  import { untrack } from 'svelte';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
   import type { LogicCanvasState } from '../../logic/canvas.svelte';
@@ -17,6 +18,25 @@
 
   $effect(() => {
     void logic.connect(session.channel);
+  });
+
+  // The live trace follows the author's toggle while this tab is showing: it subscribes on the connection, renews its
+  // lease, and lets go when the tab is left or the connection changes.
+  $effect(() => {
+    if (!active) return;
+    const channel = session.channel;
+    // untracked: the effect follows the tab and the connection, not the toggle (which the toggle itself acts on)
+    untrack(() => void logic.trace.attach(channel));
+    return () => untrack(() => logic.trace.detach());
+  });
+
+  const trace = $derived(logic.trace);
+  const traceNote = $derived.by(() => {
+    if (trace.status === 'starting') return 'Connecting the trace…';
+    if (trace.status === 'live' && logic.gui.dirty) {
+      return 'Unsaved edits: the trace follows the saved file, so a node you moved or inserted may not line up until you save.';
+    }
+    return trace.message;
   });
 
   const selected = $derived(logic.selected);
@@ -67,6 +87,29 @@
       <span class="rule"></span>
       {@render tool('undo-2', logic.gui.undoLabel ? `Undo ${logic.gui.undoLabel}` : 'Undo', 'Ctrl+Z', () => logic.undo(), !logic.gui.canUndo || logic.gui.readOnly)}
       {@render tool('redo-2', logic.gui.redoLabel ? `Redo ${logic.gui.redoLabel}` : 'Redo', 'Ctrl+Shift+Z', () => logic.redo(), !logic.gui.canRedo || logic.gui.readOnly)}
+      <span class="rule"></span>
+      <button
+        type="button"
+        class="trace"
+        class:on={trace.enabled}
+        aria-pressed={trace.enabled}
+        disabled={!trace.available}
+        data-testid="logic-trace-toggle"
+        title="Live trace: click in game and watch this GUI's rules run here. Off by default; only this GUI is traced."
+        onclick={() => void trace.set(!trace.enabled)}
+      >
+        <Icon name="activity" size={14} /> Live trace
+      </button>
+      {#if trace.enabled}
+        <span
+          class="tracestate"
+          class:bad={trace.status === 'failed' || trace.status === 'unavailable'}
+          role={trace.status === 'failed' ? 'alert' : 'status'}
+          data-testid="logic-trace-status"
+          data-trace-status={trace.status}
+          title={traceNote}
+        >{traceNote}</span>
+      {/if}
     </div>
 
     {#if logic.status === 'failed'}
@@ -159,6 +202,44 @@
     color: var(--accent-ink);
     font: 600 var(--text-sm) var(--font-sans);
     cursor: pointer;
+  }
+  .trace {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 28px;
+    padding: 0 var(--space-3);
+    background: transparent;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    color: var(--muted);
+    font: 600 var(--text-sm) var(--font-sans);
+    cursor: pointer;
+  }
+  .trace:hover:not(:disabled) {
+    color: var(--fg);
+    border-color: var(--accent);
+  }
+  .trace.on {
+    background: color-mix(in srgb, var(--accent) 18%, transparent);
+    border-color: var(--accent);
+    color: var(--fg);
+  }
+  .trace:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+  .tracestate {
+    min-width: 0;
+    max-width: 52ch;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: var(--text-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tracestate.bad {
+    color: var(--warn);
   }
   .add:disabled {
     background: none;

@@ -19,6 +19,23 @@ public final class LogicTestSupport {
         return new LogicService(host(), registries);
     }
 
+    /** A logic service with a rule engine over {@code scheduling}, so flows can be fired through it headless. */
+    public static LogicService newRunningService(
+            RegistryService registries, dev.materione.api.scheduling.SchedulingGateway scheduling) {
+        return new LogicService(host(), registries, scheduling, diagnostic -> { }, null, null,
+                new GatewayRunScheduler.ThreadProbe() {
+                    @Override
+                    public boolean ownsEntity(org.bukkit.entity.Entity entity) {
+                        return true;
+                    }
+
+                    @Override
+                    public boolean onGlobalThread() {
+                        return true;
+                    }
+                });
+    }
+
     /**
      * A logic service with Materione's own triggers, actions and v1 recipes registered, as the plugin does at boot.
      * A recipe that does not load fails the test: the built-ins must always load.
