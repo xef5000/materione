@@ -301,7 +301,14 @@ export class GuiStudioState {
     if (bareType(made) === 'text') this.editingText = made.id;
   }
 
+  /**
+   * Asked before layers are deleted: the Design/Logic linkage answers true when it took the deletion over, because
+   * rules name the layers and the author has to say what becomes of them (logic.md section 7.4).
+   */
+  deleteGuard: ((ids: readonly string[]) => boolean) | null = null;
+
   deleteSelection(): void {
+    if (this.readOnly || this.deleteGuard?.(this.selection)) return;
     this.run(ops.deleteLayers(this.doc, this.selection));
   }
 

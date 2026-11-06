@@ -772,4 +772,117 @@ export default [
       }
     },
   }),
+
+test({
+    id: 'gui.logic-linkage-live-save',
+    title: 'sample:qa_chest Design/Logic linkage: Add click logic on a Button opens its rule in Logic, the Script tab edits it, the Close button recipe adds a second rule, and deleting the layer with "Delete the rules" removes both; each Save is the expected canonical YAML',
+    dependsOn: ['gui.logic-inspector-live-save'],
+    covers: [...LOGIC_COVERS, 'webui/browser/specs/logic-linkage.pw.ts', 'webui/browser/specs/logic-script.pw.ts',
+      'webui/browser/specs/logic-recipes.pw.ts', 'webui/src/lib/studio/gui/LayersPanel.svelte',
+      'webui/src/lib/studio/gui/InspectorPanel.svelte', 'webui/src/lib/gui/save.ts',
+      'behavior/src/main/java/dev/materione/behavior/logic/recipe/**',
+      'plugin/src/main/java/dev/materione/plugin/logic/recipe/**'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      ctx.expect(fs.existsSync(GUI_FILE)).toBe(false);
+      try {
+        const { parse } = requireWebui('yaml');
+        const page = await openNewChest(ctx);
+        const starter = parse(fs.readFileSync(GUI_FILE, 'utf8'));
+        const save = async () => {
+          await page.getByRole('button', { name: 'Save', exact: true }).click();
+          await page.locator('[data-status]').filter({ hasText: 'Saved' }).waitFor({ state: 'visible', timeout: 20_000 });
+        };
+
+        // Design: a Button, then Add click logic from the inspector
+        await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Button' }).click();
+        await page.getByTestId('add-click-logic').click();
+        await page.getByTestId('logic-canvas').waitFor({ state: 'visible', timeout: 30_000 });
+        const trigger = page.locator('.node[data-kind="trigger"][data-node="behavior.0"]');
+        await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+        const layer = await trigger.getAttribute('data-layer');
+        ctx.expect(layer).toBeTruthy();
+        ctx.expect(await trigger.getAttribute('aria-selected')).toBe('true');
+        await save();
+        const first = parse(fs.readFileSync(GUI_FILE, 'utf8'));
+        ctx.expect(first.qa_chest.behavior).toEqual([{ on: 'gui.click', layer, do: [] }]);
+        ctx.expect(first.qa_chest.layers.some((entry) => entry.id === layer)).toBeTruthy();
+
+        // Script: give the rule a step by typing it
+        await page.getByRole('tab', { name: 'Script' }).click();
+        const editor = page.getByTestId('script-editor');
+        await editor.fill('behavior:\n  - on: gui.click\n    layer: ' + layer + '\n    do:\n      - message: MATERIONE-QA-LINKAGE\n');
+        await page.getByTestId('script-state').and(page.locator('[data-state="synced"]')).waitFor({ timeout: 15_000 });
+        await save();
+        ctx.expect(parse(fs.readFileSync(GUI_FILE, 'utf8')).qa_chest.behavior).toEqual([
+          { on: 'gui.click', layer, do: [{ message: 'MATERIONE-QA-LINKAGE' }] },
+        ]);
+
+        // Recipes: Close button on the same layer
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-recipes-toggle').click();
+        await page.locator('[data-recipe="close_button"]').click();
+        await page.getByTestId('logic-recipe-form').getByRole('combobox', { name: 'layer' }).selectOption(layer);
+        await page.getByTestId('recipe-insert').click();
+        await page.getByTestId('recipe-inserted').waitFor({ state: 'visible', timeout: 15_000 });
+        await save();
+        ctx.expect(parse(fs.readFileSync(GUI_FILE, 'utf8')).qa_chest.behavior).toEqual([
+          { on: 'gui.click', layer, do: [{ message: 'MATERIONE-QA-LINKAGE' }] },
+          { on: 'gui.click', layer, do: ['gui.close'] },
+        ]);
+
+        // Design: delete the layer, and the dialog's "Delete the rules" takes the rules with it
+        await page.getByRole('tab', { name: 'Design' }).click();
+        await page.locator('section[aria-label="Layers"] li.row').filter({ has: page.getByTestId('layer-bolt') }).getByRole('button').first().click();
+        await page.getByRole('button', { name: 'Delete layer', exact: true }).click();
+        await page.getByTestId('delete-layer-rules').click();
+        await save();
+        const after = parse(fs.readFileSync(GUI_FILE, 'utf8'));
+        ctx.expect(after.qa_chest.layers.some((entry) => entry.id === layer)).toBe(false);
+        ctx.expect(after.qa_chest.behavior ?? []).toEqual([]);
+        ctx.expect(after.qa_chest.title).toBe(starter.qa_chest.title);
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.logic-linkage-visual',
+    title: 'sample:qa_chest studio flow: Design (a Button with its bolt and the Logic section of the inspector), Add click logic into Logic (the trigger with the layer\'s thumbnail and the mini preview on hover), the Script tab with an invalid draft, and the Recipes panel',
+    mode: 'visual',
+    dependsOn: ['gui.logic-linkage-live-save'],
+    covers: [...LOGIC_COVERS, 'webui/src/lib/studio/gui/LayersPanel.svelte', 'webui/src/lib/studio/gui/InspectorPanel.svelte'],
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Button' }).click();
+        await ctx.browser.browserShot('linkage-design-before');
+        await page.getByTestId('add-click-logic').click();
+        const trigger = page.locator('.node[data-kind="trigger"][data-node="behavior.0"]');
+        await trigger.waitFor({ state: 'visible', timeout: 15_000 });
+        await trigger.hover();
+        await page.getByTestId('logic-layer-preview').waitFor({ state: 'visible', timeout: 5_000 });
+        await ctx.browser.browserShot('linkage-logic-hover', '[data-testid="logic-tab"]');
+        await page.getByRole('tab', { name: 'Design' }).click();
+        await ctx.browser.browserShot('linkage-design-bolt');
+        await page.getByRole('tab', { name: 'Script' }).click();
+        await page.getByTestId('script-editor').fill('behavior:\n  - on: gui.click\n    do: [\n');
+        await page.getByTestId('script-error').waitFor({ state: 'visible', timeout: 10_000 });
+        await ctx.browser.browserShot('linkage-script-error', '[data-testid="script-tab"]');
+        await page.getByTestId('script-discard').click();
+        await page.getByRole('tab', { name: 'Logic' }).click();
+        await page.getByTestId('logic-recipes-toggle').click();
+        await page.locator('[data-recipe="close_button"]').waitFor({ state: 'visible', timeout: 15_000 });
+        await ctx.sleep(1500); // the panel asks the server which recipes it can run
+        await ctx.browser.browserShot('linkage-recipes', '[data-testid="logic-tab"]');
+        ctx.needsEyes(
+          'Design: the Button row in the layers panel wears an amber bolt after Add click logic, and the inspector has a Logic section ("1 rule answers clicks on this layer", Open in Logic, Add another click rule) in the same panel style as the other sections; Logic: the gui.click trigger shows a small pixel thumbnail of the button and its name where the layer filter line would be, and hovering it shows a mini preview of the whole GUI with the button outlined in amber, bottom-left of the canvas, not covering the node; Script: the YAML editor has a line-number gutter, the invalid draft shows a red line number and a red problem row ("Line N: ...") and the state pill says Not applied; Recipes: a panel left of the canvas lists the eight recipes with a one-line description each, and Pay to receive is dimmed with a Vault reason when no economy is installed; the chrome uses the editor tokens and nothing overflows horizontally.',
+        );
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
 ];

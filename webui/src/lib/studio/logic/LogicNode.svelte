@@ -14,6 +14,8 @@
   import { isLine, summarize } from '../../logic/summary';
   import { valueKey } from '../../logic/plan';
   import { categoryIcon } from '../../logic/vocabulary';
+  import { layerLabel } from '../../gui/model';
+  import LayerThumb from './linkage/LayerThumb.svelte';
 
   interface Props {
     node: GraphNode;
@@ -57,12 +59,18 @@
         ? canvas.vocabulary?.triggers.get(node.op.split(':')[0]!)?.description
         : canvas.vocabulary?.steps.get(node.kind)?.description,
   );
+  /** The layer a rule answers (logic.md section 7.4): its thumbnail and name stand in for the `layer:` line. */
+  const layer = $derived(node.kind === 'trigger' ? canvas.links?.layerOf(node.id) ?? null : null);
   const options = $derived(
     Object.entries(node.options)
       .slice(0, 3)
-      .map(([name, value]) => `${name}: ${summarize(value, 40)}`),
+      .map(([name, value]) => ({ text: `${name}: ${summarize(value, 40)}`, layer: name === 'layer' ? layer : null })),
   );
-  const extras = $derived(node.kind === 'trigger' ? [...(node.condition !== undefined ? [`if ${summarize(node.condition, 44)}`] : []), ...options].slice(0, 3) : []);
+  const extras = $derived(
+    node.kind === 'trigger'
+      ? [...(node.condition !== undefined ? [{ text: `if ${summarize(node.condition, 44)}`, layer: null }] : []), ...options].slice(0, 3)
+      : [],
+  );
   const labelled = $derived(node.ports.length > 1);
   const hasInput = $derived(node.kind !== 'trigger' && node.kind !== 'entry');
   const notice = $derived(
@@ -107,7 +115,12 @@
   data-kind={node.kind}
   data-op={node.op}
   data-trace={ran?.state}
+  data-layer={layer?.id}
   tabindex={tab ? 0 : -1}
+  onpointerenter={() => layer && canvas.links?.hover(layer.id)}
+  onpointerleave={() => canvas.links?.hover(null)}
+  onfocus={() => layer && canvas.links?.hover(layer.id)}
+  onblur={() => canvas.links?.hover(null)}
   style="left:{rect.x}px;top:{rect.y}px;width:{rect.w}px;height:{rect.h}px;--c:{color};--i:{ran?.order ?? 0}"
   title={description}
 >
@@ -147,7 +160,15 @@
   </div>
 
   {#each extras as line, index (index)}
-    <div class="extra" style="top:{HEAD + (index + 1) * ROW}px;height:{ROW}px" title={line}>{line}</div>
+    {#if line.layer}
+      <div class="extra chip" style="top:{HEAD + (index + 1) * ROW}px;height:{ROW}px" title={line.text} data-testid="logic-layer-chip">
+        <LayerThumb studio={canvas.gui} layer={line.layer} size={20} />
+        <span class="layer-name">{layerLabel(line.layer)}</span>
+        {#if layerLabel(line.layer) !== line.layer.id}<code class="layer-id">{line.layer.id}</code>{/if}
+      </div>
+    {:else}
+      <div class="extra" style="top:{HEAD + (index + 1) * ROW}px;height:{ROW}px" title={line.text}>{line.text}</div>
+    {/if}
   {/each}
 
   {#if hasInput}
@@ -350,6 +371,24 @@
     text-overflow: ellipsis;
     display: block;
     line-height: 28px;
+  }
+  .extra.chip {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--fg);
+  }
+  .extra.chip .layer-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .extra.chip .layer-id {
+    flex: none;
+    margin-left: auto;
+    color: var(--faint);
+    font: var(--text-xs) var(--mono);
   }
   .selector {
     min-width: 0;

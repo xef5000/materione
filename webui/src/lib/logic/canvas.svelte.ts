@@ -18,6 +18,8 @@ import { logicApiAvailable, logicValidate, logicVocabulary } from './server';
 import { verdictsOf, type NodeFlag } from './verdicts';
 import { InspectorState } from './inspector.svelte';
 import { TraceState } from './trace.svelte';
+import type { LinkageState } from './linkage/linkage.svelte';
+import { RecipesState } from './recipes/recipes.svelte';
 import type { PushFrame, Signal } from '../events';
 
 export type { NodeFlag } from './verdicts';
@@ -84,6 +86,12 @@ export class LogicCanvasState {
   readonly inspector: InspectorState;
   /** The live trace (logic.md section 7.6): an opt-in stream of what this GUI's rules do, drawn on the canvas. */
   readonly trace: TraceState;
+  /** The Recipes panel (logic.md section 7.5): the registry's recipes, expanded on the server and inserted as one undo step. */
+  readonly recipes: RecipesState;
+  /** The seam to the other tabs (the layer a trigger points at, the mini preview); set by the studio that owns both. */
+  links: LinkageState | null = null;
+  /** The canvas was opened to show a node (from a layer's bolt): frame it once the stage is measured. */
+  focusOnShow = false;
   selected: GraphNode | null;
   groups: PaletteGroup[];
 
@@ -104,6 +112,7 @@ export class LogicCanvasState {
     this.selected = $derived(this.selection ? this.graph.byId.get(this.selection) ?? null : null);
     this.groups = $derived(this.vocabulary ? paletteGroups(this.vocabulary, { host: this.host }) : []);
     this.inspector = new InspectorState(this);
+    this.recipes = new RecipesState(this);
     this.trace = new TraceState({
       resource: tracing.pushes ? tracing.resource : undefined,
       graph: () => this.graph,

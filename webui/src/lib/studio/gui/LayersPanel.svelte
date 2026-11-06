@@ -13,8 +13,9 @@
   import * as ops from '../../gui/ops';
   import { componentIcon } from '../../gui/registry';
   import type { GuiStudioState } from '../../gui/studio.svelte';
+  import type { LinkageState } from '../../logic/linkage/linkage.svelte';
 
-  let { studio }: { studio: GuiStudioState } = $props();
+  let { studio, links }: { studio: GuiStudioState; links?: LinkageState } = $props();
 
   /** Top of the stack first, like every layers panel. */
   const rows = $derived([...studio.doc.layers].reverse());
@@ -104,6 +105,8 @@
       {@const badge = studio.badges.get(layer.id)}
       {@const info = studio.infoOf(layer)}
       {@const problems = studio.flagsFor(layer.id).map((flag) => flag.message)}
+      {@const rules = links?.ruleCount(layer.id) ?? 0}
+      {@const logicFlags = links?.flagsFor(layer.id) ?? []}
       <li
         class="row"
         class:selected={studio.selection.includes(layer.id)}
@@ -141,6 +144,26 @@
             <span class="type"><Icon name={componentIcon(info)} size={14} /></span>
             <span class="name">{layerLabel(layer)}</span>
           </button>
+        {/if}
+        {#if rules > 0 && links}
+          <button
+            type="button"
+            class="bolt"
+            data-testid="layer-bolt"
+            title="{rules} rule{rules === 1 ? '' : 's'}: open in Logic"
+            aria-label="{rules} rule{rules === 1 ? '' : 's'} on {layerLabel(layer)}: open in Logic"
+            onclick={() => links.openRules(layer.id)}
+          ><Icon name="zap" size={13} />{#if rules > 1}<span class="count">{rules}</span>{/if}</button>
+        {/if}
+        {#if logicFlags.length}
+          {@const worst = logicFlags.some((flag) => flag.severity === 'error') ? 'error' : 'warn'}
+          <span
+            class="problem logic {worst}"
+            data-testid="layer-logic-problem"
+            title={logicFlags.map((flag) => flag.message + (flag.path ? ` (${flag.path})` : '')).join(' | ')}
+            role="img"
+            aria-label="Logic problem: {logicFlags.map((flag) => flag.message).join('. ')}"
+          ><Icon name="triangle-alert" size={14} /></span>
         {/if}
         {#if problems.length}
           <span class="problem" title={problems.join('. ')} role="img" aria-label="Compiler warning: {problems.join('. ')}"><Icon name="triangle-alert" size={14} /></span>
@@ -322,6 +345,28 @@
     display: inline-grid;
     place-items: center;
     color: var(--warn);
+  }
+  .bolt {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+    padding: 2px 3px;
+    background: transparent;
+    border: 0;
+    border-radius: var(--radius-sm);
+    color: var(--logic-trigger);
+    cursor: pointer;
+  }
+  .bolt:hover {
+    background: var(--bg-hover);
+  }
+  .bolt .count {
+    font-size: var(--text-xs);
+    font-variant-numeric: tabular-nums;
+  }
+  .problem.logic.error {
+    color: var(--error);
   }
   .badge {
     flex: none;

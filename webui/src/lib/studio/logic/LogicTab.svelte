@@ -13,6 +13,7 @@
   import type { ResourceRef } from '../../api';
   import LogicCanvas from './LogicCanvas.svelte';
   import LogicInspector from './inspector/LogicInspector.svelte';
+  import RecipesPanel from './recipes/RecipesPanel.svelte';
 
   let { logic, resource, active = true }: { logic: LogicCanvasState; resource: ResourceRef; active?: boolean } = $props();
 
@@ -30,6 +31,7 @@
     return () => untrack(() => logic.trace.detach());
   });
 
+  const recipes = $derived(logic.recipes);
   const trace = $derived(logic.trace);
   const traceNote = $derived.by(() => {
     if (trace.status === 'starting') return 'Connecting the trace…';
@@ -91,6 +93,18 @@
       <button
         type="button"
         class="trace"
+        class:on={recipes.open}
+        aria-pressed={recipes.open}
+        disabled={logic.status !== 'ready'}
+        data-testid="logic-recipes-toggle"
+        title="Recipes: ready-made rules (pay to receive, close button, ...), expanded by the server"
+        onclick={() => recipes.toggle(session.channel)}
+      >
+        <Icon name="sparkles" size={14} /> Recipes
+      </button>
+      <button
+        type="button"
+        class="trace"
         class:on={trace.enabled}
         aria-pressed={trace.enabled}
         disabled={!trace.available}
@@ -125,6 +139,7 @@
     {/if}
 
     <div class="work">
+      {#if recipes.open}<RecipesPanel canvas={logic} />{/if}
       <LogicCanvas canvas={logic} {active} />
       <LogicInspector canvas={logic} />
     </div>

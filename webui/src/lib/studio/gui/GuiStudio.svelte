@@ -16,8 +16,13 @@
   import LayersPanel from './LayersPanel.svelte';
   import PaintOptions from './PaintOptions.svelte';
   import LogicTab from '../logic/LogicTab.svelte';
+  import ScriptTab from '../logic/script/ScriptTab.svelte';
+  import DeleteLayerDialog from '../logic/linkage/DeleteLayerDialog.svelte';
   import { LogicCanvasState } from '../../logic/canvas.svelte';
+  import { LinkageState } from '../../logic/linkage/linkage.svelte';
+  import { ScriptState } from '../../logic/script/script.svelte';
   import { traceResourceOf } from '../../logic/trace';
+  import { onDestroy } from 'svelte';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
   import { ops, unwrap } from '../../api';
@@ -56,7 +61,13 @@
   // The Logic tab is a second view of the same document: it shares this studio's history, dirty state and save.
   // svelte-ignore state_referenced_locally
   const logic = new LogicCanvasState(studio, 'gui', { resource: traceResourceOf(resource), pushes: bus.push });
-  let tab = $state<'design' | 'logic'>('design');
+  // The seam between the tabs (logic.md section 7.4): which tab shows, "Add click logic", the bolt on a layer, a deleted layer's rules.
+  // svelte-ignore state_referenced_locally
+  const links = new LinkageState(studio, logic);
+  // The Script tab is a third view of the same document (logic.md section 7.1), with its own text draft and nothing else.
+  // svelte-ignore state_referenced_locally
+  const script = new ScriptState(studio, logic);
+  const tab = $derived(links.view);
   const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
 
   const rootId = $derived(rootIdForResource(resource.id));
@@ -100,6 +111,17 @@
       }
     })();
   });
+
+  // The logic is read and checked whichever tab shows: a layer's bolt and the diagnostics on it (logic.md section 7.4) are drawn in Design.
+  $effect(() => {
+    void logic.connect(session.channel);
+  });
+  $effect(() => {
+    void logic.block;
+    void logic.status;
+    logic.scheduleCheck(session.channel);
+  });
+  onDestroy(() => script.dispose());
 
   // Textures the layers name are read through the asset store, a few at a time.
   $effect(() => {
@@ -146,6 +168,7 @@
   async function save(): Promise<void> {
     const channel = session.channel;
     if (!channel || !studio.loaded) return;
+    script.flush(); // a draft typed a moment ago is part of what Save writes
     await studio.save(channel, documentDraft);
     for (const draft of customItems) {
       if (draftDirty(draft)) await saveDocumentDraft(draft, channel);
@@ -167,7 +190,7 @@
   }
 
   function keydown(event: KeyboardEvent): void {
-    if (!active) return;
+    if (!active || links.pendingDelete) return;
     const mod = event.ctrlKey || event.metaKey;
     const key = event.key.toLowerCase();
     if (mod && key === 's') {
@@ -176,15 +199,17 @@
       return;
     }
     if (typing(event.target)) return;
-    if (tab === 'logic') {
-      // The Logic tab owns its own keys; undo and redo are the one history the tabs share.
+    if (tab !== 'design') {
+      // The Logic and Script tabs own their keys; undo and redo are the one history the tabs share.
+      const undo = tab === 'script' ? () => script.undo() : () => logic.undo();
+      const redo = tab === 'script' ? () => script.redo() : () => logic.redo();
       if (mod && key === 'z') {
         event.preventDefault();
-        if (event.shiftKey) logic.redo();
-        else logic.undo();
+        if (event.shiftKey) redo();
+        else undo();
       } else if (mod && key === 'y') {
         event.preventDefault();
-        logic.redo();
+        redo();
       }
       return;
     }
@@ -258,8 +283,10 @@
   function tabKeys(event: KeyboardEvent): void {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
     event.preventDefault();
-    tab = tab === 'design' ? 'logic' : 'design';
-    document.getElementById(`gui-tab-${tab}`)?.focus();
+    const order = ['design', 'logic', 'script'] as const;
+    const at = order.indexOf(tab);
+    links.view = order[(at + (event.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length]!;
+    document.getElementById(`gui-tab-${links.view}`)?.focus();
   }
 
   function keyup(event: KeyboardEvent): void {
@@ -308,9 +335,12 @@
   </header>
 
   <div class="tabs" role="tablist" aria-label="Studio views" tabindex="-1" onkeydown={tabKeys}>
-    <button type="button" role="tab" id="gui-tab-design" aria-selected={tab === 'design'} aria-controls="gui-panel" tabindex={tab === 'design' ? 0 : -1} class:on={tab === 'design'} onclick={() => (tab = 'design')}>Design</button>
-    <button type="button" role="tab" id="gui-tab-logic" aria-selected={tab === 'logic'} aria-controls="gui-panel" tabindex={tab === 'logic' ? 0 : -1} class:on={tab === 'logic'} onclick={() => (tab = 'logic')}>
+    <button type="button" role="tab" id="gui-tab-design" aria-selected={tab === 'design'} aria-controls="gui-panel" tabindex={tab === 'design' ? 0 : -1} class:on={tab === 'design'} onclick={() => (links.view = 'design')}>Design</button>
+    <button type="button" role="tab" id="gui-tab-logic" aria-selected={tab === 'logic'} aria-controls="gui-panel" tabindex={tab === 'logic' ? 0 : -1} class:on={tab === 'logic'} onclick={() => (links.view = 'logic')}>
       <Icon name="workflow" size={13} /> Logic
+    </button>
+    <button type="button" role="tab" id="gui-tab-script" aria-selected={tab === 'script'} aria-controls="gui-panel" tabindex={tab === 'script' ? 0 : -1} class:on={tab === 'script'} onclick={() => (links.view = 'script')}>
+      <Icon name="file-code" size={13} /> Script
     </button>
   </div>
 
@@ -383,11 +413,15 @@
   <div class="logic-body" id="gui-panel" role="tabpanel" aria-labelledby="gui-tab-logic">
     <LogicTab {logic} {resource} {active} />
   </div>
+  {:else if tab === 'script'}
+  <div class="logic-body" id="gui-panel" role="tabpanel" aria-labelledby="gui-tab-script">
+    <ScriptTab {script} {resource} />
+  </div>
   {:else}
   <div class="body" id="gui-panel" role="tabpanel" aria-labelledby="gui-tab-design">
     <aside class="left">
       <ComponentPalette {studio} />
-      <LayersPanel {studio} />
+      <LayersPanel {studio} {links} />
     </aside>
     <div class="center">
       {#if documentDraft.loading && !studio.loaded}
@@ -402,10 +436,11 @@
         <span class="hintline" class:say={!!studio.hint} role="status" data-testid="gui-hint">{studio.hint || (isPaintTool(studio.tool) ? 'Space-drag pans · wheel zooms · [ ] change the brush size' : 'Space or middle-drag to pan · wheel to zoom · Shift+click to multi-select · double-click text to edit')}</span>
       </footer>
     </div>
-    <div class="right"><InspectorPanel {studio} {textures} /></div>
+    <div class="right"><InspectorPanel {studio} {textures} {links} /></div>
   </div>
   {#if studio.choosing}<ImageChooser {studio} {textures} />{/if}
   {/if}
+  <DeleteLayerDialog {links} />
 </section>
 
 <style>

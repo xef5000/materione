@@ -411,6 +411,17 @@ planner refusals, the pending log, the vocabulary and the camera) and `webui/bro
 sound, command, close by dragging wires, save, and the file is the expected YAML; the fixture's `logic.edit` runs the
 same edit code the canvas plans with, and its vocabulary is the recorded plugin snapshot).
 
+*As built (the Design/Logic linkage, the Script tab and the Recipes panel, #225):* the GUI studio's tabs are **Design**, **Logic** and
+**Script** (logic.md §7.1, §33). Like the Logic tab, this adds no op and no wire shape. The linkage reads the `layer:` filter of each rule from the
+document and writes through the same `logic.edit` plans (a layer's deletion carries its rules' removal or detachment as one history
+command). The Script tab edits `open:`, `behavior:` and `flows:` as YAML: a draft that parses is checked by `logic.validate`
+(diagnostics drawn on the lines their step paths name) and committed as a history command whose logic part is `removeRules`/`addRule`/
+`removeFlow`/`addFlow` and whose `open:` part is a plain field of the layers' own `authoring.setFields`. The Recipes panel lists the
+vocabulary's `recipes`, calls `logic.instantiate` (the SPA now reads its `warnings` too) and inserts the rules with `logic.edit`; it asks for
+an expansion of each recipe with stand-in values to learn which ones the server cannot run. *Tests:* `webui/test/logic-linkage.spec.ts`,
+`logic-script.spec.ts`, `logic-recipes.spec.ts`, and the Playwright specs `logic-linkage.pw.ts`, `logic-script.pw.ts` and `logic-recipes.pw.ts`
+(the `?logic` fixture gains `seed=linkage` and a `logic.instantiate` stand-in that writes the recipes' golden shapes).
+
 *As built (M5 scalable authoring):* `authoring.references` (`{pack, kind: asset|resource, target}` →
 `{hits: [{pack, type, path, id, field, value}], coverage}`) and `authoring.bulk`
 (`{pack, operations, dryRun}`, operations `set` / `create` / `duplicate`, ≤ 50) answer from

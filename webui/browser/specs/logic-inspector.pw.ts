@@ -73,7 +73,8 @@ async function buildPayToReceive(page: Page): Promise<void> {
   // the trigger's filter: the layer the click is about, offered from the GUI's own layers
   await inspector(page).getByRole('combobox', { name: 'Layer' }).fill('buy');
   await page.keyboard.press('Enter');
-  await expect(node(page, 'behavior.0')).toContainText('layer: buy');
+  await expect(node(page, 'behavior.0')).toHaveAttribute('data-layer', 'buy'); // the trigger shows the layer's thumbnail and name (issue 225)
+  await expect(node(page, 'behavior.0')).toContainText('Buy button');
 
   await dragOut(page, port(page, 'behavior.0', 'out'));
   await pick(page, 'control:require');

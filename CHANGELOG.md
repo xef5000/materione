@@ -9,6 +9,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The Design tab and the Logic tab know each other; a Script tab; a Recipes panel (logic.md §7.1, §7.4, §7.5, §33, #225).** In the
+  GUI studio, selecting a button, an item or a list offers **Add click logic**: it adds a `gui.click` rule filtered to the layer and opens it
+  in the Logic tab. A trigger node shows the layer's thumbnail and name, and hovering it outlines the layer on a mini preview of the GUI; a
+  layer that has rules wears a bolt in the layers panel (click it to open the rule), and the compiler's verdict on a rule is drawn on its layer
+  with the step path. Deleting a layer that has rules asks whether to delete the rules or keep them without the layer filter, as one
+  undo step. The new **Script** tab is the GUI's `open:`, `behavior:` and `flows:` as YAML with live validation: edits apply once you pause,
+  share Undo and Save with the other tabs, and a draft that does not parse stays in the editor and is never saved; a section you did not change is
+  not rewritten, and keys the editor does not know are kept. The **Recipes** panel lists the server's recipes (Pay to receive, Close button,
+  Welcome message, ...), fills a recipe's parameters with the same typed fields as a node, has the server expand it and inserts the rules as one
+  undo step; a recipe the server cannot run here is greyed with the reason and still insertable. The studio now saves a changed `open:` block with
+  the layers. No new op, wire shape or diagnostic code.
 - **Live trace for GUI logic (logic.md §7.6, §32, #226).** Turn on "Live trace" in the Logic tab, click in game, and the GUI's rules
   run on the canvas: the wires and nodes the click went through light up one after the other, the steps it did not reach are dimmed,
   a failed action shows its reason on its node, and a notice says when the server dropped entries. It is off by default, per GUI and
