@@ -327,6 +327,7 @@ public final class FlowInterpreter extends FlowContinuations {
             return;
         }
         reporter.aborted(run.rule(), path, reason);
+        emit(run, path, TraceEvent.Type.STEP_FAILED, reason); // the node that hit the budget shows why
         finish(run, RunOutcome.ABORTED, reason);
     }
 
@@ -354,7 +355,9 @@ public final class FlowInterpreter extends FlowContinuations {
             return;
         }
         try {
-            sink.accept(new TraceEvent(run.id(), run.rule().id(), path, type, detail));
+            Object key = run.owner().playerKey();
+            sink.accept(new TraceEvent(run.id(), String.valueOf(run.rule().owner()), String.valueOf(run.rule().id()),
+                    RunOwner.NO_PLAYER.equals(key) ? "" : String.valueOf(key), path, type, detail));
         } catch (RuntimeException ignored) {
             // a broken sink must never break a run
         }

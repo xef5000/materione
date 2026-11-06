@@ -10,6 +10,8 @@ import dev.materione.api.logic.LogicApi;
 import dev.materione.api.logic.LogicRegistry;
 import dev.materione.api.logic.Recipe;
 import dev.materione.api.logic.TriggerType;
+import dev.materione.api.logic.trace.LogicTraces;
+import dev.materione.api.logic.trace.TraceLimits;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.logic.provider.CurrencyIntegration;
 import dev.materione.api.logic.provider.LogicProviders;
@@ -22,10 +24,12 @@ import dev.materione.behavior.logic.RegistryLogicLookup;
 import dev.materione.behavior.logic.VocabularyBuilder;
 import dev.materione.behavior.run.FlowInterpreter;
 import dev.materione.behavior.run.RunBudget;
+import dev.materione.behavior.run.trace.TraceHub;
 import dev.materione.behavior.runtime.CooldownStore;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.registry.RegistryService;
 import dev.materione.plugin.logic.currency.MaterioneCurrencyCatalog;
+import dev.materione.plugin.logic.trace.TracePump;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -65,6 +69,8 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     private final LogicProvidersImpl providers;
     private final RuleEngine engine;
     private final VariableService variables;
+    private final TraceHub traces;
+    private final TracePump pump;
     private boolean closed;
 
     /**
@@ -98,19 +104,35 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
             Consumer<Diagnostic> diagnostics,
             String defaultCurrency,
             VariableService variables) {
+        this(host, registries, scheduling, diagnostics, defaultCurrency, variables,
+                GatewayRunScheduler.ThreadProbe.SERVER);
+    }
+
+    /** As above, with the thread probe the run scheduler asks "which thread am I on" through (a test stands in). */
+    public LogicService(
+            Plugin host,
+            RegistryService registries,
+            SchedulingGateway scheduling,
+            Consumer<Diagnostic> diagnostics,
+            String defaultCurrency,
+            VariableService variables,
+            GatewayRunScheduler.ThreadProbe probe) {
         this.registries = Objects.requireNonNull(registries, "registries");
         this.variables = variables;
         this.engine = scheduling == null || diagnostics == null
                 ? null
                 : new RuleEngine(
                         new FlowInterpreter(new GatewayRunScheduler(host, scheduling,
-                                GatewayRunScheduler.ThreadProbe.SERVER,
+                                probe,
                                 player -> {
                                     if (variables != null) {
                                         variables.invalidatePlayer(player);
                                     }
                                 }), RunBudget.DEFAULT, diagnostics),
                         new CooldownStore());
+        // the live trace (logic.md §7.6, §32): the sink is installed only while a subscription exists
+        this.traces = new TraceHub(TraceLimits.DEFAULT, System::currentTimeMillis, this::tracing);
+        this.pump = engine == null ? null : new TracePump(host, scheduling, engine.interpreter(), traces);
         this.actions = new LogicRegistryImpl<>(registries, RegistryKeys.ACTIONS, erased(ActionType.class),
                 "action", ActionType::id, type -> type.describe().self());
         this.conditions = new LogicRegistryImpl<>(registries, RegistryKeys.CONDITIONS, erased(ConditionType.class),
@@ -216,6 +238,18 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
     }
 
     @Override
+    public LogicTraces traces() {
+        return traces;
+    }
+
+    /** The hub reports when its first subscription opens and its last closes; the pump follows (logic.md §32). */
+    private void tracing(boolean listening) {
+        if (pump != null) {
+            pump.active(listening);
+        }
+    }
+
+    @Override
     public VariablesApi variables() {
         if (variables == null) {
             throw new IllegalStateException("this LogicService was built without variables");
@@ -291,6 +325,7 @@ public final class LogicService implements LogicApi, AutoCloseable, Listener {
             return;
         }
         closed = true;
+        traces.close();
         actions.close();
         conditions.close();
         triggers.close();

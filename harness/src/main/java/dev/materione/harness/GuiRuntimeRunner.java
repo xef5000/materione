@@ -186,6 +186,9 @@ public final class GuiRuntimeRunner {
             problems.addAll(expect(console, log, options,
                     "materione gui open guilogic:menu Nobody",
                     "MATERIONE-GUI-FAILED reason=no-such-player"));
+
+            // 9. the live trace (logic.md §32): the stream opens and closes through the editor, capped per session
+            problems.addAll(liveTraceThroughTheEditor(browser));
             browser.close();
 
             console.send("stop");
@@ -297,6 +300,42 @@ public final class GuiRuntimeRunner {
         }
         if (!diagnostics.contains("[\"behavior\",\"0\",\"layer\"]")) {
             problems.add("gui.validate should report the unknown layer at behavior.0.layer: " + diagnostics);
+        }
+        return problems;
+    }
+
+    /**
+     * {@code logic.trace.subscribe} over the real session: a GUI's trace opens (a console session has no player,
+     * so it traces everyone's runs), a malformed id is a bad request, a session holds four at most and the fifth is
+     * refused with {@code MTR-0089}, and {@code logic.trace.unsubscribe} closes them. The click that makes a trace
+     * needs a client, so the stream's content is judged by {@code LogicTraceIntegrationTest} and the QA catalog's
+     * {@code logic.trace-*} entries; this proves the op, the capability and the wiring on a live server.
+     */
+    private static List<String> liveTraceThroughTheEditor(EditorBrowser.BrowserClient browser) throws Exception {
+        List<String> problems = new ArrayList<>();
+        Wire.Response opened = browser.call("logic.trace.subscribe", object("resource", GUI_ID));
+        if (!opened.ok() || !opened.data().getAsJsonObject().get("subscribed").getAsBoolean()
+                || !"all".equals(opened.data().getAsJsonObject().get("scope").getAsString())
+                || opened.data().getAsJsonObject().get("leaseSeconds").getAsInt() <= 0) {
+            problems.add("logic.trace.subscribe should open a stream for " + GUI_ID + ": " + opened.toJson());
+        }
+        Wire.Response malformed = browser.call("logic.trace.subscribe", object("resource", "no-colon"));
+        if (malformed.ok() || !"MTR-0008".equals(malformed.error().code())) {
+            problems.add("logic.trace.subscribe with a malformed id must be a bad request: " + malformed.toJson());
+        }
+        for (int i = 1; i < 4; i++) {
+            Wire.Response more = browser.call("logic.trace.subscribe", object("resource", "sample:trace" + i));
+            if (!more.ok()) {
+                problems.add("logic.trace.subscribe " + i + " of 4 should open: " + more.toJson());
+            }
+        }
+        Wire.Response fifth = browser.call("logic.trace.subscribe", object("resource", "sample:trace4"));
+        if (fifth.ok() || !"MTR-0089".equals(fifth.error().code())) {
+            problems.add("a fifth live trace in one session must be refused with MTR-0089: " + fifth.toJson());
+        }
+        Wire.Response closed = browser.call("logic.trace.unsubscribe", new JsonObject());
+        if (!closed.ok() || closed.data().getAsJsonObject().get("unsubscribed").getAsInt() != 4) {
+            problems.add("logic.trace.unsubscribe should close the four streams: " + closed.toJson());
         }
         return problems;
     }

@@ -888,6 +888,24 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         ];
         document.raw = serializeFixtureYaml(document.parsed);
       }
+      if (options.seed === 'trace') {
+        // the live trace's fixtures (issue #226): a click rule with a branch, a call and a stop, a second rule and a flow
+        const document = this.#documents.get(`${PACK}/guis/shop/main.yml`)!;
+        document.parsed.main!.behavior = [
+          {
+            on: 'gui.click', layer: 'buy',
+            do: [
+              { message: 'hello' },
+              { if: 'player.level > 5', then: [{ take_money: 10 }, { message: 'bought' }], else: [{ message: 'too poor' }] },
+              { call: 'bonus' },
+              'stop',
+            ],
+          },
+          { on: 'gui.open', do: [{ sound: 'block.chest.open' }] },
+        ];
+        document.parsed.main!.flows = { bonus: [{ message: 'thanks' }] };
+        document.raw = serializeFixtureYaml(document.parsed);
+      }
       for (const sample of SAMPLE_GUI_ASSETS) {
         this.#assets.set(assetPath(PACK, sample.path), { path: sample.path, kind: 'png', data: sample.data, bytes: sample.data.length });
       }
@@ -1145,6 +1163,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.logicValidate(op, payload);
       case 'logic.edit':
         return this.logicEdit(op, payload);
+      case 'logic.trace.subscribe':
+        return this.logicTraceSubscribe(op, payload);
+      case 'logic.trace.unsubscribe':
+        return this.logicTraceUnsubscribe(op, payload);
       case 'authoring.references':
         return this.references(op, payload);
       case 'authoring.bulk':
@@ -1547,6 +1569,43 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       walk(rule.do, ['behavior', String(r), 'do']);
     });
     return this.success(op, { diagnostics });
+  }
+
+  /** The GUIs the live trace is open for (logic.trace.subscribe), so a test can see the studio asked and let go. */
+  readonly #traced = new Set<string>();
+  /** The next logic.trace.subscribe is refused with the server's cap. */
+  #refuseTrace = false;
+
+  /** `logic.trace.subscribe`: the server's lease for one GUI, scoped to the session's own player. */
+  private logicTraceSubscribe(op: string, payload: Record<string, unknown>): Response {
+    const resource = stringValue(payload.resource);
+    if (!resource.includes(':')) return this.failure(op, 'MTR-0008', "'resource' must be a resource id such as pack:name");
+    if (this.#refuseTrace) {
+      this.#refuseTrace = false;
+      return this.failure(op, 'MTR-0089', 'the server already holds 8 live trace subscriptions');
+    }
+    this.#traced.add(resource);
+    return this.success(op, {
+      subscribed: true, resource, scope: 'player', leaseSeconds: 300,
+      limits: { eventsPerSecond: 200, maxEntriesPerRun: 256, maxBatch: 128 },
+    });
+  }
+
+  private logicTraceUnsubscribe(op: string, payload: Record<string, unknown>): Response {
+    const resource = typeof payload.resource === 'string' ? payload.resource : undefined;
+    const closed = resource === undefined ? this.#traced.size : this.#traced.delete(resource) ? 1 : 0;
+    if (resource === undefined) this.#traced.clear();
+    return this.success(op, { unsubscribed: closed });
+  }
+
+  /** Test control: the GUIs whose live trace is open. */
+  tracedResources(): readonly string[] {
+    return [...this.#traced];
+  }
+
+  /** Test control: refuse the next live trace subscription, as a server at its cap does. */
+  refuseNextTrace(): void {
+    this.#refuseTrace = true;
   }
 
   /** logic.edit: the server's editor, run by the same code the studio plans with. All or none, at the revision. */

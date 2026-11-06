@@ -17,6 +17,7 @@
   import PaintOptions from './PaintOptions.svelte';
   import LogicTab from '../logic/LogicTab.svelte';
   import { LogicCanvasState } from '../../logic/canvas.svelte';
+  import { traceResourceOf } from '../../logic/trace';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
   import { ops, unwrap } from '../../api';
@@ -39,7 +40,7 @@
   import { zoomLabel } from '../../gui/viewport';
   import { restack } from '../../gui/ops';
   import { rootIdForResource } from '../../studio';
-  import { registerEditorGuard, revealInAdvanced, session, workspace } from '../../state.svelte';
+  import { bus, registerEditorGuard, revealInAdvanced, session, workspace } from '../../state.svelte';
 
   interface Props {
     resource: ResourceRef;
@@ -54,7 +55,7 @@
   const studio = new GuiStudioState(resource.pack, resource.path, rootIdForResource(resource.id));
   // The Logic tab is a second view of the same document: it shares this studio's history, dirty state and save.
   // svelte-ignore state_referenced_locally
-  const logic = new LogicCanvasState(studio);
+  const logic = new LogicCanvasState(studio, 'gui', { resource: traceResourceOf(resource), pushes: bus.push });
   let tab = $state<'design' | 'logic'>('design');
   const documentDraft = $derived(getDocumentDraft(resource.pack, resource.path));
 

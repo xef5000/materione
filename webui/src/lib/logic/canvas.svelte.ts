@@ -17,6 +17,8 @@ import { project, type Graph, type GraphNode } from './project';
 import { logicApiAvailable, logicValidate, logicVocabulary } from './server';
 import { verdictsOf, type NodeFlag } from './verdicts';
 import { InspectorState } from './inspector.svelte';
+import { TraceState } from './trace.svelte';
+import type { PushFrame, Signal } from '../events';
 
 export type { NodeFlag } from './verdicts';
 import { blockOf, blockProblems, type LogicBlock } from './tree';
@@ -80,10 +82,17 @@ export class LogicCanvasState {
   editable: boolean;
   /** The node inspector: scope, declared variables and the way an inspector edit reaches the document. */
   readonly inspector: InspectorState;
+  /** The live trace (logic.md section 7.6): an opt-in stream of what this GUI's rules do, drawn on the canvas. */
+  readonly trace: TraceState;
   selected: GraphNode | null;
   groups: PaletteGroup[];
 
-  constructor(gui: GuiStudioState, host = 'gui') {
+  /**
+   * @param host the kind of resource being edited
+   * @param tracing the GUI's id on the server and the connection's pushes, which the live trace needs; without them
+   *        the canvas has no trace to offer (a unit test, say)
+   */
+  constructor(gui: GuiStudioState, host = 'gui', tracing: { resource?: string; pushes?: Signal<PushFrame> } = {}) {
     this.gui = gui;
     this.host = host;
     this.block = $derived(blockOf(this.gui.doc.rest));
@@ -95,6 +104,11 @@ export class LogicCanvasState {
     this.selected = $derived(this.selection ? this.graph.byId.get(this.selection) ?? null : null);
     this.groups = $derived(this.vocabulary ? paletteGroups(this.vocabulary, { host: this.host }) : []);
     this.inspector = new InspectorState(this);
+    this.trace = new TraceState({
+      resource: tracing.pushes ? tracing.resource : undefined,
+      graph: () => this.graph,
+      pushes: tracing.pushes ?? ({ add: () => () => {} } as unknown as Signal<PushFrame>),
+    });
   }
 
   // ------------------------------------------------------------------ names
@@ -122,7 +136,7 @@ export class LogicCanvasState {
     return categoryColor(this.categoryOf(node));
   }
 
-  /** What the compiler and the vocabulary say about a node. */
+  /** What the compiler and the vocabulary say about a node (the live trace's verdict is `traceFlagOf`). */
   flagsOf(node: GraphNode): NodeFlag[] {
     const out: NodeFlag[] = [...(this.verdicts.get(node.id) ?? [])];
     const entry = node.kind === 'action' ? this.vocabulary?.actions.get(node.op) : undefined;
@@ -134,6 +148,14 @@ export class LogicCanvasState {
       }
     }
     return out;
+  }
+
+  /** What the live trace saw this node do in the run on screen, as a badge: a failure with its reason, a skip with why. */
+  traceFlagOf(node: GraphNode): NodeFlag | null {
+    const ran = this.trace.of(node.id);
+    if (ran?.state === 'failed') return { severity: 'error', message: `Failed in the last run: ${ran.detail || 'no reason given'}` };
+    if (ran?.state === 'skipped') return { severity: 'info', message: `Skipped in the last run${ran.detail ? `: ${ran.detail}` : ''}` };
+    return null;
   }
 
   // ------------------------------------------------------------------ connection

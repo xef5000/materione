@@ -10,13 +10,16 @@ import java.util.Objects;
  * nobody is debugging pays for none of them.
  *
  * @param runId the run's id, unique per interpreter
+ * @param resource the id of the resource that owns the rule (a GUI's {@code pack:id})
  * @param rule the rule's id
+ * @param player the player the run belongs to (a UUID text), or an empty string when it has none
  * @param path the step the event is about ({@code behavior.2.do.0.then.1}); the rule's own path
  *        for run-level events
  * @param type what happened
  * @param detail a short human sentence, or an empty string
  */
-public record TraceEvent(long runId, String rule, StepPath path, Type type, String detail) {
+public record TraceEvent(
+        long runId, String resource, String rule, String player, StepPath path, Type type, String detail) {
 
     /** What happened. */
     public enum Type {
@@ -43,7 +46,9 @@ public record TraceEvent(long runId, String rule, StepPath path, Type type, Stri
     }
 
     public TraceEvent {
+        Objects.requireNonNull(resource, "resource");
         Objects.requireNonNull(rule, "rule");
+        player = player == null ? "" : player;
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(type, "type");
         detail = detail == null ? "" : detail;

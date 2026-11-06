@@ -77,8 +77,8 @@ describe('design tokens', () => {
     const used = new Set(
       files.flatMap((file) => [...file.text.matchAll(/var\((--[\w-]+)/g)].map((match) => match[1] ?? '')),
     );
-    // --cols, --c and --w (a node or wire colour) are set per element at runtime; --legacy-* is built from the legacy palette keys.
-    const missing = [...used].filter((name) => !defined.has(name) && name !== '--cols' && name !== '--c' && name !== '--w' && !name.startsWith('--legacy-'));
+    // --cols, --c and --w (a node or wire colour) and --i (the order the live trace reached a node or wire in) are set per element at runtime; --legacy-* is built from the legacy palette keys.
+    const missing = [...used].filter((name) => !defined.has(name) && name !== '--cols' && name !== '--c' && name !== '--w' && name !== '--i' && !name.startsWith('--legacy-'));
     expect(missing).toEqual([]);
   });
 });

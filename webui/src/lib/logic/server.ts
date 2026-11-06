@@ -162,3 +162,29 @@ export async function logicInstantiate(
 export async function logicVocabulary(channel: RpcChannel): Promise<LogicVocabulary> {
   return unwrap(await channel.call('logic.vocabulary', {})) as unknown as LogicVocabulary;
 }
+
+/** What `logic.trace.subscribe` answers: the scope that is live, how long the lease lasts and the server's caps. */
+export interface TraceSubscribed {
+  resource: string;
+  /** `player`: only the runs of the player who opened this session. `all`: every player's. */
+  scope: 'player' | 'all';
+  leaseSeconds: number;
+  limits: { eventsPerSecond: number; maxEntriesPerRun: number; maxBatch: number };
+}
+
+/**
+ * `logic.trace.subscribe`: opens the live trace of one GUI for this session (logic.md section 32). The server then pushes
+ * `push.logic.trace` frames; subscribing again renews the lease, which lapses after `leaseSeconds`. A refusal (the
+ * server's cap) rejects with its code.
+ */
+export async function logicTraceSubscribe(channel: RpcChannel, resource: string, allPlayers = false): Promise<TraceSubscribed> {
+  const payload: Record<string, unknown> = { resource };
+  if (allPlayers) payload.allPlayers = true;
+  return unwrap(await channel.call('logic.trace.subscribe', payload)) as unknown as TraceSubscribed;
+}
+
+/** `logic.trace.unsubscribe`: closes one GUI's trace, or all of this session's when no resource is named. */
+export async function logicTraceUnsubscribe(channel: RpcChannel, resource?: string): Promise<number> {
+  const data = unwrap(await channel.call('logic.trace.unsubscribe', resource === undefined ? {} : { resource }));
+  return typeof data.unsubscribed === 'number' ? data.unsubscribed : 0;
+}

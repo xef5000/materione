@@ -454,6 +454,12 @@ request, never a change to a file:
 | `MTR-0087` | error | `instantiate` refused an expansion: it does not validate under the flow compiler (the compiler's own problems follow it), or the recipe failed while expanding. Nothing is returned. A recipe author fixes the recipe; an author of a request fixes nothing here. |
 | `MTR-0088` | warning | An expansion uses an action this server cannot run right now, such as a payment with no economy. The expansion is still returned, with the warning; the reason is the action's own availability reason. |
 
+The live trace ([`logic.md`](logic.md) §32, #226) adds one code, which answers a subscription and never touches a file or a run:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0089` | warning | A live-trace subscription was refused: the server already holds its maximum of 8 concurrent subscriptions (`api.logic().traces().subscribe`), or one editor session already traces 4 GUIs (`logic.trace.subscribe`). Nothing is subscribed. Turn a trace off, in this editor or another, then try again; a closed editor or a lapsed 5-minute lease frees its slot. |
+
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
 meaning and step paths as for items (`gui.validate` returns them for a `saved` or `yaml` source). `MTR-0021`

@@ -155,6 +155,7 @@ abstract class ControlSteps {
         if (step.cancelSessionRuns() && run.owner().cancelKey() != null) {
             cancel(run.owner().cancelKey());
         }
+        emit(run, step.path(), TraceEvent.Type.STEP_OK, "stop");
         finish(run, RunOutcome.STOPPED, "stop");
         return false;
     }

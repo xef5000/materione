@@ -252,6 +252,10 @@ public final class EditorTransportService {
         dev.materione.web.rpc.ops.GuiAuthoringOps.register(dispatcher, api.authoring().gui(), actorFor);
         dev.materione.web.rpc.ops.LogicAuthoringOps.register(
                 dispatcher, api.authoring().logic(), actorFor, this::behaviorVocabulary);
+        // the live trace (logic.md §32): frames go to the editor session that subscribed, nobody else
+        dev.materione.web.rpc.ops.LogicTraceOps.register(
+                dispatcher, api.logic().traces(), this::traceChannel, this::ownerUuidOfCurrentSession,
+                System::currentTimeMillis);
         dev.materione.web.rpc.ops.AuthoringModelOps.register(
                 dispatcher, api.authoring(), actorFor);
         dev.materione.web.rpc.ops.AssetOps.register(dispatcher, api.assets(), actorFor);
@@ -262,6 +266,26 @@ public final class EditorTransportService {
         // preview in game: the session's approved player is the one who opened it in game (gui.md §5)
         dev.materione.web.rpc.ops.RuntimeOps.register(
                 dispatcher, api.runtime().gui(), actorFor, this::ownerUuidOfCurrentSession);
+    }
+
+    /** The live trace's view of an editor session: alive or not, and a frame sink. Null once the session is gone. */
+    private dev.materione.web.rpc.ops.LogicTraceOps.Channel traceChannel(String sessionId) {
+        EditorSessions current = sessions;
+        EditorSession session = current == null ? null : current.find(sessionId);
+        if (session == null) {
+            return null;
+        }
+        return new dev.materione.web.rpc.ops.LogicTraceOps.Channel() {
+            @Override
+            public boolean open() {
+                return session.isActive();
+            }
+
+            @Override
+            public void send(byte[] body) {
+                session.sendFrame(body);
+            }
+        };
     }
 
     /** The session owner bound to the dispatching request, if any. */

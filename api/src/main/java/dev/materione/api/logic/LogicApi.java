@@ -1,5 +1,6 @@
 package dev.materione.api.logic;
 
+import dev.materione.api.logic.trace.LogicTraces;
 import dev.materione.api.logic.variable.VariablesApi;
 import dev.materione.api.logic.provider.LogicProviders;
 import dev.materione.api.registry.BehaviorVocabulary;
@@ -20,11 +21,8 @@ import dev.materione.api.registry.BehaviorVocabulary;
  * reload, because steps are parsed at load. Nothing here edits files (D1) or runs a flow directly
  * (D6): firing a trigger belongs to the runtime that owns the event.
  *
- * <h2>Planned additions</h2>
- *
- * <p>{@code traces()} (subscribe to run traces, logic.md §7.6, §13 W4) is deliberately absent and
- * arrives as an additive method when its subsystem exists, never as a placeholder. Recipes and the
- * authoring edit/validate surface (§8) live on {@code AuthoringApi.logic()} (§13 A1).
+ * <p>The authoring edit/validate surface (§8) lives on {@code AuthoringApi.logic()} (§13 A1); live run
+ * traces (§7.6, §32) are {@link #traces()}.
  */
 public interface LogicApi {
 
@@ -90,6 +88,12 @@ public interface LogicApi {
      * is visible at once to the editor and to {@code instantiate}, and it needs no reload.
      */
     LogicRegistry<Recipe> recipes();
+
+    /**
+     * Live run traces (logic.md §7.6, §32): subscribe, per player and per resource, to the step-boundary events of
+     * the runs a flow produces. Rate-limited and capped, and free while nobody subscribes.
+     */
+    LogicTraces traces();
 
     /**
      * The self-description of the whole behavior system as the editor sees it, rebuilt from the
