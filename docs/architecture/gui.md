@@ -19,7 +19,7 @@
 | Term | Meaning |
 |---|---|
 | **GUI** | One `guis/**/*.yml` resource: a container screen design (v1: a chest of 1–6 rows). |
-| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. |
+| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. *Being replaced by the open canvas of §11 (#274): art may extend past the screen, anchored to its top-left.* |
 | **Layer** | One entry in the GUI's ordered `layers:` list (bottom → top). Every layer is an instance of one component. |
 | **Component** | A registered layer kind (`gui-components` registry): `panel`, `slots`, `image`, `paint`, `button`, `text`, `item` in v1. Addons register more through the same path. |
 | **Render target** | Where a component's output physically lands in the client: the **raster** background, the **title text**, or a container **slot** (§4). |
@@ -412,7 +412,7 @@ canvas tool, not a form.
 - **Truthful preview**: the canvas renders through the shared raster (§4) plus the
   first-party font, in compiled target order.
 - **Layers**: drag to reorder, visibility, lock, rename, duplicate, delete; a new GUI starts
-  as `panel` + `slots` — the vanilla chest look, painted by our own bevel routine.
+  as `panel` + `slots` — the vanilla chest look, painted by our own bevel routine. *(Being replaced by §11, #278: a new GUI has no layers and the studio draws the real chest under it.)*
 - **Components palette**: add any registered component; unknown addon components get a
   schema-derived inspector automatically.
 - **Paint tools** on `paint` layers reuse the `pixels.ts` engine (brush, eraser, fill,
@@ -916,3 +916,95 @@ These implement §9.4 and lift the `default`-run restriction. Each decision is r
 6. **Diagnostics.** `MTR-0052` loses its "text placed after a `default` run" cause (plugin.md §5). The studio's text-after-`default` flag goes with it, because that flag is the server's verdict and the server no longer reports the case. The `default`-above-row-5 flag remains.
 7. **The studio's `default` preview keeps its approximate glyphs and says so**, but its pen and selection box use the exact widths. Only letter shapes are approximate now.
 8. **Existing goldens do not change.** The shared raster vectors and the pack goldens contain no `default` run after another run, and the `guitext` fixture has its `default` run last, so their bytes are unchanged.
+
+---
+
+## 11. The open canvas (#274) — design approved by the owner, being built
+
+> **Status.** Approved by the owner on 2026-11-05. It replaces the bounded canvas of §1, the starter GUI
+> of §6 and the full-screen flatten of §4 step 1 **as each issue lands**: #275 (research), #276
+> (compiler), #277 (studio), #278 (starter, showcase, panel corners). Until an issue lands, the
+> sections it replaces still describe the shipped behaviour. Facts marked *to verify* are #275's to
+> confirm on the probe client; its findings are recorded in §9 and may amend the rules below.
+
+### 11.1 Why
+
+- **The chest was redrawn, not shown.** A new GUI started as a `panel` and a `slots` layer that
+  repainted the chest with our own bevel, whose 1-px corner cut does not match the client's rounded
+  corners. Every GUI shipped a full-screen background, even a transparent one.
+- **The showcase covered the player inventory** with a 176 × 168 frame, so the player's own items
+  floated on flat grey without their slot grid.
+- **Art was boxed into the screen** (`176 × (114 + 18·rows)`), although the title glyph that carries
+  it is not clipped to the screen, and §9.3 already found the negative ascent and the 256-px tiles that
+  larger art needs.
+- **A GUI should be worth making without any art.** Materione's logic should stand on its own: a GUI
+  with no custom pixels must cost nothing in the pack and look exactly like a vanilla chest.
+
+### 11.2 The model
+
+**The vanilla chest is the base, not a layer.** The client draws its own chest under the title, so
+Materione never compiles or stores it. The studio draws the owner's reference art
+(`webui/static/vanilla/generic_54.png`, the 176 × 222 chest on a 256 × 256 sheet) under every GUI,
+composed for 1–6 rows exactly as the client composes it: the top `rows·18 + 17` px of the sheet, then
+the 96-px player-inventory part from `v = 126`. A new GUI has **no layers**.
+
+**Coordinates.** GUI pixels, origin at the top-left of the vanilla screen, as before. A layer may sit
+anywhere within the **art cap**: about 1024 × 1024 GUI px around the screen (the exact box is #276's,
+after #275), so negative positions and positions past the screen are ordinary.
+
+**Three regions:**
+
+| Region | Where | In the studio | Rules |
+|---|---|---|---|
+| Container | the chest's top part and its slots | drawn normally | the only slots Materione controls; `item` and `list` layers live here |
+| Player inventory | `y ≥ rows·18 + 17` inside the screen | the vanilla art under a **grey veil** | the veil **lifts per painted pixel**: a pixel of any raster layer is drawn at full strength, the unpainted vanilla pixels around it stay veiled. Items are the player's own, so no `item` layer here |
+| Outside | everything past the screen edge, within the cap | open space with the screen's outline and the cap's box | any raster or text layer may draw here; nothing here is clickable (11.4) |
+
+**Nothing transparent is stored.** The compiler flattens over the **painted bounds** (the smallest
+box holding every pixel with alpha > 0), not over the screen, and places the glyph by shift and ascent
+from that box's origin. A GUI whose raster layers paint no pixel emits **no PNG, no font provider and
+no background glyph**; its title is its text runs (or the plain title) alone. The same holds for each
+dynamic overlay glyph (§4 step 7): each is cropped to its own bounds.
+
+**Paint layers own their geometry.** A `paint` layer carries `x`, `y`, `width`, `height` like an
+`image`; the studio grows it as strokes leave it and trims it to its painted bounds on save. No paint
+PNG is canvas-sized any more.
+
+### 11.3 Compiling art past the screen
+
+- **Horizontal placement** is the existing pen arithmetic of *Title geometry* (§4), starting at the
+  painted box's `x` instead of 0.
+- **Vertical placement** is the provider's `ascent = 13 − y` for a box starting at GUI row `y`.
+  A box below the screen top has a negative ascent, which is valid (§9.3). *To verify:* the client also
+  requires `ascent ≤ height`, so a box starting more than its own height above row 13 cannot be raised
+  that far; the compiler pads the bitmap with transparent rows below, or splits it (next point).
+- **Tiles.** A glyph is at most 256 × 256 px (§9.3). Art larger in either dimension is cut into tiles
+  of at most 256 × 256, each its own codepoint (a further durable `gui-background` allocation keyed by
+  GUI and tile), placed side by side with shifts; a fully transparent tile is not emitted. Rows of
+  tiles each carry their own ascent.
+- **Past the cap.** A layer partly past the cap is clipped and reported (a new `MTR-` code, #276),
+  never quarantining the GUI.
+
+### 11.4 Clicks outside the container
+
+The client sends a click outside the container as "outside" (slot −999) with no position, so a
+clickable layer (a `button`, or any layer a `gui.click` rule filters on) drawn outside the container
+cannot be told apart from any other outside click. The studio marks such a layer as **decoration
+only**, with the reason, and the compiler warns. `gui.click_outside` stays the only trigger for that
+area. *To verify (#275).*
+
+### 11.5 What the player's window cuts
+
+Art past the screen is drawn only where the player's window has room: the screen is centred, so how
+much of the outside is visible depends on the window size and the GUI scale. The studio draws guides
+for what fits around the screen at GUI scales 2, 3 and 4 on a 1920 × 1080 window, so an author sees
+what most players will see. *To verify (#275):* that the title is not clipped to the screen at any
+scale, and the draw order against the Inventory label and slot items.
+
+### 11.6 What stays
+
+- The `panel` and `slots` components stay for authors who want to repaint the chest; `panel` gains a
+  vanilla corner style matching the reference art, used by default for a new panel (#278).
+- Text layers, item layers, `visible_if`, `frames` and the dynamic path (§4 step 7) are unchanged apart
+  from cropping and placement.
+- The vanilla **Inventory** label is still drawn by the client over everything (§9.2).
