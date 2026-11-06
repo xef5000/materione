@@ -93,10 +93,13 @@ final class GuiVisualCompiler {
                     skipped.accept(layer, failure.getMessage() == null ? failure.toString() : failure.getMessage());
                     continue;
                 }
-                boolean invalid = text.stream().anyMatch(run -> GuiTextRules.problem(run.text(), run.font(), run.y(),
-                        GuiTemplates.isTemplated(run.text())) != null);
-                if (invalid) {
-                    skipped.accept(layer, "text contains unsupported characters or has an invalid row");
+                String problem = text.stream()
+                        .map(run -> GuiTextRules.problem(run.text(), run.font(), run.y(),
+                                GuiTemplates.isTemplated(run.text())))
+                        .filter(java.util.Objects::nonNull)
+                        .findFirst().orElse(null);
+                if (problem != null) {
+                    skipped.accept(layer, problem);
                     continue;
                 }
                 pieces.addAll(text);

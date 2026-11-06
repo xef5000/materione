@@ -170,6 +170,19 @@ class GuiCompilerTest {
     }
 
     @Test
+    void aDynamicTextLayerSaysWhyItIsSkipped() {
+        var layers = GuiTestSupport.definition(1,
+                GuiTestSupport.layer("tip", "text", "text", "<gray>Tip", "x", 60, "y", 6,
+                        "visible_if", "player.level > 1"),
+                GuiTestSupport.layer("accent", "text", "text", "café", "x", 8, "y", 6,
+                        "visible_if", "player.level > 1"));
+        var compiled = compile(layers, FIRST_BACKGROUND, TextureSource.NONE);
+        assertThat(compiled.diagnostics()).extracting(Diagnostic::message).satisfiesExactlyInAnyOrder(
+                message -> assertThat(message).contains("'tip'").contains("may not contain <"),
+                message -> assertThat(message).contains("'accent'").contains("printable ASCII only"));
+    }
+
+    @Test
     void aLaterItemInTheSameSlotWinsAndSaysSo() {
         var layers = GuiTestSupport.definition(1,
                 GuiTestSupport.layer("first", "item", "slot", 4, "item", "minecraft:stone"),
