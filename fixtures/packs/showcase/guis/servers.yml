@@ -1,0 +1,57 @@
+# The server selector (logic.md §1 rows: items with templated text, live update, server transfer, requirement then
+# action). The lobby button shows the online count of this server, read from the server scope (${server.online}), and a
+# game-tick rule refreshes the window every 100 ticks so the count moves while the window is open. A click sends the
+# player through connect; without a transfer configured (transfer_host, or a proxy channel), connect fails and the
+# else tells the player so. The window is one row.
+servers:
+  title: Servers
+  rows: 1
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "SERVERS"
+      font: smallcaps
+      color: "#404040"
+    - id: lobby
+      type: item
+      slot: 4
+      item: minecraft:compass
+      name: "<aqua>Lobby"
+      lore:
+        - "<gray>Online: ${server.online}"
+        - "<gray>Click to connect"
+    - id: back
+      type: item
+      slot: 8
+      item: minecraft:arrow
+      name: "<gray>Back"
+  behavior:
+    - on: gui.tick
+      every: 100
+      do:
+        - gui.refresh
+    - on: gui.click
+      layer: lobby
+      do:
+        - message: "<gray>Connecting to lobby..."
+        - require:
+            - connect: lobby
+          else:
+            - message: "<red>The lobby cannot be reached from here."
+    - on: gui.click
+      layer: back
+      do:
+        - gui.back
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-OPEN servers"
+            as: console

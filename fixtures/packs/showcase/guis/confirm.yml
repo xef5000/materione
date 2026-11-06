@@ -1,0 +1,62 @@
+# The confirm dialog (logic.md §1 rows: sub-GUI with arguments, back and close behaviour). The settings GUI opens it with a
+# question argument. Yes turns the tips off and goes back; no goes back without changing anything; a click outside the
+# window cancels, as no does. The window is its own resource: the rules that open it live in the settings GUI.
+# Announced on the console (`say MATERIONE-SHOWCASE-...`).
+confirm:
+  title: Confirm
+  rows: 1
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: question
+      type: text
+      x: 8
+      y: 6
+      text: "${gui.args.question}"
+      font: default
+      color: "#404040"
+    - id: accept
+      type: item
+      slot: 3
+      item: minecraft:lime_concrete
+      name: "<green>Yes"
+    - id: decline
+      type: item
+      slot: 5
+      item: minecraft:red_concrete
+      name: "<red>No"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-OPEN confirm"
+            as: console
+    - on: gui.click
+      layer: accept
+      do:
+        - set_var: { var: showcase:show_tips, value: false }
+        - message: "<green>Tips are off."
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-CONFIRM yes"
+            as: console
+        - gui.back
+    - on: gui.click
+      layer: decline
+      do:
+        - message: "<gray>Kept as it was."
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-CONFIRM no"
+            as: console
+        - gui.back
+    - on: gui.click_outside
+      do:
+        - gui.back
+    - on: gui.close
+      do:
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-CLOSE confirm reason=${close.reason}"
+            as: console

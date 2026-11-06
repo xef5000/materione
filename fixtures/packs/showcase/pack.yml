@@ -1,0 +1,9 @@
+# The GUI showcase pack (#227, logic.md §1, §34): five GUIs that together demonstrate the parity rows of the GUI
+# logic model: the shop (with its open command), the server selector, the paged player list with search, the
+# settings toggles and the confirm dialog. It holds no items on purpose: other suites pin the item counts of the
+# packs they load.
+id: showcase
+version: 1.0.0
+schema_version: 1
+
+depends: []

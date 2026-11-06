@@ -9,6 +9,11 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **A GUI logic showcase: five GUIs that demonstrate the menu parity rows (logic.md §1.1, §34, #227).** The `showcase` fixture pack
+  holds a shop (`/shop` with a typed category, a 5-point paywall, conditional stock), a server selector (`connect` and the online
+  count), a paged player list with search, settings toggles (player booleans with on and off overlays), and a confirm dialog that
+  opens from the settings with a question. The QA catalog has eleven `showcase.*` entries (nine automatic, two visual); they await a
+  blessing run on main. No new diagnostic codes.
 - **The Design tab and the Logic tab know each other; a Script tab; a Recipes panel (logic.md §7.1, §7.4, §7.5, §33, #225).** In the
   GUI studio, selecting a button, an item or a list offers **Add click logic**: it adds a `gui.click` rule filtered to the layer and opens it
   in the Logic tab. A trigger node shows the layer's thumbnail and name, and hovering it outlines the layer on a mini preview of the GUI; a

@@ -205,7 +205,7 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
 | Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | 📋 M6 |
-| Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) | 📋 M6 |
+| Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) | 🚧 M6: the GUI studio and GUI logic shipped (click rules, open commands, dynamic slots, lists and search, prompts, input slots; epic #189, showcase #227, logic.md §1.1). Blessing of the showcase QA entries pending; the Bedrock forms and dialogs stay later |
 | **Server-side dialogs** (1.21+ forms) | ❌ | ❌ | ✅ | 📋 M6 |
 
 ### K. Recipes
