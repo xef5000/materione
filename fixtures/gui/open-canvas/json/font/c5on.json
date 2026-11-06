@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c5on_on.png",
+   "ascent": -7,
+   "height": 32,
+   "chars": [
+    "\ue000"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,21 @@
+r275_click:
+  title: R275 click
+  rows: 3
+  layers:
+    - id: gem
+      type: item
+      slot: 13
+      item: corpus:gem_red
+      amount: 1
+  behavior:
+    - on: gui.click
+      layer: gem
+      do:
+        - run_command:
+            command: "say MTR275-CLICK-GEM"
+            as: console
+    - on: gui.click_outside
+      do:
+        - run_command:
+            command: "say MTR275-CLICK-OUTSIDE"
+            as: console

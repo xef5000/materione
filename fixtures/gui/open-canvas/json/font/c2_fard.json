@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_fard.png",
+   "ascent": -627,
+   "height": 32,
+   "chars": [
+    "\ue005"
+   ]
+  }
+ ]
+}

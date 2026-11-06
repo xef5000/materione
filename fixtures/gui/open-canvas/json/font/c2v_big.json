@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2v_big.png",
+   "ascent": 63,
+   "height": 257,
+   "chars": [
+    "\ue002"
+   ]
+  }
+ ]
+}

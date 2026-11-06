@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_over.png",
+   "ascent": 257,
+   "height": 257,
+   "chars": [
+    "\ue008"
+   ]
+  }
+ ]
+}

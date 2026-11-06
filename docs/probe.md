@@ -569,6 +569,30 @@ already asserts.
   `FontDescription.Resource(Identifier.fromNamespaceAndPath(ns, path))`, not an identifier. The
   screenshot class is `net.minecraft.client.Screenshot`. `ChestMenu.sixRows` needs the unwrapped
   inventory `mc.player.getInventory().@target`. GUI scale: `mc.getWindow().@target.setGuiScale(n)`.
+- **Measuring GUI geometry to the pixel (26.1.2, #275; `fixtures/gui/open-canvas/`).** A client
+  resource pack in `harness/build/probe/client/resourcepacks/<name>/` (`pack.mcmeta` with
+  `min_format`/`max_format` 84) is selected with
+  `r = mc.getResourcePackRepository(); r.reload(); r.setSelected(['vanilla','file/<name>']); mc.reloadResourcePacks()`
+  (the server's own pack stays selected on top). A real server-driven title is a vanilla chest
+  with `CustomName` set by `setblock`/`data merge` (a double chest is 6 rows), opened by aiming
+  and `mc.gameMode.useItemOn(player, MAIN_HAND, player.pick(5.0D, 1.0F, false))`; `setblock ...
+  replace` rebuilds the block entity, so set `Items` after it. The bridge screenshot is a JPEG: for
+  pixel comparisons use `Screenshot.grab(mc.gameDirectory.@target, 'name.png', mc.getMainRenderTarget().@target, 1, { c -> } as java.util.function.Consumer)`
+  inside `mc.execute({ ... } as Runnable)`, and read the PNG back (the file name keeps its
+  extension when you give one). The window resizes with
+  `mc.execute({ org.lwjgl.glfw.GLFW.glfwSetWindowSize(h, 1920, 1080) } as Runnable)` where
+  `h = mc.getWindow().handle()` (a window larger than the monitor works); the GUI scale with
+  `mc.options.guiScale().set(n); mc.resizeGui()`, clamped to `min(⌊W/320⌋, ⌊H/240⌋)`.
+  Open screens expose `leftPos`/`topPos` through `mc.screen.@target`. A font whose provider the
+  client rejects is logged as `Unable to load font ...` in `harness/build/probe/client/logs/latest.log`:
+  read it after every pack reload. Resource ids in a font provider are lowercase only. A real
+  mouse click on an open screen is
+  `mc.screen.@target.mouseClicked(new net.minecraft.client.input.MouseButtonEvent(x, y, new net.minecraft.client.input.MouseButtonInfo(0, 0)), false)`
+  in GUI-scaled coordinates. A command of a few KB (a 16-tile title written with `\u` escapes) was not applied through
+  RCON and reported nothing: send long titles as raw UTF-8 in one component (one font holding both
+  the shift characters and the glyphs). The probe's Paper JVM
+  (Microsoft OpenJDK 25.0.4) crashed once with a G1 `FreeList_lock` guarantee failure during a long
+  RCON session; `probe up --no-build` and `join` recover.
 - **Default-font text is not legible in probe captures** while the published pack overrides
   `minecraft:default` without the vanilla providers (gui.md §9.6). Use a styled font, such as
   `shop:gui/smallcaps_y6`, for readable probe text.

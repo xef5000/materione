@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_scale.png",
+   "ascent": 113,
+   "height": 128,
+   "chars": [
+    "\ue006"
+   ]
+  }
+ ]
+}

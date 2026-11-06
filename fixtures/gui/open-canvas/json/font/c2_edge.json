@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_edge.png",
+   "ascent": 256,
+   "height": 256,
+   "chars": [
+    "\ue002"
+   ]
+  }
+ ]
+}

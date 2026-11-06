@@ -1,0 +1,13 @@
+{
+ "providers": [
+  {
+   "type": "bitmap",
+   "file": "r275:font/c2_farl.png",
+   "ascent": -287,
+   "height": 32,
+   "chars": [
+    "\ue003"
+   ]
+  }
+ ]
+}
