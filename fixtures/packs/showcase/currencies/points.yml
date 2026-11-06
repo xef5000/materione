@@ -1,0 +1,6 @@
+# The showcase currency (logic.md §18): the built-in XP integration, so the shop runs without Vault. Points are the
+# player's total experience, so `xp add <player> 20 points` funds a purchase.
+integration: xp
+unit: points
+display_name: Points
+decimals: 0

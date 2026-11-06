@@ -69,6 +69,53 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Extension API | none | material, item, requirement and command registries | Public registries for actions, conditions, triggers, item sources, list sources, input methods and recipes (§4). |
 | Importing incumbent menus | n/a | n/a | Later: the importers issue (#17) gains DeluxeMenus and CommandPanels mappings once this model ships. |
 
+### 1.1 Coverage by the showcase (#227)
+
+Every row above that is not "Later" is listed below with what demonstrates it: a showcase GUI (`showcase:<name>`, the pack in
+`fixtures/packs/showcase`), an in-game QA entry (`showcase.*` in `qa/catalog/showcase.mjs`, or an existing entry named in full), or
+an explicit **gap**. A gap is not covered by any client run; the reason is given. The QA entries are authored and pass
+`qa/runner.mjs check`, but they have **not run against a client** (blessing is pending, qa/README.md). Rows are in §1 order.
+
+| §1 row | Demonstrated by | Status |
+|---|---|---|
+| Menu file, id, title | All five showcase GUIs. | Partial. Titles are static in the showcase. A dynamic title (§6.4) has no client entry; `GuiTitleTest` covers it. **Gap.** |
+| Size and container type | `rows: 1` (servers, settings, confirm) and `rows: 3` (shop, players). | Covered (chest only, as §1 says). |
+| Open commands and aliases | `showcase:shop` opens with `/shop` (`showcase.shop-open-command`). | Partial. One name per GUI here. Several names: `opencommands.deferred-alias-applies-automatically` (existing). |
+| Open arguments | Shop `category` (choice, default `all`): the console marker carries `category=gems`. | Covered. `suggest:` is not checked client-side. |
+| Open gate | Not in the showcase. `opencommands.failed-requirement-denies-with-its-message` (existing, the `guilogic:opener` GUI). | Covered by an existing entry. The `open.permission` gate has no client entry. **Gap.** |
+| Open, close and refresh hooks | `gui.open` in all five; `gui.close` in the shop; `gui.click_outside` in confirm (`showcase.confirm-click-outside`); `refresh: 20` on the shop; `gui.tick` in servers. | Partial. `gui.tick` is authored and compiled, and no client entry counts its refreshes. **Gap** (the ticker has unit tests). |
+| Item forms | Vanilla items in every GUI. | Partial. The `head:` source is `guidynamic.viewer-head` (existing). Materione items, external sources, `player_slot` and templates are not in the showcase, by design (no items in the pack). **Gap.** |
+| Item text and meta | `name` and `lore` on every item layer; lore templated (`${vars.server.showcase.stock}`, `${gui.args.category}`). | Partial. `amount`, `glint` and `lore_mode` have no client entry. **Gap.** |
+| Conditional items | `visible_if` on the sold-out barrier, the tip line and the two toggle overlays. | Covered: `showcase.shop-sold-out`, `showcase.settings-toggle`, `showcase.tip-line-follows-the-toggle` (visual). `guidynamic.conditional-item` (existing). |
+| Live update | `refresh: 20` on the shop; `gui.tick` every 100 ticks on servers. | Partial, as above. `guiruntime.live-refresh` and the `guidynamic` entries (existing) cover the clock. |
+| Animations | Not in the showcase. | Covered by `guidynamic.animated-slot` (existing). |
+| Click types | Left on every toggle and button; right on the toggle (`showcase.settings-toggle`). | Partial. Shift, middle, drop and the rest are unit-tested (`ClickRouterTest`). **Gap** at client level. |
+| Requirement then action, deny and success | `require` … `else` on the emerald and the lobby button; `if` … `then`/`else` on the sold-out check and the toggle. | Covered: `showcase.shop-buy-with-points`, `showcase.shop-buy-refused-without-points`, `showcase.shop-sold-out`, `showcase.servers`. |
+| Requirement types | Expression conditions (`visible_if`, `if: "${…}"`) and the `var` condition (`if: var:` in settings). | Partial. `has_permission`: `logic.conditions-permission` (existing). `has_money`, `has_item_space` and `at_least` have no client entry. **Gap**; `at_least` is unit-tested (`ConditionsInFlowsTest`). |
+| `minimum_requirements`, `optional`, `stop_at_success` | Not in the showcase. | **Gap** (unit-tested). |
+| Paywalls (check and take) | The emerald: `require: [take_money, give_item]`, failing with the message and no stock change. | Covered: `showcase.shop-buy-with-points`, `showcase.shop-buy-refused-without-points`. |
+| Actions: commands | `run_command` with `as: console` on every marker. | Covered for `console`. `as: player` and `as: op` have no client entry. **Gap.** |
+| Actions: messages | `message` throughout. | Covered. `broadcast`, `chat`, `actionbar`, `title`: `logic.messages-broadcast-chat` and `logic.title-actionbar` (existing). |
+| Actions: sound | Not in the showcase. | Covered by `guilogic.click-message-sound` (sound step) and `logic.sound-stop` (existing). |
+| Actions: GUI | `gui.open` (servers, players, settings, confirm), `gui.close`, `gui.refresh`, `gui.back`. | Covered for open, close, refresh and back. `gui.page` is authored on the list's arrows, but a one-page list never pages: `guilogic.roster-paged` (existing) covers it. `gui.slot_item` has no client entry. **Gap.** |
+| Actions: economy, exp, permissions | `take_money` and `give_item` (shop). | Partial. `give_money`: the currency reads in `logic.currency-live-read-surfaces` (existing), but no client run gives money. **Gap.** `take_exp` and `give_exp`: `logic.exp-give-take` (existing). `give_permission`: `logic.conditions-permission` (existing). |
+| Actions: world | `connect` (servers; the failure path, because the probe has no transfer). `give_item` (shop). | Partial. `teleport`: `logic.teleport` (existing). `take_item`: `logic.items-take-give` (existing). `potion`: **gap**. |
+| Delay and chance | Not in the showcase. | **Gap** (unit-tested). |
+| Per-player data | `showcase:show_tips` (player boolean, settings and confirm); `showcase:stock` (server number, shop); `session.search` (players). | Covered for player, server and session scopes. Local variables are not in the showcase; `variables.*` (existing) cover the scopes. |
+| Placeholders out | `${…}` templates in every GUI. `${server.online}` on servers. | Partial. The PlaceholderAPI `%materione_var_*%` expansion has no client entry. `logic.currency-xp-placeholders` (existing) covers currency tokens. **Gap.** |
+| Text input | `prompt` on the players search (`showcase.players-search`, chat answers "pro" and "zzz"). | Covered for chat. `guilogic.chat-prompt-cancel` (existing) covers cancel. Sign and anvil: sign is unavailable on 1.21.4; anvil has no entry. **Gap.** |
+| Items players put into the menu | Not in the showcase. | Covered by `guilogic.input-slots` and `guioverlay.input-ownership` (existing). |
+| Inventory lock | Not in the showcase. The existing trade GUI uses `player_inventory: free`. | **Gap**: `locked` has no client entry. |
+| Pagination, lists | `online_players` list with `sort: name`, `search`, and the "Page x of y" indicator (players). | Partial. Search, sort and the indicator are covered (`showcase.players-search`). Paging with more than one page: `guilogic.roster-paged` (existing). |
+| Admin commands | `/materione var get|set` in every showcase entry; `/materione gui open` (existing). | Covered. |
+| Extension API | Not demonstrated: the showcase uses built-ins only. | **Gap** at client level. Registries are unit-tested (`BuiltinLogic`, `LogicServiceTest`). |
+
+**Gaps, collected.** The client-level gaps are: a dynamic title; the `open.permission` gate; `gui.tick` refresh counts; Materione item
+forms and item meta beyond name and lore; `has_money` and `has_item_space` as conditions; `minimum_requirements`; `as: player` and
+`as: op`; `gui.slot_item`; `give_money` in a live run; `potion`; the delay and chance options; the PlaceholderAPI variable
+expansion; sign and anvil input; the `locked` inventory; and the extension API. Each of these is either covered by an existing
+entry named above, or unit-tested, or both. None is faked by a showcase GUI.
+
 ---
 
 ## 2. The flow model
@@ -3367,3 +3414,73 @@ real local app) and `gui.logic-linkage-visual` (screenshots of the studio flow);
 recipe in the vocabulary, which would replace the probe. "Add click logic" for a multi-selection. Syntax colouring, completion and
 inline `open:` validation in the Script tab. Keeping comments inside the three sections (a list-item path in `LosslessYamlDocument`).
 Showing the linkage for item, block and furniture resources (only the GUI studio hosts the Logic tab).
+
+## 34. Decisions taken in #227 (Q1: the showcase and close-out)
+
+#227 closes the first GUI logic milestone (#189, Q1). It ships a **showcase pack** that uses the shipped GUI logic end to
+end, its QA entries, and the coverage in §1.1. No engine change was needed for the showcase; the one code change is a test
+(`ShowcasePackTest`). The decisions below are the choices the showcase forced.
+
+**The showcase is a fixture pack, not a shipped example**
+
+1. **The pack lives at `fixtures/packs/showcase`, id `showcase`.** There is no shipped GUI example to put it beside: the shipped
+   recipes (`plugin/src/main/resources/recipes/`) are rule templates, not GUIs. A fixture pack is what the probe stages into every
+   test server (`scripts/probe/probe.mjs` copies every pack under `fixtures/packs`), so the QA entries read it with no extra setup.
+   The pack holds **no items**, so the item-count pins of other suites are unaffected. `PipelineRunnerTest` now expects nine packs.
+   Whether a shipped example pack should exist as well is an owner question (it would be a second copy of the same GUIs); this
+   change does not decide it.
+2. **Five GUIs, one per showcase feature.** `shop` (the open command with a typed `category` argument; the paywall; the
+   conditional stock; live `refresh`), `servers` (`connect`, `${server.online}`, `gui.tick`), `players` (the `online_players` list
+   with `sort` and `search`, the `prompt` into `session.search`, the "Page x of y" indicator), `settings` (player booleans, on and off
+   overlays in one slot, a right click), and `confirm` (a sub-GUI with a question argument, `gui.back`, `gui.click_outside`).
+   The shop's other buttons open the other four. Every GUI announces its open and close on the console (`MATERIONE-SHOWCASE-*`).
+
+**Declarations and economy**
+
+3. **The price is in points, the XP integration, not in Vault.** `currencies/points.yml` binds `integration: xp`, which needs no
+   economy plugin, so the paywall runs on a bare server and in the QA probe. The showcase does not depend on `materione:money`.
+4. **Stock is a server-scope number and persists.** `showcase:stock` (default 3) is written to `storage/variables.json` (§3.1), so
+   a stock left at 0 stays 0 until it is reset. The QA entries set it with `materione var set - showcase:stock 3` in every
+   `finally`.
+5. **The toggle is a player boolean with two item layers in one slot.** The "on" and "off" overlays are two item layers
+   (`lime_dye`, `gray_dye`) under `visible_if`, and the topmost visible layer answers the click. This needs no overlay glyph. The
+   sold-out barrier works the same way, and the flow repeats the stock check, because a layer that is only drawn does not refuse a
+   click (§6.3).
+
+**Authoring findings (not fixed here)**
+
+6. **YAML reads `yes` and `no` as booleans, so a layer named `yes` is skipped.** The first confirm GUI used the ids `yes` and `no`.
+   Its layers were skipped with `MTR-0052` "id must match [a-z0-9_]+", and the diagnostic showed `layerId=null`, so the author
+   could not see which layer was meant. The showcase uses `accept` and `decline`. For the owner: the diagnostic should show the raw
+   key, or the GUI loader should reject a boolean id with its own message.
+7. **A text layer's rejection does not say why.** The first shop tip, `<gray>Tip: left click buys` at `x: 60`, was skipped with
+   `MTR-0052` "text contains unsupported characters or has an invalid row". The shipped tip (`Click to buy`, plain, at the same `x`)
+   compiles. The rich prefix and the text itself changed in the same edit, so the cause is not isolated. A diagnostic that names
+   the cause (the character, or the x and the width) would make this a one-step fix.
+8. **A rich-text argument reaches a text layer untested.** The settings GUI passes `question: "<yellow>Turn the tips off?"` to the
+   confirm GUI's `${gui.args.question}` text layer. Compilation accepts it. Whether a `<…>` tag inside an argument renders (rather
+   than showing as text) is not checked by any entry; the blessing run must check the confirm GUI's question.
+9. **The test helper that compiles rules lacks the prompt.** `LogicTestSupport.withBuiltIns` does not register `prompt`, so a test
+   that compiles a GUI with a prompt sees `MTR-0057 unknown action 'prompt'`. The plugin registers it at boot through
+   `BuiltinLogic.registerPrompts`, and `ShowcasePackTest` does the same. This is a test-support gap, not an engine fault.
+
+**Verification**
+
+10. **`ShowcasePackTest` (plugin) compiles every showcase GUI** with the real GUI compiler (with overlay allocations), the real rule
+    compiler and the real open-block compiler, against the built-in registries and the pack's declared variables. It asserts zero
+    diagnostics, zero skipped layers and steps, and the shop's `open:` block (`commands: [shop]`). `LosslessYamlTest` walks every
+    fixture pack and passes on the new files.
+11. **The QA catalog has eleven `showcase.*` entries** (`qa/catalog/showcase.mjs`): nine automatic and two visual (the tip line, and
+    the five-GUI tour). Each names the parity row it demonstrates. They are **not run against a client** in this change: the probe
+    loop needs the 26.x seam and a windowed client, which this change could not drive. The ledger is untouched; blessing runs on
+    main after merge (qa/README.md). `qa/runner.mjs check` passes.
+12. **Two QA mechanics are unverified until the blessing run.** The entries run `/shop` as the probe player with
+    `execute as Probe run shop` (a server-side dispatch, not a typed client command), and they answer the search prompt by sending
+    chat through `mc.player.connection.sendChat`, as `guilogic.search-recipe` does. If the first does not open the shop for a
+    player, the fix is a typed client command (`typedChat`).
+
+**Coverage**
+
+13. **Every §1 row that is not "Later" has a line in §1.1**, naming the showcase GUI or the QA entry that demonstrates it, or the
+    existing entry (the `guilogic`, `guidynamic`, `guioverlay`, `logic`, `opencommands` and `variables` suites), or **a gap** with
+    its reason. The gaps are collected at the end of §1.1.

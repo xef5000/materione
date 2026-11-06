@@ -1,0 +1,12 @@
+# Declared variables of the showcase (logic.md §3.2, §34). show_tips is a player boolean the settings GUI flips and
+# the shop reads; stock is a server number the shop decrements on every purchase (a server variable is shared).
+show_tips:
+  scope: player
+  type: boolean
+  default: false
+  description: "Shows the tip line in the showcase shop"
+stock:
+  scope: server
+  type: number
+  default: 3
+  description: "Emeralds left in the showcase shop"

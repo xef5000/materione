@@ -401,6 +401,9 @@ Worker is unchanged — no new endpoint, no cost-model change.
 - Menu builder (chest + free-form canvas layouts, pagination/search, ECA click bindings).
   v1 is design-first: a layered canvas studio over the `gui` content type
   ([`architecture/gui.md`](architecture/gui.md)); logic follows through the same component seam.
+  **GUI logic** (epic #189, [`architecture/logic.md`](architecture/logic.md)): click rules, sessions, open commands, dynamic
+  slots, input slots, lists and prompts, and the recipes and studio linkage, shipped as built (logic.md §14–§33). The showcase pack
+  (`fixtures/packs/showcase`, #227) demonstrates the parity rows (logic.md §1.1); its QA entries await a blessing run on main.
 - Server-side dialogs (1.21+ wrapper, dialog.submit → ECA).
 - Native HUD system (image/text/bar layers, bindings, per-world conditions).
 - In-game content browser GUI (categories, search, get-item).

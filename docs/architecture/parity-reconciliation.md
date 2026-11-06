@@ -20,7 +20,7 @@
 | 3.7 | Component armor default; trim option; animated/emissive; elytra; mob armor/saddles/harness | `runtime-systems.md` §12 | M7 |
 | 3.8 | First-class Java HUD system | `runtime-systems.md` §7 | M6 |
 | 3.9 | Full glyph system + shift tags + emoji + GLSL effects | `runtime-systems.md` §6 | M4 |
-| 3.10 | Item browser GUI; **real interactive menu builder**; server-side dialogs | `runtime-systems.md` §8 (+ in-game builder = menus+dialogs dogfooding) | M6 |
+| 3.10 | Item browser GUI; **real interactive menu builder**; server-side dialogs | `runtime-systems.md` §8 (+ in-game builder = menus+dialogs dogfooding); the menu logic is `logic.md` §1 (the parity rows, with the showcase coverage in §1.1) | M6: menu logic and the studio shipped (#189, showcase #227); the item browser and dialogs (#6) remain M6 |
 | 3.11 | All vanilla recipe types + in-game builder + disable-vanilla | `runtime-systems.md` §9 | M1 (3 types), M7 (all + builder) |
 | 3.12 | Custom sounds (+replace), music discs, custom paintings, small particle API | `runtime-systems.md` §10 | M4 (sounds/discs/paintings), M7 (particles) |
 | 3.13 | Ore/worldgen + custom fluids (open opportunities); mobs/vehicles delegated | `runtime-systems.md` §11; delegation per master §12 | M8 |

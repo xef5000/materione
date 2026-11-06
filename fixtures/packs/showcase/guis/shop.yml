@@ -1,0 +1,119 @@
+# The shop (logic.md §1 rows: open command and typed arguments, item text and meta, conditional items, live update,
+# click types, requirement then action, paywalls, placeholders out). /shop opens it with a typed category. One
+# emerald costs 5 points: the purchase is a require (take the points, then give the item), and nothing changes when
+# the payment or the item fails. The emerald is an item layer whose view changes with the server's stock: a barrier
+# on top shows "Sold out" while the stock is zero, and a click on it still reaches the emerald's rule, which refuses
+# the purchase. The window refreshes every second, so the stock count stays live. The other buttons open the other
+# showcase GUIs. Every open and close is announced on the server console (`say MATERIONE-SHOWCASE-...`), which the
+# QA catalog (qa/catalog/showcase.mjs) reads as markers.
+shop:
+  title: Shop
+  rows: 3
+  refresh: 20
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 168
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "SHOP"
+      font: smallcaps
+      color: "#404040"
+    - id: tip
+      type: text
+      x: 60
+      y: 6
+      text: "Click to buy"
+      font: default
+      color: "#404040"
+      visible_if: "vars.player.showcase.show_tips == true"
+    - id: emerald
+      type: item
+      slot: 11
+      item: minecraft:emerald
+      name: "<green>Emerald"
+      lore:
+        - "<gray>5 points"
+        - "<gray>Category: ${gui.args.category}"
+        - "<gray>In stock: ${vars.server.showcase.stock}"
+    - id: sold_out
+      type: item
+      slot: 11
+      item: minecraft:barrier
+      name: "<red>Sold out"
+      visible_if: "vars.server.showcase.stock <= 0"
+    - id: servers
+      type: item
+      slot: 13
+      item: minecraft:ender_pearl
+      name: "<aqua>Servers"
+    - id: players
+      type: item
+      slot: 15
+      item: minecraft:player_head
+      name: "<yellow>Players"
+    - id: settings
+      type: item
+      slot: 22
+      item: minecraft:comparator
+      name: "<white>Settings"
+    - id: close
+      type: item
+      slot: 26
+      item: minecraft:oak_door
+      name: "<red>Close"
+  open:
+    commands: [shop]
+    args:
+      - { name: category, type: choice, default: all, suggest: [all, gems] }
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-OPEN shop category=${gui.args.category}"
+            as: console
+    - on: gui.click
+      layer: emerald
+      do:
+        - if: "${vars.server.showcase.stock <= 0}"
+          then:
+            - message: "<red>Sold out."
+            - stop
+        - require:
+            - take_money: { amount: 5, currency: showcase:points }
+            - give_item: { item: minecraft:emerald, amount: 1 }
+          else:
+            - message: "<red>You need 5 points."
+            - stop
+        - set_var: { var: showcase:stock, op: subtract, value: 1 }
+        - message: "<green>Bought an emerald."
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-BUY"
+            as: console
+        - gui.refresh
+    - on: gui.click
+      layer: servers
+      do:
+        - gui.open: showcase:servers
+    - on: gui.click
+      layer: players
+      do:
+        - gui.open: showcase:players
+    - on: gui.click
+      layer: settings
+      do:
+        - gui.open: showcase:settings
+    - on: gui.click
+      layer: close
+      do:
+        - gui.close
+    - on: gui.close
+      do:
+        - run_command:
+            command: "say MATERIONE-SHOWCASE-CLOSE shop reason=${close.reason}"
+            as: console

@@ -53,7 +53,7 @@ const all = cases();
 describe('projection round trip', () => {
   it('finds the fixtures, not an empty directory', () => {
     expect(all.length).toBeGreaterThanOrEqual(10);
-    expect(all.some((entry) => entry.name.endsWith('shop.yml#shop'))).toBe(true);
+    expect(all.some((entry) => entry.name.endsWith('test/fixtures/logic/shop.yml#shop'))).toBe(true);
     expect(all.some((entry) => entry.name.includes('guilogic'))).toBe(true);
   });
 
@@ -117,7 +117,7 @@ describe('projection round trip', () => {
   });
 
   it('the shop flow projects to the nodes and ports of logic.md §7.2', () => {
-    const shop = all.find((entry) => entry.name.endsWith('shop.yml#shop'))!;
+    const shop = all.find((entry) => entry.name.endsWith('test/fixtures/logic/shop.yml#shop'))!;
     const graph = project(shop.block);
     const byOp = (op: string) => graph.nodes.filter((node) => node.op === op);
     expect(graph.byId.get('behavior.0')!.kind).toBe('trigger');
@@ -143,7 +143,7 @@ describe('projection round trip', () => {
   });
 
   it('a rule keeps its filters as options and its condition apart', () => {
-    const shop = all.find((entry) => entry.name.endsWith('shop.yml#shop'))!;
+    const shop = all.find((entry) => entry.name.endsWith('test/fixtures/logic/shop.yml#shop'))!;
     const graph = project(shop.block);
     expect(graph.byId.get('behavior.0')!.options).toEqual({ layer: 'buy', click: ['left', 'shift_left'], id: 'buy_sword', cooldown: 500 });
     expect(graph.byId.get('behavior.1')!.condition).toBe('${player.level >= 10}');
@@ -161,7 +161,7 @@ describe('projection round trip', () => {
 });
 
 describe('layout', () => {
-  const shop = all.find((entry) => entry.name.endsWith('shop.yml#shop'))!;
+  const shop = all.find((entry) => entry.name.endsWith('test/fixtures/logic/shop.yml#shop'))!;
 
   it('is deterministic', () => {
     const a = layout(project(shop.block));
