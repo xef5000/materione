@@ -6,12 +6,6 @@ confirm:
   title: Confirm
   rows: 1
   layers:
-    - id: frame
-      type: panel
-      x: 0
-      y: 0
-      width: 176
-      height: 132
     - id: question
       type: text
       x: 8

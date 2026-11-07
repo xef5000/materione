@@ -88,7 +88,9 @@ function rectOf(layer: Layer): { x: number; y: number; w: number; h: number } {
 export const RASTER_PAINTERS: Record<string, RasterPainter> = {
   panel(layer, _scene, out) {
     const { x, y, w, h } = rectOf(layer);
-    paintRaised(out, x, y, w, h, styleOf(layer, RAISED_DEFAULT), PANEL_EDGE);
+    // an absent `corners` is square: every panel written before the open canvas keeps its look
+    const corners = layer.corners === 'vanilla' ? 'vanilla' : 'square';
+    paintRaised(out, x, y, w, h, styleOf(layer, RAISED_DEFAULT), PANEL_EDGE, corners);
   },
   button(layer, _scene, out) {
     const { x, y, w, h } = rectOf(layer);

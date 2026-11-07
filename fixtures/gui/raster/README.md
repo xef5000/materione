@@ -108,6 +108,25 @@ A rectangle with `w <= 0` or `h <= 0` draws nothing. Rectangles of width or heig
 all ring, all corners, or a corner-skipped ring; the rules above give the answer, no special
 cases.
 
+**Corners** (`panel` only; gui.md section 11.6). The field `corners` is `square` or `vanilla`. An
+absent field is `square`, which is the rule above unchanged: every file written before the open
+canvas (#278) keeps its pixels. `vanilla` is the owner's chest corner
+(`webui/static/vanilla/generic_54.png`), applied over the raised rule as three rules, in this order,
+for a `w x h` panel (offsets are inside the rectangle; `dx = w - 1 - lx` is the offset from the
+right edge):
+
+1. **Top-left.** `lx + ly <= 1` is not drawn; `lx + ly = 2` is `outline`; `(lx, ly) = (3, 3)` is
+   `highlight`.
+2. **Top-right.** `dx + ly <= 2` is not drawn; `dx + ly = 3` is `outline`. The right cut is one
+   pixel larger than the left one, as in the chest.
+3. **Bottom corners.** `(0, h-1)` and `(w-1, h-1)` are `outline`. The chest's bottom edge is the
+   inventory separator, not a bevel, so the bottom corners are square.
+
+The rules are exact for panels at least 8 x 8 (the top-left and top-right rules do not overlap
+there); smaller panels apply the same three rules in the same order, which is deterministic but not
+pinned. `button` and `slots` have no corner field. The chest's top corners and outer outline columns
+are checked against `generic_54.png` by `content/src/test/java/dev/materione/content/gui/raster/VanillaChestCornersTest.java`.
+
 **Inset** (slot wells, always 18 x 18 for `slots`, no outline), pixel `(lx, ly)` of `w x h`:
 `dark` = `ly == 0` or `lx == 0`; `light` = `ly == h-1` or `lx == w-1`. Both: **fill** (the
 top-right and bottom-left pixels); `dark` only: **shadow** (so the top and left edges are the
@@ -156,7 +175,9 @@ the rest transparent. A missing bitmap draws nothing.
 | `panel-2px-bevel` | raised 2 px bevel, including panels too small for a clean interior |
 | `button-custom-style` | full and partial `style` blocks |
 | `slots-container-1row`, `slots-player-3rows`, `slots-custom-style` | the slot grid per region and the inset bevel with partial style |
-| `chest-6-rows`, `chest-1-row` | the starter look of a new GUI (panel + all-region slots) |
+| `chest-6-rows`, `chest-1-row` | a square-cornered panel (no `corners` field) with all-region slots: the look of every panel before #278 |
+| `panel-vanilla-corners` | `corners: vanilla` at 8 x 8, 9 x 12 and 20 x 20, beside a square 8 x 8 panel |
+| `vanilla-chest-corners` | the top part of a 6-row chest (176 x 125) as one vanilla panel; checked against `generic_54.png` by `VanillaChestCornersTest` |
 | `chest-with-button` | layer order, and `opacity` on a bevel layer |
 | `blend-translucent` | the full source-over formula over translucent and opaque backgrounds |
 | `opacity-rounding` | round-half-up opacity edge cases (including alpha 1) |
