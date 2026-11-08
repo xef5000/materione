@@ -7207,13 +7207,13 @@
         "target": "raster"
       },
       {
-        "description": "A pixel layer painted in the studio, stored as one canvas-sized PNG",
+        "description": "A pixel layer painted in the studio, stored as one PNG trimmed to its pixels",
         "displayName": "Paint",
         "id": "materione:paint",
         "parameters": [
           {
             "advanced": false,
-            "description": "Canvas-sized PNG under the pack's textures/ (the studio writes it)",
+            "description": "PNG under the pack's textures/ (the studio writes it)",
             "example": "gui/shop/main/art",
             "id": "image",
             "label": "Painting",
@@ -7223,6 +7223,66 @@
             "section": "appearance",
             "type": "reference",
             "uiHint": "texture"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Left edge of the painted pixels in GUI pixels",
+            "example": "0",
+            "id": "x",
+            "label": "X",
+            "max": 1024.0,
+            "min": -1024.0,
+            "order": 20,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": false,
+            "default": "0",
+            "description": "Top edge of the painted pixels in GUI pixels",
+            "example": "0",
+            "id": "y",
+            "label": "Y",
+            "max": 1024.0,
+            "min": -1024.0,
+            "order": 30,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Width of the painted pixels; 0 when nothing is painted",
+            "id": "width",
+            "label": "Width",
+            "max": 1024.0,
+            "min": 0.0,
+            "order": 40,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
+          },
+          {
+            "advanced": true,
+            "description": "Height of the painted pixels; 0 when nothing is painted",
+            "id": "height",
+            "label": "Height",
+            "max": 1024.0,
+            "min": 0.0,
+            "order": 50,
+            "required": false,
+            "section": "placement",
+            "type": "integer",
+            "uiHint": "number",
+            "unit": "px"
           }
         ],
         "registeredBy": "materione",

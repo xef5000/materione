@@ -71,6 +71,36 @@ class GuiOpenCanvasTest {
         return tiles.get(0);
     }
 
+    // --- paint layers own their position (#277) -------------------------------------------------------
+
+    @Test
+    void aPaintLayerDrawsAtItsOwnPositionAndAnEmptyOneNeedsNoTexture() {
+        var definition = new java.util.LinkedHashMap<String, Object>();
+        definition.put("title", "Test");
+        definition.put("rows", 1);
+        definition.put("layers", List.of(
+                GuiTestSupport.layer("art", "paint", "image", "gui/art", "x", -30, "y", 5, "width", 2, "height", 3),
+                GuiTestSupport.layer("blank", "paint", "image", "gui/never_saved", "x", 40, "y", 40,
+                        "width", 0, "height", 0),
+                GuiTestSupport.layer("legacy", "paint", "image", "gui/legacy")));
+        int[] opaque = new int[6];
+        java.util.Arrays.fill(opaque, 0xFF102030);
+        TextureSource textures = texture -> switch (texture) {
+            case "gui/art" -> java.util.Optional.of(new TextureSource.Pixels(2, 3, opaque));
+            case "gui/legacy" -> java.util.Optional.of(new TextureSource.Pixels(1, 1, new int[] {0xFF405060}));
+            default -> java.util.Optional.empty();
+        };
+        var skipped = new ArrayList<String>();
+        ArgbCanvas canvas = GuiFlatten.flatten(GuiArt.CAP_X, GuiArt.CAP_Y, GuiArt.CAP_SIZE, GuiArt.CAP_SIZE,
+                GuiTestSupport.parse(GuiTestSupport.type(), definition).layers(), textures,
+                (layer, reason) -> skipped.add(layer.id() + ": " + reason), layer -> { });
+        assertThat(skipped).isEmpty();
+        assertThat(canvas.argb(-30, 5)).isEqualTo(0xFF102030);
+        assertThat(canvas.argb(-29, 7)).isEqualTo(0xFF102030);
+        assertThat(canvas.argb(0, 0)).isEqualTo(0xFF405060);
+        assertThat(canvas.paintedBounds()).isEqualTo(new ArgbCanvas.Bounds(-30, 0, 31, 8));
+    }
+
     // --- bounds, crop, ascent and padding ---------------------------------------------------------------
 
     @Test

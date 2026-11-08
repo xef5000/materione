@@ -1186,6 +1186,10 @@ The compiler half of §11. Each one is reversible by the owner.
 8. **`GuiRender.background` stays the screen-sized preview** (176 × height) the vectors pin. It is flattened for the preview and is
    no longer the bytes the pack ships, since the pack ships tiles. The studio draws the open canvas itself (#277).
 9. **`GuiCompilation.assets()` is sorted** (it was an unordered `Map.copyOf`), so emission order is deterministic (D7).
+10. **A `paint` layer owns its position (§11.2, for #277).** It reads `x`, `y` (default 0, −1024..1024) and draws its PNG 1:1
+    there; `width` and `height` (0..1024) record the trimmed size. A layer with a zero `width` or `height` has nothing painted:
+    it draws nothing and its `image` need not exist. A layer without these fields sits at the origin, so canvas-sized paint
+    layers written before #277 compile as before.
 
 ---
 
