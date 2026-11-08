@@ -68,6 +68,11 @@
   {#if !draft.loaded}
     <p class="note">{draft.error || 'Opening the item…'}</p>
   {:else}
+    {#if inheritance && !inheritance.failure}
+      <p class="note" data-testid="gui-item-follows">
+        Follows <code>{inheritance.template}</code>: what you do not change here comes from it.
+      </p>
+    {/if}
     <ItemAppearance
       pack={resource.pack}
       {values}

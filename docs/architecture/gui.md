@@ -97,8 +97,10 @@ implementing PR, documented in plugin.md §5) and the rest of the GUI still comp
 **Customized items live next to the GUI as ordinary items.** When the studio customizes an
 item layer's appearance, it creates a normal item resource at
 `items/gui/<gui-path>/<layer-id>.yml` (a vanilla base becomes `material:`; a Materione base is
-copied, since items cannot be templates, see section 6) and points the layer's `item:` at it. There is no "GUI-local item" concept: the item type, its
-studio, its compile path and its auto-updater are reused as they are (D1, D5).
+**linked**: the new item is `template: <base>` and nothing else, so it follows the base and overrides only
+what the designer changes there, plugin.md §3.1) and points the layer's `item:` at it. There is no
+"GUI-local item" concept: the item type, its studio, its compile path and its auto-updater are reused as
+they are (D1, D5).
 
 **Paint layers own one PNG** at `textures/<image>.png`, RGBA, holding exactly the layer's painted pixels: the layer
 carries `x`, `y`, `width` and `height` like an `image` (§11.2), and a layer with no painted pixel has `width: 0`,
@@ -515,10 +517,14 @@ pixel assets are saved first by a normal save (itself one transaction) and the c
 **(2)** the file is named after the item's id (the API fixes that), so the id is the layer id when
 the pack has no resource of that name, else `<gui-name>_<layer-id>`, else numbered, and the path
 is `items/gui/<gui-path>/<id>.yml`. A **vanilla** base becomes a `create` with `material:`. A
-**Materione item** base becomes a `duplicate` of its document: items are not templates
-(`template:` resolves only against `templates/`), so a live link to a base item cannot be
-expressed; the copy starts identical, keeps the base's own `template:`, and is then the layer's
-to change. Blocks and furniture cannot be customized (no item document). The inline appearance
+**Materione item** base becomes a `create` of `template: <base id>` and nothing else (since #203
+an item may be the template of an item, plugin.md §3.1): the scaffold's own `material` and
+`display_name` are removed in the same step, so nothing is copied that could drift. The new item
+starts identical to the base and keeps following it for everything the designer does not set;
+the inline appearance shows "Follows `<base>`", the item studio's chip names the base, and
+**Detach template** turns the link into a copy when a designer wants one. If a template with the
+base's id exists, a link would name the template rather than the item (plugin.md §3.1
+precedence), so Customize refuses with that reason instead of linking to the wrong thing. Blocks and furniture cannot be customized (no item document). The inline appearance
 is the item studio's own `ItemAppearance` on that item's document draft; its edits are drafts of
 that file, and **Save** writes the layout and every customized item's draft (two kinds of
 document, so two transactions, in that order).
@@ -1067,7 +1073,7 @@ These answer §9. Each one is reversible by the owner.
 
 These fill gaps the sections above leave open. Each one is reversible by the owner.
 
-1. **Customize copies a Materione base item instead of template-linking it, until items can be templates (#203).** The template pool is `templates/` only, so `template: <item>` would quarantine the new item; `authoring.bulk` `duplicate` is the closest faithful operation. If a live link to a base item is wanted, it needs a template-pool decision (items usable as templates), not a studio workaround.
+1. **Customize links a Materione base item (#203, superseding the copy this decision first took).** The first cut of #187 *duplicated* a Materione base, because the template pool was `templates/` only and `template: <item>` would have quarantined the new item. The owner approved items as templates (plugin.md §3.1, *Items as templates*), and Customize now creates `template: <base>` instead; see *Decisions taken in #203* below. Vanilla bases are unchanged (`material:`).
 2. **A customized item's id may differ from the layer id.** The API names the file after the id and ids are unique per pack, so a clash falls back to `<gui-name>_<layer-id>` (the path stays under `items/gui/<gui-path>/`).
 3. **Item layers address container slots only**, matching `ItemComponent` (the player inventory is vanilla and not an item layer target); the studio snaps and flags accordingly instead of writing a layer the compiler would skip.
 4. **Pixel edits are commands outside the document.** The history tracks them by identity of the newest applied pixel command, so dirtiness is exact without copying canvases.
@@ -1118,7 +1124,7 @@ These fill the gaps §5 leaves open. Each one is reversible by the owner.
 These move the GUI rules from the studio into the API (api.md §3.9). Each decision is reversible by the owner.
 
 1. **The verdict is the server's.** `analyzeText` and `analyzeItems`, and the TypeScript copy of the compiler's rules they carried, are gone. The studio sends the document it shows to `gui.validate`, debounced, and draws each diagnostic on the layer it names (`layers.<index>`, the draft's position). A diagnostic with no layer (a parse failure) is shown for the document. Every compile diagnostic about a layer is a skip, so the severity is `skip` alone; the studio's old `note` (the default run that blocks the runs after it) is no longer a separate message. The skipped runs after it carry their own, from the compiler.
-2. **Customize's naming and refusals moved server-side unchanged** (`GuiItemNaming`, `GuiAuthoringApiImpl.customizeItem`): the layer id when the pack has no resource of that id, else `<gui>_<layer>`, else numbered; a vanilla base is a `create` with `material:` (refused when the server's material list does not know it); a Materione item is a `duplicate`, with a refusal when it is not an item of this pack or the layer already has its own. **The seam for #203** is the one place a Materione base is copied (`GuiAuthoringApiImpl.customizeItem`, the `DUPLICATE` branch): switching it to a template link is a change of that one operation once items can be templates.
+2. **Customize's naming and refusals moved server-side unchanged** (`GuiItemNaming`, `GuiAuthoringApiImpl.customizeItem`): the layer id when the pack has no resource of that id, else `<gui>_<layer>`, else numbered; a vanilla base is a `create` with `material:` (refused when the server's material list does not know it); a Materione item was a `duplicate` (now a template link, see *Decisions taken in #203*), with a refusal when it is not an item of this pack or the layer already has its own. The seam for #203 was the one place a Materione base is copied (`GuiAuthoringApiImpl.customizeItem`).
 3. **`edit` returns the typed view, not the raw document.** `GuiAuthoringApi.edit` returns `GuiDocumentView` (the view `get` returns, plus the revision) and carries the compiler's warnings as the successful result's diagnostics. The raw `DocumentView` is what `setFields` returns; the view is what a GUI consumer reads.
 4. **Binaries reuse `AuthoringApi.ModelAsset`**, the shape `setFields` takes, rather than a second `AssetUpload` record.
 5. **Layer-list edits rewrite the `layers:` block.** `edit` and `customizeItem` write the whole `layers` list through `setFields`/`bulk`, as the studio's save has since #183. Unknown keys inside a layer survive; comments inside the `layers:` block do not (the lossless writer addresses mapping keys, not list items). A list-item path in `LosslessYamlDocument` would lift this; it is not in this change. An edit that changes nothing writes nothing.
@@ -1393,3 +1399,35 @@ players will see; the last two rows are worth a "small window" guide. A 1-row sc
 - Text layers, item layers, `visible_if`, `frames` and the dynamic path (§4 step 7) are unchanged apart
   from cropping and placement.
 - The vanilla **Inventory** label is still drawn by the client over everything (§9.2).
+
+### Decisions taken in #203 (items usable as templates, Customize links)
+
+The owner approved items as templates on #187 (PR #200). The rules live in plugin.md §3.1, *Items as
+templates*; this records what they mean for the GUI studio. Each decision is reversible by the owner.
+
+1. **Customize writes a link, not a copy.** For a Materione base item the new `items/gui/<gui-path>/<id>.yml` is
+   `template: <base id>` and nothing else (`GuiAuthoringApiImpl.customizeItem` creates the item with the
+   scaffold's `material` and `display_name` removed in the same `authoring.bulk` call, so the GUI pointer and the
+   link are still one all-or-nothing transaction). The base id is written bare (the item is in this pack, so a bare
+   reference resolves in the new item's own namespace). Reading the new item's file tells the whole story; the
+   merged values come from the one resolver, so the inline Appearance shows them as inherited.
+2. **The base is followed, on purpose.** Renaming the base, or changing its lore, texture or abilities, changes every
+   customized item that links to it and has not overridden that field; the pack and the open GUI windows follow on the
+   next reload like any other change. A designer who wants a frozen copy uses the item studio's **Detach template**
+   (copies the inherited values in, drops the link) — an ordinary write, not a Customize mode.
+3. **A template with the base's id refuses Customize.** The reference would resolve to the template (the precedence
+   rule), so the link would silently name the wrong thing; the refusal says to rename one of them. This is the one
+   place the studio does not fall back to a copy, so the two outcomes ("linked" and "copied") never differ without
+   the designer being told. `itemResource` also stops picking a template over the item that shares its id when it
+   looks the base up.
+4. **Vanilla bases are unchanged**: a `create` with `material:` (a vanilla item is not a resource, so there is nothing
+   to link to). A layer that already points into the GUI's own folder is still refused ("already has its own item").
+5. **The studio shows the link where the designer is looking.** The inline appearance says "Follows `<base>`"; the
+   item studio's template chip names the base, its menu says **Open base item** (not "Open template") when the link
+   is an item (`InheritanceView.templates[id].kind === 'item'`), and the chain provenance lines read as for templates.
+   The chip's template picker also offers items, under an "Items" heading, for an item only (plugin.md §3.1,
+   *Owner answers*), so a designer can re-link a customized item to another base, or link any item to one, without
+   editing YAML; it never offers the item itself or a choice that would close a loop.
+6. **Owner answers on PR #285.** (a) Items are selectable in the template picker (see 5). (b) A shared
+   template/item id is resolved by renaming; `MTR-0094` stays as it is and no spelling reaches the shadowed item.
+   (c) Customize on a shadowed base refuses (decision 3) rather than copying.

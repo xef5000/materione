@@ -120,6 +120,21 @@ class SamplePackTemplatesTest {
     }
 
     @Test
+    void anItemOfTheSamplePackIsAUsableTemplateForANewItem() throws Exception {
+        ApiResult<AuthoringApi.DocumentView> created = api.createResource(editor(),
+                new AuthoringApi.CreateResourceRequest(
+                        "sample", "ruby_sword_plus", "Ruby Sword Plus", "items", null, false, "ruby_sword"));
+
+        assertThat(created.ok()).as(created.diagnostics().toString()).isTrue();
+        assertThat(read("items/ruby_sword_plus.yml")).contains("template: ruby_sword");
+        // the real ItemType resolves ruby_sword -> base_item behind it: the sword's own material wins
+        assertThat(materialOf("ruby_sword_plus")).isEqualTo("NETHERITE_SWORD");
+        // the base sword is still a plain item: it is not listed as a template
+        assertThat(api.listTemplates().value()).extracting(AuthoringApi.TemplateInfo::id)
+                .doesNotContain("ruby_sword");
+    }
+
+    @Test
     void saveAsTemplateFromTheSampleSwordProducesATemplateTheTypeCanInherit() throws Exception {
         ApiResult<AuthoringApi.DocumentView> saved = api.saveAsTemplate(editor(),
                 new AuthoringApi.SaveAsTemplateRequest(

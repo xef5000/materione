@@ -45,7 +45,9 @@ class DiagnosticCodesTest {
         // MTR-0089 live trace subscription refused: logic.md §32, #226;
         // MTR-0090 GUI art past the art cap, MTR-0091 GUI art tile breaks a provider limit,
         // MTR-0092 clickable GUI layer outside the container: gui.md section 11, #276;
+        // MTR-0093 template chain loops, MTR-0094 template reference names a template and an item:
+        // plugin.md section 3.1, #203;
         // MTR-0095 pack id belongs to a built-in pack, MTR-0096 built-in pack unavailable: master section 7.3, #8)
-        assertThat(DiagnosticCodes.all()).hasSize(94);
+        assertThat(DiagnosticCodes.all()).hasSize(96);
     }
 }

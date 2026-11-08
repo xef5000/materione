@@ -435,19 +435,7 @@ public final class PipelineService {
                     dev.materione.core.runtime.RuntimeContentIndex.empty());
             return builder.build();
         }
-        var templates = new LinkedHashMap<String, Map<String, Object>>();
-        for (ContentPack pack : packs) {
-            for (ContentResource resource : pack.resources()) {
-                if ("template".equals(resource.contentType())) {
-                    Object definition = resource.document().data().get(resource.id().value());
-                    if (definition instanceof Map<?, ?> mapping) {
-                        @SuppressWarnings("unchecked")
-                        var raw = (Map<String, Object>) mapping;
-                        templates.put(resource.id().toString(), raw);
-                    }
-                }
-            }
-        }
+        var templates = dev.materione.core.pipeline.TemplatePools.of(packs);
         // pre-pass: the declared variables first, so a set_var in any rule or flow compiles against
         // the whole shadow whatever order the resources iterate in (logic.md §3.2)
         var declaredVariables = parseVariables(packs, templates);

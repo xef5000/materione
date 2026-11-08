@@ -3,7 +3,7 @@
  * them. Stateless by design per web.md §6 — a refresh refetches everything
  * through loadWorkspace(); only unsaved editor content lives in tab state.
  */
-import type { AssetRef, DiagnosticEntry, ResourceRef, ResourceSummary, RpcChannel, TemplateEntry, TypeInfo } from './api';
+import type { AssetRef, DiagnosticEntry, ItemLink, ResourceRef, ResourceSummary, RpcChannel, TemplateEntry, TypeInfo } from './api';
 import { RpcError, unwrap, ops, assetOps } from './api';
 import type { BehaviorVocabulary } from './behavior';
 import type { PushFrame } from './events';
@@ -74,6 +74,8 @@ export const workspace = $state({
   summariesError: '',
   /** Every template of every pack, as the server derives them (`authoring.templates`). */
   templates: [] as TemplateEntry[],
+  /** Every item's authored `template:` link, so the picker can keep an item from closing a loop. */
+  itemLinks: [] as ItemLink[],
   visualVersion: 0,
   types: [] as TypeInfo[],
   /** Registered events, actions and mechanics (`authoring.describe`); null on jars that predate it. */
@@ -421,12 +423,16 @@ async function loadResourceSummaries(channel: RpcChannel, pack: string) {
 }
 
 /** Templates are a convenience layer: a server without the op simply offers none. */
-async function loadTemplates(channel: RpcChannel): Promise<TemplateEntry[]> {
+async function loadTemplates(channel: RpcChannel): Promise<{ templates: TemplateEntry[]; itemLinks: ItemLink[] }> {
   try {
     const data = unwrap(await ops.templates(channel));
-    return Array.isArray(data.templates) ? data.templates as TemplateEntry[] : [];
+    return {
+      templates: Array.isArray(data.templates) ? data.templates as TemplateEntry[] : [],
+      // absent on a plugin that predates items as templates: the picker then offers no items
+      itemLinks: Array.isArray(data.itemLinks) ? data.itemLinks as ItemLink[] : [],
+    };
   } catch {
-    return [];
+    return { templates: [], itemLinks: [] };
   }
 }
 
@@ -447,7 +453,8 @@ export async function refreshPack(): Promise<void> {
     workspace.folders = ((unwrap(folders).folders as string[]) ?? []).sort((a, b) => a.localeCompare(b));
     workspace.summaries = summaries.resources;
     workspace.summariesError = summaries.error;
-    workspace.templates = templates;
+    workspace.templates = templates.templates;
+    workspace.itemLinks = templates.itemLinks;
     if (summaries.error) logActivity('error', summaries.error);
   } catch (e) {
     logActivity('error', `browse: ${errorMessage(e)}`);
@@ -595,6 +602,7 @@ export function resetWorkspace(): void {
   workspace.resources = [];
   workspace.summaries = [];
   workspace.templates = [];
+  workspace.itemLinks = [];
   workspace.summariesError = '';
   workspace.visualVersion = 0;
   workspace.types = [];

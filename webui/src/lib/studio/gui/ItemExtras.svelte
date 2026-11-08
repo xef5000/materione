@@ -65,7 +65,8 @@
   {:else}
     <p class="note">
       <span>The layer shows {reference ? 'the item as it is in your pack or in Minecraft' : 'nothing yet'}. Customize gives it
-      its own item (name, lore, texture, model) at <code>items/gui/…</code> without touching the original.</span>
+      its own item at <code>items/gui/…</code>: for one of your items it is linked to the original, so whatever you do not
+      change here keeps following it; the original is never touched.</span>
     </p>
     <button
       type="button"

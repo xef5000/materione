@@ -670,6 +670,56 @@ test.describe('item layers', () => {
     expect(await writes(page)).toEqual([]);
   });
 
+  test('Customize on one of the pack\'s items creates a LINKED item, points the layer at it and says it follows the original (#203)', async ({ page }) => {
+    // A server with the GUI API (the `logic` fixture advertises it). The layer shows the pack's Ruby Blade.
+    await openShop(page, 'logic&modules&seed=customize');
+    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Sword', exact: true }).click();
+    const customize = page.getByRole('button', { name: 'Customize', exact: true });
+    await expect(customize).toBeEnabled();
+    await customize.click();
+
+    // the new item is a link to the base and nothing else: no copied material, name or lore
+    await expect.poll(async () => documentOf(page, 'items/gui/shop/main/sword.yml')).not.toBeNull();
+    const item = await documentOf(page, 'items/gui/shop/main/sword.yml');
+    expect(item!.parsed.sword).toEqual({ template: 'ruby_blade' });
+    expect(item!.raw).toContain('template: ruby_blade');
+    expect(item!.raw).not.toMatch(/material|display_name|lore/);
+    // the original is untouched, and the layer now holds the new item
+    const base = await documentOf(page, 'items/ruby_blade.yml');
+    expect(base!.parsed.ruby_blade).toMatchObject({ material: 'DIAMOND_SWORD', display_name: 'Ruby Blade' });
+    const saved = await documentOf(page, 'guis/shop/main.yml');
+    expect((saved!.parsed.main as { layers: { id: string; item?: string }[] }).layers.find((layer) => layer.id === 'sword')?.item)
+      .toBe('fixture_pack:sword');
+    expect((await writes(page)).map((write) => write.op)).toContain('gui.customizeItem');
+
+    // the inline appearance opens on the linked item and says what it follows
+    await expect(page.getByTestId('gui-item-appearance')).toBeVisible();
+    await expect(page.getByTestId('gui-item-follows')).toContainText('ruby_blade');
+  });
+
+  test('the linked item opens in the item studio with a template chip naming the original, which can be opened or detached (#203)', async ({ page }) => {
+    await openShop(page, 'logic&modules&seed=customize');
+    await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Sword', exact: true }).click();
+    await page.getByRole('button', { name: 'Customize', exact: true }).click();
+    await expect(page.getByTestId('gui-item-follows')).toBeVisible();
+    await page.getByRole('button', { name: 'Open in the item studio' }).click();
+
+    // the chip names the item it follows; its menu offers the base item, not a template
+    const chip = page.locator('[data-based-on-button]');
+    await expect(chip).toContainText('ruby_blade');
+    await chip.click();
+    await expect(page.getByRole('button', { name: 'Open base item' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open template' })).toHaveCount(0);
+
+    // Detach copies the base item's values into the linked item and drops the link
+    await page.locator('[data-detach]').click();
+    await expect(page.getByRole('button', { name: 'Template: No template' })).toBeVisible();
+    const detached = await documentOf(page, 'items/gui/shop/main/sword.yml');
+    expect(detached!.parsed.sword).toMatchObject({ material: 'DIAMOND_SWORD', display_name: 'Ruby Blade' });
+    expect(detached!.raw).not.toContain('template:');
+    expect((await writes(page)).map((write) => write.op).slice(-1)).toEqual(['authoring.detachTemplate']);
+  });
+
   test('a vanilla item layer is no different in the demo: Customize waits for the server, and nothing is written', async ({ page }) => {
     await openShop(page, 'gui&modules');
     await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Apple', exact: true }).click();

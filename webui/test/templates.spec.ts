@@ -14,7 +14,7 @@ import {
   templateTitle,
   templatesFor,
 } from '../src/lib/templates';
-import { detached, startingFields, templateCatalog } from '../src/lib/demo/templates';
+import { detached, referenceDefinition, startingFields, templateCatalog } from '../src/lib/demo/templates';
 import type { TemplateDocument } from '../src/lib/demo/templates';
 
 function field(id: string, extra: Partial<TypeParam> = {}): TypeParam {
@@ -198,6 +198,58 @@ describe('template operations of the in-tab servers', () => {
     expect(detached(documents, 'demo', { material: 'X' })).toEqual({ error: 'not based on a template' });
     expect(detached(documents, 'demo', { template: 'ghost' })).toEqual({
       error: 'template does not resolve: unknown template demo:ghost',
+    });
+  });
+});
+
+// Items as templates (plugin.md section 3.1, #203): the in-tab servers resolve a link to an item the way
+// the plugin's one resolver does, so the editor behaves the same without a server.
+describe('items as templates in the in-tab servers', () => {
+  function doc(path: string, parsed: Record<string, unknown>, pack = 'demo'): [string, TemplateDocument] {
+    return [`${pack}/${path}`, { pack, path, rev: 1, raw: '', parsed }];
+  }
+  const documents = new Map<string, TemplateDocument>([
+    doc('templates/base_item.yml', { base_item: { material: 'PAPER', lore: ['Forged'] } }),
+    doc('items/ruby_sword.yml', { ruby_sword: { template: 'base_item', material: 'DIAMOND_SWORD', display_name: 'Ruby Sword' } }),
+    doc('items/gui/shop/sword.yml', { sword: { template: 'ruby_sword' } }),
+    doc('items/a.yml', { a: { template: 'b' } }),
+    doc('items/b.yml', { b: { template: 'a' } }),
+    doc('templates/blade.yml', { blade: { material: 'FROM_TEMPLATE' } }),
+    doc('items/blade.yml', { blade: { material: 'FROM_ITEM' } }),
+    doc('blocks/lamp.yml', { lamp: { technique: 'note_block' } }),
+  ]);
+
+  it('finds the template of an id first and an item only for an item', () => {
+    expect(referenceDefinition(documents, 'demo:ruby_sword', true)).toMatchObject({ kind: 'item', path: 'demo/items/ruby_sword.yml' });
+    expect(referenceDefinition(documents, 'demo:ruby_sword', false)).toBeUndefined();
+    expect(referenceDefinition(documents, 'demo:blade', true)).toMatchObject({ kind: 'template' });
+    expect(referenceDefinition(documents, 'demo:blade', true)?.definition).toEqual({ material: 'FROM_TEMPLATE' });
+    expect(referenceDefinition(documents, 'demo:base_item', false)).toMatchObject({ kind: 'template' });
+  });
+
+  it('starts a new item as a link to an item, and refuses it for anything that is not an item', () => {
+    expect(startingFields(documents, 'demo', 'items', 'plus', 'Plus', 'ruby_sword', ''))
+      .toEqual({ fields: { template: 'ruby_sword', display_name: 'Plus' } });
+    expect(startingFields(documents, 'demo', 'blocks', 'plus', 'Plus', 'ruby_sword', ''))
+      .toEqual({ error: 'unknown template demo:ruby_sword' });
+  });
+
+  it('detaches through an item and on to the template behind it, the nearer one winning', () => {
+    expect(detached(documents, 'demo', { template: 'ruby_sword', display_name: 'Mine' }, true)).toEqual({
+      fields: { display_name: 'Mine', material: 'DIAMOND_SWORD', lore: ['Forged'] },
+    });
+    // a customized GUI item sets nothing: everything comes from the base it links to
+    expect(detached(documents, 'demo', { template: 'ruby_sword' }, true)).toEqual({
+      fields: { material: 'DIAMOND_SWORD', display_name: 'Ruby Sword', lore: ['Forged'] },
+    });
+    expect(detached(documents, 'demo', { template: 'ruby_sword' }, false)).toEqual({
+      error: 'template does not resolve: unknown template demo:ruby_sword',
+    });
+  });
+
+  it('reports a loop through items instead of spinning', () => {
+    expect(detached(documents, 'demo', { template: 'a' }, true)).toEqual({
+      error: 'template does not resolve: template chain revisits demo:a',
     });
   });
 });

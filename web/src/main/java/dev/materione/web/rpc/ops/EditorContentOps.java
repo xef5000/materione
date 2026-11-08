@@ -602,6 +602,19 @@ public final class EditorContentOps {
                 }
                 JsonObject payload = new JsonObject();
                 payload.add("templates", templates);
+                // the item-to-item links, for a picker that never offers a choice closing a loop (additive)
+                ApiResult<List<AuthoringApi.ItemLink>> links = authoring.listItemLinks();
+                if (links.ok()) {
+                    var rows = new com.google.gson.JsonArray();
+                    for (AuthoringApi.ItemLink link : links.value()) {
+                        JsonObject row = new JsonObject();
+                        row.addProperty("pack", link.pack());
+                        row.addProperty("id", link.id());
+                        row.addProperty("parent", link.parent());
+                        rows.add(row);
+                    }
+                    payload.add("itemLinks", rows);
+                }
                 return Wire.Response.success(request, payload);
             } catch (Exception e) {
                 return failure(request, e);

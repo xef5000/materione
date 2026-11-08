@@ -119,6 +119,63 @@ export default [
   }),
 
   test({
+    id: 'guiruntime.linked-item-follows-base',
+    title: 'a GUI slot showing a customized item that is a template link to a base item (Customize, #203) shows the base\'s name, follows the base when the base is renamed, and a loop between two such items quarantines only those items',
+    dependsOn: ['guiruntime.open-command'],
+    covers: [
+      ...RUNTIME_COVERS,
+      'core/src/main/java/dev/materione/core/pipeline/**',
+      'content/src/main/java/dev/materione/content/items/ItemType.java',
+      'content/src/main/java/dev/materione/content/Templates.java',
+    ],
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      const base = path.join(SERVER_SAMPLE, 'items', 'qa_linked_base.yml');
+      const linkedDir = path.join(SERVER_SAMPLE, 'items', 'gui', 'qa_runtime');
+      const loopA = path.join(SERVER_SAMPLE, 'items', 'qa_loop_a.yml');
+      const loopB = path.join(SERVER_SAMPLE, 'items', 'qa_loop_b.yml');
+      const writeBase = (name) => fs.writeFileSync(base, `qa_linked_base:\n  material: PAPER\n  display_name: "${name}"\n`);
+      try {
+        // what Customize writes for a Materione base: a link and nothing else
+        fs.mkdirSync(linkedDir, { recursive: true });
+        fs.writeFileSync(path.join(linkedDir, 'sword.yml'), 'sword:\n  template: qa_linked_base\n');
+        writeBase('Linked Base');
+        writeGui(guiYaml('Shop').replace('item: corpus:gem_red', 'item: sample:sword'));
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.reset();
+        await ctx.rcon('materione gui open sample:qa_runtime Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=sample:qa_runtime player=Probe/);
+        const name = () => ctx.exec(
+          'return player.getOpenInventory().getTopInventory().getItem(13).getHoverName().getString()');
+        ctx.expect(String(await name())).toBe('Linked Base');
+
+        // the base changes, the linked item is not touched: the GUI follows
+        writeBase('Linked Base Two');
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.rcon('materione gui open sample:qa_runtime Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=sample:qa_runtime player=Probe/);
+        ctx.expect(String(await name())).toBe('Linked Base Two');
+
+        // a loop between two items quarantines those two (MTR-0093) and nothing else: the GUI still opens
+        fs.writeFileSync(loopA, 'qa_loop_a:\n  template: qa_loop_b\n');
+        fs.writeFileSync(loopB, 'qa_loop_b:\n  template: qa_loop_a\n');
+        await ctx.rcon('materione reload');
+        await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
+        await ctx.rcon('materione gui open sample:qa_runtime Probe');
+        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=sample:qa_runtime player=Probe/);
+        ctx.expect(String(await name())).toBe('Linked Base Two');
+      } finally {
+        for (const file of [base, loopA, loopB]) fs.rmSync(file, { force: true });
+        fs.rmSync(linkedDir, { recursive: true, force: true });
+        removeGui();
+        await ctx.rcon('materione reload');
+      }
+    },
+  }),
+
+  test({
     id: 'guiruntime.removed-closes-viewer',
     title: 'a save that stops sample:qa_runtime compiling closes the window of its viewer with a note, and the GUI stops resolving',
     dependsOn: ['guiruntime.open-command'],

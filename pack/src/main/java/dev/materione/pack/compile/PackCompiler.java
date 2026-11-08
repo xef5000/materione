@@ -326,20 +326,9 @@ public final class PackCompiler {
             }
         };
 
-        // template pool: id → raw definition (template chains resolve at parse)
-        var templates = new LinkedHashMap<String, Map<String, Object>>();
-        for (ContentPack pack : packs) {
-            for (ContentResource resource : pack.resources()) {
-                if ("template".equals(resource.contentType())) {
-                    Object definition = resource.document().data().get(resource.id().value());
-                    if (definition instanceof Map<?, ?> mapping) {
-                        @SuppressWarnings("unchecked")
-                        var rawTemplate = (Map<String, Object>) mapping;
-                        templates.put(resource.id().toString(), rawTemplate);
-                    }
-                }
-            }
-        }
+        // template pool: id → raw definition (template chains resolve at parse); items ride along
+        // under their own keys so an item can be the template of another item (plugin.md §3.1)
+        var templates = dev.materione.core.pipeline.TemplatePools.of(packs);
 
         for (ContentPack pack : packs) {
             if (pack.manifest() == null) {

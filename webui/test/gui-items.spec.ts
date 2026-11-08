@@ -1,7 +1,7 @@
 /**
  * Item layers and image uploads: container-only slot snapping, the pack-qualified reference a pick
  * writes, the names an upload takes, and how a layer's customized item is recognised. The compiler's
- * rules for an item layer, and Customize's own rules (the id, the copy or the material), are the
+ * rules for an item layer, and Customize's own rules (the id, the link or the material), are the
  * server's (gui.validate, gui.customizeItem; pinned by the Java tests). Pure.
  */
 import { describe, expect, it } from 'vitest';

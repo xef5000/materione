@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.content.PackEmitter;
+import dev.materione.core.pipeline.TemplateResolver;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,6 +34,47 @@ class ItemTypeTest {
         assertThat(item.material()).isEqualTo("NETHERITE_SWORD");
         assertThat(item.modelParent()).isEqualTo("item/handheld"); // inherited from base
         assertThat(item.wantsGeneratedModel()).isTrue();
+    }
+
+    @Test
+    void anItemCanBeBasedOnAnotherItemThroughTheItemEntriesOfThePool() {
+        var pool = new LinkedHashMap<String, Map<String, Object>>();
+        pool.put("sample:base_item", map("material", "PAPER", "model_parent", "item/handheld"));
+        pool.put(TemplateResolver.ITEM_PREFIX + "sample:blade",
+                map("template", "base_item", "material", "IRON_SWORD", "display_name", "Blade"));
+
+        var parsed = type.parse(
+                NamespacedId.parse("sample:blade_plus"),
+                map("template", "blade", "texture", "obsidian/axe"), pool);
+
+        assertThat(parsed).isPresent();
+        var item = (ItemDefinition) parsed.get();
+        assertThat(item.material()).isEqualTo("IRON_SWORD");        // the item's, over its template's
+        assertThat(item.displayName()).isEqualTo("Blade");           // inherited through the link
+        assertThat(item.modelParent()).isEqualTo("item/handheld");   // and through the item to its template
+        assertThat(item.template()).isEqualTo("blade");              // the authored link is what is kept
+    }
+
+    @Test
+    void aTemplateOfTheSameIdBeatsTheItem() {
+        var pool = new LinkedHashMap<String, Map<String, Object>>();
+        pool.put("sample:blade", map("material", "PAPER"));
+        pool.put(TemplateResolver.ITEM_PREFIX + "sample:blade", map("material", "IRON_SWORD"));
+
+        var parsed = type.parse(NamespacedId.parse("sample:x"), map("template", "blade"), pool);
+
+        assertThat(((ItemDefinition) parsed.get()).material()).isEqualTo("PAPER");
+    }
+
+    @Test
+    void anItemLoopIsRejectedWithoutACrash() {
+        var pool = new LinkedHashMap<String, Map<String, Object>>();
+        pool.put(TemplateResolver.ITEM_PREFIX + "sample:a", map("template", "b", "material", "DIRT"));
+        pool.put(TemplateResolver.ITEM_PREFIX + "sample:b", map("template", "a", "material", "DIRT"));
+
+        assertThat(type.parse(NamespacedId.parse("sample:a"), pool.get(TemplateResolver.ITEM_PREFIX + "sample:a"), pool))
+                .isEmpty();
+        assertThat(type.parse(NamespacedId.parse("sample:c"), map("template", "a"), pool)).isEmpty();
     }
 
     @Test
