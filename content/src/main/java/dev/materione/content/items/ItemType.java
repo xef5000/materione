@@ -119,9 +119,9 @@ public final class ItemType implements ContentType {
     @Override
     public Optional<Object> parse(
             NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
-        var merged = Templates.merge(definition, id.namespace(), templates);
+        var merged = Templates.mergeItem(definition, id.namespace(), templates);
         if (merged == null) {
-            return Optional.empty(); // unknown or diamond template — quarantine upstream
+            return Optional.empty(); // unknown or cyclic template — quarantine upstream
         }
         Object material = merged.get("material");
         if (!(material instanceof String materialText) || materialText.isBlank()) {

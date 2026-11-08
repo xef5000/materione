@@ -27,6 +27,15 @@ public final class Templates {
         return TemplateResolver.merge(definition, defaultNamespace, templates);
     }
 
+    /**
+     * {@link #merge(Map, String, Map)} for an item: an item may also name another item as its template
+     * (plugin.md section 3.1); a template of the same id still wins.
+     */
+    public static LinkedHashMap<String, Object> mergeItem(
+            Map<String, Object> definition, String defaultNamespace, Map<String, Map<String, Object>> templates) {
+        return TemplateResolver.merge(definition, defaultNamespace, templates, true);
+    }
+
     /** Short references resolve against the resource's own namespace. */
     public static String shortRef(String defaultNamespace, String raw) {
         return TemplateResolver.shortRef(defaultNamespace, raw);

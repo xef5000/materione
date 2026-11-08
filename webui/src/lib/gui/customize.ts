@@ -1,7 +1,7 @@
 /**
  * "Customize" for an item layer (gui.md section 2): the layer gets its own ordinary item at
  * `items/gui/<gui-path>/<layer-id>.yml`, and the layer's `item:` points at it. The rules of that
- * (the id, the copy or the material, the refusals) are the server's: `gui.customizeItem` decides
+ * (the id, the link to a Materione base or the material of a vanilla one, the refusals) are the server's: `gui.customizeItem` decides
  * them in one transaction (gui.md §10 #2). What stays here is the studio's reading of a layer: whether
  * its item already lives in the GUI's folder, so the inspector can show it.
  *

@@ -142,6 +142,106 @@ class TemplateResolverTest {
                 .isEqualTo(TemplateResolver.resolve(definition, NAMESPACE, chain()).merged());
     }
 
+    // ------------------------------------------------------------------ items as templates (#203)
+
+    private static final String ITEM = TemplateResolver.ITEM_PREFIX;
+
+    /** demo:blade is an item based on the template demo:root; demo:root is a template. */
+    private static Map<String, Map<String, Object>> itemPool() {
+        return Map.of(
+                "demo:root", map("material", "PAPER", "display_name", "Root Name", "lore", List.of("root line")),
+                ITEM + "demo:blade", map("template", "root", "material", "DIAMOND_SWORD", "storage", 9));
+    }
+
+    @Test
+    void anItemServesAsTheTemplateOfAnItemAndTheChainContinuesThroughIt() {
+        Resolution resolution = TemplateResolver.resolve(
+                map("template", "blade", "display_name", "Mine"), NAMESPACE, itemPool(), true);
+
+        assertThat(resolution.failure()).isNull();
+        assertThat(resolution.chain()).containsExactly("demo:blade", "demo:root");
+        assertThat(resolution.merged())
+                .containsEntry("display_name", "Mine")        // the definition wins
+                .containsEntry("material", "DIAMOND_SWORD")   // the item beats the template it is based on
+                .containsEntry("storage", 9)
+                .containsEntry("lore", List.of("root line")); // still reaches the template behind the item
+        assertThat(resolution.sources()).containsEntry("material", "demo:blade").containsEntry("lore", "demo:root");
+    }
+
+    @Test
+    void onlyDefinitionsThatAllowItemsCanNameOne() {
+        Resolution resolution = TemplateResolver.resolve(map("template", "blade"), NAMESPACE, itemPool());
+
+        assertThat(resolution.merged()).isNull();
+        assertThat(resolution.failure()).contains("unknown template demo:blade");
+        assertThat(TemplateResolver.merge(map("template", "blade"), NAMESPACE, itemPool())).isNull();
+    }
+
+    @Test
+    void aTemplateOfTheSameIdAlwaysWinsOverTheItem() {
+        Map<String, Map<String, Object>> pool = Map.of(
+                "demo:blade", map("material", "FROM_TEMPLATE"),
+                ITEM + "demo:blade", map("material", "FROM_ITEM"));
+
+        Resolution resolution = TemplateResolver.resolve(map("template", "blade"), NAMESPACE, pool, true);
+
+        assertThat(resolution.merged()).containsEntry("material", "FROM_TEMPLATE");
+        assertThat(TemplateResolver.lookup(pool, "demo:blade", true)).containsEntry("material", "FROM_TEMPLATE");
+        assertThat(TemplateResolver.lookup(pool, "demo:blade", false)).containsEntry("material", "FROM_TEMPLATE");
+        assertThat(TemplateResolver.lookup(itemPool(), "demo:blade", true)).containsEntry("material", "DIAMOND_SWORD");
+        assertThat(TemplateResolver.lookup(itemPool(), "demo:blade", false)).isNull();
+    }
+
+    @Test
+    void aTemplatesOwnParentNamesTemplatesOnlyEvenWhenTheChildIsAnItem() {
+        // item -> template t -> (item blade): the template cannot be based on an item
+        Map<String, Map<String, Object>> pool = Map.of(
+                "demo:t", map("template", "blade", "x", 1),
+                ITEM + "demo:blade", map("material", "DIAMOND_SWORD"));
+
+        Resolution resolution = TemplateResolver.resolve(map("template", "t"), NAMESPACE, pool, true);
+
+        assertThat(resolution.merged()).isNull();
+        assertThat(resolution.failure()).contains("unknown template demo:blade");
+    }
+
+    @Test
+    void aLoopThroughItemsIsACycleNamingThePath() {
+        Map<String, Map<String, Object>> pool = Map.of(
+                ITEM + "demo:a", map("template", "b"),
+                ITEM + "demo:b", map("template", "a"));
+
+        Resolution fromChild = TemplateResolver.resolve(map("template", "a"), NAMESPACE, pool, true);
+        Resolution fromMember = TemplateResolver.resolve(pool.get(ITEM + "demo:a"), NAMESPACE, pool, true);
+
+        assertThat(fromChild.merged()).isNull();
+        assertThat(TemplateResolver.isCycle(fromChild)).isTrue();
+        assertThat(fromChild.failure()).contains("demo:a -> demo:b -> demo:a");
+        assertThat(TemplateResolver.isCycle(fromMember)).isTrue();
+        assertThat(TemplateResolver.merge(map("template", "a"), NAMESPACE, pool, true)).isNull();
+    }
+
+    @Test
+    void anItemBasedOnItselfIsACycleButBasedOnATemplateOfItsOwnIdIsNot() {
+        Map<String, Map<String, Object>> selfOnly = Map.of(ITEM + "demo:a", map("template", "a", "x", 1));
+        Map<String, Map<String, Object>> withTemplate = Map.of(
+                ITEM + "demo:a", map("template", "a", "x", 1),
+                "demo:a", map("y", 2));
+
+        Resolution loop = TemplateResolver.resolve(selfOnly.get(ITEM + "demo:a"), NAMESPACE, selfOnly, true);
+        Resolution fine = TemplateResolver.resolve(withTemplate.get(ITEM + "demo:a"), NAMESPACE, withTemplate, true);
+
+        assertThat(TemplateResolver.isCycle(loop)).isTrue();
+        assertThat(fine.failure()).isNull();
+        assertThat(fine.merged()).containsEntry("y", 2).containsEntry("x", 1);
+    }
+
+    @Test
+    void anUnknownTemplateIsNotACycle() {
+        assertThat(TemplateResolver.isCycle(TemplateResolver.resolve(map("template", "ghost"), NAMESPACE, chain())))
+                .isFalse();
+    }
+
     @Test
     void shortReferencesResolveAgainstTheDefaultNamespaceAndQualifiedOnesDoNot() {
         Map<String, Map<String, Object>> pool = Map.of(

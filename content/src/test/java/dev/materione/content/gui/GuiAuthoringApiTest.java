@@ -38,6 +38,7 @@ import dev.materione.core.document.DocumentStore;
 import dev.materione.core.document.ModelTransactionService;
 import dev.materione.core.texture.PngDecoder;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -289,7 +290,8 @@ class GuiAuthoringApiTest {
     // customize
 
     @Test
-    void aMaterioneItemIsCopiedIntoTheGuiFolderAndTheLayerRepointed() {
+    @SuppressWarnings("unchecked")
+    void aMaterioneItemIsLinkedNotCopiedIntoTheGuiFolderAndTheLayerRepointed() {
         // the pack already has an item called "sword", so the layer's own id is taken: the GUI's stem prefixes it
         int revision = revisionOfGui();
         ApiResult<CustomizeItemResult> result = gui.customizeItem(ACTOR,
@@ -300,9 +302,48 @@ class GuiAuthoringApiTest {
         assertThat(created.itemPath()).isEqualTo("items/gui/main/main_sword.yml");
         assertThat(created.reference()).isEqualTo("shop:main_sword");
         assertThat(created.revision()).isEqualTo(revision + 1);
-        assertThat(authoring.getDocument(PACK, "items/gui/main/main_sword.yml").ok()).isTrue();
+        DocumentView item = authoring.getDocument(PACK, "items/gui/main/main_sword.yml").value();
+        // a link, not a copy (plugin.md §3.1): the new item sets nothing the base supplies, so it follows the base
+        Map<String, Object> own = (Map<String, Object>) item.parsed().get("main_sword");
+        assertThat(own).containsEntry("template", "sword").doesNotContainKeys("material", "display_name");
+        Map<String, Object> inheritance = (Map<String, Object>) ((Map<String, Object>) item.computed()
+                .get("inheritance")).get("main_sword");
+        assertThat(inheritance).containsEntry("chain", List.of("shop:sword")).doesNotContainKey("failure");
+        assertThat((Map<String, Object>) inheritance.get("inherited")).containsEntry("material", "STICK");
         // the writer quotes a value with a colon; the parsed layer is the test's authority
         assertThat(layerItem("sword")).isEqualTo("shop:main_sword");
+    }
+
+    @Test
+    void theLinkFollowsTheBaseAfterItChanges() {
+        assertThat(gui.customizeItem(ACTOR, new CustomizeItemRequest(PACK, GUI, revisionOfGui(), "sword")).ok())
+                .isTrue();
+        int baseRevision = authoring.getDocument(PACK, "items/sword.yml").value().revision();
+        assertThat(authoring.setFields(ACTOR, new dev.materione.api.authoring.AuthoringApi.SetFieldsRequest(
+                PACK, "items/sword.yml", baseRevision,
+                List.of(new dev.materione.api.authoring.AuthoringApi.FieldEdit(
+                        List.of("sword", "material"), "NETHERITE_SWORD")))).ok()).isTrue();
+
+        String effective = authoring.getDocument(PACK, "items/gui/main/main_sword.yml").value().computed().toString();
+
+        assertThat(effective).contains("NETHERITE_SWORD").doesNotContain("STICK");
+    }
+
+    @Test
+    void aTemplateSharingTheBaseItemsIdRefusesTheLinkAndWritesNothing() throws IOException {
+        Files.createDirectories(temp.resolve("packs").resolve(PACK).resolve("templates"));
+        Files.writeString(temp.resolve("packs").resolve(PACK).resolve("templates/sword.yml"),
+                "sword:\n  material: PAPER\n");
+        authoring.invalidateResourceSummaries(); // a file dropped in from outside, as the watcher would report
+        String before = rawGui();
+
+        ApiResult<CustomizeItemResult> result = gui.customizeItem(ACTOR,
+                new CustomizeItemRequest(PACK, GUI, revisionOfGui(), "sword"));
+
+        assertThat(result.ok()).isFalse();
+        assertThat(message(result)).contains("A template named \"sword\" shares this item's id");
+        assertThat(rawGui()).isEqualTo(before);
+        assertThat(authoring.getDocument(PACK, "items/gui/main/main_sword.yml").ok()).isFalse();
     }
 
     @Test

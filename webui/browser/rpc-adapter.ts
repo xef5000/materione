@@ -795,6 +795,7 @@ function isWriteOperation(op: string): boolean {
     op === 'authoring.duplicateResource' ||
     op === 'authoring.detachTemplate' ||
     op === 'authoring.saveAsTemplate' ||
+    op === 'gui.customizeItem' ||
     op === 'assets.put' ||
     op === 'assets.delete' ||
     op === 'assets.move' ||
@@ -917,6 +918,14 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
           { on: 'gui.click', layer: 'sword', do: [{ sound: '' }] },
           { on: 'gui.click', layer: ['apple', 'coin'], do: ['gui.refresh'] },
         ];
+        document.raw = serializeFixtureYaml(document.parsed);
+      }
+      if (options.seed === 'customize') {
+        // Customize on a Materione item (issue #203): the sword layer shows the pack's own Ruby Blade, an item
+        // that sets its own material, name and lore, so a link to it has something to inherit
+        const document = this.#documents.get(`${PACK}/guis/shop/main.yml`)!;
+        const layers = document.parsed.main!.layers as { id: string; item?: string }[];
+        layers.find((layer) => layer.id === 'sword')!.item = `${PACK}:ruby_blade`;
         document.raw = serializeFixtureYaml(document.parsed);
       }
       if (options.seed === 'trace') {
@@ -1188,6 +1197,8 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         return this.setFields(op, payload);
       case 'gui.validate':
         return this.success(op, { diagnostics: [] });
+      case 'gui.customizeItem':
+        return this.customizeItem(op, payload);
       case 'logic.vocabulary':
         return this.success(op, this.logicVocabulary());
       case 'logic.validate':
@@ -1291,6 +1302,56 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     });
   }
 
+  /**
+   * `gui.customizeItem` as the server plans it (gui.md section 2, plugin.md section 3.1): a vanilla base becomes a
+   * `material:` item, a Materione base becomes a LINK (`template: <base>` and nothing else), and the layer is pointed
+   * at the new item, in one revision-checked step. The server owns the naming; this mirrors it closely enough for
+   * the studio's behaviour to be asserted without one.
+   */
+  private customizeItem(op: string, payload: Record<string, unknown>): Response {
+    const pack = stringValue(payload.pack, PACK);
+    const path = stringValue(payload.path);
+    const gui = this.#documents.get(`${pack}/${path}`);
+    if (!gui) return this.failure(op, 'MTR-0009', 'fixture document not found');
+    if (numberValue(payload.rev) !== gui.rev) {
+      return this.failure(op, 'MTR-0034', 'document revision no longer matches');
+    }
+    const root = Object.keys(gui.parsed)[0] ?? '';
+    const layers = (gui.parsed[root]?.layers ?? []) as Record<string, unknown>[];
+    const layerId = stringValue(payload.layer);
+    const layer = layers.find((entry) => entry.id === layerId);
+    if (!layer) return this.failure(op, 'MTR-0008', `no layer '${layerId}' in this GUI`);
+    if (layer.type !== 'item') return this.failure(op, 'MTR-0008', `layer '${layerId}' is not an item layer`);
+    const reference = stringValue(layer.item).trim();
+    if (!reference) return this.failure(op, 'MTR-0008', 'Choose an item first: the layer has none');
+
+    const stem = path.replace(/^guis\//, '').replace(/\.ya?ml$/, '');
+    const taken = new Set(this.#resources.filter((resource) => resource.pack === pack).map((resource) => resource.id));
+    const id = !taken.has(layerId) ? layerId : `${stem.slice(stem.lastIndexOf('/') + 1)}_${layerId}`;
+    if (taken.has(id)) return this.failure(op, 'MTR-0008', `the item id '${id}' is taken`);
+    const itemPath = `items/gui/${stem}/${id}.yml`;
+
+    let fields: Record<string, unknown>;
+    if (reference.startsWith('minecraft:')) {
+      fields = { material: reference.slice('minecraft:'.length).toUpperCase() };
+    } else {
+      const baseId = reference.includes(':') ? reference.slice(reference.indexOf(':') + 1) : reference;
+      const base = this.#resources.find((resource) => resource.pack === pack && resource.id === baseId);
+      if (!base) return this.failure(op, 'MTR-0008', `"${reference}" is not an item in this pack, so there is nothing to link.`);
+      if (base.type !== 'items') return this.failure(op, 'MTR-0008', 'Only items and vanilla materials can be customized.');
+      if (base.path.startsWith(`items/gui/${stem}/`)) return this.failure(op, 'MTR-0008', 'This layer already has its own item.');
+      // a link, not a copy: nothing the base supplies is written here
+      fields = { template: baseId };
+    }
+    const item = makeDocument(itemPath, 1, { [id]: fields });
+    this.#documents.set(`${pack}/${itemPath}`, item);
+    this.#resources.push({ pack, type: 'items', path: itemPath, id });
+    layer.item = `${pack}:${id}`;
+    gui.rev += 1;
+    gui.raw = serializeFixtureYaml(gui.parsed);
+    return this.success(op, { id, path: itemPath, reference: `${pack}:${id}`, rev: gui.rev });
+  }
+
   private duplicateResource(op: string, payload: Record<string, unknown>): Response {
     const pack = stringValue(payload.pack, PACK);
     const id = stringValue(payload.id);
@@ -1320,7 +1381,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
     const root = stringValue(payload.resource) || Object.keys(document.parsed)[0] || '';
     const fields = document.parsed[root];
     if (!fields) return this.failure(op, 'MTR-0008', `no resource '${root}' in ${document.path}`);
-    const result = detached(this.#documents, document.pack, fields);
+    const result = detached(this.#documents, document.pack, fields, document.path.startsWith('items/'));
     if ('error' in result) return this.failure(op, 'MTR-0008', `${root}: ${result.error}`);
     document.parsed = { ...document.parsed, [root]: result.fields };
     document.rev += 1;
@@ -1440,8 +1501,19 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       const authored = stringValue(fields.template);
       if (!authored) continue;
       const id = authored.includes(':') ? authored : `${PACK}:${authored}`;
-      const path = `templates/${id.slice(id.indexOf(':') + 1)}.yml`;
-      const template = this.#documents.get(`${PACK}/${path}`)?.parsed[id.slice(id.indexOf(':') + 1)];
+      const short = id.slice(id.indexOf(':') + 1);
+      let path = `templates/${short}.yml`;
+      let template = this.#documents.get(`${PACK}/${path}`)?.parsed[short];
+      let kind: 'item' | undefined;
+      if (!template && document.path.startsWith('items/')) {
+        // an item may be the template of an item (plugin.md section 3.1); a template of that id would win
+        const item = this.#resources.find((resource) => resource.pack === PACK && resource.type === 'items' && resource.id === short);
+        if (item) {
+          path = item.path;
+          template = this.#documents.get(`${PACK}/${path}`)?.parsed[short];
+          kind = 'item';
+        }
+      }
       if (!template) {
         out[root] = { template: authored, chain: [id], inherited: {}, sources: {}, templates: {}, failure: `unknown template ${id}` };
         continue;
@@ -1453,7 +1525,10 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
         inherited[key] = structuredClone(value);
         sources[key] = id;
       }
-      out[root] = { template: authored, chain: [id], inherited, sources, templates: { [id]: { pack: PACK, path } } };
+      out[root] = {
+        template: authored, chain: [id], inherited, sources,
+        templates: { [id]: { pack: PACK, path, ...(kind ? { kind } : {}) } },
+      };
     }
     return Object.keys(out).length ? { inheritance: out } : {};
   }

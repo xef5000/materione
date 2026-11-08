@@ -9,6 +9,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **An item can be the template of another item, and GUI Customize now links instead of copying (plugin.md §3.1, gui.md §10, #203).**
+  `template: some_item` in an item now works: the new item inherits what it does not set from that item (and through it from the
+  template behind it), with the same merge as ever, so it follows the base when the base changes. Only items can be based on an item;
+  a block, GUI or template naming an item stays unresolved. When an id names both a template and an item, the template is used and the
+  item is warned about with `MTR-0094`; a loop of `template:` links (an item based on itself, two items on each other) quarantines
+  the resources that meet it with `MTR-0093` and nothing else. In the GUI studio, **Customize** on one of your own items now creates
+  a linked item (`template: <base>`, nothing copied) instead of a copy: it starts identical and keeps following the original for
+  everything you do not change, the inline appearance says "Follows `<base>`", and the item studio's template chip offers **Open base
+  item** and **Detach template** (which turns the link into a copy). Customize on a vanilla item is unchanged. If a template has the same
+  id as the item, Customize says so and creates nothing. The editor's inheritance view marks a link to an item with `kind: "item"`
+  (additive; absent means a template).
 - **The GUI studio's open canvas: the vanilla chest underneath, the inventory under a veil, art anywhere around the screen (gui.md §6, §11, #277).**
   The canvas is no longer the screen: it is the whole art area (1024 x 1024 px around the chest, drawn with its limit), with the owner's
   vanilla chest drawn under every GUI as the client composes it for 1 to 6 rows. It is not a layer and is never saved. The player's

@@ -540,6 +540,22 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode GUI_CLICK_OUTSIDE_CONTAINER =
             new DiagnosticCode("MTR-0092", Severity.WARN, "Clickable GUI layer is outside the container; clicks cannot reach it");
 
+    /**
+     * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
+     * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
+     * the loop is quarantined; nothing else is affected.
+     */
+    public static final DiagnosticCode TEMPLATE_CYCLE =
+            new DiagnosticCode("MTR-0093", Severity.ERROR, "Template chain loops; resource quarantined");
+
+    /**
+     * A {@code template:} reference names both a template and an item. The template is used (plugin.md
+     * section 3.1 precedence); the item of that id cannot be the link target until one of them is renamed.
+     */
+    public static final DiagnosticCode TEMPLATE_AMBIGUOUS =
+            new DiagnosticCode("MTR-0094", Severity.WARN,
+                    "Template reference names both a template and an item; the template is used");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -632,7 +648,9 @@ public final class DiagnosticCodes {
             TRACE_REFUSED,
             GUI_ART_CLIPPED,
             GUI_ART_GEOMETRY_INVALID,
-            GUI_CLICK_OUTSIDE_CONTAINER);
+            GUI_CLICK_OUTSIDE_CONTAINER,
+            TEMPLATE_CYCLE,
+            TEMPLATE_AMBIGUOUS);
 
     private DiagnosticCodes() {}
 

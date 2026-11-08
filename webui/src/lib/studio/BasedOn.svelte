@@ -25,10 +25,14 @@
     onChange: (ref: string) => void;
     onOpen: (id: string) => void;
     onDetach: () => void;
+    /** The first menu action's label: "Open base item" when the link names an item. */
+    openLabel?: string;
   }
 
-  let { authored, inheritance, candidates, detachBlocked, editable, onChange, onOpen, onDetach }: Props =
-    $props();
+  let {
+    authored, inheritance, candidates, detachBlocked, editable, onChange, onOpen, onDetach,
+    openLabel = 'Open template',
+  }: Props = $props();
 
   let open = $state(false);
   let query = $state('');
@@ -166,7 +170,7 @@
         {/if}
         <div class="actions">
           <button type="button" class="menu-item" onclick={() => { open = false; onOpen(inheritance?.chain[0] ?? authored); }}>
-            <Icon name="file" size={13} /> Open template
+            <Icon name="file" size={13} /> {openLabel}
           </button>
           <button
             type="button"

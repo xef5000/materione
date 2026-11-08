@@ -6,6 +6,7 @@ import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
+import dev.materione.core.pipeline.TemplateResolver;
 import dev.materione.core.pipeline.graph.ContentEdgeType;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +44,10 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             if (!(value instanceof String target) || target.isBlank()) {
                 continue;
             }
+            if ("template".equals(field)) {
+                validateTemplate(resource, target, environment, problems);
+                continue;
+            }
             NamespacedId targetId = resolve(resource.id().namespace(), target);
             if (!exists(environment, targetId)) {
                 problems.add(new Diagnostic(
@@ -77,6 +82,70 @@ public final class ReferenceValidator implements ValidateStage.Validator {
             validateJukeboxSong(resource, definition, environment, problems);
         }
         return problems;
+    }
+
+    /**
+     * A {@code template:} link (plugin.md section 3.1). It names a template, or, for an item, an item;
+     * the chain it starts must resolve and must not loop (MTR-0093). A reference that names both a
+     * template and an item uses the template and warns (MTR-0094). Resolved with the pool the compile
+     * will parse against, so validation and compile cannot disagree.
+     */
+    private static void validateTemplate(
+            ContentResource resource, String target, ValidationEnvironment environment, List<Diagnostic> problems) {
+        boolean itemChild = "item".equals(resource.contentType());
+        String namespace = resource.id().namespace();
+        Map<String, Map<String, Object>> pool = environment.templatePool();
+        String ref = TemplateResolver.shortRef(namespace, target);
+        var target0 = dev.materione.api.diagnostics.DiagnosticTarget.field("template");
+        if (TemplateResolver.lookup(pool, ref, itemChild) == null) {
+            boolean itemOnly = !itemChild && pool.containsKey(TemplateResolver.ITEM_PREFIX + ref);
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                    itemOnly
+                            ? "template '" + target + "' is an item, and only an item can be based on an item"
+                            : "unresolved template '" + target + "'",
+                    resource.id(), null,
+                    itemOnly
+                            ? "base this resource on a template instead, or on an item if it is an item"
+                            : "did you mean '" + closest(environment, target, "template", itemChild) + "'?",
+                    target0));
+            return;
+        }
+        TemplateResolver.Resolution chain =
+                TemplateResolver.resolve(Map.of("template", target), namespace, pool, itemChild);
+        if (TemplateResolver.isCycle(chain)) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.TEMPLATE_CYCLE, Severity.ERROR,
+                    resource.id() + ": " + chain.failure(),
+                    resource.id(), null,
+                    "a template: link in the loop points back at an earlier one; change or remove one of them",
+                    target0));
+            return;
+        }
+        if (chain.failure() != null) {
+            problems.add(new Diagnostic(
+                    DiagnosticCodes.UNRESOLVED_REFERENCE, Severity.ERROR,
+                    resource.id() + ": " + chain.failure() + " (further up the template chain)",
+                    resource.id(), null,
+                    "fix the template: link of the template named in the message",
+                    target0));
+            return;
+        }
+        if (itemChild) {
+            boolean fromItem = true;
+            for (String hop : chain.chain()) {
+                boolean template = pool.containsKey(hop);
+                if (fromItem && template && pool.containsKey(TemplateResolver.ITEM_PREFIX + hop)) {
+                    problems.add(new Diagnostic(
+                            DiagnosticCodes.TEMPLATE_AMBIGUOUS, Severity.WARN,
+                            resource.id() + ": '" + hop + "' names both a template and an item; the template is used",
+                            resource.id(), null,
+                            "rename the template or the item so the link names only one of them",
+                            target0));
+                }
+                fromItem = fromItem && !template;
+            }
+        }
     }
 
     /**
@@ -485,11 +554,21 @@ public static ContentEdgeType edgeTypeFor(String field) {
     }
 
     private static String closest(ValidationEnvironment environment, String target, String field) {
+        return closest(environment, target, field, false);
+    }
+
+    /** The nearest id of the kind the field names; for a template link from an item, items count too. */
+    private static String closest(
+            ValidationEnvironment environment, String target, String field, boolean itemsServe) {
         String best = target;
         int bestDistance = Integer.MAX_VALUE;
         for (ContentPack pack : environment.packs()) {
             for (ContentResource resource : pack.resources()) {
-                if (field.equals("template") != "template".equals(resource.contentType())) {
+                boolean candidate = field.equals("template")
+                        ? "template".equals(resource.contentType())
+                                || (itemsServe && "item".equals(resource.contentType()))
+                        : !"template".equals(resource.contentType());
+                if (!candidate) {
                     continue;
                 }
                 int distance = levenshtein(target, resource.id().value());

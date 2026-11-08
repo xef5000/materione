@@ -390,7 +390,7 @@ ${id}: {}
     const root = optional(p.resource) ?? Object.keys(current.parsed)[0] ?? '';
     const fields = current.parsed[root] as Record<string, unknown> | undefined;
     if (!fields) throw new DemoError('MTR-0008', `no resource '${root}' in ${path}`);
-    const result = detached(this.#documentMap(), pack, fields);
+    const result = detached(this.#documentMap(), pack, fields, path.startsWith('items/'));
     if ('error' in result) throw new DemoError('MTR-0008', `${root}: ${result.error}`);
     const yaml = parseDocument(current.raw);
     for (const [field, value] of Object.entries(result.fields)) {
