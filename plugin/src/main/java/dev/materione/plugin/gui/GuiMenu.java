@@ -31,7 +31,7 @@ public final class GuiMenu extends PluginGui {
     }
 
     public GuiMenu(GuiSession session, GuiContainer container, String title, String baseTitle, GuiInput input) {
-        super(container.slotCount(), MaterioneText.parseData(title));
+        super(container.open(), MaterioneText.parseData(title));
         this.session = session;
         this.container = container;
         this.title = title;

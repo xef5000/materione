@@ -36,6 +36,7 @@ import org.bukkit.plugin.java.JavaPlugin;
  *                                                         open it; [title] is a JSON file under the data folder
  *                                                         (else plain text); a slot holds an item unless "empty"
  *   ctprobe title &lt;player&gt; &lt;title&gt;                      refresh the open window's title (the packet the product sends)
+ *   ctprobe top &lt;player&gt;                              the open top inventory of a window the product opened (row P, gui.md 12.6)
  * </pre>
  *
  * Every answer is one log line containing {@code MATERIONE-CTPROBE}.
@@ -67,6 +68,7 @@ public final class ContainerProbe extends JavaPlugin implements Listener {
                 case "describe" -> describe(args[1], inventoryOf(args[1], title(args.length > 2 ? args[2] : null, args[1])));
                 case "open" -> open(args);
                 case "title" -> retitle(args);
+                case "top" -> top(args[1]);
                 default -> throw new IllegalArgumentException("unknown stage '" + stage + "'");
             }
         } catch (Exception failure) {
@@ -95,6 +97,37 @@ public final class ContainerProbe extends JavaPlugin implements Listener {
                 + " holder=" + (view.getTopInventory().getHolder() == holder)
                 + " menuSlots=" + ((List<?>) field(menu, "slots")).size()
                 + " menuId=" + field(menu, "containerId"));
+    }
+
+    /**
+     * What a player's open top inventory is, for a window the product runtime opened (gui.md 12.6): the inventory type
+     * and size, the menu the server holds for it and its id (the id the client's open-window packet carries), and
+     * whether the holder is a product {@code PluginGui} (checked by class name: this plugin has no product dependency).
+     */
+    private void top(String name) throws Exception {
+        Player player = Bukkit.getPlayerExact(name);
+        if (player == null) {
+            throw new IllegalStateException("player is not online");
+        }
+        var view = player.getOpenInventory();
+        Inventory top = view.getTopInventory();
+        Object holder = top.getHolder();
+        boolean product = false;
+        for (Class<?> type = holder == null ? null : holder.getClass(); type != null; type = type.getSuperclass()) {
+            if (type.getName().equals("dev.materione.plugin.gui.PluginGui")) {
+                product = true;
+            }
+        }
+        Object menu = field(handle(player), "containerMenu");
+        Object menuType = Class.forName("org.bukkit.craftbukkit.inventory.CraftContainer")
+                .getMethod("getNotchInventoryType", Inventory.class).invoke(null, top);
+        getLogger().info("MATERIONE-CTPROBE top ok=true player=" + name + " viewType=" + view.getType()
+                + " type=" + top.getType() + " size=" + top.getSize()
+                + " menuType=" + menuTypeKey(menuType)
+                + " menuId=" + field(menu, "containerId")
+                + " menuSlots=" + ((List<?>) field(menu, "slots")).size()
+                + " holder=" + (holder == null ? "none" : holder.getClass().getSimpleName())
+                + " product=" + product);
     }
 
     private void retitle(String[] args) throws Exception {

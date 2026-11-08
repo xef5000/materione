@@ -1,11 +1,13 @@
 package dev.materione.plugin.gui.window;
 
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.platform.gui.PaperRichTitles;
 import dev.materione.platform.gui.RichTitleTransport;
 import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.GuiMenu;
+import dev.materione.plugin.gui.PluginGui;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.Viewer;
 import dev.materione.plugin.gui.input.GuiInput;
@@ -80,11 +82,39 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public Optional<String> unavailable(RuntimeGuis.Live gui) {
+        Optional<String> container = unopenable(gui);
+        if (container.isPresent()) {
+            return container;
+        }
         if (gui.visuals() == null || titles.available()) {
             return Optional.empty();
         }
         String reason = "rich-title transport is unavailable; conditional title overlays cannot be opened";
         reporter.problem(DiagnosticCodes.GUI_DYNAMIC_LAYER_FAILED, gui.id(), "title", reason);
+        return Optional.of(reason);
+    }
+
+    /**
+     * Whether the GUI's container profile names a window this server can create (gui.md §12.6): a size the
+     * inventory API accepts (a multiple of 9 from 9 to 54), or an {@code InventoryType} that exists and is
+     * creatable. Reports {@code MTR-0098} and returns the reason when it does not.
+     */
+    private Optional<String> unopenable(RuntimeGuis.Live gui) {
+        GuiContainer.Open open = gui.container().open();
+        String reason = null;
+        if (open.inventoryType() == null) {
+            if (open.size() < 9 || open.size() > 54 || open.size() % 9 != 0) {
+                reason = "the container '" + gui.container().id() + "' asks for a window of " + open.size()
+                        + " slots, which this server cannot create";
+            }
+        } else if (PluginGui.inventoryType(open).isEmpty()) {
+            reason = "the container '" + gui.container().id() + "' asks for the window type '"
+                    + open.inventoryType() + "', which this server cannot create";
+        }
+        if (reason == null) {
+            return Optional.empty();
+        }
+        reporter.problem(DiagnosticCodes.GUI_CONTAINER_UNOPENABLE, gui.id(), "container", reason);
         return Optional.of(reason);
     }
 

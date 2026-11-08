@@ -232,7 +232,9 @@ Exposes live, shadow-swapped content definitions and world interactions (current
   - `playSound(ActorContext, UUID player, String soundKey, float volume, float pitch)`
   - `placePainting(ActorContext, UUID player, NamespacedId variantId)`
 - **GUI screens (`GuiRuntimeApi`, gui.md §5, as built in #185):**
-  - `guis()` / `gui(NamespacedId)` — the live catalog: `GuiView(id, rows, accessibleTitle, filledSlots)`
+  - `guis()` / `gui(NamespacedId)` — the live catalog: `GuiView(id, container, accessibleTitle, filledSlots, profile)`
+    (gui.md §12.6, #292: `container` is the profile id, `profile` the `GuiContainer` it opens as; the profile
+    component was added in #292, so the record's canonical constructor changed)
   - `open(ActorContext, NamespacedId guiId, UUID targetPlayer)` — opens a live GUI for an online player
     (node `materione.gui.open`); a refusal completes at once with its diagnostic (`MTR-0055` for the
     node, `MTR-0009` for an offline player or a GUI that is not live), and an open that is still

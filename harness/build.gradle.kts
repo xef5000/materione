@@ -84,6 +84,14 @@ val integrationTest by tasks.registering(Test::class) {
     systemProperty("harness.containerProbeJar", containerProbeJar.get().archiveFile.get().asFile.absolutePath)
     inputs.file(containerProbeJar.flatMap { it.archiveFile })
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
+    // The container GUI floor (#292, row P): the product opens a hopper and a dispenser for a protocol client. It needs
+    // `npm ci` in harness/protocol, so it is opt-in like the rich-title floor.
+    if (providers.gradleProperty("harness.containerGuiFloor").orNull == "true") {
+        testLogging.showStandardStreams = true
+        systemProperty("harness.containerGuiFloor", "true")
+        systemProperty("harness.protocolDir", layout.projectDirectory.dir("protocol").asFile.absolutePath)
+        inputs.files(fileTree(layout.projectDirectory.dir("protocol")) { exclude("node_modules/**") })
+    }
     if (providers.gradleProperty("harness.richTitleFloor").orNull == "true") {
         dependsOn(richTitleProbeJar)
         testLogging.showStandardStreams = true

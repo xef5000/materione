@@ -11,14 +11,15 @@ import java.util.Optional;
  *
  * <p>Two questions. Across one swap, which GUIs changed or vanished ({@link #changes}). For one
  * viewer of a changed GUI, what must happen to the window they have open ({@link #viewerAction}).
- * A window's title and size are fixed when it is created, so a new title or new rows need a new
- * window; anything else (the items in the slots) is written into the open window in place.
+ * A window's title and size are fixed when it is created, so a new title or a new container profile
+ * (gui.md §12.6: a change from {@code chest_3} to {@code hopper} is one) needs a new window; anything else
+ * (the items in the slots) is written into the open window in place.
  */
 public final class GuiRefreshPlan {
 
     /** How one GUI changed between two applies. */
     public enum Change {
-        /** Still live, with a different window: rows, title or items. */
+        /** Still live, with a different window: container, title or items. */
         CHANGED,
         /** No longer live: removed from the pack, or quarantined by its compile. */
         REMOVED
@@ -26,9 +27,9 @@ public final class GuiRefreshPlan {
 
     /** What one open window needs. */
     public enum Action {
-        /** Same title and rows: rewrite the slot contents of the open window in place. */
+        /** Same title and container profile: rewrite the slot contents of the open window in place. */
         UPDATE_CONTENTS,
-        /** The title or the rows changed: open a new window, keeping the cursor item. */
+        /** The title or the container profile changed: open a new window, keeping the cursor item. */
         REOPEN,
         /** The GUI is no longer live: close the window and tell the viewer why. */
         CLOSE
