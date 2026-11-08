@@ -25,7 +25,7 @@ public final class TitleRenderer {
 
     public Result render(NamespacedId gui, GuiContainer container, TitleProgram program, LogicContext context, long ticks) {
         GuiVisualPlan plan = program.plan();
-        var title = new GuiTitle(plan.namespace());
+        var title = new GuiTitle(plan.namespace(), container);
         var hidden = new HashSet<String>();
         var coverage = new HashMap<String, Set<Integer>>();
         var visible = new HashMap<String, Boolean>();
@@ -45,7 +45,7 @@ public final class TitleRenderer {
                 try {
                     value = compiled.template() == null ? text.text() : compiled.template().render(context);
                     String problem = value == null ? "template returned null"
-                            : GuiTextRules.problem(value, text.font(), text.y(), false);
+                            : GuiTextRules.problem(value, text.font(), text.y(), false, container);
                     if (problem != null) {
                         throw new IllegalArgumentException(problem);
                     }

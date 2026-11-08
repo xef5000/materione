@@ -472,6 +472,42 @@ const vectors = [
     container: 'chest_6',
     layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 125, corners: 'vanilla' }],
   },
+  {
+    name: 'slots-container-hopper',
+    description: 'Inset slot wells for the container region of a hopper (gui.md section 12.5): five wells in one row at x = 44 + 18*i, y = 20, on the hopper\'s 176x133 screen.',
+    canvas: { width: 176, height: 133 },
+    container: 'hopper',
+    layers: [{ id: 'wells', type: 'slots', region: 'container' }],
+  },
+  {
+    name: 'slots-container-dispenser',
+    description: 'Inset slot wells for the container region of a dispenser: a 3 x 3 grid at (62, 17) on the dispenser\'s 176x166 screen.',
+    canvas: { width: 176, height: 166 },
+    container: 'dispenser',
+    layers: [{ id: 'wells', type: 'slots', region: 'container' }],
+  },
+  {
+    name: 'hopper-screen',
+    description: 'A hopper GUI: vanilla-corner panel over its whole 176x133 screen, wells for the container and the player inventory (inventory at y = 51, hotbar at y = 109), and a button over slots 2 and 3.',
+    canvas: { width: 176, height: 133 },
+    container: 'hopper',
+    layers: [
+      { id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 133, corners: 'vanilla' },
+      { id: 'wells', type: 'slots', region: 'all' },
+      { id: 'tab', type: 'button', x: 80, y: 20, width: 40, height: 16 },
+    ],
+  },
+  {
+    name: 'dispenser-screen',
+    description: 'A dispenser GUI: vanilla-corner panel over its whole 176x166 screen, wells for the container (3 x 3 at (62, 17)) and the player inventory (inventory at y = 84, hotbar at y = 142), and a button over four slots.',
+    canvas: { width: 176, height: 166 },
+    container: 'dispenser',
+    layers: [
+      { id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 166, corners: 'vanilla' },
+      { id: 'wells', type: 'slots', region: 'all' },
+      { id: 'tab', type: 'button', x: 80, y: 36, width: 32, height: 34 },
+    ],
+  },
 ];
 
 for (const vector of vectors) {

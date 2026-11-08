@@ -17,7 +17,8 @@ import { paintInset, paintRaised, BUTTON_EDGE, PANEL_EDGE, type BevelStyle } fro
 import { blitPaint, blitScaled } from './blit';
 import { ArgbCanvas } from './canvas';
 import { parseColor, type Argb } from './color';
-import { cellsOf, wellRect, type SlotRegion } from '../chest';
+import { cellsOf, wellRect, type SlotCell, type SlotRegion } from '../chest';
+import { profileCells, type ContainerProfile } from '../containers';
 
 export type Layer = Record<string, unknown> & { id?: unknown; type?: unknown };
 
@@ -29,6 +30,11 @@ export interface RasterScene {
   originX?: number;
   originY?: number;
   rows: number;
+  /**
+   * The container profile the slots are drawn in (gui.md section 12.5). When set, the `slots` layer reads its cells from
+   * the profile, whatever the container; the studio scene, until its container row (S), still passes only `rows`.
+   */
+  container?: ContainerProfile;
   /** The decoded bitmap behind an `image:` reference, or null when it is unavailable. */
   image(reference: string): ArgbCanvas | null;
 }
@@ -101,7 +107,9 @@ export const RASTER_PAINTERS: Record<string, RasterPainter> = {
   },
   slots(layer, scene, out) {
     const style = styleOf(layer, SLOT_DEFAULT);
-    for (const cell of cellsOf(scene.rows, regionOf(layer))) {
+    const region = regionOf(layer);
+    const cells: SlotCell[] = scene.container ? profileCells(scene.container, region) : cellsOf(scene.rows, region);
+    for (const cell of cells) {
       const well = wellRect(cell);
       paintInset(out, well.x, well.y, well.w, well.h, style);
     }

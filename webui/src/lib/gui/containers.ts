@@ -8,6 +8,7 @@
  * kept as authored, but not drawn. Pure: no DOM, no Svelte.
  */
 import profileFile from '../../../../shared/gui/containers.json';
+import type { SlotCell } from './chest';
 
 export interface ContainerBlit {
   readonly sheet: string;
@@ -64,4 +65,50 @@ export function studioDraws(profile: ContainerProfile): boolean {
 /** The supported ids, for the messages that name an unknown one. */
 export function supportedContainerIds(): string {
   return CONTAINERS.map((profile) => profile.id).join(', ');
+}
+
+/** The vanilla slot pitch, in pixels (the Java `GuiContainer.PITCH`). */
+const SLOT_PITCH = 18;
+
+/** The hotbar's distance below the first row of the player's inventory (gui.md section 12.2.3, every container). */
+const HOTBAR_GAP = 58;
+
+/**
+ * The slot cells a region covers in a container, container slots first then the player's 27 and the hotbar, read from the
+ * profile alone (gui.md section 12.5.2): the Java `SlotsComponent.itemOrigins`. A chest is not a case of it, the six chests
+ * are six profiles. `index` is the menu slot id: the container's own `0..slotCount-1`, then the player's.
+ */
+export function profileCells(profile: ContainerProfile, region: 'container' | 'player' | 'all'): SlotCell[] {
+  const cells: SlotCell[] = [];
+  if (region === 'container' || region === 'all') {
+    for (let slot = 0; slot < profile.slotCount; slot++) {
+      cells.push({
+        index: slot,
+        x: profile.slots.x + SLOT_PITCH * (slot % profile.columns),
+        y: profile.slots.y + SLOT_PITCH * Math.floor(slot / profile.columns),
+        region: 'container',
+      });
+    }
+  }
+  if (region === 'player' || region === 'all') {
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 9; col++) {
+        cells.push({
+          index: profile.slotCount + row * 9 + col,
+          x: profile.inventory.x + col * SLOT_PITCH,
+          y: profile.inventory.y + row * SLOT_PITCH,
+          region: 'player',
+        });
+      }
+    }
+    for (let col = 0; col < 9; col++) {
+      cells.push({
+        index: profile.slotCount + 27 + col,
+        x: profile.inventory.x + col * SLOT_PITCH,
+        y: profile.inventory.y + HOTBAR_GAP,
+        region: 'player',
+      });
+    }
+  }
+  return cells;
 }

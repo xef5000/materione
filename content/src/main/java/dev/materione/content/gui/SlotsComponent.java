@@ -21,8 +21,7 @@ import java.util.List;
  * minus one pixel; raster target.
  *
  * <p>Geometry comes from the container profile (gui.md §12.5.1): container item origins are its slots, and the
- * player inventory is its {@code inventory} origin for three rows and the hotbar 58 px below. For a chest those are
- * {@code x = 8 + col·18}, {@code y = 18 + row·18} and {@code y = rows·18 + 31 + row·18}, {@code y = rows·18 + 89}.
+ * player inventory is its {@code inventory} origin for three rows and the hotbar 58 px below, on the 18-px pitch.
  */
 public final class SlotsComponent implements GuiComponent {
 
@@ -121,11 +120,13 @@ public final class SlotsComponent implements GuiComponent {
         if (region == Region.PLAYER || region == Region.ALL) {
             for (int row = 0; row < 3; row++) {
                 for (int col = 0; col < 9; col++) {
-                    origins.add(new int[] {container.inventoryX() + col * 18, container.inventoryY() + row * 18});
+                    origins.add(new int[] {container.inventoryX() + col * GuiContainer.PITCH,
+                            container.inventoryY() + row * GuiContainer.PITCH});
                 }
             }
             for (int col = 0; col < 9; col++) {
-                origins.add(new int[] {container.inventoryX() + col * 18, container.inventoryY() + HOTBAR_GAP});
+                origins.add(new int[] {container.inventoryX() + col * GuiContainer.PITCH,
+                        container.inventoryY() + HOTBAR_GAP});
             }
         }
         return origins;

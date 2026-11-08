@@ -58,8 +58,8 @@ final class GuiVisualCompiler {
                 List<CompiledGuiLayer> frames = layer.frames() == null
                         ? List.of(layer.compiled()) : layer.frames().layers();
                 if (own == null) {
-                    own = GuiArt.capCanvas();
-                    output = GuiArt.capCanvas();
+                    own = GuiArt.capCanvas(gui.container());
+                    output = GuiArt.capCanvas(gui.container());
                 }
                 var tilesByFrame = new ArrayList<List<GuiArt.Tile>>();
                 boolean pastCap = false;
@@ -76,7 +76,7 @@ final class GuiVisualCompiler {
                     }
                     pastCap |= own.clippedInk();
                     output.composite(own, layer.opacity());
-                    tilesByFrame.add(GuiArt.cut(output)); // an invariant failure quarantines the GUI
+                    tilesByFrame.add(GuiArt.cut(output, gui.container())); // an invariant failure quarantines the GUI
                 }
                 if (failed) {
                     continue;
@@ -121,7 +121,7 @@ final class GuiVisualCompiler {
                 }
                 String problem = text.stream()
                         .map(run -> GuiTextRules.problem(run.text(), run.font(), run.y(),
-                                GuiTemplates.isTemplated(run.text())))
+                                GuiTemplates.isTemplated(run.text()), gui.container()))
                         .filter(java.util.Objects::nonNull)
                         .findFirst().orElse(null);
                 if (problem != null) {
@@ -131,7 +131,8 @@ final class GuiVisualCompiler {
                 pieces.addAll(text);
                 for (GuiVisualPlan.Text run : text) {
                     List<Map<String, Object>> providers = run.font() == dev.materione.api.gui.TitleSink.Font.SMALLCAPS
-                            ? GuiFonts.smallcaps(namespace, run.y()) : GuiFonts.defaults(run.y());
+                            ? GuiFonts.smallcaps(namespace, gui.container(), run.y())
+                            : GuiFonts.defaults(gui.container(), run.y());
                     providers.forEach(provider -> fonts.add(new GuiCompilation.FontProvider(
                             GuiFonts.text(namespace, run.font(), run.y()), provider)));
                     if (run.font() == dev.materione.api.gui.TitleSink.Font.SMALLCAPS) {

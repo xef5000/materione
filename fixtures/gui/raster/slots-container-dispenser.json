@@ -1,0 +1,16 @@
+{
+  "name": "slots-container-dispenser",
+  "description": "Inset slot wells for the container region of a dispenser: a 3 x 3 grid at (62, 17) on the dispenser's 176x166 screen.",
+  "canvas": {
+    "width": 176,
+    "height": 166
+  },
+  "container": "dispenser",
+  "layers": [
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "container"
+    }
+  ]
+}

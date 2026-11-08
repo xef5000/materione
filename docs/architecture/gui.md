@@ -1445,14 +1445,14 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 ---
 
-## 12. Containers beyond the chest (#286) — design approved and merged (#287); row M built (#290)
+## 12. Containers beyond the chest (#286) — design approved and merged (#287); rows M (#290) and C (#291) built
 
 > **Status: the design is approved and merged (#287, all owner questions answered, §12.13, none open, §12.14). Row M is built
 > (#290): `container:` replaces `rows:`, the container profiles are one file (`shared/gui/containers.json`, §12.5.1), and every
-> GUI in the repository is converted. Rows C (the profile-driven compiler for hopper and dispenser), P (runtime opening by
-> the profile's `open` descriptor), S (the studio's container select) and R (the in-game probe) are not built yet.** Until
-> those land, a hopper or dispenser GUI compiles but cannot be opened by the plugin, and the studio does not draw it (it
-> shows the reason and edits nothing). The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
+> GUI in the repository is converted. Row R (the in-game probe, #289) is done (§12.2.6). Row C is built (#291): the compiler
+> is profile-driven for every container, hopper and dispenser included (§12.5.7). Rows P (runtime opening by the profile's
+> `open` descriptor) and S (the studio's container select) are not built yet.** Until those land, a hopper or dispenser GUI
+> compiles but cannot be opened by the plugin, and the studio does not draw it (it shows the reason and edits nothing). The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
 > §8 and §11 are one-line pointers; they change no behaviour.
 >
 > **The governing rule (owner, §12.13 item 5): the system is agnostic of the container type.** The chest is the default
@@ -1848,13 +1848,16 @@ position in §4 and §11.3 holds unchanged.** Because the pieces of a title alre
 
 > After the last piece, shift the pen to `titleX0 + (imageWidth - 16)`, that is `168` on a 176-px screen.
 
-That is one trailing `<shift:168 - pen>` (nothing when the pen is already 168), added by `GuiTitle` and by the dynamic
-`TitleRenderer` at the end of every assembled title that has art or text runs. A GUI with neither keeps its plain `title:`
-as the title, and the client centres it: the vanilla look. The check is exact integer arithmetic, so the golden can pin it.
+That is one trailing `<shift:168 - pen>` (nothing when the pen is already 168), added by `GuiTitle` (so by the static compile
+and by the dynamic `TitleRenderer`, which assemble through it) at the end of every assembled title that has art or text runs,
+**on a profile whose title is `centred`**. A GUI with neither keeps its plain `title:` as the title, and the client centres it:
+the vanilla look. The check is exact integer arithmetic, so the golden can pin it.
 It rests on `Font.width` summing negative advances without a clamp, which the bytecode shows ([CLI]: the lambda adds each
 `getAdvance` to a `MutableFloat`) and the probe confirmed on a real `DispenserScreen` (§12.2.6, U1: `font.width = 160`,
 `titleLabelX = 8`; without the shift a 501-px title lands at −162). The shift is harmless on a profile whose title is not centred
-(the hopper's art is identical with and without it), so it may be added uniformly. Had the probe refuted it, the dispenser would have left
+(the hopper's art is identical with and without it), so it could be added uniformly; **as built (row C) it is added for `centred`
+profiles only**, because a uniform shift would append a `<shift:..>` to every existing chest title and move every existing golden,
+which the row forbids. The condition is a profile property (`title.centred`), not a container name. Had the probe refuted it, the dispenser would have left
 v1 (§12.3); nothing else depends on it.
 
 #### 12.5.4 The art cap and the regions
@@ -1881,7 +1884,33 @@ Per profile: a compiled golden (the pack-output summary), shared raster vectors 
 click-map table, and a **title vector** with a trailing shift. A ban test forbids `rows * 9`, `% 9` and `/ 9`, the
 numbers `176`, `114`, `18 * rows` and `rows * 18`, and the identifiers `rows` and `"chest"` anywhere outside the profile data. Nothing in
 the parser reads `rows`. The existing
-`chest-*` vectors and every shipped golden stay as they are.
+`chest-*` vectors and every shipped golden stay as they are. What row C built is in §12.5.7.
+
+#### 12.5.7 As built (row C, #291)
+
+Row M had already made the slot table, the click map, `ItemComponent`, `ListSlots` and `SlotsComponent` read the profile, and the
+preview height and the `screen` edit take the profile too (§12.5.2). Row C finished the compiler, which was still chest-shaped
+in the title and the art cap:
+
+| Where | What it is now |
+|---|---|
+| `GuiTitle` | `new GuiTitle(namespace, container)`. The pen starts at `originX(container)` (the profile's `title.x`, or 8 for a `centred` title), every art piece returns the pen there, and `build()` appends the trailing shift to `trailingX(container)` = `origin + width - 16` (168) when the title is `centred` and has a piece. `ascentFor(container, screenTop)` is `titleY + 7 - screenTop` |
+| `GuiArt` | The cap is `GuiArt.Cap.of(container)`: `x = (width - 1024) / 2`, `y = titleY + 7 - 256`, so `-424` and `-243` for every v1 profile (one shared box, §12.5.4); `capCanvas`, `cut` and the `MTR-0091` check take it, and `MTR-0090`'s message prints the profile's box. The constants `CAP_X`/`CAP_Y` are gone |
+| `GuiFonts`, `GuiTextRules`, `GuiCompiler`, `GuiVisualCompiler`, `TitleRenderer` | The offset fonts' ascent, the "default-font text must start on row N" rule (N is derived: `5` for title row 6) and the dynamic title all take the container. The plugin's `TitleRenderer` changes only by passing the container it already had |
+| Offset-font keys | A key is `<ns>:gui/<family>_y<row>`, with no title row in it. Two GUIs of one namespace with different title rows would disagree on a key's ascent, so the day a profile has a title row other than 6 the key must carry it first; `GuiContainerCompilerTest` fails if one is added without it. All v1 profiles have title row 6 |
+| The underlay | **No Java code composes it.** The blit list (`underlay`) is profile data read by the studio (row S); the compiler never draws the vanilla screen, so there is no `generic_54` geometry in it to remove. The shared raster vectors pin the geometry the studio's renderer and the compiler share (slots and screen size) for hopper and dispenser |
+| `ItemComponent` | The editor's slot range is `0..(largest profile slot count - 1)`, derived from the profiles; the GUI's own profile bounds it further |
+
+*Tests.* `GuiContainerCompilerTest` pins a hopper and a dispenser compile (`fixtures/golden/gui/hopper-compiled.txt`,
+`dispenser-compiled.txt`: title, fonts, assets and a click table), replays the dispenser title's pen to 168, and checks the cap of
+every profile; `GuiTitleOriginTest` pins the trailing shift (positive, negative, absent, idempotent `build()`); `TitleRendererTest`
+pins the dynamic title; `GuiAuthoringApiTest` the preview's height per container. Four new shared vectors (`hopper-screen`,
+`dispenser-screen`, `slots-container-hopper`, `slots-container-dispenser`) are rendered by the Java compiler's flatten and by the
+studio's raster (which reads the profile through `profileCells` when a scene carries one; the studio's own scene still passes
+rows until row S). **The ban** is `GuiContainerAgnosticTest`: in the GUI sources of `content`, `api` and `plugin`, outside
+comments and string contents, no identifier `rows`, no `% 9` or `/ 9`, no `176` or `114`, and no `"chest` literal. Its allow-list
+is the `rows` that are not container rows (glyph sheets, the art tile grid, the entries of a list layer) and `GuiType`'s
+`NEW_GUI_CONTAINER`, the one default a New GUI starts with. No existing compiled-output golden or vector changed.
 
 ### 12.6 Runtime
 
@@ -2016,7 +2045,7 @@ effort, regular implementation on Haiku.
 |---|---|---|---|---|
 | **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high. **Done (#289, §12.2.6)** |
 | **M** | Model, profiles and the conversion | `container:` replaces `rows:` in the schema and `GuiType.parse` (required; `MTR-0097` for an unknown id); the profile data file (six chest entries, hopper, dispenser; `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; `GuiComponentConfiguration` and `CompiledGui` carry the profile; the scaffold change in `core` and `web`. **The conversion, in this row:** every `rows:` of a GUI becomes `container: chest_N` in the same change: `fixtures/gui/*.yml` and `fixtures/gui/open-canvas`, `fixtures/packs/*/guis` (showcase, guilogic, guitext, opencanvas, overlay), the built-in `plugin/src/main/resources/builtin-packs/materione/guis/browser.yml`, `harness/protocol/floor.yml`, YAML embedded in Java and TS tests and runners (`content`, `core`, `pack`, `plugin`, `harness`, `web`, `webui` demo data and specs), the vector generator, the goldens they regenerate (`editor-demo-snapshot.json` and the pack-output goldens), and the docs' examples (gui.md §2, logic.md). Glyph sheets and the satchel item have their own `rows` that are not GUI rows and stay. The CHANGELOG entry states the breaking change and why it is acceptable (GUIs are unreleased). A grep-based test fails the build on any GUI file with `rows:` | none | Haiku for the sweep, Sonnet reviews the parser |
-| **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high |
+| **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high. **Done (#291, §12.5.7)** |
 | **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor | M | Haiku |
 | **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row can ship first | owner (§12.13 item 3) | owner / Haiku for C |
 | **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high |

@@ -1,5 +1,6 @@
 package dev.materione.content.gui;
 
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.TitleSink;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -13,7 +14,9 @@ import java.util.Map;
  * background glyph lives in {@code <ns>:gui}; a text run lives in an offset font
  * {@code <ns>:gui/<font>_y<y>} generated once per (font, y) actually used. Every
  * provider is a bitmap whose {@code ascent} places its top at the screen row the key
- * names (see {@link GuiTitle#ascentFor}).
+ * names (see {@link GuiTitle#ascentFor}). The ascent depends on the container's title row, which the key does
+ * not carry: every container profile shares title row 6, so GUIs of one namespace never disagree on a key. A profile
+ * with another title row must put it in the key first (a test pins this).
  */
 final class GuiFonts {
 
@@ -59,19 +62,19 @@ final class GuiFonts {
     }
 
     /** The providers of one small-caps offset font: the space advance, then the sheet for row {@code y}. */
-    static List<Map<String, Object>> smallcaps(String namespace, int y) {
+    static List<Map<String, Object>> smallcaps(String namespace, GuiContainer container, int y) {
         var providers = new ArrayList<Map<String, Object>>();
         providers.add(space(SmallcapsFont.SPACE_ADVANCE));
-        providers.add(bitmap(namespace + ":" + SMALLCAPS_TEXTURE + ".png", GuiTitle.ascentFor(y),
+        providers.add(bitmap(namespace + ":" + SMALLCAPS_TEXTURE + ".png", GuiTitle.ascentFor(container, y),
                 SmallcapsFont.CELL_HEIGHT, SmallcapsFont.grid()));
         return providers;
     }
 
     /** The providers of one default offset font: the space advance, then the vanilla ASCII grid at row {@code y}. */
-    static List<Map<String, Object>> defaults(int y) {
+    static List<Map<String, Object>> defaults(GuiContainer container, int y) {
         var providers = new ArrayList<Map<String, Object>>();
         providers.add(space(VanillaAscii.SPACE_ADVANCE));
-        providers.add(bitmap(VANILLA_ASCII, GuiTitle.ascentFor(y), VANILLA_ASCII_HEIGHT, asciiGrid()));
+        providers.add(bitmap(VANILLA_ASCII, GuiTitle.ascentFor(container, y), VANILLA_ASCII_HEIGHT, asciiGrid()));
         return providers;
     }
 

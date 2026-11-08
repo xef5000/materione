@@ -31,6 +31,9 @@ class GuiOpenCanvasTest {
 
     private static final NamespacedId BANNER = NamespacedId.of("shop", "banner");
 
+    /** The container the arithmetic tests draw in; the cap and the title origin are the profile's (gui.md §12.5). */
+    private static final dev.materione.api.gui.GuiContainer CONTAINER = GuiContainers.byId("chest_1").orElseThrow();
+
     @TempDir
     Path temp;
 
@@ -66,7 +69,7 @@ class GuiOpenCanvasTest {
     }
 
     private static GuiArt.Tile onlyTile(ArgbCanvas canvas) {
-        List<GuiArt.Tile> tiles = GuiArt.cut(canvas);
+        List<GuiArt.Tile> tiles = GuiArt.cut(canvas, CONTAINER);
         assertThat(tiles).hasSize(1);
         return tiles.get(0);
     }
@@ -91,7 +94,7 @@ class GuiOpenCanvasTest {
             default -> java.util.Optional.empty();
         };
         var skipped = new ArrayList<String>();
-        ArgbCanvas canvas = GuiFlatten.flatten(GuiArt.CAP_X, GuiArt.CAP_Y, GuiArt.CAP_SIZE, GuiArt.CAP_SIZE,
+        ArgbCanvas canvas = GuiFlatten.flatten(GuiArt.Cap.of(CONTAINER).x(), GuiArt.Cap.of(CONTAINER).y(), GuiArt.CAP_SIZE, GuiArt.CAP_SIZE,
                 GuiTestSupport.parse(GuiTestSupport.type(), definition).layers(), textures,
                 (layer, reason) -> skipped.add(layer.id() + ": " + reason), layer -> { });
         assertThat(skipped).isEmpty();
@@ -105,7 +108,7 @@ class GuiOpenCanvasTest {
 
     @Test
     void aScreenSizedRasterIsOneTileWithTheOldAscentAndHeight() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(0, 0, 176, 114, 0xFF112233);
         GuiArt.Tile tile = onlyTile(canvas);
         assertThat(tile).extracting(GuiArt.Tile::x, GuiArt.Tile::y, GuiArt.Tile::width, GuiArt.Tile::height)
@@ -117,7 +120,7 @@ class GuiOpenCanvasTest {
 
     @Test
     void aTileIsCroppedToItsInkBoxAndItsAscentFollowsItsTopRow() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(30, 40, 10, 20, 0xFFFFFFFF);
         canvas.blend(60, 41, 0x01000000); // a nearly invisible pixel still counts as ink (alpha > 0)
         GuiArt.Tile tile = onlyTile(canvas);
@@ -134,7 +137,7 @@ class GuiOpenCanvasTest {
     @Test
     void aBannerAboveTheScreenIsPaddedToSatisfyAscentAtMostHeight() {
         // gui.md §11.3 worked example: 120 x 12 at (28, -30): a = 43, H = max(12, 43), 31 transparent rows
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(28, -30, 120, 12, 0xFF445566);
         GuiArt.Tile tile = onlyTile(canvas);
         assertThat(tile.ascent()).isEqualTo(43);
@@ -150,10 +153,10 @@ class GuiOpenCanvasTest {
     @Test
     void theMinimalPaddingIsZeroWhenTheTileReachesRow13AndBelow() {
         // ty + th >= 13 means th >= a: the cell is the art itself
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(0, 5, 10, 8, 0xFF000001); // ty = 5, th = 8, a = 8: exactly enough
         assertThat(onlyTile(canvas).padding()).isZero();
-        var shorter = GuiArt.capCanvas();
+        var shorter = GuiArt.capCanvas(CONTAINER);
         shorter.fill(0, 5, 10, 7, 0xFF000001); // ty + th = 12 < 13
         GuiArt.Tile tile = onlyTile(shorter);
         assertThat(tile.ascent()).isEqualTo(8);
@@ -163,7 +166,7 @@ class GuiOpenCanvasTest {
 
     @Test
     void theHighestReachableRowIsMinus243WithAnAscentOf256() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(0, -243, 16, 4, 0xFFFFFFFF);
         GuiArt.Tile tile = onlyTile(canvas);
         assertThat(tile.ascent()).isEqualTo(256);
@@ -175,7 +178,7 @@ class GuiOpenCanvasTest {
 
     @Test
     void aRasterOf256By256NeverSplits() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(-100, 100, 256, 256, 0xFFFFFFFF);
         GuiArt.Tile tile = onlyTile(canvas);
         assertThat(tile.width()).isEqualTo(256);
@@ -184,9 +187,9 @@ class GuiOpenCanvasTest {
 
     @Test
     void a530By530RasterIsNineTilesInRowMajorOrderOnAGridAnchoredAtItsTopLeft() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(-17, -9, 530, 530, 0xFFFFFFFF);
-        List<GuiArt.Tile> tiles = GuiArt.cut(canvas);
+        List<GuiArt.Tile> tiles = GuiArt.cut(canvas, CONTAINER);
         assertThat(tiles).hasSize(9);
         assertThat(tiles).extracting(GuiArt.Tile::row).containsExactly(0, 0, 0, 1, 1, 1, 2, 2, 2);
         assertThat(tiles).extracting(GuiArt.Tile::col).containsExactly(0, 1, 2, 0, 1, 2, 0, 1, 2);
@@ -199,10 +202,10 @@ class GuiOpenCanvasTest {
 
     @Test
     void aFullyTransparentTileIsNotEmittedAndEachOtherTileKeepsItsGridCoordinates() {
-        var canvas = GuiArt.capCanvas();
+        var canvas = GuiArt.capCanvas(CONTAINER);
         canvas.fill(0, 0, 4, 4, 0xFFFFFFFF); // top-left of the bounds
         canvas.fill(576, 576, 4, 4, 0xFFFFFFFF); // bottom-right: the bounds are 580 x 580, three cells each way
-        List<GuiArt.Tile> tiles = GuiArt.cut(canvas);
+        List<GuiArt.Tile> tiles = GuiArt.cut(canvas, CONTAINER);
         assertThat(tiles).extracting(t -> t.row() + "/" + t.col()).containsExactly("0/0", "2/2");
         // the second tile is cropped to its own ink, not to its grid cell (512..579)
         assertThat(tiles.get(1)).extracting(GuiArt.Tile::x, GuiArt.Tile::y, GuiArt.Tile::width, GuiArt.Tile::height)
@@ -211,14 +214,14 @@ class GuiOpenCanvasTest {
 
     @Test
     void anEmptyCanvasHasNoTiles() {
-        assertThat(GuiArt.cut(GuiArt.capCanvas())).isEmpty();
+        assertThat(GuiArt.cut(GuiArt.capCanvas(CONTAINER), CONTAINER)).isEmpty();
     }
 
     // --- emit-time invariants -----------------------------------------------------------------------------
 
     @Test
     void anAscentHigherThanTheHeightIsRefusedBeforeAnyProviderExists() {
-        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 10, 12, 20))
+        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 10, 12, 20, -243))
                 .isInstanceOf(CompileRejectException.class)
                 .hasMessageContaining("ascent 20 is higher than height 12")
                 .satisfies(error -> assertThat(((CompileRejectException) error).code())
@@ -227,11 +230,11 @@ class GuiOpenCanvasTest {
 
     @Test
     void everyOtherLimitIsRefusedToo() {
-        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 0, 12, 12)).hasMessageContaining("width 0");
-        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 257, 12, 12)).hasMessageContaining("width 257");
-        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 10, 257, 13)).hasMessageContaining("height 257");
-        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, -244, 10, 12, 12)).hasMessageContaining("-244");
-        GuiArt.check(0, 0, 0, -243, 256, 256, 256); // the extremes themselves are fine
+        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 0, 12, 12, -243)).hasMessageContaining("width 0");
+        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 257, 12, 12, -243)).hasMessageContaining("width 257");
+        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, 0, 10, 257, 13, -243)).hasMessageContaining("height 257");
+        assertThatThrownBy(() -> GuiArt.check(0, 0, 0, -244, 10, 12, 12, -243)).hasMessageContaining("-244");
+        GuiArt.check(0, 0, 0, -243, 256, 256, 256, -243); // the extremes themselves are fine
     }
 
     @Test
@@ -239,7 +242,7 @@ class GuiOpenCanvasTest {
         // the cap normally prevents this; a canvas of another origin shows the assertion guards the cut itself
         var tooHigh = new ArgbCanvas(0, -300, 64, 64);
         tooHigh.fill(0, -300, 8, 8, 0xFFFFFFFF);
-        assertThatThrownBy(() -> GuiArt.cut(tooHigh))
+        assertThatThrownBy(() -> GuiArt.cut(tooHigh, CONTAINER))
                 .isInstanceOf(CompileRejectException.class)
                 .satisfies(error -> assertThat(((CompileRejectException) error).code())
                         .isEqualTo(DiagnosticCodes.GUI_ART_GEOMETRY_INVALID));

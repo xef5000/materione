@@ -10,7 +10,7 @@ Each vector is a pair with the same base name:
 
 | File | Contents |
 |---|---|
-| `<name>.json` | the input: canvas size, optional slot-grid `rows`, optional inline `images`, and `layers` |
+| `<name>.json` | the input: canvas size, the `container` profile the slot grid comes from, optional inline `images`, and `layers` |
 | `<name>.png` | the expected output, RGBA8, straight (non-premultiplied) alpha |
 
 Both implementations must reproduce every `<name>.png` **pixel for pixel** (compare decoded
@@ -26,7 +26,7 @@ the committed bytes are the fixture, and CI never regenerates.
   "name": "chest-6-rows",              // equals the file base name
   "description": "...",                // prose, ignored by tests
   "canvas": { "width": 176, "height": 222 },
-  "rows": 6,                           // only needed by `slots` layers (the slot grid depends on it)
+  "container": "chest_6",              // a profile id of shared/gui/containers.json; only `slots` layers read it (a vector with none is chest_1)
   "images": {                          // bitmaps by the reference `image`/`paint` layers use
     "gui/test/checker": {
       "width": 2, "height": 2,
@@ -132,19 +132,23 @@ are checked against `generic_54.png` by `content/src/test/java/dev/materione/con
 top-right and bottom-left pixels); `dark` only: **shadow** (so the top and left edges are the
 dark ones); `light` only: **highlight**; neither: **fill**.
 
-### Chest geometry (`slots`)
+### Container geometry (`slots`)
 
-The canvas of a chest GUI is `176 x (114 + rows*18)`. A `slots` layer with `region` draws one
-inset well per slot, the 18 x 18 well at `(x-1, y-1)` for the slot's 16 x 16 item origin `(x, y)`:
+The canvas of a GUI is its container's screen, `width x height` from the profile (`shared/gui/containers.json`, gui.md
+§12.5.1): `176 x (114 + rows*18)` for a chest, `176 x 133` for the hopper, `176 x 166` for the dispenser. A `slots` layer
+with `region` draws one inset well per slot, the 18 x 18 well at `(x-1, y-1)` for the slot's 16 x 16 item origin `(x, y)`.
+The origins are the profile's, with the pitch of 18 px:
 
 | Region | Item origins |
 |---|---|
-| `container` (also the value of an absent `region`) | `x = 8 + col*18`, `y = 18 + row*18`; `col` 0..8, `row` 0..rows-1 |
-| `player` | inventory: `x = 8 + col*18`, `y = rows*18 + 31 + row*18`, `row` 0..2; hotbar: `x = 8 + col*18`, `y = rows*18 + 89` |
+| `container` (also the value of an absent `region`) | slot `i` at `x = slots.x + 18 * (i % columns)`, `y = slots.y + 18 * floor(i / columns)`, `i` in `0..slotCount-1` |
+| `player` | inventory: `x = inventory.x + col*18`, `y = inventory.y + row*18`, `row` 0..2; hotbar: `x = inventory.x + col*18`, `y = inventory.y + 58`; `col` 0..8 |
 | `all` | both |
 
-(6 rows: inventory at `y = 139, 157, 175`, hotbar at `y = 197`, exactly vanilla.) Wells tile the
-grid without overlapping or leaving gaps, so their pixels are written once each.
+For `chest_N`: `slots = (8, 18)`, `columns = 9`, `inventory = (8, 31 + 18N)` (6 rows: inventory at `y = 139, 157, 175`,
+hotbar at `y = 197`, exactly vanilla). For `hopper`: `slots = (44, 20)`, five columns, `inventory = (8, 51)`. For
+`dispenser`: `slots = (62, 17)`, three columns, `inventory = (8, 84)`. Wells tile the grid without overlapping or leaving
+gaps, so their pixels are written once each.
 
 ### `image`
 
@@ -175,6 +179,8 @@ the rest transparent. A missing bitmap draws nothing.
 | `panel-2px-bevel` | raised 2 px bevel, including panels too small for a clean interior |
 | `button-custom-style` | full and partial `style` blocks |
 | `slots-container-1row`, `slots-player-3rows`, `slots-custom-style` | the slot grid per region and the inset bevel with partial style |
+| `slots-container-hopper`, `slots-container-dispenser` | the container region of the hopper (one row of five at `x = 44 + 18i`, `y = 20`) and of the dispenser (3 x 3 at `(62, 17)`), on their own screen sizes (`176 x 133`, `176 x 166`) |
+| `hopper-screen`, `dispenser-screen` | a vanilla-corner panel over the whole screen, wells for container and player, and a button: the geometry the profile-driven compiler and the studio's raster share (#291) |
 | `chest-6-rows`, `chest-1-row` | a square-cornered panel (no `corners` field) with all-region slots: the look of every panel before #278 |
 | `panel-vanilla-corners` | `corners: vanilla` at 8 x 8, 9 x 12 and 20 x 20, beside a square 8 x 8 panel |
 | `vanilla-chest-corners` | the top part of a 6-row chest (176 x 125) as one vanilla panel; checked against `generic_54.png` by `VanillaChestCornersTest` |

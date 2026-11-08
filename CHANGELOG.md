@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **A hopper or a dispenser GUI compiles through the same code as a chest (gui.md §12.5, #291).** The compiler reads everything about the
+  screen from the container's profile (`shared/gui/containers.json`): the slot table, the click areas, the item, list and slot layers, the
+  title's origin, the art cap and the preview height. A dispenser's client screen centres its title, so its compiled title now ends with one
+  trailing shift that makes the title exactly 160 px wide and puts the client's origin back at 8 (verified on a real client, gui.md §12.2.6),
+  and nothing about any other layer changes. The chests and the hopper compile byte for byte as before: no existing GUI output, golden or
+  vector moved. New goldens pin a hopper and a dispenser, and new shared raster vectors (`hopper-screen`, `dispenser-screen`,
+  `slots-container-hopper`, `slots-container-dispenser`) pin their slot geometry in the Java compiler and the studio's renderer. A test now
+  fails the build if GUI code mentions a row count, a chest's nine columns, 176 or 114, or a chest id. A hopper or dispenser GUI still cannot
+  be opened by the plugin (row P) or drawn by the studio (row S).
 - **An item can be the template of another item, and GUI Customize now links instead of copying (plugin.md §3.1, gui.md §10, #203).**
   `template: some_item` in an item now works: the new item inherits what it does not set from that item (and through it from the
   template behind it), with the same merge as ever, so it follows the base when the base changes. Only items can be based on an item;

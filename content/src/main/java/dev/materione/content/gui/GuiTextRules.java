@@ -6,9 +6,10 @@ import dev.materione.api.gui.TitleSink;
 public final class GuiTextRules {
     private GuiTextRules() {}
 
-    public static String problem(String text, TitleSink.Font font, int y, boolean template) {
-        if (font == TitleSink.Font.DEFAULT && GuiTitle.ascentFor(y) > GuiFonts.VANILLA_ASCII_HEIGHT) {
-            return "default-font text must start on row 5 or lower";
+    public static String problem(String text, TitleSink.Font font, int y, boolean template,
+            dev.materione.api.gui.GuiContainer container) {
+        if (font == TitleSink.Font.DEFAULT && GuiTitle.ascentFor(container, y) > GuiFonts.VANILLA_ASCII_HEIGHT) {
+            return "default-font text must start on row " + firstDefaultRow(container) + " or lower";
         }
         if (template) {
             return null;
@@ -24,6 +25,11 @@ public final class GuiTextRules {
             }
         }
         return null;
+    }
+
+    /** The first row default-font text may start on: its 8-px glyphs must not need an ascent above their height. */
+    static int firstDefaultRow(dev.materione.api.gui.GuiContainer container) {
+        return GuiTitle.ascentFor(container, 0) - GuiFonts.VANILLA_ASCII_HEIGHT;
     }
 
     public static java.util.Set<Integer> slots(

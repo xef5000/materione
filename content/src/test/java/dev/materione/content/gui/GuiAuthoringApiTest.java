@@ -452,6 +452,21 @@ class GuiAuthoringApiTest {
     }
 
     @Test
+    void renderOfADraftIsAsTallAsItsContainersScreen() {
+        // the preview is the raster inside the profile's screen: 133 for the hopper, 166 for the dispenser
+        for (var screen : List.of(Map.entry("hopper", 133), Map.entry("dispenser", 166), Map.entry("chest_2", 150))) {
+            var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", screen.getKey(), 0, List.of(
+                    new Layer("wells", "slots", null, true, false, null, Map.of("region", "all")))));
+            ApiResult<GuiRender> result = gui.render(new GuiRenderRequest(draft, List.of()));
+            assertThat(result.ok()).as(screen.getKey() + " " + result.diagnostics()).isTrue();
+            assertThat(result.value().width()).isEqualTo(176);
+            assertThat(result.value().height()).as(screen.getKey()).isEqualTo(screen.getValue());
+            var pixels = PngDecoder.decode(result.value().background()).orElseThrow();
+            assertThat(pixels.width() + "x" + pixels.height()).isEqualTo("176x" + screen.getValue());
+        }
+    }
+
+    @Test
     void renderOfADraftReportsSkippedLayersAndRanksTheRest() {
         var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of(
                 new Layer("heading", "text", null, true, false, null,
