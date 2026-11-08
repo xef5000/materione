@@ -7,12 +7,6 @@ servers:
   title: Servers
   rows: 1
   layers:
-    - id: frame
-      type: panel
-      x: 0
-      y: 0
-      width: 176
-      height: 132
     - id: heading
       type: text
       x: 8

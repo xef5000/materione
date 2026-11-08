@@ -3,7 +3,6 @@ package dev.materione.content.gui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.gui.TextureSource;
-import dev.materione.core.texture.PngDecoder;
 import dev.materione.core.texture.PackTextures;
 import dev.materione.testing.golden.GoldenFiles;
 import java.nio.charset.StandardCharsets;
@@ -75,14 +74,13 @@ class GuiVisualCompilerTest {
         assertThat(result.model().visuals().pieces().get(0)).isInstanceOf(GuiVisualPlan.Raster.class);
         assertThat(result.model().visuals().pieces().get(1)).isInstanceOf(GuiVisualPlan.Raster.class);
         assertThat(result.model().visuals().pieces().get(2)).isInstanceOf(GuiVisualPlan.Text.class);
+        // a dynamic GUI paints no static background (gui.md §4 step 7, §11.3 rule 6): no PNG, no provider, no
+        // codepoint for it, only one glyph per overlay layer
         assertThat(result.assets()).containsKeys(
-                "assets/shop/textures/font/materione/gui/test.png",
                 "assets/shop/textures/font/materione/gui_overlay/74657374/6c6f776572/0.png",
-                "assets/shop/textures/font/materione/gui_overlay/74657374/7570706572/0.png");
-        var background = PngDecoder.decode(result.assets().get(
-                "assets/shop/textures/font/materione/gui/test.png")).orElseThrow();
-        assertThat(background.argb()).containsOnly(0);
-        assertThat(result.fonts().stream().filter(font -> font.fontKey().equals("shop:gui")).count()).isEqualTo(3);
+                "assets/shop/textures/font/materione/gui_overlay/74657374/7570706572/0.png")
+                .doesNotContainKey("assets/shop/textures/font/materione/gui/test.png");
+        assertThat(result.fonts().stream().filter(font -> font.fontKey().equals("shop:gui")).count()).isEqualTo(2);
     }
 
     @Test
@@ -94,9 +92,9 @@ class GuiVisualCompilerTest {
         var result = GuiCompiler.compile(valid, 0xE200, TextureSource.NONE,
                 (layer, frame) -> 0xE201 + frame);
         var animation = (GuiVisualPlan.Raster) result.model().visuals().pieces().get(0);
-        assertThat(animation.frame(0).codepoint()).isEqualTo(0xE201);
-        assertThat(animation.frame(4).codepoint()).isEqualTo(0xE202);
-        assertThat(animation.frame(8).codepoint()).isEqualTo(0xE201);
+        assertThat(animation.frame(0).tiles().get(0).codepoint()).isEqualTo(0xE201);
+        assertThat(animation.frame(4).tiles().get(0).codepoint()).isEqualTo(0xE202);
+        assertThat(animation.frame(8).tiles().get(0).codepoint()).isEqualTo(0xE201);
         var invalid = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
                 GuiTestSupport.layer("bad", "panel", "width", 20, "height", 20,
                         "materione:overlay_frames", Map.of("every", 0, "layers", List.of(Map.of())))));
@@ -121,8 +119,8 @@ class GuiVisualCompilerTest {
             var animation = result.model().visuals().pieces().stream()
                     .filter(piece -> piece.layer().equals("moving"))
                     .map(piece -> (GuiVisualPlan.Raster) piece).findFirst().orElseThrow();
-            assertThat(animation.frame(0).codepoint()).isNotEqualTo(animation.frame(40).codepoint());
-            assertThat(animation.frame(80).codepoint()).isEqualTo(animation.frame(0).codepoint());
+            assertThat(animation.frame(0).tiles().get(0).codepoint()).isNotEqualTo(animation.frame(40).tiles().get(0).codepoint());
+            assertThat(animation.frame(80).tiles().get(0).codepoint()).isEqualTo(animation.frame(0).tiles().get(0).codepoint());
         }
     }
 }

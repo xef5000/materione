@@ -220,7 +220,7 @@ class GuiCompilerTest {
                 GuiTestSupport.layer("panel", "panel", "width", 20, "height", 20, "visible_if", true)));
         var emitter = new Recording(TextureSource.NONE);
         var allocations = new Allocations() {
-            int next = 5888;
+            int next = 5889; // a dynamic GUI has no background: its first overlay tile is the first ask
 
             @Override
             public String allocate(NamespacedId id, String kind) {

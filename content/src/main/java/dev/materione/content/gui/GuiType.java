@@ -197,10 +197,57 @@ public final class GuiType implements ContentType {
         }
         var out = new ArrayList<Diagnostic>();
         diagnoseLayers(gui, out);
+        diagnoseClickFootprints(gui, out);
         diagnoseInputSettings(gui, out);
         diagnoseRefresh(gui, out);
         diagnoseRules(gui, out);
         return List.copyOf(out);
+    }
+
+    /**
+     * {@code MTR-0092} for a layer meant to be clicked whose rectangle covers no container slot (gui.md §11.4):
+     * a {@code button}, or a layer a {@code gui.click} rule names with {@code layer:}. The client reports a
+     * click outside the container without a position, so art drawn there is decoration only. The layer is
+     * kept and still draws. Only a rectangle of known size is judged: an unsized image has none until its
+     * texture is read, and a slot set is the container by definition.
+     */
+    private static void diagnoseClickFootprints(GuiDefinition gui, List<Diagnostic> out) {
+        var named = new java.util.HashSet<String>();
+        for (Object rule : gui.rules().behavior()) {
+            if (rule instanceof Map<?, ?> mapping && "gui.click".equals(mapping.get("on"))) {
+                Object layer = mapping.get("layer");
+                if (layer instanceof String id) {
+                    named.add(id);
+                } else if (layer instanceof List<?> ids) {
+                    ids.forEach(id -> named.add(String.valueOf(id)));
+                }
+            }
+        }
+        for (int index = 0; index < gui.layers().size(); index++) {
+            GuiLayer layer = gui.layers().get(index);
+            if (!layer.visible() || !(layer.compiled() instanceof ButtonComponent.Layer
+                    || named.contains(layer.id()))) {
+                continue;
+            }
+            dev.materione.api.gui.ClickArea area;
+            try {
+                area = layer.compiled().clickArea(dev.materione.api.gui.TextureSource.NONE);
+            } catch (RuntimeException ignored) {
+                continue; // a component that cannot say where it is clicked is not clickable
+            }
+            if (area instanceof dev.materione.api.gui.ClickArea.Rect rect && rect.width() > 0 && rect.height() > 0
+                    && dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(rect, gui.rows()).isEmpty()) {
+                out.add(new Diagnostic(
+                        DiagnosticCodes.GUI_CLICK_OUTSIDE_CONTAINER, Severity.WARN,
+                        "GUI layer '" + layer.id() + "' is meant to be clicked but covers no container slot (its "
+                                + "rectangle is x " + rect.x() + ".." + (rect.x() + rect.width() - 1) + ", y " + rect.y()
+                                + ".." + (rect.y() + rect.height() - 1) + "): a click outside the container "
+                                + "carries no position, so it is decoration only",
+                        gui.id(), null,
+                        "move the layer over a container slot, or handle the click with gui.click_outside",
+                        DiagnosticTarget.field("layers", String.valueOf(GuiCompiler.authoredIndex(gui, layer.id())))));
+            }
+        }
     }
 
     /** {@code MTR-0071} when {@code refresh:} was not a clock: the GUI still loads, without one. */
@@ -281,35 +328,32 @@ public final class GuiType implements ContentType {
     }
 
     /**
-     * Compiles one GUI into pack output (gui.md §4) through {@link GuiCompiler}: the
-     * background PNG and its glyph provider, the offset fonts actually used, and the
-     * diagnostics of skipped layers. The background codepoint is the GUI's durable
-     * {@link GuiBackgrounds#ALLOCATION_KIND} allocation; a used-up block quarantines this
-     * GUI with {@code MTR-0053} and the pack still compiles.
+     * Compiles one GUI into pack output (gui.md §4, §11) through {@link GuiCompiler}: one PNG and one glyph
+     * provider per tile of art, the offset fonts actually used, and the diagnostics of skipped or clipped
+     * layers. A GUI that paints no pixel emits no art at all. Each tile's codepoint is a durable
+     * {@link GuiBackgrounds#ALLOCATION_KIND} allocation made only when the tile is emitted (see
+     * {@link GuiOverlayKeys}); a used-up block quarantines this GUI with {@code MTR-0053}, a tile that breaks a
+     * font-provider invariant with {@code MTR-0091}, and the pack still compiles. Nothing is emitted for a
+     * quarantined GUI.
      */
     @Override
     public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {
         if (!(definition instanceof GuiDefinition gui)) {
             return;
         }
-        int number = allocations.range(gui.id(), GuiBackgrounds.ALLOCATION_KIND, 1).start();
-        if (!GuiBackgrounds.fits(number)) {
-            throw new CompileRejectException(
-                    DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
-                    "GUI " + gui.id() + " has no background codepoint left (U+E200..U+F8FF is used up)",
-                    "retire unused GUIs; the allocation table never reuses codepoints");
-        }
-        GuiCompilation compiled = GuiCompiler.compile(
-                gui, GuiBackgrounds.codepoint(number), emitter.textures(), (layer, frame) -> {
-                    int overlay = allocations.range(GuiOverlayKeys.allocation(gui.id(), layer.id(), frame),
-                            GuiBackgrounds.ALLOCATION_KIND, 1).start();
-                    if (!GuiBackgrounds.fits(overlay)) {
-                        throw new CompileRejectException(DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
-                                "GUI " + gui.id() + " has no overlay codepoint left (U+E200..U+F8FF is used up)",
-                                "retire unused GUIs; the allocation table never reuses codepoints");
-                    }
-                    return GuiBackgrounds.codepoint(overlay);
-                });
+        GuiCompilation compiled = GuiCompiler.compile(gui, emitter.textures(), (layer, frame, row, col) -> {
+            NamespacedId key = layer == null
+                    ? GuiOverlayKeys.background(gui.id(), row, col)
+                    : GuiOverlayKeys.allocation(gui.id(), layer, frame, row, col);
+            int number = allocations.range(key, GuiBackgrounds.ALLOCATION_KIND, 1).start();
+            if (!GuiBackgrounds.fits(number)) {
+                throw new CompileRejectException(
+                        DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
+                        "GUI " + gui.id() + " has no codepoint left for its art (U+E200..U+F8FF is used up)",
+                        "retire unused GUIs; the allocation table never reuses codepoints");
+            }
+            return GuiBackgrounds.codepoint(number);
+        });
         compiled.diagnostics().forEach(emitter::diagnostic);
         compiled.assets().forEach(emitter::generatedAsset);
         // GUI fonts map plain ASCII (smallcaps, the vanilla grid) and reach the screen only

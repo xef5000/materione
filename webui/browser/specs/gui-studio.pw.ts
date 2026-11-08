@@ -55,7 +55,7 @@ async function at(page: Page, x: number, y: number): Promise<[number, number]> {
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
 
-test('a new GUI opens as a vanilla chest: a panel and slot wells from the server starter, drawn by the shared bevel', async ({ page }) => {
+test('a new GUI opens with no layers: the title and rows only, and nothing painted on the canvas (gui.md 11.2)', async ({ page }) => {
   await openFixture(page);
   await page.getByRole('button', { name: /new gui/i }).first().click();
   await page.getByRole('dialog').getByRole('textbox').first().fill('Chest Test');
@@ -63,19 +63,20 @@ test('a new GUI opens as a vanilla chest: a panel and slot wells from the server
   await expect(canvas(page)).toBeVisible();
   expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([CAP.size, CAP.size]); // the art covers the whole cap
   expect(await page.getByTestId('gui-underlay').evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 168]); // the starter is a 3-row chest
-  await expect(page.locator('.layers .row .name')).toHaveText(['wells', 'frame']);
+  await expect(page.locator('.layers .row .name')).toHaveCount(0);
 
-  // the compiled background, pixel for pixel (fixtures/gui/raster: panel + slots region all)
-  expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]); // transparent corner
-  expect(await pixel(page, 1, 0)).toEqual([0, 0, 0, 255]); // outline
-  expect(await pixel(page, 1, 1)).toEqual([255, 255, 255, 255]); // highlight
-  expect(await pixel(page, 5, 5)).toEqual([198, 198, 198, 255]); // fill
-  expect(await pixel(page, 174, 100)).toEqual([85, 85, 85, 255]); // shadow
-  expect(await pixel(page, 7, 17)).toEqual([55, 55, 55, 255]); // slot well, dark edge
-  expect(await pixel(page, 8, 18)).toEqual([139, 139, 139, 255]); // slot well interior
-  expect(await pixel(page, 24, 34)).toEqual([255, 255, 255, 255]); // slot well, light edge
-  expect(await pixel(page, 8, 85)).toEqual([139, 139, 139, 255]); // first inventory slot (y = 3*18+31)
-  expect(await pixel(page, 8, 143)).toEqual([139, 139, 139, 255]); // hotbar slot (y = 3*18+89)
+  // a new GUI has no raster layers, so no pixel is painted
+  expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 1, 1)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 8, 85)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 8, 143)).toEqual([0, 0, 0, 0]);
+
+  // ...and the vanilla chest underneath is the client's, drawn from the reference art (gui.md 11.2)
+  const underlay = (x: number, y: number) => page.getByTestId('gui-underlay').evaluate(
+    (element: HTMLCanvasElement, [px, py]) => element.getContext('2d')!.getImageData(px!, py!, 1, 1).data[3], [x, y]);
+  expect(await underlay(0, 0)).toBe(0); // the rounded corner
+  expect(await underlay(5, 5)).toBe(255);
+  expect(await underlay(8, 143)).toBe(255); // the hotbar
 });
 
 test('select, nudge with arrow keys (Shift = 10), undo and redo; the status follows the history', async ({ page }) => {
@@ -178,7 +179,9 @@ test('adds components from the registry palette, schema-derived inspector, then 
   await expect(page.getByRole('textbox', { name: 'Fill hex' })).toHaveValue('#3C8527');
 
   await page.keyboard.press('Control+s');
-  await expect(page.locator('[data-status]')).toHaveText('Saved');
+  // the save encodes and writes the sample's art, then reads the file back: well under a second here, but past the
+  // default 5 s on a loaded 2-core CI runner, so this one wait is longer (it checks what is saved, not how fast)
+  await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
   const recorded = (await writes(page)).filter((entry) => entry.op === 'authoring.setFields');
   expect(recorded).toHaveLength(1);
   const payload = recorded[0]!.payload as { edits: { field: string[]; value: { id: string }[] }[]; assets: { path: string }[] };
@@ -458,7 +461,7 @@ test.describe('paint tools', () => {
     // one Ctrl+Z takes the stroke, the next the layer it created
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
-    await expect(page.locator('.layers .row .name')).toHaveText(['wells', 'frame']);
+    await expect(page.locator('.layers .row .name')).toHaveCount(0);
 
     await page.keyboard.press('Control+Shift+z');
     await page.getByRole('button', { name: 'Lock Paint' }).click();

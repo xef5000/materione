@@ -1274,7 +1274,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       return this.failure(op, 'MTR-0008', `document already exists: ${path}`);
     }
     if (type === 'guis') {
-      // The starter is a vanilla chest: a panel plus an all-region slots layer.
+      // The starter is a title and rows with no layers: the vanilla chest is the client's own (gui.md 11.2).
       const created = makeDocument(path, 1, parseYaml(guiScaffold(id, name)) as Record<string, Record<string, unknown>>);
       this.#documents.set(`${pack}/${path}`, created);
       this.#resources.push({ pack, type, path, id });

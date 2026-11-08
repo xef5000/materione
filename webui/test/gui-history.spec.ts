@@ -243,8 +243,8 @@ describe('layer operations', () => {
   });
 
   it('changing rows resizes a frame panel that spanned the canvas', () => {
-    // exercised through the same commands the studio composes
-    const doc = starterDocument(6);
+    // exercised through the same commands the studio composes; a new GUI has no layers, so the panel is added first
+    const doc = { ...starterDocument(6), layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 }] };
     const command = compose('Change rows', [
       setDocumentFields(doc, { rows: 3 }, 'rows'),
       patchLayers(doc, { frame: { height: 168 } }, 'frame'),

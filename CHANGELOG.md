@@ -20,6 +20,23 @@ releases may change file formats, settings and the public API.
   and are trimmed by the next save of the layout (a save of only the title, the rows or the logic leaves them alone). A button, or any layer with a click rule, whose click rectangle covers no container slot is badged as decoration only,
   with the reason (outside the chest, clicks arrive as click_outside; the compiler's MTR-0092 rule). The eyedropper reads the art first and then the vanilla chest under it. The compiler side is
   #276 (a paint layer's `x`, `y` and an empty layer are read there); no new wire shape or diagnostic code.
+- **The GUI compiler draws on an open canvas (gui.md §11, #276).** A GUI's art may sit anywhere within a 1024 × 1024 box around the
+  screen (`x −424..599`, `y −243..780`): the compiler flattens over that box, crops the result to its painted pixels, cuts it into
+  256-px tiles, and ships one cropped PNG and one font provider per tile that has a pixel, each placed by its own shift and ascent
+  (padded with transparent rows when it ends above row 13, so the client never drops the GUI font). A GUI that paints nothing emits no
+  PNG, no provider, no codepoint and no glyph, so it looks exactly like a vanilla chest. `panel`, `button` and `image` accept positions
+  in −1024..1024 and sizes up to 1024. Art past the box is clipped with the new warning `MTR-0090` (the GUI is not quarantined); a tile
+  that would break a client limit quarantines only its GUI with `MTR-0091`; a clickable layer drawn where no container slot is
+  warns with `MTR-0092`. An existing GUI keeps its codepoint and texture path when its art is one tile. A GUI with `visible_if` or
+  `frames` no longer ships a blank background PNG. The QA catalog gains four `guiopencanvas.*` entries (two automatic, two visual),
+  awaiting a blessing run on main.
+- **The open canvas starts empty, and panels can have the chest's corners (gui.md §11, #278).** A new GUI has no layers: the
+  New GUI starter is its title and rows, and the vanilla chest is the client's own, so a new GUI costs nothing in the pack. A
+  `panel` takes `corners: vanilla | square`: `vanilla` is the chest's rounded corners, pixel for pixel on the top, and the studio
+  starts every new panel with it. A file without the field keeps the square corners it always had, so no existing GUI changes. The
+  five showcase GUIs lose their full-screen frames. The shared raster vectors gain `panel-vanilla-corners` and
+  `vanilla-chest-corners`; a Java test checks the chest corners against `webui/static/vanilla/generic_54.png`. Visual verification
+  in a client is pending (QA entry `gui.vanilla-corners-visual`).
 - **A GUI logic showcase: five GUIs that demonstrate the menu parity rows (logic.md §1.1, §34, #227).** The `showcase` fixture pack
   holds a shop (`/shop` with a typed category, a 5-point paywall, conditional stock), a server selector (`connect` and the online
   count), a paged player list with search, settings toggles (player booleans with on and off overlays), and a confirm dialog that

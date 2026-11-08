@@ -105,7 +105,7 @@ export function transformability(info: GuiComponentInfo | undefined, layer?: Gui
   const slotBound = has('slot');
   // A paint layer owns its geometry (gui.md section 11.2): it moves with `x`/`y`, but its size is its pixels', so it
   // is never dragged out to a size (and the component need not describe geometry fields for the studio to move it).
-  const paint = layer !== undefined && bareName(layer.type) === 'paint';
+  const paint = bareName(info?.id ?? layer?.type ?? '') === 'paint';
   return {
     slotBound,
     movable: paint || slotBound || (has('x') && has('y')),
@@ -127,6 +127,15 @@ const REQUIRED_FALLBACKS: Record<string, unknown> = {
   item: 'minecraft:stone',
 };
 
+/**
+ * What a new layer of a component starts with beyond its required fields: the studio's choice, not the schema's.
+ * A new panel has the chest's own corners (gui.md section 11.6). A file that does not say `corners` keeps the
+ * square corners every earlier panel had, so only panels the studio creates carry the field.
+ */
+const NEW_LAYER_PRESETS: Record<string, Json> = {
+  panel: { corners: 'vanilla' },
+};
+
 /** The layer a palette click adds: required fields with their default (or a starting value), positioned by the caller. */
 export function newLayer(
   info: GuiComponentInfo,
@@ -135,7 +144,7 @@ export function newLayer(
 ): GuiLayer {
   const bare = bareName(info.id);
   const id = uniqueId(bare, taken);
-  const layer: Json = { id, type: bare, name: shortName(info) };
+  const layer: Json = { id, type: bare, name: shortName(info), ...(NEW_LAYER_PRESETS[bare] ?? {}) };
   for (const param of info.parameters) {
     // an item is optional in the schema (an animated layer has frames instead), but a new item layer starts with one
     if (!param.required && !(param.id === 'x' || param.id === 'y' || param.id === 'item')) continue;

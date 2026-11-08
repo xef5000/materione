@@ -460,6 +460,14 @@ The live trace ([`logic.md`](logic.md) §32, #226) adds one code, which answers 
 |---|---|---|
 | `MTR-0089` | warning | A live-trace subscription was refused: the server already holds its maximum of 8 concurrent subscriptions (`api.logic().traces().subscribe`), or one editor session already traces 4 GUIs (`logic.trace.subscribe`). Nothing is subscribed. Turn a trace off, in this editor or another, then try again; a closed editor or a lapsed 5-minute lease frees its slot. |
 
+The GUI open canvas ([`gui.md`](gui.md) §11, #276) adds three codes:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0090` | warning | A raster layer of a GUI paints past the art cap, the box `x -424..599, y -243..780` around the screen (gui.md §11.2). The part outside is clipped; the layer is not skipped and the GUI still compiles. Move or shrink the layer. Reported once per layer, also for a layer that is entirely past the cap. |
+| `MTR-0091` | error | An art tile of a GUI broke a font-provider limit at emit time (gui.md §11.3 rule 4): an ascent above its height, a width or height outside 1 to 256, or a top row above −243. The client would drop the pack's whole GUI font for one such provider, so this GUI is quarantined and nothing of it is emitted; the rest of the pack compiles. An internal error the art cap prevents for authored content: report it with the GUI that caused it. |
+| `MTR-0092` | warning | A layer meant to be clicked (a `button`, or a layer a `gui.click` rule names with `layer:`) covers no container slot, for instance because it was drawn outside the container. The client reports a click outside the container without a position, so the layer is decoration only (gui.md §11.4); the layer is kept and drawn. Move it over a slot, or handle the click with `gui.click_outside`. |
+
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
 meaning and step paths as for items (`gui.validate` returns them for a `saved` or `yaml` source). `MTR-0021`

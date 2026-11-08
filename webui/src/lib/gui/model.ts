@@ -185,16 +185,15 @@ export function sameDocument(a: GuiDocument, b: GuiDocument): boolean {
       JSON.stringify(a.rest) === JSON.stringify(b.rest));
 }
 
-/** A starter GUI: a vanilla chest look, a `panel` plus an all-region `slots` layer. */
+/**
+ * A starter GUI (gui.md section 11.2): a title and rows and no layers. The vanilla chest is the client's own, drawn
+ * under the GUI by the studio, so a new GUI has no art and costs nothing in the pack.
+ */
 export function starterDocument(rows = 6, title = ''): GuiDocument {
-  const height = 114 + rows * 18;
   return {
     title,
     rows,
-    layers: [
-      { id: 'frame', type: 'panel', name: 'Frame', x: 0, y: 0, width: 176, height: height },
-      { id: 'wells', type: 'slots', name: 'Slots', region: 'all' },
-    ],
+    layers: [],
     rest: {},
     order: ['title', 'rows', 'layers'],
   };

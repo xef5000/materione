@@ -18,21 +18,58 @@ import java.util.Arrays;
  *   <li>Layer opacity {@code o} (0–100) scales the source alpha: {@code sa' = rdiv(sa·o, 100)}.</li>
  *   <li>Writes outside the canvas are clipped, never an error.</li>
  * </ul>
+ *
+ * <p><strong>Origin.</strong> A canvas covers the rectangle {@code [originX, originX + width) ×
+ * [originY, originY + height)} of GUI pixels, and every coordinate on its interface is a GUI pixel, so a
+ * layer paints at its authored position whatever the rectangle is. The screen canvases of the shared
+ * vectors have origin {@code (0, 0)}; the open canvas of gui.md section 11 starts at the art cap's
+ * top-left corner, which is negative. The canvas also remembers the smallest rectangle it wrote to, so
+ * clearing, compositing and finding the painted bounds visit only that rectangle, and whether a visible
+ * pixel was ever clipped by its edge.
  */
 public final class ArgbCanvas implements RasterCanvas {
 
+    private final int originX;
+    private final int originY;
     private final int width;
     private final int height;
     private final int[] pixels;
 
-    /** A transparent canvas (every pixel {@code 0x00000000}). */
+    // the written rectangle in array coordinates, right and bottom exclusive; empty when right <= left
+    private int dirtyLeft = Integer.MAX_VALUE;
+    private int dirtyTop = Integer.MAX_VALUE;
+    private int dirtyRight = Integer.MIN_VALUE;
+    private int dirtyBottom = Integer.MIN_VALUE;
+    private boolean clippedInk;
+
+    /** The smallest box holding every pixel with alpha above zero: GUI pixels, origin at its top-left. */
+    public record Bounds(int x, int y, int width, int height) {}
+
+    /** A transparent canvas (every pixel {@code 0x00000000}) whose top-left is the GUI pixel {@code (0, 0)}. */
     public ArgbCanvas(int width, int height) {
+        this(0, 0, width, height);
+    }
+
+    /** A transparent canvas whose top-left is the GUI pixel {@code (originX, originY)}. */
+    public ArgbCanvas(int originX, int originY, int width, int height) {
         if (width < 1 || height < 1) {
             throw new IllegalArgumentException("canvas must be at least 1x1: " + width + "x" + height);
         }
+        this.originX = originX;
+        this.originY = originY;
         this.width = width;
         this.height = height;
         this.pixels = new int[width * height];
+    }
+
+    /** The GUI x of the canvas's left column. */
+    public int originX() {
+        return originX;
+    }
+
+    /** The GUI y of the canvas's top row. */
+    public int originY() {
+        return originY;
     }
 
     @Override
@@ -45,9 +82,9 @@ public final class ArgbCanvas implements RasterCanvas {
         return height;
     }
 
-    /** The pixel at {@code (x, y)}; {@code 0} outside the canvas. */
+    /** The pixel at GUI pixel {@code (x, y)}; {@code 0} outside the canvas. */
     public int argb(int x, int y) {
-        return inside(x, y) ? pixels[y * width + x] : 0;
+        return inside(x, y) ? pixels[index(x, y)] : 0;
     }
 
     /** A copy of the row-major pixels. */
@@ -74,8 +111,13 @@ public final class ArgbCanvas implements RasterCanvas {
     @Override
     public void blend(int x, int y, int argb) {
         if (inside(x, y)) {
-            int index = y * width + x;
+            if ((argb >>> 24) != 0) {
+                markDirty(x - originX, y - originY, x - originX + 1, y - originY + 1);
+            }
+            int index = index(x, y);
             pixels[index] = over(argb, pixels[index]);
+        } else if ((argb >>> 24) != 0) {
+            clippedInk = true;
         }
     }
 
@@ -90,10 +132,19 @@ public final class ArgbCanvas implements RasterCanvas {
 
     @Override
     public void fill(int x, int y, int rectWidth, int rectHeight, int argb) {
-        int left = Math.max(0, x);
-        int top = Math.max(0, y);
-        int right = Math.min(width, x + rectWidth);
-        int bottom = Math.min(height, y + rectHeight);
+        int left = Math.max(0, x - originX);
+        int top = Math.max(0, y - originY);
+        int right = Math.min(width, x - originX + rectWidth);
+        int bottom = Math.min(height, y - originY + rectHeight);
+        if (rectWidth > 0 && rectHeight > 0 && (argb >>> 24) != 0
+                && (x < originX || y < originY
+                        || x - originX + rectWidth > width || y - originY + rectHeight > height)) {
+            clippedInk = true;
+        }
+        if (left >= right || top >= bottom) {
+            return;
+        }
+        markDirty(left, top, right, bottom);
         for (int row = top; row < bottom; row++) {
             Arrays.fill(pixels, row * width + left, row * width + right, argb);
         }
@@ -101,21 +152,86 @@ public final class ArgbCanvas implements RasterCanvas {
 
     /**
      * Source-over composites {@code layer} onto this canvas with the layer's opacity
-     * ({@code 0..100}). Both canvases must have the same size.
+     * ({@code 0..100}). Both canvases must cover the same rectangle. Only the rectangle the layer
+     * wrote to is visited: every other pixel has alpha 0 and leaves the destination unchanged.
      */
     public void composite(ArgbCanvas layer, int opacity) {
-        if (layer.width != width || layer.height != height) {
-            throw new IllegalArgumentException("layer is " + layer.width + "x" + layer.height
-                    + ", canvas is " + width + "x" + height);
+        if (layer.width != width || layer.height != height || layer.originX != originX
+                || layer.originY != originY) {
+            throw new IllegalArgumentException("layer is " + layer.width + "x" + layer.height + " at ("
+                    + layer.originX + ", " + layer.originY + "), canvas is " + width + "x" + height + " at ("
+                    + originX + ", " + originY + ")");
         }
-        for (int index = 0; index < pixels.length; index++) {
-            int source = layer.pixels[index];
-            if (opacity != 100) {
-                int alpha = (source >>> 24) * opacity;
-                source = (rdiv(alpha, 100) << 24) | (source & 0x00FFFFFF);
+        if (layer.dirtyRight <= layer.dirtyLeft) {
+            return;
+        }
+        markDirty(layer.dirtyLeft, layer.dirtyTop, layer.dirtyRight, layer.dirtyBottom);
+        for (int row = layer.dirtyTop; row < layer.dirtyBottom; row++) {
+            for (int column = layer.dirtyLeft; column < layer.dirtyRight; column++) {
+                int index = row * width + column;
+                int source = layer.pixels[index];
+                if (opacity != 100) {
+                    int alpha = (source >>> 24) * opacity;
+                    source = (rdiv(alpha, 100) << 24) | (source & 0x00FFFFFF);
+                }
+                pixels[index] = over(source, pixels[index]);
             }
-            pixels[index] = over(source, pixels[index]);
         }
+    }
+
+    /** Makes the canvas transparent again and forgets what it clipped, so one buffer serves many layers. */
+    public void clear() {
+        if (dirtyRight > dirtyLeft) {
+            for (int row = dirtyTop; row < dirtyBottom; row++) {
+                Arrays.fill(pixels, row * width + dirtyLeft, row * width + dirtyRight, 0);
+            }
+        }
+        dirtyLeft = Integer.MAX_VALUE;
+        dirtyTop = Integer.MAX_VALUE;
+        dirtyRight = Integer.MIN_VALUE;
+        dirtyBottom = Integer.MIN_VALUE;
+        clippedInk = false;
+    }
+
+    /**
+     * Whether a write with alpha above zero fell outside this canvas since it was created or last
+     * {@link #clear cleared}: the part of a layer past the art cap, which the cap drops.
+     */
+    public boolean clippedInk() {
+        return clippedInk;
+    }
+
+    /** The smallest box holding every pixel with alpha above zero, or {@code null} when there is none. */
+    public Bounds paintedBounds() {
+        int left = Integer.MAX_VALUE;
+        int top = Integer.MAX_VALUE;
+        int right = Integer.MIN_VALUE;
+        int bottom = Integer.MIN_VALUE;
+        if (dirtyRight > dirtyLeft) {
+            for (int row = dirtyTop; row < dirtyBottom; row++) {
+                for (int column = dirtyLeft; column < dirtyRight; column++) {
+                    if ((pixels[row * width + column] >>> 24) != 0) {
+                        left = Math.min(left, column);
+                        right = Math.max(right, column + 1);
+                        top = Math.min(top, row);
+                        bottom = Math.max(bottom, row + 1);
+                    }
+                }
+            }
+        }
+        return left == Integer.MAX_VALUE ? null
+                : new Bounds(originX + left, originY + top, right - left, bottom - top);
+    }
+
+    /** A copy of the {@code w × h} block whose top-left is the GUI pixel {@code (x, y)}, row-major; outside is 0. */
+    public int[] crop(int x, int y, int w, int h) {
+        int[] out = new int[w * h];
+        for (int row = 0; row < h; row++) {
+            for (int column = 0; column < w; column++) {
+                out[row * w + column] = argb(x + column, y + row);
+            }
+        }
+        return out;
     }
 
     /**
@@ -154,6 +270,17 @@ public final class ArgbCanvas implements RasterCanvas {
     }
 
     private boolean inside(int x, int y) {
-        return x >= 0 && y >= 0 && x < width && y < height;
+        return x >= originX && y >= originY && x - originX < width && y - originY < height;
+    }
+
+    private int index(int x, int y) {
+        return (y - originY) * width + (x - originX);
+    }
+
+    private void markDirty(int left, int top, int right, int bottom) {
+        dirtyLeft = Math.min(dirtyLeft, left);
+        dirtyTop = Math.min(dirtyTop, top);
+        dirtyRight = Math.max(dirtyRight, right);
+        dirtyBottom = Math.max(dirtyBottom, bottom);
     }
 }

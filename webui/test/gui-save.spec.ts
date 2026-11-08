@@ -112,14 +112,14 @@ describe('against the server', () => {
     expect(missing.ok).toBe(false);
   });
 
-  it('a new GUI from the server starter parses as the vanilla chest', async () => {
+  it('a new GUI from the server starter parses with a title and rows and no layers (gui.md 11.2)', async () => {
     const created = await server.call('authoring.createResource', {
       pack: 'sample', id: 'chest_two', name: 'Chest Two', type: 'guis',
     });
     expect(created.ok).toBe(true);
     const data = (created as { data: { parsed: unknown; raw: string } }).data;
     const gui = parseGui(data.parsed, 'chest_two')!;
-    expect(gui.doc.layers.map((layer) => layer.type)).toEqual(['panel', 'slots']);
+    expect(gui.doc.layers).toEqual([]);
     expect(gui.doc.rows).toBe(3);
     expect(parse(data.raw)).toBeTruthy();
   });

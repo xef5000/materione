@@ -11,12 +11,6 @@ shop:
   rows: 3
   refresh: 20
   layers:
-    - id: frame
-      type: panel
-      x: 0
-      y: 0
-      width: 176
-      height: 168
     - id: heading
       type: text
       x: 8

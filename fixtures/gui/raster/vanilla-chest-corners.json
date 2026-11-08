@@ -1,0 +1,20 @@
+{
+  "name": "vanilla-chest-corners",
+  "description": "The top part of a 6-row chest (176 x 125) as one vanilla-corner panel. Its corners and outline columns must match webui/static/vanilla/generic_54.png (VanillaChestCornersTest).",
+  "canvas": {
+    "width": 176,
+    "height": 125
+  },
+  "rows": 6,
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 125,
+      "corners": "vanilla"
+    }
+  ]
+}

@@ -42,7 +42,9 @@ class DiagnosticCodesTest {
         // MTR-0083 GUI not shown again after a prompt, MTR-0084 input method could not start: logic.md §6.6, §29, #220;
         // MTR-0085 recipe does not load, MTR-0086 recipe parameter refused, MTR-0087 recipe expansion does not validate,
         // MTR-0088 recipe action unavailable: logic.md §30, #222;
-        // MTR-0089 live trace subscription refused: logic.md §32, #226)
-        assertThat(DiagnosticCodes.all()).hasSize(89);
+        // MTR-0089 live trace subscription refused: logic.md §32, #226;
+        // MTR-0090 GUI art past the art cap, MTR-0091 GUI art tile breaks a provider limit,
+        // MTR-0092 clickable GUI layer outside the container: gui.md section 11, #276)
+        assertThat(DiagnosticCodes.all()).hasSize(92);
     }
 }

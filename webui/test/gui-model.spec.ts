@@ -99,7 +99,7 @@ describe('losslessness (master 5.6)', () => {
   });
 
   it('same documents compare equal and different ones do not', () => {
-    const a = starterDocument(3);
+    const a = { ...starterDocument(3), layers: [{ id: 'frame', type: 'panel' }, { id: 'wells', type: 'slots' }] };
     expect(sameDocument(a, { ...a })).toBe(true);
     expect(sameDocument(a, { ...a, rows: 4 })).toBe(false);
     expect(sameDocument(a, { ...a, layers: [...a.layers].reverse() })).toBe(false);
@@ -123,16 +123,15 @@ describe('helpers', () => {
     expect(isLocked({ id: 'a', type: 'panel' })).toBe(false);
   });
 
-  it('a new GUI starts as a vanilla chest: panel + all-region slots, panel as tall as the canvas', () => {
+  it('a new GUI starts with no layers: the vanilla chest is the client\'s own, not art (gui.md 11.2)', () => {
     const starter = starterDocument(6);
-    expect(starter.layers.map((layer) => layer.type)).toEqual(['panel', 'slots']);
-    expect(starter.layers[0]).toMatchObject({ x: 0, y: 0, width: 176, height: 222 });
-    expect(starter.layers[1]).toMatchObject({ region: 'all' });
-    // the server's own starter, as recorded in the golden snapshot
+    expect(starter.layers).toEqual([]);
+    expect(starter.rows).toBe(6);
+    // the server's own starter, as recorded in the golden snapshot: title and rows, no layers
     const scaffold = parseGui(parse(scaffoldGui('shop_two', 'Shop Two')), 'shop_two')!;
     expect(scaffold.doc.rows).toBe(3);
     expect(scaffold.doc.title).toBe('Shop Two');
-    expect(scaffold.doc.layers.map((layer) => [layer.type, layer.region ?? layer.height])).toEqual([['panel', 168], ['slots', 'all']]);
+    expect(scaffold.doc.layers).toEqual([]);
   });
 });
 
@@ -166,7 +165,7 @@ describe('the gui-components registry description', () => {
     expect(can('text')).toEqual({ movable: true, resizable: false, slotBound: false });
     expect(can('item')).toEqual({ movable: true, resizable: false, slotBound: true });
     expect(can('slots')).toEqual({ movable: false, resizable: false, slotBound: false });
-    expect(can('paint').movable).toBe(false);
+    expect(can('paint')).toEqual({ movable: true, resizable: false, slotBound: false }); // its size is its pixels' (gui.md §11.2)
     // an addon component the studio has never heard of, described with x/y/width/height, is just as movable
     const addon = { ...componentOf(registry, 'panel')!, id: 'addon:bar' };
     expect(transformability(addon).resizable).toBe(true);

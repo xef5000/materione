@@ -33,8 +33,8 @@ class PipelineRunnerTest {
         Path packsRoot = GoldenFiles.fixturesRoot().resolve("packs");
         var result = runner.request(new ReloadScope.Everything(), packsRoot);
         assertThat(result.completed()).isTrue();
-        // Includes overlay (#217) and showcase (#227), alongside the other fixture packs.
-        assertThat(result.packsScanned()).isEqualTo(9);
+        // Includes overlay (#217), showcase (#227) and opencanvas (#276), alongside the other fixture packs.
+        assertThat(result.packsScanned()).isEqualTo(10);
         assertThat(quarantine.size()).isZero();
         // items + templates + recipes: ruby_sword, obsidian_axe, base_item, ruby_sword(recipe)
         assertThat(result.resourcesValid()).isGreaterThanOrEqualTo(4);

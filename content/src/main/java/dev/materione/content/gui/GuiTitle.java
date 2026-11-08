@@ -1,6 +1,7 @@
 package dev.materione.content.gui;
 
 import dev.materione.api.gui.TitleSink;
+import java.util.List;
 
 /**
  * Title assembly (gui.md §4, step 4): the MiniMessage title a compiled GUI sends as its
@@ -9,18 +10,20 @@ import dev.materione.api.gui.TitleSink;
  *
  * <p><strong>Title draw origin.</strong> Vanilla draws a container's title at
  * {@code (titleLabelX, titleLabelY) = (8, 6)} relative to the screen's top-left
- * ({@code AbstractContainerScreen}, 26.1.2). The pen starts there.
+ * ({@code AbstractContainerScreen}, 26.1.2). The pen starts there, and every piece of the title
+ * (art, text) begins and ends at {@link #ORIGIN_X}, so pieces assemble in any order.
  *
  * <p><strong>Vertical rule.</strong> The client places a bitmap glyph's top at
  * {@code drawY + 7 − ascent} ({@code GlyphBitmap.getTop}, 26.1.2), where {@code drawY} is
  * the text origin's row. With {@code drawY = 6}, a glyph whose top must land on screen row
- * {@code t} has {@code ascent = 13 − t}. The background glyph sits on row 0, so its ascent is
- * 13; a text run on row {@code y} uses an offset font with ascent {@code 13 − y}.
+ * {@code t} has {@code ascent = 13 − t}. An art tile whose top is row {@code ty} has ascent
+ * {@code 13 − ty}; a text run on row {@code y} uses an offset font with ascent {@code 13 − y}.
  *
- * <p><strong>Horizontal rule.</strong> The pen starts at {@link #ORIGIN_X}. The background
- * is drawn from pen position {@code −8} (screen column 0). A bitmap glyph advances by its
- * ink width plus one ({@code actualWidth + 1}), so after it the pen is at
- * {@code −8 + advance}, and a shift of {@code 8 − advance} returns it to the origin.
+ * <p><strong>Horizontal rule.</strong> A bitmap glyph is drawn at the pen and advances by its ink
+ * width plus one ({@code actualWidth + 1}). To draw a tile whose left edge is GUI column {@code x}
+ * the pen is shifted by {@code x − pen} first, and after it the pen is at {@code x + inkWidth + 1}
+ * (gui.md §11.3 rule 5). A tile at column 0 is drawn from pen position −8, so the first shift of a
+ * screen-wide background is −8, as before the open canvas.
  *
  * <p>Text advances are known for both fonts: {@code smallcaps} from its own pixels
  * ({@link SmallcapsFont}), {@code default} from the vanilla ASCII table ({@link VanillaAscii}, gui.md
@@ -37,20 +40,38 @@ public final class GuiTitle {
     /** {@code GlyphBitmap.getTop()} is {@code 7 − ascent} above the draw row. */
     static final int BASELINE = 7;
 
+    /**
+     * One art glyph as the title needs it.
+     *
+     * @param codepoint the tile's codepoint in the GUI font
+     * @param x the GUI column of the tile's left edge (its first inked column)
+     * @param inkWidth the tile's ink width, so its advance is {@code inkWidth + 1}
+     */
+    public record ArtGlyph(int codepoint, int x, int inkWidth) {}
+
     private final String namespace;
     private final StringBuilder out = new StringBuilder();
-    private int pen;
+    /** The pen's absolute GUI column; starts at {@link #ORIGIN_X}. */
+    private int pen = ORIGIN_X;
+
+    /** Starts an empty title with the pen at the vanilla title origin. */
+    public GuiTitle(String namespace) {
+        this.namespace = namespace;
+    }
 
     /**
-     * Starts the title with the background glyph, which must be the first thing drawn so
-     * that text draws over it.
-     *
-     * @param backgroundCodepoint the GUI's background codepoint
-     * @param backgroundAdvance the glyph's advance, {@code actualWidth + 1}, from its pixels
+     * Appends one art piece: its glyphs in the order given (row-major), each shifted to its own column,
+     * then a shift back to the origin. Art goes first in a title, so that text draws over it. An empty
+     * list appends nothing.
      */
-    public GuiTitle(String namespace, int backgroundCodepoint, int backgroundAdvance) {
-        this.namespace = namespace;
-        glyph(backgroundCodepoint, backgroundAdvance);
+    public void art(List<ArtGlyph> glyphs) {
+        for (ArtGlyph glyph : glyphs) {
+            moveTo(glyph.x());
+            out.append("<font:").append(GuiFonts.background(namespace)).append("><#FFFFFF>")
+                    .appendCodePoint(glyph.codepoint()).append("</font>");
+            pen = glyph.x() + glyph.inkWidth() + 1;
+        }
+        moveTo(ORIGIN_X);
     }
 
     /**
@@ -58,18 +79,10 @@ public final class GuiTitle {
      * checked the run's characters and row.
      */
     public void place(int x, int y, String text, TitleSink.Font font, int argb) {
-        moveTo(x - ORIGIN_X);
+        moveTo(x);
         out.append("<font:").append(GuiFonts.text(namespace, font, y)).append("><#")
                 .append(hex(argb)).append('>').append(text).append("</font>");
         pen += font == TitleSink.Font.SMALLCAPS ? SmallcapsFont.measure(text) : VanillaAscii.measure(text);
-    }
-
-    public void glyph(int codepoint, int advance) {
-        moveTo(-ORIGIN_X);
-        out.append("<font:").append(GuiFonts.background(namespace)).append("><#FFFFFF>")
-                .appendCodePoint(codepoint).append("</font>");
-        pen = -ORIGIN_X + advance;
-        moveTo(0);
     }
 
     public String build() {
