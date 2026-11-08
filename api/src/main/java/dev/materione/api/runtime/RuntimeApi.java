@@ -101,8 +101,14 @@ public interface RuntimeApi {
         Optional<String> onlineName(UUID player);
     }
 
-    /** One live GUI: its id, container profile id, plain title and how many slots it fills. */
-    record GuiView(NamespacedId id, String container, String accessibleTitle, int filledSlots) {}
+    /**
+     * One live GUI: its id, container profile id, plain title, how many slots it fills and the container profile
+     * itself (gui.md section 12.6): the geometry and the {@code open} descriptor the window is created from.
+     * {@code profile.id()} equals {@code container}. The profile is the fifth component, added by row P (#292): the
+     * record's canonical constructor changed, the accessors of the first four did not.
+     */
+    record GuiView(NamespacedId id, String container, String accessibleTitle, int filledSlots,
+            dev.materione.api.gui.GuiContainer profile) {}
 
     // ------------------------------------------------------------------
 

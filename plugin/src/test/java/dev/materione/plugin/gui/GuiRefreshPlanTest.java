@@ -82,6 +82,25 @@ class GuiRefreshPlanTest {
                 .isEqualTo(GuiRefreshPlan.Action.UPDATE_CONTENTS);
     }
 
+    @Test
+    void aChangeOfContainerProfileNeedsANewWindowWhateverTheTitle() {
+        // a chest and a hopper are different profiles even with the same title: the window is made differently
+        RuntimeGuis hopper = view("hash-1", shopIn("hopper", "Shop"));
+        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, "chest_3", hopper.gui(SHOP)))
+                .isEqualTo(GuiRefreshPlan.Action.REOPEN);
+        assertThat(GuiRefreshPlan.changes(view("hash-1", shop("Shop", 3)), hopper))
+                .containsExactly(java.util.Map.entry(SHOP, GuiRefreshPlan.Change.CHANGED));
+    }
+
+    @Test
+    void aGuiThatStaysOnItsHopperRefreshesInPlace() {
+        String openTitle = "<font:demo:gui>Shop";
+        RuntimeGuis now = view("hash-2", shopIn("hopper", "Shop"));
+
+        assertThat(GuiRefreshPlan.viewerAction(openTitle, "hopper", now.gui(SHOP)))
+                .isEqualTo(GuiRefreshPlan.Action.UPDATE_CONTENTS);
+    }
+
     // --- fixtures -----------------------------------------------------------
 
     /** A view of the given GUIs, where the sword resolves to an item with this definition hash. */
@@ -99,6 +118,12 @@ class GuiRefreshPlanTest {
 
     private static CompiledGui shop(String title, int rows) {
         return new CompiledGui(SHOP, dev.materione.content.gui.GuiContainers.byId("chest_" + rows).orElseThrow(), "<font:demo:gui>" + title, title,
+                List.of(new CompiledGui.Slot(4, SWORD, 1)));
+    }
+
+    /** The shop in any container profile, with one sword in slot 4 (slot 4 exists in a hopper and in a chest). */
+    private static CompiledGui shopIn(String containerId, String title) {
+        return new CompiledGui(SHOP, GuiContainers.byId(containerId).orElseThrow(), "<font:demo:gui>" + title, title,
                 List.of(new CompiledGui.Slot(4, SWORD, 1)));
     }
 
