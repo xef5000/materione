@@ -1,0 +1,46 @@
+{
+  "name": "panel-vanilla-corners",
+  "description": "Vanilla corners (gui.md section 11.6) at the 8 x 8 minimum, an odd 9 x 12 frame and a 20 x 20 frame, beside a square 8 x 8 panel (the 1-px cut) for contrast.",
+  "canvas": {
+    "width": 60,
+    "height": 24
+  },
+  "layers": [
+    {
+      "id": "v8",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 8,
+      "height": 8,
+      "corners": "vanilla"
+    },
+    {
+      "id": "v9",
+      "type": "panel",
+      "x": 10,
+      "y": 0,
+      "width": 9,
+      "height": 12,
+      "corners": "vanilla"
+    },
+    {
+      "id": "sq8",
+      "type": "panel",
+      "x": 22,
+      "y": 0,
+      "width": 8,
+      "height": 8,
+      "corners": "square"
+    },
+    {
+      "id": "v20",
+      "type": "panel",
+      "x": 34,
+      "y": 0,
+      "width": 20,
+      "height": 20,
+      "corners": "vanilla"
+    }
+  ]
+}

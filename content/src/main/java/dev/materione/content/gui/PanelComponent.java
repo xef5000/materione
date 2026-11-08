@@ -52,6 +52,16 @@ public final class PanelComponent implements GuiComponent {
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 40, false, "number", "", "168")
                                         .withRange(0.0, 512.0, "px")),
+                        new ParameterSchema("corners", ParameterType.ENUM, false, "square",
+                                "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the chest's own rounded corners, pixel for pixel)",
+                                List.of("square", "vanilla"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Corners", "appearance", 45, false, "select", "", "square")
+                                        .withOptions(List.of(
+                                                ParameterSchema.EditorOption.of("vanilla", "Vanilla",
+                                                        "The chest's rounded corners (new panels start here)"),
+                                                ParameterSchema.EditorOption.of("square", "Square",
+                                                        "The 1-px cut corner of earlier panels")))),
                         new ParameterSchema("style", ParameterType.RAW, false, null,
                                 "Bevel colours: {fill, highlight, shadow, outline} as #RRGGBB or #AARRGGBB",
                                 null, null)
@@ -72,11 +82,23 @@ public final class PanelComponent implements GuiComponent {
                 configuration.integer("y", 0, -512, 512),
                 configuration.requiredInteger("width", 0, 512),
                 configuration.requiredInteger("height", 0, 512),
-                GuiBevel.read(configuration));
+                GuiBevel.read(configuration),
+                corners(configuration));
     }
 
-    /** A parsed panel: a raised bevel of the given size at the given position. */
-    public record Layer(int x, int y, int width, int height, GuiBevel bevel) implements CompiledGuiLayer {
+    /** An absent {@code corners} is {@code square}: every file written before #278 keeps its look. */
+    static Bevels.Corners corners(GuiComponentConfiguration configuration) {
+        return switch (configuration.text("corners", "square")) {
+            case "square" -> Bevels.Corners.SQUARE;
+            case "vanilla" -> Bevels.Corners.VANILLA;
+            default -> throw new IllegalArgumentException(
+                    "layer " + configuration.layerId() + ": corners must be square or vanilla");
+        };
+    }
+
+    /** A parsed panel: a raised bevel of the given size at the given position, with the given corners. */
+    public record Layer(int x, int y, int width, int height, GuiBevel bevel, Bevels.Corners corners)
+            implements CompiledGuiLayer {
 
         @Override
         public RenderTarget target() {
@@ -85,7 +107,7 @@ public final class PanelComponent implements GuiComponent {
 
         @Override
         public void paint(RasterCanvas canvas, TextureSource textures) {
-            Bevels.raised(canvas, x, y, width, height, PANEL_EDGE,
+            Bevels.raised(canvas, x, y, width, height, PANEL_EDGE, corners,
                     bevel.outline(), bevel.highlight(), bevel.shadow(), bevel.fill());
         }
     }

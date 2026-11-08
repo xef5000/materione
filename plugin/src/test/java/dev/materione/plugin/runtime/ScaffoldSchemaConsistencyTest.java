@@ -53,13 +53,10 @@ class ScaffoldSchemaConsistencyTest {
         assertThat(parsed).isPresent();
         var definition = (dev.materione.content.gui.GuiDefinition) parsed.get();
         assertThat(definition.rows()).isEqualTo(3);
-        assertThat(definition.layers()).hasSize(2);
+        // a new GUI has no layers: the vanilla chest is the client's own, not a layer (gui.md section 11.2)
+        assertThat(definition.layers()).isEmpty();
         assertThat(definition.skipped()).isEmpty();
         assertThat(gui.diagnose(definition)).isEmpty();
-        // panel is 176 wide and 114 + rows * 18 tall, the vanilla chest canvas
-        var panel = (dev.materione.content.gui.PanelComponent.Layer) definition.layers().get(0).compiled();
-        assertThat(panel.width()).isEqualTo(176);
-        assertThat(panel.height()).isEqualTo(114 + definition.rows() * 18);
     }
 
     /** The GUI type with the built-in components registered, as bootstrap registers them. */

@@ -44,26 +44,20 @@ async function at(page: Page, x: number, y: number): Promise<[number, number]> {
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
 
-test('a new GUI opens as a vanilla chest: a panel and slot wells from the server starter, drawn by the shared bevel', async ({ page }) => {
+test('a new GUI opens with no layers: the title and rows only, and nothing painted on the canvas (gui.md 11.2)', async ({ page }) => {
   await openFixture(page);
   await page.getByRole('button', { name: /new gui/i }).first().click();
   await page.getByRole('dialog').getByRole('textbox').first().fill('Chest Test');
   await page.keyboard.press('Enter');
   await expect(canvas(page)).toBeVisible();
   expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 168]); // the starter is a 3-row chest
-  await expect(page.locator('.layers .row .name')).toHaveText(['wells', 'frame']);
+  await expect(page.locator('.layers .row .name')).toHaveCount(0);
 
-  // the compiled background, pixel for pixel (fixtures/gui/raster: panel + slots region all)
-  expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]); // transparent corner
-  expect(await pixel(page, 1, 0)).toEqual([0, 0, 0, 255]); // outline
-  expect(await pixel(page, 1, 1)).toEqual([255, 255, 255, 255]); // highlight
-  expect(await pixel(page, 5, 5)).toEqual([198, 198, 198, 255]); // fill
-  expect(await pixel(page, 174, 100)).toEqual([85, 85, 85, 255]); // shadow
-  expect(await pixel(page, 7, 17)).toEqual([55, 55, 55, 255]); // slot well, dark edge
-  expect(await pixel(page, 8, 18)).toEqual([139, 139, 139, 255]); // slot well interior
-  expect(await pixel(page, 24, 34)).toEqual([255, 255, 255, 255]); // slot well, light edge
-  expect(await pixel(page, 8, 85)).toEqual([139, 139, 139, 255]); // first inventory slot (y = 3*18+31)
-  expect(await pixel(page, 8, 143)).toEqual([139, 139, 139, 255]); // hotbar slot (y = 3*18+89)
+  // a new GUI has no raster layers, so no pixel is painted
+  expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 1, 1)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 8, 85)).toEqual([0, 0, 0, 0]);
+  expect(await pixel(page, 8, 143)).toEqual([0, 0, 0, 0]);
 });
 
 test('select, nudge with arrow keys (Shift = 10), undo and redo; the status follows the history', async ({ page }) => {
@@ -433,7 +427,7 @@ test.describe('paint tools', () => {
     // one Ctrl+Z takes the stroke, the next the layer it created
     await page.keyboard.press('Control+z');
     await page.keyboard.press('Control+z');
-    await expect(page.locator('.layers .row .name')).toHaveText(['wells', 'frame']);
+    await expect(page.locator('.layers .row .name')).toHaveCount(0);
 
     await page.keyboard.press('Control+Shift+z');
     await page.getByRole('button', { name: 'Lock Paint' }).click();
