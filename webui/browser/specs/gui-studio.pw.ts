@@ -29,17 +29,28 @@ function canvas(page: Page): Locator {
   return page.getByTestId('gui-art');
 }
 
-/** The GUI pixel (x, y) of the canvas as the browser paints it: RGBA from the real 2D context. */
+/** The art canvas covers the art cap (gui.md section 11.2); its top-left is GUI pixel (-424, -243). */
+const CAP = { x: -424, y: -243, size: 1024 };
+
+/** The GUI pixel (x, y) of the art as the browser paints it: RGBA from the real 2D context (GUI pixels, origin at the screen). */
 function pixel(page: Page, x: number, y: number): Promise<number[]> {
   return page.evaluate(([px, py]) => {
     const element = document.querySelector<HTMLCanvasElement>('[data-testid=gui-art]')!;
+    return [...element.getContext('2d')!.getImageData(px! + 424, py! + 243, 1, 1).data];
+  }, [x, y]);
+}
+
+/** The same for the vanilla chest underneath (the screen only): the owner's art, the player's inventory veiled. */
+function underlayPixel(page: Page, x: number, y: number): Promise<number[]> {
+  return page.evaluate(([px, py]) => {
+    const element = document.querySelector<HTMLCanvasElement>('[data-testid=gui-underlay]')!;
     return [...element.getContext('2d')!.getImageData(px!, py!, 1, 1).data];
   }, [x, y]);
 }
 
-/** Screen position of a GUI pixel, from the canvas's live box. */
+/** Screen position of a GUI pixel (any pixel, on the screen or around it), from the screen's live box. */
 async function at(page: Page, x: number, y: number): Promise<[number, number]> {
-  const box = (await canvas(page).boundingBox())!;
+  const box = (await page.getByTestId('gui-underlay').boundingBox())!;
   const zoom = box.width / 176;
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
@@ -50,7 +61,8 @@ test('a new GUI opens with no layers: the title and rows only, and nothing paint
   await page.getByRole('dialog').getByRole('textbox').first().fill('Chest Test');
   await page.keyboard.press('Enter');
   await expect(canvas(page)).toBeVisible();
-  expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 168]); // the starter is a 3-row chest
+  expect(await canvas(page).evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([CAP.size, CAP.size]); // the art covers the whole cap
+  expect(await page.getByTestId('gui-underlay').evaluate((element: HTMLCanvasElement) => [element.width, element.height])).toEqual([176, 168]); // the starter is a 3-row chest
   await expect(page.locator('.layers .row .name')).toHaveCount(0);
 
   // a new GUI has no raster layers, so no pixel is painted
@@ -58,6 +70,13 @@ test('a new GUI opens with no layers: the title and rows only, and nothing paint
   expect(await pixel(page, 1, 1)).toEqual([0, 0, 0, 0]);
   expect(await pixel(page, 8, 85)).toEqual([0, 0, 0, 0]);
   expect(await pixel(page, 8, 143)).toEqual([0, 0, 0, 0]);
+
+  // ...and the vanilla chest underneath is the client's, drawn from the reference art (gui.md 11.2)
+  const underlay = (x: number, y: number) => page.getByTestId('gui-underlay').evaluate(
+    (element: HTMLCanvasElement, [px, py]) => element.getContext('2d')!.getImageData(px!, py!, 1, 1).data[3], [x, y]);
+  expect(await underlay(0, 0)).toBe(0); // the rounded corner
+  expect(await underlay(5, 5)).toBe(255);
+  expect(await underlay(8, 143)).toBe(255); // the hotbar
 });
 
 test('select, nudge with arrow keys (Shift = 10), undo and redo; the status follows the history', async ({ page }) => {
@@ -87,7 +106,7 @@ test('select, nudge with arrow keys (Shift = 10), undo and redo; the status foll
 test('drag-moves a layer on the canvas, resizes it by a handle, and one undo takes each back', async ({ page }) => {
   await openShop(page);
   const [fromX, fromY] = await at(page, 142, 65);
-  const box = (await canvas(page).boundingBox())!;
+  const box = (await page.getByTestId('gui-underlay').boundingBox())!;
   const zoom = box.width / 176;
   await page.mouse.move(fromX, fromY);
   await page.mouse.down();
@@ -144,7 +163,7 @@ test('the layers panel renames, hides, locks and reorders; the badge says what t
   await expect(page.getByRole('region', { name: 'Layers' }).locator('.row.selected .name')).toHaveText('Slots');
 });
 
-test('adds components from the registry palette, schema-derived inspector, then saves ONE transaction with the paint asset', async ({ page }) => {
+test('adds components from the registry palette, schema-derived inspector, then saves ONE transaction; a Paint layer nothing was painted on saves no PNG', async ({ page }) => {
   await openShop(page);
   await expect(page.getByRole('region', { name: 'Components' }).getByRole('button')).toHaveText(
     ['Panel', 'Slots', 'Image', 'Paint', 'Button', 'Text', 'Item', 'List']);
@@ -160,12 +179,17 @@ test('adds components from the registry palette, schema-derived inspector, then 
   await expect(page.getByRole('textbox', { name: 'Fill hex' })).toHaveValue('#3C8527');
 
   await page.keyboard.press('Control+s');
-  await expect(page.locator('[data-status]')).toHaveText('Saved');
+  // the save encodes and writes the sample's art, then reads the file back: well under a second here, but past the
+  // default 5 s on a loaded 2-core CI runner, so this one wait is longer (it checks what is saved, not how fast)
+  await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
   const recorded = (await writes(page)).filter((entry) => entry.op === 'authoring.setFields');
   expect(recorded).toHaveLength(1);
-  const payload = recorded[0]!.payload as { edits: { field: string[] }[]; assets: { path: string }[] };
+  const payload = recorded[0]!.payload as { edits: { field: string[]; value: { id: string }[] }[]; assets: { path: string }[] };
   expect(payload.edits.map((edit) => edit.field)).toEqual([['main', 'layers']]);
-  expect(payload.assets.map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/paint.png']);
+  // the new Paint layer has no pixel: it is written as an empty box and no PNG exists for it; the only PNG is the sample's
+  // older canvas-sized art, trimmed on this save
+  expect(payload.edits[0]!.value.find((layer) => layer.id === 'paint')).toMatchObject({ image: 'gui/shop/main/paint', x: 0, y: 0, width: 0, height: 0 });
+  expect(payload.assets.map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/art.png']);
   const saved = await documentOf(page, 'guis/shop/main.yml');
   expect((saved!.parsed.main as { layers: { id: string }[] }).layers.map((layer) => layer.id)).toContain('panel');
 });
@@ -221,14 +245,14 @@ test('zoom 1x to 16x around the cursor, pixel grid from 8x, 0 fits and 1 is 100%
   await page.keyboard.press('0');
   await expect(zoom).toHaveText('300%');
 
-  const before = (await canvas(page).boundingBox())!;
+  const before = (await page.getByTestId('gui-underlay').boundingBox())!;
   await page.keyboard.down(' ');
   await page.mouse.move(before.x + 100, before.y + 100);
   await page.mouse.down();
   await page.mouse.move(before.x + 60, before.y + 70, { steps: 4 });
   await page.mouse.up();
   await page.keyboard.up(' ');
-  const after = (await canvas(page).boundingBox())!;
+  const after = (await page.getByTestId('gui-underlay').boundingBox())!;
   expect(Math.round(after.x - before.x)).toBe(-40);
   expect(Math.round(after.y - before.y)).toBe(-30);
 });
@@ -296,8 +320,14 @@ function recorded(page: Page, kind: string) {
 
 const rgb = (color: number[]): number[] => color.slice(0, 3);
 
+/** The width and height a PNG (base64) declares in its header. */
+function pngSize(base64: string): [number, number] {
+  const bytes = Buffer.from(base64, 'base64');
+  return [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+}
+
 test.describe('paint tools', () => {
-  test('the brush draws a continuous stroke at any zoom; the whole stroke is ONE undo step; paint-only saves send empty edits and the PNG', async ({ page }) => {
+  test('the brush draws a continuous stroke at any zoom; the whole stroke is ONE undo step; a save trims the layer to its painted pixels and sends the layout with the PNG', async ({ page }) => {
     await openShop(page);
     await page.getByRole('button', { name: 'Brush', exact: true }).click();
     await expect(page.getByTestId('paint-options')).toBeVisible();
@@ -341,10 +371,14 @@ test.describe('paint tools', () => {
     await expect(page.locator('[data-status]')).toHaveText('Saved');
     const sent = await recorded(page, 'authoring.setFields');
     expect(sent).toHaveLength(1);
-    const payload = sent[0]!.payload as { edits: unknown[]; assets: { path: string; data: string }[] };
-    expect(payload.edits).toEqual([]); // nothing but pixels changed
+    const payload = sent[0]!.payload as { edits: { field: string[]; value: { id: string }[] }[]; assets: { path: string; data: string }[] };
+    // the layer from before the open canvas had a canvas-sized PNG and no box: the save trims it to its painted pixels (the
+    // sample's art spans x 6..167, y 3..79; the stroke added row 120) and the layout carries the box that matches
+    expect(payload.edits.map((edit) => edit.field)).toEqual([['main', 'layers']]);
+    expect(payload.edits[0]!.value.find((layer) => layer.id === 'art')).toMatchObject({ x: 6, y: 3, width: 162, height: 118 });
     expect(payload.assets.map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/art.png']);
     expect(Buffer.from(payload.assets[0]!.data, 'base64').subarray(1, 4).toString()).toBe('PNG');
+    expect(pngSize(payload.assets[0]!.data)).toEqual([162, 118]);
   });
 
   test('sizes 1 to 8 and the round shape change the footprint; [ and ] step the size', async ({ page }) => {
@@ -462,8 +496,9 @@ test.describe('image layers', () => {
     const sent = await recorded(page, 'authoring.setFields');
     expect(sent).toHaveLength(1);
     const payload = sent[0]!.payload as { edits: { field: string[]; value: { name?: string; image?: string }[] }[]; assets: { path: string; data: string }[] };
-    expect(payload.assets.map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/my_logo.png']);
-    expect(payload.assets[0]!.data).toBe(coin.toString('base64')); // the original bytes, not a re-encode
+    // (and the sample's canvas-sized art, trimmed on any save)
+    expect(payload.assets.map((asset) => asset.path).sort()).toEqual(['assets/textures/gui/shop/main/art.png', 'assets/textures/gui/shop/main/my_logo.png']);
+    expect(payload.assets.find((asset) => asset.path.endsWith('my_logo.png'))!.data).toBe(coin.toString('base64')); // the original bytes, not a re-encode
     expect(payload.edits[0]!.value.find((layer) => layer.name === 'My logo')?.image).toBe('gui/shop/main/my_logo');
   });
 
@@ -477,8 +512,9 @@ test.describe('image layers', () => {
     await expect(page.getByTestId('image-size')).toContainText('natural 16 x 16');
     await page.keyboard.press('Control+s');
     await expect(page.locator('[data-status]')).toHaveText('Saved');
-    const payload = (await recorded(page, 'authoring.setFields'))[0]!.payload as { assets?: unknown[] };
-    expect(payload.assets ?? []).toEqual([]);
+    const payload = (await recorded(page, 'authoring.setFields'))[0]!.payload as { assets?: { path: string }[] };
+    // nothing was uploaded for the picked texture; the only PNG is the sample's older art, trimmed on this save
+    expect((payload.assets ?? []).map((asset) => asset.path)).toEqual(['assets/textures/gui/shop/main/art.png']);
   });
 
   test('an image layer can be re-pointed: Upload replaces the texture and takes its natural size', async ({ page }) => {
@@ -532,7 +568,7 @@ test.describe('text layers', () => {
     await openShop(page);
     // the client's own Inventory label is drawn over the background: a faint ghost at (8, height - 94), 3 rows = 168 px
     const label = (await page.getByTestId('inventory-label').boundingBox())!;
-    const art = (await canvas(page).boundingBox())!;
+    const art = (await page.getByTestId('gui-underlay').boundingBox())!;
     expect(Math.abs(label.x - (art.x + 8 * (art.width / 176)))).toBeLessThan(2);
     // the box of an SVG text starts a little above its glyph row: within a few GUI pixels of the row
     const row = art.y + (168 - 94) * (art.width / 176);

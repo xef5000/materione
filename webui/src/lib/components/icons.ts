@@ -90,6 +90,7 @@ import Flame from '@lucide/svelte/icons/flame';
 import Timer from '@lucide/svelte/icons/timer';
 import Trash2 from '@lucide/svelte/icons/trash-2';
 import MousePointer2 from '@lucide/svelte/icons/mouse-pointer-2';
+import MousePointerBan from '@lucide/svelte/icons/mouse-pointer-ban';
 import Hand from '@lucide/svelte/icons/hand';
 import ZoomIn from '@lucide/svelte/icons/zoom-in';
 import ZoomOut from '@lucide/svelte/icons/zoom-out';
@@ -189,6 +190,7 @@ export const icons = {
   timer: Timer,
   'trash-2': Trash2,
   'mouse-pointer-2': MousePointer2,
+  'mouse-pointer-ban': MousePointerBan,
   'hand': Hand,
   'zoom-in': ZoomIn,
   'zoom-out': ZoomOut,

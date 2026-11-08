@@ -9,6 +9,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The GUI studio's open canvas: the vanilla chest underneath, the inventory under a veil, art anywhere around the screen (gui.md §6, §11, #277).**
+  The canvas is no longer the screen: it is the whole art area (1024 x 1024 px around the chest, drawn with its limit), with the owner's
+  vanilla chest drawn under every GUI as the client composes it for 1 to 6 rows. It is not a layer and is never saved. The player's
+  inventory part is dimmed, and the dimming lifts under every pixel you paint there. You can pan, zoom, paint and place layers outside
+  the screen, drag across empty space to select what is there, and turn on **Window guides** to see what a 1920 x 1080 player sees around
+  the screen at GUI scales 2, 3 and 4. A **Paint** layer now has its own position and size: it grows as you paint outside it (in the same
+  undo step as the stroke), the Save trims it to the pixels you painted (no more screen-sized PNGs, so no transparent margin in the file),
+  and a layer with nothing painted saves no PNG and is written with `width: 0`, `height: 0`. Older screen-sized paint layers still open
+  and are trimmed by the next save of the layout (a save of only the title, the rows or the logic leaves them alone). A button, or any layer with a click rule, whose click rectangle covers no container slot is badged as decoration only,
+  with the reason (outside the chest, clicks arrive as click_outside; the compiler's MTR-0092 rule). The eyedropper reads the art first and then the vanilla chest under it. The compiler side is
+  #276 (a paint layer's `x`, `y` and an empty layer are read there); no new wire shape or diagnostic code.
 - **The GUI compiler draws on an open canvas (gui.md §11, #276).** A GUI's art may sit anywhere within a 1024 × 1024 box around the
   screen (`x −424..599`, `y −243..780`): the compiler flattens over that box, crops the result to its painted pixels, cuts it into
   256-px tiles, and ships one cropped PNG and one font provider per tile that has a pixel, each placed by its own shift and ascent

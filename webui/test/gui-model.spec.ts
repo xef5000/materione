@@ -165,7 +165,7 @@ describe('the gui-components registry description', () => {
     expect(can('text')).toEqual({ movable: true, resizable: false, slotBound: false });
     expect(can('item')).toEqual({ movable: true, resizable: false, slotBound: true });
     expect(can('slots')).toEqual({ movable: false, resizable: false, slotBound: false });
-    expect(can('paint').movable).toBe(true); // x/y since #276 (gui.md §11.2); #277 keeps it from being resized
+    expect(can('paint')).toEqual({ movable: true, resizable: false, slotBound: false }); // its size is its pixels' (gui.md §11.2)
     // an addon component the studio has never heard of, described with x/y/width/height, is just as movable
     const addon = { ...componentOf(registry, 'panel')!, id: 'addon:bar' };
     expect(transformability(addon).resizable).toBe(true);

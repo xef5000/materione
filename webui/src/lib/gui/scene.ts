@@ -15,6 +15,8 @@ import type { ArgbCanvas, Rect } from './raster/canvas';
 import { bareType, regionOf, whole } from './raster/flatten';
 import { componentOf, type GuiRegistry, type RenderTarget } from './registry';
 import { measureTextLayer } from './text';
+import { isEmptyRect } from './open-canvas';
+import { paintReferenceOf, paintRect } from './paint-geometry';
 
 export { measureTextLayer };
 
@@ -55,7 +57,12 @@ function union(rects: Rect[]): Rect | null {
 export function layerBounds(layer: GuiLayer, scene: Scene): Rect | null {
   const target = renderTargetOf(layer, scene);
   if (bareType(layer) === 'slots') return union(cellsOf(scene.rows, regionOf(layer)).map(wellRect));
-  if (bareType(layer) === 'paint') return { x: 0, y: 0, w: scene.width, h: scene.height };
+  if (bareType(layer) === 'paint') {
+    // a paint layer owns its geometry (gui.md section 11.2): its x, y and the bitmap's own size; none while it holds no pixel
+    const bitmap = paintReferenceOf(layer) ? scene.image(paintReferenceOf(layer)) : null;
+    const rect = paintRect(layer, bitmap);
+    return isEmptyRect(rect) ? null : rect;
+  }
   if (target === 'slot' && typeof layer.slot === 'number') {
     const cell = slotCell(scene.rows, layer.slot);
     return cell ? itemRect(cell) : null;
@@ -186,10 +193,26 @@ export function hitTest(
   return null;
 }
 
-/** Layers whose bounds intersect a marquee rectangle (unlocked and visible; slots and paint by their own rules). */
-export function layersInRect(doc: GuiDocument, scene: Scene, marquee: Rect): GuiLayer[] {
+/** Whether a rectangle covers the whole screen: a frame, the backdrop a drag on it marquee-selects over. */
+export function coversScreen(bounds: Rect, scene: Pick<Scene, 'width' | 'height'>): boolean {
+  return bounds.x <= 0 && bounds.y <= 0 && bounds.x + bounds.w >= scene.width && bounds.y + bounds.h >= scene.height;
+}
+
+/**
+ * Layers whose bounds intersect a marquee rectangle (unlocked and visible; slots and paint by their own rules). A layer
+ * that covers the whole screen is the backdrop you marquee over, never part of the result; the open space outside the
+ * screen has no layer under it, so a marquee there selects what it touches.
+ */
+export function layersInRect(
+  doc: GuiDocument,
+  scene: Scene,
+  marquee: Rect,
+  /** Whether a paint layer has a painted pixel inside a GUI-pixel rectangle; without it paint layers are never selected by a marquee. */
+  paintTouches?: (layer: GuiLayer, area: Rect) => boolean,
+): GuiLayer[] {
   return compiledOrder(doc, scene).filter((layer) => {
-    if (isLocked(layer) || bareType(layer) === 'paint') return false;
+    if (isLocked(layer)) return false;
+    if (bareType(layer) === 'paint') return paintTouches?.(layer, marquee) ?? false;
     const touches = (bounds: Rect): boolean => bounds.x < marquee.x + marquee.w && bounds.x + bounds.w > marquee.x &&
       bounds.y < marquee.y + marquee.h && bounds.y + bounds.h > marquee.y;
     // slot wells count one by one (their bounding box is the whole screen) and only when the marquee covers one
@@ -201,8 +224,8 @@ export function layersInRect(doc: GuiDocument, scene: Scene, marquee: Rect): Gui
       });
     }
     const bounds = layerBounds(layer, scene);
-    // the backdrop (a layer filling the whole canvas) is what you marquee over, never part of the result
-    if (!bounds || (bounds.x <= 0 && bounds.y <= 0 && bounds.x + bounds.w >= scene.width && bounds.y + bounds.h >= scene.height)) return false;
+    // the backdrop (a layer covering the whole screen) is what you marquee over, never part of the result
+    if (!bounds || coversScreen(bounds, scene)) return false;
     return touches(bounds);
   });
 }

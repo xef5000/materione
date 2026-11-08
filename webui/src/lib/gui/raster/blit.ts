@@ -21,20 +21,21 @@ export function blitScaled(
   dh: number,
 ): void {
   if (dw <= 0 || dh <= 0 || source.width <= 0 || source.height <= 0) return;
-  for (let j = 0; j < dh; j++) {
-    const ty = dy + j;
-    if (ty < 0 || ty >= target.height) continue;
+  // only the part of the destination that lands on the target is visited
+  const j0 = Math.max(0, target.originY - dy);
+  const j1 = Math.min(dh, target.originY + target.height - dy);
+  const i0 = Math.max(0, target.originX - dx);
+  const i1 = Math.min(dw, target.originX + target.width - dx);
+  for (let j = j0; j < j1; j++) {
     const sy = Math.floor(((2 * j + 1) * source.height) / (2 * dh));
-    for (let i = 0; i < dw; i++) {
-      const tx = dx + i;
-      if (tx < 0 || tx >= target.width) continue;
+    for (let i = i0; i < i1; i++) {
       const sx = Math.floor(((2 * i + 1) * source.width) / (2 * dw));
-      target.blend(tx, ty, source.get(sx, sy));
+      target.blend(dx + i, dy + j, source.get(sx, sy));
     }
   }
 }
 
-/** A paint layer's bitmap: copied 1:1 at the origin, never scaled; excess is clipped. */
-export function blitPaint(target: ArgbCanvas, source: ArgbCanvas): void {
-  blitScaled(target, source, 0, 0, source.width, source.height);
+/** A paint layer's bitmap: copied 1:1 with its top-left at (x, y), never scaled; excess is clipped. */
+export function blitPaint(target: ArgbCanvas, source: ArgbCanvas, x = 0, y = 0): void {
+  blitScaled(target, source, x, y, source.width, source.height);
 }

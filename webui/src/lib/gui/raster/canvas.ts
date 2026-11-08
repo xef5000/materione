@@ -51,39 +51,51 @@ export function blendOver(dst: Argb, src: Argb): Argb {
   );
 }
 
+/**
+ * A grid of pixels. By default its top-left is the origin; a canvas may instead be placed at
+ * (`originX`, `originY`) in the coordinates callers use: the open canvas (gui.md section 11) is
+ * 1024 x 1024 pixels whose top-left is (-424, -243) GUI pixels. `get`, `set`, `blend`, `fillRect`
+ * and `inside` speak those coordinates; `pixels`, `width` and `height` stay local (row-major).
+ */
 export class ArgbCanvas {
   readonly pixels: Uint32Array;
 
   constructor(
     readonly width: number,
     readonly height: number,
+    readonly originX = 0,
+    readonly originY = 0,
   ) {
     this.pixels = new Uint32Array(width * height);
   }
 
   inside(x: number, y: number): boolean {
-    return x >= 0 && y >= 0 && x < this.width && y < this.height;
+    const lx = x - this.originX;
+    const ly = y - this.originY;
+    return lx >= 0 && ly >= 0 && lx < this.width && ly < this.height;
   }
 
   get(x: number, y: number): Argb {
-    return this.inside(x, y) ? this.pixels[y * this.width + x]! : 0;
+    return this.inside(x, y) ? this.pixels[(y - this.originY) * this.width + (x - this.originX)]! : 0;
   }
 
   /** Replaces one pixel (no blending). Out-of-bounds writes are dropped. */
   set(x: number, y: number, color: Argb): void {
-    if (this.inside(x, y)) this.pixels[y * this.width + x] = alphaOf(color) === 0 ? 0 : color >>> 0;
+    if (this.inside(x, y)) {
+      this.pixels[(y - this.originY) * this.width + (x - this.originX)] = alphaOf(color) === 0 ? 0 : color >>> 0;
+    }
   }
 
   /** Composites one pixel over what is there (source-over). */
   blend(x: number, y: number, color: Argb): void {
     if (!this.inside(x, y)) return;
-    const index = y * this.width + x;
+    const index = (y - this.originY) * this.width + (x - this.originX);
     this.pixels[index] = blendOver(this.pixels[index]!, color) >>> 0;
   }
 
   fillRect(x: number, y: number, w: number, h: number, color: Argb): void {
-    for (let py = Math.max(0, y); py < Math.min(this.height, y + h); py++) {
-      for (let px = Math.max(0, x); px < Math.min(this.width, x + w); px++) {
+    for (let py = Math.max(this.originY, y); py < Math.min(this.originY + this.height, y + h); py++) {
+      for (let px = Math.max(this.originX, x); px < Math.min(this.originX + this.width, x + w); px++) {
         this.blend(px, py, color);
       }
     }
@@ -103,7 +115,7 @@ export class ArgbCanvas {
   }
 
   clone(): ArgbCanvas {
-    const copy = new ArgbCanvas(this.width, this.height);
+    const copy = new ArgbCanvas(this.width, this.height, this.originX, this.originY);
     copy.pixels.set(this.pixels);
     return copy;
   }
@@ -119,12 +131,13 @@ export class ArgbCanvas {
   /** Straight RGBA bytes, row-major: the `ImageData` / `pixels.ts` `Bitmap` layout. */
   toRgba(): Uint8ClampedArray {
     const out = new Uint8ClampedArray(this.pixels.length * 4);
+    // one word per pixel: bytes are R, G, B, A in memory, which is A, B, G, R as a little-endian word
+    // (every browser and Node target is little-endian); the open canvas is a million pixels, so this
+    // is the hot path of every redraw
+    const words = new Uint32Array(out.buffer);
     for (let index = 0; index < this.pixels.length; index++) {
       const color = this.pixels[index]!;
-      out[index * 4] = redOf(color);
-      out[index * 4 + 1] = greenOf(color);
-      out[index * 4 + 2] = blueOf(color);
-      out[index * 4 + 3] = alphaOf(color);
+      words[index] = (color & 0xff00ff00) | ((color >>> 16) & 0xff) | ((color & 0xff) << 16);
     }
     return out;
   }

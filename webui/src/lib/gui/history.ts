@@ -65,6 +65,16 @@ export class GuiHistory {
     return this.#future[this.#future.length - 1] ?? null;
   }
 
+  /**
+   * The document and its baseline both become the given document, history untouched. A save does this with the trimmed paint layers: the
+   * document is the same picture with the margins gone, so what was saved is what is in memory, and every command in
+   * the history (which keeps pixels at GUI positions) still applies.
+   */
+  adopt(doc: GuiDocument): void {
+    this.#doc = doc;
+    this.#baseline = doc;
+  }
+
   /** Sets the baseline "dirty" is measured from, without touching the history (a save that went through in parts). */
   rebase(baseline: GuiDocument): void {
     this.#baseline = baseline;

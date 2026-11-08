@@ -20,7 +20,9 @@
   import { footprint, outlinePath } from '../../gui/paint';
   import { bareType, regionOf } from '../../gui/raster/flatten';
   import type { Rect } from '../../gui/raster/canvas';
-  import { hitTest, layerBounds, layersInRect } from '../../gui/scene';
+  import { ART_CAP, insideCap, intersectRects, windowGuides } from '../../gui/open-canvas';
+  import { paintRect } from '../../gui/paint-geometry';
+  import { coversScreen, hitTest, layerBounds, layersInRect } from '../../gui/scene';
   import { collectTargets, snapMove, snapResize, snapThreshold } from '../../gui/snap';
   import { isPaintTool, type GuiStudioState } from '../../gui/studio.svelte';
   import { transformability } from '../../gui/registry';
@@ -39,6 +41,7 @@
 
   let stage = $state<HTMLDivElement>();
   let art = $state<HTMLCanvasElement>();
+  let underlay = $state<HTMLCanvasElement>();
   let hover = $state<string | null>(null);
   let hoverHandle = $state<Handle | null>(null);
   let marquee = $state<Rect | null>(null);
@@ -49,8 +52,12 @@
   const view = $derived(studio.view);
   const zoom = $derived(view.zoom);
   const size = $derived(studio.size);
+  /** The screen (the vanilla chest) and the art cap around it, as boxes on the stage. */
   const paperStyle = $derived(
     `left:${Math.round(view.panX)}px;top:${Math.round(view.panY)}px;width:${size.width * zoom}px;height:${size.height * zoom}px`,
+  );
+  const capStyle = $derived(
+    `left:${Math.round(view.panX + ART_CAP.x * zoom)}px;top:${Math.round(view.panY + ART_CAP.y * zoom)}px;width:${ART_CAP.w * zoom}px;height:${ART_CAP.h * zoom}px`,
   );
 
   // ---------------------------------------------------------------- drawing
@@ -58,8 +65,16 @@
   $effect(() => {
     const target = art;
     if (!target) return;
-    // the composited canvas: the shared raster plus the smallcaps title text, exactly as compiled
+    // the composited art over the whole cap: the shared raster plus the smallcaps title text, exactly as compiled
     target.getContext('2d')!.putImageData(toImageData(studio.composite), 0, 0);
+  });
+
+  $effect(() => {
+    const target = underlay;
+    const chest = studio.underlay;
+    if (!target || !chest) return;
+    // the vanilla chest under the art, the player's inventory veiled except under painted pixels (gui.md section 11.2)
+    target.getContext('2d')!.putImageData(toImageData(chest), 0, 0);
   });
 
   // ---------------------------------------------------------------- measuring
@@ -160,9 +175,25 @@
   let drag: Drag | null = null;
   let pending: ReturnType<typeof ops.setRects> = null;
 
+  /** Whether a paint layer has a painted pixel at a GUI pixel (the layer sits at its own x, y). */
   function paintAlpha(layer: GuiLayer, x: number, y: number): boolean {
     const image = typeof layer.image === 'string' ? studio.imageFor(layer.image) : null;
-    return !!image && (image.get(x, y) >>> 24) > 0;
+    if (!image) return false;
+    const at = paintRect(layer, image);
+    return (image.get(x - at.x, y - at.y) >>> 24) > 0;
+  }
+
+  /** Whether a paint layer has a painted pixel inside a GUI-pixel area: what lets a marquee select it. */
+  function paintTouches(layer: GuiLayer, area: Rect): boolean {
+    const image = typeof layer.image === 'string' ? studio.imageFor(layer.image) : null;
+    if (!image) return false;
+    const at = paintRect(layer, image);
+    const hit = intersectRects({ x: Math.floor(area.x), y: Math.floor(area.y), w: Math.ceil(area.w) + 1, h: Math.ceil(area.h) + 1 }, at);
+    if (!hit) return false;
+    for (let y = hit.y; y < hit.y + hit.h; y++) {
+      for (let x = hit.x; x < hit.x + hit.w; x++) if ((image.get(x - at.x, y - at.y) >>> 24) > 0) return true;
+    }
+    return false;
   }
 
   function down(event: PointerEvent): void {
@@ -205,11 +236,11 @@
         return;
       }
       const wasSelected = studio.selection.includes(hit.id);
-      // A layer that fills the whole canvas (the frame) is the backdrop: dragging on it marquee-selects
-      // what is on top of it, like a Figma frame. A click selects it, and once selected it moves.
+      // A layer that covers the whole screen (a frame) is the backdrop: dragging on it marquee-selects
+      // what is on top of it, like a Figma frame. A click selects it, and once selected it moves. The open
+      // space outside the screen has no layer under it, so a drag there always marquee-selects.
       const bounds = layerBounds(hit, studio.scene);
-      if (!wasSelected && bounds && bounds.x <= 0 && bounds.y <= 0 &&
-          bounds.x + bounds.w >= studio.size.width && bounds.y + bounds.h >= studio.size.height) {
+      if (!wasSelected && bounds && coversScreen(bounds, studio.scene)) {
         drag = { kind: 'marquee', start: gui, base: [], moved: false, clickId: hit.id };
         studio.select([]);
         return;
@@ -246,8 +277,8 @@
     return { x: Math.floor(gui.x), y: Math.floor(gui.y) };
   }
 
-  const onCanvas = (point: Point): boolean =>
-    point.x >= 0 && point.y >= 0 && point.x < studio.size.width && point.y < studio.size.height;
+  /** Paint tools work anywhere within the art cap, not only on the screen. */
+  const onCanvas = (point: Point): boolean => insideCap(point.x, point.y);
 
   function paintDown(event: PointerEvent, gui: Point): void {
     const point = { x: Math.floor(gui.x), y: Math.floor(gui.y) };
@@ -270,8 +301,9 @@
       height: studio.size.height,
       rows: studio.doc.rows,
       slots: true,
+      cap: ART_CAP,
       siblings: studio.doc.layers.flatMap((layer) => {
-        if (excluded.includes(layer.id) || layer.visible === false || bareType(layer) === 'paint') return [];
+        if (excluded.includes(layer.id) || layer.visible === false) return [];
         const rect = layerBounds(layer, studio.scene);
         return rect && layer.type !== 'slots' ? [rect] : [];
       }),
@@ -312,7 +344,7 @@
       if (!active.moved && Math.hypot(rect.w, rect.h) * studio.view.zoom < 4) return;
       active.moved = true;
       marquee = rect;
-      const inside = layersInRect(studio.doc, studio.scene, rect).map((layer) => layer.id);
+      const inside = layersInRect(studio.doc, studio.scene, rect, paintTouches).map((layer) => layer.id);
       studio.select([...new Set([...active.base, ...inside])]);
       return;
     }
@@ -495,9 +527,18 @@
   ]);
   const editingLayer = $derived(studio.editingText ? studio.layerById(studio.editingText) : undefined);
 
-  const gridStyle = $derived(
-    `left:${Math.round(view.panX)}px;top:${Math.round(view.panY)}px;width:${size.width * zoom}px;height:${size.height * zoom}px;background-size:${zoom}px ${zoom}px`,
-  );
+  /** The pixel grid covers the part of the art cap the stage shows (a 16x grid over the whole cap would be 16384 px wide). */
+  const gridStyle = $derived.by(() => {
+    const left = Math.max(view.panX + ART_CAP.x * zoom, 0);
+    const top = Math.max(view.panY + ART_CAP.y * zoom, 0);
+    const right = Math.min(view.panX + (ART_CAP.x + ART_CAP.w) * zoom, studio.stage.w);
+    const bottom = Math.min(view.panY + (ART_CAP.y + ART_CAP.h) * zoom, studio.stage.h);
+    if (right <= left || bottom <= top) return '';
+    return `left:${left}px;top:${top}px;width:${right - left}px;height:${bottom - top}px;background-size:${zoom}px ${zoom}px;background-position:${view.panX - left}px ${view.panY - top}px`;
+  });
+
+  /** The player-window guides, drawn when toggled (gui.md section 11.5). */
+  const windowRects = $derived(studio.showGuides ? windowGuides(studio.doc.rows) : []);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -522,16 +563,27 @@
   oncontextmenu={(event) => event.preventDefault()}
   class:dropping
 >
-  <div class="paper" style={paperStyle}></div>
+  <!-- the open canvas (gui.md section 11): open space within the art cap, the vanilla chest on it, the art over both -->
+  <div class="open" style={capStyle} data-testid="gui-open-space"></div>
   <canvas
-    bind:this={art}
-    class="art"
+    bind:this={underlay}
+    class="art underlay"
     width={size.width}
     height={size.height}
     style={paperStyle}
+    data-testid="gui-underlay"
+  ></canvas>
+  <canvas
+    bind:this={art}
+    class="art"
+    width={ART_CAP.w}
+    height={ART_CAP.h}
+    style={capStyle}
+    data-origin-x={ART_CAP.x}
+    data-origin-y={ART_CAP.y}
     data-testid="gui-art"
   ></canvas>
-  {#if showGrid}<div class="pixels" style={gridStyle}></div>{/if}
+  {#if showGrid && gridStyle}<div class="pixels" style={gridStyle}></div>{/if}
 
   <!-- title text the studio cannot draw as pixels: the client's default font (approximate) and runs the compiler will skip -->
   <svg class="texts" aria-hidden="true">
@@ -577,7 +629,20 @@
   {#if editingLayer}<TextEditOverlay {studio} layer={editingLayer} />{/if}
 
   <svg class="overlay" aria-hidden="true">
-    <rect class="edge" x={sx(0) - 0.5} y={sy(0) - 0.5} width={size.width * zoom + 1} height={size.height * zoom + 1} />
+    <!-- the art cap: art outside this box is not drawn in game (gui.md section 11.2) -->
+    <rect class="cap" data-testid="gui-cap" x={sx(ART_CAP.x) - 0.5} y={sy(ART_CAP.y) - 0.5} width={ART_CAP.w * zoom + 1} height={ART_CAP.h * zoom + 1} />
+    <text class="cap-label" x={sx(ART_CAP.x) + 6} y={sy(ART_CAP.y) + 14}>Art limit (1024 x 1024): art outside it is not drawn</text>
+    <rect class="edge" data-testid="gui-screen-edge" x={sx(0) - 0.5} y={sy(0) - 0.5} width={size.width * zoom + 1} height={size.height * zoom + 1} />
+
+    <!-- what a player's window shows around the screen at each GUI scale -->
+    {#each windowRects as guide (guide.scale)}
+      <g class="window s{guide.scale}" data-testid="gui-window-guide" data-scale={guide.scale}>
+        <rect x={sx(guide.rect.x) + 0.5} y={sy(guide.rect.y) + 0.5} width={guide.rect.w * zoom - 1} height={guide.rect.h * zoom - 1} />
+        <text x={Math.max(sx(guide.rect.x) + 6, 8)} y={Math.max(sy(guide.rect.y), 0) + 14 + (guide.scale - 2) * 14}>
+          {guide.label}: {guide.margin.top} above and below, {guide.margin.left} to each side
+        </text>
+      </g>
+    {/each}
 
     {#if studio.showSlots}
       {#each cells as cell (cell.index)}
@@ -699,21 +764,50 @@
     font-size: var(--text-md);
     pointer-events: none;
   }
-  .paper,
+  .open,
   .art,
   .pixels,
   .items {
     position: absolute;
     pointer-events: none;
   }
-  .paper {
+  /* open space: the art cap's box, a shade apart from the stage so the limit of the canvas reads at a glance */
+  .open {
     background:
       conic-gradient(var(--checker-a) 25%, var(--checker-b) 0 50%, var(--checker-a) 0 75%, var(--checker-b) 0) 0 0 / 16px 16px;
+  }
+  .underlay {
     box-shadow: var(--shadow-3);
   }
   .art {
     image-rendering: pixelated;
   }
+  .cap {
+    fill: none;
+    stroke: var(--border-strong);
+    stroke-dasharray: 6 4;
+  }
+  .cap-label {
+    fill: var(--muted);
+    font-size: var(--text-xs);
+  }
+  .window rect {
+    fill: none;
+    stroke-width: 1.5;
+    stroke-dasharray: 8 4;
+  }
+  .window text {
+    font-size: var(--text-xs);
+    paint-order: stroke;
+    stroke: var(--bg-app);
+    stroke-width: 3;
+  }
+  .window.s2 rect { stroke: var(--gui-slot-grid); }
+  .window.s2 text { fill: var(--gui-slot-grid); }
+  .window.s3 rect { stroke: var(--gui-guide); }
+  .window.s3 text { fill: var(--gui-guide); }
+  .window.s4 rect { stroke: var(--warn); }
+  .window.s4 text { fill: var(--warn); }
   .pixels {
     background-image:
       linear-gradient(to right, var(--gui-pixel-grid) 1px, transparent 1px),

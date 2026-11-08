@@ -15,6 +15,7 @@
   import type { GuiStudioState } from '../../gui/studio.svelte';
   import { unionOf } from '../../gui/transform';
   import { MAX_ROWS, MIN_ROWS, canvasSize } from '../../gui/chest';
+  import { decorationNote, isClickable } from '../../gui/open-canvas';
   import { formatColor } from '../../gui/raster/color';
   import { RAISED_DEFAULT, SLOT_DEFAULT, bareType } from '../../gui/raster/flatten';
   import type { LinkageState } from '../../logic/linkage/linkage.svelte';
@@ -44,6 +45,11 @@
   const bounds = $derived(layer ? studio.boundsOf(layer) : null);
   const target = $derived(layer ? (info?.target ?? 'raster') : 'raster');
   const rows = $derived(studio.doc.rows);
+  /** A button, or a layer with a click rule, placed outside the screen takes no clicks of its own (gui.md section 11.4). */
+  const decoration = $derived(
+    layer ? decorationNote(isClickable(bareType(layer), links?.ruleCount(layer.id) ?? 0), bounds, rows) : null,
+  );
+  const isPaint = $derived(layer ? bareType(layer) === 'paint' : false);
   const locked = $derived(layer ? isLocked(layer) : false);
   const disabled = $derived(studio.readOnly || locked);
 
@@ -185,7 +191,11 @@
       <LayerLogicSection {links} {layer} disabled={studio.readOnly} />
     {/if}
 
-    {#if can?.movable && !can.slotBound}
+    {#if decoration}
+      <p class="note decoration" data-testid="decoration-note"><Icon name="triangle-alert" size={14} /> {decoration}.</p>
+    {/if}
+
+    {#if can?.movable && !can.slotBound && !(isPaint && !bounds)}
       <section class="group">
         <h3>Transform</h3>
         <div class="grid">
@@ -196,6 +206,9 @@
             <ScrubNumber label="H" value={geometry('h')} min={1} {disabled} onchange={(value) => setGeometry('height', value)} />
           {/if}
         </div>
+        {#if isPaint}
+          <p class="note" data-testid="paint-size">{geometry('w')} x {geometry('h')} px: the size follows the pixels (it grows as you paint and is trimmed on save).</p>
+        {/if}
       </section>
     {/if}
 
@@ -538,6 +551,9 @@
     padding: var(--space-2) var(--space-3);
     color: var(--muted);
     font-size: var(--text-sm);
+  }
+  .note.decoration {
+    color: var(--warn);
   }
   .actions {
     display: flex;

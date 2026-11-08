@@ -103,10 +103,13 @@ export function transformability(info: GuiComponentInfo | undefined, layer?: Gui
   const ids = new Set(info?.parameters.map((param) => param.id));
   const has = (id: string): boolean => (info ? ids.has(id) : layer !== undefined && id in layer);
   const slotBound = has('slot');
+  // A paint layer owns its geometry (gui.md section 11.2): it moves with `x`/`y`, but its size is its pixels', so it
+  // is never dragged out to a size (and the component need not describe geometry fields for the studio to move it).
+  const paint = bareName(info?.id ?? layer?.type ?? '') === 'paint';
   return {
     slotBound,
-    movable: slotBound || (has('x') && has('y')),
-    resizable: has('x') && has('y') && has('width') && has('height'),
+    movable: paint || slotBound || (has('x') && has('y')),
+    resizable: !paint && has('x') && has('y') && has('width') && has('height'),
   };
 }
 

@@ -76,16 +76,28 @@ export function centered(viewport: Size, content: Size, zoom: number): View {
   };
 }
 
-/** Pans, keeping at least `keep` screen pixels of the content inside the viewport so it cannot be lost. */
-export function panBy(view: View, dx: number, dy: number, viewport: Size, content: Size, keep = 64): View {
+/**
+ * Pans, keeping at least `keep` screen pixels of the content inside the viewport so it cannot be lost. The content's
+ * top-left is at `origin` in GUI pixels (the open canvas starts at the art cap's corner, not at the screen).
+ */
+export function panBy(
+  view: View,
+  dx: number,
+  dy: number,
+  viewport: Size,
+  content: Size,
+  keep = 64,
+  origin: Point = { x: 0, y: 0 },
+): View {
   const width = content.w * view.zoom;
   const height = content.h * view.zoom;
-  const clampAxis = (pan: number, span: number, room: number): number =>
-    Math.min(room - Math.min(keep, span), Math.max(Math.min(keep, span) - span, pan));
+  // clamp where the content's own edge lands on screen, then turn that back into a pan
+  const clampAxis = (pan: number, span: number, room: number, offset: number): number =>
+    Math.min(room - Math.min(keep, span), Math.max(Math.min(keep, span) - span, pan + offset)) - offset;
   return {
     zoom: view.zoom,
-    panX: clampAxis(view.panX + dx, width, viewport.w),
-    panY: clampAxis(view.panY + dy, height, viewport.h),
+    panX: clampAxis(view.panX + dx, width, viewport.w, origin.x * view.zoom),
+    panY: clampAxis(view.panY + dy, height, viewport.h, origin.y * view.zoom),
   };
 }
 

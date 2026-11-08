@@ -9,16 +9,20 @@ import { starterDocument } from '../src/lib/gui/model';
 import {
   ERASER,
   Stroke,
-  applyPatch,
+  cellsOfPatch,
   clampBrush,
-  diffAll,
   fillPatch,
   footprint,
   outlinePath,
+  paintedBox,
   pushRecent,
-  resizedCanvas,
+  workingCanvas,
+  type PixelPatch,
 } from '../src/lib/gui/paint';
-import { PixelCommand } from '../src/lib/gui/pixel-command';
+import { geometryFields, paintRect, trimPaintLayers } from '../src/lib/gui/paint-geometry';
+import { PixelCommand, paintCommand, type PixelStore } from '../src/lib/gui/pixel-command';
+import type { GuiLayer } from '../src/lib/gui/model';
+import { ART_CAP } from '../src/lib/gui/open-canvas';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
 
 const RED = 0xffff0000;
@@ -30,6 +34,10 @@ const lit = (canvas: ArgbCanvas): string[] => {
   return out.sort();
 };
 const brush = (size: number, shape: 'square' | 'round' = 'square') => ({ size, shape });
+/** Writes a patch's before or after values straight into a canvas (an index patch is local to the canvas it was made on). */
+const writePatch = (canvas: ArgbCanvas, patch: PixelPatch, direction: 'after' | 'before'): void => {
+  patch.indices.forEach((index, k) => (canvas.pixels[index] = patch[direction][k]!));
+};
 
 describe('the brush', () => {
   it('is 1 to 8 pixels', () => {
@@ -95,10 +103,10 @@ describe('strokes', () => {
     expect(patch.indices).toHaveLength(6); // x = 3..8 on row 5, the blue pixel included
     expect([...patch.before].filter((value) => value === BLUE)).toHaveLength(1);
     expect([...patch.after].every((value) => value === RED)).toBe(true);
-    applyPatch(canvas, patch, 'before');
+    writePatch(canvas, patch, 'before');
     expect(lit(canvas)).toEqual(['5,5']);
     expect(canvas.get(5, 5)).toBe(BLUE);
-    applyPatch(canvas, patch, 'after');
+    writePatch(canvas, patch, 'after');
     expect(canvas.get(3, 5)).toBe(RED);
   });
 
@@ -155,85 +163,199 @@ describe('fill', () => {
     const canvas = new ArgbCanvas(176, 168);
     const patch = fillPatch(canvas, 'gui/a', 10, 10, RED)!;
     expect(patch.indices).toHaveLength(176 * 168);
-    applyPatch(canvas, patch, 'before');
+    writePatch(canvas, patch, 'before');
     expect(canvas.pixels.every((value) => value === 0)).toBe(true);
   });
 });
 
 describe('a stroke is one undoable step, and the history knows whether the pixels are clean', () => {
-  const setup = () => {
-    const canvas = new ArgbCanvas(16, 16);
+  /** A document with one paint layer whose bitmap sits in a store, as the studio keeps it. */
+  const setup = (bitmap = new ArgbCanvas(0, 0), layer: GuiLayer = { id: 'art', type: 'paint', image: 'gui/a' }) => {
+    const bitmaps = new Map<string, ArgbCanvas>([['gui/a', bitmap]]);
     const touched: string[] = [];
-    const command = (label: string, x: number, color = RED) => {
-      const stroke = new Stroke(canvas, 'gui/a', color, brush(1), { x, y: 1 });
-      return new PixelCommand(label, stroke.end()!, () => canvas, (reference) => touched.push(reference));
+    const store: PixelStore = {
+      get: (reference) => bitmaps.get(reference),
+      set: (reference, canvas) => void bitmaps.set(reference, canvas),
+      touched: (reference) => void touched.push(reference),
     };
-    return { canvas, touched, command, history: new GuiHistory(starterDocument()) };
+    const doc = { ...starterDocument(), layers: [layer] };
+    const history = new GuiHistory(doc);
+    /** What the studio does for a stroke: run it on a working copy that covers the cap, then build one command. */
+    const stroke = (label: string, x: number, y = 1, color = RED) => {
+      const current = history.doc.layers[0]!;
+      const current_bitmap = bitmaps.get('gui/a')!;
+      const rect = paintRect(current, current_bitmap);
+      const working = workingCanvas(current_bitmap, rect, ART_CAP);
+      const patch = new Stroke(working, 'gui/a', color, brush(1), { x, y }).end()!;
+      const fields = Object.fromEntries(['x', 'y', 'width', 'height'].map((key) => [key, Object.hasOwn(current, key) ? current[key] : undefined]));
+      return paintCommand(label, 'art', 'gui/a', { rect, fields }, cellsOfPatch(patch, working), store);
+    };
+    return { bitmaps, touched, store, stroke, history };
   };
+  const layerOf = (history: GuiHistory) => history.doc.layers[0]!;
 
   it('makes the studio dirty, undo restores the pixels and the clean state, redo reapplies', () => {
-    const { canvas, command, history } = setup();
+    const { bitmaps, stroke, history } = setup();
     expect(history.dirty).toBe(false);
-    history.execute(command('Paint stroke', 3));
+    history.execute(stroke('Paint stroke', 3));
     expect(history.dirty).toBe(true);
     expect(history.pixelsDirty).toBe(true);
     expect(history.undoLabel).toBe('Paint stroke');
+    expect(bitmaps.get('gui/a')!.get(0, 0)).toBe(RED); // a 1 x 1 layer holding the pixel, at (3, 1)
     history.undo();
-    expect(canvas.get(3, 1)).toBe(0);
+    expect(bitmaps.get('gui/a')!.width).toBe(0);
+    expect(layerOf(history)).toEqual({ id: 'art', type: 'paint', image: 'gui/a' }); // the very same fields, none left behind
     expect(history.dirty).toBe(false);
     history.redo();
-    expect(canvas.get(3, 1)).toBe(RED);
+    expect(bitmaps.get('gui/a')!.get(0, 0)).toBe(RED);
     expect(history.dirty).toBe(true);
   });
 
   it('reports the touched asset on apply, undo and redo so it is (re)saved', () => {
-    const { command, touched, history } = setup();
-    history.execute(command('Paint stroke', 3));
+    const { stroke, touched, history } = setup();
+    history.execute(stroke('Paint stroke', 3));
     history.undo();
     history.redo();
     expect(touched).toEqual(['gui/a', 'gui/a', 'gui/a']);
   });
 
   it('is clean exactly at the saved state: undoing past a save dirties it, a new stroke dirties it, undoing back cleans it', () => {
-    const { command, history } = setup();
-    history.execute(command('one', 1));
+    const { stroke, history } = setup();
+    history.execute(stroke('one', 1));
     history.markSaved();
     expect(history.dirty).toBe(false);
     history.undo(); // before the saved stroke
     expect(history.dirty).toBe(true);
     history.redo();
     expect(history.dirty).toBe(false);
-    history.execute(command('two', 2));
+    history.execute(stroke('two', 2));
     expect(history.dirty).toBe(true);
     history.undo();
     expect(history.dirty).toBe(false);
     // undoing the saved stroke and painting a different one must not look clean
     history.undo();
-    history.execute(command('three', 5));
+    history.execute(stroke('three', 5));
     expect(history.dirty).toBe(true);
   });
 
-  it('a clear is one step too', () => {
-    const { canvas, history } = setup();
-    for (let x = 0; x < 16; x++) canvas.set(x, 1, BLUE);
-    const snapshot = canvas.pixels.slice();
-    canvas.pixels.fill(0);
-    const patch = diffAll('gui/a', snapshot, canvas)!;
-    history.execute(new PixelCommand('Clear paint layer', patch, () => canvas, () => undefined));
+  it('a stroke that leaves the layer grows it, in every direction, and the growth is part of the same undo step', () => {
+    const { bitmaps, stroke, history } = setup();
+    history.execute(stroke('one', 10, 10));
+    expect(layerOf(history)).toMatchObject({ x: 10, y: 10, width: 1, height: 1 });
+    history.execute(stroke('left and up', 4, 7));
+    expect(layerOf(history)).toMatchObject({ x: 4, y: 7, width: 7, height: 4 });
+    expect([bitmaps.get('gui/a')!.width, bitmaps.get('gui/a')!.height]).toEqual([7, 4]);
+    history.execute(stroke('far out', -300, 500)); // outside the screen on both axes, still inside the cap
+    expect(layerOf(history)).toMatchObject({ x: -300, y: 7, width: 311, height: 494 });
+    expect(bitmaps.get('gui/a')!.get(0, 493)).toBe(RED);
+    expect(bitmaps.get('gui/a')!.get(310, 3)).toBe(RED); // the first pixel, (10, 10), kept its place while the box grew around it
     history.undo();
-    expect(canvas.get(7, 1)).toBe(BLUE);
+    expect(layerOf(history)).toMatchObject({ x: 4, y: 7, width: 7, height: 4 });
+    expect(bitmaps.get('gui/a')!.get(6, 3)).toBe(RED);
+    history.undo();
+    history.undo();
+    expect(layerOf(history)).toEqual({ id: 'art', type: 'paint', image: 'gui/a' });
+    expect(history.dirty).toBe(false);
+  });
+
+  it('a stroke inside the layer changes no document field, and a layer from before the open canvas keeps having none', () => {
+    const legacy = new ArgbCanvas(176, 168);
+    const { stroke, history } = setup(legacy);
+    history.execute(stroke('inside', 30, 40));
+    expect(layerOf(history)).toEqual({ id: 'art', type: 'paint', image: 'gui/a' });
+    history.execute(stroke('outside', 200, 40));
+    expect(layerOf(history)).toMatchObject({ x: 0, y: 0, width: 201, height: 168 });
+    history.undo();
+    expect(layerOf(history)).toEqual({ id: 'art', type: 'paint', image: 'gui/a' });
+    expect(history.dirty).toBe(true); // one undone, one still applied
+    history.undo();
+    expect(history.dirty).toBe(false);
+  });
+
+  it('keeps working after the layer was trimmed in between (a save): the cells are at GUI positions', () => {
+    const { bitmaps, stroke, history } = setup();
+    history.execute(stroke('one', 10, 10));
+    history.execute(stroke('two', 40, 30));
+    // what a save does to a layer with a margin: the box shrinks to the painted pixels, the history is untouched
+    const trim = trimPaintLayers(history.doc, (reference) => bitmaps.get(reference), () => true);
+    for (const entry of trim.layers) bitmaps.set(entry.reference, entry.canvas);
+    history.adopt(trim.doc);
+    history.undo();
+    expect(layerOf(history)).toMatchObject({ x: 10, y: 10, width: 1, height: 1 });
+    expect(bitmaps.get('gui/a')!.get(0, 0)).toBe(RED);
+    history.redo();
+    expect(layerOf(history)).toMatchObject({ x: 10, y: 10, width: 31, height: 21 });
+    expect(bitmaps.get('gui/a')!.get(30, 20)).toBe(RED);
+  });
+
+  it('a clear is one step too, and leaves a layer with no pixel', () => {
+    const canvas = new ArgbCanvas(16, 4);
+    for (let x = 0; x < 16; x++) canvas.set(x, 1, BLUE);
+    const { bitmaps, store, history } = setup(canvas, { id: 'art', type: 'paint', image: 'gui/a', x: 5, y: 6, width: 16, height: 4 });
+    const cells = {
+      x: Int32Array.from({ length: 16 }, (_, k) => 5 + k),
+      y: new Int32Array(16).fill(7),
+      before: new Uint32Array(16).fill(BLUE),
+      after: new Uint32Array(16),
+    };
+    const emptied = { x: 5, y: 6, w: 0, h: 0 };
+    history.execute(new PixelCommand(
+      'Clear paint layer', 'art', 'gui/a', cells,
+      { rect: { x: 5, y: 6, w: 16, h: 4 }, fields: { x: 5, y: 6, width: 16, height: 4 } },
+      { rect: emptied, fields: geometryFields(emptied) },
+      store,
+    ));
+    expect(layerOf(history)).toMatchObject({ x: 5, y: 6, width: 0, height: 0 });
+    expect(bitmaps.get('gui/a')!.width).toBe(0);
+    history.undo();
+    expect(layerOf(history)).toMatchObject({ width: 16, height: 4 });
+    expect(bitmaps.get('gui/a')!.get(7, 1)).toBe(BLUE);
+  });
+});
+
+describe('working canvases and cells', () => {
+  it('a working canvas holds the part of a bitmap inside its window, at the same GUI positions', () => {
+    const bitmap = new ArgbCanvas(4, 4);
+    bitmap.set(0, 0, RED);
+    bitmap.set(3, 3, BLUE);
+    const working = workingCanvas(bitmap, { x: 10, y: 20 }, { x: 11, y: 19, w: 20, h: 20 });
+    expect(working.get(10, 20)).toBe(0); // outside the window
+    expect(working.get(13, 23)).toBe(BLUE);
+    expect([working.originX, working.originY, working.width]).toEqual([11, 19, 20]);
+  });
+
+  it('a stroke on a window that starts away from the origin works in GUI pixels', () => {
+    const working = new ArgbCanvas(32, 32, -10, -5);
+    const stroke = new Stroke(working, 'gui/a', RED, brush(1), { x: -8, y: -3 });
+    stroke.to({ x: 4, y: -3 });
+    expect(working.get(-8, -3)).toBe(RED);
+    expect(working.get(4, -3)).toBe(RED);
+    expect(stroke.last).toEqual({ x: 4, y: -3 });
+    expect(stroke.inkBox()).toEqual({ x: -8, y: -3, w: 13, h: 1 });
+    const cells = cellsOfPatch(stroke.end()!, working);
+    expect([...cells.x].sort((a, b) => a - b)).toEqual(Array.from({ length: 13 }, (_, k) => -8 + k));
+    expect(new Set(cells.y)).toEqual(new Set([-3]));
+    expect(paintedBox(cells)).toEqual({ x: -8, y: -3, w: 13, h: 1 });
+  });
+
+  it('erasing paints no pixel, so it has no painted box and the ink box ignores it', () => {
+    const working = new ArgbCanvas(16, 16);
+    const stroke = new Stroke(working, 'gui/a', ERASER, brush(3), { x: 4, y: 4 });
+    expect(stroke.end()).toBeNull();
+    expect(stroke.inkBox()).toBeNull();
+    expect(paintedBox({ x: new Int32Array([1]), y: new Int32Array([1]), before: new Uint32Array([RED]), after: new Uint32Array([0]) })).toBeNull();
+  });
+
+  it('fills on a window in GUI pixels', () => {
+    const window = new ArgbCanvas(8, 8, 100, 100);
+    const patch = fillPatch(window, 'gui/a', 103, 103, RED)!;
+    expect(patch.indices).toHaveLength(64);
+    expect(window.get(100, 100)).toBe(RED);
+    expect(fillPatch(window, 'gui/a', 99, 100, BLUE)).toBeNull(); // outside the window
   });
 });
 
 describe('helpers', () => {
-  it('resizes a canvas keeping the overlap (the rows changed under a paint layer)', () => {
-    const canvas = new ArgbCanvas(4, 4);
-    canvas.set(3, 3, RED);
-    const grown = resizedCanvas(canvas, 4, 6);
-    expect([grown.width, grown.height, grown.get(3, 3), grown.get(3, 5)]).toEqual([4, 6, RED, 0]);
-    expect(resizedCanvas(canvas, 4, 3).get(3, 2)).toBe(0);
-  });
-
   it('keeps the recent colours newest first, without duplicates, bounded, and never remembers transparent', () => {
     let recent: number[] = [];
     for (const color of [1, 2, 3, 2]) recent = pushRecent(recent, 0xff000000 + color);
