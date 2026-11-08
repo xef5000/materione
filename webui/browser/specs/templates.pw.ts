@@ -281,3 +281,47 @@ test('the template chip switches the template without leaving the studio; Save &
   expect((await documentOf(page, 'items/ember_charm.yml'))?.raw).toContain('template: base_item');
   expect(pageErrors).toEqual([]);
 });
+
+// Items in the chip's picker (plugin.md section 3.1, #203): an item may be based on an item.
+test('the chip offers items under their own heading, never the item itself, and linking one writes template: <id>', async ({ page }) => {
+  const pageErrors = await openModules(page);
+  await openResource(page, 'Items', 'Ember Charm');
+  await page.locator('[data-based-on-button]').click();
+
+  // templates first, then the pack's other items, clearly labelled as items
+  await expect(page.locator('[data-template="base_item"]')).toBeVisible();
+  await expect(page.locator('[data-items-heading]')).toHaveText('Items');
+  await expect(page.locator('[data-item-template="ruby_sword"]')).toContainText('item');
+  await expect(page.locator('[data-item-template="ruby"]')).toBeVisible();
+  await expect(page.locator('[data-item-template="ember_charm"]')).toHaveCount(0); // never itself
+  await page.getByRole('searchbox', { name: 'Search templates' }).fill('sword');
+  await expect(page.locator('[data-template="base_item"]')).toHaveCount(0);
+  await page.locator('[data-item-template="ruby_sword"]').getByRole('button').click();
+
+  // staged like any template choice: the chip shows it, and Save & apply writes the plain link
+  await expect(page.getByRole('button', { name: 'Template: ruby_sword' })).toBeVisible();
+  const save = await saveAndApply(page, 1);
+  expect(save.payload.edits).toEqual([{ field: ['ember_charm', 'template'], value: 'ruby_sword' }]);
+  expect((await documentOf(page, 'items/ember_charm.yml'))?.raw).toContain('template: ruby_sword');
+  await page.locator('[data-based-on-button]').click();
+  await expect(page.getByRole('button', { name: 'Open base item' })).toBeVisible();
+
+  // the loop guard: ruby_sword may no longer take ember_charm, which now follows it
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /^back to/ }).click();
+  await openResource(page, 'Items', 'Ruby Sword');
+  await page.locator('[data-based-on-button]').click();
+  await expect(page.locator('[data-item-template="ruby"]')).toBeVisible();
+  await expect(page.locator('[data-item-template="ember_charm"]')).toHaveCount(0);
+  await expect(page.locator('[data-item-template="ruby_sword"]')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});
+
+test('a block\'s chip offers templates only, never an item', async ({ page }) => {
+  const pageErrors = await openModules(page);
+  await openResource(page, 'Blocks', 'Amethyst Lamp');
+  await page.locator('[data-based-on-button]').click();
+  await expect(page.locator('[data-items-heading]')).toHaveCount(0);
+  await expect(page.locator('[data-item-template]')).toHaveCount(0);
+  expect(pageErrors).toEqual([]);
+});

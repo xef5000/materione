@@ -509,7 +509,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
                     ? Scaffolds.templateFor(request.serves(), request.resourceId())
                     : Scaffolds.forPath(path, request.resourceId());
             if (request.template() != null && !request.template().isBlank()) {
-                scaffold = templated(request.pack(), request.resourceId(), request.template(), scaffold);
+                scaffold = templated(request.pack(), request.resourceId(), request.template(), scaffold, type);
             }
             // Recipes and templates have no display name; forcing one would
             // invent a field the type's schema does not declare.
@@ -565,13 +565,16 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * name when the type has one). The template supplies everything else, so
      * the new file carries nothing that could drift from it.
      */
-    private String templated(String pack, String resourceId, String template, String scaffold) {
+    private String templated(String pack, String resourceId, String template, String scaffold, String type) {
         if (!template.matches("[a-z0-9_-]{2,64}(:[a-z0-9_-]{2,64})?")) {
             throw new IllegalArgumentException("template must be an id like 'base_item' or 'pack:base_item'");
         }
         String id = sanitizedId(resourceId);
         String full = TemplateResolver.shortRef(namespaceOf(pack), template);
-        if (!summaryComputer.templatePool().definitions().containsKey(full)) {
+        // a template, or, for a new item, an item (plugin.md section 3.1; the template wins a shared id)
+        boolean item = "items".equals(type);
+        var pool = summaryComputer.resolutionPool(item ? java.util.Set.of(full) : java.util.Set.of()).definitions();
+        if (TemplateResolver.lookup(pool, full, item) == null) {
             throw new IllegalArgumentException("unknown template " + full);
         }
         String named = scaffold.contains("display_name:") ? "  display_name: \"" + id + "\"\n" : "";
@@ -614,6 +617,24 @@ public final class AuthoringApiImpl implements AuthoringApi {
             });
             out.sort(java.util.Comparator.comparing(TemplateInfo::pack).thenComparing(TemplateInfo::id));
             return ApiResult.ok(out);
+        } catch (RuntimeException e) {
+            return handlerFailure(e);
+        }
+    }
+
+    @Override
+    public ApiResult<List<ItemLink>> listItemLinks() {
+        try {
+            List<ItemLink> links = new ArrayList<>();
+            summaryComputer.templateCatalog().users().forEach((parent, users) -> {
+                for (DocumentStore.ResourceRef user : users) {
+                    if ("items".equals(user.type())) {
+                        links.add(new ItemLink(user.pack(), user.resourceId(), parent));
+                    }
+                }
+            });
+            links.sort(java.util.Comparator.comparing(ItemLink::pack).thenComparing(ItemLink::id));
+            return ApiResult.ok(links);
         } catch (RuntimeException e) {
             return handlerFailure(e);
         }
@@ -679,7 +700,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
             // Only the chain is resolved: what the resource would inherit if it set nothing.
             TemplateResolver.Resolution chain = TemplateResolver.resolve(
                     Map.of("template", authored), namespaceOf(request.pack()),
-                    summaryComputer.templatePool().definitions());
+                    summaryComputer.resolutionPool().definitions(), isItemDocument(request.path()));
             if (chain.merged() == null) {
                 throw new IllegalArgumentException("template does not resolve: " + chain.failure());
             }
@@ -706,6 +727,11 @@ public final class AuthoringApiImpl implements AuthoringApi {
         } catch (Exception e) {
             return handlerFailure(e);
         }
+    }
+
+    /** Items are the only resources that may be based on an item (plugin.md section 3.1). */
+    private static boolean isItemDocument(String path) {
+        return path != null && path.startsWith("items/");
     }
 
     @Override
@@ -1080,7 +1106,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
                 computed = metadata;
             }
         }
-        Map<String, Object> inheritance = tree == null ? Map.of() : inheritance(document.pack(), tree);
+        Map<String, Object> inheritance = tree == null ? Map.of() : inheritance(document.pack(), document.path(), tree);
         if (!inheritance.isEmpty()) {
             Map<String, Object> merged = new LinkedHashMap<>(computed);
             merged.put("inheritance", inheritance);
@@ -1104,7 +1130,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * when the chain does not resolve. Template documents are only read for
      * documents that use inheritance.
      */
-    private Map<String, Object> inheritance(String pack, Map<String, Object> tree) {
+    private Map<String, Object> inheritance(String pack, String path, Map<String, Object> tree) {
+        boolean itemsServe = isItemDocument(path);
         Map<String, Object> out = new LinkedHashMap<>();
         ResourceSummaryComputer.TemplatePool pool = null;
         for (Map.Entry<String, Object> root : tree.entrySet()) {
@@ -1119,15 +1146,17 @@ public final class AuthoringApiImpl implements AuthoringApi {
             }
             if (pool == null) {
                 try {
-                    pool = summaryComputer.templatePool();
+                    pool = summaryComputer.resolutionPool();
                 } catch (RuntimeException e) {
                     return Map.of(); // over budget or unreadable: report nothing rather than a guess
                 }
             }
             String namespace = namespaceOf(pack);
-            TemplateResolver.Resolution resolution = TemplateResolver.resolve(definition, namespace, pool.definitions());
+            TemplateResolver.Resolution resolution =
+                    TemplateResolver.resolve(definition, namespace, pool.definitions(), itemsServe);
             TemplateResolver.Resolution chainOnly = resolution.merged() == null
-                    ? resolution : TemplateResolver.resolve(Map.of("template", authored), namespace, pool.definitions());
+                    ? resolution
+                    : TemplateResolver.resolve(Map.of("template", authored), namespace, pool.definitions(), itemsServe);
             Map<String, Object> view = new LinkedHashMap<>();
             view.put("template", authored);
             view.put("chain", resolution.chain());
@@ -1145,9 +1174,18 @@ public final class AuthoringApiImpl implements AuthoringApi {
             view.put("sources", sources);
             Map<String, Object> locations = new LinkedHashMap<>();
             for (String id : resolution.chain()) {
+                // the template of that id when there is one, else the item: the resolver's own precedence
                 List<String> source = pool.sources().get(id);
+                boolean item = false;
+                if (source == null && itemsServe) {
+                    source = pool.sources().get(TemplateResolver.ITEM_PREFIX + id);
+                    item = true;
+                }
                 if (source != null) {
-                    locations.put(id, Map.of("pack", source.get(0), "path", source.get(1)));
+                    // `kind` appears for an item only: an absent kind is a template, as it always was
+                    locations.put(id, item
+                            ? Map.of("pack", source.get(0), "path", source.get(1), "kind", "item")
+                            : Map.of("pack", source.get(0), "path", source.get(1)));
                 }
             }
             view.put("templates", locations);

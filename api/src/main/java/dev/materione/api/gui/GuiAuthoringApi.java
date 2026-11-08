@@ -46,8 +46,9 @@ public interface GuiAuthoringApi {
     /**
      * Gives an item layer its own item at {@code items/gui/<gui-path>/<id>.yml} and points the
      * layer's {@code item:} at it, in one transaction with the GUI's revision check. A vanilla
-     * base becomes a {@code material:} item; a Materione item is copied (items cannot be
-     * templates yet, gui.md §10 #1).
+     * base becomes a {@code material:} item; a Materione item is linked, not copied: the new item
+     * is {@code template: <base>} and nothing else (plugin.md section 3.1, gui.md section 10 #203).
+     * Refused when a template has the base's id, because the link would name the template.
      */
     ApiResult<CustomizeItemResult> customizeItem(ActorContext actor, CustomizeItemRequest request);
 

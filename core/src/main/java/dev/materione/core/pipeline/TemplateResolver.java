@@ -21,6 +21,14 @@ import java.util.Set;
  */
 public final class TemplateResolver {
 
+    /**
+     * Pool key prefix of an item that may serve as a template: item {@code demo:sword} is
+     * {@code item|demo:sword}, a template {@code demo:sword} stays {@code demo:sword}.
+     */
+    public static final String ITEM_PREFIX = "item|";
+
+    private static final String CYCLE_PREFIX = "template chain revisits ";
+
     private TemplateResolver() {}
 
     /**
@@ -44,27 +52,53 @@ public final class TemplateResolver {
     }
 
     /**
-     * Merges {@code template:} inheritance into {@code definition}.
+     * Merges {@code template:} inheritance into {@code definition}; only templates can be named.
      *
      * @return the merged map, or {@code null} when the chain is unknown,
      *         cyclic or diamond-shaped
      */
     public static LinkedHashMap<String, Object> merge(
             Map<String, Object> definition, String defaultNamespace, Map<String, Map<String, Object>> templates) {
-        Resolution resolution = resolve(definition, defaultNamespace, templates);
+        return merge(definition, defaultNamespace, templates, false);
+    }
+
+    /**
+     * {@link #merge(Map, String, Map)}, where an item may also be named when {@code itemsServe} (the
+     * definition is an item, plugin.md section 3.1).
+     */
+    public static LinkedHashMap<String, Object> merge(
+            Map<String, Object> definition, String defaultNamespace, Map<String, Map<String, Object>> templates,
+            boolean itemsServe) {
+        Resolution resolution = resolve(definition, defaultNamespace, templates, itemsServe);
         return resolution.merged() == null ? null : new LinkedHashMap<>(resolution.merged());
     }
 
-    /** Resolves the chain, recording which template supplied each inherited key. */
+    /** Resolves the chain of a definition that can name templates only. */
     public static Resolution resolve(
             Map<String, Object> definition, String defaultNamespace, Map<String, Map<String, Object>> templates) {
+        return resolve(definition, defaultNamespace, templates, false);
+    }
+
+    /**
+     * Resolves the chain, recording which template supplied each inherited key.
+     *
+     * <p>Precedence (plugin.md section 3.1): a reference is looked up as a template first; only when no
+     * template has that id, and only while the definition at that hop is an item ({@code itemsServe} for
+     * the first hop, then for as long as the chain walks through items), as an item. Item entries live in
+     * the pool under {@link #ITEM_PREFIX}, so they can never be mistaken for templates. A template's own
+     * {@code template:} names templates only.
+     */
+    public static Resolution resolve(
+            Map<String, Object> definition, String defaultNamespace, Map<String, Map<String, Object>> templates,
+            boolean itemsServe) {
         var merged = new LinkedHashMap<String, Object>();
         var sources = new LinkedHashMap<String, String>();
         var chain = new ArrayList<String>();
         String templateRef = text(definition, "template");
         if (templateRef != null) {
             String failure = resolveTemplate(
-                    shortRef(defaultNamespace, templateRef), templates, new HashSet<>(), merged, sources, chain);
+                    shortRef(defaultNamespace, templateRef), itemsServe, templates, new HashSet<>(), merged, sources,
+                    chain);
             if (failure != null) {
                 return new Resolution(null, Map.of(), chain, failure);
             }
@@ -72,6 +106,18 @@ public final class TemplateResolver {
         merged.putAll(definition);
         definition.keySet().forEach(sources::remove);
         return new Resolution(merged, sources, chain, null);
+    }
+
+    /** True when the resolution failed because the chain loops back on itself (MTR-0093). */
+    public static boolean isCycle(Resolution resolution) {
+        return resolution.failure() != null && resolution.failure().startsWith(CYCLE_PREFIX);
+    }
+
+    /** The pool entry a reference names for a definition that may use items: the template, else the item. */
+    public static Map<String, Object> lookup(
+            Map<String, Map<String, Object>> pool, String ref, boolean itemsServe) {
+        Map<String, Object> template = pool.get(ref);
+        return template != null || !itemsServe ? template : pool.get(ITEM_PREFIX + ref);
     }
 
     /** Short references resolve against the resource's own namespace. */
@@ -87,18 +133,25 @@ public final class TemplateResolver {
 
     /**
      * Recursive chain resolution into {@code merged}, parent-first; a
-     * revisited template is a diamond — rejected.
+     * revisited node is a cycle (a chain has one parent per node, so there
+     * are no diamonds) and is rejected. A template and an item of the same
+     * id are different nodes.
      *
      * @return null on success, else the failure reason
      */
     private static String resolveTemplate(
-            String ref, Map<String, Map<String, Object>> templates, Set<String> visited,
+            String ref, boolean itemsServe, Map<String, Map<String, Object>> templates, Set<String> visited,
             Map<String, Object> merged, Map<String, String> sources, List<String> chain) {
-        if (!visited.add(ref)) {
-            return "template chain revisits " + ref;
+        Map<String, Object> template = templates.get(ref);
+        boolean isItem = false;
+        if (template == null && itemsServe) {
+            template = templates.get(ITEM_PREFIX + ref);
+            isItem = template != null;
+        }
+        if (!visited.add((isItem ? ITEM_PREFIX : "") + ref)) {
+            return CYCLE_PREFIX + ref + " (" + String.join(" -> ", chain) + " -> " + ref + ")";
         }
         chain.add(ref);
-        Map<String, Object> template = templates.get(ref);
         if (template == null) {
             return "unknown template " + ref;
         }
@@ -107,7 +160,7 @@ public final class TemplateResolver {
             // a short parent reference resolves in the namespace of the template that names it
             String failure = resolveTemplate(
                     shortRef(ref.substring(0, ref.indexOf(':')), parentRef),
-                    templates, visited, merged, sources, chain);
+                    isItem, templates, visited, merged, sources, chain);
             if (failure != null) {
                 return failure;
             }

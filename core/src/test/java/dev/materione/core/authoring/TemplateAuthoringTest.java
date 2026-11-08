@@ -306,6 +306,164 @@ class TemplateAuthoringTest {
         assertThat(templates.get(1).usedBy()).isEmpty();
     }
 
+    // ------------------------------------------------------------------ items as templates (#203)
+
+    private void writeItem(String path, String yaml) throws Exception {
+        ApiResult<AuthoringApi.DocumentView> put =
+                api.putDocument(editor(), new AuthoringApi.PutDocumentRequest("demo", path, 0, yaml));
+        assertThat(put.ok()).as(put.diagnostics().toString()).isTrue();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void anItemCanBeTheTemplateOfANewItemAndTheViewNamesItAsAnItem() throws Exception {
+        writeItem("items/ruby_sword.yml", """
+                ruby_sword:
+                  material: DIAMOND_SWORD
+                  display_name: "Ruby Sword"
+                """);
+
+        ApiResult<AuthoringApi.DocumentView> created = api.createResource(editor(), new AuthoringApi.CreateResourceRequest(
+                "demo", "ruby_sword_plus", "Ruby Sword Plus", "items", null, false, "ruby_sword"));
+
+        assertThat(created.ok()).as(created.diagnostics().toString()).isTrue();
+        assertThat(read("items/ruby_sword_plus.yml")).contains("template: ruby_sword");
+        Map<String, Object> view = (Map<String, Object>) ((Map<String, Object>) created.value().computed()
+                .get("inheritance")).get("ruby_sword_plus");
+        assertThat(view).containsEntry("chain", List.of("demo:ruby_sword")).doesNotContainKey("failure");
+        assertThat((Map<String, Object>) view.get("inherited")).containsEntry("material", "DIAMOND_SWORD");
+        assertThat((Map<String, Object>) view.get("templates")).containsEntry("demo:ruby_sword",
+                Map.of("pack", "demo", "path", "items/ruby_sword.yml", "kind", "item"));
+        // an item is not a template: the template library lists templates only
+        assertThat(api.listTemplates().value()).extracting(AuthoringApi.TemplateInfo::id)
+                .containsExactly("base_item");
+    }
+
+    @Test
+    void onlyAnItemCanBeBasedOnAnItem() throws Exception {
+        writeItem("items/ruby_sword.yml", "ruby_sword:\n  material: DIAMOND_SWORD\n");
+
+        ApiResult<AuthoringApi.DocumentView> refused = api.createResource(editor(), new AuthoringApi.CreateResourceRequest(
+                "demo", "ruby_lamp", "Ruby Lamp", "blocks", null, false, "ruby_sword"));
+
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.diagnostics().get(0).message()).contains("unknown template demo:ruby_sword");
+        assertThat(temp.resolve("packs/demo/blocks/ruby_lamp.yml")).doesNotExist();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aTemplateOfTheSameIdWinsTheLinkOverTheItem() throws Exception {
+        writeItem("items/base_item.yml", "base_item:\n  material: DIAMOND_SWORD\n");
+        api.createResource(editor(), dagger("base_item"));
+
+        Map<String, Object> view = (Map<String, Object>) ((Map<String, Object>) api
+                .getDocument("demo", "items/ruby_dagger.yml").value().computed().get("inheritance")).get("ruby_dagger");
+        // the template (material PAPER) is what the link means, not the item (DIAMOND_SWORD)
+        assertThat((Map<String, Object>) view.get("inherited")).containsEntry("material", "PAPER");
+        assertThat((Map<String, Object>) view.get("templates")).containsEntry("demo:base_item",
+                Map.of("pack", "demo", "path", "templates/base_item.yml"));
+    }
+
+    @Test
+    void detachingFromAnItemMaterialisesItsValuesThroughTheWholeChain() throws Exception {
+        writeItem("items/ruby_sword.yml", """
+                ruby_sword:
+                  template: base_item
+                  material: DIAMOND_SWORD
+                """);
+        writeItem("items/ruby_dagger.yml", """
+                ruby_dagger:
+                  template: ruby_sword
+                  display_name: "Ruby Dagger"
+                """);
+
+        ApiResult<AuthoringApi.DocumentView> detached = api.detachTemplate(editor(),
+                new AuthoringApi.DetachTemplateRequest("demo", "items/ruby_dagger.yml", "ruby_dagger", 1));
+
+        assertThat(detached.ok()).as(detached.diagnostics().toString()).isTrue();
+        assertThat(read("items/ruby_dagger.yml")).doesNotContain("template:")
+                .contains("material: DIAMOND_SWORD").contains("future_field: keep me").contains("- Forged");
+        // the parent item is untouched
+        assertThat(read("items/ruby_sword.yml")).contains("template: base_item");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void aLoopThroughItemsIsReportedAsAFailureNotACrash() throws Exception {
+        writeItem("items/a.yml", "a:\n  template: b\n");
+        writeItem("items/b.yml", "b:\n  template: a\n");
+
+        Map<String, Object> view = (Map<String, Object>) ((Map<String, Object>) api
+                .getDocument("demo", "items/a.yml").value().computed().get("inheritance")).get("a");
+
+        assertThat((String) view.get("failure")).startsWith("template chain revisits");
+        ApiResult<AuthoringApi.DocumentView> refused = api.detachTemplate(editor(),
+                new AuthoringApi.DetachTemplateRequest("demo", "items/a.yml", "a", 1));
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.diagnostics().get(0).message()).contains("template does not resolve");
+    }
+
+    @Test
+    void itemLinksListEveryItemsTemplateLinkAsAuthored() throws Exception {
+        writeItem("items/ruby_sword.yml", "ruby_sword:\n  template: base_item\n  material: DIAMOND_SWORD\n");
+        writeItem("items/plus.yml", "plus:\n  template: ruby_sword\n");
+        writeItem("items/plain.yml", "plain:\n  material: STICK\n");
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "blocks/lamp.yml", 0, "lamp:\n  template: base_item\n"));
+
+        var links = api.listItemLinks().value();
+
+        // items only (the block is not listed), with the full id each names; items without a link have none
+        assertThat(links).extracting(AuthoringApi.ItemLink::id, AuthoringApi.ItemLink::parent)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("plus", "demo:ruby_sword"),
+                        org.assertj.core.groups.Tuple.tuple("ruby_sword", "demo:base_item"));
+    }
+
+    @Test
+    void aLinkedItemFileRoundTripsByteForByteWithUnknownFieldsAndComments() throws Exception {
+        writeItem("items/ruby_sword.yml", "ruby_sword:\n  material: DIAMOND_SWORD\n");
+        String authored = """
+                # hand-written link, keep every byte
+                ruby_sword_plus:
+                  template: ruby_sword   # follows the base
+                  future_field: { keep: me }
+                  display_name: "Plus"
+                """;
+        writeItem("items/ruby_sword_plus.yml", authored);
+
+        // load then untouched save: the same bytes, and putting the same text back writes nothing new
+        assertThat(dev.materione.core.document.LosslessYaml.parse(authored).save()).isEqualTo(authored);
+        assertThat(api.getDocument("demo", "items/ruby_sword_plus.yml").value().raw()).isEqualTo(authored);
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest("demo", "items/ruby_sword_plus.yml", 1, authored));
+        assertThat(read("items/ruby_sword_plus.yml")).isEqualTo(authored);
+        // detaching keeps the unknown field and the comment while it drops the link
+        ApiResult<AuthoringApi.DocumentView> detached = api.detachTemplate(editor(),
+                new AuthoringApi.DetachTemplateRequest("demo", "items/ruby_sword_plus.yml", "ruby_sword_plus",
+                        api.getDocument("demo", "items/ruby_sword_plus.yml").value().revision()));
+        assertThat(detached.ok()).as(detached.diagnostics().toString()).isTrue();
+        assertThat(read("items/ruby_sword_plus.yml")).contains("# hand-written link, keep every byte")
+                .contains("future_field: { keep: me }").contains("material: DIAMOND_SWORD")
+                .doesNotContain("template:");
+    }
+
+    @Test
+    void anItemChangeReachesTheChildThroughTheCachedViews() throws Exception {
+        writeItem("items/ruby_sword.yml", "ruby_sword:\n  material: DIAMOND_SWORD\n");
+        api.createResource(editor(), new AuthoringApi.CreateResourceRequest(
+                "demo", "ruby_sword_plus", "Ruby Sword Plus", "items", null, false, "ruby_sword"));
+        assertThat(api.getDocument("demo", "items/ruby_sword_plus.yml").value().computed().toString())
+                .contains("DIAMOND_SWORD");
+
+        api.setFields(editor(), new AuthoringApi.SetFieldsRequest(
+                "demo", "items/ruby_sword.yml", 1,
+                List.of(new AuthoringApi.FieldEdit(List.of("ruby_sword", "material"), "NETHERITE_SWORD"))));
+
+        String after = api.getDocument("demo", "items/ruby_sword_plus.yml").value().computed().toString();
+        assertThat(after).contains("NETHERITE_SWORD").doesNotContain("DIAMOND_SWORD");
+    }
+
     /** A type with a {@code template} reference field plus the fields given. */
     private static final class FakeType implements ContentType {
         private final String name;

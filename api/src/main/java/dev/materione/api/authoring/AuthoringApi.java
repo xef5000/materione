@@ -105,6 +105,18 @@ public interface AuthoringApi {
     ApiResult<List<TemplateInfo>> listTemplates();
 
     /**
+     * The {@code template:} link of every item that has one, as authored, so the editor can offer items
+     * in the template picker without offering a choice that would close a loop (plugin.md section 3.1,
+     * {@code authoring.templates} {@code itemLinks}). Read-only; empty on an API that does not track it.
+     */
+    default ApiResult<List<ItemLink>> listItemLinks() {
+        return ApiResult.ok(List.of());
+    }
+
+    /** One item's {@code template:} link: {@code parent} is the full {@code pack:id} the item names. */
+    record ItemLink(String pack, String id, String parent) {}
+
+    /**
      * Materialises a resource's inherited values into the resource and drops
      * its {@code template:} link ({@code authoring.detachTemplate}) — one
      * revision, resolved by the pipeline's own resolver at write time.

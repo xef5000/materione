@@ -376,8 +376,24 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             if (source.path().startsWith(ITEM_FOLDER_PREFIX + folder + "/")) {
                 return badRequest("This layer already has its own item.");
             }
-            // items cannot be templates yet (gui.md §10 #1): the copy starts identical, then it is the layer's
-            item = new BulkOperation(BulkKind.DUPLICATE, null, 0, null, folder, id, null, source.path(), List.of());
+            // the new item is a link to the base (plugin.md §3.1, gui.md §10 #1): `template: <base>` and
+            // nothing else, so it inherits what the base is now and keeps inheriting what it does not
+            // override. A template with the base's id wins that reference (plugin.md §3.1), so the link
+            // would name the template, not the item: refuse rather than link to the wrong thing.
+            ApiResult<List<TemplateInfo>> templates = authoring.listTemplates();
+            if (!templates.ok()) {
+                return ApiResult.fail(templates.diagnostics());
+            }
+            for (TemplateInfo template : templates.value()) {
+                if (template.pack().equals(request.pack()) && template.id().equals(source.resourceId())) {
+                    return badRequest("A template named \"" + source.resourceId() + "\" shares this item's id, "
+                            + "so a link to the item would name the template. Rename one of them, then Customize.");
+                }
+            }
+            item = new BulkOperation(BulkKind.CREATE, null, 0, "items", folder, id, null, null, List.of(
+                    new FieldEdit(List.of(id, "template"), source.resourceId()),
+                    FieldEdit.removal(List.of(id, "material")),
+                    FieldEdit.removal(List.of(id, "display_name"))));
         }
 
         List<Object> repointed = new ArrayList<>();
@@ -713,12 +729,17 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (!namespace.equals(pack)) {
             return null;
         }
+        ResourceRef other = null;
         for (ResourceRef resource : resources) {
-            if (resource.resourceId().equals(id)) {
-                return resource;
+            if (!resource.resourceId().equals(id)) {
+                continue;
             }
+            if ("items".equals(resource.type())) {
+                return resource; // an item beats a template or block that shares its id
+            }
+            other = other == null ? resource : other;
         }
-        return null;
+        return other;
     }
 
     private static Map<String, Object> stringKeyed(Map<?, ?> source) {

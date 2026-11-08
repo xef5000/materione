@@ -30,6 +30,7 @@
   import { scrollBehavior } from '../motion';
   import {
     acceptsTemplates,
+    selectableItems,
     selectableTemplates,
     servedSchema,
     studioSchema,
@@ -142,6 +143,13 @@
     selectableTemplates(workspace.templates, servedDirectory,
       isTemplate ? { pack: resource.pack, id: rootId } : undefined),
   );
+  /** Items an item may be based on (plugin.md section 3.1): never itself, never a loop, never offered to another type. */
+  const itemChoices = $derived(
+    takesTemplates && !isTemplate && typeDirectory === 'items'
+      ? selectableItems(workspace.resources, workspace.summaries, workspace.templates, workspace.itemLinks,
+          { pack: resource.pack, id: rootId }, workspace.activePack)
+      : [],
+  );
   let savingAsTemplate = $state(false);
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
   const name = $derived(plainText(String(effective.display_name ?? '')).trim() || resource.id);
@@ -219,7 +227,10 @@
     return text === undefined ? '' : text.length > 48 ? `${text.slice(0, 47)}…` : text;
   }
 
-  /** A template opens in its own studio (display + modules), like the type it serves. */
+  /**
+   * A template opens in its own studio (display + modules), like the type it serves; a link to an item
+   * opens that item, which is an ordinary item (plugin.md section 3.1).
+   */
   function openTemplate(id: string) {
     const location = inheritance?.templates[id]
       ?? (() => {
@@ -227,8 +238,14 @@
         return entry ? { pack: entry.pack, path: entry.path } : undefined;
       })();
     if (!location) return;
-    void revealInStudio({ pack: location.pack, path: location.path, type: 'templates', id: templateLabel(id) });
+    const type = 'kind' in location && location.kind === 'item' ? 'items' : 'templates';
+    void revealInStudio({ pack: location.pack, path: location.path, type, id: templateLabel(id) });
   }
+
+  /** What opening the first link of the chain is called: its kind, so a link to an item does not say "template". */
+  const openLabel = $derived(
+    inheritance?.chain[0] && inheritance.templates[inheritance.chain[0]]?.kind === 'item' ? 'Open base item' : 'Open template',
+  );
 
   const detachBlocked = $derived(
     dirty ? 'Save or discard your changes first: detaching rewrites the saved file'
@@ -547,10 +564,12 @@
         authored={authoredTemplate}
         {inheritance}
         candidates={parents}
+        {itemChoices}
         detachBlocked={detachBlocked}
         editable={fieldsEditable}
         onChange={(ref) => set('template', ref)}
         onOpen={openTemplate}
+        {openLabel}
         onDetach={detach}
       />
     {/if}

@@ -558,6 +558,43 @@ export default [
   }),
 
   test({
+    id: 'gui.studio-item-customize-linked',
+    title: 'sample:qa_chest item layer showing sample:ruby_sword: Customize creates items/gui/qa_chest/<id>.yml as a template link to ruby_sword (no copied material or name) and points the layer at it',
+    dependsOn: ['gui.studio-item-customize'],
+    covers: [
+      ...STUDIO_COVERS,
+      'webui/src/lib/studio/BasedOn.svelte',
+      'webui/src/lib/demo/templates.ts',
+      'core/src/main/java/dev/materione/core/pipeline/**',
+    ],
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Item' }).click();
+        await page.getByTestId('item-extras').waitFor({ state: 'visible', timeout: 10_000 });
+        await page.getByRole('button', { name: /^Item:/ }).click();
+        await page.getByRole('combobox', { name: /Search items/ }).fill('ruby_sword');
+        await page.getByRole('combobox', { name: /Search items/ }).press('Enter');
+        await page.getByTestId('item-extras').getByText('sample:ruby_sword').waitFor({ state: 'visible', timeout: 10_000 });
+        await page.getByRole('button', { name: 'Customize', exact: true }).click();
+        await page.getByTestId('gui-item-follows').waitFor({ state: 'visible', timeout: 30_000 });
+        const created = fs.existsSync(GUI_ITEMS) ? fs.readdirSync(GUI_ITEMS) : [];
+        ctx.expect(created.length).toBe(1);
+        const item = fs.readFileSync(path.join(GUI_ITEMS, created[0]), 'utf8');
+        // a link, not a copy: the base supplies the material, name, lore and abilities
+        ctx.expect(item).toMatch(/template: *"?ruby_sword/);
+        ctx.expect(item).not.toMatch(/material:|display_name:|lore:/);
+        const id = created[0].replace(/\.yml$/, '');
+        ctx.expect(fs.readFileSync(GUI_FILE, 'utf8')).toContain(`item: sample:${id}`);
+        ctx.expect((await page.locator('[data-status]').innerText()).trim()).toBe('Saved');
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
     id: 'gui.studio-components-visual',
     title: 'sample:qa_chest studio components: paint tools with the brush ghost, a text layer in edit mode, the default font with its warning, and a customized item with its inline appearance',
     mode: 'visual',

@@ -38,6 +38,28 @@ export function templateDefinition(documents: Docs, full: string): Record<string
   return isRecord(definition) ? definition : undefined;
 }
 
+/**
+ * The definition a `template:` reference names, as the server's resolver does (plugin.md section 3.1): the template
+ * of that id first, and only for an item (`itemsServe`) an item of that id. Items are found by their root key in
+ * any document under `items/` of the pack.
+ */
+export function referenceDefinition(
+  documents: Docs,
+  full: string,
+  itemsServe: boolean,
+): { definition: Record<string, unknown>; kind: 'template' | 'item'; path: string } | undefined {
+  const template = templateDefinition(documents, full);
+  const [pack, id] = full.split(':');
+  if (template) return { definition: template, kind: 'template', path: `${pack}/templates/${id}.yml` };
+  if (!itemsServe) return undefined;
+  for (const document of documents.values()) {
+    if (document.pack !== pack || !document.path.startsWith('items/')) continue;
+    const definition = document.parsed[id ?? ''];
+    if (isRecord(definition)) return { definition, kind: 'item', path: `${document.pack}/${document.path}` };
+  }
+  return undefined;
+}
+
 /** The fields a new resource starts with: the link and the name, or a scaffold. */
 export function startingFields(
   documents: Docs,
@@ -50,7 +72,7 @@ export function startingFields(
 ): { fields: Record<string, unknown> } | { error: string } {
   if (template) {
     const full = fullRef(template, pack);
-    if (!templateDefinition(documents, full)) return { error: `unknown template ${full}` };
+    if (!referenceDefinition(documents, full, type === 'items')) return { error: `unknown template ${full}` };
     return { fields: { template, display_name: name } };
   }
   if (type === 'templates') {
@@ -113,18 +135,24 @@ export function detached(
   documents: Docs,
   pack: string,
   fields: Record<string, unknown>,
+  /** The resource is an item, so its chain may run through items. */
+  itemsServe = false,
 ): { fields: Record<string, unknown> } | { error: string } {
   const authored = text(fields.template);
   if (!authored) return { error: 'not based on a template' };
   const chain: Record<string, unknown>[] = [];
   const seen = new Set<string>();
   let next = fullRef(authored, pack);
+  let items = itemsServe;
   while (next) {
-    const definition = templateDefinition(documents, next);
-    if (!definition || seen.has(next)) return { error: `template does not resolve: unknown template ${next}` };
-    seen.add(next);
-    chain.unshift(definition);
-    const parent = text(definition.template);
+    const found = referenceDefinition(documents, next, items);
+    if (!found) return { error: `template does not resolve: unknown template ${next}` };
+    const key = `${found.kind}|${next}`;
+    if (seen.has(key)) return { error: `template does not resolve: template chain revisits ${next}` };
+    seen.add(key);
+    chain.unshift(found.definition);
+    items = items && found.kind === 'item'; // once the chain reaches a template it names templates only
+    const parent = text(found.definition.template);
     next = parent ? fullRef(parent, next.split(':')[0] ?? pack) : '';
   }
   const inherited: Record<string, unknown> = {};
@@ -134,4 +162,17 @@ export function detached(
   for (const [key, value] of Object.entries(fields)) if (key !== 'template') result[key] = value;
   for (const [key, value] of Object.entries(inherited)) if (!(key in result)) result[key] = value;
   return { fields: result };
+}
+
+/** Mirrors the server's `itemLinks`: every item's authored `template:` as a full id (the picker's loop guard). */
+export function itemLinks(documents: Docs): { pack: string; id: string; parent: string }[] {
+  const out: { pack: string; id: string; parent: string }[] = [];
+  for (const document of documents.values()) {
+    if (!document.path.startsWith('items/')) continue;
+    for (const [id, definition] of Object.entries(document.parsed)) {
+      const authored = isRecord(definition) ? text(definition.template) : '';
+      if (authored) out.push({ pack: document.pack, id, parent: fullRef(authored, document.pack) });
+    }
+  }
+  return out.sort((a, b) => a.pack.localeCompare(b.pack) || a.id.localeCompare(b.id));
 }

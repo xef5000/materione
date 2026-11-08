@@ -185,7 +185,8 @@ Rules (enforced in review + by an ArchUnit-style ban test):
 ### 3.1 Templates are a pack-layout concept, not a registered type (issue #154)
 
 **Decision (M5): `templates/` stays a pack-layout directory. No `template` content type is
-registered.** `PackLayout.CONTENT_DIRS` lists the directory, `ParseStage` turns each keyed
+registered.** (M6 added one thing to what a `template:` reference may name: an item, for an
+item; see *Items as templates* at the end of this section.) `PackLayout.CONTENT_DIRS` lists the directory, `ParseStage` turns each keyed
 document into a content-graph node of kind `template` (master §5 — `item ──inherits──► template`),
 and `core.pipeline.TemplateResolver` is the one resolver (single parent, shallow top-level merge,
 child wins; runtime-systems §3.2). A definition opts in by declaring a parameter whose editor
@@ -214,6 +215,45 @@ common).
 alternatives considered and rejected for now are a reserved `serves:` key stripped by the resolver
 and `templates/<type>/` subfolders (the pipeline's template parse is deliberately non-recursive);
 either would be a format change and needs its own decision here first.
+
+#### Items as templates (issue #203)
+
+**Decision (M6, owner-approved on #187): an item may be the template of another item.** Until then
+`template:` resolved only against `templates/`, so a link to a base item was impossible and the GUI
+studio's Customize had to copy one (gui.md §10). The statement above stays true for *what a template
+is* (a partial definition, never a registered type, never stored with a `serves:` key); what changes
+is the **pool a `template:` reference resolves against**: the templates, plus, for an item, the items.
+Inheritance by reference is the same mechanism as before, so a linked item is not a copy that can
+drift: whatever it does not set follows its base.
+
+| Rule | Statement |
+|---|---|
+| **Who may name an item** | Only an **item** (a resource under `items/`). A block, furniture, GUI, glyph or any other type that names an item in `template:` is unresolved (`MTR-0009`, hint "base this resource on a template instead"); a `templates/` document cannot be based on an item either, so a chain that has reached a template continues through templates only. An item chain is therefore `item → item → … → [template → template …]`. |
+| **Precedence when an id names both** | The reference resolves to the **template** first; only when no template has that id is it an item. This keeps every pack that already has a template and an item of the same id working exactly as before, and it is one fixed rule rather than a guess. A reference that could have meant either (an item's `template:` naming an id that is both) is not silent: it publishes the warning `MTR-0094` on the referencing resource, and the template is used. To link to the shadowed item, rename one of the two. |
+| **Merge** | Unchanged: single parent, shallow top-level merge, parent first, the nearer definition wins, provenance per key (`TemplateResolver`, runtime-systems §3.2). The parent item's *whole authored definition* is its template body, including its own `template:`, which continues the chain, so a linked item inherits through the item to the template behind it. |
+| **Cycles** | A chain that reaches a node twice (item → item → the first item, an item based on itself, template → template → …) is `MTR-0093` (error) on **every** resource whose chain meets the loop, members and descendants alike, and on no other: those resources are quarantined, the pipeline and every other resource are untouched. A template and an item of the same id are different nodes, so `item foo → template foo` is not a cycle. |
+| **Dependency tracking** | Nothing new is needed. The pack compile resolves every resource against the full pool on every run (a targeted reload splices files onto the previous run, and validation, graph and compile always see every resource), so a child is re-resolved whenever its parent's file changes, is deleted, or reappears; the graph draws the same `inherits` (`TEMPLATE`) edge to the item. |
+| **Tooling** | One resolver. `TemplatePools` builds the pool (items under the key prefix `item|`, so they can never shadow a template) for the pack compile, the runtime shadow build and validation; `AuthoringApi` resolves the same way for the inheritance view, `detachTemplate` and `createResource` with a `template`. The inheritance view's `templates[id]` carries `kind: "item"` for a link to an item (absent means a template). `listTemplates` still lists `templates/` documents only: an item is not added to the template library. |
+
+Trace: **D1** (the link is a plain `template:` key in the child's own file; nothing derived is
+stored), **D2** (the same `inherits` edge, validated like any reference), **D6** (one resolver for
+compile, validation and editor; creating, detaching and Customize are ordinary lossless writes that
+journal, audit and reload like any other), master §5.6 (a linked item round-trips byte for byte,
+unknown fields included).
+
+**Owner answers on the first cut (PR #285), now decisions:**
+1. **The studio's template picker offers items too.** For an item, the chip's menu lists the templates and,
+   under an "Items" heading, the pack's other items, each marked as an item. Choosing one stages
+   `template: <id>` (bare inside the pack) and Save & apply writes it as any other template choice. The picker
+   never offers the item itself, an item whose own chain runs back through this one (choosing it would close a
+   loop), or an id a template also has (the reference would name the template). A block, furniture, GUI or
+   template is offered templates only (the rule above). The loop guard reads `authoring.templates` →
+   `itemLinks` (`AuthoringApi.listItemLinks`: every item's authored `template:` as a full id); a plugin
+   without it offers no items. The server remains the authority: a link written by hand that loops is still
+   `MTR-0093`.
+2. **Renaming is the answer to a shared template/item id.** `MTR-0094` stays as specified; there is no
+   spelling that reaches the shadowed item.
+3. **Customize on a shadowed base refuses** rather than copying (gui.md §10, *Decisions taken in #203*).
 
 ---
 
@@ -467,6 +507,13 @@ The GUI open canvas ([`gui.md`](gui.md) §11, #276) adds three codes:
 | `MTR-0090` | warning | A raster layer of a GUI paints past the art cap, the box `x -424..599, y -243..780` around the screen (gui.md §11.2). The part outside is clipped; the layer is not skipped and the GUI still compiles. Move or shrink the layer. Reported once per layer, also for a layer that is entirely past the cap. |
 | `MTR-0091` | error | An art tile of a GUI broke a font-provider limit at emit time (gui.md §11.3 rule 4): an ascent above its height, a width or height outside 1 to 256, or a top row above −243. The client would drop the pack's whole GUI font for one such provider, so this GUI is quarantined and nothing of it is emitted; the rest of the pack compiles. An internal error the art cap prevents for authored content: report it with the GUI that caused it. |
 | `MTR-0092` | warning | A layer meant to be clicked (a `button`, or a layer a `gui.click` rule names with `layer:`) covers no container slot, for instance because it was drawn outside the container. The client reports a click outside the container without a position, so the layer is decoration only (gui.md §11.4); the layer is kept and drawn. Move it over a slot, or handle the click with `gui.click_outside`. |
+
+Items as templates (§3.1, #203) add two codes:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0093` | error | A `template:` chain loops back on itself: an item based on itself, two items based on each other, or a longer ring through items and templates. The resource and every resource whose chain meets the loop are quarantined (the message names the path, `demo:b -> demo:a -> demo:b`); nothing else is affected. Change or remove one `template:` link in the loop, then reload. |
+| `MTR-0094` | warning | A `template:` reference of an item names an id that is both a template and an item. The template wins (§3.1 precedence) and the resource still loads, but the link cannot reach the item of that id. Rename the template or the item so the reference names only one. |
 
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same

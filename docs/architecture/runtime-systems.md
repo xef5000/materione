@@ -157,7 +157,7 @@ resolve (hot path): ItemStack → cached PDC tag read → RuntimeItem   (~1 µs 
   definition with overridable fields; diamond inheritance → validation error. *As built:* one
   resolver, `core.pipeline.TemplateResolver` (single parent, shallow top-level merge, child wins;
   `content.Templates` is its facade), serves both parsing and the editor's provenance view, which
-  reports per key which template supplies it (web.md §4.2).
+  reports per key which template supplies it (web.md §4.2). *As built (M6):* an item may also be the template of another item (templates win a shared id; cycles are `MTR-0093`), plugin.md §3.1.
 
 ### 3.3 Failure modes
 

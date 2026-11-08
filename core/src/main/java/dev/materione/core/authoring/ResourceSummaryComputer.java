@@ -50,6 +50,8 @@ final class ResourceSummaryComputer {
     private ProjectionBudgetExceededException cachedFailure;
     /** The template catalog of the current content; any change invalidates it with the summaries. */
     private TemplateCatalog cachedCatalog;
+    /** {@link #resolutionPool}: the catalog's templates plus the items some resource names as its template. */
+    private TemplatePool cachedResolutionPool;
 
     ResourceSummaryComputer(
             DocumentStore documents, AssetStore assets, Supplier<List<ContentType>> contentTypes) {
@@ -122,6 +124,7 @@ final class ResourceSummaryComputer {
             cachedFailurePack = null;
             cachedFailure = null;
             cachedCatalog = null;
+            cachedResolutionPool = null;
         }
     }
 
@@ -171,7 +174,7 @@ final class ResourceSummaryComputer {
 
     private SummarySnapshot buildSnapshot(String pack) {
         ProjectionBudget budget = new ProjectionBudget(projectionBudgetBytes);
-        Map<String, Map<String, Object>> templates = templates(budget).definitions();
+        Map<String, Map<String, Object>> templates = resolutionPool().definitions();
         Map<String, ContentType> typesByDirectory = typesByDirectory();
         List<SummaryCandidate> resources = new ArrayList<>();
         Map<ReferenceKey, SummaryCandidate> referenceCandidates = new LinkedHashMap<>();
@@ -402,6 +405,67 @@ final class ResourceSummaryComputer {
      */
     TemplatePool templatePool() {
         return templates(new ProjectionBudget(projectionBudgetBytes));
+    }
+
+    /**
+     * What a {@code template:} reference resolves against (plugin.md section 3.1): the templates, plus,
+     * under {@link TemplateResolver#ITEM_PREFIX}, every item some resource names as its template, so an
+     * item can serve as the template of another item. Only the items in use are read, which keeps the
+     * pool as small as the templates alone for a pack that links no item. Cached with the catalog.
+     */
+    TemplatePool resolutionPool() {
+        synchronized (cacheLock) {
+            if (cachedResolutionPool == null) {
+                cachedResolutionPool = buildResolutionPool(Set.of());
+            }
+            return cachedResolutionPool;
+        }
+    }
+
+    /**
+     * {@link #resolutionPool} that also reads the items {@code alsoItems} names (full ids): the pool a
+     * brand-new link to an item resolves against, before any resource names that item. Not cached.
+     */
+    TemplatePool resolutionPool(Set<String> alsoItems) {
+        synchronized (cacheLock) {
+            return alsoItems.isEmpty() ? resolutionPool() : buildResolutionPool(alsoItems);
+        }
+    }
+
+    private TemplatePool buildResolutionPool(Set<String> alsoItems) {
+        TemplateCatalog catalog = templateCatalog();
+        Set<String> wanted = new HashSet<>(catalog.users().keySet());
+        wanted.addAll(alsoItems);
+        if (wanted.isEmpty()) {
+            return catalog.pool();
+        }
+        ProjectionBudget budget = new ProjectionBudget(projectionBudgetBytes);
+        Map<String, Map<String, Object>> definitions = new LinkedHashMap<>(catalog.pool().definitions());
+        Map<String, List<String>> sources = new HashMap<>(catalog.pool().sources());
+        Map<String, String> itemPaths = new HashMap<>();
+        documents.forEachResourceDocument(null, "items", row -> {
+            if (row.document() == null || row.document().parseError().isPresent()) {
+                return;
+            }
+            Map<String, Object> definition = mapping(row.document(), row.resource().resourceId());
+            if (definition == null) {
+                return;
+            }
+            try {
+                String id = NamespacedId.of(row.resource().pack(), row.resource().resourceId()).toString();
+                String key = TemplateResolver.ITEM_PREFIX + id;
+                String existingPath = itemPaths.get(key);
+                if (wanted.contains(id) && (existingPath == null || row.resource().path().compareTo(existingPath) > 0)) {
+                    budget.consume(estimateTemplateSize(id, row.resource().path(), definition));
+                    definitions.put(key, LosslessYaml.stringKeyed(definition));
+                    sources.put(key, List.of(row.resource().pack(), row.resource().path()));
+                    itemPaths.put(key, row.resource().path());
+                }
+            } catch (IllegalArgumentException ignored) {
+                // An invalid item id cannot be a valid link target.
+            }
+        }, budget);
+        return new TemplatePool(Map.copyOf(definitions), Map.copyOf(sources));
     }
 
     /**

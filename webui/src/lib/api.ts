@@ -118,8 +118,19 @@ export interface InheritanceView {
   inherited: Record<string, unknown>;
   /** Which template supplies each key (inherited or overridden). */
   sources: Record<string, string>;
-  templates: Record<string, { pack: string; path: string }>;
+  /**
+   * Where each chain id lives. `kind: 'item'` marks a link to an item (an item can be the template of
+   * another item, plugin.md section 3.1); absent means a `templates/` document, as it always was.
+   */
+  templates: Record<string, { pack: string; path: string; kind?: 'item' }>;
   failure?: string;
+}
+
+/** An item's authored `template:` link as `authoring.templates` lists it (`itemLinks`); `parent` is a full `pack:id`. */
+export interface ItemLink {
+  pack: string;
+  id: string;
+  parent: string;
 }
 
 /**

@@ -8,7 +8,8 @@
    * from", "Overrides") stays with the fields themselves.
    */
   import Icon from '../components/Icon.svelte';
-  import { searchTemplates, templateRef, templateSets, templateTitle, servedSchema } from '../templates';
+  import { searchItems, searchTemplates, templateRef, templateSets, templateTitle, servedSchema } from '../templates';
+  import type { ItemChoice } from '../templates';
   import type { InheritanceView, TemplateEntry } from '../api';
   import { workspace } from '../state.svelte';
 
@@ -25,10 +26,16 @@
     onChange: (ref: string) => void;
     onOpen: (id: string) => void;
     onDetach: () => void;
+    /** The first menu action's label: "Open base item" when the link names an item. */
+    openLabel?: string;
+    /** Items this item may be based on (plugin.md section 3.1); empty for anything that is not an item. */
+    itemChoices?: ItemChoice[];
   }
 
-  let { authored, inheritance, candidates, detachBlocked, editable, onChange, onOpen, onDetach }: Props =
-    $props();
+  let {
+    authored, inheritance, candidates, detachBlocked, editable, onChange, onOpen, onDetach,
+    openLabel = 'Open template', itemChoices = [],
+  }: Props = $props();
 
   let open = $state(false);
   let query = $state('');
@@ -37,6 +44,9 @@
   let search = $state<HTMLInputElement>();
 
   const shown = $derived(searchTemplates(candidates, query, workspace.types));
+  const shownItems = $derived(searchItems(itemChoices, query));
+  /** Keyboard order: the templates, then the items. */
+  const rowCount = $derived(shown.length + shownItems.length);
   const label = $derived(authored ? authored.slice(authored.lastIndexOf(':') + 1) : '');
   const current = $derived(
     authored
@@ -78,20 +88,30 @@
     onChange(templateRef(entry, workspace.activePack));
   }
 
+  /** An item is linked by its id, exactly as a template is: `template: <id>` (bare inside the pack). */
+  function chooseItem(item: ItemChoice): void {
+    open = false;
+    onChange(templateRef(item, workspace.activePack));
+  }
+
   function onKey(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.stopPropagation();
       open = false;
     } else if (event.key === 'ArrowDown') {
       event.preventDefault();
-      highlighted = shown.length ? (highlighted + 1) % shown.length : 0;
+      highlighted = rowCount ? (highlighted + 1) % rowCount : 0;
     } else if (event.key === 'ArrowUp') {
       event.preventDefault();
-      highlighted = shown.length ? (highlighted - 1 + shown.length) % shown.length : 0;
+      highlighted = rowCount ? (highlighted - 1 + rowCount) % rowCount : 0;
     } else if (event.key === 'Enter') {
       event.preventDefault();
       const entry = shown[highlighted];
       if (entry) choose(entry);
+      else {
+        const item = shownItems[highlighted - shown.length];
+        if (item) chooseItem(item);
+      }
     }
   }
 
@@ -148,8 +168,27 @@
             </button>
           </li>
         {/each}
-        {#if shown.length === 0}
-          <li class="none">{candidates.length ? `Nothing matches “${query}”.` : 'No templates fit this yet.'}</li>
+        {#if shownItems.length > 0}
+          <li class="group-label" role="presentation" data-items-heading>Items</li>
+        {/if}
+        {#each shownItems as item, index (item.pack + ':' + item.id)}
+          {@const ref = templateRef(item, workspace.activePack)}
+          <li
+            role="option"
+            aria-selected={ref === authored}
+            class="menu-item"
+            class:highlight={shown.length + index === highlighted}
+            data-item-template={item.id}
+          >
+            <button type="button" class="row" onclick={() => chooseItem(item)}>
+              <span class="name">{item.title}</span>
+              <code>{item.id}</code>
+              <span class="sets kind-item">item</span>
+            </button>
+          </li>
+        {/each}
+        {#if rowCount === 0}
+          <li class="none">{candidates.length || itemChoices.length ? `Nothing matches “${query}”.` : 'No templates fit this yet.'}</li>
         {/if}
       </ul>
       {#if authored}
@@ -166,7 +205,7 @@
         {/if}
         <div class="actions">
           <button type="button" class="menu-item" onclick={() => { open = false; onOpen(inheritance?.chain[0] ?? authored); }}>
-            <Icon name="file" size={13} /> Open template
+            <Icon name="file" size={13} /> {openLabel}
           </button>
           <button
             type="button"
@@ -262,6 +301,17 @@
   }
   li.highlight {
     background: var(--bg-hover);
+  }
+  .group-label {
+    padding: var(--space-1) var(--space-2) 0;
+    border-top: 1px solid var(--border);
+    color: var(--faint);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .kind-item {
+    color: var(--accent);
   }
   .none {
     padding: var(--space-3);

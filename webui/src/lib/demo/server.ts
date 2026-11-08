@@ -17,7 +17,7 @@ import type { PushFrame } from '../events';
 import type { Response } from '../protocol/wire';
 import type { DemoSnapshot, SnapshotDocument, SnapshotPack } from './snapshot';
 import { scanReferences } from './references';
-import { detached, fullRef, startingFields, templateCatalog, templateDefinition } from './templates';
+import { detached, fullRef, itemLinks, startingFields, templateCatalog, templateDefinition } from './templates';
 import type { TemplateDocument } from './templates';
 
 const ACTOR = 'demo';
@@ -83,7 +83,7 @@ export class DemoServer implements RpcChannel {
       case 'edit.create': return this.#create(op, text(p.pack), text(p.path), optional(p.id));
       case 'authoring.createResource': return this.#createResource(p);
       case 'authoring.duplicateResource': return this.#duplicate(p);
-      case 'authoring.templates': return { templates: templateCatalog(this.#documentMap(), this.#snapshot.types) };
+      case 'authoring.templates': return { templates: templateCatalog(this.#documentMap(), this.#snapshot.types), itemLinks: itemLinks(this.#documentMap()) };
       case 'authoring.detachTemplate': return this.#detach(p);
       case 'authoring.saveAsTemplate': return this.#saveAsTemplate(p);
       case 'edit.delete': return this.#delete(p);
@@ -390,7 +390,7 @@ ${id}: {}
     const root = optional(p.resource) ?? Object.keys(current.parsed)[0] ?? '';
     const fields = current.parsed[root] as Record<string, unknown> | undefined;
     if (!fields) throw new DemoError('MTR-0008', `no resource '${root}' in ${path}`);
-    const result = detached(this.#documentMap(), pack, fields);
+    const result = detached(this.#documentMap(), pack, fields, path.startsWith('items/'));
     if ('error' in result) throw new DemoError('MTR-0008', `${root}: ${result.error}`);
     const yaml = parseDocument(current.raw);
     for (const [field, value] of Object.entries(result.fields)) {
