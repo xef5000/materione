@@ -19,7 +19,7 @@ releases may change file formats, settings and the public API.
   everything you do not change, the inline appearance says "Follows `<base>`", and the item studio's template chip offers **Open base
   item** and **Detach template** (which turns the link into a copy). Customize on a vanilla item is unchanged. If a template has the same
   id as the item, Customize says so and creates nothing. The editor's inheritance view marks a link to an item with `kind: "item"`
-  (additive; absent means a template).
+  (additive; absent means a template). The item-to-item links ride along as `itemLinks` on `authoring.templates`, which is how the template chip offers items without offering a loop.
 - **The GUI studio's open canvas: the vanilla chest underneath, the inventory under a veil, art anywhere around the screen (gui.md §6, §11, #277).**
   The canvas is no longer the screen: it is the whole art area (1024 x 1024 px around the chest, drawn with its limit), with the owner's
   vanilla chest drawn under every GUI as the client composes it for 1 to 6 rows. It is not a layer and is never saved. The player's

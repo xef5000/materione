@@ -517,7 +517,7 @@ treats an absent key as a no-op, and refuses keys in flow style or behind a sequ
 same revision-checked batch. `browse.get` adds a read-only `computed.inheritance` per root that names
 a `template:`: `template` as authored, `chain` (full ids, nearest first), `inherited` (the value the
 chain supplies for each key), `sources` (which template supplies it), `templates` (`{pack, path}` per
-chain id; `kind: "item"` added when the id is an item, since an item can be the template of an item, plugin.md §3.1) and `failure` when the chain does not resolve. `authoring.templates` (no payload) returns
+chain id; `kind: "item"` added when the id is an item, since an item can be the template of an item, plugin.md §3.1; `authoring.templates` also returns `itemLinks: [{pack, id, parent}]`, every item's authored link, for the picker's loop guard) and `failure` when the chain does not resolve. `authoring.templates` (no payload) returns
 `{templates: [{pack, path, id, parent?, definition, serves, usedBy}]}`: `definition` is what the
 template sets, `serves` the template-capable type directories it fits (derived — plugin.md §3.1),
 `usedBy` the `{pack, type, path, id}` of every resource that names it. `authoring.detachTemplate`

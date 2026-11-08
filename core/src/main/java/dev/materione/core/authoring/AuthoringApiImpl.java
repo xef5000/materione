@@ -622,6 +622,24 @@ public final class AuthoringApiImpl implements AuthoringApi {
         }
     }
 
+    @Override
+    public ApiResult<List<ItemLink>> listItemLinks() {
+        try {
+            List<ItemLink> links = new ArrayList<>();
+            summaryComputer.templateCatalog().users().forEach((parent, users) -> {
+                for (DocumentStore.ResourceRef user : users) {
+                    if ("items".equals(user.type())) {
+                        links.add(new ItemLink(user.pack(), user.resourceId(), parent));
+                    }
+                }
+            });
+            links.sort(java.util.Comparator.comparing(ItemLink::pack).thenComparing(ItemLink::id));
+            return ApiResult.ok(links);
+        } catch (RuntimeException e) {
+            return handlerFailure(e);
+        }
+    }
+
     /** A type takes part in inheritance when one of its fields is a template reference. */
     private static boolean acceptsTemplates(ContentType type) {
         return type.describe().parameters().stream().anyMatch(parameter ->

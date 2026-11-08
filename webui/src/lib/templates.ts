@@ -6,7 +6,7 @@
  * who uses it (`authoring.templates`), and every function below reads those
  * answers plus the registry's own self-description.
  */
-import type { ResourceRef, TemplateEntry, TypeInfo, TypeParam } from './api';
+import type { ItemLink, ResourceRef, TemplateEntry, TypeInfo, TypeParam } from './api';
 import { humanise } from './browser';
 import { plainText } from './rich-text/model';
 
@@ -199,4 +199,69 @@ export function selectableTemplates(
     visit(self.pack, self.id);
   }
   return templatesFor(templates, directory).filter((entry) => !blocked.has(`${entry.pack}:${entry.id}`));
+}
+
+/** An item the template picker can offer (plugin.md section 3.1: an item may be the template of an item). */
+export interface ItemChoice {
+  pack: string;
+  id: string;
+  path: string;
+  /** Its display name when the pack summary has one, else the humanised id. */
+  title: string;
+}
+
+/**
+ * The items an item may be based on: the pack's other items, minus the item itself, minus an id a template
+ * also has (a reference to it names the template, MTR-0094), minus every item whose own chain runs back
+ * through this one (choosing it would close a loop, MTR-0093). Only an item is offered items: the caller
+ * passes `self` for an item and nothing for any other type.
+ */
+export function selectableItems(
+  resources: readonly ResourceRef[],
+  summaries: readonly { pack: string; path: string; id: string; name: string }[],
+  templates: readonly Pick<TemplateEntry, 'pack' | 'id'>[],
+  itemLinks: readonly ItemLink[],
+  self: { pack: string; id: string } | undefined,
+  activePack: string | null,
+): ItemChoice[] {
+  if (!self) return [];
+  const selfKey = `${self.pack}:${self.id}`;
+  const templateIds = new Set(templates.map((entry) => `${entry.pack}:${entry.id}`));
+  const parents = new Map<string, string>(itemLinks.map((link) => [`${link.pack}:${link.id}`, link.parent]));
+  const loops = (start: string): boolean => {
+    const seen = new Set<string>();
+    let current: string | undefined = start;
+    while (current !== undefined && !seen.has(current)) {
+      if (current === selfKey) return true;
+      if (templateIds.has(current)) return false; // a template ends the item chain
+      seen.add(current);
+      current = parents.get(current);
+    }
+    return false;
+  };
+  const named = new Map(summaries.map((entry) => [`${entry.pack}:${entry.path}:${entry.id}`, entry.name] as const));
+  return resources
+    .filter((resource) => resource.type === 'items' && resource.pack === activePack)
+    .filter((resource) => {
+      const key = `${resource.pack}:${resource.id}`;
+      return key !== selfKey && !templateIds.has(key) && !loops(key);
+    })
+    .map((resource) => {
+      const name = named.get(`${resource.pack}:${resource.path}:${resource.id}`);
+      return {
+        pack: resource.pack,
+        id: resource.id,
+        path: resource.path,
+        title: plainText(name ?? '').trim() || humanise(resource.id),
+      };
+    })
+    .sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+}
+
+/** Case-insensitive search of the item choices by id and title. */
+export function searchItems(items: readonly ItemChoice[], query: string): ItemChoice[] {
+  const needle = query.trim().toLowerCase().replaceAll('_', ' ');
+  if (!needle) return [...items];
+  return items.filter((item) =>
+    `${item.id.replaceAll('_', ' ')} ${item.title}`.toLowerCase().includes(needle));
 }

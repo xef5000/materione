@@ -239,10 +239,21 @@ Trace: **D1** (the link is a plain `template:` key in the child's own file; noth
 stored), **D2** (the same `inherits` edge, validated like any reference), **D6** (one resolver for
 compile, validation and editor; creating, detaching and Customize are ordinary lossless writes that
 journal, audit and reload like any other), master §5.6 (a linked item round-trips byte for byte,
-unknown fields included). *Not decided here, deliberately:* choosing an item as the template from the
-studio's template picker (the picker still lists `templates/` documents; the link is made by Customize,
-by `createResource` with `template`, or by writing the key), and an explicit spelling to reach a
-shadowed item (`MTR-0094` asks for a rename instead).
+unknown fields included).
+
+**Owner answers on the first cut (PR #285), now decisions:**
+1. **The studio's template picker offers items too.** For an item, the chip's menu lists the templates and,
+   under an "Items" heading, the pack's other items, each marked as an item. Choosing one stages
+   `template: <id>` (bare inside the pack) and Save & apply writes it as any other template choice. The picker
+   never offers the item itself, an item whose own chain runs back through this one (choosing it would close a
+   loop), or an id a template also has (the reference would name the template). A block, furniture, GUI or
+   template is offered templates only (the rule above). The loop guard reads `authoring.templates` →
+   `itemLinks` (`AuthoringApi.listItemLinks`: every item's authored `template:` as a full id); a plugin
+   without it offers no items. The server remains the authority: a link written by hand that loops is still
+   `MTR-0093`.
+2. **Renaming is the answer to a shared template/item id.** `MTR-0094` stays as specified; there is no
+   spelling that reaches the shadowed item.
+3. **Customize on a shadowed base refuses** rather than copying (gui.md §10, *Decisions taken in #203*).
 
 ---
 

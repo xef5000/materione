@@ -126,6 +126,13 @@ export interface InheritanceView {
   failure?: string;
 }
 
+/** An item's authored `template:` link as `authoring.templates` lists it (`itemLinks`); `parent` is a full `pack:id`. */
+export interface ItemLink {
+  pack: string;
+  id: string;
+  parent: string;
+}
+
 /**
  * One template as `authoring.templates` lists it. Derived by the server from
  * the authored documents: `serves` are the template-capable type directories

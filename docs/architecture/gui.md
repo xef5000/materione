@@ -1422,4 +1422,9 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 5. **The studio shows the link where the designer is looking.** The inline appearance says "Follows `<base>`"; the
    item studio's template chip names the base, its menu says **Open base item** (not "Open template") when the link
    is an item (`InheritanceView.templates[id].kind === 'item'`), and the chain provenance lines read as for templates.
-   The chip's template *picker* still offers `templates/` documents only (plugin.md §3.1, not decided here).
+   The chip's template picker also offers items, under an "Items" heading, for an item only (plugin.md §3.1,
+   *Owner answers*), so a designer can re-link a customized item to another base, or link any item to one, without
+   editing YAML; it never offers the item itself or a choice that would close a loop.
+6. **Owner answers on PR #285.** (a) Items are selectable in the template picker (see 5). (b) A shared
+   template/item id is resolved by renaming; `MTR-0094` stays as it is and no spelling reaches the shadowed item.
+   (c) Customize on a shadowed base refuses (decision 3) rather than copying.

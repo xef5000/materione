@@ -1,7 +1,7 @@
 import { SAMPLE_GUI_ASSETS, sampleGuiRaw } from '../src/lib/demo/gui';
 import { parse as parseYaml } from 'yaml';
 import { scanReferences } from '../src/lib/demo/references';
-import { detached, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
+import { detached, itemLinks, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
 // The real server's type self-descriptions, recorded by the plugin's golden
 // test: the ?modules fixture serves the block/furniture/... schemas exactly as
 // Java declares them, so a spec cannot pass against a schema the server lacks.
@@ -1220,7 +1220,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'authoring.duplicateResource':
         return this.duplicateResource(op, payload);
       case 'authoring.templates':
-        return this.success(op, { templates: templateCatalog(this.#documents, this.typeList()) });
+        return this.success(op, { templates: templateCatalog(this.#documents, this.typeList()), itemLinks: itemLinks(this.#documents) });
       case 'authoring.detachTemplate':
         return this.detachTemplate(op, payload);
       case 'authoring.saveAsTemplate':

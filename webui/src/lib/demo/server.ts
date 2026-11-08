@@ -17,7 +17,7 @@ import type { PushFrame } from '../events';
 import type { Response } from '../protocol/wire';
 import type { DemoSnapshot, SnapshotDocument, SnapshotPack } from './snapshot';
 import { scanReferences } from './references';
-import { detached, fullRef, startingFields, templateCatalog, templateDefinition } from './templates';
+import { detached, fullRef, itemLinks, startingFields, templateCatalog, templateDefinition } from './templates';
 import type { TemplateDocument } from './templates';
 
 const ACTOR = 'demo';
@@ -83,7 +83,7 @@ export class DemoServer implements RpcChannel {
       case 'edit.create': return this.#create(op, text(p.pack), text(p.path), optional(p.id));
       case 'authoring.createResource': return this.#createResource(p);
       case 'authoring.duplicateResource': return this.#duplicate(p);
-      case 'authoring.templates': return { templates: templateCatalog(this.#documentMap(), this.#snapshot.types) };
+      case 'authoring.templates': return { templates: templateCatalog(this.#documentMap(), this.#snapshot.types), itemLinks: itemLinks(this.#documentMap()) };
       case 'authoring.detachTemplate': return this.#detach(p);
       case 'authoring.saveAsTemplate': return this.#saveAsTemplate(p);
       case 'edit.delete': return this.#delete(p);

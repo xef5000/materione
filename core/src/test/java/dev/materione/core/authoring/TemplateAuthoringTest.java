@@ -405,6 +405,23 @@ class TemplateAuthoringTest {
     }
 
     @Test
+    void itemLinksListEveryItemsTemplateLinkAsAuthored() throws Exception {
+        writeItem("items/ruby_sword.yml", "ruby_sword:\n  template: base_item\n  material: DIAMOND_SWORD\n");
+        writeItem("items/plus.yml", "plus:\n  template: ruby_sword\n");
+        writeItem("items/plain.yml", "plain:\n  material: STICK\n");
+        api.putDocument(editor(), new AuthoringApi.PutDocumentRequest(
+                "demo", "blocks/lamp.yml", 0, "lamp:\n  template: base_item\n"));
+
+        var links = api.listItemLinks().value();
+
+        // items only (the block is not listed), with the full id each names; items without a link have none
+        assertThat(links).extracting(AuthoringApi.ItemLink::id, AuthoringApi.ItemLink::parent)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("plus", "demo:ruby_sword"),
+                        org.assertj.core.groups.Tuple.tuple("ruby_sword", "demo:base_item"));
+    }
+
+    @Test
     void aLinkedItemFileRoundTripsByteForByteWithUnknownFieldsAndComments() throws Exception {
         writeItem("items/ruby_sword.yml", "ruby_sword:\n  material: DIAMOND_SWORD\n");
         String authored = """

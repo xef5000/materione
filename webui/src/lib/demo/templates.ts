@@ -163,3 +163,16 @@ export function detached(
   for (const [key, value] of Object.entries(inherited)) if (!(key in result)) result[key] = value;
   return { fields: result };
 }
+
+/** Mirrors the server's `itemLinks`: every item's authored `template:` as a full id (the picker's loop guard). */
+export function itemLinks(documents: Docs): { pack: string; id: string; parent: string }[] {
+  const out: { pack: string; id: string; parent: string }[] = [];
+  for (const document of documents.values()) {
+    if (!document.path.startsWith('items/')) continue;
+    for (const [id, definition] of Object.entries(document.parsed)) {
+      const authored = isRecord(definition) ? text(definition.template) : '';
+      if (authored) out.push({ pack: document.pack, id, parent: fullRef(authored, document.pack) });
+    }
+  }
+  return out.sort((a, b) => a.pack.localeCompare(b.pack) || a.id.localeCompare(b.id));
+}

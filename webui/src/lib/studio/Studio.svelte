@@ -30,6 +30,7 @@
   import { scrollBehavior } from '../motion';
   import {
     acceptsTemplates,
+    selectableItems,
     selectableTemplates,
     servedSchema,
     studioSchema,
@@ -141,6 +142,13 @@
   const parents = $derived(
     selectableTemplates(workspace.templates, servedDirectory,
       isTemplate ? { pack: resource.pack, id: rootId } : undefined),
+  );
+  /** Items an item may be based on (plugin.md section 3.1): never itself, never a loop, never offered to another type. */
+  const itemChoices = $derived(
+    takesTemplates && !isTemplate && typeDirectory === 'items'
+      ? selectableItems(workspace.resources, workspace.summaries, workspace.templates, workspace.itemLinks,
+          { pack: resource.pack, id: rootId }, workspace.activePack)
+      : [],
   );
   let savingAsTemplate = $state(false);
   const folder = $derived(resource.path.split('/').slice(0, -1).join('/'));
@@ -556,6 +564,7 @@
         authored={authoredTemplate}
         {inheritance}
         candidates={parents}
+        {itemChoices}
         detachBlocked={detachBlocked}
         editable={fieldsEditable}
         onChange={(ref) => set('template', ref)}
