@@ -32,7 +32,7 @@
 # content/packs/<pack>/guis/shop.yml
 shop:                          # one resource per key (master §7.2); the key is the GUI id
   title: Shop                  # accessibility/fallback title (narration, title-less clients)
-  rows: 6                      # 1..6 (a chest). Designed in §12 (not built): `container: chest_6` is the same, and names other containers
+  rows: 6                      # 1..6 (a chest). Designed in §12 (not built): replaced by `container: chest_6`, which also names other containers
   layers:                      # bottom → top
     - id: frame                # stable, unique within the GUI; [a-z0-9_]+
       type: panel              # component name in the gui-components registry
@@ -1442,12 +1442,12 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 ---
 
-## 12. Containers beyond the chest (#286) — design, scope approved by the owner, one question open
+## 12. Containers beyond the chest (#286) — design, all owner questions answered; awaiting final approval to merge
 
-> **Status: design only; the owner answered the first round on PR #287 (§12.13) and one question remains (§12.14).**
+> **Status: design only; all owner questions are answered (§12.13) and there are none open (§12.14). Awaiting final approval to merge.**
 > Nothing in this section is built. It answers #286 (Paper menu types, v1 scope, file model, compiler, runtime, studio,
 > logic and QA, the row split) so that implementation issues can be filed from it, as #274 did for the open canvas. Until
-> then §1 to §11 describe what ships: **a GUI is a chest of 1 to 6 rows, written `rows: N`**. The consistency edits this
+> then §1 to §11 describe what ships: **a GUI is a chest of 1 to 6 rows, written `rows: N`**; the implementation replaces `rows:` with `container:` outright (§12.4). The consistency edits this
 > design makes to §1, §2, §4, §6, §8 and §11 are one-line pointers; they change no behaviour.
 >
 > **The governing rule (owner, §12.13 item 5): the system is agnostic of the container type.** The chest is the default
@@ -1457,8 +1457,7 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 > Traceability: files canonical (D1): the container is one line of YAML and nothing else stores it. One pipeline (D6): the
 > container is read by the same `GuiCompiler` the pack and the runtime share. Registries with self-description (D5): the
 > container list reaches the studio through `authoring.describe`, not through a studio-side list. Fail-soft: an unknown
-> container quarantines that GUI, never the server. Lossless round-trip (master §5.6): a file that says `rows: N` is read
-> and written exactly as before until the author changes its container.
+> container quarantines that GUI, never the server. Lossless round-trip (master §5.6) holds for `container:` files like any other: load then untouched save is byte-identical.
 
 ### 12.1 Goal and non-goals
 
@@ -1628,33 +1627,29 @@ orders:
 guide:
   title: Guide
   container: chest_3       # a chest is a container like any other: its row count is part of its id
-shop:
-  title: Shop
-  rows: 6                  # the existing spelling: still valid, means `container: chest_6`
 ```
 
 | Rule | Decision |
 |---|---|
-| **Name and values** | `container:` holds the id of a built-in container profile, lower-snake-case, valid wherever the schema takes an enum: `chest_1` .. `chest_6`, `hopper`, `dispenser` in v1. `dispenser` is also how a dropper is written (one menu, one screen; the importer maps `DROPPER` to it). Later ids follow the menu names (`shulker_box`, `furnace`, `blast_furnace`, `smoker`, `anvil`, ...). The chest ids are spelled `chest_N` rather than vanilla's `generic_9xN` (§12.14) |
-| **No parameters** | A container has no fields of its own in the file (§12.2.5). The row count is part of the id, so a chest of 4 rows is `chest_4`, not `chest` plus `rows: 4`. There is no parameter API |
-| **`rows:` is a legacy alias, resolved in one place** | A profile may declare an alias: a top-level key and value that name it (`chest_N` declares `rows: N`). One resolver turns a GUI definition into a profile: `container:` if present, else the alias key, else the GUI is missing its container (quarantined, as a missing `rows` is today). Everything after that sees a profile and never `rows`. No other code reads `rows` |
-| **`container` and `rows` both present** | `container:` wins. When the alias disagrees with it, `MTR-0100` (warning) says the alias is ignored; when it agrees nothing is reported |
-| **Round-trip and migration** | Loading and saving an untouched file is byte-identical, whichever spelling it uses; no file is ever migrated by a reload. The studio writes a spelling only when the author changes the container: it then writes `container: <id>` and removes `rows` in the same edit (one undo step). A file that says `rows: 4` keeps saying it until its container is edited. **Both spellings stay valid indefinitely**; `container:` is the one form the studio writes and the New GUI dialog starts with (the default there is `chest_3`) |
-| **No default container when parsing** | A definition with neither `container` nor an alias is missing its container: quarantined, exactly as a missing `rows` is today. "Chests are the default" is a choice of the New GUI dialog, not a rule of the parser |
-| **Unknown or unsupported id** | The GUI is quarantined with `MTR-0097` (error): the message names the value and lists the supported ids. This is also how an **older plugin** refuses a file written for a newer one, with no capability: it does not know `container:`, finds no `rows`, and quarantines the GUI as missing its size, never showing a wrong chest. A newer plugin reading an unknown id uses `MTR-0097`. The file is untouched either way (fail-soft, D1) |
+| **Name and values** | `container:` holds the id of a built-in container profile, lower-snake-case, valid wherever the schema takes an enum: `chest_1` .. `chest_6`, `hopper`, `dispenser` in v1. `dispenser` is also how a dropper is written (one menu, one screen; the importer maps `DROPPER` to it). Later ids follow the menu names (`shulker_box`, `furnace`, `blast_furnace`, `smoker`, `anvil`, ...). The chest ids are spelled `chest_N` rather than vanilla's `generic_9xN` (§12.13 item 8) |
+| **No parameters** | A container has no fields of its own in the file (§12.2.5). The row count is part of the id, so a chest of 4 rows is `chest_4`. There is no parameter API, and there is no `rows:` field |
+| **`rows:` is dropped** | The GUI system has not been released, so there is no compatibility to keep (owner, §12.13 item 9). `rows:` is removed from the schema and the parser outright: no alias, no resolver, no two spellings. A file that still says `rows:` has no `container:`, so it fails like any other file missing a required field; `rows` is then just an unknown top-level key, preserved losslessly as unknown keys are (master §5.6) |
+| **Round-trip and conversion** | Load then untouched save is byte-identical. Every file in the repository that uses `rows:` is converted to `container: chest_N` **in the same change that lands the parser** (row M, §12.10), so `main` never holds a mixed state. The change is breaking, acceptable because GUIs are unreleased, and the CHANGELOG entry says so |
+| **`container:` is required** | A definition without `container:` is a schema error with the existing codes (the same path a missing `rows` takes today). "Chests are the default" is a choice of the New GUI dialog (`chest_3`), not a rule of the parser |
+| **Unknown or unsupported id** | The GUI is quarantined with `MTR-0097` (error): the message names the value and lists the supported ids. A file written for a newer plugin therefore costs that one GUI on an older server, never the pack, and the file is untouched (fail-soft, D1). No capability is involved |
 | **Slot numbers** | A slot is the container's own slot id (§12.2.3): `0..4` on a hopper, `0..8` on a dispenser, row-major `0..9N-1` on `chest_N`. An `item` layer, a `list` slot set or a rule's `slot:` outside the container is the existing diagnostic (`MTR-0052` for an item or list layer, `MTR-0021` for a rule), with the message saying "container" and the slot count instead of "rows". No new code |
-| **Schema self-description (D5)** | `container` joins the gui type's `SelfDescription` as an `ENUM` whose options are the profiles (group `placement`, before `rows`); `rows` stays, described as the legacy alias of `container: chest_N`. No conditional-applicability hint is needed, because nothing is "chest only" any more. `authoring.describe` gains `guiContainers` (id, label, group, slot count, columns, screen size) next to `guiComponents` |
-| **The editor ships apart from the jar** | The studio offers the profiles that `guiContainers` lists, the same for every container. A server that predates the list (no `guiContainers`) offers exactly the profiles that declare an alias, and the studio writes them in the alias form (`rows: N`), which that server reads. That is a data rule, not a chest rule: it applies to any container that ever declares an alias. There is no session capability and no gate that only some containers need |
+| **Schema self-description (D5)** | `container` replaces `rows` in the gui type's `SelfDescription`: a required `ENUM` whose options are the profiles (group `placement`). Nothing is conditional on the container, so the schema needs no applicability hint. `authoring.describe` gains `guiContainers` (id, label, group, slot count, columns, screen size) next to `guiComponents` |
+| **The editor ships apart from the jar** | The studio offers the profiles that `guiContainers` lists, the same for every container. A server too old to list them has no GUI containers at all; the studio says so and offers none. Plugin and editor are released together while GUIs are unreleased, so no fallback is designed |
 
 **Diagnostics reserved for this feature.** The next free code is `MTR-0097`. The block `MTR-0097` to `MTR-0100` is
-reserved here, in one place (plugin.md §5 notes the reservation so another change does not take them):
+reserved here, in one place (plugin.md §5 notes the reservation so another change does not take them); `MTR-0100` stays unassigned unless the design genuinely needs it:
 
 | Code | Severity | Meaning | When it lands |
 |---|---|---|---|
 | `MTR-0097` | error | A GUI's `container:` is not a supported container id (or is not a string). The GUI is quarantined; the rest of the pack compiles | M |
 | `MTR-0098` | error | A GUI's container cannot be opened on this server (a platform without the menu API a later type needs). The open is refused with this code, before the previous session changes, like the unavailable-window refusal of logic.md §6.1 step 4. **Unused in v1**: all v1 containers open on every supported Paper | phase 2 |
 | `MTR-0099` | warning | An `input: true` slot sits on a container slot the client refuses items for (§12.2.4: a fuel slot, a result slot, a beacon payment slot, ...). The layer is kept; the item would not go in. **Unused in v1** (all v1 slots accept anything) | phase 2 |
-| `MTR-0100` | warning | A GUI sets `container:` and also a legacy alias (`rows:`) that names a different container; the alias is ignored | M |
+| `MTR-0100` | - | reserved, unassigned (it was the legacy-alias disagreement of an earlier draft; with `rows:` dropped nothing needs it) | - |
 
 ### 12.5 The compiler
 
@@ -1668,7 +1663,6 @@ ids and labels.
 | Field | Meaning | chest_4 (example of `chest_N`) | hopper | dispenser |
 |---|---|---|---|---|
 | `id`, `label`, `group` | the `container:` value, the studio's name, and the heading the select groups it under | `chest_4`, "Chest, 4 rows", Chests | `hopper` | `dispenser` |
-| `alias` | an optional legacy top-level key and value that name this profile (§12.4) | `rows: 4` | none | none |
 | `slotCount`, `columns` | slots and the grid's width (lists and `skip_columns` use `columns`) | 36, 9 | 5, 5 | 9, 3 |
 | `slots` | the item's top-left in screen px, as an origin and an 18-px pitch over `columns` | origin `(8, 18)`, 9 columns | origin `(44, 20)`, 5 columns | origin `(62, 17)`, 3 columns |
 | `width`, `height` | the screen | `176`, `186` | `176`, `133` | `176`, `166` |
@@ -1688,21 +1682,21 @@ later container is one more entry; the geometry is never a code change, and noth
 **Identical for every container, byte for byte:** the flatten over the art cap (§4 step 1), the cut into 256-px tiles, the
 PNG encoder, the glyph allocation and the `<ns>:gui` font, the offset fonts, `ShiftMath`, the dynamic-visual path (§4 step
 7), `MTR-0090`/`MTR-0091`, and every existing golden and vector. **A row's exit criterion is that no existing golden
-changes.** A file that says `rows: N` compiles exactly as today because `chest_N` reproduces today's constants.
+changes.** The converted files (`rows: N` to `container: chest_N`, §12.4) compile exactly as today because `chest_N` reproduces today's constants.
 
 **Generalised** (the compiler's `rows`-shaped places, found by reading the code, §12.6 has the plugin and studio ones):
 
 | Where | Today | With a profile |
 |---|---|---|
-| `GuiType` (`MAX_ROWS`, the `rows` schema entry and range check) | rows 1 to 6 or quarantine | the alias resolver of §12.4 (`container`, else an alias, else quarantine); `MAX_ROWS` disappears |
-| `GuiDefinition`, `CompiledGui` (`rows`, `WIDTH`, `height(rows)`) | chest size | carry the profile; `width()`/`height()` from it; `rows()` is kept only as a deprecated derived value (`slotCount / columns`) for source compatibility |
+| `GuiType` (`MAX_ROWS`, the `rows` schema entry and range check) | rows 1 to 6 or quarantine | `container` is read and looked up in the profiles (`MTR-0097` when unknown); `rows` and `MAX_ROWS` disappear |
+| `GuiDefinition`, `CompiledGui` (`rows`, `WIDTH`, `height(rows)`) | chest size | carry the profile; `width()`/`height()` from it; `rows()` is removed (the GUI system is unreleased, so no deprecated shim) |
 | `GuiCompiler` slot table (`for slot < rows * 9`) | 9-wide | `slotCount` |
 | `ItemComponent` (`rows * 9`, "outside the GUI's N row(s)") | chest slot | `slotCount`, message says container |
 | `ListSlots` (`COLUMNS = 9`, `rows * 9`), `ListComponent` | chest slot grid | profile `columns` and `slotCount` |
 | `SlotsComponent.itemOrigins` and the well painter (`rows * 18 + 31`, `8 + col * 18`) | chest geometry | the profile's `slot(i)` and `inventory`; `region: player` uses `inventory` |
 | `ClickMapCompiler` (`centreX(slot % 9)`, `centreY(slot / 9)`, `rows * 9`), `GuiTextRules.slots`, `GuiVisualCompiler` | 9-wide centres | the profile's slot centres |
-| `GuiAuthoringApiImpl.render` (the preview flattened at `CompiledGui.height(rows)`), `GuiLayerEdits` (screen edit: rows 1 to 6), the `rows` edit paths | chest | profile height; the `screen` edit takes a `container` id; a `rows` edit is the alias and is resolved like a file's |
-| `GuiComponentConfiguration.rows` (api) | the component's view of the geometry | gains the profile; `rows()` stays deprecated and derived, for source compatibility |
+| `GuiAuthoringApiImpl.render` (the preview flattened at `CompiledGui.height(rows)`), `GuiLayerEdits` (screen edit: rows 1 to 6) | chest | profile height; the `screen` edit takes a `container` id instead of `rows` |
+| `GuiComponentConfiguration.rows` (api) | the component's view of the geometry | replaced by the profile (an api change, acceptable while unreleased) |
 
 #### 12.5.3 The title origin, including centred titles
 
@@ -1749,8 +1743,8 @@ position (§9.14), for every container.
 
 Per profile: a compiled golden (the pack-output summary), shared raster vectors for the underlay composition, a
 click-map table, and a **title vector** with a trailing shift. A ban test forbids `rows * 9`, `% 9` and `/ 9`, the
-numbers `176`, `114`, `18 * rows` and `rows * 18`, and the identifiers `rows` and `"chest"` outside the profile file and the
-alias resolver. The existing
+numbers `176`, `114`, `18 * rows` and `rows * 18`, and the identifiers `rows` and `"chest"` anywhere outside the profile data. Nothing in
+the parser reads `rows`. The existing
 `chest-*` vectors and every shipped golden stay as they are.
 
 ### 12.6 Runtime
@@ -1776,8 +1770,8 @@ re-opens, with the cursor lifted and restored as today. The dynamic-title transp
 asks `CraftContainer.getNotchInventoryType(expected)` for the menu type, which is type-aware on both pins, so a hopper's
 title refresh sends `MenuType.HOPPER` [SRV; platform source].
 
-**API.** `RuntimeApi.GuiView(id, rows, title, slots)` keeps `rows` as the deprecated derived value (`slotCount / columns`) and
-gains the container id as a new component through a source-compatible secondary constructor; `/materione gui open` and the editor's preview are
+**API.** `RuntimeApi.GuiView(id, rows, title, slots)` replaces `rows` with the container id (an api change, acceptable while
+unreleased); `/materione gui open` and the editor's preview are
 container-agnostic. `GuiRuleDiagnoser`'s "outside this GUI's N row(s)" becomes "container slots 0 to N-1".
 
 **`player_inventory`.** The policy is a property of the viewer's inventory and is container-independent. The only per-type
@@ -1818,7 +1812,7 @@ entries of it); the switch is **one undo step** and loses nothing:
 
 | What the document holds | On a switch | How the author sees it |
 |---|---|---|
-| the container field (`container:`, or the legacy `rows:` alias) | rewritten as `container: <id>`, with the alias removed in the same edit; undo restores the exact original lines. A switch from `chest_3` to `chest_5` is the same edit as one to a hopper | the Screen panel shows the id |
+| `container:` | rewritten to the new id; undo restores the exact original line. A switch from `chest_3` to `chest_5` is the same edit as one to a hopper | the Screen panel shows the id |
 | `item` layers in slots the new container lacks | kept, unchanged | the existing server verdict (`gui.validate`, `MTR-0052`) flags each: the orange `!` on the canvas, the warning in the layers panel, the reason in the inspector; the compiler skips only those layers |
 | `list` slot sets, rules with `slot:` | kept | `MTR-0052` and `MTR-0021` respectively, as above |
 | `slots` layers | kept; they are drawn from the new container's wells | none needed |
@@ -1838,7 +1832,7 @@ part of this design.
 ### 12.8 Logic, importer and QA
 
 - **logic.md §1 / §11.** The "Size and container type" row becomes: `container: <id>` (`chest_1`..`chest_6`, `hopper`, `dispenser` in v1,
-  gui.md §12; `rows: N` stays valid as the alias of `chest_N`); DeluxeMenus' `inventory_type` maps `CHEST`, `HOPPER`, `DISPENSER`, `DROPPER` now and the rest as the later
+  gui.md §12); DeluxeMenus' `inventory_type` maps `CHEST`, `HOPPER`, `DISPENSER`, `DROPPER` now and the rest as the later
   phases add profiles. The deferred row "Non-chest containers: click-kind mapping per container" is answered for v1: **no
   mapping is needed**, because the click kinds are Bukkit's and the v1 menus are plain slots; a container's own behaviours
   (rename, buttons, trades, progress) become **triggers and components of that container** when it is designed, never a change
@@ -1853,7 +1847,7 @@ part of this design.
   a chest; the dynamic title refreshes on a hopper; and **the open dispenser screen's `titleLabelX` is 8 for a compiled title
   and `(176 - width) / 2` for a plain one**, read with `ctx.exec` from the client (the check that closes U1 and then guards the
   trailing shift). Studio auto: switching `chest_6` to `hopper` keeps every layer, flags the out-of-range ones, and undo restores the
-  original lines (a file that says `rows: 6` included); a file edited without touching its container is byte-identical. Visual: art over a hopper and a dispenser (tiles across the screen edge, the veil boundary, the "Inventory" label
+  original line; a file edited without touching its container is byte-identical. Visual: art over a hopper and a dispenser (tiles across the screen edge, the veil boundary, the "Inventory" label
   over the art, items over art), and the studio canvas for each container. Showcase: a hopper GUI and a dispenser GUI join
   `fixtures/packs/showcase`.
 
@@ -1865,17 +1859,16 @@ Each is reversible by the owner (the owner's own are in §12.13).
    data change plus its probe. The chest is six entries of it.
 2. **Types-as-parameters.** The chest's row count is the only structural parameter of any vanilla menu and vanilla already
    makes it part of the type (§12.2.5); a container is an id and has no parameters. No parameter API.
-3. **`container:` names the profile; `rows:` is a legacy alias resolved by one reader.** Both spellings stay valid; the studio
-   writes `container:` when a container is edited; no reload migrates a file.
-4. **No chest special-casing anywhere.** No capability, no `if chest`, no conditional field, no chest adapter. An older
-   plugin's refusal falls out of the schema (missing size) and `MTR-0097`.
+3. **`container:` names the profile and is required; `rows:` is dropped, not aliased.** One spelling, no resolver; the repository's
+   files are converted in the change that lands the parser.
+4. **No chest special-casing anywhere.** No capability, no `if chest`, no conditional field, no chest adapter, no alias.
 5. **v1 opens through `InventoryType` or by size (the legacy path), keeping the holder as the window's identity,** chosen by
    the profile's `open` descriptor. The `MenuType` path arrives with the first type that needs it, with a view-identity router
    beside the holder one.
 6. **Centred titles are neutralised by a trailing shift, so the pen origin stays 8.** Conditional on the probe.
 7. **One art cap for v1**, stated per profile so later containers can differ.
 8. **Switching container never edits a layer.** It reports; the author decides.
-9. **`MTR-0097` to `MTR-0100` are reserved for this feature**, all four defined (§12.4).
+9. **`MTR-0097` to `MTR-0100` are reserved for this feature**; three are defined and `MTR-0100` stays unassigned (§12.4).
 
 ### 12.10 Implementation rows
 
@@ -1886,12 +1879,12 @@ effort, regular implementation on Haiku.
 | Row | Title | Scope | Depends on | Model |
 |---|---|---|---|---|
 | **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high |
-| **M** | Model and profiles | `container:` in the schema; the alias resolver and `GuiType.parse` on it; `MTR-0097` and `MTR-0100`; the profile data file (six chest entries, hopper, dispenser; `alias`, `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; the scaffold change in `core` and `web` and the goldens it moves; `GuiComponentConfiguration` gains the profile; lossless-round-trip tests for files with `rows:`, with `container:` and with both | none | Haiku, reviewed by Sonnet |
-| **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile file and the alias resolver); **no existing golden changes** | M; R for the dispenser | Sonnet, high |
+| **M** | Model, profiles and the conversion | `container:` replaces `rows:` in the schema and `GuiType.parse` (required; `MTR-0097` for an unknown id); the profile data file (six chest entries, hopper, dispenser; `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; `GuiComponentConfiguration` and `CompiledGui` carry the profile; the scaffold change in `core` and `web`. **The conversion, in this row:** every `rows:` of a GUI becomes `container: chest_N` in the same change: `fixtures/gui/*.yml` and `fixtures/gui/open-canvas`, `fixtures/packs/*/guis` (showcase, guilogic, guitext, opencanvas, overlay), the built-in `plugin/src/main/resources/builtin-packs/materione/guis/browser.yml`, `harness/protocol/floor.yml`, YAML embedded in Java and TS tests and runners (`content`, `core`, `pack`, `plugin`, `harness`, `web`, `webui` demo data and specs), the vector generator, the goldens they regenerate (`editor-demo-snapshot.json` and the pack-output goldens), and the docs' examples (gui.md §2, logic.md). Glyph sheets and the satchel item have their own `rows` that are not GUI rows and stay. The CHANGELOG entry states the breaking change and why it is acceptable (GUIs are unreleased). A grep-based test fails the build on any GUI file with `rows:` | none | Haiku for the sweep, Sonnet reviews the parser |
+| **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high |
 | **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor | M | Haiku |
 | **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row can ship first | owner (§12.13 item 3) | owner / Haiku for C |
-| **S** | Studio | The container select (all profiles, grouped, from `guiContainers`, with the alias-form rule for servers that predate it), the profile-driven canvas (`chest.ts` becomes the profile reader), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog, `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high |
-| **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes, plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
+| **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high |
+| **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
 | **B** (later) | Underlay from the user's jar | Option B of §12.7, approved as the follow-up once the type count grows | after v1 | Sonnet, high |
 
 R, M and A can start together. If R refutes U1, C ships the hopper and the dispenser is re-filed as phase 2.
@@ -1934,30 +1927,28 @@ jar this machine lacks, can add.
    full array yet. The dispenser stays conditional on the probe (U1); anvil and furnaces are phase 2.
 2. **The dropper is the dispenser: approved. The chest's rows become part of the type** if the chest is the only container with
    parameters, otherwise a parameter API: answered by §12.2.5 (the chest is the only one, and vanilla already splits it into six
-   types), so the file model is types-as-parameters (§12.4). The spelling and the old `rows:` are §12.14.
+   types), so the file model is types-as-parameters (§12.4).
 3. **Underlay: option A (the owner's hopper and dispenser sheets) with C (the generated diagram) as the fallback now, and B
    (the user's own jar) later: approved.**
 4. **`MTR-0097` to `MTR-0100` reserved: approved.**
 5. **The system is agnostic of the container type: no special treatment for non-chest containers, and none for chests.** The
    chest is the default a New GUI starts with and nothing more. This removed the `gui.containers` capability, the "chest only"
    `rows` rule, the `appliesWhen` hint, the removal of `rows` on a switch, the chest adapter and the chest fast path in the
-   opener (§12.4, §12.5, §12.6, §12.7).
+   opener (§12.4, §12.5, §12.6, §12.7). The alias and the older-server rule that an earlier draft of this item produced were
+   dropped by item 9.
 6. **The importer skips a GUI whose `inventory_type` is not supported yet: approved.**
 7. **The furnace recipe-book button is acceptable (it cannot be removed): approved.** The furnaces stay phase 2 and the button
    is not a blocker.
+8. **The chest ids are `chest_1` .. `chest_6`, with `hopper` and `dispenser`.** (Not vanilla's `generic_9xN`; the profile may
+   carry the vanilla name as data.)
+9. **`rows:` is dropped entirely: no legacy alias, no alias resolver, no `alias` profile field, no "both present" rule, no
+   older-server alias rule.** The GUI system was never publicly released, so there is no compatibility to keep ("make smart
+   decisions now, and not compromise for other decisions"). `container:` is required; a file without it is a schema error with
+   the existing codes; an unknown id is `MTR-0097`. The repository's own files are converted in row M (§12.10), and the
+   CHANGELOG entry says the change is breaking.
 
 ### 12.14 Still open
 
-1. **The spelling of the chest ids, and what happens to `rows:`** (item 2 of §12.13 left this to the design). The design
-   recommends:
-   - **Ids `chest_1` .. `chest_6`.** Readable, matches the user-facing word, extends to `shulker_box`, `blast_furnace`, and is
-     valid wherever the schema takes an enum. The alternative is vanilla's own `generic_9x1` .. `generic_9x6` (the exact
-     `MenuType` names, so an importer or a developer reading Paper recognises them), at the cost of an opaque name for the most
-     common container. The profile can carry the vanilla name as data (`menu: generic_9x4`) either way, so the choice is only
-     the spelling authors type.
-   - **Both spellings stay valid, with `container:` canonical** (§12.4): `rows: 4` means `container: chest_4`, a reload never
-     migrates a file, and the studio writes `container:` only when the author changes the container. The alternative is a
-     **migration**: a one-time rewrite of every `rows:` into `container: chest_N`, which breaks the byte-identical round-trip
-     of untouched files, makes every existing pack differ in version control, and strands any older plugin that reads the
-     rewritten file. The cost of keeping both is one alias reader that never goes away; the cost of migrating is a flag day.
-   Is `chest_N` with the permanent alias what you want, or `generic_9xN`, or a migration?
+None. All owner questions are answered (§12.13); the design awaits final approval to merge, after which the rows of §12.10
+are filed.
+
