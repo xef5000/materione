@@ -593,6 +593,20 @@ already asserts.
   the shift characters and the glyphs). The probe's Paper JVM
   (Microsoft OpenJDK 25.0.4) crashed once with a G1 `FreeList_lock` guarantee failure during a long
   RCON session; `probe up --no-build` and `join` recover.
+- **Non-chest container windows (26.1.2, #289; `fixtures/gui/containers/`).** The chest rig above cannot make a
+  hopper or a dispenser. A test-only plugin does: `:harness:containerProbeJar` builds `ContainerProbe`
+  (`harness/src/containerProbe`); copy the jar to `harness/build/probe/server/plugins/MaterioneContainerProbe.jar`
+  *before* `probe up`, and Adventure-JSON titles to `plugins/MaterioneContainerProbe/<name>.json` (`runs/install.mjs`
+  does the titles and the client pack). Then `rcon "ctprobe open hopper Probe <title> [empty]"` (or `dispenser`) opens
+  `Bukkit.createInventory(holder, InventoryType.X, title)` with a holder of its own, `rcon "ctprobe title Probe <title>"`
+  refreshes the open window's title with the product's packet, and every click on it logs
+  `MATERIONE-CTPROBE click where=top|bottom|outside slot=… raw=…`. The screen's own numbers read from
+  `mc.screen.@target`: `imageWidth`, `imageHeight`, `leftPos`, `topPos`, `titleLabelX/Y`, `inventoryLabelX/Y` (fields
+  are reachable with `.@target` even when `protected`); the title's width is `mc.font.width(mc.screen.@target.getTitle())`.
+  A pack of the vanilla container sheets can be read straight from the client jar
+  (`assets/minecraft/textures/gui/container/{hopper,dispenser,generic_54}.png` are 4-bit palette PNGs; `runs/lib.mjs`
+  decodes them). Real clicks on slots: `scr.mouseClicked(new MouseButtonEvent(x, y, new MouseButtonInfo(0, 0)), false)`
+  with `x`, `y` in GUI-scaled coordinates (`leftPos + 8 + …`); the plugin cancels them, so the cursor never keeps an item.
 - **Default-font text is not legible in probe captures** while the published pack overrides
   `minecraft:default` without the vanilla providers (gui.md §9.6). Use a styled font, such as
   `shop:gui/smallcaps_y6`, for readable probe text.

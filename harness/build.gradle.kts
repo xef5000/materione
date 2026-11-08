@@ -36,6 +36,17 @@ val richTitleProbeJar by tasks.registering(Jar::class) {
     from(richTitleProbe.output)
 }
 
+// A second test-only Paper plugin opens a hopper and a dispenser through the legacy path (gui.md 12.2.6, #289).
+// It rides in every integration run (the container window IT) and is installed by hand on the 26.x probe.
+val containerProbe = sourceSets.create("containerProbe")
+dependencies {
+    add(containerProbe.compileOnlyConfigurationName, libs.paper.api)
+}
+val containerProbeJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("container-probe")
+    from(containerProbe.output)
+}
+
 val catalog = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
 val paperUrl = catalog.findVersion("paper-harness-url").get().requiredVersion
 val paperSha256 = catalog.findVersion("paper-harness-sha256").get().requiredVersion
@@ -65,11 +76,13 @@ val integrationTest by tasks.registering(Test::class) {
         includeTags("integration")
     }
     maxParallelForks = 1
-    dependsOn(":plugin:shadowJar", downloadPaperServer)
+    dependsOn(":plugin:shadowJar", downloadPaperServer, containerProbeJar)
     val shadowJarPath = rootProject.projectDir.resolve("plugin/build/libs/Materione-${project.version}.jar")
     systemProperty("paper.jar", downloadPaperServer.get().output.get().asFile.absolutePath)
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
+    systemProperty("harness.containerProbeJar", containerProbeJar.get().archiveFile.get().asFile.absolutePath)
+    inputs.file(containerProbeJar.flatMap { it.archiveFile })
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
     if (providers.gradleProperty("harness.richTitleFloor").orNull == "true") {
         dependsOn(richTitleProbeJar)

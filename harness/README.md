@@ -158,6 +158,12 @@ node --test harness\protocol\floor-bot.test.mjs
   `removed=1` and the GUI stops resolving, and a slot naming an item that is not live is `MTR-0054`
   while the GUI stays live. Headless: no client joins, so the window itself is judged by the unit tiers
   and the QA catalog (`gui.runtime-*`).
+- `PaperContainerWindowIT` — the window type and top size of a hopper (5 slots, `minecraft:hopper`) and a
+  dispenser (9 slots, `minecraft:generic_3x3`) created through the legacy
+  `createInventory(holder, InventoryType, Component)` path on the 1.21.4 floor (gui.md §12.2.6, #289). A
+  test-only plugin (`harness/src/containerProbe`, built by `:harness:containerProbeJar`, never shipped) makes the
+  windows and logs `MATERIONE-CTPROBE describe …`; headless, so the screens themselves are the 26.x probe's
+  evidence (`fixtures/gui/containers/`).
 - `PaperEditorHandshakeIT` — drives the real local handshake and editor mutations,
   including rapid glyph texture/create/save requests. Before comparing allocated glyph
   metadata with the compiled font, a queued console reload acts as a completion barrier:
