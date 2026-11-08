@@ -629,9 +629,12 @@ public final class MaterionePlugin extends JavaPlugin {
         var rootCommand = new dev.materione.plugin.command.MaterioneCommandAdapter(new MaterioneCommand(this));
         // permissions were declared in plugin.yml (default: op) — declare them
         // programmatically so the §9.2 taxonomy stays exactly as documented
-        for (String permission : List.of(
+        // the content browser's nodes (gui/browse/BrowseAccess): open it, and take items from it
+        var permissions = new java.util.ArrayList<>(List.of(
                 "materione.editor", "materione.pipeline", "materione.dev",
-                "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION)) {
+                "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION));
+        permissions.addAll(dev.materione.plugin.gui.browse.BrowseAccess.nodes());
+        for (String permission : permissions) {
             if (getServer().getPluginManager().getPermission(permission) == null) {
                 getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(
                         permission, org.bukkit.permissions.PermissionDefault.OP));
@@ -640,7 +643,7 @@ public final class MaterionePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
         // gui click router (holder identity — no title matching): one
-        // listener for every Materione menu, admin browser today, M6 menus later
+        // listener for every Materione menu, the content browser today, M6 menus later
         // the input-slot rules (logic.md §25) are the router's collaborator; without a GUI runtime the router
         // judges every window as one with no input slots
         getServer().getPluginManager().registerEvents(

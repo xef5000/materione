@@ -499,16 +499,11 @@ layout, as incumbents do). Every click is an ECA `menu.click` — same engine, s
 same conditions as everything else.
 
 **Shipped ahead of it (pre-M3 tooling):** the holder-based gui kit in `plugin/gui/`
-(`PluginGui` identified by `InventoryHolder` identity — never title matching — plus
-`PaginatedGui` page math and one shared click router; the router cancels only the
-gui's own slots so a picked item can be deposited into the viewer's inventory).
-Built-in admin surfaces already ride
-it: `/materione give <id> [player] [amount]` and the `/materione browser` pack-picker →
-paginated grid of a pack's items, blocks, and furniture (permission `materione.give`) —
-blocks/furniture render as their placement item's real stack, and every placeable
-definition has one: the definition's `item:` link, a same-id item resource, or the
-auto-generated placement item (below). MenuDefinition will render author menus
-through this same kit.
+(`PluginGui` identified by `InventoryHolder` identity — never title matching — and one
+shared click router; the router cancels only the gui's own slots, so a picked item can be
+deposited into the viewer's inventory, and it refuses every move a window must not take).
+`/materione give <id> [player] [amount]` rides it as a command; the in-game browser (§8.3)
+is the other built-in surface. MenuDefinition will render author menus through this same kit.
 
 ### 8.2 Dialogs (1.21+ server-side)
 
@@ -516,6 +511,65 @@ Thin, faithful wrapper over the vanilla dialog system (NOTICE/CONFIRM/LIST/MULTI
 message/item bodies; text/bool/number/single inputs; static + dynamic actions), with inputs
 flowing into ECA `dialog.submit` events. Dialog definitions are content resources like any
 other — referencable from menus, items, furniture, NPCs.
+
+### 8.3 The in-game content browser (M6, #8)
+
+`/materione browse [words…]` (alias `browser`) opens the browser for a player. It is the
+roadmap's "item browser" parity row (`feature-parity.md` §3.10): the surface every incumbent's
+`/ia`, `/oraxen inv` and `/nexo inv` provides, here as a 54-slot window over one snapshot of the live
+registries.
+
+**Model (`plugin/gui/browse`, pure and headless-tested).** `BrowseCatalog.build` makes one row per
+live item (synthetic placement items excluded), per custom block and per furniture; a block or a
+furniture row hands out its placement item, and a row with none says how to place it
+(`/materione dev place`). Rows sort by category, then name (case-insensitive), then id.
+
+**Categories come from the registries, with one authored field.** A row's category is:
+
+| Row | Category |
+|---|---|
+| an item with `category:` | the authored label (trimmed, at most 40 characters) |
+| an item without one | its pack (the namespace) |
+| a block or furniture | its placement item's category, or its pack when it has none |
+
+`category:` is an optional item field (`ItemType` self-description, `ItemDefinition.category`,
+`RuntimeItem.category`). It inherits through `template:` like every item field, round-trips in the
+raw map, and an unusable value (blank) is read as absent: the item is never quarantined over it.
+Grouping is case-insensitive (`Tools` and `tools` are one group), and a group shows the label of its
+first row in sort order, so one group never shows two spellings. The first screen lists the
+categories; each is shown as its first row's item, with its count.
+
+**Search.** `BrowseCatalog.search` matches the words of the query (split on whitespace) against each
+row's lower-cased id and plain display name (formatting tags and legacy colour codes removed); every
+word must match. `/materione browse red gem` opens the browser already filtered, and the window's search
+button types that command for the player. An in-window prompt is not built: the prompt action is the
+GUI runtime's, and the browser is not a GUI resource (below).
+
+**Taking.** A left click hands one item to the viewer, a shift-click a full stack, both through
+`Give.deliver`, so nothing lands on the cursor and nothing can be duplicated by a drop, a drag or a number
+key. Only the four left and right clicks are acted on: a drop, a number key or a middle click on a row does
+nothing. The window is a `PluginGui`, so the shared click router (`GuiListener`) cancels the moves a window
+must not take: a shift-click from the viewer into it, a drag that touches it, and a drop or a number-key swap
+of its own slots.
+
+**Permissions.** `materione.browse` opens the browser (and runs `/materione browse`); `materione.browse.get`
+takes from it. Both are declared at enable with the operator default, like `materione.give`. A viewer
+who may open but not take still sees, searches and browses everything; a click says what is missing.
+
+**Why not the GUI runtime.** The browser could be a `gui` resource with a `list` over a new
+`ListSource` and a `prompt` for search, and this surface then becomes the same code as a server's own
+GUIs. It is not done here, because a GUI resource that ships with the plugin is a built-in pack. That is
+a new source of content that the owner has not decided: a second copy of a GUI in the jar, seeded into
+`content/packs`, or loaded from the classpath beside the packs (the D1 question, §14). The browser is
+built on the kit it would use (`PluginGui`, `Pagination`, the click router), so moving it to the runtime
+later changes its window, not its rules. Open question for the owner, recorded in the PR.
+
+**Diagnostics.** The browser adds no `MTR-` code. An entry that cannot be handed out (no placement item, or
+an item that is no longer live) tells the player why and gives nothing; a reload is the fix. The browser
+logs `MATERIONE-BROWSE-OPEN` and `MATERIONE-BROWSE-GET` for the QA suite (`qa/catalog/browse.mjs`).
+
+**Not in this milestone.** Configurable slot layout, icons, titles and navigation icons (the parity row's
+"configurable" part, and Nexo's FILE and DIRECTORY layouts) follow from the GUI runtime and are not built.
 
 ---
 

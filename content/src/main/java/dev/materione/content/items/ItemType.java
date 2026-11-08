@@ -84,6 +84,9 @@ public final class ItemType implements ContentType {
                                 "The shape family the generated model renders with (flat sprite or handheld)")),
                         new ParameterSchema("display_name", ParameterType.STRING, false, null,
                                 "Item display name", null, null).withEditor(new ParameterSchema.EditorMetadata("Display name", "identity", 0, false, "formatted-text", "", "Ruby sword")),
+                        new ParameterSchema("category", ParameterType.STRING, false, null,
+                                "Browser category: the group the in-game browser files this item under (case-insensitive; default: the pack)",
+                                null, null).withEditor(new ParameterSchema.EditorMetadata("Category", "identity", 30, true, "text", "", "Tools")),
                         new ParameterSchema("lore", ParameterType.LIST, false, null,
                                 "Lore lines", null, null).withEditor(new ParameterSchema.EditorMetadata("Lore", "gameplay", 10, false, "formatted-lines", "", "A very special item")),
                         new ParameterSchema("components", ParameterType.RAW, false, null,
@@ -135,12 +138,32 @@ public final class ItemType implements ContentType {
                 Templates.text(merged, "texture"),
                 textOrDefault(merged, "model_parent", "item/generated"),
                 Templates.text(merged, "display_name"),
+                category(merged),
                 stringList(merged.get("lore")),
                 nestedMap(merged.get("components")),
                 behaviorMaps(merged.get("behavior")),
                 behaviorMaps(merged.get("mechanics")),
                 jukeboxSong(merged, id),
                 merged));
+    }
+
+    /** The longest browser category label an item may carry. */
+    public static final int MAX_CATEGORY = 40;
+
+    /**
+     * {@code category:} trimmed and capped at {@link #MAX_CATEGORY} characters; a blank value means no category
+     * (the item is filed under its pack). Fail-soft: a bad category never quarantines the item.
+     */
+    static String category(Map<String, Object> merged) {
+        String raw = Templates.text(merged, "category");
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.strip();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        return trimmed.length() > MAX_CATEGORY ? trimmed.substring(0, MAX_CATEGORY) : trimmed;
     }
 
     /** {@code jukebox_song:} full or pack-relative sound reference. */

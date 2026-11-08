@@ -204,7 +204,7 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | 📋 M6 |
+| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | 🟡 M6 (#8): `/materione browse` with categories (`category:` on items), search and take; configurable layout, icons and FILE/DIRECTORY layouts pending (runtime-systems §8.3) |
 | Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) | 🚧 M6: the GUI studio and GUI logic shipped (click rules, open commands, dynamic slots, lists and search, prompts, input slots; epic #189, showcase #227, logic.md §1.1). Blessing of the showcase QA entries pending; the Bedrock forms and dialogs stay later |
 | **Server-side dialogs** (1.21+ forms) | ❌ | ❌ | ✅ | 📋 M6 |
 
@@ -455,6 +455,7 @@ Effectively equal across all three: textured unicode glyphs injected into Minecr
 ### 3.10 GUIs / menus / dialogs
 
 - **Built-in item browser GUI** — all three (`/ia`, `/oraxen inv`, `/nexo inv`), configurable categories/slots/icons/titles; Nexo supports FILE vs DIRECTORY layouts and custom nav/search icons.
+  **Materione (M6, #8, as built — runtime-systems §8.3):** `/materione browse [words]` lists categories (an authored `category:` on the item, else its pack), searches items, blocks and furniture by id and name, and hands an item out on a click (`materione.browse` to open, `materione.browse.get` to take). The categories, layout, icons and titles are not yet configurable beyond `category:`; the window is built in code, not from a GUI resource.
 - **Free-form interactive GUI builder** — **none** ship a full DeluxeMenus-style builder. Oraxen and Nexo build GUI *backgrounds* from glyph/font images; the click logic comes from other plugins. ItemsAdder ⚠️ likewise.
 - **Server-side dialogs (1.21+, Nexo-only)** — full wrapper around Mojang's dialog system: `NOTICE`/`CONFIRM`/`LIST`/`MULTI`/`LINK` dialog types; `MESSAGE`/`ITEM` bodies; `TEXT`/`BOOL`/`NUMBER`(slider)/`SINGLE` inputs; static actions (`OPEN_URL`/`RUN_COMMAND`/`SUGGEST_COMMAND`/`CHANGE_PAGE`/`CLIPBOARD`/`SHOW_DIALOG`/`CUSTOM`) + dynamic ones (`DYNAMIC_RUN_COMMAND`/`DYNAMIC_CUSTOM` using input values). Great for NPC forms/admin panels with no client mod.
 

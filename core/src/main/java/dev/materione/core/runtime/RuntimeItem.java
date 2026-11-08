@@ -29,19 +29,29 @@ public record RuntimeItem(
         Food food,
         boolean synthetic,
         String jukeboxSong,
-        List<ItemModifier> itemModifiers) {
+        List<ItemModifier> itemModifiers,
+        String category) {
 
     public RuntimeItem {
         lore = List.copyOf(lore);
         itemModifiers = List.copyOf(itemModifiers);
     }
 
-    /** Compatibility constructor for callers without extension item hooks. */
+    /** Compatibility constructor for callers without extension item hooks or a browser category. */
     public RuntimeItem(
             NamespacedId id, String material, NamespacedId modelId,
             String displayName, List<String> lore, String definitionHash, Food food,
             boolean synthetic, String jukeboxSong) {
-        this(id, material, modelId, displayName, lore, definitionHash, food, synthetic, jukeboxSong, List.of());
+        this(id, material, modelId, displayName, lore, definitionHash, food, synthetic, jukeboxSong, List.of(), null);
+    }
+
+    /** Pre-category arity: the item hooks, no browser category (the item is filed under its pack). */
+    public RuntimeItem(
+            NamespacedId id, String material, NamespacedId modelId,
+            String displayName, List<String> lore, String definitionHash, Food food,
+            boolean synthetic, String jukeboxSong, List<ItemModifier> itemModifiers) {
+        this(id, material, modelId, displayName, lore, definitionHash, food, synthetic, jukeboxSong,
+                itemModifiers, null);
     }
 
     /** Pre-mechanics arity kept for tests and simple builders. */

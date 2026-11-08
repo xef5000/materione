@@ -9168,6 +9168,18 @@
             "uiHint": "formatted-text"
           },
           {
+            "advanced": true,
+            "description": "Browser category: the group the in-game browser files this item under (case-insensitive; default: the pack)",
+            "example": "Tools",
+            "id": "category",
+            "label": "Category",
+            "order": 30,
+            "required": false,
+            "section": "identity",
+            "type": "string",
+            "uiHint": "text"
+          },
+          {
             "advanced": false,
             "description": "Lore lines",
             "example": "A very special item",
@@ -15224,6 +15236,18 @@
           "section": "identity",
           "type": "string",
           "uiHint": "formatted-text"
+        },
+        {
+          "advanced": true,
+          "description": "Browser category: the group the in-game browser files this item under (case-insensitive; default: the pack)",
+          "example": "Tools",
+          "id": "category",
+          "label": "Category",
+          "order": 30,
+          "required": false,
+          "section": "identity",
+          "type": "string",
+          "uiHint": "text"
         },
         {
           "advanced": false,

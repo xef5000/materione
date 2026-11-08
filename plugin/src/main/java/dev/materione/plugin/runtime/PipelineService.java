@@ -1092,7 +1092,8 @@ public final class PipelineService {
                 RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore(), runtimeState),
                 null, false,
                 item.jukeboxSong(),
-                mechanics.stream().flatMap(mechanic -> mechanic.itemModifiers().stream()).toList());
+                mechanics.stream().flatMap(mechanic -> mechanic.itemModifiers().stream()).toList(),
+                item.category());
     }
 
     /** Resolves mechanics against the frozen-at-apply registry snapshot. */

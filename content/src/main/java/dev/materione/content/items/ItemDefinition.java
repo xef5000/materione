@@ -19,6 +19,7 @@ public record ItemDefinition(
         String texture,           // generated-model layer0 texture, if any
         String modelParent,       // generated-model parent (item/generated…)
         String displayName,
+        String category,          // browser grouping (M6 browse); null = the pack
         List<String> lore,
         Map<String, Object> components,
         List<Map<String, Object>> behavior, // raw ECA rule maps (engine-compiled at apply)

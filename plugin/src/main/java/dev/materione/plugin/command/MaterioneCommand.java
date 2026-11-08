@@ -8,7 +8,8 @@ import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.MaterionePlugin;
 import dev.materione.plugin.MaterioneVersion;
-import dev.materione.plugin.gui.ContentBrowser;
+import dev.materione.plugin.gui.browse.BrowseAccess;
+import dev.materione.plugin.gui.browse.BrowseGui;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.items.ItemIdResolver;
 import dev.materione.plugin.runtime.PipelineService;
@@ -36,11 +37,10 @@ import org.jetbrains.annotations.NotNull;
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS =
-            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor", "gui", "var");
+            List.of("version", "doctor", "reload", "dev", "give", "browse", "editor", "gui", "var");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
-    private final ContentBrowser browser;
     private final EditorCommands editorCommands;
     private final GuiCommands guiCommands;
     private final VarCommand varCommand;
@@ -48,7 +48,6 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
         this.devCommands = new DevCommands(plugin);
-        this.browser = new ContentBrowser(plugin);
         this.editorCommands = new EditorCommands(plugin);
         this.guiCommands = new GuiCommands(plugin);
         this.varCommand = new VarCommand(plugin);
@@ -126,27 +125,35 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                         });
             }
             case "give" -> give(sender, args);
-            case "browser" -> {
-                if (!sender.hasPermission("materione.give")) {
-                    sender.sendMessage(Component.text("no permission (materione.give)", NamedTextColor.RED));
-                    return true;
-                }
-                if (sender instanceof Player player) {
-                    browser.open(player);
-                } else {
-                    plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=player-only");
-                    sender.sendMessage(Component.text(
-                            "the content browser needs a player — open it in game", NamedTextColor.RED));
-                }
-            }
+            case "browse", "browser" -> browse(sender, args);
             case "dev" -> devCommands.handle(sender, args);
             case "editor" -> editorCommands.handle(sender, args);
             case "gui" -> guiCommands.handle(sender, args);
             case "var" -> varCommand.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev|give|browser|editor|gui|var>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browse|editor|gui|var>", NamedTextColor.RED));
         }
         return true;
+    }
+
+    /**
+     * {@code /materione browse [words…]} (alias {@code browser}) — opens the in-game content browser (M6), filtered to
+     * the words when given (permission {@code materione.browse}; taking items needs {@code materione.browse.get}). The
+     * window does the work, so the command and the window's own search share one path.
+     */
+    private void browse(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            plugin.getLogger().info("MATERIONE-BROWSE-DENIED reason=player-only");
+            sender.sendMessage(Component.text(
+                    "the content browser needs a player — open it in game", NamedTextColor.RED));
+            return;
+        }
+        if (!player.hasPermission(BrowseAccess.OPEN)) {
+            sender.sendMessage(Component.text(BrowseAccess.OPEN_DENIED, NamedTextColor.RED));
+            return;
+        }
+        String query = args.length > 1 ? String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)) : null;
+        BrowseGui.open(plugin, player, query);
     }
 
     /**
@@ -174,7 +181,7 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         if (resolution.status() == ItemIdResolver.Status.UNKNOWN) {
             plugin.getLogger().info("MATERIONE-GIVE-FAILED reason=unknown-item");
             sender.sendMessage(Component.text(
-                    "no live item matches '" + args[1] + "' — try /materione browser",
+                    "no live item matches '" + args[1] + "' — try /materione browse",
                     NamedTextColor.RED));
             return;
         }

@@ -198,7 +198,7 @@ public final class RuntimeGuis {
                 "GUI " + gui.id() + " slot " + entry.slot() + " names '" + entry.item()
                         + "', which is not a live item; the slot stays empty",
                 gui.id(), null,
-                "check the item id (/materione browser lists the live items) or the pack that defines it");
+                "check the item id (/materione browse lists the live items) or the pack that defines it");
     }
 
     /**

@@ -88,6 +88,51 @@ class ItemTypeTest {
     }
 
     @Test
+    void categoryIsAnOptionalSelfDescribedBrowserField() {
+        var category = type.describe().parameters().stream()
+                .filter(p -> p.id().equals("category"))
+                .findFirst();
+        assertThat(category).isPresent();
+        assertThat(category.get().required()).isFalse();
+    }
+
+    @Test
+    void categoryIsReadTrimmedAndCappedAndAbsentWhenBlank() {
+        assertThat(parsedCategory(map("category", "  Tools  "))).isEqualTo("Tools");
+        assertThat(parsedCategory(map("category", "   "))).isNull();
+        assertThat(parsedCategory(Map.of())).isNull();
+        var long200 = "x".repeat(200);
+        assertThat(parsedCategory(map("category", long200))).hasSize(ItemType.MAX_CATEGORY);
+    }
+
+    @Test
+    void aCategoryInheritedFromATemplateIsTheTemplatesUnlessTheItemOverrides() {
+        var templates = new LinkedHashMap<String, Map<String, Object>>();
+        templates.put("sample:base", map("material", "PAPER", "category", "Gems"));
+        var inherited = type.parse(NamespacedId.parse("sample:ruby"),
+                map("template", "sample:base"), templates);
+        var overridden = type.parse(NamespacedId.parse("sample:axe"),
+                map("template", "sample:base", "category", "Weapons"), templates);
+        assertThat(((ItemDefinition) inherited.orElseThrow()).category()).isEqualTo("Gems");
+        assertThat(((ItemDefinition) overridden.orElseThrow()).category()).isEqualTo("Weapons");
+    }
+
+    @Test
+    void theCategoryRoundTripsInTheRawMapWithoutChange() {
+        var definition = map("material", "PAPER", "category", "Gems", "unknown_future_key", 7);
+        var parsed = (ItemDefinition) type.parse(NamespacedId.parse("sample:ruby"), definition, Map.of())
+                .orElseThrow();
+        assertThat(parsed.raw()).containsEntry("category", "Gems").containsEntry("unknown_future_key", 7);
+    }
+
+    private String parsedCategory(Map<String, Object> definition) {
+        var withMaterial = new LinkedHashMap<String, Object>(definition);
+        withMaterial.put("material", "PAPER");
+        return ((ItemDefinition) type.parse(NamespacedId.parse("sample:ruby"), withMaterial, Map.of())
+                .orElseThrow()).category();
+    }
+
+    @Test
     void displayNameAndLoreDeclareFormattingWidgetsInTheRegistrySchema() {
         var parameters = type.describe().parameters();
         var displayName = parameters.stream()

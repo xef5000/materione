@@ -28,8 +28,8 @@ public final class MaterioneCommandAdapter extends Command implements BasicComma
 
     MaterioneCommandAdapter(CommandExecutor executor, TabCompleter completer) {
         super("materione",
-                "Materione root command (version, doctor, reload, dev, give, browser, editor)",
-                "/materione <version|doctor|reload|dev|give|browser|editor>",
+                "Materione root command (version, doctor, reload, dev, give, browse, editor)",
+                "/materione <version|doctor|reload|dev|give|browse|editor>",
                 List.of());
         this.executor = executor;
         this.completer = completer;
