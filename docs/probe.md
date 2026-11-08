@@ -67,7 +67,7 @@ node scripts/probe/probe.mjs rcon "materione dev place sample:amethyst_lamp 0 -5
 node scripts/probe/probe.mjs rcon "tp Probe 5 -59 5"
 
 # or client side, as the player
-node scripts/probe/probe.mjs command "/materione browser"
+node scripts/probe/probe.mjs command "/materione browse"
 
 # look
 node scripts/probe/probe.mjs shot --out shots/gem-check.jpg   # then Read the file

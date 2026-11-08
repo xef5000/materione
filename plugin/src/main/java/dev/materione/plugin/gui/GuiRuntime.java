@@ -141,6 +141,46 @@ public final class GuiRuntime implements RuntimeApi.GuiRuntimeApi {
         return future;
     }
 
+    /**
+     * Opens a live GUI for a player who typed a command that names it, such as {@code /materione browse}. Like an
+     * open command (logic.md §23 decision 17) it needs no {@value #OPEN_PERMISSION}: the GUI's own
+     * {@code open.permission}, requirement and typed arguments govern. The answer is the opener's own, so the
+     * caller can tell the player why a refusal happened.
+     *
+     * @param player an online player; the window opens on their thread
+     * @param guiId the GUI, qualified
+     * @param args the open arguments as typed, by name
+     */
+    public CompletableFuture<OpenResult> openForCommand(Player player, NamespacedId guiId, Map<String, String> args) {
+        Objects.requireNonNull(player, "player");
+        Objects.requireNonNull(guiId, "guiId");
+        Objects.requireNonNull(args, "args");
+        CompletableFuture<OpenResult> future = new CompletableFuture<>();
+        if (viewOf(live.get()).gui(guiId).isEmpty()) {
+            future.complete(OpenResult.refused(OpenResult.Outcome.NOT_LIVE,
+                    "GUI '" + guiId + "' is not live: it is unknown, or its last compile quarantined it"));
+            return future;
+        }
+        if (stack == null) {
+            future.complete(OpenResult.refused(OpenResult.Outcome.FAILED, "the GUI runtime is not running"));
+            return future;
+        }
+        try {
+            scheduling.executeEntity(plugin, player, () -> {
+                try {
+                    future.complete(stack.opener().open(
+                            OpenRequest.of(Viewer.of(player), guiId, args, OpenRequest.Cause.API)));
+                } catch (RuntimeException e) {
+                    future.complete(OpenResult.refused(OpenResult.Outcome.FAILED, "GUI open failed: " + e.getMessage()));
+                }
+            });
+        } catch (RuntimeException e) {
+            future.complete(OpenResult.refused(OpenResult.Outcome.FAILED,
+                    "GUI open could not be scheduled: " + e.getMessage()));
+        }
+        return future;
+    }
+
     /** The opener's answer as an API result: each refusal keeps its own code and reason. */
     private static ApiResult<Void> answer(OpenResult result) {
         return switch (result.outcome()) {

@@ -8,7 +8,6 @@ import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.MaterionePlugin;
 import dev.materione.plugin.MaterioneVersion;
-import dev.materione.plugin.gui.ContentBrowser;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.items.ItemIdResolver;
 import dev.materione.plugin.runtime.PipelineService;
@@ -36,11 +35,10 @@ import org.jetbrains.annotations.NotNull;
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS =
-            List.of("version", "doctor", "reload", "dev", "give", "browser", "editor", "gui", "var");
+            List.of("version", "doctor", "reload", "dev", "give", "browse", "editor", "gui", "var");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
-    private final ContentBrowser browser;
     private final EditorCommands editorCommands;
     private final GuiCommands guiCommands;
     private final VarCommand varCommand;
@@ -48,7 +46,6 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
     public MaterioneCommand(MaterionePlugin plugin) {
         this.plugin = plugin;
         this.devCommands = new DevCommands(plugin);
-        this.browser = new ContentBrowser(plugin);
         this.editorCommands = new EditorCommands(plugin);
         this.guiCommands = new GuiCommands(plugin);
         this.varCommand = new VarCommand(plugin);
@@ -126,27 +123,49 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                         });
             }
             case "give" -> give(sender, args);
-            case "browser" -> {
-                if (!sender.hasPermission("materione.give")) {
-                    sender.sendMessage(Component.text("no permission (materione.give)", NamedTextColor.RED));
-                    return true;
-                }
-                if (sender instanceof Player player) {
-                    browser.open(player);
-                } else {
-                    plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=player-only");
-                    sender.sendMessage(Component.text(
-                            "the content browser needs a player — open it in game", NamedTextColor.RED));
-                }
-            }
+            case "browse", "browser" -> browse(sender, args);
             case "dev" -> devCommands.handle(sender, args);
             case "editor" -> editorCommands.handle(sender, args);
             case "gui" -> guiCommands.handle(sender, args);
             case "var" -> varCommand.handle(sender, args);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev|give|browser|editor|gui|var>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browse|editor|gui|var>", NamedTextColor.RED));
         }
         return true;
+    }
+
+    /** The in-game content browser: a GUI of the plugin's built-in pack (master §7.3), opened like any GUI. */
+    static final NamespacedId BROWSER = NamespacedId.of("materione", "browser");
+
+    /**
+     * {@code /materione browse [words…]} (alias {@code browser}) — opens the GUI {@link #BROWSER} for the sender, its
+     * {@code search} argument set to the words when given (M6, runtime-systems §8.3). The command is an alias for the
+     * generic open path: it knows nothing of the window. Who may open it, the typed arguments and the refusal text are
+     * the GUI's own {@code open:} block (permission {@code materione.browse}); taking items is the GUI's own check
+     * ({@code materione.browse.get}).
+     */
+    private void browse(CommandSender sender, String[] args) {
+        if (!(sender instanceof Player player)) {
+            plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=player-only");
+            sender.sendMessage(Component.text(
+                    "the content browser needs a player — open it in game", NamedTextColor.RED));
+            return;
+        }
+        var runtime = plugin.guiRuntime();
+        if (runtime == null) {
+            sender.sendMessage(Component.text("no content is loaded yet", NamedTextColor.RED));
+            return;
+        }
+        var openArgs = new java.util.LinkedHashMap<String, String>();
+        if (args.length > 1) {
+            openArgs.put("search", String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
+        }
+        runtime.openForCommand(player, BROWSER, openArgs).thenAccept(result -> {
+            if (!result.ok()) {
+                plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=" + result.outcome().name().toLowerCase());
+                player.sendMessage(Component.text(result.reason(), NamedTextColor.RED));
+            }
+        });
     }
 
     /**
@@ -174,7 +193,7 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         if (resolution.status() == ItemIdResolver.Status.UNKNOWN) {
             plugin.getLogger().info("MATERIONE-GIVE-FAILED reason=unknown-item");
             sender.sendMessage(Component.text(
-                    "no live item matches '" + args[1] + "' — try /materione browser",
+                    "no live item matches '" + args[1] + "' — try /materione browse",
                     NamedTextColor.RED));
             return;
         }
@@ -326,6 +345,12 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                                         ? "?" : "format v" + report.storageFormatVersion())),
                 report.allocationCorrupt() ? NamedTextColor.RED : NamedTextColor.GRAY));
 
+        sender.sendMessage(Component.text(
+                "built-in packs: " + (plugin.builtinPackIds().isEmpty()
+                        ? "none loaded"
+                        : String.join(", ", new java.util.TreeSet<>(plugin.builtinPackIds()))
+                                + " (read-only, from the plugin jar)"),
+                NamedTextColor.GRAY));
         sender.sendMessage(Component.text(
                 "runtime: " + (report.packSha256() == null && report.liveItems() < 0
                         ? "not started"

@@ -91,7 +91,7 @@ class ListPagingFlowTest {
         assertThat(shown(10)).contains("Cy");
         assertThat(shown(11)).contains("Dee");
         assertThat(session.rendered().slots().keySet()).containsExactlyInAnyOrder(9, 10, 11);
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 1, "count", 2));
+        assertThat(session.pages()).containsEntry("players", Map.of("number", 1, "count", 2, "size", 4));
         assertThat(session.rendered().lists().shownAt(10).orElseThrow().entry()).containsEntry("name", "Cy");
     }
 
@@ -107,7 +107,7 @@ class ListPagingFlowTest {
     void guiPageMovesTheListToTheNextPageAndFiresItsTriggerAfterTheWindowShowsIt() {
         assertThat(click(22).handled()).isTrue();
 
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2));
+        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
         assertThat(shown(9)).contains("Eve");
         assertThat(session.rendered().slots().keySet()).containsExactlyInAnyOrder(9);
         assertThat(f.windows.log).contains("advance roster");
@@ -140,7 +140,7 @@ class ListPagingFlowTest {
 
         click(22);
 
-        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2));
+        assertThat(session.pages()).containsEntry("players", Map.of("number", 2, "count", 2, "size", 4));
         assertThat(f.ran).hasSize(before);
     }
 

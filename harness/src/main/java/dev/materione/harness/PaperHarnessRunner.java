@@ -295,6 +295,11 @@ public final class PaperHarnessRunner {
                     "MATERIONE-GIVE-FAILED reason=no-such-player"));
             problems.addAll(drive(console, log, options, "materione browser",
                     "MATERIONE-BROWSER-DENIED reason=player-only"));
+            // the plugin's own pack is read from its jar and loads like any pack: its GUI is live, so the open
+            // gets as far as looking for the player (an unknown GUI would say reason=not-live)
+            problems.addAll(drive(console, log, options,
+                    "materione gui open materione:browser ghostplayer",
+                    "MATERIONE-GUI-FAILED reason=no-such-player"));
             // the item_model component must name the ITEM DEFINITION id (what
             // the compiler writes to assets/<ns>/items/<id>.json), not the pack
             // model — a real client checkerboarded every modeled item when the

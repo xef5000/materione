@@ -300,6 +300,16 @@ resources. Fingerprinting the manifest and fixing the splice must land together.
   the same winner as a full run. Authoring refuses to create or duplicate a declaration that
   already exists in the pack (`MTR-0056`, error), so the editor cannot make the duplicate in the
   first place.
+- **Built-in packs are parsed first, from the jar (master §7.3).** The packs the plugin ships
+  (`BuiltinPacks`, listed in the classpath resource `builtin-packs/index.txt`) are opened once at
+  boot as paths in the jar's own file system and handed to the runner. Every run parses them before the packs
+  in `content/packs`, whatever the scope, through the same `PackLayout` rule and the same `buildPack`: they
+  yield `ContentPack`s with `builtin = true` and are validated, graphed, allocated and compiled like the rest.
+  Because nothing on disk can change them, they have no fingerprints and never expand a targeted scope; a
+  targeted run keeps them from the previous run, and a scope that names a built-in pack's id is ignored for that id.
+  A folder in `content/packs` that takes a built-in pack's id is not parsed at all and is reported (`MTR-0095`),
+  once per run. A built-in pack that cannot be read is reported (`MTR-0096`) and absent from the run. The
+  jar's file system is closed in `onDisable`.
 - **One rule, everywhere.** The scope/fingerprint set (§4.1), the editor's browser and folder
   list, the file watcher and the boot-time reader all list content through the same
   `PackLayout` rule. A test pins browser and pipeline to the same document set.
@@ -514,6 +524,13 @@ Items as templates (§3.1, #203) add two codes:
 |---|---|---|
 | `MTR-0093` | error | A `template:` chain loops back on itself: an item based on itself, two items based on each other, or a longer ring through items and templates. The resource and every resource whose chain meets the loop are quarantined (the message names the path, `demo:b -> demo:a -> demo:b`); nothing else is affected. Change or remove one `template:` link in the loop, then reload. |
 | `MTR-0094` | warning | A `template:` reference of an item names an id that is both a template and an item. The template wins (§3.1 precedence) and the resource still loads, but the link cannot reach the item of that id. Rename the template or the item so the reference names only one. |
+
+The built-in packs (master architecture §7.3, #8) add two codes, both from the parse stage:
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0095` | error | A folder in `content/packs` has the id of a built-in pack (today `materione`, which is reserved). A built-in pack ships inside the plugin jar and cannot be overridden, extended or replaced, so the whole folder is ignored: none of its resources load, and the built-in pack is unchanged. Reported on every run while the folder exists. Rename or remove the folder (and move its content to a pack of its own), then `/materione reload`. The same code is returned by the authoring API when a pack is created with such an id; nothing is written. |
+| `MTR-0096` | error | A built-in pack could not be read from the plugin jar: its entry in `builtin-packs/index.txt` has no `pack.yml`, the index cannot be read, or the pack's id is not a valid pack id. The pack is left out and the server runs without it; what depends on it (`/materione browse`) says its GUI is not live. A damaged or half-replaced jar is the usual cause: reinstall the plugin. A built-in *document* that does not parse or validate is quarantined with the ordinary codes (`MTR-0007` for a YAML error, `MTR-0008` for a schema error), not this one. |
 
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same

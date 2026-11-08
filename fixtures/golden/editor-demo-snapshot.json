@@ -2722,6 +2722,101 @@
       "listSources": [
         {
           "cached": false,
+          "description": "The live content as packs, folders and entries, one location at a time",
+          "displayName": "Content tree",
+          "entry": [
+            {
+              "description": "pack, folder or item",
+              "hosts": [],
+              "path": "entry.kind",
+              "type": "string"
+            },
+            {
+              "description": "The pack, the folder or the item's plain display name",
+              "hosts": [],
+              "path": "entry.name",
+              "type": "string"
+            },
+            {
+              "description": "The name to show: an item's display name as authored (with its formatting), otherwise the plain name",
+              "hosts": [],
+              "path": "entry.label",
+              "type": "string"
+            },
+            {
+              "description": "The location a pack or folder opens; empty for an item",
+              "hosts": [],
+              "path": "entry.path",
+              "type": "string"
+            },
+            {
+              "description": "How many items are under a pack or folder; 1 for an item",
+              "hosts": [],
+              "path": "entry.count",
+              "type": "integer"
+            },
+            {
+              "description": "The id of the item that is handed out; empty for a pack or folder",
+              "hosts": [],
+              "path": "entry.id",
+              "type": "string"
+            },
+            {
+              "description": "item, block or furniture for an item row; empty otherwise",
+              "hosts": [],
+              "path": "entry.type",
+              "type": "string"
+            },
+            {
+              "description": "The item's full stack size; 1 for a pack or folder",
+              "hosts": [],
+              "path": "entry.stack",
+              "type": "integer"
+            },
+            {
+              "description": "A line for the lore: the id of an item, how many items a folder holds",
+              "hosts": [],
+              "path": "entry.detail",
+              "type": "string"
+            },
+            {
+              "description": "The lower-cased text a search matches: an item's id and plain name",
+              "hosts": [],
+              "path": "entry.search",
+              "type": "string"
+            }
+          ],
+          "id": "content",
+          "parameters": [
+            {
+              "advanced": false,
+              "default": "path",
+              "description": "The GUI argument that holds the location (empty is the root)",
+              "id": "arg",
+              "label": "Arg",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            },
+            {
+              "advanced": false,
+              "description": "The session variable that holds a search; while it has text, every entry is listed flat",
+              "id": "search",
+              "label": "Search",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "string",
+              "uiHint": "text"
+            }
+          ],
+          "registeredBy": "materione",
+          "sinceVersion": "1.0.0"
+        },
+        {
+          "cached": false,
           "description": "Every online player, by name and UUID",
           "displayName": "Online players",
           "entry": [

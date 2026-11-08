@@ -23,8 +23,8 @@ import org.bukkit.event.inventory.InventoryDragEvent;
  * rules (logic.md §25). It holds no rule of its own.
  *
  * <p>Clicks in the gui itself are cancelled and handed to the gui (its handlers see an already-cancelled
- * event, on the viewer's region thread). The viewer's own inventory stays live (the browser hands items onto
- * the cursor, and depositing them must work) except the actions that would move items the gui does not
+ * event, on the viewer's region thread). The viewer's own inventory stays live (picking up an item and depositing
+ * it must work) except the actions that would move items the gui does not
  * own: a shift-click or double-click collection into a gui with no input slots, and every click while the
  * viewer's inventory is locked. Input slots take the player's items through the checked, planned moves of
  * {@link InputSlotClicks}. Drags are cancelled when they touch a gui slot that is not an input slot.

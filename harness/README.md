@@ -27,7 +27,7 @@ Materione's internals, only these markers.
 | `MATERIONE-GIVE-OK id=<id> player=<name> amount=<n>` | `/materione give` delivered (console senders only) |
 | `MATERIONE-GIVE-DENIED reason=player-required` | console give without a target player |
 | `MATERIONE-GIVE-FAILED reason=no-such-player\|no-content` | give could not resolve its target |
-| `MATERIONE-BROWSER-DENIED reason=player-only` | `/materione browser` from the console |
+| `MATERIONE-BROWSER-DENIED reason=player-only\|denied\|usage\|not_live\|cancelled\|failed` | `/materione browse` (alias `browser`) from the console (`player-only`), or the GUI it opens refused (the opener's own outcome) |
 | `MATERIONE-DEV-SOUND key=<pack>:<sound>` | `/materione dev sound` dispatched an in-game play (M4) |
 | `MATERIONE-DEV-SOUND-DENIED reason=player-required` | `/materione dev sound` from the console (the client resolves the key, so a player is required) |
 | `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |

@@ -235,7 +235,7 @@ public final class BuiltinLogic {
         for (dev.materione.api.logic.ItemSource<?> source : dev.materione.plugin.logic.item.BuiltinItemSources.all(items)) {
             api.itemSources().register(owner, builtIn(source.id()), source);
         }
-        // list sources of GUI list components (logic.md §4.5, §6.7): online_players, pack_items, variable, static
+        // list sources of GUI list components (logic.md §4.5, §6.7): online_players, pack_items, content, variable, static
         for (ListSource<?> source : BuiltinListSources.all(items)) {
             api.listSources().register(owner, builtIn(source.id()), source);
         }

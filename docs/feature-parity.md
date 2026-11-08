@@ -204,7 +204,7 @@ spans are `<effect:pack:id>…</effect>` in any resolved text (runtime-systems �
 
 | Capability | ItemsAdder | Oraxen | Nexo | Materione |
 |---|---|---|---|---|
-| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | 📋 M6 |
+| Built-in item browser GUI (categorized) | ✅ (`/ia`) | ✅ (`/oraxen inv`) | ✅ (`/nexo inv`) | ✅ M6 (#8): `/materione browse`, a GUI of the plugin's built-in pack: packs, then the folders inside them (the categories an author makes), search by chat prompt, take one or a stack, operator-only by default (runtime-systems §8.3). Not configurable: it ships read-only; a server builds its own from the same parts |
 | Free-form interactive GUI builder | 🟡 ⚠️ (font-image backgrounds; clicks via other plugins) | ❌ | 🟡 (glyph backgrounds; MultiPack menu) | 🚧 M6: the GUI studio and GUI logic shipped (click rules, open commands, dynamic slots, lists and search, prompts, input slots; epic #189, showcase #227, logic.md §1.1). Blessing of the showcase QA entries pending; the Bedrock forms and dialogs stay later |
 | **Server-side dialogs** (1.21+ forms) | ❌ | ❌ | ✅ | 📋 M6 |
 
@@ -455,6 +455,7 @@ Effectively equal across all three: textured unicode glyphs injected into Minecr
 ### 3.10 GUIs / menus / dialogs
 
 - **Built-in item browser GUI** — all three (`/ia`, `/oraxen inv`, `/nexo inv`), configurable categories/slots/icons/titles; Nexo supports FILE vs DIRECTORY layouts and custom nav/search icons.
+  **Materione (M6, #8, as built — runtime-systems §8.3):** `/materione browse [words]` opens `materione:browser`, a `gui` resource in the plugin's own built-in pack (master §7.3), loaded through the normal pipeline and read-only. It shows the packs, then the folders inside a pack (folders under `items/`, `blocks/` and `furnitures/` merged: an author's folder is their category, with no field to label), then the items; a block or furniture is listed as the item that places it. It searches id and plain name (every word must match; the search button asks in chat), and a click hands out one item, a shift-click a stack. `materione.browse` opens it and `materione.browse.get` takes (operators by default, checked on every take). The layout, icons and titles are the shipped GUI's own and are not configurable; a server builds its own browser from the public `content` list source.
 - **Free-form interactive GUI builder** — **none** ship a full DeluxeMenus-style builder. Oraxen and Nexo build GUI *backgrounds* from glyph/font images; the click logic comes from other plugins. ItemsAdder ⚠️ likewise.
 - **Server-side dialogs (1.21+, Nexo-only)** — full wrapper around Mojang's dialog system: `NOTICE`/`CONFIRM`/`LIST`/`MULTI`/`LINK` dialog types; `MESSAGE`/`ITEM` bodies; `TEXT`/`BOOL`/`NUMBER`(slider)/`SINGLE` inputs; static actions (`OPEN_URL`/`RUN_COMMAND`/`SUGGEST_COMMAND`/`CHANGE_PAGE`/`CLIPBOARD`/`SHOW_DIALOG`/`CUSTOM`) + dynamic ones (`DYNAMIC_RUN_COMMAND`/`DYNAMIC_CUSTOM` using input values). Great for NPC forms/admin panels with no client mod.
 

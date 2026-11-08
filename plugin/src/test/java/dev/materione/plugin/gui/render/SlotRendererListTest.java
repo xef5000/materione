@@ -100,7 +100,7 @@ class SlotRendererListTest {
         assertThat(shownName(rendered, 9)).isEqualTo("Ada");
         assertThat(shownName(rendered, 10)).isEqualTo("Bob");
         assertThat(shownName(rendered, 11)).isEqualTo("Cy");
-        assertThat(rendered.lists().pages()).containsEntry("players", new ListPage(1, 2));
+        assertThat(rendered.lists().pages()).containsEntry("players", new ListPage(1, 2, 5));
         assertThat(rendered.lists().shownAt(10).orElseThrow().entry()).containsEntry("name", "Bob");
         // each entry's item is an unresolved source here, which is reported (MTR-0072) and shown as a barrier
         assertThat(reports.codes).containsOnly("MTR-0072");
@@ -115,10 +115,10 @@ class SlotRendererListTest {
         assertThat(second.slots().keySet()).containsExactlyInAnyOrder(9, 10);
         assertThat(shownName(second, 9)).isEqualTo("Dee");
         assertThat(shownName(second, 10)).isEqualTo("Eve");
-        assertThat(second.lists().pages()).containsEntry("players", new ListPage(2, 2));
+        assertThat(second.lists().pages()).containsEntry("players", new ListPage(2, 2, 5));
 
         Rendered clamped = renderer.render(gui, window(Map.of("players", Map.of("number", 9, "count", 2))), 0, null);
-        assertThat(clamped.lists().pages()).containsEntry("players", new ListPage(2, 2));
+        assertThat(clamped.lists().pages()).containsEntry("players", new ListPage(2, 2, 5));
         assertThat(clamped.slots().keySet()).containsExactlyInAnyOrder(9, 10);
     }
 
@@ -135,7 +135,7 @@ class SlotRendererListTest {
         assertThat(shownName(rendered, 9)).isEqualTo("Eve");
         assertThat(shownName(rendered, 10)).isEqualTo("Dee");
         assertThat(shownName(rendered, 11)).isEqualTo("Cy");
-        assertThat(rendered.lists().pages()).containsEntry("players", new ListPage(1, 2));
+        assertThat(rendered.lists().pages()).containsEntry("players", new ListPage(1, 2, 4));
     }
 
     @Test

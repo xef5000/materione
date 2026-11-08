@@ -34,11 +34,11 @@ class VocabularySourcesTest {
         BehaviorVocabulary vocabulary = service.vocabulary();
 
         assertThat(vocabulary.listSources()).extracting(BehaviorVocabulary.ListSourceEntry::id)
-                .containsExactly("online_players", "pack_items", "static", "variable");
-        BehaviorVocabulary.ListSourceEntry players = vocabulary.listSources().get(0);
+                .containsExactly("content", "online_players", "pack_items", "static", "variable");
+        BehaviorVocabulary.ListSourceEntry players = vocabulary.listSources().get(1);
         assertThat(players.registeredBy()).isEqualTo("materione");
         assertThat(players.description().entry()).extracting(variable -> variable.path()).contains("entry.name");
-        assertThat(vocabulary.listSources().get(1).description().shorthand()).isEqualTo("pack");
+        assertThat(vocabulary.listSources().get(2).description().shorthand()).isEqualTo("pack");
 
         assertThat(vocabulary.itemSources()).extracting(BehaviorVocabulary.ItemSourceEntry::id)
                 .containsExactly("head", "item", "player_slot");
