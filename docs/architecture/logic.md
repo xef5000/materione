@@ -35,7 +35,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Incumbent feature | DeluxeMenus | CommandPanels | Materione |
 |---|---|---|---|
 | Menu file, id, title | `menu_title`, `gui_menus` | panel file, `title` | `guis/**/*.yml` (gui.md §2). The title can be dynamic text (§6.4). |
-| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `rows` (chest) in v1. Other containers: `container:` with a profile per type, **designed in gui.md §12** (hopper and dispenser first; anvil and furnaces later), awaiting the owner's approval. |
+| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `rows` (chest) in v1. Containers: `container:` naming a profile (`chest_1`..`chest_6`, `hopper`, `dispenser`; `rows: N` stays as the alias of `chest_N`), **designed in gui.md §12** (scope approved by the owner; anvil and furnaces later). |
 | Open commands and aliases | `open_command`, `register_command` | `command`, `aliases` | `open.commands` (§6.1), registered with Brigadier. |
 | Open arguments | `args`, `args_usage_message`, per-argument requirements | command args read as session data | Typed `open.args` (§6.1), validated by conditions and exposed as `gui.args.<name>`. |
 | Open gate | `open_requirement` with deny commands, bypass permission | panel `conditions` | `open.permission`, plus an `open.requirement` condition with a `deny` flow (§6.1). |
