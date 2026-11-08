@@ -151,6 +151,9 @@ public final class RelaySession implements SessionDriver.Out {
         CompletableFuture<RelayClient.Poll> request = client.pollAsync(
                 channel.channelId(), channel.pluginToken(), cursor, POLL_WAIT_SECONDS);
         inFlight = request;
+        if (!outbound.isEmpty()) {
+            request.cancel(false);
+        }
         try {
             return request.get(POLL_WAIT_SECONDS + 15, TimeUnit.SECONDS);
         } catch (CancellationException wake) {

@@ -134,25 +134,14 @@ public final class Scaffolds {
     }
 
     /**
-     * The New GUI starter: a three-row chest on the vanilla canvas (176 wide,
-     * 114 + rows × 18 tall) with a raised panel and both slot regions, so the
-     * first save already looks like a chest.
+     * The New GUI starter (gui.md section 11.2): a three-row GUI with a title and no layers. The vanilla chest is the
+     * client's own, so the first save already looks like a chest and carries no art.
      */
     private static String gui(String id) {
         return "# " + id + " — created by the Materione editor\n"
                 + id + ":\n"
                 + "  title: \"" + display(id) + "\"\n"
-                + "  rows: 3\n"
-                + "  layers:\n"
-                + "    - id: frame\n"
-                + "      type: panel\n"
-                + "      x: 0\n"
-                + "      y: 0\n"
-                + "      width: 176\n"
-                + "      height: 168\n"
-                + "    - id: wells\n"
-                + "      type: slots\n"
-                + "      region: all\n";
+                + "  rows: 3\n";
     }
 
     /**

@@ -1,6 +1,6 @@
 {
   "name": "chest-1-row",
-  "description": "The same starter on the smallest chest, 176x132.",
+  "description": "The same square-cornered panel and slots on the smallest chest, 176x132.",
   "canvas": {
     "width": 176,
     "height": 132

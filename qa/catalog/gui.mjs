@@ -127,21 +127,18 @@ async function canvasPoint(page, x, y) {
 export default [
   test({
     id: 'gui.studio-new-chest',
-    title: 'a new GUI (sample:qa_chest) opens as the starter chest from the server: panel + slots layers, 176x168, the compiled bevel pixels on the canvas',
+    title: 'a new GUI (sample:qa_chest) opens with no layers from the server (title and rows only, gui.md 11.2): 176x168, no art on the canvas, no pixels to draw',
     covers: STUDIO_COVERS,
     timeoutMs: 180_000,
     steps: async (ctx) => {
       try {
         const page = await openNewChest(ctx);
         ctx.expect(await page.getByTestId('gui-art').evaluate((element) => [element.width, element.height])).toEqual([176, 168]);
-        ctx.expect(await page.locator('.layers .row .name').allInnerTexts()).toEqual(['wells', 'frame']);
-        // the same bevel rules as fixtures/gui/raster (panel + slots, region all)
+        ctx.expect(await page.locator('.layers .row .name').allInnerTexts()).toEqual([]);
+        // a new GUI has no raster layers: the canvas holds no painted pixel
         ctx.expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]);
-        ctx.expect(await pixel(page, 1, 0)).toEqual([0, 0, 0, 255]);
-        ctx.expect(await pixel(page, 1, 1)).toEqual([255, 255, 255, 255]);
-        ctx.expect(await pixel(page, 7, 17)).toEqual([55, 55, 55, 255]);
-        ctx.expect(await pixel(page, 8, 85)).toEqual([139, 139, 139, 255]);
-        ctx.expect(await pixel(page, 8, 143)).toEqual([139, 139, 139, 255]);
+        ctx.expect(await pixel(page, 1, 1)).toEqual([0, 0, 0, 0]);
+        ctx.expect(await pixel(page, 8, 85)).toEqual([0, 0, 0, 0]);
         ctx.expect((await page.locator('[data-status]').innerText()).trim()).toBe('Saved');
       } finally {
         removeFixtureFile();
@@ -283,6 +280,30 @@ export default [
         await ctx.browser.browserShot('gui-studio-zoom-16');
         ctx.needsEyes(
           'the canvas reads as a vanilla chest drawn by the shared bevel (light top/left, dark bottom/right, black outline, transparent corners, inset 18x18 slot wells) at crisp nearest-neighbour pixels with no blur at any zoom; the selected Button shows eight resize handles, an orange selection outline and a size readout is absent at rest; the inspector shows Transform (X/Y/W/H), Style with four color fields and hex text, and Opacity; at 16x the pixel grid and the dashed slot overlay are visible but do not hide the art; the layers panel lists top-of-stack first with eye and lock toggles; the chrome uses the editor tokens (navy surfaces, orange accent only for selection and the primary Save) and stays legible.',
+        );
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.vanilla-corners-visual',
+    title: 'sample:qa_chest vanilla corners (gui.md 11.6): a new Panel is drawn with the chest\'s own rounded corners, and the same panel saved as square keeps its 1-px cut',
+    mode: 'visual',
+    dependsOn: ['gui.studio-new-chest'],
+    covers: STUDIO_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await page.getByRole('region', { name: 'Components' }).getByRole('button', { name: 'Panel' }).click();
+        await ctx.browser.browserShot('gui-studio-vanilla-panel');
+        await page.getByTestId('gui-art').focus();
+        for (let i = 0; i < 12; i++) await page.keyboard.press('=');
+        await ctx.browser.browserShot('gui-studio-vanilla-panel-corners-16');
+        ctx.needsEyes(
+          'at 16x the new Panel has rounded top corners like the vanilla chest: the top-left cut is two pixels of transparency with a one-pixel black diagonal, the top-right cut is one pixel larger, the bottom corners are square black outline, and the light top/left and dark bottom/right bands are unchanged along the edges. Inspector: the Corners field reads Vanilla. The art has no transparent pixel in the middle of the panel, and nothing outside it. Compare with the real chest art (webui/static/vanilla/generic_54.png) at the same zoom: the corners should look the same.',
         );
       } finally {
         removeFixtureFile();

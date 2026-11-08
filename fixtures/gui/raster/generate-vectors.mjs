@@ -68,7 +68,36 @@ function withOpacity(c, opacity) {
 
 // ---------------------------------------------------------------- component painters
 
-function raised(buf, x, y, w, h, style, edge) {
+/**
+ * The vanilla corners (README, "Vanilla corners"): replace the square corners' pixels in place, in this order,
+ * top-left, then top-right, then bottom. Each entry is an offset inside the rectangle and a part (null = not drawn).
+ */
+function setInRect(buf, x, y, w, h, lx, ly, color) {
+  if (lx < 0 || ly < 0 || lx >= w || ly >= h) return;
+  buf.px[(y + ly) * buf.w + (x + lx)] = color === null ? [0, 0, 0, 0] : color;
+}
+
+function vanillaCorners(buf, x, y, w, h, style) {
+  const K = style.outline;
+  const HL = style.highlight;
+  // top-left, offsets from the top-left corner
+  for (const [lx, ly, color] of [[0, 0, null], [1, 0, null], [0, 1, null], [2, 0, K], [1, 1, K], [0, 2, K], [3, 3, HL]]) {
+    setInRect(buf, x, y, w, h, lx, ly, color);
+  }
+  // top-right, offsets dx from the right edge and dy from the top
+  for (let dy = 0; dy <= 3; dy++) {
+    for (let dx = 0; dx <= 3; dx++) {
+      const lx = w - 1 - dx;
+      if (dx + dy <= 2) setInRect(buf, x, y, w, h, lx, dy, null);
+      else if (dx + dy === 3) setInRect(buf, x, y, w, h, lx, dy, K);
+    }
+  }
+  // bottom corners: plain outline
+  setInRect(buf, x, y, w, h, 0, h - 1, K);
+  setInRect(buf, x, y, w, h, w - 1, h - 1, K);
+}
+
+function raised(buf, x, y, w, h, style, edge, corners = 'square') {
   if (w <= 0 || h <= 0) return;
   // 1. the outline ring, minus the four corner pixels (each ring pixel once)
   const ends = (n) => (n === 1 ? [0] : [0, n - 1]);
@@ -89,6 +118,7 @@ function raised(buf, x, y, w, h, style, edge) {
       put(buf, x + 1 + i, y + 1 + j, color);
     }
   }
+  if (corners === 'vanilla') vanillaCorners(buf, x, y, w, h, style);
 }
 
 function inset(buf, x, y, w, h, style) {
@@ -125,7 +155,8 @@ function paintLayer(vector, layer) {
   const g = (key, fallback) => (layer[key] === undefined ? fallback : layer[key]);
   switch (layer.type) {
     case 'panel':
-      raised(buf, g('x', 0), g('y', 0), g('width', 0), g('height', 0), styleFor(layer, RAISED), 2);
+      raised(buf, g('x', 0), g('y', 0), g('width', 0), g('height', 0), styleFor(layer, RAISED), 2,
+        layer.corners === 'vanilla' ? 'vanilla' : 'square');
       break;
     case 'button':
       raised(buf, g('x', 0), g('y', 0), g('width', 0), g('height', 0), styleFor(layer, RAISED), 1);
@@ -299,14 +330,14 @@ const vectors = [
   },
   {
     name: 'chest-6-rows',
-    description: 'The vanilla look of a new GUI: a panel plus an all-region slots layer on a 176x222 canvas.',
+    description: 'A panel with no corners field (square corners, as every panel before #278) plus an all-region slots layer on a 176x222 canvas.',
     canvas: CHEST(6),
     rows: 6,
     layers: [VANILLA_PANEL(6), { id: 'wells', type: 'slots', region: 'all' }],
   },
   {
     name: 'chest-1-row',
-    description: 'The same starter on the smallest chest, 176x132.',
+    description: 'The same square-cornered panel and slots on the smallest chest, 176x132.',
     canvas: CHEST(1),
     rows: 1,
     layers: [VANILLA_PANEL(1), { id: 'wells', type: 'slots', region: 'all' }],
@@ -414,6 +445,24 @@ const vectors = [
       { id: 'sword', type: 'item', slot: 3, item: 'minecraft:diamond_sword', amount: 1 },
       { id: 'future', type: 'addon:progress', x: 20, y: 12, width: 10, height: 4 },
     ],
+  },
+  {
+    name: 'panel-vanilla-corners',
+    description: 'Vanilla corners (gui.md section 11.6) at the 8 x 8 minimum, an odd 9 x 12 frame and a 20 x 20 frame, beside a square 8 x 8 panel (the 1-px cut) for contrast.',
+    canvas: { width: 60, height: 24 },
+    layers: [
+      { id: 'v8', type: 'panel', x: 0, y: 0, width: 8, height: 8, corners: 'vanilla' },
+      { id: 'v9', type: 'panel', x: 10, y: 0, width: 9, height: 12, corners: 'vanilla' },
+      { id: 'sq8', type: 'panel', x: 22, y: 0, width: 8, height: 8, corners: 'square' },
+      { id: 'v20', type: 'panel', x: 34, y: 0, width: 20, height: 20, corners: 'vanilla' },
+    ],
+  },
+  {
+    name: 'vanilla-chest-corners',
+    description: 'The top part of a 6-row chest (176 x 125) as one vanilla-corner panel. Its corners and outline columns must match webui/static/vanilla/generic_54.png (VanillaChestCornersTest).',
+    canvas: { width: 176, height: 125 },
+    rows: 6,
+    layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 125, corners: 'vanilla' }],
   },
 ];
 

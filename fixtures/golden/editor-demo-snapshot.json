@@ -7028,6 +7028,35 @@
             "unit": "px"
           },
           {
+            "advanced": false,
+            "allowedValues": [
+              "square",
+              "vanilla"
+            ],
+            "default": "square",
+            "description": "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the chest's own rounded corners, pixel for pixel)",
+            "example": "square",
+            "id": "corners",
+            "label": "Corners",
+            "options": [
+              {
+                "description": "The chest's rounded corners (new panels start here)",
+                "label": "Vanilla",
+                "value": "vanilla"
+              },
+              {
+                "description": "The 1-px cut corner of earlier panels",
+                "label": "Square",
+                "value": "square"
+              }
+            ],
+            "order": 45,
+            "required": false,
+            "section": "appearance",
+            "type": "enum",
+            "uiHint": "select"
+          },
+          {
             "advanced": true,
             "description": "Bevel colours: {fill, highlight, shadow, outline} as #RRGGBB or #AARRGGBB",
             "id": "style",
@@ -13684,7 +13713,7 @@
     "effects": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  kind: rainbow # rainbow | wave | shake | pulse\n  speed: 3.0\n  # colors:\n  #   - \"#FF0000\"\n  #   - \"#0000FF\"\n  # Compiles into the injected text-shader overlay (runtime-systems §6).\n  # Use in text as <effect:demo_scaffold>…</effect>; test with\n  # /materione dev effect demo_scaffold hello.\n",
     "furnitures": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: block/demo_scaffold\n  display_name: \"Demo Scaffold\"\n  rotation: 90\n  hitboxes:\n    - type: interaction\n      offset: [0, 0, 0]\n      width: 1.0\n      height: 1.0\n  # seats:\n  #   - offset: [0, 0.3, 0]\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
     "glyphs": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: gui/demo_scaffold\n  ascent: 8\n  height: 8\n  # placeholders:\n  #   - \":demo_scaffold:\"\n  # emoji: true — chat interception + tab-completion\n  # The codepoint is allocated by the server and shown in the preview.\n",
-    "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      x: 0\n      y: 0\n      width: 176\n      height: 168\n    - id: wells\n      type: slots\n      region: all\n",
+    "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  rows: 3\n",
     "items": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  material: STICK\n  display_name: \"Demo Scaffold\"\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n",
     "paintings": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: painting/demo_scaffold # exactly 16 px per block\n  width: 1\n  height: 1\n  # author: \"Unknown\"\n  # title: \"Demo Scaffold\"\n  # placeable: false — join the vanilla random-placement pool\n  # Paintings apply at the next server restart (world datapack).\n",
     "recipes": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  type: shaped # shaped | shapeless | furnace\n  result: demo_scaffold\n  shape:\n    - \" A \"\n    - \" B \"\n    - \" A \"\n  ingredients:\n    A: minecraft:stone\n    B: minecraft:stick\n",

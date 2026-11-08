@@ -41,6 +41,7 @@ shop:                          # one resource per key (master §7.2); the key is
       y: 0
       width: 176
       height: 222
+      corners: vanilla         # square (absent: the 1-px cut of earlier panels) | vanilla (the chest's corners)
     - id: wells
       type: slots
       region: container        # container | player | all
@@ -294,7 +295,9 @@ large button and a slot well is an inset button:
 
 - *raised* (panel, button): 1 px `outline` ring with transparent corners; inside it, top and
   left 1 px edges in `highlight`, bottom and right in `shadow`, the two off-diagonal corner
-  pixels in `fill`, interior `fill`. Panels use a 2 px highlight/shadow edge.
+  pixels in `fill`, interior `fill`. Panels use a 2 px highlight/shadow edge. A panel's
+  `corners` field picks the corner: `square` (the rule above, the absent default) or `vanilla`,
+  the chest's own rounded corners pixel for pixel, with a square bottom (§11.6, #278).
 - *inset* (slot wells, 18 × 18): top/left edge in `shadow`, bottom/right in `highlight`,
   interior `fill` — no outline.
 
@@ -429,7 +432,7 @@ canvas tool, not a form.
 - **Truthful preview**: the canvas renders through the shared raster (§4) plus the
   first-party font, in compiled target order.
 - **Layers**: drag to reorder, visibility, lock, rename, duplicate, delete; a new GUI starts
-  as `panel` + `slots` — the vanilla chest look, painted by our own bevel routine. *(Being replaced by §11, #278: a new GUI has no layers and the studio draws the real chest under it.)*
+  with no layers: the title and the rows, nothing else (§11.2, built in #278). The vanilla chest is the client's own, and the studio draws the owner's reference art under it (§11, #277). A new **panel** starts with `corners: vanilla`.
 - **Components palette**: add any registered component; unknown addon components get a
   schema-derived inspector automatically.
 - **Paint tools** on `paint` layers reuse the `pixels.ts` engine (brush, eraser, fill,
@@ -1191,19 +1194,31 @@ The compiler half of §11. Each one is reversible by the owner.
     it draws nothing and its `image` need not exist. A layer without these fields sits at the origin, so canvas-sized paint
     layers written before #277 compile as before.
 
+### Decisions taken in #278 (the starter, the showcase and the vanilla corners)
+
+These are the owner's reversible choices as built. The rules themselves are the shared vectors' (`fixtures/gui/raster/README.md`, *Corners*).
+
+1. **A new GUI has no layers.** The starter file holds `title` and `rows` only. The server's New GUI scaffold (`core` `Scaffolds`, mirrored byte for byte in `web` `Scaffolds`, pinned by `ScaffoldSchemaConsistencyTest`) and the studio's `starterDocument` both say so. Existing files are untouched: nothing rewrites a layer that is already there.
+2. **The showcase drops its frames.** The five GUIs of `fixtures/packs/showcase` lose their full-screen `frame` panels; the vanilla chest is the background, so no panel is kept and no panel covers the player inventory. `ShowcasePackTest` stays green unchanged.
+3. **The field is `corners` on `panel`, values `square` and `vanilla`.** An absent field is `square` in both the Java parser (`PanelComponent.corners`) and the TypeScript raster (`flatten.ts`). That is the back-compat rule: a file written before this change, or one that does not set the field, renders exactly as before. The studio writes `corners: vanilla` only on a panel it creates (a preset in `registry.ts`'s `newLayer`, not in the schema); the schema default is `square`, the value an absent field means. Lossless: the field is written only when the author or the studio sets it, and no existing layer gains it.
+4. **The vanilla corners are the chest's, pixel for pixel, on the top.** The top-left cut is two transparent pixels of a diagonal (`x + y <= 1`), the top-right cut is one pixel larger (`dx + y <= 2`), as the owner's art has it, and the `(3, 3)` highlight of the top-left step is reproduced. The bottom corners are square outline, because the chest's bottom edge is the inventory separator (a light line, not a bevel) and a bottom bevel would not match the art. Frames at least 8 x 8 are exact at any size.
+5. **The chest is the test.** `vanilla-chest-corners` renders a 176 x 125 vanilla panel (the top part of a 6-row chest). `VanillaChestCornersTest` checks it against `webui/static/vanilla/generic_54.png`: both top 12 x 12 corners, and the outer outline columns, match with no mismatch.
+6. **Goldens.** `fixtures/golden/editor-demo-snapshot.json` changes twice: the panel schema gains `corners`, and the New GUI scaffold text loses its layers. Both come from the Java source and were regenerated with `-Dmaterione.golden.regen=true` (`EditorDemoSnapshotTest`). No other golden changed; the two existing vectors `chest-6-rows` and `chest-1-row` keep their PNGs (their JSON descriptions now say they are square-cornered).
+7. **Not yet seen in a client.** The corners are verified against the art's pixels, not against a running client. The QA visual entry `gui.vanilla-corners-visual` (`qa/catalog/gui.mjs`) is for the next visual pass.
+
 ---
 
 ## 11. The open canvas (#274) — design approved by the owner; compiler built (#276)
 
 > **Status.** Approved by the owner on 2026-11-05. It replaces the bounded canvas of §1, the starter GUI
 > of §6 and the full-screen flatten of §4 step 1 **as each issue lands**: #275 (research), #276
-> (compiler), #277 (studio), #278 (starter, showcase, panel corners). Until an issue lands, the
+> (compiler), #277 (studio), #278 (starter, showcase, panel corners; **landed**, §11.6). Until an issue lands, the
 > sections it replaces still describe the shipped behaviour. **#275 has landed:** the facts this section
 > marked *to verify* were measured on the 26.1.2 probe client (§9.8–§9.15) and the rules below are the
 > verified ones, with the exact numbers #276 needs. One finding amends the design: the art box is
 > asymmetric at the top (§11.2). 1.21.4 is not measured (§9.7). **#276 has landed:** the compiler and the
 > runtime implement §11.2's flatten and §11.3 rules 1 to 6, and the warning of §11.4 (see *Decisions taken in
-> #276*). The studio (#277) and the starter GUI and showcase (#278) are still to land.
+> #276*). The studio (#277) is still to land.
 
 ### 11.1 Why
 
@@ -1338,8 +1353,9 @@ players will see; the last two rows are worth a "small window" guide. A 1-row sc
 
 ### 11.6 What stays
 
-- The `panel` and `slots` components stay for authors who want to repaint the chest; `panel` gains a
-  vanilla corner style matching the reference art, used by default for a new panel (#278).
+- The `panel` and `slots` components stay for authors who want to repaint the chest. **Built in #278:** `panel`
+  takes `corners: vanilla | square` (§11.6, *Decisions taken in #278*); the studio starts a new panel with
+  `vanilla`, and a file without the field keeps the square corners it always had.
 - Text layers, item layers, `visible_if`, `frames` and the dynamic path (§4 step 7) are unchanged apart
   from cropping and placement.
 - The vanilla **Inventory** label is still drawn by the client over everything (§9.2).
