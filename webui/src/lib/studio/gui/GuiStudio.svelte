@@ -42,6 +42,7 @@
   import { readRegistry } from '../../gui/registry';
   import { GuiStudioState, isPaintTool } from '../../gui/studio.svelte';
   import { isTextLayer } from '../../gui/text';
+  import { regionAt, type Region } from '../../gui/open-canvas';
   import { zoomLabel } from '../../gui/viewport';
   import { restack } from '../../gui/ops';
   import { rootIdForResource } from '../../studio';
@@ -293,8 +294,18 @@
     if (event.key === ' ') studio.panKey = false;
   }
 
+  const REGION_NAMES: Record<Region, string> = {
+    container: 'container',
+    player: 'player inventory',
+    outside: 'open space',
+  };
+
   const status = $derived(
     studio.readOnly ? 'Read-only' : studio.saving ? 'Saving…' : anyDirty ? 'Unsaved changes' : 'Saved',
+  );
+  /** Which region of the open canvas the pointer is over (gui.md section 11.2). */
+  const cursorRegion = $derived(
+    studio.cursor ? REGION_NAMES[regionAt(studio.doc.rows, studio.cursor.x, studio.cursor.y)] : '',
   );
   const selectionText = $derived.by(() => {
     if (studio.selected.length === 0) return `${studio.size.width} x ${studio.size.height} px, ${studio.doc.rows} row${studio.doc.rows === 1 ? '' : 's'}`;
@@ -367,6 +378,7 @@
     <span class="rule"></span>
     <div class="cluster">
       {@render tool('layout-grid', 'Slot grid', 'overlay', () => (studio.showSlots = !studio.showSlots), studio.showSlots)}
+      {@render tool('ruler', 'Window guides', 'what a 1920 x 1080 window shows at GUI scales 2, 3 and 4', () => (studio.showGuides = !studio.showGuides), studio.showGuides)}
       {@render tool('grid-3x3', 'Pixel grid (from 8x)', 'overlay', () => (studio.showPixelGrid = !studio.showPixelGrid), studio.showPixelGrid)}
       {@render tool('magnet', 'Snapping (hold Ctrl to skip)', 'toggle', () => (studio.snapping = !studio.snapping), studio.snapping)}
     </div>
@@ -431,6 +443,7 @@
       {/if}
       <footer class="statusbar">
         <span class="cursor" data-cursor>{studio.cursor ? `${studio.cursor.x}, ${studio.cursor.y}` : '–'}</span>
+        <span class="region" data-region>{cursorRegion}</span>
         <span class="sel">{selectionText}</span>
         <span class="spacer"></span>
         <span class="hintline" class:say={!!studio.hint} role="status" data-testid="gui-hint">{studio.hint || (isPaintTool(studio.tool) ? 'Space-drag pans · wheel zooms · [ ] change the brush size' : 'Space or middle-drag to pan · wheel to zoom · Shift+click to multi-select · double-click text to edit')}</span>
@@ -708,6 +721,10 @@
   }
   .cursor {
     min-width: 64px;
+  }
+  .region {
+    min-width: 96px;
+    color: var(--faint);
   }
   .hintline {
     color: var(--faint);

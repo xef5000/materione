@@ -25,6 +25,9 @@ export type Layer = Record<string, unknown> & { id?: unknown; type?: unknown };
 export interface RasterScene {
   width: number;
   height: number;
+  /** Where the canvas's top-left sits in GUI pixels (0 when it starts at the screen, the art cap's corner for the open canvas). */
+  originX?: number;
+  originY?: number;
   rows: number;
   /** The decoded bitmap behind an `image:` reference, or null when it is unavailable. */
   image(reference: string): ArgbCanvas | null;
@@ -113,7 +116,7 @@ export const RASTER_PAINTERS: Record<string, RasterPainter> = {
   paint(layer, scene, out) {
     const reference = typeof layer.image === 'string' ? layer.image : '';
     const source = reference ? scene.image(reference) : null;
-    if (source) blitPaint(out, source);
+    if (source) blitPaint(out, source, whole(layer.x, 0), whole(layer.y, 0));
   },
 };
 
@@ -125,14 +128,14 @@ export function isVisible(layer: Layer): boolean {
 export function paintRasterLayer(layer: Layer, scene: RasterScene): ArgbCanvas | null {
   const painter = RASTER_PAINTERS[bareType(layer)];
   if (!painter) return null;
-  const out = new ArgbCanvas(scene.width, scene.height);
+  const out = new ArgbCanvas(scene.width, scene.height, scene.originX ?? 0, scene.originY ?? 0);
   painter(layer, scene, out);
   return out;
 }
 
 /** Bottom-to-top flatten of every visible raster layer, honoring each layer's opacity. */
 export function flattenRaster(layers: readonly Layer[], scene: RasterScene): ArgbCanvas {
-  const canvas = new ArgbCanvas(scene.width, scene.height);
+  const canvas = new ArgbCanvas(scene.width, scene.height, scene.originX ?? 0, scene.originY ?? 0);
   for (const layer of layers) {
     if (!isVisible(layer)) continue;
     const painted = paintRasterLayer(layer, scene);

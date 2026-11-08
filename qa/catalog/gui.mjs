@@ -70,10 +70,11 @@ async function openNewChest(ctx) {
   return page;
 }
 
+// The art canvas covers the whole art cap (gui.md section 11.2): its top-left is GUI pixel (-424, -243).
 function pixel(page, x, y) {
   return page.evaluate(([px, py]) => {
     const element = document.querySelector('[data-testid=gui-art]');
-    return [...element.getContext('2d').getImageData(px, py, 1, 1).data];
+    return [...element.getContext('2d').getImageData(px + 424, py + 243, 1, 1).data];
   }, [x, y]);
 }
 
@@ -119,7 +120,8 @@ function inkPixels(text, x, y) {
 }
 
 async function canvasPoint(page, x, y) {
-  const box = await page.getByTestId('gui-art').boundingBox();
+  // positions are measured on the vanilla chest (the screen), which the art canvas and the open space are laid around
+  const box = await page.getByTestId('gui-underlay').boundingBox();
   const zoom = box.width / 176;
   return [box.x + x * zoom + zoom / 2, box.y + y * zoom + zoom / 2];
 }
@@ -133,7 +135,8 @@ export default [
     steps: async (ctx) => {
       try {
         const page = await openNewChest(ctx);
-        ctx.expect(await page.getByTestId('gui-art').evaluate((element) => [element.width, element.height])).toEqual([176, 168]);
+        ctx.expect(await page.getByTestId('gui-art').evaluate((element) => [element.width, element.height])).toEqual([1024, 1024]);
+        ctx.expect(await page.getByTestId('gui-underlay').evaluate((element) => [element.width, element.height])).toEqual([176, 168]);
         ctx.expect(await page.locator('.layers .row .name').allInnerTexts()).toEqual(['wells', 'frame']);
         // the same bevel rules as fixtures/gui/raster (panel + slots, region all)
         ctx.expect(await pixel(page, 0, 0)).toEqual([0, 0, 0, 0]);
@@ -236,7 +239,7 @@ export default [
       try {
         const page = await openNewChest(ctx);
         const zoom = page.locator('[data-zoom]');
-        const art = page.getByTestId('gui-art');
+        const art = page.getByTestId('gui-underlay');
         const box = await art.boundingBox();
         await page.mouse.move(box.x + 40, box.y + 40);
         await page.mouse.wheel(0, -100);
@@ -258,6 +261,77 @@ export default [
         const panned = await art.boundingBox();
         ctx.expect(Math.round(panned.x - fitted.x)).toBe(-30);
         ctx.expect(Math.round(panned.y - fitted.y)).toBe(-20);
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.studio-open-canvas',
+    title: 'sample:qa_chest open canvas: the vanilla chest is drawn under the GUI, painting outside the screen grows a paint layer that Save trims, and the window guides toggle',
+    dependsOn: ['gui.studio-new-chest'],
+    covers: STUDIO_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        // the chest under the art is not a layer: it is there, and the layers panel does not list it
+        ctx.expect(await page.getByTestId('gui-underlay').evaluate((element) => {
+          const data = element.getContext('2d').getImageData(88, 10, 1, 1).data;
+          return data[3];
+        })).toBe(255);
+        // paint outside the screen with the brush at 100%
+        await page.getByRole('button', { name: 'Brush', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Paint colour hex' }).fill('#FF0000');
+        await page.keyboard.press('Enter');
+        await page.keyboard.press('1');
+        const [x, y] = await canvasPoint(page, 200, 40); // right of the 176-wide screen
+        await page.mouse.click(x, y);
+        ctx.expect(await pixel(page, 200, 40)).toEqual([255, 0, 0, 255]);
+        ctx.expect(await page.getByTestId('paint-size').innerText()).toContain('1 x 1 px');
+        // Save trims the layer to its pixels and writes the box with it
+        await page.keyboard.press('Control+s');
+        await page.locator('[data-status]').filter({ hasText: 'Saved' }).waitFor({ timeout: 30_000 });
+        const saved = fs.readFileSync(GUI_FILE, 'utf8');
+        ctx.expect(saved).toContain('type: paint');
+        ctx.expect(saved).toMatch(/x: 200/);
+        ctx.expect(saved).toMatch(/width: 1/);
+        // the window guides toggle like the slot grid
+        await page.getByRole('button', { name: 'Window guides', exact: true }).click();
+        ctx.expect(await page.getByTestId('gui-window-guide').count()).toBe(3);
+        await page.getByRole('button', { name: 'Window guides', exact: true }).click();
+        ctx.expect(await page.getByTestId('gui-window-guide').count()).toBe(0);
+      } finally {
+        removeFixtureFile();
+      }
+    },
+  }),
+
+  test({
+    id: 'gui.studio-open-canvas-visual',
+    title: 'sample:qa_chest studio look of the open canvas: the vanilla chest, the inventory veil lifting under paint, art outside the screen, the cap box and the window guides',
+    mode: 'visual',
+    dependsOn: ['gui.studio-open-canvas'],
+    covers: STUDIO_COVERS,
+    timeoutMs: 180_000,
+    steps: async (ctx) => {
+      try {
+        const page = await openNewChest(ctx);
+        await ctx.browser.browserShot('gui-studio-open-canvas-chest');
+        await page.getByRole('button', { name: 'Brush', exact: true }).click();
+        await page.getByRole('textbox', { name: 'Paint colour hex' }).fill('#3C8527');
+        await page.keyboard.press('Enter');
+        for (const [gx, gy] of [[20, 100], [21, 100], [22, 101], [60, 60], [-30, 40], [-31, 41], [210, 90]]) {
+          const [x, y] = await canvasPoint(page, gx, gy);
+          await page.mouse.click(x, y);
+        }
+        await page.getByRole('button', { name: 'Window guides', exact: true }).click();
+        await page.keyboard.press('0');
+        await ctx.browser.browserShot('gui-studio-open-canvas-guides');
+        ctx.needsEyes(
+          'the canvas shows the vanilla chest with rounded corners under any layers (not a bevel redrawn by the studio); the player-inventory part is dimmed with grey, and the dimming is lifted exactly under the painted pixels there, with their neighbours still dimmed; painted pixels outside the screen sit in the open space beside the chest, with the dashed cap box (1024 x 1024) labelled "Art limit" and the screen outline; with Window guides on, three dashed rectangles (scale 2, 3 and 4 at 1920 x 1080) are visible around the screen with their margins in the labels, scale 4 closest to the chest; the layers panel lists only real layers; the chrome keeps the editor tokens and the labels stay legible over the art.',
+        );
       } finally {
         removeFixtureFile();
       }

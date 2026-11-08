@@ -6,6 +6,11 @@
 import { ArgbCanvas } from './raster/canvas';
 
 export function decodeImage(base64: string): Promise<ArgbCanvas> {
+  return decodeImageUrl(`data:image/png;base64,${base64}`);
+}
+
+/** Decodes an image the page can fetch (a URL the bundler emitted, or a data URL) into an `ArgbCanvas`. */
+export function decodeImageUrl(url: string): Promise<ArgbCanvas> {
   return new Promise((resolve, reject) => {
     const image = new Image();
     image.onload = () => {
@@ -17,8 +22,8 @@ export function decodeImage(base64: string): Promise<ArgbCanvas> {
       const data = context.getImageData(0, 0, scratch.width, scratch.height);
       resolve(ArgbCanvas.fromRgba(scratch.width, scratch.height, data.data));
     };
-    image.onerror = () => reject(new Error('not a readable image'));
-    image.src = `data:image/png;base64,${base64}`;
+    image.onerror = () => reject(new Error(`could not read the image at ${url}`));
+    image.src = url;
   });
 }
 

@@ -35,6 +35,8 @@ export interface TargetSources {
   siblings: readonly Rect[];
   /** Include the slot grid (item origins and wells). */
   slots: boolean;
+  /** The art cap (gui.md section 11.2): its edges pull too, so art can be butted against the limit. */
+  cap?: Rect;
 }
 
 export function collectTargets(source: TargetSources): SnapTargets {
@@ -49,6 +51,7 @@ export function collectTargets(source: TargetSources): SnapTargets {
     }
   };
   addRect({ x: 0, y: 0, w: source.width, h: source.height }, 'canvas');
+  if (source.cap) addRect(source.cap, 'canvas', false);
   if (source.slots) {
     const cells = cellsOf(source.rows, 'all');
     for (const cell of cells) {

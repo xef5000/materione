@@ -1,21 +1,28 @@
 <script lang="ts">
   /**
-   * What a `paint` layer needs beyond its schema fields: how to draw on it. The layer owns one
-   * canvas-sized PNG; the brush, eraser, fill and picker in the toolbar paint it, each stroke one
-   * undo step, and Save writes the PNG in the same transaction as the layout.
+   * What a `paint` layer needs beyond its schema fields: how to draw on it. The layer owns its pixels and their box
+   * (gui.md section 11.2): the brush, eraser and fill in the toolbar paint it anywhere within the art cap, the box
+   * grows as you paint, each stroke is one undo step, and Save trims it to the painted pixels and writes the PNG in
+   * the same transaction as the layout. A layer with no pixel saves no PNG.
    */
   import Icon from '../../components/Icon.svelte';
   import type { GuiLayer } from '../../gui/model';
   import type { GuiStudioState } from '../../gui/studio.svelte';
 
   let { studio, layer, disabled }: { studio: GuiStudioState; layer: GuiLayer; disabled: boolean } = $props();
+
+  const bounds = $derived(studio.boundsOf(layer));
 </script>
 
 <section class="group" data-testid="paint-extras">
   <h3>Pixels</h3>
   <p class="note">
-    A {studio.size.width} x {studio.size.height} px canvas stored as <code>{typeof layer.image === 'string' ? layer.image : 'gui/…'}.png</code>.
-    Pick the brush (B), eraser (E) or fill (G) in the toolbar and paint on the canvas.
+    {#if bounds}
+      {bounds.w} x {bounds.h} px at {bounds.x}, {bounds.y}, stored as <code>{typeof layer.image === 'string' ? layer.image : 'gui/…'}.png</code>.
+    {:else}
+      No pixels yet: nothing is saved for this layer until something is painted on it.
+    {/if}
+    Pick the brush (B), eraser (E) or fill (G) in the toolbar and paint on the canvas, on the screen or around it.
   </p>
   <div class="row">
     <button type="button" class="btn" disabled={disabled} onclick={() => studio.chooseTool('brush')}><Icon name="pencil" size={14} /> Paint</button>

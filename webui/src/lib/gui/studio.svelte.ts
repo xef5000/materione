@@ -10,6 +10,7 @@ import { reconcileDocumentDraft, type DocumentDraft } from '../drafts.svelte';
 import { decodeImage, encodePng, readImageFile } from './browser-image';
 import { canvasSize } from './chest';
 import { composeCanvas } from './compose';
+import { ART_CAP, clipToCap, insideCap, isEmptyRect, screenRect, unionRects } from './open-canvas';
 import { addLayer, compose, patchLayers, setDocumentFields, type Command } from './commands';
 import { GuiHistory } from './history';
 import {
@@ -26,17 +27,26 @@ import * as ops from './ops';
 import {
   ERASER,
   Stroke,
+  cellsOfPatch,
   clampBrush,
-  diffAll,
   fillPatch,
   pushRecent,
-  resizedCanvas,
+  workingCanvas,
   type BrushSettings,
+  type PixelCells,
 } from './paint';
-import { PixelCommand } from './pixel-command';
-import { ArgbCanvas } from './raster/canvas';
+import {
+  geometryFields,
+  isPaintLayer,
+  paintReferenceOf,
+  paintRect,
+  reshape,
+  trimPaintLayers,
+} from './paint-geometry';
+import { PixelCommand, paintCommand, type PixelStore } from './pixel-command';
+import { ArgbCanvas, type Rect } from './raster/canvas';
 import type { Argb } from './raster/color';
-import { bareType } from './raster/flatten';
+import { bareType, whole } from './raster/flatten';
 import { componentOf, newLayer, type GuiComponentInfo, type GuiRegistry } from './registry';
 import {
   base64Of,
@@ -50,6 +60,8 @@ import {
 import type { Guide } from './snap';
 import { compiledOrder, layerBounds, orderBadges, overlays, sceneOf, type Scene } from './scene';
 import { customizeItem, draftOf, guiApiAvailable, validateDraft } from './server';
+import { composeVanilla, veiledScreen } from './vanilla';
+import { loadVanillaSheet } from './vanilla-sheet';
 import { isLogicCommand, withBlock } from '../logic/command';
 import { LogicLog } from '../logic/log';
 import { logicApiAvailable, logicEditResponse } from '../logic/server';
@@ -84,6 +96,8 @@ export class GuiStudioState {
   /** The original bytes of uploaded images (base64), sent as they were chosen rather than re-encoded. */
   readonly #uploads = new Map<string, string>();
   #stroke: Stroke | null = null;
+  /** The layer a stroke is drawing on: its bitmap and box before the stroke, and what its geometry fields were. */
+  #strokeLayer: { layerId: string; reference: string; bitmap: ArgbCanvas; rect: Rect; fields: Record<string, unknown> } | null = null;
   #lastStrokeEnd = new Map<string, Point>();
   #redraw = 0;
   #hintTimer: ReturnType<typeof setTimeout> | undefined;
@@ -118,6 +132,10 @@ export class GuiStudioState {
   autoFit = $state(true);
   stage = $state<Size>({ w: 0, h: 0 });
   showSlots = $state(false);
+  /** The guides for what a 1920 x 1080 window shows around the screen at GUI scales 2, 3 and 4 (gui.md section 11.5). */
+  showGuides = $state(false);
+  /** The owner's vanilla chest sheet, once decoded; the underlay draws from it. */
+  vanillaSheet = $state.raw<ArgbCanvas | null>(null);
   showPixelGrid = $state(true);
   snapping = $state(true);
   /** The GUI pixel under the pointer, for the status bar. */
@@ -157,6 +175,10 @@ export class GuiStudioState {
     readonly rootId: string,
   ) {
     this.#restorePaintSettings();
+    void loadVanillaSheet().then(
+      (sheet) => (this.vanillaSheet = sheet),
+      () => this.say('The vanilla chest art could not be loaded; the canvas shows no underlay.'),
+    );
   }
 
   /** The document the canvas draws: the live drag preview, else the committed one. */
@@ -174,15 +196,29 @@ export class GuiStudioState {
   items = $derived(this.marks.filter((mark) => mark.target === 'slot'));
   /** The ids of the layers the compiler drops, from the server's verdict (empty until it answers). */
   skippedIds = $derived(new Set([...this.flags].filter(([, flags]) => isSkipped(flags)).map(([id]) => id)));
-  /** The canvas as the player sees the background and smallcaps title: the eyedropper samples this. */
+  /**
+   * The art as the player sees it, over the whole art cap (gui.md section 11.2): raster layers, then smallcaps title
+   * text, on a 1024 x 1024 canvas whose top-left is the cap's corner. The eyedropper samples this.
+   */
   composite = $derived.by<ArgbCanvas>(() => {
     void this.imageVersion;
     return composeCanvas(this.shown, {
-      width: this.size.width,
-      height: this.size.height,
+      width: ART_CAP.w,
+      height: ART_CAP.h,
+      originX: ART_CAP.x,
+      originY: ART_CAP.y,
       rows: this.shown.rows,
       image: (reference) => this.imageFor(reference),
     }, this.skippedIds);
+  });
+  /** The vanilla chest for the row count (gui.md section 11.2): not a layer, never saved, not in the history. */
+  vanilla = $derived<ArgbCanvas | null>(this.vanillaSheet ? composeVanilla(this.vanillaSheet, this.shown.rows) : null);
+  /** The chest as drawn: the vanilla screen with the player's inventory veiled except under painted pixels. */
+  underlay = $derived.by<ArgbCanvas | null>(() => {
+    const vanilla = this.vanilla;
+    if (!vanilla) return null;
+    const art = this.composite;
+    return veiledScreen(vanilla, this.shown.rows, (x, y) => (art.get(x, y) >>> 24) > 0);
   });
   selected = $derived(this.shown.layers.filter((layer) => this.selection.includes(layer.id)));
 
@@ -204,6 +240,7 @@ export class GuiStudioState {
     this.selection = [];
     this.preview = null;
     this.#stroke = null;
+    this.#strokeLayer = null;
     this.editingText = null;
     this.choosing = false;
     // pixels edited or uploaded here and never saved are discarded; the next read gets the server's
@@ -286,12 +323,11 @@ export class GuiStudioState {
     const { layer } = ops.addComponent(this.doc, this.scene, info);
     let made = layer;
     if (bareType(layer) === 'paint') {
-      // A paint layer owns a canvas-sized PNG; it exists from the first moment, blank, and is written on save.
+      // A paint layer owns its pixels and their box (gui.md section 11.2). It starts with none: nothing is
+      // written for it until something is painted.
       const reference = paintReference(this.path, layer.id);
       made = { ...layer, image: reference } as GuiLayer;
-      const blank = new ArgbCanvas(this.size.width, this.size.height);
-      this.#images.set(reference, blank);
-      this.#dirtyAssets.set(reference, blank);
+      this.#images.set(reference, new ArgbCanvas(0, 0));
       this.imageVersion++;
     }
     if (bareType(layer) === 'item') made = { ...layer, slot: this.freeSlot() } as GuiLayer;
@@ -313,7 +349,16 @@ export class GuiStudioState {
   }
 
   duplicateSelection(): void {
-    const { command, created } = ops.duplicateLayers(this.doc, this.scene, this.selection);
+    const { command, created } = ops.duplicateLayers(this.doc, this.scene, this.selection, (source, copy) => {
+      // a copy of a paint layer has pixels of its own: painting on it must not paint on the original
+      const original = paintReferenceOf(source);
+      const bitmap = isPaintLayer(source) && original ? this.#images.get(original) : null;
+      if (!bitmap) return;
+      const reference = paintReference(this.path, copy.id);
+      copy.image = reference;
+      this.#images.set(reference, bitmap.clone());
+      if (bitmap.width * bitmap.height > 0) this.#dirtyAssets.set(reference, this.#images.get(reference)!);
+    });
     if (this.run(command)) this.selection = created;
   }
 
@@ -382,8 +427,9 @@ export class GuiStudioState {
     this.setView(zoomTo(this.view, zoom, anchor ?? { x: this.stage.w / 2, y: this.stage.h / 2 }));
   }
 
+  /** Pans over the whole art cap, not just the screen: the canvas is open (gui.md section 11). */
   pan(dx: number, dy: number): void {
-    this.setView(panBy(this.view, dx, dy, this.stage, { w: this.size.width, h: this.size.height }));
+    this.setView(panBy(this.view, dx, dy, this.stage, { w: ART_CAP.w, h: ART_CAP.h }, 64, { x: ART_CAP.x, y: ART_CAP.y }));
   }
 
   // ------------------------------------------------------------------ pixel assets
@@ -404,8 +450,18 @@ export class GuiStudioState {
     const wanted = new Set(
       this.doc.layers.flatMap((layer) => (typeof layer.image === 'string' && layer.image ? [layer.image] : [])),
     );
+    // a paint layer saved with no pixel (width 0, height 0) has no file: it is an empty bitmap, not a texture to fetch
+    const unpainted = new Set(
+      this.doc.layers.flatMap((layer) =>
+        isPaintLayer(layer) && layer.width === 0 && layer.height === 0 ? [paintReferenceOf(layer)] : []),
+    );
     await Promise.all([...wanted].map(async (reference) => {
       if (this.#images.has(reference) || this.#loading.has(reference)) return;
+      if (unpainted.has(reference)) {
+        this.#images.set(reference, new ArgbCanvas(0, 0));
+        this.imageVersion++;
+        return;
+      }
       this.#loading.add(reference);
       try {
         const payload = unwrap(await assetOps.get(channel, this.pack, textureAssetPath(reference)));
@@ -495,7 +551,7 @@ export class GuiStudioState {
     else this.say('Click the canvas to start a Paint layer.');
   }
 
-  #paintTarget(): { layer: GuiLayer; reference: string; canvas: ArgbCanvas } | null {
+  #paintTarget(): { layer: GuiLayer; reference: string; bitmap: ArgbCanvas } | null {
     if (this.readOnly) {
       this.say('This file is read-only here.');
       return null;
@@ -520,31 +576,62 @@ export class GuiStudioState {
       return null;
     }
     if (this.selection.length !== 1 || this.selection[0] !== layer.id) this.selection = [layer.id];
-    const reference = typeof layer.image === 'string' && layer.image ? layer.image : paintReference(this.path, layer.id);
-    if (layer.image !== reference) this.run(ops.setField(this.doc, layer.id, 'image', reference, 'Set paint texture'));
-    let canvas = this.#images.get(reference);
-    if (canvas === undefined) {
+    const reference = paintReferenceOf(layer) || paintReference(this.path, layer.id);
+    if (layer.image !== reference) {
+      // a paint layer written without a texture: it has no pixels yet
+      this.#images.set(reference, new ArgbCanvas(0, 0));
+      this.run(ops.setField(this.doc, layer.id, 'image', reference, 'Set paint texture'));
+    }
+    let bitmap = this.#images.get(reference);
+    if (bitmap === undefined) {
       this.say('The layer is still loading.');
       return null;
     }
-    const { width, height } = this.size;
-    if (canvas === null || canvas.width !== width || canvas.height !== height) {
-      // no file yet, or the canvas grew with the rows: a transparent canvas of the right size, overlap kept
-      canvas = canvas ? resizedCanvas(canvas, width, height) : new ArgbCanvas(width, height);
-      this.#images.set(reference, canvas);
-      this.#dirtyAssets.set(reference, canvas);
+    if (bitmap === null) {
+      // no file: fine for a layer that was never painted, but not for one the document says has pixels
+      if (whole(layer.width, 0) > 0 && whole(layer.height, 0) > 0) {
+        this.say('This layer\'s pixels could not be read, so painting on it could overwrite them.');
+        return null;
+      }
+      bitmap = new ArgbCanvas(0, 0);
+      this.#images.set(reference, bitmap);
     }
-    return { layer, reference, canvas };
+    return { layer, reference, bitmap };
   }
 
-  /** Redraws at most once per frame while a stroke is in flight. */
+  /** The `x`, `y`, `width` and `height` a layer has right now (an absent field is `undefined`), so an undo restores them exactly. */
+  #geometryOf(layer: GuiLayer): Record<string, unknown> {
+    return Object.fromEntries(
+      Object.keys(geometryFields({ x: 0, y: 0, w: 0, h: 0 })).map((key) => [key, Object.hasOwn(layer, key) ? layer[key] : undefined]),
+    );
+  }
+
+  /**
+   * Redraws at most once per frame while a stroke is in flight. The layer on screen is the stroke's own working
+   * copy, grown to hold what has been painted, so a stroke that leaves the layer is seen leaving it.
+   */
   #kick(): void {
     if (this.#redraw) return;
     const schedule = globalThis.requestAnimationFrame ?? ((callback: () => void) => setTimeout(callback, 16) as unknown as number);
     this.#redraw = schedule(() => {
       this.#redraw = 0;
+      this.#showStroke();
       this.imageVersion++;
     });
+  }
+
+  #showStroke(): void {
+    const stroke = this.#stroke;
+    const base = this.#strokeLayer;
+    if (!stroke || !base) return;
+    const ink = stroke.inkBox();
+    const grown = ink ? unionRects(base.rect, ink) : base.rect;
+    const working = stroke.canvas;
+    this.#images.set(
+      base.reference,
+      reshape(working, { x: working.originX, y: working.originY, w: working.width, h: working.height }, grown),
+    );
+    this.preview = patchLayers(this.doc, { [base.layerId]: geometryFields(grown) }, 'Paint')?.apply(this.doc) ?? null;
   }
 
   #touch(reference: string): void {
@@ -553,16 +640,32 @@ export class GuiStudioState {
     this.imageVersion++;
   }
 
-  #pixelCommand(label: string, patch: NonNullable<ReturnType<Stroke['end']>>): Command {
-    return new PixelCommand(label, patch, (reference) => this.#images.get(reference) ?? null, (reference) => this.#touch(reference));
-  }
+  readonly #store: PixelStore = {
+    get: (reference) => this.#images.get(reference),
+    set: (reference, canvas) => void this.#images.set(reference, canvas),
+    touched: (reference) => this.#touch(reference),
+  };
 
   /** Begins a brush or eraser stroke at a GUI pixel; shift joins the previous stroke's end with a straight line. */
   beginStroke(point: Point, erase: boolean, straight: boolean): boolean {
     const target = this.#paintTarget();
     if (!target) return false;
+    if (!insideCap(point.x, point.y)) {
+      this.say('That is outside the art cap: art there is not drawn in game.');
+      return false;
+    }
+    const rect = paintRect(target.layer, target.bitmap);
+    // the stroke runs on a copy that covers the whole cap, so it can leave the layer; the copy is clipped to the cap
+    const working = workingCanvas(target.bitmap, rect, ART_CAP);
     const from = straight ? this.#lastStrokeEnd.get(target.reference) : undefined;
-    this.#stroke = new Stroke(target.canvas, target.reference, erase ? ERASER : this.color, this.brush, point, from);
+    this.#stroke = new Stroke(working, target.reference, erase ? ERASER : this.color, this.brush, point, from);
+    this.#strokeLayer = {
+      layerId: target.layer.id,
+      reference: target.reference,
+      bitmap: target.bitmap,
+      rect,
+      fields: this.#geometryOf(target.layer),
+    };
     this.#strokeErases = erase;
     this.#kick();
     return true;
@@ -586,49 +689,86 @@ export class GuiStudioState {
   /** Ends the stroke: ONE command, however many events drew it (nothing when it changed no pixel). */
   endStroke(): void {
     const stroke = this.#stroke;
+    const base = this.#strokeLayer;
     this.#stroke = null;
-    if (!stroke) return;
+    this.#strokeLayer = null;
+    if (!stroke || !base) return;
     this.#lastStrokeEnd.set(stroke.reference, stroke.last);
+    // back to the layer as it was before the stroke: the command writes the result in, and undo gives this back
+    this.#images.set(base.reference, base.bitmap);
+    this.preview = null;
     const patch = stroke.end();
     if (!patch) {
       this.imageVersion++;
       return;
     }
-    this.run(this.#pixelCommand(this.#strokeErases ? 'Erase' : 'Paint stroke', patch));
+    const layer = findLayer(this.doc, base.layerId);
+    if (!layer) return;
+    const cells = cellsOfPatch(patch, stroke.canvas);
+    this.run(paintCommand(this.#strokeErases ? 'Erase' : 'Paint stroke', layer.id, base.reference, { rect: base.rect, fields: base.fields }, cells, this.#store));
     if (!this.#strokeErases) this.setColor(this.color, true);
   }
 
-  /** Flood fill (contiguous, exact colour match) with the paint colour. */
+  /**
+   * Flood fill (contiguous, exact colour match) with the paint colour. The fill is bounded by the layer's box joined
+   * with the screen, so it works on the screen's empty space and inside painted shapes, and never floods the art cap.
+   */
   fillAt(point: Point): void {
     const target = this.#paintTarget();
     if (!target) return;
-    const patch = fillPatch(target.canvas, target.reference, point.x, point.y, this.color);
+    const rect = paintRect(target.layer, target.bitmap);
+    const window = clipToCap(unionRects(rect, screenRect(this.doc.rows)));
+    if (!window || point.x < window.x || point.y < window.y || point.x >= window.x + window.w || point.y >= window.y + window.h) {
+      this.say('Fill works on the screen and inside painted shapes. Use the brush to paint further out.');
+      return;
+    }
+    const working = workingCanvas(target.bitmap, rect, window);
+    const patch = fillPatch(working, target.reference, point.x, point.y, this.color);
     if (!patch) {
       this.say('Nothing to fill there.');
       return;
     }
-    this.run(this.#pixelCommand('Fill', patch));
+    this.run(paintCommand('Fill', target.layer.id, target.reference, { rect, fields: this.#geometryOf(target.layer) }, cellsOfPatch(patch, working), this.#store));
     this.setColor(this.color, true);
   }
 
-  /** Empties the paint layer (one undoable step). */
+  /** Empties the paint layer (one undoable step): no pixel is left, so none is saved. */
   clearPaint(id: string): void {
     const layer = findLayer(this.doc, id);
-    const reference = layer && typeof layer.image === 'string' ? layer.image : '';
-    const canvas = this.#images.get(reference);
-    if (!layer || !canvas || this.readOnly || isLocked(layer)) return;
-    const snapshot = canvas.pixels.slice();
-    canvas.pixels.fill(0);
-    const patch = diffAll(reference, snapshot, canvas);
-    if (patch) this.run(this.#pixelCommand('Clear paint layer', patch));
-    else this.say('The layer is already empty.');
+    const reference = layer ? paintReferenceOf(layer) : '';
+    const bitmap = reference ? this.#images.get(reference) : null;
+    if (!layer || !bitmap || this.readOnly || isLocked(layer)) return;
+    const rect = paintRect(layer, bitmap);
+    const painted: number[] = [];
+    bitmap.pixels.forEach((value, index) => value >>> 24 !== 0 && painted.push(index));
+    if (isEmptyRect(rect) && painted.length === 0) {
+      this.say('The layer is already empty.');
+      return;
+    }
+    const cells: PixelCells = {
+      x: Int32Array.from(painted, (index) => (index % bitmap.width) + rect.x),
+      y: Int32Array.from(painted, (index) => Math.floor(index / bitmap.width) + rect.y),
+      before: Uint32Array.from(painted, (index) => bitmap.pixels[index]!),
+      after: new Uint32Array(painted.length),
+    };
+    const emptied: Rect = { x: rect.x, y: rect.y, w: 0, h: 0 };
+    this.run(new PixelCommand(
+      'Clear paint layer', id, reference, cells,
+      { rect, fields: this.#geometryOf(layer) },
+      { rect: emptied, fields: geometryFields(emptied) },
+      this.#store,
+    ));
   }
 
   #previousPaintTool: PaintTool = 'brush';
 
-  /** The eyedropper: the colour the player sees at a GUI pixel (the composited canvas, text included). */
+  /**
+   * The eyedropper: the colour at a GUI pixel. What Materione draws comes first (the composited art, text included, as the
+   * player sees it); where it draws nothing the vanilla chest underneath answers, in its own colour and not the veiled one.
+   */
   pickAt(point: Point): boolean {
-    const color = this.composite.get(point.x, point.y);
+    const art = this.composite.get(point.x, point.y);
+    const color = art >>> 24 !== 0 ? art : (this.vanilla?.get(point.x, point.y) ?? 0);
     if (color >>> 24 === 0) {
       this.say('That pixel is transparent: nothing to pick.');
       return false;
@@ -877,6 +1017,7 @@ export class GuiStudioState {
   async #unsavedPixels(): Promise<AssetUpload[]> {
     const out: AssetUpload[] = [];
     for (const [reference, canvas] of this.#dirtyAssets) {
+      if (canvas.width * canvas.height === 0) continue; // a layer with no pixel has no file
       const data = this.#uploads.get(reference) ?? base64Of(await encodePng(canvas));
       out.push({ path: textureAssetPath(reference), data });
     }
@@ -902,11 +1043,24 @@ export class GuiStudioState {
     this.conflict = false;
     this.notice = '';
     try {
+      // Every paint layer is saved trimmed to its painted pixels (gui.md section 11.2): the PNG holds no transparent
+      // margin, and a layer with no pixel at all saves no PNG and is written with width 0 and height 0.
+      // Only when the layout or a texture is being saved anyway: a save of the title, the rows or the logic never rewrites art.
+      const savingArt = this.#dirtyAssets.size > 0 || JSON.stringify(this.#history.baseline.layers) !== JSON.stringify(this.#history.doc.layers);
+      const trim = savingArt
+        ? trimPaintLayers(this.#history.doc, (reference) => this.#images.get(reference), (reference) => this.#dirtyAssets.has(reference))
+        : { doc: this.#history.doc, layers: [] };
+      const trimmed = new Set(trim.layers.map((entry) => entry.reference));
       const encoded = new Map<string, string>();
       for (const [reference, canvas] of this.#dirtyAssets) {
+        if (trimmed.has(reference)) continue;
+        if (canvas.width * canvas.height === 0) continue;
         encoded.set(reference, this.#uploads.get(reference) ?? base64Of(await encodePng(canvas)));
       }
-      const plan = planSave(this.#location.prefix, this.#history.baseline, this.#history.doc, encoded);
+      for (const entry of trim.layers) {
+        if (entry.needsPng) encoded.set(entry.reference, base64Of(await encodePng(entry.canvas)));
+      }
+      const plan = planSave(this.#location.prefix, this.#history.baseline, trim.doc, encoded);
       // The Logic tab's edits go through logic.edit, the same ops the canvas planned them with (D6); only a
       // log that fell out of step with the history is saved as the whole behavior and flows fields.
       const savedLogic = blockOf(this.#history.baseline.rest);
@@ -925,7 +1079,17 @@ export class GuiStudioState {
         this.saveError = 'This server does not offer the logic API (the logic capability), so logic changes cannot be saved. Update the Materione plugin.';
         return false;
       }
+      // What was saved is the trimmed layer; the studio holds the same from now on (no margin, same pixels).
+      const adoptTrim = (): void => {
+        for (const entry of trim.layers) {
+          this.#images.set(entry.reference, entry.canvas);
+          this.#dirtyAssets.delete(entry.reference);
+        }
+        this.#history.adopt(trim.doc);
+        this.imageVersion++;
+      };
       if (isEmptyPlan(plan) && logicEdits.length === 0) {
+        adoptTrim();
         this.#history.markSaved();
         this.#logic.saved();
         this.sync();
@@ -941,6 +1105,7 @@ export class GuiStudioState {
       if (!isEmptyPlan(plan)) {
         const response = await sendSave(channel, this.pack, this.path, draft.rev, plan);
         if (!response.ok) return failed(response.error.code, response.error.message);
+        adoptTrim();
         this.#history.markSaved();
         for (const asset of plan.assets) {
           const reference = [...encoded.keys()].find((key) => textureAssetPath(key) === asset.path);

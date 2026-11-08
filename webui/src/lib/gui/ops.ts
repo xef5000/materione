@@ -139,7 +139,13 @@ export function deleteLayers(doc: GuiDocument, ids: readonly string[]): Command 
 }
 
 /** Copies layers just above their originals (ids made unique), nudged 4 px so the copy shows. */
-export function duplicateLayers(doc: GuiDocument, scene: Scene, ids: readonly string[]): { command: Command | null; created: string[] } {
+export function duplicateLayers(
+  doc: GuiDocument,
+  scene: Scene,
+  ids: readonly string[],
+  /** Called with each copy before it is inserted: a layer that owns something (a paint layer's pixels) gives its copy its own. */
+  adjust?: (source: GuiLayer, copy: GuiLayer) => void,
+): { command: Command | null; created: string[] } {
   const taken = new Set(doc.layers.map((layer) => layer.id));
   const created: string[] = [];
   const steps: Command[] = [];
@@ -156,6 +162,7 @@ export function duplicateLayers(doc: GuiDocument, scene: Scene, ids: readonly st
       copy.y = source.y + 4;
     }
     delete copy.locked;
+    adjust?.(source, copy);
     steps.push(addLayer(doc, copy, layerIndex(doc, source.id) + 1, 'Duplicate layer'));
   }
   return { command: compose(sources.length === 1 ? 'Duplicate layer' : 'Duplicate layers', steps), created };

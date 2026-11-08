@@ -9,6 +9,17 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The GUI studio's open canvas: the vanilla chest underneath, the inventory under a veil, art anywhere around the screen (gui.md §6, §11, #277).**
+  The canvas is no longer the screen: it is the whole art area (1024 x 1024 px around the chest, drawn with its limit), with the owner's
+  vanilla chest drawn under every GUI as the client composes it for 1 to 6 rows. It is not a layer and is never saved. The player's
+  inventory part is dimmed, and the dimming lifts under every pixel you paint there. You can pan, zoom, paint and place layers outside
+  the screen, drag across empty space to select what is there, and turn on **Window guides** to see what a 1920 x 1080 player sees around
+  the screen at GUI scales 2, 3 and 4. A **Paint** layer now has its own position and size: it grows as you paint outside it (in the same
+  undo step as the stroke), the Save trims it to the pixels you painted (no more screen-sized PNGs, so no transparent margin in the file),
+  and a layer with nothing painted saves no PNG and is written with `width: 0`, `height: 0`. Older screen-sized paint layers still open
+  and are trimmed by the next save of the layout (a save of only the title, the rows or the logic leaves them alone). A button, or any layer with a click rule, whose click rectangle covers no container slot is badged as decoration only,
+  with the reason (outside the chest, clicks arrive as click_outside; the compiler's MTR-0092 rule). The eyedropper reads the art first and then the vanilla chest under it. The compiler side is
+  #276 (a paint layer's `x`, `y` and an empty layer are read there); no new wire shape or diagnostic code.
 - **A GUI logic showcase: five GUIs that demonstrate the menu parity rows (logic.md §1.1, §34, #227).** The `showcase` fixture pack
   holds a shop (`/shop` with a typed category, a 5-point paywall, conditional stock), a server selector (`connect` and the online
   count), a paged player list with search, settings toggles (player booleans with on and off overlays), and a confirm dialog that

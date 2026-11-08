@@ -99,8 +99,10 @@ item layer's appearance, it creates a normal item resource at
 copied, since items cannot be templates, see section 6) and points the layer's `item:` at it. There is no "GUI-local item" concept: the item type, its
 studio, its compile path and its auto-updater are reused as they are (D1, D5).
 
-**Paint layers own one PNG** at `textures/<image>.png`, canvas-sized, RGBA. The studio
-writes it through the asset store; the compiler reads it like any other texture.
+**Paint layers own one PNG** at `textures/<image>.png`, RGBA, holding exactly the layer's painted pixels: the layer
+carries `x`, `y`, `width` and `height` like an `image` (§11.2), and a layer with no painted pixel has `width: 0`,
+`height: 0` and no file. The studio writes it through the asset store; the compiler reads it like any other texture.
+(Layers from before the open canvas have no box and a canvas-sized PNG; the studio opens them and trims them on the next save.)
 
 **Logic lives beside the layers.** A GUI resource may also carry `behavior:` (rules fired by
 `gui.opening`, `gui.open`, `gui.close`, `gui.click`, `gui.click_outside` and `gui.tick`) and `flows:`
@@ -449,9 +451,9 @@ the tools a designer expects.
 
 | Piece | Where | Notes |
 |---|---|---|
-| Paint tools | `gui/paint.ts`, `gui/pixel-command.ts`, `studio/gui/PaintOptions.svelte` | brush and eraser (1-8 px, square or round), contiguous fill (tolerance 0), eyedropper (samples the **composited** canvas: raster layers and smallcaps text, as the player sees it), palette with recent colours and hex input (persisted in the browser, never in the file). The drawing rules are `pixels.ts`'s (stamp, Bresenham line, exact-match flood fill) run on a working RGBA copy of the layer's `ArgbCanvas`; `Brush` gained an optional `shape` for the round footprint (additive: the texture editor is unchanged). A stroke joins every pointer event, coalesced ones included, with a line, so a fast drag leaves no gaps at any zoom; Shift-click draws a straight line from the last stroke's end; Alt picks a colour from any paint tool |
-| Strokes are commands | `GuiHistory` | a stroke, fill or clear is **one** `PixelCommand` carrying a patch (touched pixels, before and after) rather than a copy of the canvas. The document does not change, so the history tracks the newest applied pixel command by identity: a stroke makes the studio dirty, undoing back to the saved state makes it clean, and undoing past a save, or painting something else after it, never looks clean. Paint-only saves send empty `edits` plus the PNG (section 7) |
-| Paint target | `GuiStudioState` | the selected paint layer, else the topmost visible unlocked one, else a new `Paint` layer is created by the first stroke (one more undo step); a locked or hidden target is explained in the status bar, never painted. A paint layer whose canvas no longer matches the rows is grown (overlap kept) |
+| Paint tools | `gui/paint.ts`, `gui/pixel-command.ts`, `studio/gui/PaintOptions.svelte` | brush and eraser (1-8 px, square or round), contiguous fill (tolerance 0), eyedropper (samples the **composited** art first, as the player sees it, then the vanilla chest under it; §10 *Decisions taken in #277*), palette with recent colours and hex input (persisted in the browser, never in the file). The drawing rules are `pixels.ts`'s (stamp, Bresenham line, exact-match flood fill) run on a working RGBA copy of the layer's `ArgbCanvas`; `Brush` gained an optional `shape` for the round footprint (additive: the texture editor is unchanged). A stroke joins every pointer event, coalesced ones included, with a line, so a fast drag leaves no gaps at any zoom; Shift-click draws a straight line from the last stroke's end; Alt picks a colour from any paint tool |
+| Strokes are commands | `GuiHistory` | a stroke, fill or clear is **one** `PixelCommand` carrying a patch (touched pixels, before and after) rather than a copy of the canvas. A stroke inside the layer's box does not change the document, so the history tracks the newest applied pixel command by identity: a stroke makes the studio dirty, undoing back to the saved state makes it clean, and undoing past a save, or painting something else after it, never looks clean. Since #277 the patch is kept in GUI pixels (not as indices into a bitmap) together with the layer's box before and after, because the bitmap is reshaped between a stroke and its undo (see *As built (issue 277)* below) |
+| Paint target | `GuiStudioState` | the selected paint layer, else the topmost visible unlocked one, else a new `Paint` layer is created by the first stroke (one more undo step); a locked or hidden target is explained in the status bar, never painted. A paint layer is no longer tied to the rows (#277: it owns its box) |
 | Image layers | `studio/gui/ImageExtras.svelte`, `ImageChooser.svelte` | add by **upload** (file dialog, or drop a file on the canvas) or **from the Assets workspace** (the item studio's explorer). An upload is stored at `textures/gui/<gui-path>/<file>.png` with the file's own bytes (a PNG is never re-encoded; other formats the browser can read are converted) and rides the layout transaction as an `assets` entry; moving and resizing are the canvas's (nearest neighbour), with **Natural size** and 1x-4x scale buttons |
 | Text layers | `gui/font/`, `gui/text.ts`, `gui/compose.ts`, `studio/gui/TextEditOverlay.svelte` | **smallcaps is pixel-exact**: the canvas draws each glyph from the shared font source `fonts/smallcaps/smallcaps.txt` (section 4, *Fonts*, parsed by `font/smallcaps.ts`; `font/render.ts` draws it), at the pen the compiler computes, tinted by the colour; the browser spec compares every ink pixel against glyphs parsed independently from that file. The studio also draws the vanilla **Inventory** label as a faint ghost at (8, height - 94), since the client draws it over the background (section 9.2). **Double-click** (or `Enter`) edits in place: a hidden input takes the keyboard, the canvas keeps drawing the real font, and the overlay draws only caret and selection from the font's own advances; typing previews live without touching the history, `Enter`/leaving commits one undo step, `Escape` takes it back. `default` is drawn with the bundled Minecraftia and says **Approximate preview**; its advances are the client's own widths (`fonts/vanilla-ascii/advances.txt`, §9.4), so the pen and the selection box are exact |
 | Compiler rules, shown | `gui/validation.ts`, `gui/server.ts` (since #204, §10 #8) | the verdict is the server's: `gui.validate` answers for the document as shown, debounced as you edit, and each diagnostic lands on the layer it names. The studio holds no copy of the rules, so the list below is what the server enforces, stated where the author is looking: an orange `!` flag on the canvas, a warning icon in the layers panel and the reason in the inspector. Text: reserved characters, non-ASCII, blank or over-long text, and `default` above row 5. Items: a slot outside the container, a missing item, a bad amount, a later layer replacing an earlier one in the same slot. Skipped text is drawn as a faint ghost, not as the pixels the player will not get |
@@ -465,6 +467,18 @@ has rules), a layer with rules wears a bolt in the layers panel (a button that o
 its layer (a triangle on the row, the message with its step path in the inspector), and deleting a layer that has rules asks
 whether to delete the rules or keep them without the `layer:` filter, as one undo step with the layer. The link is the rule's `layer:`
 filter and nothing is stored. The studio's `open:` block (§6.1) is edited in the Script tab and saved as its own field with the layers.
+
+**As built (issue 277: the open canvas, gui.md §11).** The canvas is no longer the screen; it is the whole art cap with the chest drawn on it.
+
+| Piece | Where | Notes |
+|---|---|---|
+| Vanilla underlay | `gui/vanilla.ts`, `gui/vanilla-sheet.ts`, `static/vanilla/generic_54.png` | the owner's sheet, composed for 1-6 rows as the client blits it (the top `rows*18+17` rows, then 96 rows from `v = 126`; the last row of the screen stays empty). It is not a layer: it is never listed, saved or in the history. The vitest and the browser spec compare it pixel for pixel with the sheet for every row count |
+| Regions and veil | `gui/vanilla.ts` `veiledScreen`, `gui/open-canvas.ts` | container normal; the player's inventory (`y >= rows*18+17`) under a translucent grey veil (`VEIL`) that lifts **per painted pixel** (any pixel of the composed art with alpha above 0 shows the vanilla pixel at full strength, the neighbours stay veiled); the open space outside the screen has the screen outline and the cap box. The status bar names the region under the pointer. `item` and `list` layers stay container-only |
+| The canvas | `GuiCanvas.svelte` | three stacked canvases: the open space (the cap's box), `gui-underlay` (the chest, screen-sized) and `gui-art` (the composed art over the cap: 1024 x 1024, its top-left at GUI pixel -424, -243; `ArgbCanvas` gained an origin for this, `RasterScene` an `originX`/`originY`). Pan and zoom cover the whole cap (`panBy` takes the content's origin); the pixel grid covers what the stage shows. Snapping also pulls to the cap's edges |
+| Guides | `gui/open-canvas.ts` `windowGuide`, toolbar "Window guides" | dashed rectangles for what a 1920 x 1080 window shows around the screen at GUI scales 2, 3 and 4 (§9.12 and §11.5: `leftPos = floor((ceil(W/s) - 176) / 2)`, `topPos = floor((ceil(H/s) - imageHeight) / 2)`), with the margins in the label; off by default, like the slot grid |
+| Paint layers own their box | `gui/paint-geometry.ts`, `gui/pixel-command.ts`, `GuiStudioState` | see *Decisions taken in #277*: x, y, width, height; a stroke runs on a working copy that covers the cap, so it can leave the layer and is clipped to the cap; the layer grows to hold it in the same undo step; **Save trims** every paint layer to its painted pixels (the PNG holds no margin), and the studio adopts the trimmed layer so what is saved is what it holds. A paint layer moves with X and Y and is never dragged to a size |
+| Selecting in the open space | `gui/scene.ts` | hit testing and marquee work anywhere. A layer covering the whole screen is still the backdrop a drag on it marquee-selects over (`coversScreen`); the open space has no layer under it, so a drag there always marquee-selects. A marquee also selects a paint layer when it covers one of its painted pixels |
+| Decoration only | `gui/open-canvas.ts` `decorationNote`, layers panel and inspector | a button, or a layer with a click rule (the Design/Logic link of #225), whose click rectangle covers **no container slot** wears a badge and an inspector note: placed outside the screen, "Decoration only: clicks outside the chest arrive as click_outside"; on the screen but over no slot (the player's inventory, the gaps), "it covers no container slot"; covering a slot but leaving the screen, "Partly decoration only". Pure geometry (§9.14, §11.4) stated with the compiler's own rule (MTR-0092, #276); the compiler's warning itself arrives through `gui.validate` like any other |
 
 **Customize is one transaction.** Customize creates an ordinary item at
 `items/gui/<gui-path>/<layer-id>.yml`, points the layer's `item:` at it and opens its appearance
@@ -1124,9 +1138,24 @@ These record what §9.8–§9.15 measured and the rules §11.3 draws from it. Ea
 6. **The leading no-ink shift of a title stays** (it is harmless and the shipped goldens have it), but it is not needed for placement: no first-character offset was measured (§9.15).
 7. **1.21.4 is unverified** for all of this (§9.7); the rules are stated for the 26.1.2 client and expected to hold on the floor version.
 
+### Decisions taken in #277 (open canvas studio)
+
+Each one is reversible by the owner.
+
+1. **The underlay is drawn, not stored.** The vanilla chest is composed from `static/vanilla/generic_54.png` for the row count and drawn under the art; it is not a layer, is never saved and is not in the history (§11.2). The veil is a translucent grey (`0xA0303030`, source-over) on the opaque vanilla pixels of the inventory part; it lifts under any pixel of the composed art with alpha above 0, smallcaps title text included (an opaque ink pixel hides what is under it either way).
+2. **A paint layer's bitmap is the truth for its size.** The layer is drawn 1:1 at (`x`, `y`) with the PNG's own size, as the compiler blits it; `width`/`height` in the file mirror the bitmap (and stand in for it only until it has loaded). A layer from before the open canvas (no `x`, `y`, `width`, `height`, a canvas-sized PNG) opens as it is and is rewritten, trimmed, by the next save that writes the layout or a texture (a save of the title, the rows or the logic alone never rewrites art).
+3. **Growing and trimming.** A stroke or fill grows the layer's box to hold what it painted, in the same undo step; erasing never shrinks it while editing. **Save trims** every paint layer to the box of its pixels with alpha above 0 and writes the layer's `x`, `y`, `width`, `height` with it. The history keeps its patches in GUI pixels with the layer's box before and after, so a save in the middle of the history does not break undo. A layer whose bitmap could not be read is never trimmed (a failed read cannot empty a layer).
+4. **An empty paint layer.** A paint layer with no painted pixel (never painted, cleared, or erased) is saved with `width: 0` and `height: 0` (and its last `x`, `y`), **no PNG**, and its `image:` reference kept; a stale file from an earlier save is left where it is. This follows the zero-size rule of §10 *Decisions taken in #184* (8): a zero-size layer draws nothing. The server must accept the layer without the texture existing (#276's compiler); until it does, the compiler reports the missing texture of such a layer like any other.
+5. **Fill is bounded.** Fill runs on the layer's box joined with the screen (clipped to the cap), so it fills empty space on the screen and the inside of painted shapes, and never floods the art cap. A click outside that area says so.
+6. **Painting is clipped to the cap.** Strokes run on a working copy of the cap's size, so pixels outside `x -424..599, y -243..780` are never painted; a stroke that starts outside says why. The cap is geometry the studio needs to draw and clip; whether art past it is an error is the compiler's (`gui.validate`), and the studio holds no copy of those rules.
+7. **The eyedropper** samples what Materione draws first (the composed art with its alpha, as the player sees it), then the vanilla chest under it, in its own colour and not the veiled one; open space and the transparent corners of the sheet say "transparent".
+8. **The backdrop rule is generalised, not dropped.** A layer covering the whole screen is still what a drag on it marquee-selects over (a click selects it, and once selected it moves); with the open canvas there is also open space with no layer under it, where a drag always marquee-selects. A marquee selects a paint layer when it covers one of its painted pixels (paint layers now have real boxes).
+9. **Decoration only is geometry, and it is the compiler's rule.** A button, or a layer with a click rule, whose click rectangle covers no container slot (the 16 x 16 item areas of the chest's slots) is badged, with the reason: outside the screen it arrives as `click_outside`; on the screen over no slot a click is a plain click (§9.14). A layer that covers a slot and also leaves the screen is badged "partly". This agrees with MTR-0092 (#276), which the same layer also gets through `gui.validate`.
+10. **Guides** are drawn for 1920 x 1080 at scales 2, 3 and 4 as §11.5 says. The "small window" guides (1280 x 720 at 3, 854 x 480 at 2) are not drawn yet; `windowGuide` already computes them.
+
 ---
 
-## 11. The open canvas (#274) — design approved by the owner, being built
+## 11. The open canvas (#274) — design approved by the owner; studio built (#277)
 
 > **Status.** Approved by the owner on 2026-11-05. It replaces the bounded canvas of §1, the starter GUI
 > of §6 and the full-screen flatten of §4 step 1 **as each issue lands**: #275 (research), #276
@@ -1134,7 +1163,9 @@ These record what §9.8–§9.15 measured and the rules §11.3 draws from it. Ea
 > sections it replaces still describe the shipped behaviour. **#275 has landed:** the facts this section
 > marked *to verify* were measured on the 26.1.2 probe client (§9.8–§9.15) and the rules below are the
 > verified ones, with the exact numbers #276 needs. One finding amends the design: the art box is
-> asymmetric at the top (§11.2). 1.21.4 is not measured (§9.7).
+> asymmetric at the top (§11.2). 1.21.4 is not measured (§9.7). **#277 has landed:** the studio side of this section is built
+> (§6 *As built (issue 277)*): the vanilla underlay and the veil, the open canvas with the cap and the player-window guides, and paint
+> layers that own their box. The compiler (#276) and the starter (#278) are the other two.
 
 ### 11.1 Why
 
@@ -1181,7 +1212,7 @@ dynamic overlay glyph (§4 step 7): each is cropped to its own bounds.
 
 **Paint layers own their geometry.** A `paint` layer carries `x`, `y`, `width`, `height` like an
 `image`; the studio grows it as strokes leave it and trims it to its painted bounds on save. No paint
-PNG is canvas-sized any more.
+PNG is canvas-sized any more. *(Built in #277.)*
 
 ### 11.3 Compiling art past the screen (rules for #276, verified by #275)
 

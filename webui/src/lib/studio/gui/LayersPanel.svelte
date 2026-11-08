@@ -11,7 +11,9 @@
   import { moveLayers } from '../../gui/commands';
   import { layerLabel, isHidden, isLocked, type GuiLayer } from '../../gui/model';
   import * as ops from '../../gui/ops';
+  import { decorationNote, isClickable } from '../../gui/open-canvas';
   import { componentIcon } from '../../gui/registry';
+  import { bareType } from '../../gui/raster/flatten';
   import type { GuiStudioState } from '../../gui/studio.svelte';
   import type { LinkageState } from '../../logic/linkage/linkage.svelte';
 
@@ -107,6 +109,7 @@
       {@const problems = studio.flagsFor(layer.id).map((flag) => flag.message)}
       {@const rules = links?.ruleCount(layer.id) ?? 0}
       {@const logicFlags = links?.flagsFor(layer.id) ?? []}
+      {@const decoration = decorationNote(isClickable(bareType(layer), rules), studio.boundsOf(layer), studio.doc.rows)}
       <li
         class="row"
         class:selected={studio.selection.includes(layer.id)}
@@ -164,6 +167,9 @@
             role="img"
             aria-label="Logic problem: {logicFlags.map((flag) => flag.message).join('. ')}"
           ><Icon name="triangle-alert" size={14} /></span>
+        {/if}
+        {#if decoration}
+          <span class="problem decoration" data-testid="layer-decoration" title={decoration} role="img" aria-label={decoration}><Icon name="mouse-pointer-ban" size={14} /></span>
         {/if}
         {#if problems.length}
           <span class="problem" title={problems.join('. ')} role="img" aria-label="Compiler warning: {problems.join('. ')}"><Icon name="triangle-alert" size={14} /></span>
