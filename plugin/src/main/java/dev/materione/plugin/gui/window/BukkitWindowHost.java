@@ -99,11 +99,15 @@ public final class BukkitWindowHost implements WindowHost {
      * inventory API accepts (a multiple of 9 from 9 to 54), or an {@code InventoryType} that exists and is
      * creatable. Reports {@code MTR-0098} and returns the reason when it does not.
      */
+    /** Bukkit's {@code createInventory(holder, size, title)} contract, not a container's geometry. */
+    private static final int API_SIZE_STEP = 9;
+    private static final int API_SIZE_MAX = 54;
+
     private Optional<String> unopenable(RuntimeGuis.Live gui) {
         GuiContainer.Open open = gui.container().open();
         String reason = null;
         if (open.inventoryType() == null) {
-            if (open.size() < 9 || open.size() > 54 || open.size() % 9 != 0) {
+            if (open.size() < API_SIZE_STEP || open.size() > API_SIZE_MAX || open.size() % API_SIZE_STEP != 0) {
                 reason = "the container '" + gui.container().id() + "' asks for a window of " + open.size()
                         + " slots, which this server cannot create";
             }
