@@ -1,0 +1,5 @@
+title: <shift:20><font:shop:gui><#FFFFFF>{E200}</font><shift:-149><font:shop:gui><#FFFFFF>{E201}</font><shift:-169>
+font shop:gui {type=bitmap, file=shop:font/materione/gui/banner.png, ascent=43, height=43, chars=[{E200}]}
+font shop:gui {type=bitmap, file=shop:font/materione/gui_tile/62616e6e6572/1_0.png, ascent=-217, height=100, chars=[{E201}]}
+asset assets/shop/textures/font/materione/gui/banner.png 120x43 9607ded5ada6d3a435330e8672fd4fffca2ae7cf977c457517d6efaafbbbad71
+asset assets/shop/textures/font/materione/gui_tile/62616e6e6572/1_0.png 176x100 02c72d2c126f3f96355bc6074b292cc7e321f11e3f9c3a879a02bf0c3649b984

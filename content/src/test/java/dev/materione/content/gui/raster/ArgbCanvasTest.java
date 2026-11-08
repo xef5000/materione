@@ -64,5 +64,82 @@ class ArgbCanvasTest {
     void compositeRequiresEqualSizes() {
         assertThatThrownBy(() -> new ArgbCanvas(2, 2).composite(new ArgbCanvas(3, 2), 100))
                 .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new ArgbCanvas(2, 2).composite(new ArgbCanvas(1, 0, 2, 2), 100))
+                .as("the same size at another origin is another rectangle")
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    // --- the open canvas (gui.md §11): an origin, painted bounds, clipping memory ---------------------------
+
+    @Test
+    void anOriginMakesEveryCoordinateAGuiPixel() {
+        var canvas = new ArgbCanvas(-10, -5, 20, 10);
+        canvas.blend(-10, -5, 0xFF111111);
+        canvas.blend(9, 4, 0xFF222222);
+        canvas.fill(-2, 0, 3, 1, 0xFF333333);
+        assertThat(canvas.argb(-10, -5)).isEqualTo(0xFF111111);
+        assertThat(canvas.argb(9, 4)).isEqualTo(0xFF222222);
+        assertThat(canvas.argb(-2, 0)).isEqualTo(0xFF333333);
+        assertThat(canvas.argb(0, 0)).isEqualTo(0xFF333333);
+        assertThat(canvas.argb(1, 0)).isZero();
+        assertThat(canvas.argb(-11, -5)).as("outside is 0").isZero();
+        assertThat(canvas.originX()).isEqualTo(-10);
+        assertThat(canvas.originY()).isEqualTo(-5);
+    }
+
+    @Test
+    void paintedBoundsAreTheBoxOfPixelsWithAlphaAboveZero() {
+        var canvas = new ArgbCanvas(-10, -5, 20, 10);
+        assertThat(canvas.paintedBounds()).isNull();
+        canvas.blend(0, 0, 0x00FFFFFF); // a transparent source paints nothing
+        assertThat(canvas.paintedBounds()).isNull();
+        canvas.blend(-3, -2, 0x01000000);
+        canvas.blend(4, 3, 0xFF000000);
+        assertThat(canvas.paintedBounds()).isEqualTo(new ArgbCanvas.Bounds(-3, -2, 8, 6));
+        // a fill that erases leaves no ink, so the bounds shrink to what is still painted
+        canvas.fill(4, 3, 1, 1, 0);
+        assertThat(canvas.paintedBounds()).isEqualTo(new ArgbCanvas.Bounds(-3, -2, 1, 1));
+    }
+
+    @Test
+    void cropCopiesABlockOfGuiPixelsAndPadsOutsideWithZero() {
+        var canvas = new ArgbCanvas(-2, -2, 6, 6);
+        canvas.fill(-1, -1, 2, 2, 0xFFABCDEF);
+        assertThat(canvas.crop(-2, -2, 3, 3)).containsExactly(
+                0, 0, 0,
+                0, 0xFFABCDEF, 0xFFABCDEF,
+                0, 0xFFABCDEF, 0xFFABCDEF);
+        assertThat(canvas.crop(3, 3, 2, 2)).as("past the edge").containsOnly(0);
+    }
+
+    @Test
+    void clippedInkRemembersAVisibleWriteThatFellOutsideAndClearForgetsIt() {
+        var canvas = new ArgbCanvas(0, 0, 4, 4);
+        canvas.blend(9, 9, 0x00FFFFFF);
+        canvas.fill(7, 7, 2, 2, 0x00000000);
+        assertThat(canvas.clippedInk()).as("transparent writes are not ink").isFalse();
+        canvas.fill(2, 2, 5, 1, 0xFF00FF00); // half inside, half outside
+        assertThat(canvas.clippedInk()).isTrue();
+        assertThat(canvas.argb(3, 2)).isEqualTo(0xFF00FF00);
+        canvas.clear();
+        assertThat(canvas.clippedInk()).isFalse();
+        assertThat(canvas.paintedBounds()).isNull();
+        assertThat(canvas.argb(3, 2)).as("clear really clears the written rectangle").isZero();
+        canvas.blend(-1, 0, 0xFF000000);
+        assertThat(canvas.clippedInk()).isTrue();
+    }
+
+    @Test
+    void compositeOnlyVisitsWhatTheLayerWroteAndMatchesAFullComposite() {
+        var layer = new ArgbCanvas(-4, -4, 8, 8);
+        layer.fill(-2, -1, 3, 2, 0xFF336699);
+        layer.blend(2, 2, 0x80FF0000);
+        var base = new ArgbCanvas(-4, -4, 8, 8);
+        base.fill(-4, -4, 8, 8, 0xFFFFFFFF);
+        base.composite(layer, 60);
+        assertThat(base.argb(-2, -1)).isEqualTo(ArgbCanvas.over(0x99336699, 0xFFFFFFFF));
+        assertThat(base.argb(2, 2)).isEqualTo(ArgbCanvas.over(
+                (ArgbCanvas.rdiv(0x80 * 60, 100) << 24) | 0xFF0000, 0xFFFFFFFF));
+        assertThat(base.argb(-4, -4)).as("untouched").isEqualTo(0xFFFFFFFF);
     }
 }

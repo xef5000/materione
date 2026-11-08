@@ -4,8 +4,11 @@ import dev.materione.api.gui.TitleSink;
 import java.util.List;
 import java.util.Set;
 
-/** Ordered title pieces retained for per-viewer assembly. */
-public record GuiVisualPlan(String namespace, int background, int backgroundAdvance, List<Piece> pieces) {
+/**
+ * Ordered title pieces retained for per-viewer assembly (gui.md §4, step 7). The static background is not part of
+ * a plan: a GUI with dynamic visuals paints none (§4 step 7), so its title starts empty.
+ */
+public record GuiVisualPlan(String namespace, List<Piece> pieces) {
     public GuiVisualPlan {
         pieces = List.copyOf(pieces);
     }
@@ -16,8 +19,13 @@ public record GuiVisualPlan(String namespace, int background, int backgroundAdva
         Object visibleIf();
     }
 
-    public record Glyph(int codepoint, int advance, Set<Integer> slots) {
+    /**
+     * One frame of a raster layer: its art tiles in row-major order (none when the frame paints no pixel, in
+     * which case it adds nothing to the title) and the container slots it covers.
+     */
+    public record Glyph(List<GuiTitle.ArtGlyph> tiles, Set<Integer> slots) {
         public Glyph {
+            tiles = List.copyOf(tiles);
             slots = Set.copyOf(slots);
         }
     }

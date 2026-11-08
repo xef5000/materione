@@ -24,7 +24,7 @@ public final class TitleRenderer {
 
     public Result render(NamespacedId gui, int rows, TitleProgram program, LogicContext context, long ticks) {
         GuiVisualPlan plan = program.plan();
-        var title = new GuiTitle(plan.namespace(), plan.background(), plan.backgroundAdvance());
+        var title = new GuiTitle(plan.namespace());
         var hidden = new HashSet<String>();
         var coverage = new HashMap<String, Set<Integer>>();
         var visible = new HashMap<String, Boolean>();
@@ -37,7 +37,7 @@ public final class TitleRenderer {
             }
             if (piece instanceof GuiVisualPlan.Raster raster) {
                 var frame = raster.frame(ticks);
-                title.glyph(frame.codepoint(), frame.advance());
+                title.art(frame.tiles());
                 coverage.put(piece.layer(), frame.slots());
             } else if (piece instanceof GuiVisualPlan.Text text) {
                 String value;

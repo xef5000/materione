@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 /**
  * The pure GUI compiler (gui.md §4): a parsed {@link GuiDefinition} becomes a
@@ -44,10 +45,11 @@ public final class GuiCompiler {
     private GuiCompiler() {}
 
     /**
-     * Compiles one GUI.
+     * Compiles one GUI whose static background is at most one tile, with a fixed codepoint for it. A
+     * background of several tiles (art past 256 px, or two separated pieces) needs {@link GuiCodepoints}.
      *
      * @param gui the parsed GUI
-     * @param backgroundCodepoint the GUI's durable background codepoint ({@link GuiBackgrounds})
+     * @param backgroundCodepoint the codepoint of the background's first tile ({@link GuiBackgrounds})
      * @param textures pixel access to the owning pack's textures
      */
     public static GuiCompilation compile(GuiDefinition gui, int backgroundCodepoint, TextureSource textures) {
@@ -56,18 +58,46 @@ public final class GuiCompiler {
         });
     }
 
+    /** As {@link #compile(GuiDefinition, int, TextureSource)}, with the codepoint of each overlay frame's first tile. */
     public static GuiCompilation compile(GuiDefinition gui, int backgroundCodepoint, TextureSource textures,
             BiFunction<GuiLayer, Integer, Integer> overlayCodepoint) {
+        return compile(gui, textures, (layer, frame, row, col) -> {
+            if (row != 0 || col != 0) {
+                throw new IllegalStateException("art tile " + row + "/" + col + " of "
+                        + (layer == null ? "the background" : "layer '" + layer + "'")
+                        + " needs its own codepoint: compile with GuiCodepoints");
+            }
+            if (layer == null) {
+                return backgroundCodepoint;
+            }
+            GuiLayer owner = gui.layers().stream().filter(candidate -> candidate.id().equals(layer))
+                    .findFirst().orElseThrow();
+            return overlayCodepoint.apply(owner, frame);
+        });
+    }
+
+    /**
+     * Compiles one GUI (gui.md §4, §11). {@code codepoints} is asked for each art tile that is emitted and
+     * for no other, so a GUI that paints no pixel allocates nothing.
+     *
+     * @param gui the parsed GUI
+     * @param textures pixel access to the owning pack's textures
+     * @param codepoints the codepoint of each art tile
+     * @throws dev.materione.api.content.CompileRejectException {@code MTR-0091} when a tile breaks a
+     *     font-provider invariant; nothing of this GUI may then be emitted
+     */
+    public static GuiCompilation compile(GuiDefinition gui, TextureSource textures, GuiCodepoints codepoints) {
         var report = new Report();
         String namespace = gui.id().namespace();
-        int width = CompiledGui.WIDTH;
-        int height = CompiledGui.height(gui.rows());
         TextureSource bound = reference -> textures.texture(
                 reference.contains(":") ? reference : namespace + ":" + reference);
 
         boolean dynamicVisuals = GuiVisualCompiler.needed(gui);
-        ArgbCanvas background = dynamicVisuals ? new ArgbCanvas(width, height) : flatten(width, height, gui.layers(), bound,
-                (layer, reason) -> report.skip(gui, layer.id(), reason));
+        // the open canvas (gui.md §11): the raster is flattened over the art cap and cut to its painted bounds
+        ArgbCanvas background = dynamicVisuals ? null : GuiFlatten.flatten(GuiArt.CAP_X, GuiArt.CAP_Y, GuiArt.CAP_SIZE,
+                GuiArt.CAP_SIZE, gui.layers(), bound, (layer, reason) -> report.skip(gui, layer.id(), reason),
+                layer -> report.clipped(gui, layer.id()));
+        List<GuiArt.Tile> tiles = background == null ? List.of() : GuiArt.cut(background);
 
         var runs = new ArrayList<TextRun>();
         var slots = new LinkedHashMap<Integer, SlotPlacement>();
@@ -90,9 +120,21 @@ public final class GuiCompiler {
         }
         List<CompiledGui.Placement> placements = placeItems(gui, items, slots, report);
 
-        // the client's advance for a bitmap glyph: its ink width plus one pixel of spacing
-        int advance = background.inkWidth() + 1;
-        var title = new GuiTitle(namespace, backgroundCodepoint, advance);
+        // one provider per tile in the shared GUI font, one PNG per tile (gui.md §11.3)
+        var fonts = new ArrayList<GuiCompilation.FontProvider>();
+        var assets = new TreeMap<String, byte[]>();
+        var art = new ArrayList<GuiTitle.ArtGlyph>();
+        for (GuiArt.Tile tile : tiles) {
+            int codepoint = codepoints.codepoint(null, 0, tile.row(), tile.col());
+            String texture = GuiOverlayKeys.backgroundTexture(gui.id(), tile.row(), tile.col());
+            assets.put(GuiFonts.textureAsset(namespace, texture),
+                    PngEncoder.encodeRgba(tile.width(), tile.cell(), tile.argb()));
+            fonts.add(new GuiCompilation.FontProvider(GuiFonts.background(namespace),
+                    GuiFonts.tileProvider(namespace, texture, tile, codepoint)));
+            art.add(new GuiTitle.ArtGlyph(codepoint, tile.x(), tile.width()));
+        }
+        var title = new GuiTitle(namespace);
+        title.art(art);
         var textFonts = new LinkedHashMap<String, List<Map<String, Object>>>();
         boolean smallcapsUsed = false;
         for (TextRun run : runs) {
@@ -104,21 +146,16 @@ public final class GuiCompiler {
             smallcapsUsed |= run.font() == TitleSink.Font.SMALLCAPS;
         }
 
-        var fonts = new ArrayList<GuiCompilation.FontProvider>();
-        fonts.add(new GuiCompilation.FontProvider(GuiFonts.background(namespace),
-                GuiFonts.backgroundProvider(namespace, gui.id().value(), backgroundCodepoint, height)));
         textFonts.forEach((key, providers) -> providers.forEach(
                 provider -> fonts.add(new GuiCompilation.FontProvider(key, provider))));
 
-        var assets = new TreeMap<String, byte[]>();
-        assets.put(GuiFonts.backgroundAsset(namespace, gui.id().value()),
-                PngEncoder.encodeRgba(width, height, background.toArray()));
         if (smallcapsUsed) {
             assets.put(GuiFonts.smallcapsAsset(namespace), SmallcapsFont.sheetPng());
         }
         GuiVisualPlan visuals = dynamicVisuals
-                ? GuiVisualCompiler.compile(gui, backgroundCodepoint, bound, overlayCodepoint, assets, fonts,
-                        (layer, reason) -> report.skip(gui, layer.id(), reason))
+                ? GuiVisualCompiler.compile(gui, bound, codepoints, assets, fonts,
+                        (layer, reason) -> report.skip(gui, layer.id(), reason),
+                        layer -> report.clipped(gui, layer.id()))
                 : null;
 
         var slotList = new ArrayList<CompiledGui.Slot>();
@@ -128,7 +165,7 @@ public final class GuiCompiler {
         var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
                 PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
                 placements, gui.refresh(), visuals, lists);
-        return new GuiCompilation(model, report.diagnostics, assets, fonts, layerReports(gui, report.reasons));
+        return new GuiCompilation(model, report.diagnostics, assets, fonts, GuiFlatten.layerReports(gui, report.reasons));
     }
 
     /**
@@ -200,41 +237,6 @@ public final class GuiCompiler {
         return List.copyOf(placements);
     }
 
-    /**
-     * Each layer as the compiler placed it, in list order. {@code rank} is the layer's position in
-     * the compiled order of the visible layers: raster first, then text, then slot items, each in
-     * list order (the studio's {@code TARGET_RANK}, gui.md §6); hidden layers have rank -1.
-     */
-    private static List<GuiCompilation.LayerReport> layerReports(GuiDefinition gui, Map<String, String> reasons) {
-        var visible = new ArrayList<GuiLayer>();
-        for (GuiLayer layer : gui.layers()) {
-            if (layer.visible()) {
-                visible.add(layer);
-            }
-        }
-        // a stable sort keeps list order within a target
-        visible.sort(Comparator.comparingInt(layer -> targetRank(layer.compiled().target())));
-        var ranks = new LinkedHashMap<String, Integer>();
-        for (int index = 0; index < visible.size(); index++) {
-            ranks.put(visible.get(index).id(), index);
-        }
-        var out = new ArrayList<GuiCompilation.LayerReport>();
-        for (GuiLayer layer : gui.layers()) {
-            out.add(new GuiCompilation.LayerReport(
-                    layer.id(), layer.compiled().target(),
-                    layer.visible() ? ranks.get(layer.id()) : -1,
-                    reasons.get(layer.id())));
-        }
-        return out;
-    }
-
-    private static int targetRank(RenderTarget target) {
-        return switch (target) {
-            case RASTER -> 0;
-            case TEXT -> 1;
-            case SLOT -> 2;
-        };
-    }
 
     /**
      * Flattens the visible raster layers of {@code layers}, bottom to top, onto one transparent
@@ -247,21 +249,7 @@ public final class GuiCompiler {
      */
     public static ArgbCanvas flatten(int width, int height, List<GuiLayer> layers, TextureSource textures,
             BiConsumer<GuiLayer, String> skipped) {
-        ArgbCanvas output = new ArgbCanvas(width, height);
-        for (GuiLayer layer : layers) {
-            if (!layer.visible() || layer.compiled().target() != RenderTarget.RASTER) {
-                continue;
-            }
-            var own = new ArgbCanvas(width, height);
-            try {
-                layer.compiled().paint(own, textures);
-            } catch (RuntimeException failure) {
-                skipped.accept(layer, failure.getMessage() != null ? failure.getMessage() : failure.toString());
-                continue;
-            }
-            output.composite(own, layer.opacity());
-        }
-        return output;
+        return GuiFlatten.flatten(0, 0, width, height, layers, textures, skipped, layer -> { });
     }
 
     // --- text ------------------------------------------------------------------
@@ -338,7 +326,7 @@ public final class GuiCompiler {
     }
 
     /** The layer's position in the authored {@code layers:} list, or {@code -1} when unknown. */
-    private static int authoredIndex(GuiDefinition gui, String layerId) {
+    static int authoredIndex(GuiDefinition gui, String layerId) {
         if (gui.raw().get("layers") instanceof List<?> authored) {
             for (int index = 0; index < authored.size(); index++) {
                 if (authored.get(index) instanceof Map<?, ?> layer && layerId.equals(layer.get("id"))) {
@@ -361,6 +349,17 @@ public final class GuiCompiler {
         void skip(GuiDefinition gui, String layerId, String reason) {
             diagnostics.add(skipped(gui, layerId, reason));
             reasons.putIfAbsent(layerId, reason);
+        }
+
+        /** {@code MTR-0090}: the layer paints past the art cap. The layer is not skipped. */
+        void clipped(GuiDefinition gui, String layerId) {
+            diagnostics.add(new Diagnostic(
+                    DiagnosticCodes.GUI_ART_CLIPPED, Severity.WARN,
+                    "GUI layer '" + layerId + "' paints past the art cap (x " + GuiArt.CAP_X + ".." + GuiArt.CAP_RIGHT
+                            + ", y " + GuiArt.CAP_Y + ".." + GuiArt.CAP_BOTTOM + "); the part outside is clipped",
+                    gui.id(), null,
+                    "move or shrink the layer so it stays inside the cap; the GUI and the rest of the layer still compile",
+                    DiagnosticTarget.field("layers", String.valueOf(authoredIndex(gui, layerId)))));
         }
     }
 

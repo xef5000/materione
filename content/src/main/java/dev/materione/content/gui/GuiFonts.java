@@ -23,9 +23,6 @@ final class GuiFonts {
     /** Pack-relative texture path (under {@code assets/<ns>/textures/}) of the small-caps sheet. */
     static final String SMALLCAPS_TEXTURE = "font/materione/smallcaps";
 
-    /** Pack-relative texture folder of GUI background glyphs. */
-    static final String BACKGROUND_TEXTURE_DIRECTORY = "font/materione/gui/";
-
     /** The vanilla ASCII cell is 8 px high; a larger ascent would scale it. */
     static final int VANILLA_ASCII_HEIGHT = 8;
 
@@ -42,9 +39,9 @@ final class GuiFonts {
         return namespace + ":gui/" + family + "_y" + y;
     }
 
-    /** The asset path of a GUI's background texture, relative to the pack's {@code assets/}. */
-    static String backgroundAsset(String namespace, String value) {
-        return "assets/" + namespace + "/textures/" + BACKGROUND_TEXTURE_DIRECTORY + value + ".png";
+    /** The asset path of an art texture ({@link GuiOverlayKeys} names it), relative to the pack's {@code assets/}. */
+    static String textureAsset(String namespace, String texture) {
+        return "assets/" + namespace + "/textures/" + texture + ".png";
     }
 
     /** The asset path of the small-caps sheet, relative to the pack's {@code assets/}. */
@@ -52,14 +49,13 @@ final class GuiFonts {
         return "assets/" + namespace + "/textures/" + SMALLCAPS_TEXTURE + ".png";
     }
 
-    /** The bitmap provider of a background glyph: one cell, the canvas's size, ascent at the top. */
-    static Map<String, Object> backgroundProvider(String namespace, String value, int codepoint, int height) {
-        return bitmap(namespace + ":" + BACKGROUND_TEXTURE_DIRECTORY + value + ".png",
-                GuiTitle.ascentFor(0), height, List.of(String.valueOf((char) codepoint)));
-    }
-
-    static Map<String, Object> bitmapProvider(String texture, int codepoint, int height) {
-        return bitmap(texture, GuiTitle.ascentFor(0), height, List.of(String.valueOf((char) codepoint)));
+    /**
+     * The bitmap provider of one art tile (gui.md §11.3 rule 3): one cell as high as the PNG, so nothing is
+     * resampled, with the tile's own ascent, which places its top row on the screen row the tile starts on.
+     */
+    static Map<String, Object> tileProvider(String namespace, String texture, GuiArt.Tile tile, int codepoint) {
+        return bitmap(namespace + ":" + texture + ".png", tile.ascent(), tile.cell(),
+                List.of(String.valueOf((char) codepoint)));
     }
 
     /** The providers of one small-caps offset font: the space advance, then the sheet for row {@code y}. */

@@ -36,22 +36,22 @@ public final class PanelComponent implements GuiComponent {
                                 "Left edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "X", "placement", 10, false, "number", "", "0")
-                                        .withRange(-512.0, 512.0, "px")),
+                                        .withRange(-1024.0, 1024.0, "px")),
                         new ParameterSchema("y", ParameterType.INTEGER, false, "0",
                                 "Top edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Y", "placement", 20, false, "number", "", "0")
-                                        .withRange(-512.0, 512.0, "px")),
+                                        .withRange(-1024.0, 1024.0, "px")),
                         new ParameterSchema("width", ParameterType.INTEGER, true, null,
                                 "Width in GUI pixels (a chest is 176)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Width", "placement", 30, false, "number", "", "176")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(0.0, 1024.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, true, null,
                                 "Height in GUI pixels (a three-row chest is 168)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 40, false, "number", "", "168")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(0.0, 1024.0, "px")),
                         new ParameterSchema("corners", ParameterType.ENUM, false, "square",
                                 "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the chest's own rounded corners, pixel for pixel)",
                                 List.of("square", "vanilla"), null)
@@ -78,10 +78,10 @@ public final class PanelComponent implements GuiComponent {
     @Override
     public CompiledGuiLayer parse(GuiComponentConfiguration configuration) {
         return new Layer(
-                configuration.integer("x", 0, -512, 512),
-                configuration.integer("y", 0, -512, 512),
-                configuration.requiredInteger("width", 0, 512),
-                configuration.requiredInteger("height", 0, 512),
+                configuration.integer("x", 0, -1024, 1024),
+                configuration.integer("y", 0, -1024, 1024),
+                configuration.requiredInteger("width", 0, 1024),
+                configuration.requiredInteger("height", 0, 1024),
                 GuiBevel.read(configuration),
                 corners(configuration));
     }

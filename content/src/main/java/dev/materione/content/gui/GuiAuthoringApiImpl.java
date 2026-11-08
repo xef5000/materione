@@ -154,29 +154,35 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             return ApiResult.fail(pool.diagnostics());
         }
         Check check = check(subject, textures.value(), pool.value());
-        if (check.gui() == null || check.background() == null) {
+        if (check.gui() == null) {
             return ApiResult.fail(check.diagnostics());
         }
         GuiDefinition gui = check.gui();
-        // the same compile the pack runs, for the per-layer outcome: the codepoint comes from the
-        // preview view, so this allocates nothing and the background bytes are the check's
+        // the same compile the pack runs, for the per-layer outcome: the codepoints come from the
+        // preview view, so this allocates nothing
         Allocations preview = previewAllocations.get();
-        int codepoint = GuiBackgrounds.codepoint(preview.range(gui.id(), GuiBackgrounds.ALLOCATION_KIND, 1).start());
-        GuiCompilation compiled = GuiCompiler.compile(gui, codepoint, textures.value(), (layer, frame) ->
-                GuiBackgrounds.codepoint(preview.range(GuiOverlayKeys.allocation(gui.id(), layer.id(), frame),
-                        GuiBackgrounds.ALLOCATION_KIND, 1).start()));
-        byte[] previewBackground = check.background();
-        if (compiled.model().visuals() != null) {
-            var layers = gui.layers().stream().map(layer -> layer.frames() == null ? layer
-                    : new GuiLayer(layer.id(), layer.component(), layer.name(), layer.visible(), layer.locked(),
-                            layer.opacity(), layer.frames().layers().get(0), layer.visibleIf())).toList();
-            TextureSource bound = reference -> textures.value().texture(
-                    reference.contains(":") ? reference : gui.id().namespace() + ":" + reference);
-            var canvas = GuiCompiler.flatten(CompiledGui.WIDTH, CompiledGui.height(gui.rows()), layers, bound,
-                    (layer, reason) -> { });
-            previewBackground = dev.materione.content.gui.raster.PngEncoder.encodeRgba(
-                    canvas.width(), canvas.height(), canvas.toArray());
+        GuiCompilation compiled;
+        try {
+            compiled = GuiCompiler.compile(gui, textures.value(), (layer, frame, row, col) ->
+                    GuiBackgrounds.codepoint(preview.range(
+                            layer == null ? GuiOverlayKeys.background(gui.id(), row, col)
+                                    : GuiOverlayKeys.allocation(gui.id(), layer, frame, row, col),
+                            GuiBackgrounds.ALLOCATION_KIND, 1).start()));
+        } catch (dev.materione.api.content.CompileRejectException rejected) {
+            return ApiResult.fail(check.diagnostics()); // the check already published the rejection
         }
+        // The wire's background is the preview of the raster inside the vanilla screen (176 x height), the
+        // region the shared vectors pin; the pack's art (tiles over the open canvas, gui.md section 11) is
+        // not one image. A raster layer with frames shows its first frame.
+        var layers = gui.layers().stream().map(layer -> layer.frames() == null ? layer
+                : new GuiLayer(layer.id(), layer.component(), layer.name(), layer.visible(), layer.locked(),
+                        layer.opacity(), layer.frames().layers().get(0), layer.visibleIf())).toList();
+        TextureSource bound = reference -> textures.value().texture(
+                reference.contains(":") ? reference : gui.id().namespace() + ":" + reference);
+        var canvas = GuiCompiler.flatten(CompiledGui.WIDTH, CompiledGui.height(gui.rows()), layers, bound,
+                (layer, reason) -> { });
+        byte[] previewBackground = dev.materione.content.gui.raster.PngEncoder.encodeRgba(
+                canvas.width(), canvas.height(), canvas.toArray());
         return ApiResult.ok(new GuiRender(
                 CompiledGui.WIDTH, CompiledGui.height(gui.rows()), previewBackground,
                 layerRenders(gui, compiled.layers()), check.diagnostics()));
@@ -403,8 +409,8 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
     /** A GUI as a request names it: its pack, its id, its authored fields and the file's revision (null for drafts). */
     private record Subject(String pack, String path, NamespacedId id, Map<String, Object> definition, Integer revision) {}
 
-    /** One compile of a subject: the parsed GUI (null when it did not parse), its diagnostics and its background PNG (null when not compiled). */
-    private record Check(GuiDefinition gui, List<Diagnostic> diagnostics, byte[] background) {}
+    /** One compile of a subject: the parsed GUI (null when it did not parse) and the diagnostics the compile raised. */
+    private record Check(GuiDefinition gui, List<Diagnostic> diagnostics) {}
 
     private ApiResult<Subject> loadSaved(String pack, String path) {
         if (path == null || !path.startsWith("guis/")) {
@@ -614,10 +620,9 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
                     }
                 });
         if (parsed.isEmpty()) {
-            return new Check(null, diagnostics, null);
+            return new Check(null, diagnostics);
         }
-        byte[] background = emitter.assets.get(GuiFonts.backgroundAsset(id.namespace(), id.value()));
-        return new Check((GuiDefinition) parsed.get(), diagnostics, background);
+        return new Check((GuiDefinition) parsed.get(), diagnostics);
     }
 
     /** Every template of every pack, by {@code pack:id}, when the GUI inherits from one; empty otherwise. */

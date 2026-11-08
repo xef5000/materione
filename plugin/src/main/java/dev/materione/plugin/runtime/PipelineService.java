@@ -706,28 +706,29 @@ public final class PipelineService {
         if (parsed.isEmpty() || !(parsed.get() instanceof GuiDefinition gui)) {
             return;
         }
-        Optional<String> allocated = allocation == null
-                ? Optional.empty()
-                : allocation.allocationOf(gui.id(), GuiBackgrounds.ALLOCATION_KIND);
-        if (allocated.isEmpty()) {
-            diagnostics.publish(Diagnostic.warn(
-                    DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                    "shadow build skipped " + gui.id() + ": no allocated background codepoint"));
-            return;
-        }
-        int number = dev.materione.api.content.AllocatedRange.parse(allocated.get()).start();
-        if (!GuiBackgrounds.fits(number)) {
-            return; // exhausted: the pack compile quarantined this GUI with MTR-0053
-        }
         try {
+            // the runtime never allocates (D7): each tile's codepoint is the pack compile's allocation, looked up
+            // only for the tiles the compile emits, so a GUI with no art needs none
             out.put(gui.id(), GuiCompiler.compile(
-                    gui, GuiBackgrounds.codepoint(number),
-                    new PackTextures(pack.id(), pack.directory()), (layer, frame) -> {
-                        var key = dev.materione.content.gui.GuiOverlayKeys.allocation(gui.id(), layer.id(), frame);
-                        String value = allocation.allocationOf(key, GuiBackgrounds.ALLOCATION_KIND)
-                                .orElseThrow(() -> new IllegalStateException("missing overlay allocation " + key));
-                        return GuiBackgrounds.codepoint(dev.materione.api.content.AllocatedRange.parse(value).start());
+                    gui, new PackTextures(pack.id(), pack.directory()), (layer, frame, row, col) -> {
+                        var key = layer == null
+                                ? dev.materione.content.gui.GuiOverlayKeys.background(gui.id(), row, col)
+                                : dev.materione.content.gui.GuiOverlayKeys.allocation(gui.id(), layer, frame, row, col);
+                        String value = allocation == null ? null
+                                : allocation.allocationOf(key, GuiBackgrounds.ALLOCATION_KIND).orElse(null);
+                        if (value == null) {
+                            throw new IllegalStateException("no allocated art codepoint for " + key);
+                        }
+                        int number = dev.materione.api.content.AllocatedRange.parse(value).start();
+                        if (!GuiBackgrounds.fits(number)) {
+                            throw new dev.materione.api.content.CompileRejectException(
+                                    DiagnosticCodes.GUI_BACKGROUND_EXHAUSTED,
+                                    "GUI " + gui.id() + " has no codepoint left for its art", "");
+                        }
+                        return GuiBackgrounds.codepoint(number);
                     }).model());
+        } catch (dev.materione.api.content.CompileRejectException rejected) {
+            return; // the pack compile quarantined this GUI with the same code (MTR-0053, MTR-0091)
         } catch (RuntimeException e) {
             diagnostics.publish(Diagnostic.error(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED,
