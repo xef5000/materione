@@ -5,7 +5,7 @@
 # clear button empties the search. The QA catalog (qa/catalog/guilogic.mjs) asks through it.
 search:
   title: Search
-  rows: 3
+  container: chest_3
   layers:
     - id: frame
       type: panel

@@ -66,7 +66,7 @@ async function buildFlow(page: Page): Promise<void> {
 
 const EXPECTED = `main:
   title: Shop
-  rows: 3
+  container: chest_3
   behavior:
     - on: gui.open
       do:
@@ -79,7 +79,7 @@ const EXPECTED = `main:
 async function savedBehavior(page: Page): Promise<string> {
   const doc = await documentOf(page, 'guis/shop/main.yml');
   const { behavior, flows } = (doc!.parsed.main ?? {}) as Record<string, unknown>;
-  return stringify({ main: { title: 'Shop', rows: 3, ...(behavior ? { behavior } : {}), ...(flows ? { flows } : {}) } });
+  return stringify({ main: { title: 'Shop', container: 'chest_3', ...(behavior ? { behavior } : {}), ...(flows ? { flows } : {}) } });
 }
 
 test('build open, sound, command, close by dragging wires, then save: the file is the expected YAML', async ({ page }) => {

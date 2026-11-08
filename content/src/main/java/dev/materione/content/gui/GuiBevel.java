@@ -40,7 +40,7 @@ public record GuiBevel(int fill, int highlight, int shadow, int outline) {
             }
         }
         var colours = new GuiComponentConfiguration(
-                configuration.guiId(), configuration.layerId(), configuration.rows(), style);
+                configuration.guiId(), configuration.layerId(), configuration.container(), style);
         return new GuiBevel(
                 colours.color("fill", defaults.fill()),
                 colours.color("highlight", defaults.highlight()),

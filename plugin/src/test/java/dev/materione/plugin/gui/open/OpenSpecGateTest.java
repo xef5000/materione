@@ -23,7 +23,7 @@ class OpenSpecGateTest {
     private static final String SHOP = """
             shop:
               title: Shop
-              rows: 3
+              container: chest_3
               layers: []
               open:
                 commands: [shop, store]
@@ -62,7 +62,7 @@ class OpenSpecGateTest {
 
     @Test
     void aGuiWithoutAnOpenBlockIsAdmittedWithItsArgumentsAsGiven() {
-        RuntimeGuis.Live gui = f.gui("plain:\n  title: Plain\n  rows: 1\n  layers: []\n");
+        RuntimeGuis.Live gui = f.gui("plain:\n  title: Plain\n  container: chest_1\n  layers: []\n");
 
         Admission admission = admit(gate(granted()), gui, Map.of("anything", "goes"));
 
@@ -142,7 +142,7 @@ class OpenSpecGateTest {
         RuntimeGuis.Live gui = f.gui("""
                 broken:
                   title: Broken
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [broken]

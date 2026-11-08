@@ -4,7 +4,7 @@
 # screen itself is the client's own chest: no layer paints over it.
 offscreen:
   title: Open canvas
-  rows: 3
+  container: chest_3
   layers:
     - id: left
       type: panel

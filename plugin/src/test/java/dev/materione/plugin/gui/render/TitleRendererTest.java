@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.gui.TitleSink;
@@ -24,7 +25,7 @@ class TitleRendererTest {
                 new GuiVisualPlan.Raster("none", 1, null, List.of(new GuiVisualPlan.Glyph(List.of(), Set.of())), 0)));
         var program = TitleProgram.compile(RenderFixtures.GUI, plan, RenderFixtures.lookup());
         var title = new TitleRenderer(RenderReporter.SILENT)
-                .render(RenderFixtures.GUI, 1, program.program(), RenderFixtures.viewer(1), 0).title();
+                .render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), program.program(), RenderFixtures.viewer(1), 0).title();
         // pen 8 -> -30 (shift -38), 20 ink + 1 -> -9, -> 100 (shift 109), 10 ink + 1 -> 111, back to 8 (shift -103);
         // a frame that paints nothing adds nothing, not even a shift
         assertThat(title).isEqualTo("<shift:-38><font:shop:gui><#FFFFFF></font><shift:109><font:shop:gui><#FFFFFF>"
@@ -44,19 +45,19 @@ class TitleRendererTest {
         var program = TitleProgram.compile(RenderFixtures.GUI, plan, RenderFixtures.lookup());
         assertThat(program.problems()).isEmpty();
         var renderer = new TitleRenderer(RenderReporter.SILENT);
-        var hidden = renderer.render(RenderFixtures.GUI, 1, program.program(), RenderFixtures.viewer(1), 0);
+        var hidden = renderer.render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), program.program(), RenderFixtures.viewer(1), 0);
         assertThat(hidden.hidden()).containsExactlyInAnyOrder("label", "tab");
         assertThat(hidden.title()).contains("\uE201").doesNotContain("\uE202", "Hi Probe");
-        var shown = renderer.render(RenderFixtures.GUI, 1, program.program(), RenderFixtures.viewer(9), 5);
+        var shown = renderer.render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), program.program(), RenderFixtures.viewer(9), 5);
         assertThat(shown.hidden()).isEmpty();
         assertThat(shown.title()).contains("Hi Probe", "\uE203").doesNotContain("\uE202");
         assertThat(shown.title().indexOf("\uE201")).isLessThan(shown.title().indexOf("Hi Probe"));
         assertThat(shown.title().indexOf("\uE203")).isLessThan(shown.title().indexOf("Hi Probe"));
         assertThat(shown.coverage().get("tab")).containsExactly(1);
         assertThat(shown.coverage().get("label")).contains(0);
-        assertThat(renderer.render(RenderFixtures.GUI, 1, program.program(), RenderFixtures.viewer(9), 6).title())
+        assertThat(renderer.render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), program.program(), RenderFixtures.viewer(9), 6).title())
                 .isEqualTo(shown.title());
-        assertThat(renderer.render(RenderFixtures.GUI, 1, program.program(), RenderFixtures.viewer(9), 10).title())
+        assertThat(renderer.render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), program.program(), RenderFixtures.viewer(9), 10).title())
                 .isNotEqualTo(shown.title());
     }
 
@@ -68,7 +69,7 @@ class TitleRendererTest {
         var result = TitleProgram.compile(RenderFixtures.GUI, plan, RenderFixtures.lookup());
         assertThat(result.problems()).isNotEmpty();
         var rendered = new TitleRenderer(RenderReporter.SILENT)
-                .render(RenderFixtures.GUI, 1, result.program(), RenderFixtures.viewer(9), 0);
+                .render(RenderFixtures.GUI, GuiContainers.byId("chest_1").orElseThrow(), result.program(), RenderFixtures.viewer(9), 0);
         assertThat(rendered.hidden()).containsExactly("bad");
         assertThat(rendered.title()).doesNotContain("Hi");
     }

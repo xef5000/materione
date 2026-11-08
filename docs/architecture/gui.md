@@ -32,7 +32,7 @@
 # content/packs/<pack>/guis/shop.yml
 shop:                          # one resource per key (master §7.2); the key is the GUI id
   title: Shop                  # accessibility/fallback title (narration, title-less clients)
-  rows: 6                      # 1..6 (a chest). Designed in §12 (not built): replaced by `container: chest_6`, which also names other containers
+  container: chest_6           # a container profile (§12.4): chest_1 .. chest_6, hopper or dispenser; a chest of 6 rows is chest_6
   layers:                      # bottom → top
     - id: frame                # stable, unique within the GUI; [a-z0-9_]+
       type: panel              # component name in the gui-components registry
@@ -942,7 +942,7 @@ These fill gaps the sections above leave open. Each one is reversible by the own
 
 1. **Keyed file, not a bare mapping.** §2 now shows the GUI under its id key. The pipeline
    (`ParseStage`) reads one resource per top-level key with a mapping value, which is the
-   master §7.2 rule for every content type; a bare `title:`/`rows:`/`layers:` file would
+   master §7.2 rule for every content type; a bare `title:`/`container:`/`layers:` file would
    parse to no resource at all.
 2. **Flat discovery in v1.** A GUI file is `guis/<name>.yml`, not `guis/**/*.yml`. The
    pipeline lists each content directory non-recursively for every type, so folder content
@@ -1442,13 +1442,15 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 ---
 
-## 12. Containers beyond the chest (#286) — design, all owner questions answered; awaiting final approval to merge
+## 12. Containers beyond the chest (#286) — design approved and merged (#287); row M built (#290)
 
-> **Status: design only; all owner questions are answered (§12.13) and there are none open (§12.14). Awaiting final approval to merge.**
-> Nothing in this section is built. It answers #286 (Paper menu types, v1 scope, file model, compiler, runtime, studio,
-> logic and QA, the row split) so that implementation issues can be filed from it, as #274 did for the open canvas. Until
-> then §1 to §11 describe what ships: **a GUI is a chest of 1 to 6 rows, written `rows: N`**; the implementation replaces `rows:` with `container:` outright (§12.4). The consistency edits this
-> design makes to §1, §2, §4, §6, §8 and §11 are one-line pointers; they change no behaviour.
+> **Status: the design is approved and merged (#287, all owner questions answered, §12.13, none open, §12.14). Row M is built
+> (#290): `container:` replaces `rows:`, the container profiles are one file (`shared/gui/containers.json`, §12.5.1), and every
+> GUI in the repository is converted. Rows C (the profile-driven compiler for hopper and dispenser), P (runtime opening by
+> the profile's `open` descriptor), S (the studio's container select) and R (the in-game probe) are not built yet.** Until
+> those land, a hopper or dispenser GUI compiles but cannot be opened by the plugin, and the studio does not draw it (it
+> shows the reason and edits nothing). The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
+> §8 and §11 are one-line pointers; they change no behaviour.
 >
 > **The governing rule (owner, §12.13 item 5): the system is agnostic of the container type.** The chest is the default
 > a New GUI starts with, nothing more. Every container, the chest included, is a profile (§12.5.1) read by the same code:
@@ -1657,8 +1659,10 @@ reserved here, in one place (plugin.md §5 notes the reservation so another chan
 
 Every container is **data**: a profile in one file that both Java and the studio read (the pattern of `smallcaps.txt` and
 `advances.txt`: one source, a golden that pins its digest, a test on each side), not constants in either language. The
-file lives with the other shared data (name decided by row M) and is mirrored into `authoring.describe` only as the list of
-ids and labels.
+file is `shared/gui/containers.json` at the repository root (decided by row M, built): the content jar carries it as
+`/gui/containers.json` (`GuiContainers`), the studio imports it (`webui/src/lib/gui/containers.ts`), and the golden
+`fixtures/golden/editor-demo-snapshot.json` pins what the describe call reports from it. `authoring.describe` mirrors it
+only as the list of ids, labels, groups, slot counts, columns and screen sizes (`guiContainers`).
 
 | Field | Meaning | chest_4 (example of `chest_N`) | hopper | dispenser |
 |---|---|---|---|---|

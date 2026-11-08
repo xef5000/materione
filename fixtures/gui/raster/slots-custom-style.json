@@ -5,7 +5,7 @@
     "width": 176,
     "height": 150
   },
-  "rows": 2,
+  "container": "chest_2",
   "layers": [
     {
       "id": "wells",

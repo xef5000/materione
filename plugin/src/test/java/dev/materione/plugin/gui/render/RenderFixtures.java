@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.content.gui.GuiContainers;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.logic.ItemResolution;
 import dev.materione.api.logic.LogicContext;
@@ -79,7 +80,7 @@ final class RenderFixtures {
 
     /** A live GUI over {@code items} (in layer order) and the given static slots. */
     static RuntimeGuis.Live gui(List<RuntimeGuis.Slot> slots, List<CompiledItemLayer> items) {
-        return new RuntimeGuis.Live(GUI, 3, "Shop", "Shop", slots, ClickMap.EMPTY, GuiRuleSet.EMPTY, List.of(), 0,
+        return new RuntimeGuis.Live(GUI, GuiContainers.byId("chest_3").orElseThrow(), "Shop", "Shop", slots, ClickMap.EMPTY, GuiRuleSet.EMPTY, List.of(), 0,
                 items);
     }
 

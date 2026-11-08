@@ -4,7 +4,7 @@
 # markers. The viewer's inventory stays free.
 trade:
   title: Trade
-  rows: 1
+  container: chest_1
   player_inventory: free
   layers:
     - id: frame

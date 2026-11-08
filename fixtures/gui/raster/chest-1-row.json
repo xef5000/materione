@@ -5,7 +5,7 @@
     "width": 176,
     "height": 132
   },
-  "rows": 1,
+  "container": "chest_1",
   "layers": [
     {
       "id": "frame",

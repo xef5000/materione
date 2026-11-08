@@ -47,7 +47,8 @@ class DiagnosticCodesTest {
         // MTR-0092 clickable GUI layer outside the container: gui.md section 11, #276;
         // MTR-0093 template chain loops, MTR-0094 template reference names a template and an item:
         // plugin.md section 3.1, #203;
-        // MTR-0095 pack id belongs to a built-in pack, MTR-0096 built-in pack unavailable: master section 7.3, #8)
-        assertThat(DiagnosticCodes.all()).hasSize(96);
+        // MTR-0095 pack id belongs to a built-in pack, MTR-0096 built-in pack unavailable: master section 7.3, #8;
+        // MTR-0097 GUI container is not supported: gui.md section 12.4, #290)
+        assertThat(DiagnosticCodes.all()).hasSize(97);
     }
 }

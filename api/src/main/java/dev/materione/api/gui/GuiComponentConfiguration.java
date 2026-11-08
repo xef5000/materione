@@ -17,15 +17,17 @@ import java.util.Objects;
  *
  * @param guiId the GUI resource being compiled
  * @param layerId the layer's id inside that GUI (for messages)
- * @param rows the GUI's row count (1..6); components that name slots bound-check against it
+ * @param container the GUI's container profile (gui.md §12.5.1); components that name slots bound-check against its
+ *        slot count and columns
  * @param parameters the layer's remaining fields
  */
 public record GuiComponentConfiguration(
-        NamespacedId guiId, String layerId, int rows, Map<String, Object> parameters) {
+        NamespacedId guiId, String layerId, GuiContainer container, Map<String, Object> parameters) {
 
     public GuiComponentConfiguration {
         Objects.requireNonNull(guiId, "guiId");
         Objects.requireNonNull(layerId, "layerId");
+        Objects.requireNonNull(container, "container");
         parameters = immutableMap(parameters);
     }
 

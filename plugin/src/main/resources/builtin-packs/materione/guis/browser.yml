@@ -13,7 +13,7 @@
 # are operators by default, like creative mode.
 browser:
   title: Content browser
-  rows: 6
+  container: chest_6
   open:
     permission: materione.browse
     args:

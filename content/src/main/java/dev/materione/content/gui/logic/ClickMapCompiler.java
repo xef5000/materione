@@ -1,6 +1,7 @@
 package dev.materione.content.gui.logic;
 
 import dev.materione.api.gui.ClickArea;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.content.gui.GuiDefinition;
 import dev.materione.content.gui.GuiLayer;
@@ -28,14 +29,14 @@ import java.util.Set;
  */
 public final class ClickMapCompiler {
 
-    /** The x pixel of a container slot's interior centre, by column. */
-    static int centreX(int column) {
-        return 8 + 18 * column + 8;
+    /** The x pixel of a container slot's interior centre: its origin plus the 8 px half-slot (the profile's slot(i)). */
+    static int centreX(GuiContainer container, int slot) {
+        return container.slotX(slot) + 8;
     }
 
-    /** The y pixel of a container slot's interior centre, by row. */
-    static int centreY(int row) {
-        return 18 + 18 * row + 8;
+    /** The y pixel of a container slot's interior centre: its origin plus the 8 px half-slot (the profile's slot(i)). */
+    static int centreY(GuiContainer container, int slot) {
+        return container.slotY(slot) + 8;
     }
 
     private ClickMapCompiler() {}
@@ -46,7 +47,7 @@ public final class ClickMapCompiler {
      * @param skipped ids of layers the GUI compile skipped; they take no clicks
      */
     public static ClickMap compile(GuiDefinition gui, TextureSource textures, Collection<String> skipped) {
-        int slots = gui.rows() * 9;
+        int slots = gui.container().slotCount();
         var perSlot = new ArrayList<List<String>>(slots);
         for (int slot = 0; slot < slots; slot++) {
             perSlot.add(new ArrayList<>());
@@ -56,11 +57,11 @@ public final class ClickMapCompiler {
             if (!layer.visible() || skipped.contains(layer.id())) {
                 continue;
             }
-            var covered = new java.util.TreeSet<>(coveredSlots(area(layer, textures), gui.rows()));
+            var covered = new java.util.TreeSet<>(coveredSlots(area(layer, textures), gui.container()));
             if (layer.frames() != null) {
                 for (var frame : layer.frames().layers()) {
                     try {
-                        covered.addAll(coveredSlots(frame.clickArea(textures), gui.rows()));
+                        covered.addAll(coveredSlots(frame.clickArea(textures), gui.container()));
                     } catch (RuntimeException ignored) {
                         // A broken frame cannot receive clicks.
                     }
@@ -69,7 +70,7 @@ public final class ClickMapCompiler {
             if (layer.compiled() instanceof dev.materione.content.gui.TextComponent.Layer text
                     && dev.materione.content.gui.item.GuiTemplates.isTemplated(text.text())) {
                 covered.addAll(coveredSlots(new ClickArea.Rect(text.x(), text.y(), 2048,
-                        text.font() == dev.materione.api.gui.TitleSink.Font.SMALLCAPS ? 16 : 8), gui.rows()));
+                        text.font() == dev.materione.api.gui.TitleSink.Font.SMALLCAPS ? 16 : 8), gui.container()));
             }
             for (int slot : covered) {
                 perSlot.get(slot).add(layer.id());
@@ -83,8 +84,8 @@ public final class ClickMapCompiler {
         return any ? new ClickMap(perSlot) : ClickMap.EMPTY;
     }
 
-    /** The container slots {@code area} covers in a chest of {@code rows} rows, ascending. */
-    public static List<Integer> coveredSlots(ClickArea area, int rows) {
+    /** The container slots {@code area} covers in {@code container}, ascending. */
+    public static List<Integer> coveredSlots(ClickArea area, GuiContainer container) {
         var covered = new ArrayList<Integer>();
         switch (area) {
             case ClickArea.None none -> {
@@ -92,16 +93,16 @@ public final class ClickMapCompiler {
             }
             case ClickArea.Slots set -> {
                 Set<Integer> wanted = set.slots();
-                for (int slot = 0; slot < rows * 9; slot++) {
+                for (int slot = 0; slot < container.slotCount(); slot++) {
                     if (wanted.contains(slot)) {
                         covered.add(slot);
                     }
                 }
             }
             case ClickArea.Rect rect -> {
-                for (int slot = 0; slot < rows * 9; slot++) {
-                    int cx = centreX(slot % 9);
-                    int cy = centreY(slot / 9);
+                for (int slot = 0; slot < container.slotCount(); slot++) {
+                    int cx = centreX(container, slot);
+                    int cy = centreY(container, slot);
                     if (cx >= rect.x() && cx < rect.x() + rect.width()
                             && cy >= rect.y() && cy < rect.y() + rect.height()) {
                         covered.add(slot);

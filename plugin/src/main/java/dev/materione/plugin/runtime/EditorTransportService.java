@@ -248,7 +248,8 @@ public final class EditorTransportService {
                         ownerUuidOfCurrentSession(), node -> true);
         dev.materione.web.rpc.ops.EditorContentOps.register(
                 dispatcher, api.authoring(), this::contentTypes,
-                () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary, this::guiComponents);
+                () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary, this::guiComponents,
+                this::guiContainers);
         dev.materione.web.rpc.ops.GuiAuthoringOps.register(dispatcher, api.authoring().gui(), actorFor);
         dev.materione.web.rpc.ops.LogicAuthoringOps.register(
                 dispatcher, api.authoring().logic(), actorFor, this::behaviorVocabulary);
@@ -317,6 +318,11 @@ public final class EditorTransportService {
     /** The {@code gui-components} registry, built-in and addon, as the GUI API describes it (read per describe call). */
     private java.util.List<dev.materione.api.gui.GuiAuthoringApi.GuiComponentDescriptor> guiComponents() {
         return api.authoring().gui().components();
+    }
+
+    /** The GUI container profiles (gui.md §12.5.1), as the GUI API lists them (read per describe call). */
+    private java.util.List<dev.materione.api.gui.GuiContainer> guiContainers() {
+        return api.authoring().gui().containers();
     }
 
     /** Registered content types through the api's registry view (D5). */

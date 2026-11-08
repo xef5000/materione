@@ -54,15 +54,15 @@ public final class GuiRefreshPlan {
     }
 
     /**
-     * What a viewer's open window needs, given the title and rows it was created with and the
+     * What a viewer's open window needs, given the title and container it was created with and the
      * GUI as it is after the swap.
      */
-    public static Action viewerAction(String openTitle, int openRows, Optional<RuntimeGuis.Live> now) {
+    public static Action viewerAction(String openTitle, String openContainer, Optional<RuntimeGuis.Live> now) {
         if (now.isEmpty()) {
             return Action.CLOSE;
         }
         RuntimeGuis.Live live = now.get();
-        if (live.rows() != openRows || !live.title().equals(openTitle)) {
+        if (!live.container().id().equals(openContainer) || !live.title().equals(openTitle)) {
             return Action.REOPEN;
         }
         return Action.UPDATE_CONTENTS;

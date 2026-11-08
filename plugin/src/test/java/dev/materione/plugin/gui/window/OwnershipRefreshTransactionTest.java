@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.window;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.scheduling.ScheduledHandle;
@@ -164,7 +165,7 @@ class OwnershipRefreshTransactionTest {
             String yaml = """
                     trade:
                       title: Trade
-                      rows: 1
+                      container: chest_1
                       layers:
                         - {id: wells, type: slots, region: container, input: true}
                         - id: cover
@@ -262,7 +263,7 @@ class OwnershipRefreshTransactionTest {
             var journal = new GuiJournal(plugin, scheduling, sessions);
             var viewer = Viewer.of(player);
             var initial = renderer.render(viewer, session, live, true, 0);
-            var menu = new GuiMenu(session, 1, initial.title(), input);
+            var menu = new GuiMenu(session, GuiContainers.byId("chest_1").orElseThrow(), initial.title(), input);
             var sends = new AtomicInteger();
             RichTitleTransport titles = new RichTitleTransport() {
                 public boolean available() { return !unavailable; }
@@ -376,7 +377,7 @@ class OwnershipRefreshTransactionTest {
                 assertThat(sends.get()).isZero();
                 assertThat(opens.get()).isZero();
                 assertThat(closes.get()).isZero();
-                var staticLive = new RuntimeGuis.Live(live.id(), live.rows(), initial.title(), live.accessibleTitle(),
+                var staticLive = new RuntimeGuis.Live(live.id(), live.container(), initial.title(), live.accessibleTitle(),
                         live.slots(), live.clicks(), live.logic(), live.inputs(), live.open(), live.placements(),
                         live.refresh(), live.items());
                 guard.during(playerId, () -> {

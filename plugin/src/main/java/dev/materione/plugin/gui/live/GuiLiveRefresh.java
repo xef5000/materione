@@ -143,7 +143,7 @@ public final class GuiLiveRefresh {
         if (shape.isEmpty()) {
             return;
         }
-        switch (GuiRefreshPlan.viewerAction(shape.get().title(), shape.get().rows(), now)) {
+        switch (GuiRefreshPlan.viewerAction(shape.get().title(), shape.get().container(), now)) {
             case CLOSE -> {
                 lifecycle.removed(viewer, session);
                 windows.close(viewer);

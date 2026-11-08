@@ -63,6 +63,7 @@
         "data": {
           "parsed": {
             "shop": {
+              "container": "chest_3",
               "layers": [
                 {
                   "height": 168,
@@ -71,11 +72,10 @@
                   "width": 176
                 }
               ],
-              "rows": 3,
               "title": "Market"
             }
           },
-          "raw": "shop:\n  title: Market\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
+          "raw": "shop:\n  title: Market\n  container: chest_3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
           "rev": 3
         },
         "id": "ops-3",
@@ -111,6 +111,7 @@
       "data": {
         "parsed": {
           "shop": {
+            "container": "chest_3",
             "layers": [
               {
                 "height": 168,
@@ -119,11 +120,10 @@
                 "width": 176
               }
             ],
-            "rows": 3,
             "title": "Market"
           }
         },
-        "raw": "shop:\n  title: Market\n  rows: 3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
+        "raw": "shop:\n  title: Market\n  container: chest_3\n  layers:\n    - id: frame\n      type: panel\n      width: 176\n      height: 168\n",
         "rev": 2
       },
       "id": "ops-1",

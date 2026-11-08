@@ -23,7 +23,7 @@ class GuiLiveRefreshTest {
         return """
                 shop:
                   title: %s
-                  rows: %d
+                  container: chest_%d
                   layers:
                     - id: heading
                       type: text
@@ -177,7 +177,7 @@ class GuiLiveRefreshTest {
         f.gui("""
                 shop:
                   title: Shop
-                  rows: 3
+                  container: chest_3
                   layers:
                     - id: pad
                       type: button
@@ -199,7 +199,7 @@ class GuiLiveRefreshTest {
         f.gui("""
                 shop:
                   title: Shop
-                  rows: 3
+                  container: chest_3
                   layers:
                     - id: pad
                       type: button

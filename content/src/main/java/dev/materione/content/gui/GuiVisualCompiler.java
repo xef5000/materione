@@ -104,7 +104,7 @@ final class GuiVisualCompiler {
                     }
                     glyphs.add(new GuiVisualPlan.Glyph(placed,
                             java.util.Set.copyOf(dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(
-                                    area == null ? dev.materione.api.gui.ClickArea.NONE : area, gui.rows()))));
+                                    area == null ? dev.materione.api.gui.ClickArea.NONE : area, gui.container()))));
                 }
                 pieces.add(new GuiVisualPlan.Raster(layer.id(), order, layer.visibleIf(), glyphs,
                         layer.frames() == null ? 0 : layer.frames().every()));

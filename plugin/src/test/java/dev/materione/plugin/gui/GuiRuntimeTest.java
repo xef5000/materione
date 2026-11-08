@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.ApiResult;
@@ -60,8 +61,8 @@ class GuiRuntimeTest {
 
         // the fixture's sword is not live, so its slot is left empty: no filled slots
         List<RuntimeApi.GuiView> guis = runtime.guis();
-        assertThat(guis).containsExactly(new RuntimeApi.GuiView(SHOP, 3, "Shop", 0));
-        assertThat(runtime.gui(SHOP)).contains(new RuntimeApi.GuiView(SHOP, 3, "Shop", 0));
+        assertThat(guis).containsExactly(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0));
+        assertThat(runtime.gui(SHOP)).contains(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0));
         assertThat(runtime.gui(NamespacedId.parse("demo:missing"))).isEmpty();
     }
 
@@ -85,7 +86,7 @@ class GuiRuntimeTest {
     // --- fixtures -----------------------------------------------------------
 
     private static CompiledGui liveShop() {
-        return new CompiledGui(SHOP, 3, "<font:demo:gui>Shop", "Shop",
+        return new CompiledGui(SHOP, GuiContainers.byId("chest_3").orElseThrow(), "<font:demo:gui>Shop", "Shop",
                 List.of(new CompiledGui.Slot(4, NamespacedId.parse("demo:sword"), 1)));
     }
 

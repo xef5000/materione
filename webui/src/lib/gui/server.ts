@@ -34,7 +34,7 @@ export interface DraftDocument {
   path: string;
   id: string;
   title: string;
-  rows: number;
+  container: string;
   layers: DraftLayer[];
 }
 
@@ -64,7 +64,7 @@ export function draftLayer(layer: GuiLayer): DraftLayer {
 
 /** The document as the draft the server validates: every layer in list order, so layer `i` is `layers.i`. */
 export function draftOf(doc: GuiDocument, id: string, pack: string, path: string): DraftDocument {
-  return { pack, path, id, title: doc.title, rows: doc.rows, layers: doc.layers.map(draftLayer) };
+  return { pack, path, id, title: doc.title, container: doc.container, layers: doc.layers.map(draftLayer) };
 }
 
 /** `gui.validate`: the diagnostics the compile would emit for the draft, and no writes. */

@@ -218,6 +218,14 @@ releases may change file formats, settings and the public API.
 
 ### Changed
 
+- **Breaking (GUI files): `rows: N` is replaced by `container: chest_N`, and the other containers are `hopper` and `dispenser` (gui.md §12.4, #290).**
+  A GUI names the container profile it is designed in, as a required top-level field: `chest_1` to `chest_6` (the chests, as before), `hopper`
+  and `dispenser`. `rows:` is removed outright, with no alias and no second spelling, so a GUI file that still says `rows:` has no container and is
+  left out with the ordinary schema error (`MTR-0008`); an unknown container value quarantines that one GUI with `MTR-0097`. This is a breaking
+  change to a file format, and it is acceptable because the GUI system has not been released (the owner's decision, gui.md §12.13 item 9): no
+  published pack holds a GUI. Every GUI in the repository and in the built-in pack was converted in the same change, and a test fails the build
+  on any GUI file that still says `rows:`. The chest compiles to the same output as before. `authoring.describe` gains `guiContainers`, and the
+  GUI API's typed view and `setScreen` edit carry the container id instead of rows.
 - **`/materione browser` is now `/materione browse` (the old name stays as an alias).** It opens the new content browser, and it is gated by
   `materione.browse` (operators by default), not `materione.give`. Grant `materione.browse` to a player who used the old command, and
   `materione.browse.get` to whoever may take items. The old pack picker and its paginated classes (`ContentBrowser`, `PaginatedGui`) are removed.

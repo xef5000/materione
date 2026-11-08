@@ -28,7 +28,7 @@ public final class OpenCommandRunner {
         return """
                 %s:
                   title: Probe
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [%s]

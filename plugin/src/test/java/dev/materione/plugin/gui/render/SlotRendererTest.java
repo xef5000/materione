@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.content.gui.GuiContainers;
 import static dev.materione.plugin.gui.render.RenderFixtures.barrier;
 import static dev.materione.plugin.gui.render.RenderFixtures.conditional;
 import static dev.materione.plugin.gui.render.RenderFixtures.gui;
@@ -190,9 +191,9 @@ class SlotRendererTest {
     void theClockIsTheGreatestCommonDivisorOfTheRefreshAndEveryAnimation() {
         var animated = new CompiledItemLayer("anim", 0, 4, null, null, List.of(barrier("a")), 10, null, List.of(),
                 ItemComponent.LoreMode.REPLACE, template("1"), null, true);
-        var clocked = new RuntimeGuis.Live(RenderFixtures.GUI, 3, "Shop", "Shop", List.of(), ClickMap.EMPTY,
+        var clocked = new RuntimeGuis.Live(RenderFixtures.GUI, GuiContainers.byId("chest_3").orElseThrow(), "Shop", "Shop", List.of(), ClickMap.EMPTY,
                 GuiRuleSet.EMPTY, List.of(), 20, List.of(animated));
-        var off = new RuntimeGuis.Live(RenderFixtures.GUI, 3, "Shop", "Shop", List.of(), ClickMap.EMPTY,
+        var off = new RuntimeGuis.Live(RenderFixtures.GUI, GuiContainers.byId("chest_3").orElseThrow(), "Shop", "Shop", List.of(), ClickMap.EMPTY,
                 GuiRuleSet.EMPTY, List.of(), 0, List.of());
 
         assertThat(clocked.clockPeriod()).isEqualTo(10);

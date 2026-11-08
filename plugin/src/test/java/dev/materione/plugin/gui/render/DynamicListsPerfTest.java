@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.content.gui.GuiContainers;
 import static dev.materione.plugin.gui.render.RenderFixtures.template;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -61,7 +62,7 @@ class DynamicListsPerfTest {
         ListBinding source = ctx -> ListBinding.ListRead.ok(rows);
         var list = new CompiledListLayer("players", 0, slotsOf(SLOTS), source, false, aboveZero,
                 new ListSort("name", false), entry, null);
-        var live = new RuntimeGuis.Live(RenderFixtures.GUI, 6, "Roster", "Roster", List.of(), ClickMap.EMPTY,
+        var live = new RuntimeGuis.Live(RenderFixtures.GUI, GuiContainers.byId("chest_6").orElseThrow(), "Roster", "Roster", List.of(), ClickMap.EMPTY,
                 GuiRuleSet.EMPTY, InputSlots.NONE, null, List.of(), 0, List.of(), null, List.of(list));
 
         var contexts = new ArrayList<LogicContext>();

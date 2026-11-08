@@ -28,7 +28,7 @@ function guiYaml(heading, rows = 3) {
   return [
     'qa_runtime:',
     '  title: QA Runtime',
-    `  rows: ${rows}`,
+    `  container: chest_${rows}`,
     '  layers:',
     '    - id: frame',
     '      type: panel',
@@ -75,7 +75,7 @@ export default [
         await ctx.waitForServerLog(/MATERIONE-RELOAD-OK/);
         await ctx.reset();
         await ctx.rcon('materione gui open sample:qa_runtime Probe');
-        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=sample:qa_runtime player=Probe rows=3 slots=1/);
+        await ctx.waitForServerLog(/MATERIONE-GUI-OPENED id=sample:qa_runtime player=Probe container=chest_3 slots=1/);
         ctx.expect(Number(await ctx.exec('return player.getOpenInventory().getTopInventory().getSize()'))).toBe(27);
         const gem = await ctx.exec(
           'return player.getOpenInventory().getTopInventory().getItem(13).getHoverName().getString()',

@@ -4,6 +4,7 @@ import dev.materione.api.gui.ClickArea;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.RasterCanvas;
 import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
@@ -19,10 +20,9 @@ import java.util.List;
  * (gui.md §2, §4). One 18 × 18 inset well per slot, at the slot's 16 × 16 item origin
  * minus one pixel; raster target.
  *
- * <p>Chest geometry (the shared-vector README): container item origins are
- * {@code x = 8 + col·18}, {@code y = 18 + row·18}; the player inventory is
- * {@code y = rows·18 + 31 + row·18} for its three rows and the hotbar
- * {@code y = rows·18 + 89}, both with {@code x = 8 + col·18}.
+ * <p>Geometry comes from the container profile (gui.md §12.5.1): container item origins are its slots, and the
+ * player inventory is its {@code inventory} origin for three rows and the hotbar 58 px below. For a chest those are
+ * {@code x = 8 + col·18}, {@code y = 18 + row·18} and {@code y = rows·18 + 31 + row·18}, {@code y = rows·18 + 89}.
  */
 public final class SlotsComponent implements GuiComponent {
 
@@ -96,44 +96,49 @@ public final class SlotsComponent implements GuiComponent {
             throw new IllegalArgumentException(
                     "layer " + configuration.layerId() + ": input slots need the container, so region must be container or all");
         }
-        return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.rows(),
+        return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.container(),
                 input, configuration.parameters().get("accept"));
     }
 
     /**
-     * The item origins ({@code x, y} of the 16 × 16 slot, the well is one pixel up and left)
-     * a region covers in a chest of {@code rows} rows, in container-then-player order.
+     * The hotbar's distance below the first row of the player's inventory, in pixels: the vanilla inventory's three
+     * rows, then the hotbar 58 px below the first (gui.md §12.2.3, the same for every container).
      */
-    public static List<int[]> itemOrigins(Region region, int rows) {
+    private static final int HOTBAR_GAP = 58;
+
+    /**
+     * The item origins ({@code x, y} of the 16 × 16 slot, the well is one pixel up and left) a region covers in
+     * {@code container}, in container-then-player order. The container's slots are the profile's {@code slot(i)}; the
+     * player's are its {@code inventory} origin and the hotbar below it (gui.md §12.5.2).
+     */
+    public static List<int[]> itemOrigins(Region region, GuiContainer container) {
         var origins = new ArrayList<int[]>();
         if (region == Region.CONTAINER || region == Region.ALL) {
-            for (int row = 0; row < rows; row++) {
-                for (int col = 0; col < 9; col++) {
-                    origins.add(new int[] {8 + col * 18, 18 + row * 18});
-                }
+            for (int slot = 0; slot < container.slotCount(); slot++) {
+                origins.add(new int[] {container.slotX(slot), container.slotY(slot)});
             }
         }
         if (region == Region.PLAYER || region == Region.ALL) {
             for (int row = 0; row < 3; row++) {
                 for (int col = 0; col < 9; col++) {
-                    origins.add(new int[] {8 + col * 18, rows * 18 + 31 + row * 18});
+                    origins.add(new int[] {container.inventoryX() + col * 18, container.inventoryY() + row * 18});
                 }
             }
             for (int col = 0; col < 9; col++) {
-                origins.add(new int[] {8 + col * 18, rows * 18 + 89});
+                origins.add(new int[] {container.inventoryX() + col * 18, container.inventoryY() + HOTBAR_GAP});
             }
         }
         return origins;
     }
 
     /**
-     * Parsed slot wells: which area, the inset colours, and the chest's row count for geometry.
+     * Parsed slot wells: which area, the inset colours, and the container the wells are drawn in (its geometry).
      *
      * @param input whether the container slots take the player's items (logic.md §25)
      * @param accept the authored {@code accept:} condition as written, or null; compiled by the runtime
      *     (it needs the flow engine), and read only when {@code input} is true
      */
-    public record Layer(Region region, GuiBevel bevel, int rows, boolean input, Object accept)
+    public record Layer(Region region, GuiBevel bevel, GuiContainer container, boolean input, Object accept)
             implements CompiledGuiLayer {
 
         @Override
@@ -148,7 +153,7 @@ public final class SlotsComponent implements GuiComponent {
                 return ClickArea.NONE;
             }
             var slots = new java.util.HashSet<Integer>();
-            for (int slot = 0; slot < rows * 9; slot++) {
+            for (int slot = 0; slot < container.slotCount(); slot++) {
                 slots.add(slot);
             }
             return new ClickArea.Slots(slots);
@@ -156,7 +161,7 @@ public final class SlotsComponent implements GuiComponent {
 
         @Override
         public void paint(RasterCanvas canvas, TextureSource textures) {
-            for (int[] origin : itemOrigins(region, rows)) {
+            for (int[] origin : itemOrigins(region, container)) {
                 Bevels.inset(canvas, origin[0] - 1, origin[1] - 1, WELL, WELL,
                         bevel.highlight(), bevel.shadow(), bevel.fill());
             }

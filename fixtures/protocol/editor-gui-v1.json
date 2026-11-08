@@ -54,6 +54,7 @@
     },
     "response": {
       "data": {
+        "container": "chest_3",
         "id": "main",
         "layers": [
           {
@@ -93,7 +94,6 @@
         "pack": "demo",
         "path": "guis/main.yml",
         "rev": 2,
-        "rows": 3,
         "title": "Shop",
         "warnings": [
           {
@@ -167,6 +167,7 @@
     },
     "response": {
       "data": {
+        "container": "chest_3",
         "id": "main",
         "layers": [
           {
@@ -196,7 +197,6 @@
         "pack": "demo",
         "path": "guis/main.yml",
         "rev": 1,
-        "rows": 3,
         "title": "Shop",
         "warnings": []
       },
@@ -272,6 +272,7 @@
       "payload": {
         "source": {
           "document": {
+            "container": "chest_1",
             "id": "main",
             "layers": [
               {
@@ -285,7 +286,6 @@
               }
             ],
             "pack": "demo",
-            "rows": 1,
             "title": "Shop"
           },
           "kind": "draft"

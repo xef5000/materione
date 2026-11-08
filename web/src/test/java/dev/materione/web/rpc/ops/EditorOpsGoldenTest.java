@@ -38,7 +38,7 @@ class EditorOpsGoldenTest {
     private static final String SEED = """
             shop:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: frame
                   type: panel

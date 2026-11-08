@@ -78,7 +78,7 @@ describe('commands are invertible', () => {
 
   it('document fields (title, rows) revert', () => {
     const doc = sample();
-    const command = setDocumentFields(doc, { title: 'Bazaar', rows: 5 }, 'Edit')!;
+    const command = setDocumentFields(doc, { title: 'Bazaar', container: 'chest_5' }, 'Edit')!;
     const after = command.apply(doc);
     expect([after.title, after.rows]).toEqual(['Bazaar', 5]);
     expect(json(command.revert(after))).toBe(json(doc));
@@ -86,9 +86,9 @@ describe('commands are invertible', () => {
   });
 
   it('composites run in order and revert in reverse', () => {
-    const doc = starterDocument(6);
+    const doc = starterDocument('chest_6');
     const first = patchLayers(doc, { frame: { height: 100 } }, 'a')!;
-    const second = setDocumentFields(doc, { rows: 2 }, 'b')!;
+    const second = setDocumentFields(doc, { container: 'chest_2' }, 'b')!;
     const both = compose('both', [first, null, second])!;
     const after = both.apply(doc);
     expect(after.rows).toBe(2);
@@ -164,7 +164,7 @@ describe('the history', () => {
     history.execute(null);
     expect(history.canUndo).toBe(false);
     history.execute(patchLayers(history.doc, { buy: { x: 1 } }, 'a'));
-    history.reset(starterDocument(2));
+    history.reset(starterDocument('chest_2'));
     expect([history.canUndo, history.dirty, history.doc.rows]).toEqual([false, false, 2]);
   });
 });
@@ -232,7 +232,7 @@ describe('layer operations', () => {
   });
 
   it('adds a palette component centered on the canvas, with registry defaults, on top', () => {
-    const doc = starterDocument(6);
+    const doc = starterDocument('chest_6');
     const { command, layer } = ops.addComponent(doc, sceneFor(doc), componentOf(registry, 'button')!);
     expect(layer).toMatchObject({ type: 'button', id: 'button', width: 48, height: 24, x: 64, y: 99 });
     expect(ids(command.apply(doc)).at(-1)).toBe('button');
@@ -244,9 +244,9 @@ describe('layer operations', () => {
 
   it('changing rows resizes a frame panel that spanned the canvas', () => {
     // exercised through the same commands the studio composes; a new GUI has no layers, so the panel is added first
-    const doc = { ...starterDocument(6), layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 }] };
+    const doc = { ...starterDocument('chest_6'), layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 }] };
     const command = compose('Change rows', [
-      setDocumentFields(doc, { rows: 3 }, 'rows'),
+      setDocumentFields(doc, { container: 'chest_3' }, 'rows'),
       patchLayers(doc, { frame: { height: 168 } }, 'frame'),
     ])!;
     const after = command.apply(doc);

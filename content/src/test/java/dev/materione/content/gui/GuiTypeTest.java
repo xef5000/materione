@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.content.CompileRejectException;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.gui.CompiledGuiLayer;
@@ -100,7 +101,7 @@ class GuiTypeTest {
         GuiDefinition shop = parse(type, "shop.yml", "shop");
 
         assertThat(shop.title()).isEqualTo("Shop");
-        assertThat(shop.rows()).isEqualTo(6);
+        assertThat(shop.container().id()).isEqualTo("chest_6");
         assertThat(shop.skipped()).isEmpty();
         assertThat(shop.layers()).extracting(GuiLayer::id)
                 .containsExactly("frame", "wells", "art", "banner", "buy", "heading", "sword", "hidden_note");
@@ -178,22 +179,22 @@ class GuiTypeTest {
     void theGuiItselfIsRejectedOnlyForItsOwnFields() {
         var type = new GuiType(components());
         var layers = List.<Object>of();
-        assertThat(type.parse(GUI, Map.of("rows", 3, "layers", layers), Map.of())).as("no title").isEmpty();
+        assertThat(type.parse(GUI, Map.of("container", "chest_3", "layers", layers), Map.of())).as("no title").isEmpty();
         assertThat(type.parse(GUI, Map.of("title", "T", "layers", layers), Map.of())).as("no rows").isEmpty();
         for (int rows : new int[] {0, 7}) {
             assertThat(type.parse(GUI, Map.of("title", "T", "rows", rows), Map.of()))
                     .as("rows %d", rows).isEmpty();
         }
-        assertThat(type.parse(GUI, Map.of("title", "T", "rows", 2, "layers", "not a list"), Map.of()))
+        assertThat(type.parse(GUI, Map.of("title", "T", "container", "chest_2", "layers", "not a list"), Map.of()))
                 .as("layers must be a list").isEmpty();
-        assertThat(type.parse(GUI, Map.of("title", "T", "rows", 2), Map.of())).as("no layers is a blank chest")
+        assertThat(type.parse(GUI, Map.of("title", "T", "container", "chest_2"), Map.of())).as("no layers is a blank chest")
                 .isPresent();
     }
 
     @Test
     void layerIdsAndTypesAreCheckedBeforeAnyComponentRuns() {
         var type = new GuiType(components());
-        var definition = Map.<String, Object>of("title", "T", "rows", 1, "layers", List.of(
+        var definition = Map.<String, Object>of("title", "T", "container", "chest_1", "layers", List.of(
                 Map.of("id", "Bad-Id", "type", "panel", "width", 10, "height", 10),
                 Map.of("id", "no_type"),
                 Map.of("id", "fine", "type", "panel", "width", 10, "height", 10, "visible", "yes"),
@@ -212,7 +213,7 @@ class GuiTypeTest {
         var type = new GuiType(components());
         var definition = LosslessYaml.parse("""
                 title: T
-                rows: 1
+                container: chest_1
                 layers:
                   - {id: yes, type: panel, width: 10, height: 10}
                   - {id: 7, type: panel, width: 10, height: 10}
@@ -236,7 +237,7 @@ class GuiTypeTest {
         var tag = new TagComponent();
         var broken = new BrokenComponent();
         var type = new GuiType(components(tag, broken));
-        var definition = Map.<String, Object>of("title", "T", "rows", 1, "layers", List.of(
+        var definition = Map.<String, Object>of("title", "T", "container", "chest_1", "layers", List.of(
                 Map.of("id", "label", "type", "example:tag", "text", "hello"),
                 Map.of("id", "boom", "type", "example:broken"),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10)));
@@ -252,13 +253,13 @@ class GuiTypeTest {
     void theComponentReceivesOnlyItsOwnFieldsAndTheGuiGeometry() {
         var recorder = new RecordingComponent();
         var type = new GuiType(components(recorder));
-        type.parse(GUI, Map.of("title", "T", "rows", 4, "layers", List.of(
+        type.parse(GUI, Map.of("title", "T", "container", "chest_4", "layers", List.of(
                 Map.of("id", "rec", "type", "example:recording", "name", "Rec", "locked", true,
                         "own_field", 42))), Map.of());
 
         assertThat(recorder.seen.guiId()).isEqualTo(GUI);
         assertThat(recorder.seen.layerId()).isEqualTo("rec");
-        assertThat(recorder.seen.rows()).isEqualTo(4);
+        assertThat(recorder.seen.container().id()).isEqualTo("chest_4");
         assertThat(recorder.seen.parameters()).containsExactly(Map.entry("own_field", 42));
     }
 
@@ -268,7 +269,7 @@ class GuiTypeTest {
                 # preserved comment
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   future_gui: retained
                   layers:
                     - id: rec
@@ -292,7 +293,7 @@ class GuiTypeTest {
     @Test
     void rejectedIdsCanBeReusedAndDiagnosticsRetainAuthoredIndices() {
         var type = new GuiType(components());
-        var definition = Map.<String, Object>of("title", "T", "rows", 1, "layers", List.of(
+        var definition = Map.<String, Object>of("title", "T", "container", "chest_1", "layers", List.of(
                 Map.of("id", "frame", "type", "missing"),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10),
@@ -315,7 +316,7 @@ class GuiTypeTest {
         target.fail = true;
         description.fail = true;
         var type = new GuiType(registry);
-        var gui = (GuiDefinition) type.parse(GUI, Map.of("title", "T", "rows", 1, "layers", List.of(
+        var gui = (GuiDefinition) type.parse(GUI, Map.of("title", "T", "container", "chest_1", "layers", List.of(
                 Map.of("id", "bad", "type", "example:bad_target"),
                 Map.of("id", "survives", "type", "example:bad_description", "name", "common", "unknown", 42),
                 Map.of("id", "frame", "type", "panel", "width", 10, "height", 10))), Map.of()).orElseThrow();
@@ -328,16 +329,36 @@ class GuiTypeTest {
     }
 
     @Test
+    void anUnknownContainerQuarantinesTheGuiWithMtr0097AndKeepsTheFile() {
+        var type = new GuiType(components());
+        var id = NamespacedId.of("shop", "shop");
+        var definition = (GuiDefinition) type.parse(id,
+                Map.of("title", "T", "container", "chest_9", "layers", List.of()), Map.of()).orElseThrow();
+        assertThat(definition.container()).isNull();
+        assertThat(definition.raw()).containsEntry("container", "chest_9");
+        assertThat(type.diagnose(definition)).isEmpty();
+        // compile refuses before it touches the emitter or the allocations, so the quarantine needs neither
+        assertThatThrownBy(() -> type.compile(definition, NamespacedId.of("shop", "shop_model"), null, null))
+                .isInstanceOfSatisfying(CompileRejectException.class, rejected -> {
+                    assertThat(rejected.code()).isEqualTo(DiagnosticCodes.GUI_CONTAINER_UNKNOWN);
+                    assertThat(rejected.getMessage()).contains("chest_9").contains("chest_1").contains("dispenser");
+                });
+        // a value that is not a string is the same quarantine; no container at all is a parse failure
+        var notAString = (GuiDefinition) type.parse(id, Map.of("title", "T", "container", 3), Map.of()).orElseThrow();
+        assertThat(notAString.container()).isNull();
+        assertThat(type.parse(id, Map.of("title", "T", "rows", 3), Map.of())).isEmpty();
+    }
+
+    @Test
     void describeDeclaresTheCommonLayerFieldsForTheStudio() {
         SelfDescription description = new GuiType(components()).describe();
         assertThat(description.parameters()).extracting(ParameterSchema::id)
-                .containsExactly("title", "rows", "player_inventory", "refresh", "layers", "behavior", "flows", "open");
+                .containsExactly("title", "container", "player_inventory", "refresh", "layers", "behavior", "flows", "open");
         ParameterSchema layers = description.parameters().get(4);
         assertThat(layers.nested()).extracting(ParameterSchema::id)
                 .containsExactly("id", "type", "name", "visible", "locked", "opacity", "visible_if",
                         "materione:overlay_frames");
         assertThat(layers.nested().get(1).editor().referenceKind()).isEqualTo("gui-component");
-        assertThat(description.parameters().get(1).editor().max()).isEqualTo(6.0);
         assertThat(new GuiType(components()).name()).isEqualTo("gui");
         assertThat(new GuiType(components()).directory()).isEqualTo("guis");
     }
@@ -366,7 +387,7 @@ class GuiTypeTest {
     }
 
     private static void assertThatBadStyle(GuiComponent component, Map<String, Object> style) {
-        var configuration = new GuiComponentConfiguration(GUI, "p", 3,
+        var configuration = new GuiComponentConfiguration(GUI, "p", GuiContainers.byId("chest_3").orElseThrow(),
                 Map.of("width", 10, "height", 10, "style", style));
         assertThatThrownBy(() -> component.parse(configuration))
                 .isInstanceOf(IllegalArgumentException.class)

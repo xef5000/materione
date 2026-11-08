@@ -1,9 +1,11 @@
 package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.content.gui.logic.ClickMap;
 import dev.materione.content.gui.logic.GuiRules;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * The runtime-facing model of one compiled GUI (gui.md §4, §5): what a container screen needs to open, and
@@ -16,7 +18,7 @@ import java.util.List;
  * when it renders, and the layers of that slot compete by layer order (the topmost visible one wins).
  *
  * @param id the GUI resource
- * @param rows chest rows, 1 to 6
+ * @param container the container profile the GUI is compiled for (gui.md §12.5.1): its slots, its screen size
  * @param title the container title as a MiniMessage string: the background glyph, shift
  *     tags and offset-font text runs, in draw order
  * @param accessibleTitle the GUI's plain title, for narration and title-less clients
@@ -31,14 +33,12 @@ import java.util.List;
  * @param lists the GUI's {@code list} layers, in layer order, resolved per viewer and page (logic.md §6.7)
  */
 public record CompiledGui(
-        NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
         ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
         List<Placement> placements, int refresh, GuiVisualPlan visuals, List<ListPlacement> lists) {
 
-    /** The canvas width of every chest GUI (vanilla container width). */
-    public static final int WIDTH = 176;
-
     public CompiledGui {
+        Objects.requireNonNull(container, "container");
         slots = List.copyOf(slots);
         clicks = clicks == null ? ClickMap.EMPTY : clicks;
         rules = rules == null ? GuiRules.EMPTY : rules;
@@ -52,40 +52,40 @@ public record CompiledGui(
     }
 
     /** A GUI with no list layers. */
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
             List<Placement> placements, int refresh, GuiVisualPlan visuals) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh,
+        this(id, container, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh,
                 visuals, List.of());
     }
 
     /** A GUI with playerInventory and inputs, and no per-viewer items or clock. */
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs,
             List<Placement> placements, int refresh) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh, null);
+        this(id, container, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, placements, refresh, null);
     }
 
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules, PlayerInventory playerInventory, List<Input> inputs) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, List.of(), 0);
+        this(id, container, title, accessibleTitle, slots, clicks, rules, playerInventory, inputs, List.of(), 0);
     }
 
     /** A GUI with per-viewer items or clock, and the viewer's inventory free. */
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules, List<Placement> placements, int refresh) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), placements, refresh);
+        this(id, container, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), placements, refresh);
     }
 
     /** A GUI with no clickable layers and no logic: the v1 shape. */
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
-        this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRules.EMPTY, PlayerInventory.FREE, List.of(), List.of(), 0);
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots) {
+        this(id, container, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRules.EMPTY, PlayerInventory.FREE, List.of(), List.of(), 0);
     }
 
     /** A GUI with clicks and rules, and no per-viewer items or clock: the M6 G1 shape. */
-    public CompiledGui(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+    public CompiledGui(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRules rules) {
-        this(id, rows, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), List.of(), 0);
+        this(id, container, title, accessibleTitle, slots, clicks, rules, PlayerInventory.FREE, List.of(), List.of(), 0);
     }
 
     /**
@@ -96,11 +96,6 @@ public record CompiledGui(
      * @param accept the layer's {@code accept:} as authored, or null to accept anything
      */
     public record Input(int slot, String layer, Object accept) {}
-
-    /** The canvas height of a chest with {@code rows} rows: {@code 114 + rows·18}. */
-    public static int height(int rows) {
-        return 114 + rows * 18;
-    }
 
     /**
      * One filled slot.

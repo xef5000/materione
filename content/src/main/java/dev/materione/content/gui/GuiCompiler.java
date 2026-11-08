@@ -162,7 +162,7 @@ public final class GuiCompiler {
         slots.forEach((slot, placement) -> slotList.add(new CompiledGui.Slot(slot, placement.item(), placement.amount())));
         slotList.sort(Comparator.comparingInt(CompiledGui.Slot::slot));
         ClickMap clicks = ClickMapCompiler.compile(gui, bound, report.reasons.keySet());
-        var model = new CompiledGui(gui.id(), gui.rows(), title.build(), gui.title(), slotList, clicks, gui.rules(),
+        var model = new CompiledGui(gui.id(), gui.container(), title.build(), gui.title(), slotList, clicks, gui.rules(),
                 PlayerInventory.of(gui.raw().get("player_inventory")), inputsOf(gui, clicks),
                 placements, gui.refresh(), visuals, lists);
         return new GuiCompilation(model, report.diagnostics, assets, fonts, GuiFlatten.layerReports(gui, report.reasons));
@@ -186,7 +186,7 @@ public final class GuiCompiler {
             }
         }
         var inputs = new ArrayList<CompiledGui.Input>();
-        for (int slot = 0; slot < gui.rows() * 9; slot++) {
+        for (int slot = 0; slot < gui.container().slotCount(); slot++) {
             List<String> top = clicks.layersAt(slot);
             for (String layer : top) {
                 if (accepts.containsKey(layer)) {

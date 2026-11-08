@@ -36,8 +36,8 @@ import java.util.regex.Pattern;
  */
 public final class GuiType implements ContentType {
 
-    /** Chest rows: the vanilla container sizes are 1 to 6 rows. */
-    static final int MAX_ROWS = 6;
+    /** The container a new GUI starts with (the studio's New GUI dialog, gui.md §12.4); the parser never defaults. */
+    public static final String NEW_GUI_CONTAINER = "chest_3";
 
     static final int MAX_OPACITY = 100;
 
@@ -123,18 +123,20 @@ public final class GuiType implements ContentType {
                         "Layers", "layers", 0, false, "structured-list", "", ""));
         return new SelfDescription(
                 "GUI",
-                "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, "
-                        + "title text and items",
+                "A container screen (a chest, hopper or dispenser) designed as ordered layers: panels, slot wells, "
+                        + "images, paint, buttons, title text and items",
                 List.of(
                         new ParameterSchema("title", ParameterType.STRING, true, null,
                                 "Accessibility and fallback title (narration, title-less clients)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Title", "identity", 0, false, "text", "", "Shop")),
-                        new ParameterSchema("rows", ParameterType.INTEGER, true, null,
-                                "Chest rows, 1 to 6", null, null)
+                        new ParameterSchema("container", ParameterType.ENUM, true, null,
+                                "The container profile the GUI is designed in: chest_1 to chest_6, hopper or "
+                                        + "dispenser (gui.md section 12.4)",
+                                containerIds(), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Rows", "placement", 10, false, "number", "", "3")
-                                        .withRange(1.0, (double) MAX_ROWS, "rows")),
+                                        "Container", "placement", 10, false, "select", "", NEW_GUI_CONTAINER)
+                                        .withOptions(containerOptions())),
                         new ParameterSchema("player_inventory", ParameterType.ENUM, false, "free",
                                 "The viewer's own inventory while the GUI is open: free (clicks work) or locked "
                                         + "(every click is cancelled and gui.click_inventory fires)",
@@ -159,6 +161,19 @@ public final class GuiType implements ContentType {
                 "1.0.0");
     }
 
+    /** The ids of every container profile, the schema's enum values (gui.md §12.4). */
+    static List<String> containerIds() {
+        return GuiContainers.all().stream().map(dev.materione.api.gui.GuiContainer::id).toList();
+    }
+
+    /** The studio's options for {@code container:}: every profile, its label and its group. */
+    private static List<ParameterSchema.EditorOption> containerOptions() {
+        return GuiContainers.all().stream()
+                .map(container -> ParameterSchema.EditorOption.of(container.id(), container.label(),
+                        container.group() + ": " + container.slotCount() + " slots"))
+                .toList();
+    }
+
     @Override
     public Optional<Object> parse(
             NamespacedId id, Map<String, Object> definition, Map<String, Map<String, Object>> templates) {
@@ -167,20 +182,24 @@ public final class GuiType implements ContentType {
             return Optional.empty(); // unknown or diamond template — quarantine upstream
         }
         String title = Templates.text(merged, "title");
-        Integer rows = GuiLayerParser.wholeNumber(merged.get("rows"));
-        if (title == null || rows == null || rows < 1 || rows > MAX_ROWS) {
-            return Optional.empty(); // a GUI needs a title and a valid chest size
+        if (title == null || !merged.containsKey("container")) {
+            return Optional.empty(); // a GUI needs a title and a container, like any required field
         }
+        // An unknown or non-string container keeps the document and quarantines it at compile (MTR-0097), so the
+        // file is not touched and the studio can still open it
+        var container = merged.get("container") instanceof String name ? GuiContainers.byId(name).orElse(null) : null;
         Object authored = merged.get("layers");
         if (authored != null && !(authored instanceof List<?>)) {
             return Optional.empty();
         }
-        List<?> entries = authored == null ? List.of() : (List<?>) authored;
-        var parsedLayers = layerParser.parse(id, rows, entries);
+        List<?> entries = authored == null || container == null ? List.of() : (List<?>) authored;
+        var parsedLayers = container == null
+                ? new GuiLayerParser.Result(List.of(), List.of())
+                : layerParser.parse(id, container, entries);
         Object authoredRefresh = merged.get("refresh");
         Integer clock = authoredRefresh == null ? null : GuiLayerParser.wholeNumber(authoredRefresh);
         boolean clockOk = authoredRefresh == null || (clock != null && clock >= 1);
-        return Optional.of(new GuiDefinition(id, title, rows, parsedLayers.layers(), parsedLayers.skipped(),
+        return Optional.of(new GuiDefinition(id, title, container, parsedLayers.layers(), parsedLayers.skipped(),
                 GuiRules.parse(merged), merged,
                 clockOk && clock != null ? clock : 0,
                 clockOk ? null : "refresh is a whole number of ticks, at least 1, not " + authoredRefresh));
@@ -192,7 +211,8 @@ public final class GuiType implements ContentType {
      */
     @Override
     public List<Diagnostic> diagnose(Object parsedDefinition) {
-        if (!(parsedDefinition instanceof GuiDefinition gui)) {
+        // a quarantined GUI (unknown container, MTR-0097) has no layers or geometry to judge; compile reports it
+        if (!(parsedDefinition instanceof GuiDefinition gui) || gui.container() == null) {
             return List.of();
         }
         var out = new ArrayList<Diagnostic>();
@@ -236,7 +256,7 @@ public final class GuiType implements ContentType {
                 continue; // a component that cannot say where it is clicked is not clickable
             }
             if (area instanceof dev.materione.api.gui.ClickArea.Rect rect && rect.width() > 0 && rect.height() > 0
-                    && dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(rect, gui.rows()).isEmpty()) {
+                    && dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(rect, gui.container()).isEmpty()) {
                 out.add(new Diagnostic(
                         DiagnosticCodes.GUI_CLICK_OUTSIDE_CONTAINER, Severity.WARN,
                         "GUI layer '" + layer.id() + "' is meant to be clicked but covers no container slot (its "
@@ -340,6 +360,15 @@ public final class GuiType implements ContentType {
     public void compile(Object definition, NamespacedId allocatedModelId, PackEmitter emitter, Allocations allocations) {
         if (!(definition instanceof GuiDefinition gui)) {
             return;
+        }
+        if (gui.container() == null) {
+            Object authored = gui.raw().get("container");
+            throw new CompileRejectException(
+                    DiagnosticCodes.GUI_CONTAINER_UNKNOWN,
+                    "GUI " + gui.id() + " has container: " + (authored instanceof String text
+                            ? text : "a value that is not a string") + "; the supported containers are "
+                            + GuiContainers.supportedIds(),
+                    "write container: with one of the supported ids; the GUI is left out until then");
         }
         GuiCompilation compiled = GuiCompiler.compile(gui, emitter.textures(), (layer, frame, row, col) -> {
             NamespacedId key = layer == null

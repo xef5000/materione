@@ -1,7 +1,7 @@
 # The shop screen of logic.md §2.1, plus every other step kind
 shop:
   title: Shop
-  rows: 3
+  container: chest_3
   layers:
     - { id: frame, type: panel, x: 0, y: 0, width: 176, height: 168 }
   behavior:

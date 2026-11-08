@@ -11,7 +11,7 @@ import { smallcaps } from '../src/lib/gui/font/render';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
 import { colorOf, measureTextLayer } from '../src/lib/gui/text';
 
-const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: '', rows: 3, layers, rest: {}, order: [] });
+const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: '', container: 'chest_3', rows: 3, layers, rest: {}, order: [] });
 const text = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'text', x: 8, y: 6, text: 'Shop', font: 'smallcaps', ...extra }) as GuiLayer;
 const NONE = new Set<string>();

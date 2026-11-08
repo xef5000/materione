@@ -52,7 +52,7 @@ public final class GuiRenderer {
             rendered = new Rendered(slotRender.slots(), slotRender.hidden(), slotRender.resolved(), gui.title(), Map.of(),
                     slotRender.lists());
         } else {
-            var title = titles.render(gui.id(), gui.rows(), gui.visuals(), context, ticks);
+            var title = titles.render(gui.id(), gui.container(), gui.visuals(), context, ticks);
             var hidden = new java.util.HashSet<>(slotRender.hidden());
             hidden.addAll(title.hidden());
             rendered = new Rendered(slotRender.slots(), hidden, slotRender.resolved(), title.title(), title.coverage(),

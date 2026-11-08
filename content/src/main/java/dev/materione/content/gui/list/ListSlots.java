@@ -1,5 +1,6 @@
 package dev.materione.content.gui.list;
 
+import dev.materione.api.gui.GuiContainer;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -9,25 +10,24 @@ import java.util.Set;
 /**
  * The container slots a list fills, as authored (logic.md §6.7). Two forms: a range with columns skipped
  * ({@code slots: {from: 10, to: 34, skip_columns: [0, 8]}}), or an explicit list of slots. The order is the
- * order of the entries: the first entry shows in the first slot.
+ * order of the entries: the first entry shows in the first slot. Columns are the container's grid (gui.md §12.5.2).
  */
 public final class ListSlots {
-
-    private static final int COLUMNS = 9;
 
     private ListSlots() {}
 
     /**
-     * Parses the authored {@code slots:} of a list in a GUI of {@code rows} rows.
+     * Parses the authored {@code slots:} of a list in a GUI of {@code container}.
      *
      * @return the slots in entry order; never empty and never repeated
      * @throws IllegalArgumentException with the reason
      */
-    public static List<Integer> parse(Object raw, int rows) {
-        int size = rows * COLUMNS;
+    public static List<Integer> parse(Object raw, GuiContainer container) {
+        int size = container.slotCount();
+        int columns = container.columns();
         List<Integer> slots;
         if (raw instanceof Map<?, ?> range) {
-            slots = range(range, size);
+            slots = range(range, size, columns);
         } else if (raw instanceof List<?> explicit) {
             slots = explicit(explicit, size);
         } else {
@@ -40,7 +40,7 @@ public final class ListSlots {
         return List.copyOf(slots);
     }
 
-    private static List<Integer> range(Map<?, ?> range, int size) {
+    private static List<Integer> range(Map<?, ?> range, int size, int columns) {
         for (Object key : range.keySet()) {
             if (!"from".equals(key) && !"to".equals(key) && !"skip_columns".equals(key)) {
                 throw new IllegalArgumentException("slots takes from, to and skip_columns, not '" + key + "'");
@@ -53,20 +53,21 @@ public final class ListSlots {
         }
         Set<Integer> skipped = new HashSet<>();
         if (range.get("skip_columns") != null) {
-            if (!(range.get("skip_columns") instanceof List<?> columns)) {
-                throw new IllegalArgumentException("skip_columns is a list of column numbers from 0 to 8");
+            if (!(range.get("skip_columns") instanceof List<?> listed)) {
+                throw new IllegalArgumentException("skip_columns is a list of column numbers from 0 to " + (columns - 1));
             }
-            for (Object column : columns) {
+            for (Object column : listed) {
                 Integer number = wholeNumber(column);
-                if (number == null || number < 0 || number >= COLUMNS) {
-                    throw new IllegalArgumentException("skip_columns holds column numbers from 0 to 8");
+                if (number == null || number < 0 || number >= columns) {
+                    throw new IllegalArgumentException(
+                            "skip_columns holds column numbers from 0 to " + (columns - 1));
                 }
                 skipped.add(number);
             }
         }
         var out = new ArrayList<Integer>();
         for (int slot = from; slot <= to; slot++) {
-            if (!skipped.contains(slot % COLUMNS)) {
+            if (!skipped.contains(slot % columns)) {
                 out.add(slot);
             }
         }

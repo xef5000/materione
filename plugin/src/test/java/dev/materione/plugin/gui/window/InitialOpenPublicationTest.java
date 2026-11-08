@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.window;
 
+import dev.materione.content.gui.GuiContainers;
 import static dev.materione.plugin.gui.window.ReopenCoalescingTest.proxy;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -159,7 +160,7 @@ class InitialOpenPublicationTest {
             Viewer viewer = Viewer.of(player);
             var previous = new GuiSession(id, "Probe", previousGui.id(), Map.of());
             fixture.sessions.begin(previous);
-            var oldMenu = new GuiMenu(previous, 1, previousGui.title(), input);
+            var oldMenu = new GuiMenu(previous, GuiContainers.byId("chest_1").orElseThrow(), previousGui.title(), input);
             oldMenu.inputSlots(Set.of(0));
             oldMenu.getInventory().setItem(0, ReopenCoalescingTest.FakeStack.of(5));
             previous.attach(oldMenu);
@@ -232,7 +233,7 @@ class InitialOpenPublicationTest {
             if (scenario.equals("unchanged")) {
                 assertThat(fixture.sessions.current(id)).containsSame(pending.get());
                 var menu = (GuiMenu) pending.get().window();
-                assertThat(menu.rows()).isEqualTo(1);
+                assertThat(menu.container().id()).isEqualTo("chest_1");
                 assertThat(menu.baseTitle()).isEqualTo(first.title());
                 assertThat(menu.inputSlots()).contains(1).doesNotContain(0);
                 assertThat(menu.getInventory().getItem(0).getAmount()).isEqualTo(1);
@@ -287,7 +288,7 @@ class InitialOpenPublicationTest {
         return """
                 %s:
                   title: Trade%s
-                  rows: %d
+                  container: chest_%d
                   layers:
                     - {id: wells, type: slots, region: container, input: true}
                     - id: display

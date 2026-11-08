@@ -101,8 +101,8 @@ public interface RuntimeApi {
         Optional<String> onlineName(UUID player);
     }
 
-    /** One live GUI: its id, chest rows, plain title and how many slots it fills. */
-    record GuiView(NamespacedId id, int rows, String accessibleTitle, int filledSlots) {}
+    /** One live GUI: its id, container profile id, plain title and how many slots it fills. */
+    record GuiView(NamespacedId id, String container, String accessibleTitle, int filledSlots) {}
 
     // ------------------------------------------------------------------
 

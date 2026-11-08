@@ -1,6 +1,7 @@
 package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.content.gui.logic.GuiRules;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -8,13 +9,17 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A parsed GUI (gui.md §1–§2): a chest design of {@code rows} rows and its ordered
- * layers. A layer that fails to parse is listed in {@link #skipped()} and left out of
- * {@link #layers()}; the GUI itself survives, so one bad layer never drops the screen.
+ * A parsed GUI (gui.md §1–§2): a design in one container (§12.4) and its ordered layers. A layer that fails to
+ * parse is listed in {@link #skipped()} and left out of {@link #layers()}; the GUI itself survives, so one bad
+ * layer never drops the screen.
+ *
+ * <p>A {@code container:} that names no profile parses to a definition with a null {@link #container()}: its
+ * layers are not read, and {@link GuiType#compile} quarantines it with {@code MTR-0097}. The authored value stays
+ * in {@link #raw()}.
  *
  * @param id the GUI resource id
  * @param title the accessibility and fallback title
- * @param rows chest rows, 1 to 6
+ * @param container the container profile the GUI is designed in, or null when {@code container:} is unknown
  * @param layers accepted layers, bottom to top, including hidden ones
  * @param skipped layers that were quarantined, in authored order
  * @param rules the GUI's {@code behavior:} and {@code flows:} as authored (logic.md §6)
@@ -25,7 +30,7 @@ import java.util.Map;
 public record GuiDefinition(
         NamespacedId id,
         String title,
-        int rows,
+        GuiContainer container,
         List<GuiLayer> layers,
         List<SkippedLayer> skipped,
         GuiRules rules,
@@ -45,9 +50,9 @@ public record GuiDefinition(
 
     /** A GUI with its clock off and no problem with it. */
     public GuiDefinition(
-            NamespacedId id, String title, int rows, List<GuiLayer> layers, List<SkippedLayer> skipped,
-            GuiRules rules, Map<String, Object> raw) {
-        this(id, title, rows, layers, skipped, rules, raw, 0, null);
+            NamespacedId id, String title, GuiContainer container, List<GuiLayer> layers,
+            List<SkippedLayer> skipped, GuiRules rules, Map<String, Object> raw) {
+        this(id, title, container, layers, skipped, rules, raw, 0, null);
     }
 
     /**

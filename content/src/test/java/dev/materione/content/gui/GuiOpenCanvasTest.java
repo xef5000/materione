@@ -50,7 +50,7 @@ class GuiOpenCanvasTest {
     private static GuiCompilation compile(Asked asked, Map<String, Object>... layers) {
         var definition = new java.util.LinkedHashMap<String, Object>();
         definition.put("title", "Test");
-        definition.put("rows", 1);
+        definition.put("container", "chest_1");
         var list = new ArrayList<Object>();
         for (Map<String, Object> layer : layers) {
             list.add(layer);
@@ -77,7 +77,7 @@ class GuiOpenCanvasTest {
     void aPaintLayerDrawsAtItsOwnPositionAndAnEmptyOneNeedsNoTexture() {
         var definition = new java.util.LinkedHashMap<String, Object>();
         definition.put("title", "Test");
-        definition.put("rows", 1);
+        definition.put("container", "chest_1");
         definition.put("layers", List.of(
                 GuiTestSupport.layer("art", "paint", "image", "gui/art", "x", -30, "y", 5, "width", 2, "height", 3),
                 GuiTestSupport.layer("blank", "paint", "image", "gui/never_saved", "x", 40, "y", 40,

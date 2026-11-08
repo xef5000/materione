@@ -21,7 +21,7 @@ class ClickRouterTest {
     private static final String SHOP = """
             shop:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: wells
                   type: slots

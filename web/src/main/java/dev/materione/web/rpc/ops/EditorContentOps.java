@@ -68,6 +68,22 @@ public final class EditorContentOps {
             Function<String, ActorContext> actorFor,
             Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary,
             Supplier<List<GuiComponentDescriptor>> guiComponents) {
+        register(dispatcher, authoring, types, diagnostics, actorFor, vocabulary, guiComponents, List::of);
+    }
+
+    /**
+     * Registers the ops with the GUI container profiles too: {@code guiContainers} (gui.md §12.5.1) is read from
+     * {@code AuthoringApi.gui().containers()} on each describe call, additive to the rest of the describe payload.
+     */
+    public static void register(
+            RpcDispatcher dispatcher,
+            AuthoringApi authoring,
+            Supplier<List<ContentType>> types,
+            Supplier<List<Diagnostic>> diagnostics,
+            Function<String, ActorContext> actorFor,
+            Supplier<dev.materione.api.registry.BehaviorVocabulary> vocabulary,
+            Supplier<List<GuiComponentDescriptor>> guiComponents,
+            Supplier<List<dev.materione.api.gui.GuiContainer>> guiContainers) {
         // Capability discovery (web.md §4.2): content types and the behavior
         // vocabulary, each read from where it is registered — never a copy.
         dispatcher.register("authoring.describe", request -> {
@@ -79,6 +95,7 @@ public final class EditorContentOps {
             payload.add("types", array);
             payload.add("behavior", vocabularyJson(vocabulary.get()));
             payload.add("guiComponents", guiComponentsJson(guiComponents.get()));
+            payload.add("guiContainers", guiContainersJson(guiContainers.get()));
             return Wire.Response.success(request, payload);
         });
 
@@ -1251,6 +1268,23 @@ public final class EditorContentOps {
             assets.add(new AuthoringApi.ModelAsset(requiredString(asset, "path"), bytes));
         }
         return assets;
+    }
+
+    /** The GUI container profiles as the studio reads them (gui.md §12.5.1): the list the API built from the file. */
+    private static com.google.gson.JsonArray guiContainersJson(List<dev.materione.api.gui.GuiContainer> containers) {
+        var array = new com.google.gson.JsonArray();
+        for (dev.materione.api.gui.GuiContainer container : containers) {
+            JsonObject json = new JsonObject();
+            json.addProperty("id", container.id());
+            json.addProperty("label", container.label());
+            json.addProperty("group", container.group());
+            json.addProperty("slotCount", container.slotCount());
+            json.addProperty("columns", container.columns());
+            json.addProperty("width", container.width());
+            json.addProperty("height", container.height());
+            array.add(json);
+        }
+        return array;
     }
 
     /**

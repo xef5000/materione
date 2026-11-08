@@ -33,12 +33,12 @@ class OpenPlanTest {
     }
 
     private static String shop(String open) {
-        return "shop:\n  title: Shop\n  rows: 3\n  layers: []\n  open:\n" + open;
+        return "shop:\n  title: Shop\n  container: chest_3\n  layers: []\n  open:\n" + open;
     }
 
     @Test
     void aGuiWithoutAnOpenBlockHasNoPlan() {
-        assertThat(plan("shop:\n  title: Shop\n  rows: 1\n  layers: []\n")).isNull();
+        assertThat(plan("shop:\n  title: Shop\n  container: chest_1\n  layers: []\n")).isNull();
     }
 
     @Test

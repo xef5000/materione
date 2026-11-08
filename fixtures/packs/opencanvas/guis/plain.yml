@@ -2,7 +2,7 @@
 # glyph, so the player sees the client's own chest under the plain title.
 plain:
   title: Plain chest
-  rows: 2
+  container: chest_2
   behavior:
     - on: gui.open
       do:

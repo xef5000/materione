@@ -75,7 +75,7 @@ test('an edit round trip: typed, applied after a pause, saved through logic.edit
   await save(page);
   const saved = await file(page);
   expect(saved.title).toBe('Shop');
-  expect(saved.rows).toBe(3);
+  expect(saved.container).toBe('chest_3');
   expect((saved.behavior as { do: unknown[] }[])[0]!.do).toEqual([{ message: 'bye' }]);
   expect((saved.behavior as unknown[]).length).toBe(3);
 

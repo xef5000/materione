@@ -141,7 +141,7 @@ public final class Scaffolds {
         return "# " + id + " — created by the Materione editor\n"
                 + id + ":\n"
                 + "  title: \"" + display(id) + "\"\n"
-                + "  rows: 3\n";
+                + "  container: chest_3\n";
     }
 
     /**

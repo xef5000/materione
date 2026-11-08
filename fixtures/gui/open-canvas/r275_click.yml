@@ -1,6 +1,6 @@
 r275_click:
   title: R275 click
-  rows: 3
+  container: chest_3
   layers:
     - id: gem
       type: item

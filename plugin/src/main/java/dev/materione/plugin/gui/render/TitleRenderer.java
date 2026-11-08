@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.logic.LogicContext;
@@ -22,7 +23,7 @@ public final class TitleRenderer {
 
     public record Result(String title, Set<String> hidden, Map<String, Set<Integer>> coverage) {}
 
-    public Result render(NamespacedId gui, int rows, TitleProgram program, LogicContext context, long ticks) {
+    public Result render(NamespacedId gui, GuiContainer container, TitleProgram program, LogicContext context, long ticks) {
         GuiVisualPlan plan = program.plan();
         var title = new GuiTitle(plan.namespace());
         var hidden = new HashSet<String>();
@@ -50,7 +51,7 @@ public final class TitleRenderer {
                     }
                     title.place(text.x(), text.y(), value, text.font(), text.argb());
                     coverage.computeIfAbsent(piece.layer(), ignored -> new HashSet<>())
-                            .addAll(GuiTextRules.slots(text.x(), text.y(), value, text.font(), rows));
+                            .addAll(GuiTextRules.slots(text.x(), text.y(), value, text.font(), container));
                 } catch (RuntimeException failure) {
                     reporter.problem(DiagnosticCodes.GUI_DYNAMIC_LAYER_FAILED, gui, piece.layer(),
                             "text could not be rendered: " + failure.getMessage());

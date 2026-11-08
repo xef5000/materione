@@ -183,8 +183,8 @@ public final class GuiAuthoringOps {
             case "reorderLayers" -> new ReorderLayers(stringsOf(edit.get("ids")));
             case "setScreen" -> new SetScreen(
                     EditorContentOps.optionalString(edit, "title"),
-                    edit.has("rows") && !edit.get("rows").isJsonNull()
-                            ? requiredInteger(edit, "rows") : null);
+                    edit.has("container") && !edit.get("container").isJsonNull()
+                            ? EditorContentOps.requiredString(edit, "container") : null);
             case "setOpen" -> new SetOpen(openOf(edit.get("open")));
             default -> throw new IllegalArgumentException("unknown GUI edit '" + op + "'");
         };
@@ -282,7 +282,7 @@ public final class GuiAuthoringOps {
                 EditorContentOps.optionalString(document, "path"),
                 EditorContentOps.requiredString(document, "id"),
                 EditorContentOps.optionalString(document, "title"),
-                document.has("rows") && !document.get("rows").isJsonNull() ? requiredInteger(document, "rows") : null,
+                EditorContentOps.optionalString(document, "container"),
                 0,
                 layers,
                 openOf(document.get("open")));
@@ -300,8 +300,8 @@ public final class GuiAuthoringOps {
         if (view.title() != null) {
             payload.addProperty("title", view.title());
         }
-        if (view.rows() != null) {
-            payload.addProperty("rows", view.rows());
+        if (view.container() != null) {
+            payload.addProperty("container", view.container());
         }
         payload.addProperty("rev", view.revision());
         var layers = new JsonArray();

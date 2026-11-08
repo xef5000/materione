@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.render;
 
+import dev.materione.content.gui.GuiContainers;
 import static dev.materione.plugin.gui.render.RenderFixtures.template;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -69,7 +70,7 @@ class SlotRendererListTest {
     }
 
     private static RuntimeGuis.Live live(List<CompiledItemLayer> items, List<CompiledListLayer> lists) {
-        return new RuntimeGuis.Live(RenderFixtures.GUI, 3, "Shop", "Shop", List.of(), ClickMap.EMPTY,
+        return new RuntimeGuis.Live(RenderFixtures.GUI, GuiContainers.byId("chest_3").orElseThrow(), "Shop", "Shop", List.of(), ClickMap.EMPTY,
                 GuiRuleSet.EMPTY, InputSlots.NONE, null, List.of(), 0, items, null, lists);
     }
 

@@ -182,10 +182,10 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
             } catch (NumberFormatException e) {
                 continue; // the filter's own type check already rejected it
             }
-            if (number >= gui.rows() * 9) {
+            if (number >= gui.container().slotCount()) {
                 out.add(warn(gui, rule, "slot",
-                        "names slot " + number + ", outside this GUI's " + gui.rows() + " row(s) (0 to "
-                                + (gui.rows() * 9 - 1) + "), so the rule never runs",
+                        "names slot " + number + ", outside this GUI's container (0 to "
+                                + (gui.container().slotCount() - 1) + "), so the rule never runs",
                         "slots count from 0 at the top-left, row by row"));
             }
         }

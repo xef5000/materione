@@ -22,7 +22,7 @@ class EffectiveInputSlotsTest {
         var definition = fixture.definition("""
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers:
                     - {id: wells, type: slots, region: container, input: true}
                     - id: tab

@@ -1,0 +1,435 @@
+{
+  "version": 1,
+  "containers": [
+    {
+      "id": "chest_1",
+      "label": "Chest, 1 row",
+      "group": "Chests",
+      "slotCount": 9,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 132,
+      "inventory": {
+        "x": 8,
+        "y": 49
+      },
+      "inventoryTop": 35,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 38
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            35
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            35
+          ]
+        }
+      ],
+      "open": {
+        "size": 9
+      }
+    },
+    {
+      "id": "chest_2",
+      "label": "Chest, 2 rows",
+      "group": "Chests",
+      "slotCount": 18,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 150,
+      "inventory": {
+        "x": 8,
+        "y": 67
+      },
+      "inventoryTop": 53,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 56
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            53
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            53
+          ]
+        }
+      ],
+      "open": {
+        "size": 18
+      }
+    },
+    {
+      "id": "chest_3",
+      "label": "Chest, 3 rows",
+      "group": "Chests",
+      "slotCount": 27,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 168,
+      "inventory": {
+        "x": 8,
+        "y": 85
+      },
+      "inventoryTop": 71,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 74
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            71
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            71
+          ]
+        }
+      ],
+      "open": {
+        "size": 27
+      }
+    },
+    {
+      "id": "chest_4",
+      "label": "Chest, 4 rows",
+      "group": "Chests",
+      "slotCount": 36,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 186,
+      "inventory": {
+        "x": 8,
+        "y": 103
+      },
+      "inventoryTop": 89,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 92
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            89
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            89
+          ]
+        }
+      ],
+      "open": {
+        "size": 36
+      }
+    },
+    {
+      "id": "chest_5",
+      "label": "Chest, 5 rows",
+      "group": "Chests",
+      "slotCount": 45,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 204,
+      "inventory": {
+        "x": 8,
+        "y": 121
+      },
+      "inventoryTop": 107,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 110
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            107
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            107
+          ]
+        }
+      ],
+      "open": {
+        "size": 45
+      }
+    },
+    {
+      "id": "chest_6",
+      "label": "Chest, 6 rows",
+      "group": "Chests",
+      "slotCount": 54,
+      "columns": 9,
+      "slots": {
+        "x": 8,
+        "y": 18
+      },
+      "width": 176,
+      "height": 222,
+      "inventory": {
+        "x": 8,
+        "y": 139
+      },
+      "inventoryTop": 125,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 128
+      },
+      "underlay": [
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            0,
+            176,
+            125
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        },
+        {
+          "sheet": "generic_54",
+          "src": [
+            0,
+            126,
+            176,
+            96
+          ],
+          "dst": [
+            0,
+            125
+          ]
+        }
+      ],
+      "open": {
+        "size": 54
+      }
+    },
+    {
+      "id": "hopper",
+      "label": "Hopper",
+      "group": "Hopper",
+      "slotCount": 5,
+      "columns": 5,
+      "slots": {
+        "x": 44,
+        "y": 20
+      },
+      "width": 176,
+      "height": 133,
+      "inventory": {
+        "x": 8,
+        "y": 51
+      },
+      "inventoryTop": 37,
+      "title": {
+        "x": 8,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 39
+      },
+      "underlay": [
+        {
+          "sheet": "hopper",
+          "src": [
+            0,
+            0,
+            176,
+            133
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        }
+      ],
+      "open": {
+        "inventoryType": "HOPPER"
+      }
+    },
+    {
+      "id": "dispenser",
+      "label": "Dispenser",
+      "group": "Dispenser",
+      "slotCount": 9,
+      "columns": 3,
+      "slots": {
+        "x": 62,
+        "y": 17
+      },
+      "width": 176,
+      "height": 166,
+      "inventory": {
+        "x": 8,
+        "y": 84
+      },
+      "inventoryTop": 70,
+      "title": {
+        "centred": true,
+        "y": 6
+      },
+      "inventoryLabel": {
+        "x": 8,
+        "y": 72
+      },
+      "underlay": [
+        {
+          "sheet": "dispenser",
+          "src": [
+            0,
+            0,
+            176,
+            166
+          ],
+          "dst": [
+            0,
+            0
+          ]
+        }
+      ],
+      "open": {
+        "inventoryType": "DISPENSER"
+      }
+    }
+  ]
+}

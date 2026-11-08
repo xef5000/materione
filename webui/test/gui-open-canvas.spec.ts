@@ -43,7 +43,7 @@ const SHEET = decodePng(new Uint8Array(readFileSync(fileURLToPath(new URL('../st
 const RED = 0xffff0000;
 
 function documentOf(layers: GuiLayer[], rows = 6): GuiDocument {
-  return { title: '', rows, layers, rest: {}, order: ['title', 'rows', 'layers'] };
+  return { title: '', container: `chest_${rows}`, rows, layers, rest: {}, order: ['title', 'container', 'layers'] };
 }
 
 describe('the art cap and the regions (gui.md section 11.2)', () => {

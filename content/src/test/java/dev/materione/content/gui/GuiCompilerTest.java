@@ -61,7 +61,7 @@ class GuiCompilerTest {
                 "<shift:-8><font:shop:gui><#FFFFFF>\uE200</font><shift:-169>"
                         + "<font:shop:gui/smallcaps_y6><#404040>Shop</font>");
         assertThat(compiled.model().accessibleTitle()).isEqualTo("Shop");
-        assertThat(compiled.model().rows()).isEqualTo(6);
+        assertThat(compiled.model().container().id()).isEqualTo("chest_6");
         assertThat(compiled.model().slots()).containsExactly(
                 new dev.materione.content.gui.CompiledGui.Slot(
                         13, NamespacedId.parse("shop:gui/main/sword"), 1));

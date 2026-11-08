@@ -16,6 +16,10 @@ sourceSets {
         resources {
             srcDir(rootProject.file("fonts"))
             include("**/*.txt")
+            // The container profiles (gui.md §12.5.1) are one JSON file shared with the studio: the jar carries it as
+            // /gui/containers.json, the same way it carries the fonts.
+            srcDir(rootProject.file("shared"))
+            include("gui/*.json")
         }
     }
 }

@@ -17,7 +17,7 @@ import { registry } from './helpers/gui-registry';
 
 const item = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'item', slot: 13, item: 'minecraft:diamond_sword', ...extra }) as GuiLayer;
-const doc = (rows: number, ...layers: GuiLayer[]): GuiDocument => ({ title: '', rows, layers, rest: {}, order: [] });
+const doc = (rows: number, ...layers: GuiLayer[]): GuiDocument => ({ title: '', container: `chest_${rows}`, rows, layers, rest: {}, order: [] });
 const resource = (id: string, path: string, type = 'items'): ResourceRef => ({ pack: 'sample', type, path, id, name: id } as ResourceRef);
 
 describe('item layers snap to the container only', () => {

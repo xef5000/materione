@@ -32,6 +32,14 @@ public interface GuiAuthoringApi {
     /** The {@code gui-components} registry as it stands now: built-in and addon, in registry order. */
     List<GuiComponentDescriptor> components();
 
+    /**
+     * The container profiles (gui.md §12.5.1) as they stand now, in file order. The studio offers these for
+     * {@code container:}; an empty list means this server offers no GUI containers at all.
+     */
+    default List<GuiContainer> containers() {
+        return List.of();
+    }
+
     /** The GUI in {@code pack}/{@code path}, typed; the document's own fields (templates are not merged). */
     ApiResult<GuiDocumentView> get(String pack, String path);
 
@@ -85,7 +93,7 @@ public interface GuiAuthoringApi {
 
     /**
      * A GUI as the typed view carries it: {@code pack}, {@code path} and {@code id} name it,
-     * {@code title} and {@code rows} are what the file says (null when absent or not valid), and
+     * {@code title} and {@code container} are what the file says (null when absent or not a string), and
      * {@code layers} are its mapping layers in order. {@code revision} is the file's revision.
      */
     record GuiDocumentView(
@@ -93,7 +101,7 @@ public interface GuiAuthoringApi {
             String path,
             String id,
             String title,
-            Integer rows,
+            String container,
             int revision,
             List<Layer> layers,
             OpenSpec open) {
@@ -106,8 +114,9 @@ public interface GuiAuthoringApi {
 
         /** A view with no {@code open:} block. */
         public GuiDocumentView(
-                String pack, String path, String id, String title, Integer rows, int revision, List<Layer> layers) {
-            this(pack, path, id, title, rows, revision, layers, null);
+                String pack, String path, String id, String title, String container, int revision,
+                List<Layer> layers) {
+            this(pack, path, id, title, container, revision, layers, null);
         }
     }
 
@@ -186,8 +195,11 @@ public interface GuiAuthoringApi {
         }
     }
 
-    /** Sets the title and/or the rows (1 to 6); a null field is left as it is. */
-    record SetScreen(String title, Integer rows) implements GuiEdit {}
+    /**
+     * Sets the title and/or the container (a profile id, gui.md §12.4); a null field is left as it is. Switching
+     * the container never edits a layer: the authoring API reports what no longer fits and the author decides.
+     */
+    record SetScreen(String title, String container) implements GuiEdit {}
 
     /** An immutable copy that keeps the caller's order: the order fields are written in. */
     private static Map<String, Object> ordered(Map<String, Object> source) {

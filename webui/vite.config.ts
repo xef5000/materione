@@ -21,6 +21,7 @@ export default defineConfig({
         '../fixtures/golden',
         '../fonts/smallcaps',
         '../fonts/vanilla-ascii',
+        '../shared/gui',
       ],
     },
     proxy: {

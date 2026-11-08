@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.NamespacedId;
 import dev.materione.platform.text.MaterioneText;
 import dev.materione.plugin.gui.input.GuiInput;
@@ -18,21 +19,21 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 public final class GuiMenu extends PluginGui {
 
     private final GuiSession session;
-    private final int rows;
+    private final GuiContainer container;
     private String title;
     private final String baseTitle;
     private final GuiInput input;
     /** The input slots this window was shown with: the only slots whose items are the player's (logic.md §25). */
     private volatile Set<Integer> inputSlots = Set.of();
 
-    public GuiMenu(GuiSession session, int rows, String title, GuiInput input) {
-        this(session, rows, title, title, input);
+    public GuiMenu(GuiSession session, GuiContainer container, String title, GuiInput input) {
+        this(session, container, title, title, input);
     }
 
-    public GuiMenu(GuiSession session, int rows, String title, String baseTitle, GuiInput input) {
-        super(rows * 9, MaterioneText.parseData(title));
+    public GuiMenu(GuiSession session, GuiContainer container, String title, String baseTitle, GuiInput input) {
+        super(container.slotCount(), MaterioneText.parseData(title));
         this.session = session;
-        this.rows = rows;
+        this.container = container;
         this.title = title;
         this.baseTitle = baseTitle;
         this.input = input;
@@ -57,8 +58,8 @@ public final class GuiMenu extends PluginGui {
         return session.gui();
     }
 
-    public int rows() {
-        return rows;
+    public GuiContainer container() {
+        return container;
     }
 
     /** The last successfully displayed MiniMessage title. */

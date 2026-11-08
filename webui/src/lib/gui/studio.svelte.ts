@@ -391,7 +391,8 @@ export class GuiStudioState {
       }
     }
     this.run(compose('Change rows', [
-      setDocumentFields(this.doc, { rows: next }, 'Change rows'),
+      // the studio's row control picks a chest (`chest_N`) until the container select (gui.md section 12.10, row S)
+      setDocumentFields(this.doc, { container: `chest_${next}` }, 'Change rows'),
       patchLayers(this.doc, frames, 'Resize frame'),
     ]));
     this.fit();

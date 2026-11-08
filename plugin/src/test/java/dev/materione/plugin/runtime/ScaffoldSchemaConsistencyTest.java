@@ -52,7 +52,7 @@ class ScaffoldSchemaConsistencyTest {
         var parsed = gui.parse(dev.materione.api.NamespacedId.of("materione", "shop_main"), starter, Map.of());
         assertThat(parsed).isPresent();
         var definition = (dev.materione.content.gui.GuiDefinition) parsed.get();
-        assertThat(definition.rows()).isEqualTo(3);
+        assertThat(definition.container().id()).isEqualTo("chest_3");
         // a new GUI has no layers: the vanilla chest is the client's own, not a layer (gui.md section 11.2)
         assertThat(definition.layers()).isEmpty();
         assertThat(definition.skipped()).isEmpty();

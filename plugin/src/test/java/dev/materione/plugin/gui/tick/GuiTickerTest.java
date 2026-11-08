@@ -19,7 +19,7 @@ class GuiTickerTest {
     private static final String CLOCK = """
             clock:
               title: Clock
-              rows: 1
+              container: chest_1
               layers: []
               behavior:
                 - on: gui.tick
@@ -65,7 +65,7 @@ class GuiTickerTest {
         f.gui("""
                 quiet:
                   title: Quiet
-                  rows: 1
+                  container: chest_1
                   layers: []
                 """);
 
@@ -95,7 +95,7 @@ class GuiTickerTest {
         f.gui("""
                 other:
                   title: Other
-                  rows: 1
+                  container: chest_1
                   layers: []
                   behavior:
                     - on: gui.tick
@@ -128,7 +128,7 @@ class GuiTickerTest {
         f.gui("""
                 clock:
                   title: Clock
-                  rows: 1
+                  container: chest_1
                   layers: []
                 """);
         GuiSession session = open("clock");
@@ -152,7 +152,7 @@ class GuiTickerTest {
         f.gui("""
                 clock:
                   title: Clock
-                  rows: 1
+                  container: chest_1
                   layers: []
                 """);
         f.ticks.advance(100);

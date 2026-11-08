@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.NamespacedId;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
@@ -111,7 +112,7 @@ public final class RuntimeGuis {
                     ? GuiRuleSet.EMPTY
                     : GuiRuleSet.compile(gui.id(), gui.rules(), logic).rules();
             out.put(gui.id(), new Live(
-                    gui.id(), gui.rows(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
+                    gui.id(), gui.container(), gui.title(), gui.accessibleTitle(), slots, gui.clicks(), rules, inputs,
                     OpenPlan.compile(gui.id(), gui.rules(), logic),
                     gui.placements(), gui.refresh(), compileItems(gui, logic),
                     gui.visuals() == null ? null : TitleProgram.compile(gui.id(), gui.visuals(), logic).program(),
@@ -205,7 +206,7 @@ public final class RuntimeGuis {
      * One live GUI: what a container screen needs to open it.
      *
      * @param id the GUI resource
-     * @param rows chest rows, 1 to 6
+     * @param container the container profile the window is made in
      * @param title the MiniMessage title with the background glyph and text runs, in draw order
      * @param accessibleTitle the plain title, for listings
      * @param slots the resolved slots, sorted by slot
@@ -219,7 +220,7 @@ public final class RuntimeGuis {
      * @param lists the GUI's list layers, compiled, in layer order (logic.md §6.7)
      */
     public record Live(
-            NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+            NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
             ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
             List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items,
             TitleProgram visuals, List<CompiledListLayer> lists) {
@@ -234,52 +235,52 @@ public final class RuntimeGuis {
             lists = lists == null ? List.of() : List.copyOf(lists);
         }
 
-        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        public Live(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
                 List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items,
                 TitleProgram visuals) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items,
+            this(id, container, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items,
                     visuals, List.of());
         }
 
-        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+        public Live(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, InputSlots inputs, OpenPlan open,
                 List<CompiledGui.Placement> placements, int refresh, List<CompiledItemLayer> items) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items, null);
+            this(id, container, title, accessibleTitle, slots, clicks, logic, inputs, open, placements, refresh, items, null);
         }
 
         /** A GUI with input slots, and no {@code open:} block, per-viewer layers or clock. */
         public Live(
-                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, InputSlots inputs) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, inputs, null, List.of(), 0, List.of());
+            this(id, container, title, accessibleTitle, slots, clicks, logic, inputs, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no {@code open:} block, and per-viewer layers or clock. */
         public Live(
-                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, List<CompiledGui.Placement> placements, int refresh,
                 List<CompiledItemLayer> items) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, placements, refresh, items);
+            this(id, container, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, placements, refresh, items);
         }
 
         /** A GUI with an {@code open:} block, and no per-viewer layers or clock. */
         public Live(
-                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic, OpenPlan open) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, open, List.of(), 0, List.of());
+            this(id, container, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, open, List.of(), 0, List.of());
         }
 
         /** A GUI with clicks and rules, and no {@code open:} block, per-viewer layers or clock. */
         public Live(
-                NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots,
+                NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots,
                 ClickMap clicks, GuiRuleSet logic) {
-            this(id, rows, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, List.of(), 0, List.of());
+            this(id, container, title, accessibleTitle, slots, clicks, logic, InputSlots.NONE, null, List.of(), 0, List.of());
         }
 
         /** A GUI with no clickable layers and no rules. */
-        public Live(NamespacedId id, int rows, String title, String accessibleTitle, List<Slot> slots) {
-            this(id, rows, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRuleSet.EMPTY);
+        public Live(NamespacedId id, GuiContainer container, String title, String accessibleTitle, List<Slot> slots) {
+            this(id, container, title, accessibleTitle, slots, ClickMap.EMPTY, GuiRuleSet.EMPTY);
         }
 
         /**
@@ -311,7 +312,7 @@ public final class RuntimeGuis {
          * to look the same.
          */
         public boolean sameAs(Live previous) {
-            if (rows != previous.rows || !title.equals(previous.title) || slots.size() != previous.slots.size()) {
+            if (!container.id().equals(previous.container.id()) || !title.equals(previous.title) || slots.size() != previous.slots.size()) {
                 return false;
             }
             if (refresh != previous.refresh || !placements.equals(previous.placements)) {

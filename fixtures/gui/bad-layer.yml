@@ -2,7 +2,7 @@
 # MTR-0052 and the rest of this GUI still parses. Each skipped layer below is deliberate.
 gallery:
   title: Gallery
-  rows: 3
+  container: chest_3
   layers:
     - id: frame
       type: panel

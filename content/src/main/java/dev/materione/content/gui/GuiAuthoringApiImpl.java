@@ -24,6 +24,7 @@ import dev.materione.api.gui.GuiAuthoringApi.GuiEdit;
 import dev.materione.api.gui.GuiAuthoringApi.OpenSpec;
 import dev.materione.api.gui.GuiAuthoringApi.SetOpen;
 import dev.materione.api.gui.GuiComponent;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.api.registry.Registry;
@@ -107,6 +108,14 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
     }
 
     // ------------------------------------------------------------------
+    // containers (gui.md §12.5.1)
+
+    @Override
+    public List<GuiContainer> containers() {
+        return GuiContainers.all();
+    }
+
+    // ------------------------------------------------------------------
     // components
 
     @Override
@@ -179,12 +188,12 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
                         layer.opacity(), layer.frames().layers().get(0), layer.visibleIf())).toList();
         TextureSource bound = reference -> textures.value().texture(
                 reference.contains(":") ? reference : gui.id().namespace() + ":" + reference);
-        var canvas = GuiCompiler.flatten(CompiledGui.WIDTH, CompiledGui.height(gui.rows()), layers, bound,
+        var canvas = GuiCompiler.flatten(gui.container().width(), gui.container().height(), layers, bound,
                 (layer, reason) -> { });
         byte[] previewBackground = dev.materione.content.gui.raster.PngEncoder.encodeRgba(
                 canvas.width(), canvas.height(), canvas.toArray());
         return ApiResult.ok(new GuiRender(
-                CompiledGui.WIDTH, CompiledGui.height(gui.rows()), previewBackground,
+                gui.container().width(), gui.container().height(), previewBackground,
                 layerRenders(gui, compiled.layers()), check.diagnostics()));
     }
 
@@ -240,13 +249,13 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
             return ApiResult.fail(layers.diagnostics());
         }
         String title = textOf(subject.definition().get("title"));
-        Integer rows = wholeNumber(subject.definition().get("rows"));
-        if (rows == null) {
-            return badRequest("the GUI's rows are not a whole number: fix the file before editing it");
+        String container = textOf(subject.definition().get("container"));
+        if (container == null || GuiContainers.byId(container).isEmpty()) {
+            return badRequest("the GUI's container is not a supported container: fix the file before editing it");
         }
         GuiLayerEdits.Result next;
         try {
-            next = new GuiLayerEdits(this::knownComponent).apply(title, rows, layers.value(), request.edits());
+            next = new GuiLayerEdits(this::knownComponent).apply(title, container, layers.value(), request.edits());
         } catch (IllegalArgumentException refused) {
             return badRequest(refused.getMessage());
         }
@@ -271,8 +280,8 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (!Objects.equals(title, next.title())) {
             fields.add(new FieldEdit(List.of(key, "title"), next.title()));
         }
-        if (rows != next.rows()) {
-            fields.add(new FieldEdit(List.of(key, "rows"), next.rows()));
+        if (!container.equals(next.container())) {
+            fields.add(new FieldEdit(List.of(key, "container"), next.container()));
         }
         List<Object> authoredLayers = currentLayers(subject);
         if (!authoredLayers.equals(next.layers())) {
@@ -544,7 +553,7 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         return new GuiDocumentView(
                 subject.pack(), subject.path(), subject.id().value(),
                 textOf(subject.definition().get("title")),
-                wholeNumber(subject.definition().get("rows")),
+                textOf(subject.definition().get("container")),
                 subject.revision() == null ? -1 : subject.revision(),
                 layers, open);
     }
@@ -575,8 +584,8 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (view.title() != null) {
             definition.put("title", view.title());
         }
-        if (view.rows() != null) {
-            definition.put("rows", view.rows());
+        if (view.container() != null) {
+            definition.put("container", view.container());
         }
         var layers = new ArrayList<Object>();
         for (Layer layer : view.layers()) {

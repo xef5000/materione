@@ -2,7 +2,7 @@
 # load -> untouched save must be byte-identical, and the unknown field below must survive.
 shop:
   title: Shop                    # accessibility/fallback title
-  rows: 6
+  container: chest_6
   layers:                        # bottom -> top
     - id: frame                  # panel: the raised chest background
       type: panel

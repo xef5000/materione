@@ -35,7 +35,7 @@ class GuiActionsTest {
     private static final String MENU = """
             menu:
               title: Menu
-              rows: 3
+              container: chest_3
               layers:
                 - id: go
                   type: button
@@ -89,7 +89,7 @@ class GuiActionsTest {
     private static final String DETAIL = """
             detail:
               title: Detail
-              rows: 1
+              container: chest_1
               layers:
                 - id: up
                   type: button

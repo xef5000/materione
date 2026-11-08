@@ -5,7 +5,7 @@
 # ("Page 2 of 3"). A click on an entry names the player in chat. Announced on the console (`say MATERIONE-SHOWCASE-...`).
 players:
   title: Players
-  rows: 3
+  container: chest_3
   layers:
     - id: heading
       type: text

@@ -42,20 +42,20 @@ describe('parseGui', () => {
   });
 
   it('locates the body or refuses what is not a GUI', () => {
-    expect(locateBody({ main: { rows: 2 } }, 'main')?.prefix).toEqual(['main']);
+    expect(locateBody({ main: { container: 'chest_2' } }, 'main')?.prefix).toEqual(['main']);
     expect(locateBody({ other: { layers: [] } }, 'main')?.prefix).toEqual(['other']);
     expect(locateBody({ a: 1, b: 2 }, 'main')).toBeNull();
     expect(parseGui('nope', 'main')).toBeNull();
   });
 
-  it('clamps rows for display and says so, but never writes the clamp back', () => {
-    const parsed = parseGui({ main: { rows: 9, layers: [] } }, 'main')!;
-    expect(parsed.doc.rows).toBe(6);
-    expect(parsed.issues.join()).toContain('clamped');
+  it('refuses a container the server does not support (blocking), and keeps the value as authored', () => {
+    const parsed = parseGui({ main: { container: 'chest_9', layers: [] } }, 'main')!;
+    expect(parsed.doc.container).toBe('chest_9');
+    expect(parsed.blocking.join()).toContain('not a supported container');
   });
 
   it('refuses to edit a file it cannot hold faithfully (blocking), instead of rewriting it', () => {
-    const parsed = parseGui({ main: { layers: [{ id: 'a', type: 'panel' }, { id: 'a', type: 'panel' }, 'junk', { type: 'slots' }] } }, 'main')!;
+    const parsed = parseGui({ main: { container: 'chest_3', layers: [{ id: 'a', type: 'panel' }, { id: 'a', type: 'panel' }, 'junk', { type: 'slots' }] } }, 'main')!;
     expect(parsed.blocking.length).toBe(3);
   });
 });
@@ -73,7 +73,7 @@ describe('losslessness (master 5.6)', () => {
       main: {
         title: 'T',
         sound: 'ui.click',
-        rows: 2,
+        container: 'chest_2',
         layers: [
           { id: 'a', type: 'addon:progress', x: 1, y: 2, value: { nested: [1, 2, 3] }, future: true },
           { id: 'p', type: 'panel', x: 0, y: 0, width: 4, height: 4, flair: 'sparkle' },
@@ -87,21 +87,21 @@ describe('losslessness (master 5.6)', () => {
   });
 
   it('does not invent a title the file never had', () => {
-    const parsed = parseGui({ main: { rows: 1, layers: [] } }, 'main')!;
-    expect(Object.keys(serializeGui(parsed.doc))).toEqual(['rows', 'layers']);
+    const parsed = parseGui({ main: { container: 'chest_1', layers: [] } }, 'main')!;
+    expect(Object.keys(serializeGui(parsed.doc))).toEqual(['container', 'layers']);
   });
 
   it('parsing copies: editing the parsed document never reaches the source', () => {
-    const file = { main: { rows: 1, layers: [{ id: 'a', type: 'panel', x: 0 }] } };
+    const file = { main: { container: 'chest_1', layers: [{ id: 'a', type: 'panel', x: 0 }] } };
     const parsed = parseGui(file, 'main')!;
     (parsed.doc.layers[0] as Record<string, unknown>).x = 99;
     expect(file.main.layers[0]!.x).toBe(0);
   });
 
   it('same documents compare equal and different ones do not', () => {
-    const a = { ...starterDocument(3), layers: [{ id: 'frame', type: 'panel' }, { id: 'wells', type: 'slots' }] };
+    const a = { ...starterDocument('chest_3'), layers: [{ id: 'frame', type: 'panel' }, { id: 'wells', type: 'slots' }] };
     expect(sameDocument(a, { ...a })).toBe(true);
-    expect(sameDocument(a, { ...a, rows: 4 })).toBe(false);
+    expect(sameDocument(a, { ...a, container: 'chest_4' })).toBe(false);
     expect(sameDocument(a, { ...a, layers: [...a.layers].reverse() })).toBe(false);
   });
 });
@@ -124,10 +124,10 @@ describe('helpers', () => {
   });
 
   it('a new GUI starts with no layers: the vanilla chest is the client\'s own, not art (gui.md 11.2)', () => {
-    const starter = starterDocument(6);
+    const starter = starterDocument('chest_6');
     expect(starter.layers).toEqual([]);
     expect(starter.rows).toBe(6);
-    // the server's own starter, as recorded in the golden snapshot: title and rows, no layers
+    // the server's own starter, as recorded in the golden snapshot: title and container, no layers
     const scaffold = parseGui(parse(scaffoldGui('shop_two', 'Shop Two')), 'shop_two')!;
     expect(scaffold.doc.rows).toBe(3);
     expect(scaffold.doc.title).toBe('Shop Two');

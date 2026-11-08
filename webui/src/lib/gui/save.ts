@@ -2,7 +2,7 @@
  * Saving a GUI (gui.md sections 6 and 7): one authoring transaction carrying
  * the fields that changed and the dirty pixel assets, committed atomically by
  * the server with rollback. Only changed top-level fields are sent (`title`,
- * `rows`, `layers` and, since the Script tab, `open`), so an untouched document sends nothing and a lossless
+ * `container`, `layers` and, since the Script tab, `open`), so an untouched document sends nothing and a lossless
  * round trip stays byte-identical.
  *
  * The wire shape is `ops.setFields(channel, pack, path, rev, edits, assets)` in
@@ -64,7 +64,7 @@ export function planSave(
     edits.push({ field: [...prefix, key], value });
   };
   if (loaded.title !== current.title) set('title', current.title);
-  if (loaded.rows !== current.rows) set('rows', current.rows);
+  if (loaded.container !== current.container) set('container', current.container);
   const layersChanged = JSON.stringify(loaded.layers) !== JSON.stringify(current.layers);
   if (layersChanged) set('layers', current.layers);
   // the Script tab edits the GUI's open: block (logic.md section 7.1); behavior: and flows: go through logic.edit instead
