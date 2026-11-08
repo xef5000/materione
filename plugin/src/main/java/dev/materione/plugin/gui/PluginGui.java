@@ -1,6 +1,9 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.api.gui.GuiContainer;
+import java.util.Optional;
 import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 
@@ -12,6 +15,10 @@ import org.bukkit.inventory.InventoryHolder;
  * {@code Bukkit.createInventory(this, …)} so the created inventory carries
  * them as its holder; {@link GuiListener} then delivers only the clicks
  * that land inside this inventory.
+ *
+ * <p>The window is created from the container profile's {@code open} descriptor (gui.md §12.6): by size, or by
+ * {@code InventoryType}. Both use the legacy {@code createInventory(holder, …, Component)} path, so the holder
+ * and the title transport serve every container. No code here asks which container it is.
  *
  * <p>One viewer per instance: a gui is created fresh per open (per player,
  * per page) and holds no global state — Folia-safe by construction.
@@ -25,10 +32,38 @@ public abstract class PluginGui implements InventoryHolder {
      * here, in the base constructor body, because Java forbids passing
      * {@code this} from a subclass super-call while creation itself never
      * calls back into the (still-uninitialized) subclass.
+     *
+     * @param open the container profile's window descriptor; the caller checks {@link #inventoryType} first when it
+     *     is made by type, so this constructor is never handed a type the server cannot create
+     * @throws IllegalArgumentException when {@code open} is made by type and {@link #inventoryType} is empty
      */
     @SuppressWarnings("this-escape") // createInventory only records the holder
-    protected PluginGui(int size, net.kyori.adventure.text.Component title) {
-        this.inventory = org.bukkit.Bukkit.createInventory(this, size, title);
+    protected PluginGui(GuiContainer.Open open, net.kyori.adventure.text.Component title) {
+        if (open.inventoryType() == null) {
+            this.inventory = org.bukkit.Bukkit.createInventory(this, open.size(), title);
+        } else {
+            InventoryType type = inventoryType(open).orElseThrow(() ->
+                    new IllegalArgumentException("no creatable inventory type named " + open.inventoryType()));
+            this.inventory = org.bukkit.Bukkit.createInventory(this, type, title);
+        }
+    }
+
+    /**
+     * The Bukkit {@code InventoryType} a type-made window names, or empty when this server has no such type or it
+     * cannot be created (gui.md §12.6, {@code MTR-0098}). A size-made window has none, and the empty result is
+     * not an error for it: check {@link GuiContainer.Open#inventoryType()} first. Reads the Bukkit enum, which
+     * needs a running server, so it is checked on the server (the harness IT), not in the plain-JVM tests.
+     */
+    public static Optional<InventoryType> inventoryType(GuiContainer.Open open) {
+        if (open.inventoryType() == null) {
+            return Optional.empty();
+        }
+        try {
+            InventoryType type = InventoryType.valueOf(open.inventoryType());
+            return type.isCreatable() ? Optional.of(type) : Optional.empty();
+        } catch (IllegalArgumentException unknown) {
+            return Optional.empty();
+        }
     }
 
     @Override

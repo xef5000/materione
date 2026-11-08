@@ -1449,10 +1449,10 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 > **Status: the design is approved and merged (#287, all owner questions answered, §12.13, none open, §12.14). Row M is built
 > (#290): `container:` replaces `rows:`, the container profiles are one file (`shared/gui/containers.json`, §12.5.1), and every
-> GUI in the repository is converted. Rows C (the profile-driven compiler for hopper and dispenser), P (runtime opening by
-> the profile's `open` descriptor), S (the studio's container select) and R (the in-game probe) are not built yet.** Until
-> those land, a hopper or dispenser GUI compiles but cannot be opened by the plugin, and the studio does not draw it (it
-> shows the reason and edits nothing). The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
+> GUI in the repository is converted. Row R (the in-game probe, #289) and row P (the runtime opening by the profile's
+> `open` descriptor, #292) are built. Rows C (the profile-driven compiler for hopper and dispenser) and S (the studio's
+> container select) are not built yet.** Until C lands, a hopper or dispenser GUI cannot be compiled into a live GUI's
+> slots, and the studio does not draw it (it shows the reason and edits nothing). The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
 > §8 and §11 are one-line pointers; they change no behaviour.
 >
 > **The governing rule (owner, §12.13 item 5): the system is agnostic of the container type.** The chest is the default
@@ -1885,6 +1885,22 @@ the parser reads `rows`. The existing
 
 ### 12.6 Runtime
 
+> **As built (#292, row P).** `PluginGui` takes the profile's `GuiContainer.Open` (one constructor): a size goes to
+> `createInventory(holder, size, title)`, a type to `createInventory(holder, InventoryType, title)`, both on the legacy
+> path. `GuiMenu` passes `container.open()`; nothing branches on the container id. An `open` the server cannot create
+> (an unknown or non-creatable `InventoryType`, or a size that is not a multiple of 9 from 9 to 54) is refused by
+> `BukkitWindowHost.unavailable` with `MTR-0098` before the viewer's window changes, which is where the chest's sizes
+> were already checked. `GuiRuntime.viewOf` fills `RuntimeApi.GuiView`'s new `profile` component. The refresh compares
+> profile ids (`RuntimeGuis.Live.sameAs`, `GuiRefreshPlan.viewerAction`), which the code already did: a
+> `chest_3` to `hopper` change reopens, a same-profile change rewrites in place. `GuiRuleDiagnoser` already names
+> "container slots 0 to N-1". The router (`GuiListener.route`, `dragRoute`, `ClickTarget.of`) was already size-agnostic
+> and is now tested with a 5-slot and a 9-slot top (`ContainerSizeRoutingTest`). The 1.21.4 check is the opt-in
+> harness scenario `PaperContainerGuiFloorIT` (`-Pharness.containerGuiFloor=true`, after `npm ci` in `harness/protocol`):
+> a bot joins, `materione gui open` shows `sample:hopper_shop` and `sample:dispenser_shop` through the product,
+> and the probe's `ctprobe top` reports `HOPPER`/5 and `DISPENSER`/9, the `minecraft:hopper` and `minecraft:generic_3x3`
+> menus, a `PluginGui` holder, and the bot's open-window packet carrying the server's menu id. It runs opt-in because the
+> default integration run has no `npm ci` for the protocol client (the rich-title floor is opt-in for the same reason).
+
 **Opening.** `GuiOpener` is unchanged (logic.md §6.1). `BukkitWindowHost` builds the window from the compiled GUI's
 profile's `open` descriptor: by size, `Bukkit.createInventory(holder, size, title)` (the six chests), or by type,
 `Bukkit.createInventory(holder, InventoryType.HOPPER | DISPENSER, title)` [API]. The descriptor is data, so `PluginGui`
@@ -1906,9 +1922,9 @@ re-opens, with the cursor lifted and restored as today. The dynamic-title transp
 asks `CraftContainer.getNotchInventoryType(expected)` for the menu type, which is type-aware on both pins, so a hopper's
 title refresh sends `MenuType.HOPPER` [SRV; platform source].
 
-**API.** `RuntimeApi.GuiView(id, rows, title, slots)` replaces `rows` with the container id (an api change, acceptable while
-unreleased); `/materione gui open` and the editor's preview are
-container-agnostic. `GuiRuleDiagnoser`'s "outside this GUI's N row(s)" becomes "container slots 0 to N-1".
+**API.** `RuntimeApi.GuiView` carries the container id (row M) and, as built in #292, the profile itself as a fifth component
+(`profile`, the `GuiContainer` the window opens as; the canonical constructor changed, an api change acceptable while
+unreleased); `/materione gui open` and the editor's preview are container-agnostic. `GuiRuleDiagnoser`'s "outside this GUI's N row(s)" becomes "container slots 0 to N-1".
 
 **`player_inventory`.** The policy is a property of the viewer's inventory and is container-independent. The only per-type
 fact is where that inventory is drawn (the profile's `inventory`); a merchant would draw it at x 108, which is why the
@@ -2017,7 +2033,7 @@ effort, regular implementation on Haiku.
 | **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high. **Done (#289, §12.2.6)** |
 | **M** | Model, profiles and the conversion | `container:` replaces `rows:` in the schema and `GuiType.parse` (required; `MTR-0097` for an unknown id); the profile data file (six chest entries, hopper, dispenser; `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; `GuiComponentConfiguration` and `CompiledGui` carry the profile; the scaffold change in `core` and `web`. **The conversion, in this row:** every `rows:` of a GUI becomes `container: chest_N` in the same change: `fixtures/gui/*.yml` and `fixtures/gui/open-canvas`, `fixtures/packs/*/guis` (showcase, guilogic, guitext, opencanvas, overlay), the built-in `plugin/src/main/resources/builtin-packs/materione/guis/browser.yml`, `harness/protocol/floor.yml`, YAML embedded in Java and TS tests and runners (`content`, `core`, `pack`, `plugin`, `harness`, `web`, `webui` demo data and specs), the vector generator, the goldens they regenerate (`editor-demo-snapshot.json` and the pack-output goldens), and the docs' examples (gui.md §2, logic.md). Glyph sheets and the satchel item have their own `rows` that are not GUI rows and stay. The CHANGELOG entry states the breaking change and why it is acceptable (GUIs are unreleased). A grep-based test fails the build on any GUI file with `rows:` | none | Haiku for the sweep, Sonnet reviews the parser |
 | **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high |
-| **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor | M | Haiku |
+| **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor. **Built (#292, §12.6 as built): `MTR-0098` is its one new code; the IT is opt-in (`harness.containerGuiFloor`)** | M | Haiku |
 | **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row can ship first | owner (§12.13 item 3) | owner / Haiku for C |
 | **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high |
 | **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
@@ -2064,7 +2080,10 @@ What is still unverified:
 
 Also not exercised by row R: the hover highlight and tooltip order (§9.1: the bridge cannot steer the mouse), the layer rule that
 `gui.click_outside` runs on a hopper (the holder was the probe's, not `PluginGui`; the signal it reads was measured, §12.2.6), and the
-runtime opener itself (rows M and P).
+runtime opener itself (rows M and P). Row P (#292) now opens both containers through the product on the 1.21.4 floor, and the
+harness checks the window type, size, holder and the client's window id (§12.6); what it does not check is the screen the client
+draws from that window, and a click on it: the 1.21.4 screen facts stay U9 and U10, and a click through the product's
+`gui.click_outside` on a hopper stays unexercised.
 
 The slot and menu facts are verified on both pins (§12.2.1); this table is only what a person looking at the screen, or a
 jar this machine lacks, can add.

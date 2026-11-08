@@ -549,6 +549,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0097", Severity.ERROR, "GUI container is not a supported container; GUI quarantined");
 
     /**
+     * A GUI's container profile names a window this server cannot create (gui.md section 12.6): its {@code open}
+     * names an {@code InventoryType} the Paper API does not have, or one it cannot create. The open is refused
+     * before the viewer's current window changes; the GUI stays live and the rest of the server is unaffected.
+     */
+    public static final DiagnosticCode GUI_CONTAINER_UNOPENABLE =
+            new DiagnosticCode("MTR-0098", Severity.ERROR, "GUI container cannot be opened on this server; the open is refused");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -675,6 +683,7 @@ public final class DiagnosticCodes {
             GUI_ART_GEOMETRY_INVALID,
             GUI_CLICK_OUTSIDE_CONTAINER,
             GUI_CONTAINER_UNKNOWN,
+            GUI_CONTAINER_UNOPENABLE,
             TEMPLATE_CYCLE,
             TEMPLATE_AMBIGUOUS,
             BUILTIN_PACK_ID_RESERVED,

@@ -61,8 +61,9 @@ class GuiRuntimeTest {
 
         // the fixture's sword is not live, so its slot is left empty: no filled slots
         List<RuntimeApi.GuiView> guis = runtime.guis();
-        assertThat(guis).containsExactly(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0));
-        assertThat(runtime.gui(SHOP)).contains(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0));
+        var chest3 = dev.materione.content.gui.GuiContainers.byId("chest_3").orElseThrow();
+        assertThat(guis).containsExactly(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0, chest3));
+        assertThat(runtime.gui(SHOP)).contains(new RuntimeApi.GuiView(SHOP, "chest_3", "Shop", 0, chest3));
         assertThat(runtime.gui(NamespacedId.parse("demo:missing"))).isEmpty();
     }
 
