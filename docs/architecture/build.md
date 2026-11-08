@@ -258,7 +258,15 @@ interactively.
 
 ## 8. CI (`.github/workflows/ci.yml`)
 
+- **detect changes** (ubuntu, PRs): classifies the diff. A **docs-only** PR (every changed
+  file under `docs/` or a top-level `*.md`) skips every other job: nothing it touches is
+  built, tested or booted. A PR that changes only `docs/`, `webui/` and top-level `*.md`
+  skips the Paper boot. Pushes to main, the nightly and manual runs never skip. Jobs skip
+  through `if:`, so a skipped required check (build, paper boot) still reports and the PR
+  can merge; a workflow-level `paths-ignore` would leave them pending.
 - **build** (ubuntu): `./gradlew build`; uploads the shaded jar.
+- **cloud** and **browser** (ubuntu): the relay Worker tests and the editor's Chromium
+  regression suite.
 - **paper boot** (ubuntu, needs build): caches the pinned Paper jar keyed on
   `hashFiles('gradle/libs.versions.toml')`, runs `:harness:integrationTest`, uploads
   workspaces on failure.
