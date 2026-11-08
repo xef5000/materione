@@ -48,7 +48,7 @@ export default [
     timeoutMs: 180_000,
     steps: async (ctx) => {
       const original = fs.existsSync(ALIAS_FILE) ? fs.readFileSync(ALIAS_FILE, 'utf8') : null;
-      const yaml = (alias) => `qa_auto_alias:\n  title: Automatic alias\n  rows: 1\n  layers: []\n  open:\n    commands: [${alias}]\n`;
+      const yaml = (alias) => `qa_auto_alias:\n  title: Automatic alias\n  container: chest_1\n  layers: []\n  open:\n    commands: [${alias}]\n`;
       try {
         await prepare(ctx);
         fs.mkdirSync(path.dirname(ALIAS_FILE), { recursive: true });

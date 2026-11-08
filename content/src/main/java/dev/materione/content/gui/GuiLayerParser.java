@@ -4,6 +4,7 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.gui.CompiledGuiLayer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.RenderTarget;
 import dev.materione.api.registry.Registry;
 import dev.materione.api.registry.RegistryEntry;
@@ -31,13 +32,13 @@ final class GuiLayerParser {
 
     record Result(List<GuiLayer> layers, List<GuiDefinition.SkippedLayer> skipped) {}
 
-    Result parse(NamespacedId guiId, int rows, List<?> entries) {
+    Result parse(NamespacedId guiId, GuiContainer container, List<?> entries) {
         var layers = new ArrayList<GuiLayer>();
         var skipped = new ArrayList<GuiDefinition.SkippedLayer>();
         var accepted = new HashSet<String>();
         for (int index = 0; index < entries.size(); index++) {
             try {
-                GuiLayer layer = layer(guiId, rows, entries.get(index), accepted);
+                GuiLayer layer = layer(guiId, container, entries.get(index), accepted);
                 accepted.add(layer.id());
                 layers.add(layer);
             } catch (Rejection rejection) {
@@ -49,7 +50,7 @@ final class GuiLayerParser {
     }
 
     /** Parses one authored layer or rejects it with the reason shown to the author. */
-    private GuiLayer layer(NamespacedId guiId, int rows, Object entry, Set<String> accepted) {
+    private GuiLayer layer(NamespacedId guiId, GuiContainer container, Object entry, Set<String> accepted) {
         if (!(entry instanceof Map<?, ?> mapping)) {
             throw new Rejection(null, null, "a layer must be a mapping of its fields");
         }
@@ -110,9 +111,9 @@ final class GuiLayerParser {
         CompiledGuiLayer compiled;
         GuiRasterFrames frames;
         try {
-            compiled = component.parse(new GuiComponentConfiguration(guiId, layerId, rows, own));
+            compiled = component.parse(new GuiComponentConfiguration(guiId, layerId, container, own));
             frames = overlayFrames
-                    ? GuiRasterFrames.parse(fields.get(OVERLAY_FRAMES), component, guiId, layerId, rows, own) : null;
+                    ? GuiRasterFrames.parse(fields.get(OVERLAY_FRAMES), component, guiId, layerId, container, own) : null;
         } catch (IllegalArgumentException rejected) {
             throw new Rejection(layerId, type, rejected.getMessage());
         } catch (RuntimeException failure) {

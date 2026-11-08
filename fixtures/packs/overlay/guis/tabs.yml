@@ -1,6 +1,6 @@
 tabs:
   title: Overlay tabs
-  rows: 3
+  container: chest_3
   refresh: 10
   layers:
     - id: background

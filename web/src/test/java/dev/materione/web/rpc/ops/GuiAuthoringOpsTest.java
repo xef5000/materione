@@ -48,7 +48,7 @@ class GuiAuthoringOpsTest {
     private static final String SEED = """
             main:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: frame
                   type: panel
@@ -213,7 +213,7 @@ class GuiAuthoringOpsTest {
         document.addProperty("pack", PACK);
         document.addProperty("id", "main");
         document.addProperty("title", "Shop");
-        document.addProperty("rows", 1);
+        document.addProperty("container", "chest_1");
         document.add("layers", layers);
         var source = new JsonObject();
         source.addProperty("kind", "draft");

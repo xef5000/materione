@@ -1,5 +1,6 @@
 package dev.materione.content.gui.logic;
 
+import dev.materione.content.gui.GuiContainers;
 import static dev.materione.content.gui.GuiTestSupport.definition;
 import static dev.materione.content.gui.GuiTestSupport.layer;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -151,8 +152,8 @@ class ClickMapCompilerTest {
 
     @Test
     void theAreaShapesResolveToContainerSlotsOnly() {
-        assertThat(ClickMapCompiler.coveredSlots(new ClickArea.Slots(Set.of(2, 40)), 1)).containsExactly(2);
-        assertThat(ClickMapCompiler.coveredSlots(ClickArea.NONE, 3)).isEmpty();
-        assertThat(ClickMapCompiler.coveredSlots(new ClickArea.Rect(0, 0, 0, 0), 3)).isEmpty();
+        assertThat(ClickMapCompiler.coveredSlots(new ClickArea.Slots(Set.of(2, 40)), GuiContainers.byId("chest_1").orElseThrow())).containsExactly(2);
+        assertThat(ClickMapCompiler.coveredSlots(ClickArea.NONE, GuiContainers.byId("chest_3").orElseThrow())).isEmpty();
+        assertThat(ClickMapCompiler.coveredSlots(new ClickArea.Rect(0, 0, 0, 0), GuiContainers.byId("chest_3").orElseThrow())).isEmpty();
     }
 }

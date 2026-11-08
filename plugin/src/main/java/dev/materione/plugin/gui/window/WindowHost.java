@@ -81,5 +81,5 @@ public interface WindowHost {
     java.util.Optional<Shape> shape(Viewer viewer, GuiSession session);
 
     /** A window's creation-time title (MiniMessage) and rows. */
-    record Shape(String title, int rows) {}
+    record Shape(String title, String container) {}
 }

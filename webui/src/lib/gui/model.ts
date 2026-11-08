@@ -7,7 +7,7 @@
  * types and unknown top-level keys ride along untouched, and a document that
  * was never edited serializes to a value equal to what was loaded.
  */
-import { clampRows } from './chest';
+import { containerProfile, gridRows, NEW_GUI_CONTAINER, studioDraws, supportedContainerIds, type ContainerProfile } from './containers';
 
 export type Json = Record<string, unknown>;
 
@@ -16,6 +16,9 @@ export type GuiLayer = Json & { id: string; type: string };
 
 export interface GuiDocument {
   readonly title: string;
+  /** The container profile the GUI is designed in (gui.md section 12.4): the value the file holds. */
+  readonly container: string;
+  /** The slot grid's rows of `container`, derived from its profile: the canvas geometry is drawn from it. */
   readonly rows: number;
   readonly layers: readonly GuiLayer[];
   /** Every other top-level key, preserved verbatim (never interpreted). */
@@ -63,10 +66,10 @@ export function clone<T>(value: T): T {
 export function locateBody(parsed: unknown, rootId: string): GuiLocation | null {
   if (!isRecord(parsed)) return null;
   const rooted = parsed[rootId];
-  if (isRecord(rooted) && (Array.isArray(rooted.layers) || 'rows' in rooted || 'title' in rooted)) {
+  if (isRecord(rooted) && (Array.isArray(rooted.layers) || 'container' in rooted || 'title' in rooted)) {
     return { prefix: [rootId], body: rooted };
   }
-  if (Array.isArray(parsed.layers) || 'rows' in parsed) return { prefix: [], body: parsed, flat: true };
+  if (Array.isArray(parsed.layers) || 'container' in parsed) return { prefix: [], body: parsed, flat: true };
   if (isRecord(rooted)) return { prefix: [rootId], body: rooted };
   const only = Object.entries(parsed).filter(([, value]) => isRecord(value));
   if (only.length === 1 && Object.keys(parsed).length === 1) {
@@ -102,12 +105,23 @@ export function parseGui(parsed: unknown, rootId: string): ParsedGui | null {
     }
     seen.add(id);
   }
-  const rows = clampRows(body.rows);
-  if (body.rows !== undefined && body.rows !== rows) issues.push(`rows ${String(body.rows)} was clamped to ${rows}`);
-  const { title: _title, rows: _rows, layers: _layers, ...rest } = body;
+  // The container is the file's value, kept as authored. An unknown one quarantines the GUI on the server (MTR-0097),
+  // so the studio says so and edits nothing; a container the studio does not draw yet is shown read-only the same way.
+  const container = typeof body.container === 'string' ? body.container : '';
+  const profile = containerProfile(container);
+  if (!profile) {
+    blocking.push(container
+      ? `container ${container} is not a supported container (the supported ones: ${supportedContainerIds()})`
+      : 'container is missing or not a string (the GUI needs container: chest_3 or another supported container)');
+  } else if (!studioDraws(profile)) {
+    blocking.push(`the studio does not draw the ${profile.id} container yet (it is opened by its inventory type)`);
+  }
+  const rows = profile ? gridRows(profile) : gridRows(containerProfile(NEW_GUI_CONTAINER)!);
+  const { title: _title, container: _container, layers: _layers, ...rest } = body;
   return {
     doc: {
       title: typeof body.title === 'string' ? body.title : '',
+      container,
       rows,
       layers,
       rest: clone(rest),
@@ -134,12 +148,12 @@ export function serializeGui(doc: GuiDocument): Json {
   };
   for (const key of doc.order) {
     if (key === 'title') emit('title', doc.title);
-    else if (key === 'rows') emit('rows', doc.rows);
+    else if (key === 'container') emit('container', doc.container);
     else if (key === 'layers') emit('layers', clone(doc.layers));
     else if (Object.hasOwn(doc.rest, key)) emit(key, clone(doc.rest[key]));
   }
   if (!written.has('title') && doc.title !== '') emit('title', doc.title);
-  if (!written.has('rows')) emit('rows', doc.rows);
+  if (!written.has('container') && doc.container !== '') emit('container', doc.container);
   if (!written.has('layers')) emit('layers', clone(doc.layers));
   for (const [key, value] of Object.entries(doc.rest)) if (!written.has(key)) emit(key, clone(value));
   return out;
@@ -180,21 +194,37 @@ export function isLocked(layer: GuiLayer): boolean {
 /** Same layers and fields, in the same order? (Deep, key-order-sensitive: the file's shape.) */
 export function sameDocument(a: GuiDocument, b: GuiDocument): boolean {
   return a === b ||
-    (a.title === b.title && a.rows === b.rows &&
+    (a.title === b.title && a.container === b.container &&
       JSON.stringify(a.layers) === JSON.stringify(b.layers) &&
       JSON.stringify(a.rest) === JSON.stringify(b.rest));
 }
 
 /**
- * A starter GUI (gui.md section 11.2): a title and rows and no layers. The vanilla chest is the client's own, drawn
- * under the GUI by the studio, so a new GUI has no art and costs nothing in the pack.
+ * The document with another container (gui.md section 12.4): the value is set and the derived rows follow its
+ * profile. Switching never edits a layer; the studio reports what no longer fits (gui.md section 12.13 item 8).
  */
-export function starterDocument(rows = 6, title = ''): GuiDocument {
-  return {
+export function withContainer(doc: GuiDocument, container: string): GuiDocument {
+  const profile = containerProfile(container);
+  return { ...doc, container, rows: profile ? gridRows(profile) : doc.rows };
+}
+
+/**
+ * A starter GUI (gui.md section 11.2): a title and a container and no layers. The vanilla chest is the client's own,
+ * drawn under the GUI by the studio, so a new GUI has no art and costs nothing in the pack. A new GUI starts on
+ * `chest_3` (gui.md section 12.4).
+ */
+export function starterDocument(container: string = NEW_GUI_CONTAINER, title = ''): GuiDocument {
+  return withContainer({
     title,
-    rows,
+    container,
+    rows: 0,
     layers: [],
     rest: {},
-    order: ['title', 'rows', 'layers'],
-  };
+    order: ['title', 'container', 'layers'],
+  }, container);
+}
+
+/** The profile of a document's container, or undefined when the studio does not know it. */
+export function profileOf(doc: GuiDocument): ContainerProfile | undefined {
+  return containerProfile(doc.container);
 }

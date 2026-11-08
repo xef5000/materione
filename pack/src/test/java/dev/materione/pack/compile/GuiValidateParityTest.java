@@ -48,7 +48,7 @@ class GuiValidateParityTest {
     private static final String FILE = """
             main:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: frame
                   type: panel

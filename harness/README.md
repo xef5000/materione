@@ -31,7 +31,7 @@ Materione's internals, only these markers.
 | `MATERIONE-DEV-SOUND key=<pack>:<sound>` | `/materione dev sound` dispatched an in-game play (M4) |
 | `MATERIONE-DEV-SOUND-DENIED reason=player-required` | `/materione dev sound` from the console (the client resolves the key, so a player is required) |
 | `MATERIONE-STACK id=<id> item_model=<key\|none>` | `dev stack` built a live item's stack; the component names the item definition (`<id>`), never the pack model — `none` for material-only items |
-| `MATERIONE-GUI-OPENED id=<id> player=<name> rows=<n> slots=<n>` | a live GUI's window was opened for a player (`/materione gui open`, or the editor's preview) |
+| `MATERIONE-GUI-OPENED id=<id> player=<name> container=<id> slots=<n>` | a live GUI's window was opened for a player (`/materione gui open`, or the editor's preview) |
 | `MATERIONE-GUI-REFRESH changed=<n> removed=<n> players=<n>` | a swap changed or removed live GUIs; the online players' windows are brought up to date (gui.md §5) |
 | `MATERIONE-GUI-REFRESH-CLOSED id=<id> player=<name>` | a viewer's window was closed because its GUI is no longer live |
 | `MATERIONE-GUI-DENIED reason=player-required` | `/materione gui open` from the console without naming a player |

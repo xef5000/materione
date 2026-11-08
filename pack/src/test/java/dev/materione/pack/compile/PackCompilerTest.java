@@ -864,7 +864,7 @@ class PackCompilerTest {
     private static final String TEXT_GUI = """
             shop:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: frame
                   type: panel

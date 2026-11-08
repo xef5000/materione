@@ -11,12 +11,19 @@
  */
 import {
   layerIndex,
+  withContainer,
   type GuiDocument,
   type GuiLayer,
   type Json,
 } from './model';
 
-type DocFields = { title?: string; rows?: number };
+type DocFields = { title?: string; container?: string };
+
+/** The document with these fields set; a container also sets the rows its profile gives (gui.md section 12.4). */
+function applyFields(doc: GuiDocument, fields: DocFields): GuiDocument {
+  const next = { ...doc, ...fields };
+  return fields.container !== undefined ? withContainer(next, fields.container) : next;
+}
 
 export interface Command {
   readonly label: string;
@@ -229,11 +236,11 @@ class DocFieldsCommand implements Command {
   ) {}
 
   apply(doc: GuiDocument): GuiDocument {
-    return { ...doc, ...this.after };
+    return applyFields(doc, this.after);
   }
 
   revert(doc: GuiDocument): GuiDocument {
-    return { ...doc, ...this.before };
+    return applyFields(doc, this.before);
   }
 
   merge(next: Command): Command | null {
@@ -242,7 +249,7 @@ class DocFieldsCommand implements Command {
   }
 }
 
-/** Title or row-count edits (the canvas height follows `rows`). */
+/** Title or container edits (the canvas height follows the container's rows). */
 export function setDocumentFields(
   doc: GuiDocument,
   fields: DocFields,
@@ -255,9 +262,9 @@ export function setDocumentFields(
     before.title = doc.title;
     after.title = fields.title;
   }
-  if (fields.rows !== undefined && fields.rows !== doc.rows) {
-    before.rows = doc.rows;
-    after.rows = fields.rows;
+  if (fields.container !== undefined && fields.container !== doc.container) {
+    before.container = doc.container;
+    after.container = fields.container;
   }
   return Object.keys(after).length ? new DocFieldsCommand(label, before, after, coalesce) : null;
 }

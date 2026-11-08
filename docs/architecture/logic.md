@@ -35,7 +35,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Incumbent feature | DeluxeMenus | CommandPanels | Materione |
 |---|---|---|---|
 | Menu file, id, title | `menu_title`, `gui_menus` | panel file, `title` | `guis/**/*.yml` (gui.md §2). The title can be dynamic text (§6.4). |
-| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `rows` (chest) in v1. Containers: `container:` naming a profile (`chest_1`..`chest_6`, `hopper`, `dispenser`) replaces `rows:`, **designed in gui.md §12** (approved by the owner; anvil and furnaces later). |
+| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `container:` naming a profile (`chest_1`..`chest_6`, `hopper`, `dispenser`), required in a GUI file (gui.md §12.4, built in #290; the plugin opens the hopper and dispenser with row P). Anvil and furnaces later. |
 | Open commands and aliases | `open_command`, `register_command` | `command`, `aliases` | `open.commands` (§6.1), registered with Brigadier. |
 | Open arguments | `args`, `args_usage_message`, per-argument requirements | command args read as session data | Typed `open.args` (§6.1), validated by conditions and exposed as `gui.args.<name>`. |
 | Open gate | `open_requirement` with deny commands, bypass permission | panel `conditions` | `open.permission`, plus an `open.requirement` condition with a `deny` flow (§6.1). |
@@ -79,7 +79,7 @@ an explicit **gap**. A gap is not covered by any client run; the reason is given
 | §1 row | Demonstrated by | Status |
 |---|---|---|
 | Menu file, id, title | All five showcase GUIs. | Partial. Titles are static in the showcase. A dynamic title (§6.4) has no client entry; `GuiTitleTest` covers it. **Gap.** |
-| Size and container type | `rows: 1` (servers, settings, confirm) and `rows: 3` (shop, players). | Covered for the chest, as §1 says. Other containers are designed (gui.md §12), not built; the row lists a hopper and a dispenser when they ship. |
+| Size and container type | `container: chest_1` (servers, settings, confirm) and `container: chest_3` (shop, players). | Covered for the chest, as §1 says. Other containers are profiles (gui.md §12.5.1) that compile; the plugin opens them with row P, so the row lists a hopper and a dispenser when they ship. |
 | Open commands and aliases | `showcase:shop` opens with `/shop` (`showcase.shop-open-command`). | Partial. One name per GUI here. Several names: `opencommands.deferred-alias-applies-automatically` (existing). |
 | Open arguments | Shop `category` (choice, default `all`): the console marker carries `category=gems`. | Covered. `suggest:` is not checked client-side. |
 | Open gate | Not in the showcase. `opencommands.failed-requirement-denies-with-its-message` (existing, the `guilogic:opener` GUI). | Covered by an existing entry. The `open.permission` gate has no client entry. **Gap.** |
@@ -446,7 +446,7 @@ actions in a run whose session has ended are skipped with outcome `FAILED("no op
 
 ```yaml
 shop:
-  rows: 6
+  container: chest_6
   open:
     commands: [shop, store]            # Brigadier, registered at enable and re-synced on reload
     args:

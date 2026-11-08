@@ -564,7 +564,7 @@ class AuthoringApiImplTest {
                   reference: other:remote
                 sheet:
                   texture: other:gui/sheet.png
-                  rows: 2
+                  container: chest_2
                   columns: 3
                 sheet_cell_2:
                   reference: demo:sheet

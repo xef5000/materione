@@ -26,10 +26,11 @@ public final class GuiTextRules {
         return null;
     }
 
-    public static java.util.Set<Integer> slots(int x, int y, String text, TitleSink.Font font, int rows) {
+    public static java.util.Set<Integer> slots(
+            int x, int y, String text, TitleSink.Font font, dev.materione.api.gui.GuiContainer container) {
         int width = font == TitleSink.Font.SMALLCAPS ? SmallcapsFont.measure(text) : VanillaAscii.measure(text);
         int height = font == TitleSink.Font.SMALLCAPS ? SmallcapsFont.GLYPH_ROWS : GuiFonts.VANILLA_ASCII_HEIGHT;
         return java.util.Set.copyOf(dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(
-                new dev.materione.api.gui.ClickArea.Rect(x, y, width, height), rows));
+                new dev.materione.api.gui.ClickArea.Rect(x, y, width, height), container));
     }
 }

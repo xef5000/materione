@@ -5,7 +5,7 @@
 # catalog read as markers.
 menu:
   title: Menu
-  rows: 3
+  container: chest_3
   layers:
     - id: frame
       type: panel

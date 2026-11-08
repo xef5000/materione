@@ -1,6 +1,6 @@
 animation_input:
   title: Overlay interaction
-  rows: 1
+  container: chest_1
   refresh: 5
   player_inventory: free
   layers:

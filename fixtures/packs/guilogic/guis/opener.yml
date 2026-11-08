@@ -3,7 +3,7 @@
 # player why instead of opening the window.
 opener:
   title: Opener
-  rows: 1
+  container: chest_1
   layers:
     - id: frame
       type: panel

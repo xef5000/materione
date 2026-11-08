@@ -14,8 +14,12 @@ class GuiComponentConfigurationTest {
 
     private static final NamespacedId GUI = NamespacedId.parse("example:shop");
 
+    private static final GuiContainer CHEST_3 = new GuiContainer(
+            "chest_3", "Chest, 3 rows", "Chests", 27, 9, 8, 18, 176, 168, 8, 85, 71,
+            false, 8, 6, 8, 74, List.of(), GuiContainer.Open.bySize(27));
+
     private static GuiComponentConfiguration of(Map<String, Object> parameters) {
-        return new GuiComponentConfiguration(GUI, "layer", 3, parameters);
+        return new GuiComponentConfiguration(GUI, "layer", CHEST_3, parameters);
     }
 
     @Test
@@ -87,6 +91,7 @@ class GuiComponentConfigurationTest {
         var configuration = of(Map.of());
         assertThat(configuration.guiId()).isEqualTo(GUI);
         assertThat(configuration.layerId()).isEqualTo("layer");
-        assertThat(configuration.rows()).isEqualTo(3);
+        assertThat(configuration.container().id()).isEqualTo("chest_3");
+        assertThat(configuration.container().slotCount()).isEqualTo(27);
     }
 }

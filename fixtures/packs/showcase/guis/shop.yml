@@ -8,7 +8,7 @@
 # QA catalog (qa/catalog/showcase.mjs) reads as markers.
 shop:
   title: Shop
-  rows: 3
+  container: chest_3
   refresh: 20
   layers:
     - id: heading

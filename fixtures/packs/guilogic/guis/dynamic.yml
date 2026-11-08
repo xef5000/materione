@@ -6,7 +6,7 @@
 # catalog (qa/catalog/guidynamic.mjs) reads as a marker.
 dynamic:
   title: Dynamic
-  rows: 3
+  container: chest_3
   refresh: 20
   layers:
     - id: frame

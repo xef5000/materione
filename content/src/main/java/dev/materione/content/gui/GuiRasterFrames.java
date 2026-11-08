@@ -2,6 +2,7 @@ package dev.materione.content.gui;
 
 import dev.materione.api.NamespacedId;
 import dev.materione.api.gui.CompiledGuiLayer;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.GuiComponent;
 import dev.materione.api.gui.GuiComponentConfiguration;
 import dev.materione.api.gui.RenderTarget;
@@ -18,7 +19,7 @@ public record GuiRasterFrames(int every, List<CompiledGuiLayer> layers) {
     }
 
     static GuiRasterFrames parse(Object raw, GuiComponent component, NamespacedId gui, String layer,
-            int rows, Map<String, Object> base) {
+            GuiContainer container, Map<String, Object> base) {
         if (!(raw instanceof Map<?, ?> mapping)) {
             throw new IllegalArgumentException("frames must be a mapping with every and layers");
         }
@@ -42,7 +43,7 @@ public record GuiRasterFrames(int every, List<CompiledGuiLayer> layers) {
                 throw new IllegalArgumentException("raster frames may override component fields only");
             }
             params.putAll(overrides);
-            CompiledGuiLayer compiled = component.parse(new GuiComponentConfiguration(gui, layer, rows, params));
+            CompiledGuiLayer compiled = component.parse(new GuiComponentConfiguration(gui, layer, container, params));
             if (compiled == null || compiled.target() != RenderTarget.RASTER) {
                 throw new IllegalArgumentException("frame did not produce a raster layer");
             }

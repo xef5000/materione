@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
@@ -58,18 +59,18 @@ class GuiRefreshPlanTest {
 
     @Test
     void aWindowOfAGuiThatIsNoLongerLiveIsClosed() {
-        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, 3, Optional.empty()))
+        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, "chest_3", Optional.empty()))
                 .isEqualTo(GuiRefreshPlan.Action.CLOSE);
     }
 
     @Test
     void aNewTitleOrNewRowsNeedANewWindow() {
         RuntimeGuis retitled = view("hash-1", shop("Market", 3));
-        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, 3, retitled.gui(SHOP)))
+        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, "chest_3", retitled.gui(SHOP)))
                 .isEqualTo(GuiRefreshPlan.Action.REOPEN);
 
         RuntimeGuis resized = view("hash-1", shop("Shop", 4));
-        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, 3, resized.gui(SHOP)))
+        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, "chest_3", resized.gui(SHOP)))
                 .isEqualTo(GuiRefreshPlan.Action.REOPEN);
     }
 
@@ -77,7 +78,7 @@ class GuiRefreshPlanTest {
     void newItemsOnTheSameWindowAreWrittenInPlace() {
         RuntimeGuis now = view("hash-2", shop("Shop", 3));
 
-        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, 3, now.gui(SHOP)))
+        assertThat(GuiRefreshPlan.viewerAction(OPEN_TITLE, "chest_3", now.gui(SHOP)))
                 .isEqualTo(GuiRefreshPlan.Action.UPDATE_CONTENTS);
     }
 
@@ -97,11 +98,11 @@ class GuiRefreshPlanTest {
     }
 
     private static CompiledGui shop(String title, int rows) {
-        return new CompiledGui(SHOP, rows, "<font:demo:gui>" + title, title,
+        return new CompiledGui(SHOP, dev.materione.content.gui.GuiContainers.byId("chest_" + rows).orElseThrow(), "<font:demo:gui>" + title, title,
                 List.of(new CompiledGui.Slot(4, SWORD, 1)));
     }
 
     private static CompiledGui arena() {
-        return new CompiledGui(ARENA, 1, "<font:demo:gui>Arena", "Arena", List.of());
+        return new CompiledGui(ARENA, GuiContainers.byId("chest_1").orElseThrow(), "<font:demo:gui>Arena", "Arena", List.of());
     }
 }

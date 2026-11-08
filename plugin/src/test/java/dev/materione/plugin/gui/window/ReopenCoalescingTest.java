@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.window;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.scheduling.ScheduledHandle;
@@ -150,7 +151,7 @@ class ReopenCoalescingTest {
             var host = new BukkitWindowHost(plugin, scheduling, input, guard, journal, renderer,
                     PaperRichTitles.create(null), (code, gui, layer, message) -> diagnostics.add(message));
             Viewer viewer = Viewer.of(player);
-            var oldMenu = new GuiMenu(session, 1, initial.title(), input);
+            var oldMenu = new GuiMenu(session, GuiContainers.byId("chest_1").orElseThrow(), initial.title(), input);
             top.set(oldMenu.getInventory());
             session.attach(oldMenu);
             var oldRendered = renderer.render(viewer, session, initial, true, 0);
@@ -230,7 +231,7 @@ class ReopenCoalescingTest {
                 assertThat(newMenu).isNotSameAs(oldMenu);
                 assertThat(oldMenu.getInventory().getItem(0)).isNull();
             }
-            assertThat(newMenu.rows()).isEqualTo(revertShape ? 1 : 3);
+            assertThat(newMenu.container().id()).isEqualTo(revertShape ? "chest_1" : "chest_3");
             assertThat(newMenu.baseTitle()).isEqualTo(latest.get().title());
             assertThat(top.get()).isSameAs(newMenu.getInventory());
             assertThat(newMenu.inputSlots()).contains(0).doesNotContain(4);
@@ -251,7 +252,7 @@ class ReopenCoalescingTest {
         return """
                 trade:
                   title: Trade%s
-                  rows: %d
+                  container: chest_%d
                   layers:
                     - {id: wells, type: slots, region: container, input: true}
                     - id: display
@@ -278,7 +279,7 @@ class ReopenCoalescingTest {
     }
 
     private static RuntimeGuis.Live withTitle(RuntimeGuis.Live gui, String title) {
-        return new RuntimeGuis.Live(gui.id(), gui.rows(), title, gui.accessibleTitle(), gui.slots(), gui.clicks(),
+        return new RuntimeGuis.Live(gui.id(), gui.container(), title, gui.accessibleTitle(), gui.slots(), gui.clicks(),
                 gui.logic(), gui.inputs(), gui.open(), gui.placements(), gui.refresh(), gui.items(), gui.visuals());
     }
 

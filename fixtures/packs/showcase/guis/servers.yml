@@ -5,7 +5,7 @@
 # else tells the player so. The window is one row.
 servers:
   title: Servers
-  rows: 1
+  container: chest_1
   layers:
     - id: heading
       type: text

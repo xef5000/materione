@@ -13,7 +13,7 @@ import { flagsOf, isSkipped, layerIndexOf } from '../src/lib/gui/validation';
 import type { Response } from '../src/lib/protocol/wire';
 
 const layer = (id: string, extra: Record<string, unknown> = {}): GuiLayer => ({ id, type: 'text', ...extra }) as GuiLayer;
-const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: 'Shop', rows: 3, layers, rest: {}, order: [] });
+const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: 'Shop', container: 'chest_3', rows: 3, layers, rest: {}, order: [] });
 const diagnostic = (message: string, field?: string[]): ServerDiagnostic => ({
   code: 'MTR-0052',
   severity: 'warn',
@@ -76,7 +76,7 @@ describe('the draft the studio asks about', () => {
       'sample',
       'guis/main.yml',
     );
-    expect(draft).toMatchObject({ pack: 'sample', path: 'guis/main.yml', id: 'main', title: 'Shop', rows: 3 });
+    expect(draft).toMatchObject({ pack: 'sample', path: 'guis/main.yml', id: 'main', title: 'Shop', container: 'chest_3' });
     expect(draft.layers[0]).toEqual({
       id: 'heading',
       type: 'text',

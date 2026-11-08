@@ -4,6 +4,7 @@
  * pixel for pixel. This module is the TS side of the contract: it turns the
  * JSON into a `RasterScene` and runs the same `flattenRaster` the studio does.
  */
+import { containerProfile, gridRows } from '../containers';
 import { ArgbCanvas } from './canvas';
 import { parseColor } from './color';
 import { flattenRaster, type Layer, type RasterScene } from './flatten';
@@ -19,8 +20,11 @@ export interface RasterVector {
   name: string;
   description?: string;
   canvas: { width: number; height: number };
-  /** Needed by `slots` layers (the slot grid depends on it); the canvas size is given separately. */
-  rows?: number;
+  /**
+   * The container the vector is drawn in (gui.md section 12.4), needed by `slots` layers: the slot grid is its profile's.
+   * A vector with none is a 1-row chest, as before.
+   */
+  container?: string;
   /** Bitmaps by the `image:` reference layers use. */
   images?: Record<string, VectorImage>;
   layers: Layer[];
@@ -44,10 +48,11 @@ export function renderVector(vector: RasterVector): ArgbCanvas {
   for (const [reference, image] of Object.entries(vector.images ?? {})) {
     images.set(reference, decodeVectorImage(image));
   }
+  const profile = containerProfile(vector.container ?? 'chest_1');
   const scene: RasterScene = {
     width: vector.canvas.width,
     height: vector.canvas.height,
-    rows: vector.rows ?? 6,
+    rows: profile ? gridRows(profile) : 6,
     image: (reference) => images.get(reference) ?? null,
   };
   return flattenRaster(vector.layers, scene);

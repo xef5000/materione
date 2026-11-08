@@ -541,6 +541,14 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0092", Severity.WARN, "Clickable GUI layer is outside the container; clicks cannot reach it");
 
     /**
+     * A GUI's {@code container:} is not a container this server supports (gui.md section 12.4): the value names no
+     * profile, or it is not a string. The GUI is quarantined and the rest of the pack compiles; the file is not
+     * changed, so a file written for a newer plugin costs that one GUI on an older server.
+     */
+    public static final DiagnosticCode GUI_CONTAINER_UNKNOWN =
+            new DiagnosticCode("MTR-0097", Severity.ERROR, "GUI container is not a supported container; GUI quarantined");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -666,6 +674,7 @@ public final class DiagnosticCodes {
             GUI_ART_CLIPPED,
             GUI_ART_GEOMETRY_INVALID,
             GUI_CLICK_OUTSIDE_CONTAINER,
+            GUI_CONTAINER_UNKNOWN,
             TEMPLATE_CYCLE,
             TEMPLATE_AMBIGUOUS,
             BUILTIN_PACK_ID_RESERVED,

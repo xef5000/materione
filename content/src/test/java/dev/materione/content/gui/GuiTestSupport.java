@@ -54,7 +54,7 @@ public final class GuiTestSupport {
         }
         var definition = new LinkedHashMap<String, Object>();
         definition.put("title", "Test");
-        definition.put("rows", rows);
+        definition.put("container", "chest_" + rows);
         definition.put("layers", list);
         return definition;
     }

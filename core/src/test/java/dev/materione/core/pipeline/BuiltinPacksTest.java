@@ -71,7 +71,7 @@ class BuiltinPacksTest {
         entries.put("builtin-packs/index.txt", "# the packs this jar ships\ndemo\n");
         entries.put("builtin-packs/demo/pack.yml", "id: demo\nversion: 1.0.0\nschema_version: 1\ndepends: []\n");
         entries.put("builtin-packs/demo/items/gems/ruby.yml", "ruby:\n  material: PAPER\n  display_name: Ruby\n");
-        entries.put("builtin-packs/demo/guis/panel.yml", "panel:\n  title: Panel\n  rows: 3\n");
+        entries.put("builtin-packs/demo/guis/panel.yml", "panel:\n  title: Panel\n  container: chest_3\n");
         return entries;
     }
 

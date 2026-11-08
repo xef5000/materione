@@ -7599,7 +7599,7 @@
         "parameters": [
           {
             "advanced": false,
-            "description": "Chest slot, 0 at the top-left, row by row; must lie inside the GUI's rows",
+            "description": "Container slot, numbered from 0 (row by row, from the top-left); must lie inside the GUI's container",
             "example": "13",
             "id": "slot",
             "label": "Slot",
@@ -7785,6 +7785,80 @@
         "registeredBy": "materione",
         "sinceVersion": "1.0.0",
         "target": "slot"
+      }
+    ],
+    "guiContainers": [
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 132,
+        "id": "chest_1",
+        "label": "Chest, 1 row",
+        "slotCount": 9,
+        "width": 176
+      },
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 150,
+        "id": "chest_2",
+        "label": "Chest, 2 rows",
+        "slotCount": 18,
+        "width": 176
+      },
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 168,
+        "id": "chest_3",
+        "label": "Chest, 3 rows",
+        "slotCount": 27,
+        "width": 176
+      },
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 186,
+        "id": "chest_4",
+        "label": "Chest, 4 rows",
+        "slotCount": 36,
+        "width": 176
+      },
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 204,
+        "id": "chest_5",
+        "label": "Chest, 5 rows",
+        "slotCount": 45,
+        "width": 176
+      },
+      {
+        "columns": 9,
+        "group": "Chests",
+        "height": 222,
+        "id": "chest_6",
+        "label": "Chest, 6 rows",
+        "slotCount": 54,
+        "width": 176
+      },
+      {
+        "columns": 5,
+        "group": "Hopper",
+        "height": 133,
+        "id": "hopper",
+        "label": "Hopper",
+        "slotCount": 5,
+        "width": 176
+      },
+      {
+        "columns": 3,
+        "group": "Dispenser",
+        "height": 166,
+        "id": "dispenser",
+        "label": "Dispenser",
+        "slotCount": 9,
+        "width": 176
       }
     ],
     "types": [
@@ -10592,7 +10666,7 @@
         ]
       },
       {
-        "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
+        "description": "A container screen (a chest, hopper or dispenser) designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
         "directory": "guis",
         "displayName": "GUI",
         "name": "gui",
@@ -10611,18 +10685,67 @@
           },
           {
             "advanced": false,
-            "description": "Chest rows, 1 to 6",
-            "example": "3",
-            "id": "rows",
-            "label": "Rows",
-            "max": 6.0,
-            "min": 1.0,
+            "allowedValues": [
+              "chest_1",
+              "chest_2",
+              "chest_3",
+              "chest_4",
+              "chest_5",
+              "chest_6",
+              "hopper",
+              "dispenser"
+            ],
+            "description": "The container profile the GUI is designed in: chest_1 to chest_6, hopper or dispenser (gui.md section 12.4)",
+            "example": "chest_3",
+            "id": "container",
+            "label": "Container",
+            "options": [
+              {
+                "description": "Chests: 9 slots",
+                "label": "Chest, 1 row",
+                "value": "chest_1"
+              },
+              {
+                "description": "Chests: 18 slots",
+                "label": "Chest, 2 rows",
+                "value": "chest_2"
+              },
+              {
+                "description": "Chests: 27 slots",
+                "label": "Chest, 3 rows",
+                "value": "chest_3"
+              },
+              {
+                "description": "Chests: 36 slots",
+                "label": "Chest, 4 rows",
+                "value": "chest_4"
+              },
+              {
+                "description": "Chests: 45 slots",
+                "label": "Chest, 5 rows",
+                "value": "chest_5"
+              },
+              {
+                "description": "Chests: 54 slots",
+                "label": "Chest, 6 rows",
+                "value": "chest_6"
+              },
+              {
+                "description": "Hopper: 5 slots",
+                "label": "Hopper",
+                "value": "hopper"
+              },
+              {
+                "description": "Dispenser: 9 slots",
+                "label": "Dispenser",
+                "value": "dispenser"
+              }
+            ],
             "order": 10,
             "required": true,
             "section": "placement",
-            "type": "integer",
-            "uiHint": "number",
-            "unit": "rows"
+            "type": "enum",
+            "uiHint": "select"
           },
           {
             "advanced": false,
@@ -13808,7 +13931,7 @@
     "effects": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  kind: rainbow # rainbow | wave | shake | pulse\n  speed: 3.0\n  # colors:\n  #   - \"#FF0000\"\n  #   - \"#0000FF\"\n  # Compiles into the injected text-shader overlay (runtime-systems §6).\n  # Use in text as <effect:demo_scaffold>…</effect>; test with\n  # /materione dev effect demo_scaffold hello.\n",
     "furnitures": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: block/demo_scaffold\n  display_name: \"Demo Scaffold\"\n  rotation: 90\n  hitboxes:\n    - type: interaction\n      offset: [0, 0, 0]\n      width: 1.0\n      height: 1.0\n  # seats:\n  #   - offset: [0, 0.3, 0]\n  # item: <item-id> — optional custom placement item; one is generated automatically\n",
     "glyphs": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: gui/demo_scaffold\n  ascent: 8\n  height: 8\n  # placeholders:\n  #   - \":demo_scaffold:\"\n  # emoji: true — chat interception + tab-completion\n  # The codepoint is allocated by the server and shown in the preview.\n",
-    "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  rows: 3\n",
+    "guis": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  title: \"Demo Scaffold\"\n  container: chest_3\n",
     "items": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  material: STICK\n  display_name: \"Demo Scaffold\"\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n",
     "paintings": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  texture: painting/demo_scaffold # exactly 16 px per block\n  width: 1\n  height: 1\n  # author: \"Unknown\"\n  # title: \"Demo Scaffold\"\n  # placeable: false — join the vanilla random-placement pool\n  # Paintings apply at the next server restart (world datapack).\n",
     "recipes": "# demo_scaffold — created by the Materione editor\ndemo_scaffold:\n  type: shaped # shaped | shapeless | furnace\n  result: demo_scaffold\n  shape:\n    - \" A \"\n    - \" B \"\n    - \" A \"\n  ingredients:\n    A: minecraft:stone\n    B: minecraft:stick\n",
@@ -16650,7 +16773,7 @@
       ]
     },
     {
-      "description": "A chest screen designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
+      "description": "A container screen (a chest, hopper or dispenser) designed as ordered layers: panels, slot wells, images, paint, buttons, title text and items",
       "directory": "guis",
       "displayName": "GUI",
       "name": "gui",
@@ -16669,18 +16792,67 @@
         },
         {
           "advanced": false,
-          "description": "Chest rows, 1 to 6",
-          "example": "3",
-          "id": "rows",
-          "label": "Rows",
-          "max": 6.0,
-          "min": 1.0,
+          "allowedValues": [
+            "chest_1",
+            "chest_2",
+            "chest_3",
+            "chest_4",
+            "chest_5",
+            "chest_6",
+            "hopper",
+            "dispenser"
+          ],
+          "description": "The container profile the GUI is designed in: chest_1 to chest_6, hopper or dispenser (gui.md section 12.4)",
+          "example": "chest_3",
+          "id": "container",
+          "label": "Container",
+          "options": [
+            {
+              "description": "Chests: 9 slots",
+              "label": "Chest, 1 row",
+              "value": "chest_1"
+            },
+            {
+              "description": "Chests: 18 slots",
+              "label": "Chest, 2 rows",
+              "value": "chest_2"
+            },
+            {
+              "description": "Chests: 27 slots",
+              "label": "Chest, 3 rows",
+              "value": "chest_3"
+            },
+            {
+              "description": "Chests: 36 slots",
+              "label": "Chest, 4 rows",
+              "value": "chest_4"
+            },
+            {
+              "description": "Chests: 45 slots",
+              "label": "Chest, 5 rows",
+              "value": "chest_5"
+            },
+            {
+              "description": "Chests: 54 slots",
+              "label": "Chest, 6 rows",
+              "value": "chest_6"
+            },
+            {
+              "description": "Hopper: 5 slots",
+              "label": "Hopper",
+              "value": "hopper"
+            },
+            {
+              "description": "Dispenser: 9 slots",
+              "label": "Dispenser",
+              "value": "dispenser"
+            }
+          ],
           "order": 10,
           "required": true,
           "section": "placement",
-          "type": "integer",
-          "uiHint": "number",
-          "unit": "rows"
+          "type": "enum",
+          "uiHint": "select"
         },
         {
           "advanced": false,

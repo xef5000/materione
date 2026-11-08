@@ -33,7 +33,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class EditorFieldAssetsTest {
 
-    private static final String SEED = "shop:\n  title: Shop\n  rows: 3\n  layers: []\n";
+    private static final String SEED = "shop:\n  title: Shop\n  container: chest_3\n  layers: []\n";
 
     @TempDir
     Path temp;

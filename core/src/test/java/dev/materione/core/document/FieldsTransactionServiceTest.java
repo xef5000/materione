@@ -20,7 +20,7 @@ import org.junit.jupiter.api.io.TempDir;
 class FieldsTransactionServiceTest {
 
     private static final String GUI = "guis/shop.yml";
-    private static final String GUI_RAW = "shop:\n  title: Shop\n  rows: 3\n  layers: []\n";
+    private static final String GUI_RAW = "shop:\n  title: Shop\n  container: chest_3\n  layers: []\n";
 
     @TempDir
     Path temp;

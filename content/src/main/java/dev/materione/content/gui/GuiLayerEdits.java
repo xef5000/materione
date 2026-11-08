@@ -23,15 +23,15 @@ import java.util.function.Predicate;
  * carried over unchanged, unknown keys included.
  *
  * <p>Refusals are the ids and types the compiler would otherwise quarantine: an id that does not
- * match {@code [a-z0-9_]+} or is taken, a component the registry does not know, a screen outside
- * 1 to 6 rows, a reorder that is not a permutation. Parameter values are not judged here: the
+ * match {@code [a-z0-9_]+} or is taken, a component the registry does not know, a screen whose
+ * container is not a profile, a reorder that is not a permutation. Parameter values are not judged here: the
  * compiler skips a layer whose fields it cannot read and says so (MTR-0052), and the API reports
  * that as a warning.
  */
 final class GuiLayerEdits {
 
     /** The authored fields after the edits. */
-    record Result(String title, int rows, List<Map<String, Object>> layers) {}
+    record Result(String title, String container, List<Map<String, Object>> layers) {}
 
     private static final Set<String> RESERVED = Set.of("id", "type");
 
@@ -46,13 +46,13 @@ final class GuiLayerEdits {
      * Applies {@code edits} in order.
      *
      * @param title the authored title (may be null when absent)
-     * @param rows the authored rows
+     * @param container the authored container id (a profile id, gui.md section 12.4)
      * @param layers the authored layer mappings, bottom to top; not modified
      * @throws IllegalArgumentException with the author-facing reason when an edit is refused
      */
-    Result apply(String title, int rows, List<Map<String, Object>> layers, List<GuiEdit> edits) {
+    Result apply(String title, String container, List<Map<String, Object>> layers, List<GuiEdit> edits) {
         String nextTitle = title;
-        int nextRows = rows;
+        String nextContainer = container;
         var working = new ArrayList<Map<String, Object>>();
         var authored = new HashSet<String>();
         for (Map<String, Object> layer : layers) {
@@ -79,17 +79,17 @@ final class GuiLayerEdits {
                         }
                         nextTitle = screen.title();
                     }
-                    if (screen.rows() != null) {
-                        if (screen.rows() < 1 || screen.rows() > GuiType.MAX_ROWS) {
-                            throw new IllegalArgumentException(
-                                    "rows must be from 1 to " + GuiType.MAX_ROWS + ", not " + screen.rows());
+                    if (screen.container() != null) {
+                        if (GuiContainers.byId(screen.container()).isEmpty()) {
+                            throw new IllegalArgumentException("container must be one of " + GuiContainers.supportedIds()
+                                    + ", not " + screen.container());
                         }
-                        nextRows = screen.rows();
+                        nextContainer = screen.container();
                     }
                 }
             }
         }
-        return new Result(nextTitle, nextRows, working);
+        return new Result(nextTitle, nextContainer, working);
     }
 
     private void add(List<Map<String, Object>> working, AddLayer add) {

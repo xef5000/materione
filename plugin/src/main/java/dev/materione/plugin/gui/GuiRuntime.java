@@ -218,7 +218,7 @@ public final class GuiRuntime implements RuntimeApi.GuiRuntimeApi {
     }
 
     private static RuntimeApi.GuiView viewOf(RuntimeGuis.Live gui) {
-        return new RuntimeApi.GuiView(gui.id(), gui.rows(), gui.accessibleTitle(), gui.slots().size());
+        return new RuntimeApi.GuiView(gui.id(), gui.container().id(), gui.accessibleTitle(), gui.slots().size());
     }
 
     /** Player lookup that fails soft when no server is up (tests, early bootstrap). */

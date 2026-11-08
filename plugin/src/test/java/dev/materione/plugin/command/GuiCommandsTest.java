@@ -14,9 +14,9 @@ import org.junit.jupiter.api.Test;
 class GuiCommandsTest {
 
     private static final List<RuntimeApi.GuiView> LIVE = List.of(
-            new RuntimeApi.GuiView(NamespacedId.parse("demo:shop"), 3, "Shop", 4),
-            new RuntimeApi.GuiView(NamespacedId.parse("demo:arena"), 1, "Arena", 0),
-            new RuntimeApi.GuiView(NamespacedId.parse("market:shop"), 6, "Market", 9));
+            new RuntimeApi.GuiView(NamespacedId.parse("demo:shop"), "chest_3", "Shop", 4),
+            new RuntimeApi.GuiView(NamespacedId.parse("demo:arena"), "chest_1", "Arena", 0),
+            new RuntimeApi.GuiView(NamespacedId.parse("market:shop"), "chest_6", "Market", 9));
 
     @Test
     void aQualifiedLiveIdResolvesToItself() {

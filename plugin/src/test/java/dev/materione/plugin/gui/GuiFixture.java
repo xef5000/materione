@@ -243,7 +243,7 @@ public final class GuiFixture {
                 log.add(what + " " + gui.id().value());
                 session.attach(this);
                 session.displayed(gui);
-                shapes.put(session, new Shape(gui.title(), gui.rows()));
+                shapes.put(session, new Shape(gui.title(), gui.container().id()));
                 paint(viewer, session, gui, true);
                 opened.accept(gui);
             };

@@ -58,13 +58,13 @@ class RasterVectorsTest {
         Map<String, Object> canvas = (Map<String, Object>) vector.get("canvas");
         int width = ((Number) canvas.get("width")).intValue();
         int height = ((Number) canvas.get("height")).intValue();
-        int rows = vector.get("rows") instanceof Number count ? count.intValue() : 1;
+        String container = vector.get("container") instanceof String id ? id : "chest_1"; // a vector with no container is a 1-row chest
         Map<String, TextureSource.Pixels> images = images(vector);
 
         // the layers as a GUI file would carry them, through the real parsers
         var definition = new LinkedHashMap<String, Object>();
         definition.put("title", name);
-        definition.put("rows", rows);
+        definition.put("container", container);
         definition.put("layers", vector.get("layers"));
         GuiType type = GuiTestSupport.type();
         var parsed = type.parse(NamespacedId.of(GuiTestSupport.NAMESPACE, "vector"), definition, Map.of());

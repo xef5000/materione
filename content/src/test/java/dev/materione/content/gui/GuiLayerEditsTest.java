@@ -44,7 +44,7 @@ class GuiLayerEditsTest {
 
     @Test
     void addsAtTheIndexWithGeneratedOrGivenIds() {
-        var result = edits.apply("Shop", 3, stack(), List.of(
+        var result = edits.apply("Shop", "chest_3", stack(), List.of(
                 new AddLayer(0, "panel", null, Map.of("x", 8)),
                 new AddLayer(4, "slots", "extra", Map.of("region", "player"))));
         assertThat(ids(result.layers())).containsExactly("panel", "frame", "wells", "sword", "extra");
@@ -53,7 +53,7 @@ class GuiLayerEditsTest {
 
     @Test
     void generatedIdsAreUniqueAndSafe() {
-        var result = edits.apply("Shop", 3, stack(), List.of(
+        var result = edits.apply("Shop", "chest_3", stack(), List.of(
                 new AddLayer(3, "materione:panel", null, Map.of()),
                 new AddLayer(3, "panel", null, Map.of())));
         assertThat(ids(result.layers())).containsExactly("frame", "wells", "sword", "panel_2", "panel");
@@ -61,7 +61,7 @@ class GuiLayerEditsTest {
 
     @Test
     void patchSetsAndRemovesFieldsAndKeepsTheRest() {
-        var result = edits.apply("Shop", 3, stack(), List.of(
+        var result = edits.apply("Shop", "chest_3", stack(), List.of(
                 new PatchLayer("sword", Map.of("amount", 4, "slot", 14), List.of("comment"))));
         Map<String, Object> sword = result.layers().get(2);
         assertThat(sword).containsEntry("slot", 14).containsEntry("amount", 4).containsEntry("item", "shop:sword");
@@ -69,65 +69,65 @@ class GuiLayerEditsTest {
         // a null value removes the field, as an absent one would read
         var set = new java.util.LinkedHashMap<String, Object>();
         set.put("item", null);
-        var cleared = edits.apply("Shop", 3, stack(), List.of(new PatchLayer("sword", set, List.of())));
+        var cleared = edits.apply("Shop", "chest_3", stack(), List.of(new PatchLayer("sword", set, List.of())));
         assertThat(cleared.layers().get(2)).doesNotContainKey("item").containsEntry("slot", 13);
     }
 
     @Test
     void reorderIsAPermutationAndRemoveNamesExistingLayers() {
-        var reordered = edits.apply("Shop", 3, stack(), List.of(new ReorderLayers(List.of("sword", "frame", "wells"))));
+        var reordered = edits.apply("Shop", "chest_3", stack(), List.of(new ReorderLayers(List.of("sword", "frame", "wells"))));
         assertThat(ids(reordered.layers())).containsExactly("sword", "frame", "wells");
-        var removed = edits.apply("Shop", 3, stack(), List.of(new RemoveLayers(List.of("wells"))));
+        var removed = edits.apply("Shop", "chest_3", stack(), List.of(new RemoveLayers(List.of("wells"))));
         assertThat(ids(removed.layers())).containsExactly("frame", "sword");
     }
 
     @Test
     void screenTitleAndRowsAreSetOrLeftAlone() {
-        var result = edits.apply("Shop", 3, stack(), List.of(new SetScreen("Market", 6)));
+        var result = edits.apply("Shop", "chest_3", stack(), List.of(new SetScreen("Market", "chest_6")));
         assertThat(result.title()).isEqualTo("Market");
-        assertThat(result.rows()).isEqualTo(6);
-        var untouched = edits.apply("Shop", 3, stack(), List.of(new SetScreen(null, null)));
+        assertThat(result.container()).isEqualTo("chest_6");
+        var untouched = edits.apply("Shop", "chest_3", stack(), List.of(new SetScreen(null, null)));
         assertThat(untouched.title()).isEqualTo("Shop");
-        assertThat(untouched.rows()).isEqualTo(3);
+        assertThat(untouched.container()).isEqualTo("chest_3");
     }
 
     @Test
     void refusesWhatTheCompilerWouldQuarantine() {
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new AddLayer(0, "hologram", null, Map.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new AddLayer(0, "hologram", null, Map.of()))))
                 .hasMessageContaining("unknown component 'hologram'");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new AddLayer(0, "panel", "Bad Id", Map.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new AddLayer(0, "panel", "Bad Id", Map.of()))))
                 .hasMessageContaining("must match [a-z0-9_]+");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new AddLayer(0, "panel", "frame", Map.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new AddLayer(0, "panel", "frame", Map.of()))))
                 .hasMessageContaining("already used");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new AddLayer(9, "panel", null, Map.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new AddLayer(9, "panel", null, Map.of()))))
                 .hasMessageContaining("outside 0..3");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new PatchLayer("frame", Map.of("id", "x"), List.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new PatchLayer("frame", Map.of("id", "x"), List.of()))))
                 .hasMessageContaining("cannot change");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new PatchLayer("frame", Map.of("type", "nope"), List.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new PatchLayer("frame", Map.of("type", "nope"), List.of()))))
                 .hasMessageContaining("unknown component 'nope'");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new PatchLayer("ghost", Map.of(), List.of()))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new PatchLayer("ghost", Map.of(), List.of()))))
                 .hasMessageContaining("no layer 'ghost'");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new ReorderLayers(List.of("frame", "wells")))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new ReorderLayers(List.of("frame", "wells")))))
                 .hasMessageContaining("names every layer once");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new ReorderLayers(List.of("frame", "frame", "wells")))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new ReorderLayers(List.of("frame", "frame", "wells")))))
                 .hasMessageContaining("named twice");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new SetScreen(null, 7))))
-                .hasMessageContaining("rows must be from 1 to 6");
-        assertThatThrownBy(() -> edits.apply("Shop", 3, stack(), List.of(new SetScreen(" ", null))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new SetScreen(null, "chest_7"))))
+                .hasMessageContaining("container must be one of chest_1, chest_2, chest_3, chest_4, chest_5, chest_6, hopper, dispenser");
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", stack(), List.of(new SetScreen(" ", null))))
                 .hasMessageContaining("must not be blank");
     }
 
     @Test
     void anEditRefusesAGuiWhoseTwoLayersShareAnId() {
         var doubled = List.of(layer("frame", "panel"), layer("frame", "panel"));
-        assertThatThrownBy(() -> edits.apply("Shop", 3, doubled, List.of(new RemoveLayers(List.of("frame")))))
+        assertThatThrownBy(() -> edits.apply("Shop", "chest_3", doubled, List.of(new RemoveLayers(List.of("frame")))))
                 .hasMessageContaining("two layers are named 'frame'");
     }
 
     @Test
     void theInputIsNeverModified() {
         var before = stack();
-        edits.apply("Shop", 3, before, List.of(new RemoveLayers(List.of("frame")), new PatchLayer("wells", Map.of("x", 1), List.of())));
+        edits.apply("Shop", "chest_3", before, List.of(new RemoveLayers(List.of("frame")), new PatchLayer("wells", Map.of("x", 1), List.of())));
         assertThat(ids(before)).containsExactly("frame", "wells", "sword");
         assertThat(before.get(1)).doesNotContainKey("x");
     }

@@ -43,7 +43,7 @@ public final class GuiRuntimeRunner {
         return """
                 runtime_shop:
                   title: Runtime Shop
-                  rows: %d
+                  container: chest_%d
                   layers:
                     - id: frame
                       type: panel
@@ -267,7 +267,7 @@ public final class GuiRuntimeRunner {
         String text = """
                 menu:
                   title: Menu
-                  rows: 3
+                  container: chest_3
                   layers:
                     - id: b
                       type: button

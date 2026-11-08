@@ -32,7 +32,7 @@ class GuiRulesCompileTest {
     private static final String HEAD = """
             shop:
               title: Shop
-              rows: 2
+              container: chest_2
               layers:
                 - id: buy
                   type: button
@@ -112,7 +112,7 @@ class GuiRulesCompileTest {
         f.gui("""
                 plain:
                   title: Plain
-                  rows: 1
+                  container: chest_1
                   layers: []
                 """);
 
@@ -172,7 +172,7 @@ class GuiRulesCompileTest {
                 """);
 
         assertThat(problems).hasSize(1);
-        assertThat(problems.get(0).message()).contains("slot 18").contains("2 row(s)");
+        assertThat(problems.get(0).message()).contains("slot 18").contains("container (0 to 17)");
         assertThat(problems.get(0).target().field()).containsExactly("behavior", "0", "slot");
     }
 
@@ -222,7 +222,7 @@ class GuiRulesCompileTest {
         List<Diagnostic> problems = check("""
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers: []
                   behavior:
                     - on: gui.open

@@ -30,7 +30,7 @@ class ItemLayerTest {
         }
         var definition = new java.util.LinkedHashMap<String, Object>();
         definition.put("title", "Test");
-        definition.put("rows", 3);
+        definition.put("container", "chest_3");
         definition.put("layers", authored);
         return GuiTestSupport.parse(TYPE, definition);
     }

@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
@@ -31,7 +32,7 @@ class RuntimeGuisTest {
                 new ArrayList<>());
 
         RuntimeGuis.Live live = view.gui(SHOP).orElseThrow();
-        assertThat(live.rows()).isEqualTo(3);
+        assertThat(live.container().id()).isEqualTo("chest_3");
         assertThat(live.title()).isEqualTo("<font:demo:gui>Shop");
         assertThat(live.accessibleTitle()).isEqualTo("Shop");
         assertThat(live.slots()).containsExactly(
@@ -94,9 +95,9 @@ class RuntimeGuisTest {
         var base = build(Map.of(SHOP, shop(slot(1, SWORD, 1))),
                 id -> Optional.of(item(SWORD, "hash-1")), new ArrayList<>()).gui(SHOP).orElseThrow();
 
-        var retitled = build(Map.of(SHOP, new CompiledGui(SHOP, 3, "<font:demo:gui>Market", "Market",
+        var retitled = build(Map.of(SHOP, new CompiledGui(SHOP, GuiContainers.byId("chest_3").orElseThrow(), "<font:demo:gui>Market", "Market",
                 List.of(slot(1, SWORD, 1)))), id -> Optional.of(item(SWORD, "hash-1")), new ArrayList<>());
-        var resized = build(Map.of(SHOP, new CompiledGui(SHOP, 4, base.title(), "Shop",
+        var resized = build(Map.of(SHOP, new CompiledGui(SHOP, GuiContainers.byId("chest_4").orElseThrow(), base.title(), "Shop",
                 List.of(slot(1, SWORD, 1)))), id -> Optional.of(item(SWORD, "hash-1")), new ArrayList<>());
         var reworked = build(Map.of(SHOP, shop(slot(1, SWORD, 1))),
                 id -> Optional.of(item(SWORD, "hash-2")), new ArrayList<>());
@@ -120,7 +121,7 @@ class RuntimeGuisTest {
     }
 
     private static CompiledGui shop(CompiledGui.Slot... slots) {
-        return new CompiledGui(SHOP, 3, "<font:demo:gui>Shop", "Shop", List.of(slots));
+        return new CompiledGui(SHOP, GuiContainers.byId("chest_3").orElseThrow(), "<font:demo:gui>Shop", "Shop", List.of(slots));
     }
 
     private static CompiledGui.Slot slot(int slot, NamespacedId item, int amount) {

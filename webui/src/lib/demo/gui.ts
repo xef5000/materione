@@ -17,7 +17,7 @@ export function sampleGuiRaw(): string {
   return `# main — a shop screen made in the Materione studio
 main:
   title: Shop
-  rows: 3
+  container: chest_3
   layers:
     - id: frame
       type: panel

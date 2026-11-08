@@ -97,7 +97,7 @@ public final class ListComponent implements GuiComponent {
         }
         List<Integer> slots;
         try {
-            slots = ListSlots.parse(raw.get("slots"), configuration.rows());
+            slots = ListSlots.parse(raw.get("slots"), configuration.container());
         } catch (IllegalArgumentException rejected) {
             throw fail(configuration, rejected.getMessage());
         }
@@ -160,7 +160,7 @@ public final class ListComponent implements GuiComponent {
         params.put("slot", 0);
         try {
             return (ItemComponent.Layer) new ItemComponent().parse(new GuiComponentConfiguration(
-                    configuration.guiId(), configuration.layerId(), configuration.rows(), params));
+                    configuration.guiId(), configuration.layerId(), configuration.container(), params));
         } catch (IllegalArgumentException rejected) {
             throw fail(configuration, "entry: " + rejected.getMessage());
         }

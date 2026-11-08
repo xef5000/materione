@@ -62,8 +62,8 @@ class GuiRenderVectorParityTest {
             var canvas = (Map<String, Object>) vector.get("canvas");
             int width = ((Number) canvas.get("width")).intValue();
             int height = ((Number) canvas.get("height")).intValue();
-            int rows = vector.get("rows") instanceof Number count ? count.intValue() : 1;
-            if (width == CompiledGui.WIDTH && height == CompiledGui.height(rows)) {
+            String container = vector.get("container") instanceof String id ? id : "chest_1"; // no container: a 1-row chest
+            if (GuiContainers.byId(container).map(profile -> profile.width() == width && profile.height() == height).orElse(false)) {
                 chests.add(DynamicTest.dynamicTest(json.getFileName().toString(), () -> verify(json)));
             }
         }
@@ -74,7 +74,7 @@ class GuiRenderVectorParityTest {
     private void verify(Path json) throws IOException {
         String name = json.getFileName().toString().replace(".json", "");
         Map<String, Object> vector = LosslessYaml.parse(Files.readString(json)).data();
-        int rows = vector.get("rows") instanceof Number count ? count.intValue() : 1;
+        String container = vector.get("container") instanceof String id ? id : "chest_1"; // a vector with no container is a 1-row chest
 
         var assets = new ArrayList<ModelAsset>();
         if (vector.get("images") instanceof Map<?, ?> images) {
@@ -97,7 +97,7 @@ class GuiRenderVectorParityTest {
         for (Object entry : (List<?>) vector.get("layers")) {
             layers.add(layer(entry));
         }
-        var draft = new Typed(new GuiDocumentView(PACK, null, "vector", name, rows, 0, layers));
+        var draft = new Typed(new GuiDocumentView(PACK, null, "vector", name, container, 0, layers));
 
         GuiAuthoringApi gui = api();
         ApiResult<GuiRender> rendered = gui.render(new GuiRenderRequest(draft, assets));

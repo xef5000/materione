@@ -131,7 +131,7 @@ public final class BukkitWindowHost implements WindowHost {
         Object previousWindow = session.window();
         Rendered previousRender = session.rendered();
         RuntimeGuis.Live previousDisplayed = session.displayed().orElse(null);
-        GuiMenu menu = new GuiMenu(session, gui.rows(), next.title(), gui.title(), input);
+        GuiMenu menu = new GuiMenu(session, gui.container(), next.title(), gui.title(), input);
         menu.inputSlots(slotsOf(gui, next));
         later(viewer, () -> {
             if (!player.isOnline()) {
@@ -187,7 +187,7 @@ public final class BukkitWindowHost implements WindowHost {
             placeInputs(player, menu, items);
             journal.mirror(player);
             plugin.getLogger().info("MATERIONE-GUI-OPENED id=" + gui.id() + " player=" + viewer.name()
-                    + " rows=" + gui.rows() + " slots=" + gui.slots().size());
+                    + " container=" + gui.container().id() + " slots=" + gui.slots().size());
             opened.run();
         }, () -> failed.accept("the player left before the window opened"));
     }
@@ -309,7 +309,7 @@ public final class BukkitWindowHost implements WindowHost {
 
     @Override
     public java.util.Optional<Shape> shape(Viewer viewer, GuiSession session) {
-        return menuOf(viewer, session).map(menu -> new Shape(menu.baseTitle(), menu.rows()));
+        return menuOf(viewer, session).map(menu -> new Shape(menu.baseTitle(), menu.container().id()));
     }
 
     /** Puts retained inputs back and returns the stacks whose slots became covered. */

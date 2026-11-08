@@ -4,7 +4,7 @@
 # Announced on the console (`say MATERIONE-SHOWCASE-...`).
 confirm:
   title: Confirm
-  rows: 1
+  container: chest_1
   layers:
     - id: question
       type: text

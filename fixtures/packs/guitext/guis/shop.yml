@@ -3,7 +3,7 @@
 # minecraft:default (#198). The default run is last, as gui.md §4 requires.
 shop:
   title: Shop
-  rows: 3
+  container: chest_3
   layers:
     - id: frame
       type: panel

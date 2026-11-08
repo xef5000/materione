@@ -11,11 +11,13 @@
 // a rule that is wrong in an implementation, or ambiguous in the README, shows
 // up as a mismatch instead of two implementations agreeing by copying.
 import { deflateSync } from 'node:zlib';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
+// The container profiles (gui.md section 12.5.1), the one file the compiler and the studio read too
+const PROFILES = JSON.parse(readFileSync(join(here, '..', '..', '..', 'shared', 'gui', 'containers.json'), 'utf8')).containers;
 
 // ---------------------------------------------------------------- colors
 
@@ -132,14 +134,20 @@ function inset(buf, x, y, w, h, style) {
   }
 }
 
-function cells(rows, region) {
+// The slot origins of a container profile (gui.md section 12.5.2): its slots, then the player inventory and the
+// hotbar 58 px below its first row.
+function cells(containerId, region) {
+  const profile = PROFILES.find((entry) => entry.id === containerId);
+  if (!profile) throw new Error(`unknown container ${containerId}`);
   const out = [];
   if (region === 'container' || region === 'all') {
-    for (let r = 0; r < rows; r++) for (let c = 0; c < 9; c++) out.push([8 + c * 18, 18 + r * 18]);
+    for (let i = 0; i < profile.slotCount; i++) {
+      out.push([profile.slots.x + 18 * (i % profile.columns), profile.slots.y + 18 * Math.floor(i / profile.columns)]);
+    }
   }
   if (region === 'player' || region === 'all') {
-    for (let r = 0; r < 3; r++) for (let c = 0; c < 9; c++) out.push([8 + c * 18, rows * 18 + 31 + r * 18]);
-    for (let c = 0; c < 9; c++) out.push([8 + c * 18, rows * 18 + 89]);
+    for (let r = 0; r < 3; r++) for (let c = 0; c < 9; c++) out.push([profile.inventory.x + c * 18, profile.inventory.y + r * 18]);
+    for (let c = 0; c < 9; c++) out.push([profile.inventory.x + c * 18, profile.inventory.y + 58]);
   }
   return out;
 }
@@ -162,7 +170,7 @@ function paintLayer(vector, layer) {
       raised(buf, g('x', 0), g('y', 0), g('width', 0), g('height', 0), styleFor(layer, RAISED), 1);
       break;
     case 'slots':
-      for (const [cx, cy] of cells(vector.rows, g('region', 'container'))) {
+      for (const [cx, cy] of cells(vector.container, g('region', 'container'))) {
         inset(buf, cx - 1, cy - 1, 18, 18, styleFor(layer, SLOT));
       }
       break;
@@ -311,42 +319,42 @@ const vectors = [
     name: 'slots-container-1row',
     description: 'Inset 18x18 slot wells for the container region of a 1-row chest (wells drawn at item origin - 1).',
     canvas: CHEST(1),
-    rows: 1,
+    container: 'chest_1',
     layers: [{ id: 'wells', type: 'slots', region: 'container' }],
   },
   {
     name: 'slots-player-3rows',
     description: 'The player inventory region of a 3-row chest: 27 slots from y = rows*18+31, then the hotbar at y = rows*18+89.',
     canvas: CHEST(3),
-    rows: 3,
+    container: 'chest_3',
     layers: [{ id: 'wells', type: 'slots', region: 'player' }],
   },
   {
     name: 'slots-custom-style',
     description: 'Slot wells with a partial style: shadow and fill overridden, highlight left at the slot default.',
     canvas: CHEST(2),
-    rows: 2,
+    container: 'chest_2',
     layers: [{ id: 'wells', type: 'slots', region: 'all', style: { fill: '#4A5568', shadow: '#1A202C' } }],
   },
   {
     name: 'chest-6-rows',
     description: 'A panel with no corners field (square corners, as every panel before #278) plus an all-region slots layer on a 176x222 canvas.',
     canvas: CHEST(6),
-    rows: 6,
+    container: 'chest_6',
     layers: [VANILLA_PANEL(6), { id: 'wells', type: 'slots', region: 'all' }],
   },
   {
     name: 'chest-1-row',
     description: 'The same square-cornered panel and slots on the smallest chest, 176x132.',
     canvas: CHEST(1),
-    rows: 1,
+    container: 'chest_1',
     layers: [VANILLA_PANEL(1), { id: 'wells', type: 'slots', region: 'all' }],
   },
   {
     name: 'chest-with-button',
     description: 'A starter chest with a button on top: later layers cover earlier ones, bevel pixels included.',
     canvas: CHEST(3),
-    rows: 3,
+    container: 'chest_3',
     layers: [
       VANILLA_PANEL(3),
       { id: 'wells', type: 'slots', region: 'all' },
@@ -461,7 +469,7 @@ const vectors = [
     name: 'vanilla-chest-corners',
     description: 'The top part of a 6-row chest (176 x 125) as one vanilla-corner panel. Its corners and outline columns must match webui/static/vanilla/generic_54.png (VanillaChestCornersTest).',
     canvas: { width: 176, height: 125 },
-    rows: 6,
+    container: 'chest_6',
     layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 125, corners: 'vanilla' }],
   },
 ];

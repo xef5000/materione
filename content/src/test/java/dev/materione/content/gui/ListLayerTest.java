@@ -3,6 +3,7 @@ package dev.materione.content.gui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
+import dev.materione.api.gui.GuiContainer;
 import dev.materione.api.gui.TextureSource;
 import dev.materione.content.gui.list.ListSort;
 import dev.materione.content.gui.list.ListSpec;
@@ -16,6 +17,8 @@ import org.junit.jupiter.api.Test;
  * names its reason, as an item layer's does, and an accepted list is a per-viewer placement, never a static slot.
  */
 class ListLayerTest {
+
+    private static final GuiContainer CHEST_3 = GuiContainers.byId("chest_3").orElseThrow();
 
     private static final GuiType TYPE = GuiTestSupport.type();
 
@@ -36,7 +39,7 @@ class ListLayerTest {
     private static GuiDefinition gui(Map<String, Object>... layers) {
         var definition = new java.util.LinkedHashMap<String, Object>();
         definition.put("title", "Test");
-        definition.put("rows", 3);
+        definition.put("container", "chest_3");
         var authored = new java.util.ArrayList<Object>();
         for (Map<String, Object> layer : layers) {
             authored.add(layer);
@@ -80,19 +83,19 @@ class ListLayerTest {
 
     @Test
     void slotsAcceptARangeWithSkippedColumnsOrAnExplicitListInEntryOrder() {
-        assertThat(ListSlots.parse(Map.of("from", 9, "to", 26, "skip_columns", List.of(0, 8)), 3))
+        assertThat(ListSlots.parse(Map.of("from", 9, "to", 26, "skip_columns", List.of(0, 8)), CHEST_3))
                 .containsExactly(10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25);
-        assertThat(ListSlots.parse(List.of(22, 4, 13), 3)).containsExactly(22, 4, 13);
+        assertThat(ListSlots.parse(List.of(22, 4, 13), CHEST_3)).containsExactly(22, 4, 13);
     }
 
     @Test
     void slotsRejectANumberOutsideTheGuiRepeatedSlotsAndAnEmptyRange() {
-        assertThatRejects(() -> ListSlots.parse(List.of(27), 3), "slot must be a slot from 0 to 26");
-        assertThatRejects(() -> ListSlots.parse(List.of(4, 4), 3), "slot 4 is listed twice");
-        assertThatRejects(() -> ListSlots.parse(Map.of("from", 12, "to", 9), 3), "to must be at or after from");
+        assertThatRejects(() -> ListSlots.parse(List.of(27), CHEST_3), "slot must be a slot from 0 to 26");
+        assertThatRejects(() -> ListSlots.parse(List.of(4, 4), CHEST_3), "slot 4 is listed twice");
+        assertThatRejects(() -> ListSlots.parse(Map.of("from", 12, "to", 9), CHEST_3), "to must be at or after from");
         assertThatRejects(() -> ListSlots.parse(Map.of("from", 0, "to", 8, "skip_columns", List.of(0, 1, 2, 3,
-                4, 5, 6, 7, 8)), 3), "slots names no slot of the GUI");
-        assertThatRejects(() -> ListSlots.parse("9-11", 3), "slots is a range");
+                4, 5, 6, 7, 8)), CHEST_3), "slots names no slot of the GUI");
+        assertThatRejects(() -> ListSlots.parse("9-11", CHEST_3), "slots is a range");
     }
 
     @Test

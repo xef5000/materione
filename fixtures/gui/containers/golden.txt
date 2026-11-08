@@ -1,0 +1,10 @@
+; The golden for the GUI container profile file (gui.md section 12.5.1, #290).
+;
+; The file is a single source, shared/gui/containers.json, read by the Java compiler (GuiContainers, the
+; content jar's /gui/containers.json) and by the studio (webui/src/lib/gui/containers.ts). This file pins it: the
+; digest is over the bytes of the file as shipped. A change to any container's geometry is a visible change here
+; as well, so the two readers cannot drift apart unnoticed.
+;
+; Regenerate with -Dmaterione.golden.regen=true (the Java test rewrites this file); review the diff, then commit.
+sha256=b42d4b5fee8108e314e7d890cc03dd5dd71b30058c22b6a979c39502eb9c5a4c
+containers=chest_1,chest_2,chest_3,chest_4,chest_5,chest_6,hopper,dispenser

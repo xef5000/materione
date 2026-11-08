@@ -28,7 +28,7 @@ class ListPagingFlowTest {
     private static final String ROSTER = """
             roster:
               title: Roster
-              rows: 3
+              container: chest_3
               layers:
                 - id: players
                   type: list

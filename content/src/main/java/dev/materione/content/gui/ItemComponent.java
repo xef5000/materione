@@ -64,7 +64,7 @@ public final class ItemComponent implements GuiComponent {
                         + "such as a player head, or a template; with templated overrides and animation",
                 List.of(
                         new ParameterSchema("slot", ParameterType.INTEGER, true, null,
-                                "Chest slot, 0 at the top-left, row by row; must lie inside the GUI's rows",
+                                "Container slot, numbered from 0 (row by row, from the top-left); must lie inside the GUI's container",
                                 null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Slot", "placement", 10, false, "number", "", "13")
@@ -117,8 +117,9 @@ public final class ItemComponent implements GuiComponent {
     @Override
     public CompiledGuiLayer parse(GuiComponentConfiguration configuration) {
         int slot = configuration.requiredInteger("slot", 0, MAX_SLOT);
-        if (slot >= configuration.rows() * 9) {
-            throw fail(configuration, "slot " + slot + " is outside the GUI's " + configuration.rows() + " row(s)");
+        if (slot >= configuration.container().slotCount()) {
+            throw fail(configuration, "slot " + slot + " is outside the GUI's container (slots 0 to "
+                    + (configuration.container().slotCount() - 1) + ")");
         }
         Map<String, Object> raw = configuration.parameters();
         boolean hasItem = raw.containsKey("item");

@@ -20,7 +20,7 @@ class GuiOpenerTest {
     private static final String SHOP = """
             shop:
               title: Shop
-              rows: 3
+              container: chest_3
               layers: []
               behavior:
                 - on: gui.opening
@@ -45,7 +45,7 @@ class GuiOpenerTest {
     private static final String MAP = """
             map:
               title: Map
-              rows: 1
+              container: chest_1
               layers: []
               behavior:
                 - on: gui.open
@@ -108,7 +108,7 @@ class GuiOpenerTest {
         f.gui("""
                 locked:
                   title: Locked
-                  rows: 1
+                  container: chest_1
                   layers: []
                   behavior:
                     - on: gui.opening
@@ -235,7 +235,7 @@ class GuiOpenerTest {
         f.gui("""
                 bounce:
                   title: Bounce
-                  rows: 1
+                  container: chest_1
                   layers: []
                   behavior:
                     - on: gui.close

@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.input;
 
+import dev.materione.content.gui.GuiContainers;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.materione.api.NamespacedId;
@@ -58,7 +59,7 @@ class ClickTargetTest {
     void theInputSlotsOfACompiledGuiAreTheSlotsItsTopmostLayerClaims() {
         // a compiled GUI's input list is what InputSlots is built from; the accept is kept as authored
         var input = new CompiledGui.Input(9, "wells", "${slot.item == 'corpus:gem_red'}");
-        var compiled = new CompiledGui(NamespacedId.of("pack", "shop"), 3, "Shop", "Shop", List.of(), null, null,
+        var compiled = new CompiledGui(NamespacedId.of("pack", "shop"), GuiContainers.byId("chest_3").orElseThrow(), "Shop", "Shop", List.of(), null, null,
                 PlayerInventory.LOCKED, List.of(input));
 
         assertThat(compiled.playerInventory()).isEqualTo(PlayerInventory.LOCKED);

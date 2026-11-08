@@ -150,7 +150,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 menu:
                   title: Menu
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [menu]
@@ -161,7 +161,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 other:
                   title: Other
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [other]
@@ -186,13 +186,13 @@ class OpenCommandRegistrarTest {
     void theRetryUsesTheLatestViewAndSeveralDeferredSwapsQueueOnlyOneTask() {
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
-        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        f.gui("other: {title: Other, container: chest_1, layers: [], open: {commands: [other]}}");
         registrar.resync(f.view());
         f.remove("other");
-        f.gui("latest: {title: Latest, rows: 1, layers: [], open: {commands: [latest]}}");
+        f.gui("latest: {title: Latest, container: chest_1, layers: [], open: {commands: [latest]}}");
         registrar.resync(f.view());
 
         assertThat(pendingTasks()).isEqualTo(1);
@@ -209,10 +209,10 @@ class OpenCommandRegistrarTest {
     void removingEveryStaleAliasCancelsTheRetry() {
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
-        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        f.gui("other: {title: Other, container: chest_1, layers: [], open: {commands: [other]}}");
         registrar.resync(f.view());
         f.remove("other");
         registrar.resync(f.view());
@@ -232,14 +232,14 @@ class OpenCommandRegistrarTest {
         };
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
         f.remove("shop");
         f.gui("""
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [shop, store]
@@ -263,10 +263,10 @@ class OpenCommandRegistrarTest {
     void anExternalCommandsLifecycleEventCancelsTheNowUnnecessaryRetry() {
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
-        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        f.gui("other: {title: Other, container: chest_1, layers: [], open: {commands: [other]}}");
         registrar.resync(f.view());
 
         registrar.onCommands(commands);
@@ -282,10 +282,10 @@ class OpenCommandRegistrarTest {
     void shutdownCancelsPendingWorkAndIgnoresLaterCallbacks() {
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
-        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        f.gui("other: {title: Other, container: chest_1, layers: [], open: {commands: [other]}}");
         registrar.resync(f.view());
         registrar.close();
 
@@ -302,10 +302,10 @@ class OpenCommandRegistrarTest {
     void aSchedulingFailureReportsTheUnappliedAliasInsteadOfSilentlyDroppingIt() {
         f.gui(SHOP);
         registrar.onCommands(commands);
-        f.gui("menu: {title: Menu, rows: 1, layers: [], open: {commands: [menu]}}");
+        f.gui("menu: {title: Menu, container: chest_1, layers: [], open: {commands: [menu]}}");
         registrar.resync(f.view());
         now = java.util.concurrent.TimeUnit.SECONDS.toNanos(1);
-        f.gui("other: {title: Other, rows: 1, layers: [], open: {commands: [other]}}");
+        f.gui("other: {title: Other, container: chest_1, layers: [], open: {commands: [other]}}");
         schedulingFails = true;
         registrar.resync(f.view());
 
@@ -319,7 +319,7 @@ class OpenCommandRegistrarTest {
     private static final String SHOP = """
             shop:
               title: Shop
-              rows: 1
+              container: chest_1
               layers: []
               open:
                 commands: [shop, store]
@@ -345,7 +345,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [give, store]
@@ -368,7 +368,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 menu:
                   title: Menu
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [menu]
@@ -391,7 +391,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 menu:
                   title: Menu
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [menu]
@@ -413,7 +413,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 other:
                   title: Other
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [give]
@@ -466,7 +466,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 shop:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [shop, store]
@@ -498,7 +498,7 @@ class OpenCommandRegistrarTest {
         f.gui("""
                 other:
                   title: Other
-                  rows: 1
+                  container: chest_1
                   layers: []
                   open:
                     commands: [shop]

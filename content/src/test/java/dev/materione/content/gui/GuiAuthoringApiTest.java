@@ -59,7 +59,7 @@ class GuiAuthoringApiTest {
     private static final String SHOP = """
             main:
               title: Shop
-              rows: 3
+              container: chest_3
               layers:
                 - id: frame
                   type: panel
@@ -146,7 +146,7 @@ class GuiAuthoringApiTest {
         GuiDocumentView view = result.value();
         assertThat(view.id()).isEqualTo("main");
         assertThat(view.title()).isEqualTo("Shop");
-        assertThat(view.rows()).isEqualTo(3);
+        assertThat(view.container()).isEqualTo("chest_3");
         assertThat(view.revision()).isEqualTo(1);
         assertThat(view.layers()).extracting(Layer::id).containsExactly("frame", "wells", "sword");
         Layer sword = view.layers().get(2);
@@ -182,12 +182,12 @@ class GuiAuthoringApiTest {
                 new AddLayer(0, "panel", "backdrop", Map.of("x", 4, "y", 4, "width", 8, "height", 8)),
                 new PatchLayer("sword", Map.of("amount", 3), List.of()),
                 new RemoveLayers(List.of("wells")),
-                new SetScreen("Market", 2)), List.of()));
+                new SetScreen("Market", "chest_2")), List.of()));
         assertThat(result.ok()).as(String.valueOf(result.diagnostics())).isTrue();
         assertThat(result.value().revision()).isEqualTo(before + 1);
         assertThat(result.value().layers()).extracting(Layer::id).containsExactly("backdrop", "frame", "sword");
         assertThat(result.value().title()).isEqualTo("Market");
-        assertThat(result.value().rows()).isEqualTo(2);
+        assertThat(result.value().container()).isEqualTo("chest_2");
         // the file is the source of truth: a fresh read agrees
         assertThat(gui.get(PACK, GUI).value().layers()).extracting(Layer::id)
                 .containsExactly("backdrop", "frame", "sword");
@@ -255,7 +255,7 @@ class GuiAuthoringApiTest {
         authorGui("""
                 main:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers:
                     - id: frame
                       type: panel
@@ -273,7 +273,7 @@ class GuiAuthoringApiTest {
         authorGui("""
                 main:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   note: keep me
                   layers:
                     - id: frame
@@ -351,7 +351,7 @@ class GuiAuthoringApiTest {
         authorGui("""
                 main:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers:
                     - id: blade
                       type: item
@@ -370,7 +370,7 @@ class GuiAuthoringApiTest {
         authorGui("""
                 main:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers:
                     - id: blade
                       type: item
@@ -410,7 +410,7 @@ class GuiAuthoringApiTest {
         authorGui("""
                 main:
                   title: Shop
-                  rows: 1
+                  container: chest_1
                   layers:
                     - id: blade
                       type: item
@@ -453,7 +453,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void renderOfADraftReportsSkippedLayersAndRanksTheRest() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", 1, 0, List.of(
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of(
                 new Layer("heading", "text", null, true, false, null,
                         Map.of("text", "Shop <b>", "x", 8, "y", 6)),
                 new Layer("ghost", "hologram", null, true, false, null, Map.of()),
@@ -479,7 +479,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void validateOfADraftIsTheCompilesDiagnostics() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", 1, 0, List.of(
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of(
                 new Layer("heading", "text", null, true, false, null,
                         Map.of("text", "Shop <b>", "x", 8, "y", 6)))));
         ApiResult<List<Diagnostic>> validated = gui.validate(new GuiValidateRequest(draft, List.of()));
@@ -527,7 +527,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void validateOfAGuiWithoutATitleReportsItsParseFailure() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", null, 1, 0, List.of()));
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", null, "chest_1", 0, List.of()));
         ApiResult<List<Diagnostic>> result = gui.validate(new GuiValidateRequest(draft, List.of()));
         assertThat(result.ok()).isTrue();
         assertThat(result.value()).singleElement().satisfies(diagnostic -> {
@@ -538,7 +538,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void aDraftPngOverlaysTheSavedTexture() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", 1, 0, List.of(
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of(
                 new Layer("art", "paint", null, true, false, null, Map.of("image", "gui/main/art")))));
         ApiResult<GuiRender> result = gui.render(new GuiRenderRequest(draft,
                 List.of(new AuthoringApi.ModelAsset("assets/textures/gui/main/art.png", pngOf(2, 2)))));
@@ -548,7 +548,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void aDraftPaintLayerWithoutItsTextureIsSkippedAndSaysWhy() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", 1, 0, List.of(
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of(
                 new Layer("art", "paint", null, true, false, null, Map.of("image", "gui/main/missing")))));
         ApiResult<GuiRender> result = gui.render(new GuiRenderRequest(draft, List.of()));
         assertThat(result.ok()).isTrue();
@@ -558,7 +558,7 @@ class GuiAuthoringApiTest {
 
     @Test
     void aDraftAssetThatIsNotAPngIsRefused() {
-        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", 1, 0, List.of()));
+        var draft = new Typed(new GuiDocumentView(PACK, null, "main", "Shop", "chest_1", 0, List.of()));
         ApiResult<GuiRender> result = gui.render(new GuiRenderRequest(draft,
                 List.of(new AuthoringApi.ModelAsset("assets/textures/gui/x.png", new byte[] {1, 2, 3}))));
         assertThat(result.ok()).isFalse();
@@ -578,9 +578,9 @@ class GuiAuthoringApiTest {
     @Test
     void aYamlDraftNeedsExactlyOneGui() {
         assertThat(gui.validate(new GuiValidateRequest(
-                new Yaml(PACK, "other:\n  title: x\n  rows: 1\n  layers: []\n"), List.of())).ok()).isTrue();
+                new Yaml(PACK, "other:\n  title: x\n  container: chest_1\n  layers: []\n"), List.of())).ok()).isTrue();
         ApiResult<List<Diagnostic>> two = gui.validate(new GuiValidateRequest(
-                new Yaml(PACK, "a:\n  title: x\n  rows: 1\nb:\n  title: y\n  rows: 1\n"), List.of()));
+                new Yaml(PACK, "a:\n  title: x\n  container: chest_1\nb:\n  title: y\n  container: chest_1\n"), List.of()));
         assertThat(two.ok()).isFalse();
         assertThat(message(two)).contains("holds 2 GUI resources");
     }
