@@ -515,6 +515,31 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode TRACE_REFUSED =
             new DiagnosticCode("MTR-0089", Severity.WARN, "Live trace subscription refused; limit reached");
 
+    /**
+     * A raster layer of a GUI paints past the art cap, the box {@code x -424..599, y -243..780} around the
+     * screen (gui.md section 11.2). The part outside is clipped and the GUI still compiles; the layer is not
+     * skipped.
+     */
+    public static final DiagnosticCode GUI_ART_CLIPPED =
+            new DiagnosticCode("MTR-0090", Severity.WARN, "GUI art extends past the art cap; the excess is clipped");
+
+    /**
+     * A tile of GUI art broke an emit-time invariant (gui.md section 11.3, rule 4): {@code ascent <= height},
+     * a width or height in 1..256, or a top row above -243. One such font provider makes the client drop the
+     * whole GUI font of the pack, so the GUI is quarantined and nothing of it is emitted. An internal error:
+     * the art cap keeps authored content inside the invariants.
+     */
+    public static final DiagnosticCode GUI_ART_GEOMETRY_INVALID =
+            new DiagnosticCode("MTR-0091", Severity.ERROR, "GUI art tile breaks a font-provider limit; GUI quarantined");
+
+    /**
+     * A layer that is meant to be clicked (a button, or a layer a {@code gui.click} rule names) covers no
+     * container slot, for instance because it was drawn outside the container. The client reports a click
+     * outside the container without a position, so such a layer is decoration only (gui.md section 11.4).
+     */
+    public static final DiagnosticCode GUI_CLICK_OUTSIDE_CONTAINER =
+            new DiagnosticCode("MTR-0092", Severity.WARN, "Clickable GUI layer is outside the container; clicks cannot reach it");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -604,7 +629,10 @@ public final class DiagnosticCodes {
             RECIPE_PARAMETER_REFUSED,
             RECIPE_EXPANSION_REFUSED,
             RECIPE_ACTION_UNAVAILABLE,
-            TRACE_REFUSED);
+            TRACE_REFUSED,
+            GUI_ART_CLIPPED,
+            GUI_ART_GEOMETRY_INVALID,
+            GUI_CLICK_OUTSIDE_CONTAINER);
 
     private DiagnosticCodes() {}
 

@@ -130,7 +130,7 @@ public final class GuiRuleDiagnoser implements GuiRuleChecker {
                         continue; // the GUI compiler reports the broken component
                     }
                 }
-                var plan = new dev.materione.content.gui.GuiVisualPlan(gui.id().namespace(), 0, 0, pieces);
+                var plan = new dev.materione.content.gui.GuiVisualPlan(gui.id().namespace(), pieces);
                 out.addAll(TitleProgram.compile(gui.id(), plan, registries).problems());
             }
         }

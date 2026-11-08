@@ -1,0 +1,49 @@
+# Art outside the vanilla screen (gui.md section 11, #276): one panel past each edge of a 3-row chest
+# (176 x 168), and a ceiling strip on the highest row the client draws (-243). The ceiling and the panel
+# above the screen share a tile that ends above row 13, so it is padded to satisfy ascent <= height. The
+# screen itself is the client's own chest: no layer paints over it.
+offscreen:
+  title: Open canvas
+  rows: 3
+  layers:
+    - id: left
+      type: panel
+      x: -140
+      y: 30
+      width: 120
+      height: 80
+      style: {fill: "#C84B4B", highlight: "#F2A0A0", shadow: "#7A2020", outline: "#000000"}
+    - id: right
+      type: panel
+      x: 196
+      y: 30
+      width: 120
+      height: 80
+      style: {fill: "#4B6FC8", highlight: "#A0B8F2", shadow: "#20347A", outline: "#000000"}
+    - id: ceiling
+      type: panel
+      x: 28
+      y: -243
+      width: 120
+      height: 12
+      style: {fill: "#8A4BC8", highlight: "#CBA0F2", shadow: "#47207A", outline: "#000000"}
+    - id: above
+      type: panel
+      x: 28
+      y: -50
+      width: 120
+      height: 30
+      style: {fill: "#4BC86F", highlight: "#A0F2B8", shadow: "#207A34", outline: "#000000"}
+    - id: below
+      type: panel
+      x: 28
+      y: 190
+      width: 120
+      height: 40
+      style: {fill: "#C8B44B", highlight: "#F2E6A0", shadow: "#7A6B20", outline: "#000000"}
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-OPENCANVAS-OFFSCREEN-OPEN"
+            as: console

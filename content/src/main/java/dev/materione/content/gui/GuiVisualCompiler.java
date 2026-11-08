@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 /** Compiles ordered title pieces when a GUI needs per-viewer visuals. */
 final class GuiVisualCompiler {
@@ -34,12 +34,21 @@ final class GuiVisualCompiler {
         return templated[0];
     }
 
-    static GuiVisualPlan compile(GuiDefinition gui, int background, TextureSource textures,
-            BiFunction<GuiLayer, Integer, Integer> codepoints, Map<String, byte[]> assets,
-            List<GuiCompilation.FontProvider> fonts, BiConsumer<GuiLayer, String> skipped) {
-        int height = CompiledGui.height(gui.rows());
+    /**
+     * Compiles the ordered pieces of a dynamic GUI. Each visible raster layer paints onto the art cap
+     * (gui.md §11), is cut into tiles per frame (a frame that paints nothing contributes no tile, no PNG, no
+     * provider and no codepoint), and each tile asks {@code codepoints} for its glyph. A layer that paints past
+     * the cap is reported to {@code clipped} once.
+     */
+    static GuiVisualPlan compile(GuiDefinition gui, TextureSource textures,
+            GuiCodepoints codepoints, Map<String, byte[]> assets,
+            List<GuiCompilation.FontProvider> fonts, BiConsumer<GuiLayer, String> skipped,
+            Consumer<GuiLayer> clipped) {
         var pieces = new ArrayList<GuiVisualPlan.Piece>();
         String namespace = gui.id().namespace();
+        // one pair of cap-sized buffers serves every layer and frame; clear() only touches what was written
+        ArgbCanvas own = null;
+        ArgbCanvas output = null;
         for (int order = 0; order < gui.layers().size(); order++) {
             GuiLayer layer = gui.layers().get(order);
             if (!layer.visible()) {
@@ -48,35 +57,52 @@ final class GuiVisualCompiler {
             if (layer.compiled().target() == RenderTarget.RASTER) {
                 List<CompiledGuiLayer> frames = layer.frames() == null
                         ? List.of(layer.compiled()) : layer.frames().layers();
-                var canvases = new ArrayList<ArgbCanvas>();
-                try {
-                    for (CompiledGuiLayer frame : frames) {
-                        var own = new ArgbCanvas(CompiledGui.WIDTH, height);
+                if (own == null) {
+                    own = GuiArt.capCanvas();
+                    output = GuiArt.capCanvas();
+                }
+                var tilesByFrame = new ArrayList<List<GuiArt.Tile>>();
+                boolean pastCap = false;
+                boolean failed = false;
+                for (CompiledGuiLayer frame : frames) {
+                    own.clear();
+                    output.clear();
+                    try {
                         frame.paint(own, textures);
-                        var output = new ArgbCanvas(CompiledGui.WIDTH, height);
-                        output.composite(own, layer.opacity());
-                        canvases.add(output);
+                    } catch (RuntimeException failure) {
+                        skipped.accept(layer, failure.getMessage() == null ? failure.toString() : failure.getMessage());
+                        failed = true;
+                        break;
                     }
-                } catch (RuntimeException failure) {
-                    skipped.accept(layer, failure.getMessage() == null ? failure.toString() : failure.getMessage());
+                    pastCap |= own.clippedInk();
+                    output.composite(own, layer.opacity());
+                    tilesByFrame.add(GuiArt.cut(output)); // an invariant failure quarantines the GUI
+                }
+                if (failed) {
                     continue;
                 }
+                if (pastCap) {
+                    clipped.accept(layer);
+                }
                 var glyphs = new ArrayList<GuiVisualPlan.Glyph>();
-                for (int frame = 0; frame < canvases.size(); frame++) {
-                    int cp = codepoints.apply(layer, frame);
-                    ArgbCanvas canvas = canvases.get(frame);
-                    String texture = GuiOverlayKeys.texture(gui.id(), layer.id(), frame);
-                    assets.put("assets/" + namespace + "/textures/" + texture + ".png",
-                            PngEncoder.encodeRgba(CompiledGui.WIDTH, height, canvas.toArray()));
-                    fonts.add(new GuiCompilation.FontProvider(GuiFonts.background(namespace),
-                            GuiFonts.bitmapProvider(namespace + ":" + texture + ".png", cp, height)));
+                for (int frame = 0; frame < tilesByFrame.size(); frame++) {
+                    var placed = new ArrayList<GuiTitle.ArtGlyph>();
+                    for (GuiArt.Tile tile : tilesByFrame.get(frame)) {
+                        int cp = codepoints.codepoint(layer.id(), frame, tile.row(), tile.col());
+                        String texture = GuiOverlayKeys.texture(gui.id(), layer.id(), frame, tile.row(), tile.col());
+                        assets.put(GuiFonts.textureAsset(namespace, texture),
+                                PngEncoder.encodeRgba(tile.width(), tile.cell(), tile.argb()));
+                        fonts.add(new GuiCompilation.FontProvider(GuiFonts.background(namespace),
+                                GuiFonts.tileProvider(namespace, texture, tile, cp)));
+                        placed.add(new GuiTitle.ArtGlyph(cp, tile.x(), tile.width()));
+                    }
                     dev.materione.api.gui.ClickArea area;
                     try {
                         area = frames.get(frame).clickArea(textures);
                     } catch (RuntimeException ignored) {
                         area = dev.materione.api.gui.ClickArea.NONE;
                     }
-                    glyphs.add(new GuiVisualPlan.Glyph(cp, canvas.inkWidth() + 1,
+                    glyphs.add(new GuiVisualPlan.Glyph(placed,
                             java.util.Set.copyOf(dev.materione.content.gui.logic.ClickMapCompiler.coveredSlots(
                                     area == null ? dev.materione.api.gui.ClickArea.NONE : area, gui.rows()))));
                 }
@@ -116,6 +142,6 @@ final class GuiVisualCompiler {
         }
         // The studio and static compiler draw all raster layers before all text layers.
         pieces.sort(java.util.Comparator.comparingInt(piece -> piece instanceof GuiVisualPlan.Raster ? 0 : 1));
-        return new GuiVisualPlan(namespace, background, 1, pieces);
+        return new GuiVisualPlan(namespace, pieces);
     }
 }

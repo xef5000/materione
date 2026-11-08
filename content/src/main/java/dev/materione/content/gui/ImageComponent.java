@@ -38,22 +38,22 @@ public final class ImageComponent implements GuiComponent {
                                 "Left edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "X", "placement", 20, false, "number", "", "0")
-                                        .withRange(-512.0, 512.0, "px")),
+                                        .withRange(-1024.0, 1024.0, "px")),
                         new ParameterSchema("y", ParameterType.INTEGER, false, "0",
                                 "Top edge in GUI pixels", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Y", "placement", 30, false, "number", "", "0")
-                                        .withRange(-512.0, 512.0, "px")),
+                                        .withRange(-1024.0, 1024.0, "px")),
                         new ParameterSchema("width", ParameterType.INTEGER, false, null,
                                 "Drawn width in GUI pixels; absent keeps the texture's own width", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Width", "placement", 40, true, "number", "", "")
-                                        .withRange(0.0, 512.0, "px")),
+                                        .withRange(0.0, 1024.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, false, null,
                                 "Drawn height in GUI pixels; absent keeps the texture's own height", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 50, true, "number", "", "")
-                                        .withRange(0.0, 512.0, "px"))),
+                                        .withRange(0.0, 1024.0, "px"))),
                 "1.0.0");
     }
 
@@ -68,10 +68,10 @@ public final class ImageComponent implements GuiComponent {
                 || configuration.parameters().containsKey("height");
         return new Layer(
                 GuiTextures.required(configuration, "image"),
-                configuration.integer("x", 0, -512, 512),
-                configuration.integer("y", 0, -512, 512),
-                sized ? configuration.requiredInteger("width", 0, 512) : 0,
-                sized ? configuration.requiredInteger("height", 0, 512) : 0,
+                configuration.integer("x", 0, -1024, 1024),
+                configuration.integer("y", 0, -1024, 1024),
+                sized ? configuration.requiredInteger("width", 0, 1024) : 0,
+                sized ? configuration.requiredInteger("height", 0, 1024) : 0,
                 sized);
     }
 

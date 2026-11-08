@@ -26,7 +26,7 @@ public record GuiCompilation(
 
     public GuiCompilation {
         diagnostics = List.copyOf(diagnostics);
-        assets = Map.copyOf(assets);
+        assets = java.util.Collections.unmodifiableSortedMap(new java.util.TreeMap<>(assets)); // sorted: D7
         fonts = List.copyOf(fonts);
         layers = List.copyOf(layers);
     }

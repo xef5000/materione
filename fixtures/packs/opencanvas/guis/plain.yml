@@ -1,0 +1,11 @@
+# A GUI with no art at all (gui.md section 11.3 rule 6): no PNG, no font provider, no codepoint and no
+# glyph, so the player sees the client's own chest under the plain title.
+plain:
+  title: Plain chest
+  rows: 2
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-OPENCANVAS-PLAIN-OPEN"
+            as: console
