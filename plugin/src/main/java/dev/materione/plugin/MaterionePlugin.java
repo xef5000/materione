@@ -93,8 +93,11 @@ public final class MaterionePlugin extends JavaPlugin {
     private MaterioneAPI api;
     private PipelineApiImpl pipelineApi;
     private DocumentStore documents;
+    /** The packs this jar ships (master section 7.3): read-only, parsed beside the packs on disk. */
+    private dev.materione.core.pipeline.BuiltinPacks builtinPacks = dev.materione.core.pipeline.BuiltinPacks.none();
     private AuditLog audit;
     private AuthoringApiImpl authoringApi;
+    private dev.materione.plugin.gui.GuiRuntime guiRuntime;
     /** bStats handle; null when metrics did not start (see {@link #startMetrics()}). */
     private Metrics metrics;
 
@@ -125,6 +128,16 @@ public final class MaterionePlugin extends JavaPlugin {
 
     public ProbeResult probeResult() {
         return probeResult;
+    }
+
+    /** The GUI runtime (the one open path behind commands, the API and actions); null before content load. */
+    public dev.materione.plugin.gui.GuiRuntime guiRuntime() {
+        return guiRuntime;
+    }
+
+    /** The ids of the packs this jar ships (master §7.3): read-only, loaded from the jar, never on disk. */
+    public java.util.Set<String> builtinPackIds() {
+        return builtinPacks.ids();
     }
 
     public PipelineService pipeline() {
@@ -248,6 +261,7 @@ public final class MaterionePlugin extends JavaPlugin {
             if (metrics != null) {
                 metrics.shutdown();
             }
+            builtinPacks.close(); // the jar's file system, once nothing reads the shipped packs any more
             // Stable harness marker: reverse-order shutdown reached the end.
             getLogger().info("MATERIONE-BYE");
         } catch (Throwable t) {
@@ -296,6 +310,11 @@ public final class MaterionePlugin extends JavaPlugin {
         pipeline = new PipelineService(
                 this, diagnostics, quarantine, registries, scheduling, descriptorOrNull());
         pipeline.registerBuiltins(ItemMaterialPalette.supportedItemMaterials());
+        // the packs this jar ships, read from the jar itself (never extracted): the pipeline parses them beside the
+        // packs on disk, so they load, compile and apply like any pack (master section 7.3)
+        builtinPacks = dev.materione.core.pipeline.BuiltinPacks.fromClasspath(
+                getClass().getClassLoader(), diagnostics::publish);
+        pipeline.runner().builtinPacks(builtinPacks);
         // native mechanics through the identical registry path (D5), before
         // content load — item definitions reference them by name
         mechanics = new dev.materione.plugin.runtime.mechanics.MechanicsService(
@@ -533,6 +552,7 @@ public final class MaterionePlugin extends JavaPlugin {
     private void wireApi() {
         java.nio.file.Path packsRoot = storage.contentPacksDir();
         documents = new DocumentStore(packsRoot, storage.storageDir().resolve("revisions"));
+        documents.reservePackIds(builtinPacks.ids());
         audit = new AuditLog(storage.storageDir().resolve("audit.log"));
         ModelTransactionService modelTransactions =
                 new ModelTransactionService(documents, packsRoot, audit);
@@ -573,6 +593,7 @@ public final class MaterionePlugin extends JavaPlugin {
                         pipeline.guiRuleChecker()),
                 // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
                 base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
+        authoringApi.builtinPackIds(builtinPacks.ids());
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);
@@ -585,7 +606,7 @@ public final class MaterionePlugin extends JavaPlugin {
         // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
         variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));
         // one GUI runtime serves both the api and the live refresh after every swap (gui.md §5)
-        var guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
+        guiRuntime = new dev.materione.plugin.gui.GuiRuntime(
                 this, scheduling, () -> pipeline.runtime().registries(), guiStack);
         pipeline.observeSwaps(guiRuntime::refreshAfterSwap);
         RuntimeApiImpl runtimeApi = new RuntimeApiImpl(
@@ -629,11 +650,12 @@ public final class MaterionePlugin extends JavaPlugin {
         var rootCommand = new dev.materione.plugin.command.MaterioneCommandAdapter(new MaterioneCommand(this));
         // permissions were declared in plugin.yml (default: op) — declare them
         // programmatically so the §9.2 taxonomy stays exactly as documented
-        // the content browser's nodes (gui/browse/BrowseAccess): open it, and take items from it
+        // the nodes the built-in pack's browser GUI names: its open: block gates opening it, and its take rule
+        // checks the second (the browser is like creative mode: operators by default, grant it to whoever may spawn items)
         var permissions = new java.util.ArrayList<>(List.of(
                 "materione.editor", "materione.pipeline", "materione.dev",
-                "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION));
-        permissions.addAll(dev.materione.plugin.gui.browse.BrowseAccess.nodes());
+                "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION,
+                "materione.browse", "materione.browse.get"));
         for (String permission : permissions) {
             if (getServer().getPluginManager().getPermission(permission) == null) {
                 getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(
@@ -643,7 +665,7 @@ public final class MaterionePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(
                 new ItemAutoUpdater(this, pipeline.runtime(), diagnostics, scheduling), this);
         // gui click router (holder identity — no title matching): one
-        // listener for every Materione menu, the content browser today, M6 menus later
+        // listener for every Materione menu: the built-in browser and the packs' own
         // the input-slot rules (logic.md §25) are the router's collaborator; without a GUI runtime the router
         // judges every window as one with no input slots
         getServer().getPluginManager().registerEvents(

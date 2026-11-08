@@ -1,0 +1,171 @@
+# The in-game content browser (runtime-systems section 8.3, issue 8): /materione browse [words] opens it.
+#
+# It is an ordinary GUI resource. The plugin runs on its own backend here: this file is loaded, compiled and opened
+# by the same pipeline and GUI runtime as a server's own GUIs, and it uses only what they have: the `content` list
+# source, the `list` component and its search, `prompt`, `gui.open` / `gui.back` for navigation, and `give_item`.
+#
+# What it shows: the packs, then the folders inside a pack, then the items. The folders are the ones under the pack's
+# items/, blocks/ and furnitures/ folders, merged, so a folder an author makes is a category. Opening a pack or a folder
+# opens this GUI again with that location in `path`, so Back is the way up, and it comes back on the page it left.
+# Searching lists every item of every pack, flat; every word typed has to appear in an item's id or plain name.
+#
+# Opening needs `materione.browse`; taking an item needs `materione.browse.get` (checked on every take, below). Both
+# are operators by default, like creative mode.
+browser:
+  title: Content browser
+  rows: 6
+  open:
+    permission: materione.browse
+    args:
+      - { name: path, type: string, optional: true }
+      - { name: search, type: string, optional: true }
+  layers:
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "CONTENT BROWSER"
+      font: smallcaps
+      color: "#404040"
+    - id: pages
+      type: text
+      x: 112
+      y: 6
+      text: "PAGE ${gui.page.entries.number} OF ${gui.page.entries.count}"
+      font: smallcaps
+      color: "#404040"
+    - id: nothing_here
+      type: text
+      x: 50
+      y: 60
+      text: "NOTHING HERE YET"
+      font: smallcaps
+      color: "#707070"
+      visible_if: "gui.page.entries.size == 0 && (gui.session.search == null || gui.session.search == '')"
+    - id: no_results
+      type: text
+      x: 62
+      y: 60
+      text: "NO RESULTS"
+      font: smallcaps
+      color: "#707070"
+      visible_if: "gui.page.entries.size == 0 && gui.session.search != null && gui.session.search != ''"
+    - id: entries
+      type: list
+      slots: { from: 0, to: 44 }
+      source: { type: content, arg: path, search: search }
+      search: { fields: [search] }
+      entry:
+        item: "${entry.kind == 'item' ? entry.id : (entry.kind == 'pack' ? 'minecraft:bookshelf' : 'minecraft:chest')}"
+        name: "${entry.kind == 'item' ? '' : '<yellow>'}${entry.label}"
+        lore_mode: append
+        lore:
+          - "<dark_gray>${entry.detail}"
+          - "${entry.kind == 'item' ? '<gray>Click: take one. Shift-click: take a stack.' : '<gray>Click to open.'}"
+    - id: back
+      type: item
+      slot: 45
+      item: minecraft:arrow
+      name: "<gray>Back"
+      visible_if: "gui.args.path != null && gui.args.path != ''"
+    - id: previous
+      type: item
+      slot: 47
+      item: minecraft:spectral_arrow
+      name: "<gray>Previous page"
+    - id: search
+      type: item
+      slot: 48
+      item: minecraft:compass
+      name: "<white>Search"
+      lore: ["<gray>Type words in chat; every word has to match an item's id or name."]
+    - id: info
+      type: item
+      slot: 49
+      item: minecraft:paper
+      name: "<white>Where you are"
+      lore:
+        - "<gray>${gui.args.path == null || gui.args.path == '' ? 'All packs' : gui.args.path}"
+        - "<gray>Search: ${gui.session.search == null || gui.session.search == '' ? 'none' : gui.session.search}"
+    - id: clear
+      type: item
+      slot: 50
+      item: minecraft:barrier
+      name: "<white>Clear the search"
+      visible_if: "gui.session.search != null && gui.session.search != ''"
+    - id: next
+      type: item
+      slot: 51
+      item: minecraft:spectral_arrow
+      name: "<gray>Next page"
+    - id: close
+      type: item
+      slot: 53
+      item: minecraft:oak_door
+      name: "<red>Close"
+  behavior:
+    # /materione browse red gem opens it already searching
+    - on: gui.open
+      do:
+        - if: "${gui.args.search != null && gui.args.search != ''}"
+          then:
+            - set_var: { var: session.search, value: "${gui.args.search}" }
+            - gui.refresh
+    - on: gui.click
+      layer: entries
+      click: left
+      do:
+        - if: "${entry.kind == 'item'}"
+          then:
+            - call: { flow: take, with: { item: "${entry.id}", amount: 1 } }
+          else:
+            - call: { flow: enter, with: { path: "${entry.path}" } }
+    - on: gui.click
+      layer: entries
+      click: shift_left
+      do:
+        - if: "${entry.kind == 'item'}"
+          then:
+            - call: { flow: take, with: { item: "${entry.id}", amount: "${entry.stack}" } }
+          else:
+            - call: { flow: enter, with: { path: "${entry.path}" } }
+    - on: gui.click
+      layer: back
+      do:
+        - gui.back
+    - on: gui.click
+      layer: previous
+      do:
+        - gui.page: { list: entries, to: previous }
+    - on: gui.click
+      layer: next
+      do:
+        - gui.page: { list: entries, to: next }
+    - on: gui.click
+      layer: search
+      do:
+        - prompt: { text: "Type the words to search for, or cancel", var: session.search, timeout: 60 }
+          else:
+            - message: "<gray>Search cancelled."
+        - gui.page: { list: entries, to: first }
+        - gui.refresh
+    - on: gui.click
+      layer: clear
+      do:
+        - set_var: { var: session.search, value: "" }
+        - gui.page: { list: entries, to: first }
+        - gui.refresh
+    - on: gui.click
+      layer: close
+      do:
+        - gui.close
+  flows:
+    # taking is the only thing this GUI does that changes the world, and it is checked every time it is asked for
+    take:
+      - if: { has_permission: materione.browse.get }
+        then:
+          - give_item: { item: "${args.item}", amount: "${args.amount}" }
+        else:
+          - message: "<red>You need materione.browse.get to take items from the browser."
+    enter:
+      - gui.open: { gui: "materione:browser", args: { path: "${args.path}" } }

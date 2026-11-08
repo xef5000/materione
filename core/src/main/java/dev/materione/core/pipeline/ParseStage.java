@@ -67,23 +67,29 @@ public final class ParseStage {
     private void parse(PipelineContext context) {
         Path root = context.packsRoot();
         ReloadScope scope = context.scope();
-        if (!Files.isDirectory(root)) {
+        java.util.List<Path> packDirs = List.of();
+        if (Files.isDirectory(root)) {
+            try (var packs = Files.list(root)) {
+                packDirs = packs.filter(Files::isDirectory)
+                        .filter(dir -> PackLayout.isDiscoveredDirectory(dir.getFileName().toString()))
+                        .sorted().toList();
+            } catch (IOException e) {
+                context.diagnostics().publish(new Diagnostic(
+                        DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
+                        "could not list packs under " + root + ": " + e.getMessage(),
+                        null, null, "check permissions on the content directory"));
+                if (context.builtinPacks().packs().isEmpty()) {
+                    return;
+                }
+            }
+        } else if (context.builtinPacks().packs().isEmpty()) {
             return;
         }
-        java.util.List<Path> packDirs;
-        try (var packs = Files.list(root)) {
-            packDirs = packs.filter(Files::isDirectory)
-                    .filter(dir -> PackLayout.isDiscoveredDirectory(dir.getFileName().toString()))
-                    .sorted().toList();
-        } catch (IOException e) {
-            context.diagnostics().publish(new Diagnostic(
-                    DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
-                    "could not list packs under " + root + ": " + e.getMessage(),
-                    null, null, "check permissions on the content directory"));
-            return;
-        }
+        // a folder named like a built-in pack never reaches the pipeline: the built-in pack cannot be overridden
+        packDirs = withoutBuiltinIds(context, packDirs);
 
         if (!(scope instanceof ReloadScope.OnePack one) && !(scope instanceof ReloadScope.FileSet set)) {
+            addBuiltinPacks(context);
             for (Path packDir : packDirs) {
                 context.packs().add(buildPack(context, packDir));
             }
@@ -105,7 +111,9 @@ public final class ParseStage {
         for (var entry : failures) {
             Path file = entry.getKey();
             var error = entry.getValue().document().parseError();
-            if (!file.toAbsolutePath().normalize().startsWith(root) || !Files.isRegularFile(file)) {
+            BuiltinPacks.Pack shipped = builtinPackOf(context, file);
+            if (shipped == null
+                    && (!file.toAbsolutePath().normalize().startsWith(root) || !Files.isRegularFile(file))) {
                 continue;
             }
             Diagnostic failure = new Diagnostic(
@@ -115,9 +123,21 @@ public final class ParseStage {
                     "fix the syntax error, then /materione reload");
             context.diagnostics().publish(failure);
             context.quarantine().add(
-                    NamespacedId.of(firstSegment(root, file), stripExtension(file.getFileName().toString())),
+                    NamespacedId.of(shipped != null ? shipped.id() : firstSegment(root, file),
+                            stripExtension(file.getFileName().toString())),
                     failure);
         }
+    }
+
+    /** The built-in pack a file is read from, or null for a file under the packs root. */
+    private static BuiltinPacks.Pack builtinPackOf(PipelineContext context, Path file) {
+        for (BuiltinPacks.Pack pack : context.builtinPacks().packs()) {
+            if (file.getFileSystem().equals(pack.directory().getFileSystem())
+                    && file.toAbsolutePath().normalize().startsWith(pack.directory().toAbsolutePath().normalize())) {
+                return pack;
+            }
+        }
+        return null;
     }
 
     /** Drops fingerprints of files that left the tree, so deletions can't wedge targeted scopes. */
@@ -157,9 +177,14 @@ public final class ParseStage {
             }
         }
 
+        // the built-in packs are not on disk under the root: a scope can never touch them
+        touchedPacks.removeAll(context.builtinPacks().ids());
+
         String expandReason = null;
         if (context.previousPacks().isEmpty()) {
             expandReason = "no previous run to build on";
+        } else if (!previousIds(context.previousPacks()).containsAll(context.builtinPacks().ids())) {
+            expandReason = "a built-in pack is not in the previous run";
         } else if (one != null && previousPack(context.previousPacks(), one.packId()) == null) {
             expandReason = "pack '" + one.packId() + "' is new since the last full run";
         } else {
@@ -177,6 +202,7 @@ public final class ParseStage {
                     dev.materione.api.diagnostics.DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
                     "targeted scope expanded to everything: " + expandReason,
                     null, null, null));
+            addBuiltinPacks(context);
             for (Path packDir : packDirs) {
                 context.packs().add(buildPack(context, packDir));
             }
@@ -217,8 +243,47 @@ public final class ParseStage {
         return relative.getNameCount() > 1 ? relative.getName(0).toString() : "";
     }
 
+    /** The packs the plugin ships, parsed first and always whole: they are not on disk, so no scope reaches them. */
+    private void addBuiltinPacks(PipelineContext context) {
+        for (BuiltinPacks.Pack pack : context.builtinPacks().packs()) {
+            context.packs().add(buildPack(context, pack.id(), pack.directory(), true));
+        }
+    }
+
+    /** Drops the folders that take a built-in pack's id and reports each one (MTR-0095). */
+    private static List<Path> withoutBuiltinIds(PipelineContext context, List<Path> packDirs) {
+        var reserved = context.builtinPacks().ids();
+        if (reserved.isEmpty()) {
+            return packDirs;
+        }
+        var kept = new ArrayList<Path>();
+        for (Path packDir : packDirs) {
+            String name = packDir.getFileName().toString();
+            if (!reserved.contains(name)) {
+                kept.add(packDir);
+                continue;
+            }
+            context.diagnostics().publish(new Diagnostic(
+                    DiagnosticCodes.BUILTIN_PACK_ID_RESERVED, Severity.ERROR,
+                    "the folder '" + name + "' takes the id of a built-in pack and is ignored; the built-in pack "
+                            + "ships inside the plugin and cannot be overridden",
+                    null, new SourceLocation(packDir.toString(), 1, 1),
+                    "rename or remove content/packs/" + name + ", then /materione reload"));
+        }
+        return kept;
+    }
+
+    private static java.util.Set<String> previousIds(List<ContentPack> packs) {
+        var ids = new java.util.HashSet<String>();
+        packs.forEach(pack -> ids.add(pack.id()));
+        return ids;
+    }
+
     private ContentPack buildPack(PipelineContext context, Path packDir) {
-        String packId = packDir.getFileName().toString();
+        return buildPack(context, packDir.getFileName().toString(), packDir, false);
+    }
+
+    private ContentPack buildPack(PipelineContext context, String packId, Path packDir, boolean builtin) {
         Path manifestFile = packDir.resolve(PackLayout.MANIFEST_FILE);
         PackManifest manifest = null;
         if (Files.isRegularFile(manifestFile)) {
@@ -249,7 +314,7 @@ public final class ParseStage {
             duplicateFindings.put(packId, duplicates.diagnostics());
         }
         indexAssets(context, packDir, packId);
-        return new ContentPack(packId, packDir, manifest, duplicates.kept());
+        return new ContentPack(packId, packDir, manifest, duplicates.kept(), builtin);
     }
 
     /**
@@ -260,7 +325,8 @@ public final class ParseStage {
     private LosslessYamlDocument documentOf(PipelineContext context, Path file) {
         String sha256 = FingerprintCache.sha256(file);
         FingerprintCache fingerprints = context.fingerprints();
-        if (fingerprints != null) {
+        // the shipped packs are not under the packs root and never drift: no fingerprint, no scope expansion
+        if (fingerprints != null && !context.builtinPacks().contains(file)) {
             fingerprints.record(relativeOf(context.packsRoot(), file), sha256);
         }
         CachedDocument cached = documentCache.get(file);

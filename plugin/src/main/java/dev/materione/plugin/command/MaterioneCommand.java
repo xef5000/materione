@@ -8,8 +8,6 @@ import dev.materione.core.runtime.RuntimeItem;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.plugin.MaterionePlugin;
 import dev.materione.plugin.MaterioneVersion;
-import dev.materione.plugin.gui.browse.BrowseAccess;
-import dev.materione.plugin.gui.browse.BrowseGui;
 import dev.materione.plugin.items.Give;
 import dev.materione.plugin.items.ItemIdResolver;
 import dev.materione.plugin.runtime.PipelineService;
@@ -136,24 +134,38 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    /** The in-game content browser: a GUI of the plugin's built-in pack (master §7.3), opened like any GUI. */
+    static final NamespacedId BROWSER = NamespacedId.of("materione", "browser");
+
     /**
-     * {@code /materione browse [words…]} (alias {@code browser}) — opens the in-game content browser (M6), filtered to
-     * the words when given (permission {@code materione.browse}; taking items needs {@code materione.browse.get}). The
-     * window does the work, so the command and the window's own search share one path.
+     * {@code /materione browse [words…]} (alias {@code browser}) — opens the GUI {@link #BROWSER} for the sender, its
+     * {@code search} argument set to the words when given (M6, runtime-systems §8.3). The command is an alias for the
+     * generic open path: it knows nothing of the window. Who may open it, the typed arguments and the refusal text are
+     * the GUI's own {@code open:} block (permission {@code materione.browse}); taking items is the GUI's own check
+     * ({@code materione.browse.get}).
      */
     private void browse(CommandSender sender, String[] args) {
         if (!(sender instanceof Player player)) {
-            plugin.getLogger().info("MATERIONE-BROWSE-DENIED reason=player-only");
+            plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=player-only");
             sender.sendMessage(Component.text(
                     "the content browser needs a player — open it in game", NamedTextColor.RED));
             return;
         }
-        if (!player.hasPermission(BrowseAccess.OPEN)) {
-            sender.sendMessage(Component.text(BrowseAccess.OPEN_DENIED, NamedTextColor.RED));
+        var runtime = plugin.guiRuntime();
+        if (runtime == null) {
+            sender.sendMessage(Component.text("no content is loaded yet", NamedTextColor.RED));
             return;
         }
-        String query = args.length > 1 ? String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)) : null;
-        BrowseGui.open(plugin, player, query);
+        var openArgs = new java.util.LinkedHashMap<String, String>();
+        if (args.length > 1) {
+            openArgs.put("search", String.join(" ", java.util.Arrays.copyOfRange(args, 1, args.length)));
+        }
+        runtime.openForCommand(player, BROWSER, openArgs).thenAccept(result -> {
+            if (!result.ok()) {
+                plugin.getLogger().info("MATERIONE-BROWSER-DENIED reason=" + result.outcome().name().toLowerCase());
+                player.sendMessage(Component.text(result.reason(), NamedTextColor.RED));
+            }
+        });
     }
 
     /**
@@ -333,6 +345,12 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
                                         ? "?" : "format v" + report.storageFormatVersion())),
                 report.allocationCorrupt() ? NamedTextColor.RED : NamedTextColor.GRAY));
 
+        sender.sendMessage(Component.text(
+                "built-in packs: " + (plugin.builtinPackIds().isEmpty()
+                        ? "none loaded"
+                        : String.join(", ", new java.util.TreeSet<>(plugin.builtinPackIds()))
+                                + " (read-only, from the plugin jar)"),
+                NamedTextColor.GRAY));
         sender.sendMessage(Component.text(
                 "runtime: " + (report.packSha256() == null && report.liveItems() < 0
                         ? "not started"

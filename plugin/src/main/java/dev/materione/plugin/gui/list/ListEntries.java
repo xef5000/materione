@@ -20,7 +20,8 @@ import java.util.Map;
  *
  * <p>This is the one place a list's visible entries are decided (logic.md §28.21). The author's {@code filter:} and a
  * session search are two conditions over the same entries, and an entry shows only when both hold: the search keeps
- * the entries whose listed fields contain the session text (ignoring case), and an empty or unset text keeps all.
+ * the entries whose listed fields contain every word of the session text (ignoring case), and an empty or unset text
+ * keeps all.
  *
  * <p>Pure apart from the reporter. A filter that throws leaves its entry out and is reported ({@code MTR-0078}); the
  * other entries still show. Sorting cannot fail: an entry with no value for the field goes last, and values that are
@@ -82,11 +83,25 @@ public final class ListEntries {
         return text.isEmpty() ? null : text;
     }
 
-    /** Whether an entry's listed field contains the (lower-cased) search text, ignoring case. */
+    /**
+     * Whether an entry matches the (lower-cased) search text: every whitespace-separated word of it must be contained,
+     * ignoring case, in at least one listed field. A single word is a plain substring match; several words may match
+     * in any order and across fields, so {@code ruby sword} finds both {@code Ruby Sword} and {@code shop:ruby_sword}
+     * when id and name are listed.
+     */
     static boolean matchesSearch(ListSearch search, Map<String, Object> entry, String needle) {
+        for (String word : needle.split("\\s+")) {
+            if (!word.isEmpty() && !containsWord(search, entry, word)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean containsWord(ListSearch search, Map<String, Object> entry, String word) {
         for (String field : search.fields()) {
             Object value = entry.get(field);
-            if (value != null && String.valueOf(value).toLowerCase(Locale.ROOT).contains(needle)) {
+            if (value != null && String.valueOf(value).toLowerCase(Locale.ROOT).contains(word)) {
                 return true;
             }
         }

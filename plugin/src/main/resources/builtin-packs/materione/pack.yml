@@ -1,0 +1,8 @@
+# The plugin's own pack (master architecture section 7.3). It ships inside the plugin jar and is read from there:
+# it is not under content/packs, cannot be edited or overridden, and loads through the same pipeline as any pack.
+# Its namespace, materione, is reserved for built-in packs.
+id: materione
+version: 1.0.0
+schema_version: 1
+
+depends: []

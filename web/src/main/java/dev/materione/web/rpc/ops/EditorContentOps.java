@@ -87,6 +87,14 @@ public final class EditorContentOps {
             var packs = new com.google.gson.JsonArray();
             authoring.listPacks().value().forEach(pack -> packs.add(pack.id()));
             payload.add("packs", packs);
+            // the packs the plugin ships are read-only and not in "packs"; present only when there are some, so an
+            // editor that does not know the field sees the same response as before (master section 7.3)
+            List<String> builtin = authoring.builtinPackIds();
+            if (!builtin.isEmpty()) {
+                var readOnly = new com.google.gson.JsonArray();
+                builtin.forEach(readOnly::add);
+                payload.add("builtin", readOnly);
+            }
             return Wire.Response.success(request, payload);
         });
 

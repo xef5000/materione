@@ -1,0 +1,3 @@
+# The packs this jar ships (master architecture section 7.3): one pack id per line, each a folder next to this file.
+# They are read from the jar, never extracted to disk, and cannot be overridden by a pack in content/packs.
+materione

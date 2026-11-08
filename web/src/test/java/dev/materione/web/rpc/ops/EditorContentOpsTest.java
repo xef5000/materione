@@ -799,6 +799,39 @@ class EditorContentOpsTest {
 
     // ------------------------------------------------------------------
 
+    @Test
+    void builtInPacksAreReportedSeparatelyAndCannotBeCreated() throws Exception {
+        DocumentStore store = store();
+        store.reservePackIds(Set.of("materione"));
+        var authoring = (dev.materione.core.authoring.AuthoringApiImpl) api(store, audit(), new CapturingTrigger());
+        authoring.builtinPackIds(Set.of("materione"));
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, authoring, java.util.List::of, java.util.List::of,
+                EditorContentOpsTest::actor);
+        assertThat(dispatcher.dispatch(request("edit.createPack", "1", object("pack", "mine"))).ok()).isTrue();
+
+        Wire.Response packs = dispatcher.dispatch(request("browse.packs", "2"));
+
+        // the editable packs stay in "packs"; the shipped ones are listed apart, read-only
+        assertThat(payload(packs).get("packs").toString()).isEqualTo("[\"mine\"]");
+        assertThat(payload(packs).get("builtin").toString()).isEqualTo("[\"materione\"]");
+
+        Wire.Response refused = dispatcher.dispatch(request("edit.createPack", "3", object("pack", "materione")));
+        assertThat(refused.ok()).isFalse();
+        assertThat(refused.toString()).contains("MTR-0095");
+        assertThat(dispatcher.dispatch(request("browse.packs", "4")).data().getAsJsonObject().get("packs").toString())
+                .isEqualTo("[\"mine\"]");
+    }
+
+    @Test
+    void aPluginThatShipsNoPacksAnswersBrowsePacksAsBefore() throws Exception {
+        RpcDispatcher dispatcher = new RpcDispatcher();
+        EditorContentOps.register(dispatcher, api(store(), audit(), new CapturingTrigger()),
+                java.util.List::of, java.util.List::of, EditorContentOpsTest::actor);
+
+        assertThat(payload(dispatcher.dispatch(request("browse.packs", "1"))).has("builtin")).isFalse();
+    }
+
     private DocumentStore store() {
         return new DocumentStore(temp.resolve("packs"), temp.resolve("revisions"));
     }

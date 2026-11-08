@@ -340,6 +340,9 @@ only (§9.4).
 - `GuiRuntime.open(player, id)` builds a `PluginGui` with the compiled title and slot items;
   every click inside the GUI is cancelled in v1 (the existing router already scopes this to
   the GUI's own slots).
+- **A GUI can ship inside the plugin.** The plugin's own pack `materione` (master §7.3) holds GUIs that are loaded, compiled
+  and opened like any other; the content browser `materione:browser` is the first (runtime-systems §8.3, logic.md §35). They
+  are read-only, so the studio does not list them among the files it edits, and a pack in `content/packs` cannot take their id.
 - `/materione gui open <id> [player]` (permission `materione.gui.open`) and the API op
   `RuntimeApi` → GUI open (api.md §3.7) are the two ways in for v1; the studio's "Preview in
   game" calls the API op for the session's approved player.

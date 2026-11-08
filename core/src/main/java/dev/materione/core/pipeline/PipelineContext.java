@@ -35,6 +35,8 @@ public final class PipelineContext {
     private volatile List<ContentPack> previousPacks = List.of();
     /** The persistent fingerprint table — targeted scopes expand on drift. Set by the runner. */
     private volatile FingerprintCache fingerprints;
+    /** The packs the plugin ships in its jar — read-only, parsed beside the packs on disk (master §7.3). */
+    private volatile BuiltinPacks builtinPacks = BuiltinPacks.none();
 
     public PipelineContext(
             ReloadScope scope,
@@ -49,6 +51,10 @@ public final class PipelineContext {
 
     void previousPacks(List<ContentPack> packs) {
         this.previousPacks = List.copyOf(packs);
+    }
+
+    void builtinPacks(BuiltinPacks packs) {
+        this.builtinPacks = packs == null ? BuiltinPacks.none() : packs;
     }
 
     void fingerprints(FingerprintCache cache) {
@@ -102,6 +108,11 @@ public final class PipelineContext {
 
     public List<ContentPack> previousPacks() {
         return previousPacks;
+    }
+
+    /** The built-in packs this run parses beside the packs on disk. */
+    public BuiltinPacks builtinPacks() {
+        return builtinPacks;
     }
 
     public FingerprintCache fingerprints() {

@@ -9,17 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
-- **The in-game content browser: `/materione browse [words]` (runtime-systems.md §8.3, #8).** A 54-slot window over the live registries:
-  the categories first (each shown as its first item), then a category's items, blocks and furniture, each shown as the item itself with
-  its id, category and take hint in the lore. Search is by id or display name, case-insensitive, every word must match
-  (`/materione browse ruby sword`); the search button types the command for you. Left-click takes one item into your inventory, shift-click a
-  full stack, and a block or furniture hands out its placement item. Categories come from a new optional item field, **`category:`**
-  (`Tools`; trimmed, at most 40 characters, case-insensitive; default: the item's pack). Blocks and furniture are filed with their
-  placement item. The field is declared in the item's self-description, so the editor offers it, and it round-trips losslessly.
-  Permissions: **`materione.browse`** opens the browser and **`materione.browse.get`** takes items from it; both default to operators.
-  The browser is built in code on the GUI kit's click router, so shift-click, drag, number-key and drop moves into it are refused. It
-  does not run on the GUI runtime yet: a shipped browser GUI would be a built-in pack, an owner decision (PR description). QA entries
-  `browse.*` are not run against a client yet.
+- **The in-game content browser: `/materione browse [words]`, a GUI of the plugin's own built-in pack (runtime-systems.md §8.3, architecture.md §7.3, #8).**
+  The browser is an ordinary `gui` resource, `materione:browser`, shipped inside the plugin jar and loaded through the same pipeline as your
+  packs. It shows the packs that hold content, then the folders inside a pack, then the items; folders under `items/`, `blocks/` and
+  `furnitures/` merge, so a folder you make is a category, with no field to fill in. A block or furniture is listed as the item that places it.
+  Search matches the id and plain name, every word must match (`/materione browse ruby sword`); the Search button asks for the words in chat.
+  Left-click takes one item, shift-click a full stack. Page indicator, Back (it returns to the page you left), and "no results" are shown in the
+  window. Permissions: **`materione.browse`** opens it and **`materione.browse.get`** takes items, checked on every take; both default to
+  operators, like creative mode. The GUI runtime gains what it needed: the **`content` list source** (packs, folders and items from the live
+  registries, public like the other sources), list **search** that matches every word of the text (it matched one phrase before), and
+  `gui.page.<list>.size`. **Built-in packs** are new: read-only, read from the jar and never extracted, loaded first and on every reload; a
+  folder in `content/packs` that takes a built-in pack's id (`materione` is reserved) is ignored and reported (**MTR-0095**), and a built-in pack
+  the jar cannot supply is reported and left out (**MTR-0096**). The editor's pack list reports them separately (`builtin`) and cannot create a pack
+  with their id. QA entries `browse.*` are not run against a client yet.
 - **The GUI studio's open canvas: the vanilla chest underneath, the inventory under a veil, art anywhere around the screen (gui.md §6, §11, #277).**
   The canvas is no longer the screen: it is the whole art area (1024 x 1024 px around the chest, drawn with its limit), with the owner's
   vanilla chest drawn under every GUI as the client composes it for 1 to 6 rows. It is not a layer and is never saved. The player's
@@ -208,6 +210,8 @@ releases may change file formats, settings and the public API.
 - **`/materione browser` is now `/materione browse` (the old name stays as an alias).** It opens the new content browser, and it is gated by
   `materione.browse` (operators by default), not `materione.give`. Grant `materione.browse` to a player who used the old command, and
   `materione.browse.get` to whoever may take items. The old pack picker and its paginated classes (`ContentBrowser`, `PaginatedGui`) are removed.
+- **A list's `search:` matches every word of the text.** `ruby sword` finds an entry that holds both words anywhere in the listed fields; it
+  used to look for the whole phrase. A phrase that matched before still matches.
 - **The GUI studio asks the server, not its own copy of the rules (gui.md §6, §10 #8–#9).** The
   compiler's verdict on a GUI (which layers the pack will skip, and why) now comes from
   `gui.validate`, debounced as you edit; the studio draws what the server says and carries no

@@ -89,7 +89,7 @@ These are the load-bearing decisions. Everything else in this document follows f
 
 | # | Decision | Rationale | Consequence we accept |
 |---|---|---|---|
-| **D1** | **Files on disk are the canonical source of truth.** The web UI is a structured editor *over the filesystem*, not a database frontend. | Survives crashes/corruption; git-friendly; the entire existing ecosystem shares file-based packs; imports from incumbents land naturally; no sync problem between "what the DB says" and "what the server runs". | The web UI needs file-level concerns (watching, atomic writes, conflict detection) rather than a database. |
+| **D1** | **Files on disk are the canonical source of truth.** The web UI is a structured editor *over the filesystem*, not a database frontend. | Survives crashes/corruption; git-friendly; the entire existing ecosystem shares file-based packs; imports from incumbents land naturally; no sync problem between "what the DB says" and "what the server runs". | The web UI needs file-level concerns (watching, atomic writes, conflict detection) rather than a database. *(Amended M6, 2026-11, owner decision on #284: the plugin's own content is the one source that is not on the server's disk. **Built-in packs** ship inside the plugin jar and are read-only; they load through the same pipeline as any pack. The files in the jar are still files, versioned with the plugin, so the source of truth is still files and nothing is a database. See §7.3.)* |
 | **D2** | **Everything readable is a typed resource in one content graph** (§5). Cross-references between content types are first-class, validated edges. | This *is* the product thesis: intertwining every feature. Validation of references is what makes intertwining safe. | One schema discipline for all content types; adding a type is a real commitment. |
 | **D3** | **Appearance and behavior are separated within every resource.** Appearance (models, textures, fonts, sounds) compiles into the resource pack; behavior (mechanics) runs on the server. The same split exists in Oraxen/Nexo (`Pack` vs `Mechanics`) — it is correct and we adopt it as universal. | The pack compiler and the runtime never entangle. A resource can change behavior without repacking, and vice versa. | Editors and schemas always carry both facets; never mix them in one flat field list. |
 | **D4** | **One behavior system everywhere:** a single Event → Condition → Action model used by items, blocks, furniture, menus, dialogs, and HUDs. Built-in mechanics are merely pre-packaged ECA bundles. | "Same action language everywhere" is the deepest form of unification; it is also the incumbents' common backbone. Third parties extend one thing, not N. | The ECA engine is critical-path and must be excellent from day one. |
@@ -164,7 +164,8 @@ A **resource** is the atomic unit of content. Every resource has:
   - *Appearance* — everything that compiles into the pack: model reference, textures, sounds,
     display transforms, font data, animations.
   - *Behavior* — everything the server does: ECA rules, mechanics, interaction handlers.
-  - *Metadata* — display name, category (for browsers), tags, permission, documentation blurb.
+  - *Metadata* — display name, tags, permission, documentation blurb. There is no per-resource category field: a
+    browser organises by pack and folder (§7.2), so a category is a folder an author makes.
 - **Provenance**: which file, which pack, which schema version, when last changed.
 
 ### 5.2 Pack
@@ -370,6 +371,8 @@ watcher (hand edits by T4 users) · pack import. All funnel into the same pipeli
 plugins/Materione/
   settings/                  ← plugin configuration (delivery, web server, permissions)
   content/packs/             ← THE SOURCE OF TRUTH (D1) — user content lives here
+                             │  (the plugin's own built-in packs are not here: they are
+                             │  read-only and read from the plugin jar, §7.3)
   generated/                 ← pack output, indices, caches (disposable, rebuildable,
                              │  gitignorable — D7)
   storage/                   ← DURABLE plugin state: allocation table, web tokens, audit
@@ -417,6 +420,11 @@ Rules that matter for robustness and tooling:
   `.materione/` are never content. A resource's identity is its key, never its path, so folders
   organise files without renaming anything. The discovery rule is specified in plugin
   architecture §4.2.
+- **Folders are the author's categories.** Folders under a content directory carry no meaning for identity
+  (above) and all the meaning a browser needs: the in-game browser (runtime-systems §8.3) walks packs, then
+  these folders, then the entries. Folders under `items/`, `blocks/` and `furnitures/` merge into one tree, so
+  `items/gems/ruby.yml` and `blocks/gems/ruby_ore.yml` sit in one folder `gems`. Nothing has to be labelled, and
+  nothing is labelled twice.
 - **Config and assets colocated in the pack** — a pack zips into a shareable unit as-is.
 - **Hand-authored vs generated are separated by directory**: users author `assets/` and `*.yml`;
   the compiler writes only `generated/`. Nothing the compiler writes ever overwrites something a
@@ -424,6 +432,31 @@ Rules that matter for robustness and tooling:
 - The file format is **interchange-first**: importers (ItemsAdder/Oraxen/Nexo — the parity doc's
   #1 adoption lever) land content in this exact layout, so imported content is indistinguishable
   from native content thereafter.
+
+### 7.3 Built-in packs (decided M6, 2026-11, owner decision on #284)
+
+The plugin runs on its own backend: content the plugin itself needs is a pack, loaded through Materione's
+normal pipeline, like a pack a server owner wrote. The first is the pack `materione`, which holds the
+in-game content browser as a `gui` resource (runtime-systems §8.3). It is a proof that the system works for
+what ships with it, and the code may rely on a built-in pack existing as a guarantee of the pipeline (a pack
+that is read from the jar cannot be missing or half-edited) without naming it.
+
+| Rule | Statement |
+|---|---|
+| **Location** | Inside the plugin jar, on the classpath at `builtin-packs/<id>/` with the layout of §7.2. `builtin-packs/index.txt` lists the ids a jar ships, one per line. It is **not** extracted to `plugins/Materione/`, so no file on the server's disk can change it. |
+| **Read-only** | Nothing writes to a built-in pack. The editor does not list it among the packs it edits, `browse.packs` reports it separately (`builtin`), the authoring API cannot create a pack with its id, and the document store neither lists nor creates a folder of that name. |
+| **Pipeline** | The parse stage reads it from the jar's file system with the same discovery rule as a pack on disk (`PackLayout`), **first**, before the packs in `content/packs`. It is validated, graphed, allocated, compiled, applied and refreshed by the same stages, and it is included in every reload: a targeted reload (one pack, a file set) never touches it and never drops it. It has no fingerprints, because it cannot drift. |
+| **Namespace** | A built-in pack's id is its namespace. The namespace `materione` is reserved for built-in packs, as `minecraft` is reserved for vanilla (§5.1). |
+| **Override** | A folder in `content/packs` whose name is a built-in pack's id **cannot** override, extend or replace it. The folder is ignored whole (none of its resources reach the pipeline) and the pipeline reports **`MTR-0095`** (error) naming the folder. Renaming or removing the folder is the fix. |
+| **Fail-soft** | A built-in pack that cannot be read from the jar (a damaged jar) is reported with **`MTR-0096`** (error) and left out; the server runs without it, and whatever depends on it, such as `/materione browse`, says the GUI is not live. A built-in document that does not parse or validate is quarantined like any other. |
+| **Permissions** | A built-in pack's resources name permission nodes like any resource (`materione.browse`, `materione.browse.get`). The plugin declares those nodes at enable with the operator default, as it does for `materione.give`. |
+| **No special case** | No code names a built-in pack or one of its resources, except a command alias that opens a GUI by id through the generic opener (`/materione browse`). The browser is a GUI like any other: its list is the `content` list source, its search is the `prompt` action, its navigation is `gui.open` and `gui.back`. |
+
+Why a classpath pack and not a seeded one: seeding copies files into `content/packs` where the owner can edit
+them (so the code could no longer assume the GUI is as shipped) and where an update has to merge with those edits.
+Reading from the jar makes "the plugin works as shipped" a property of the install, and an update of the plugin is
+an update of its pack. Why not code-built windows: a second, private way to build a GUI is what D5 and D6
+forbid, and it leaves the GUI runtime untested by the plugin's own use.
 
 ---
 

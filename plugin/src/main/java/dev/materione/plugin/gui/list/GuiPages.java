@@ -76,7 +76,7 @@ public final class GuiPages {
             return Optional.empty(); // already on that page (a step past the last one): nothing moved, nothing fires
         }
         Object stored = session.pages().get(list);
-        session.pages().put(list, new ListPage(number, before.count()).toMap());
+        session.pages().put(list, new ListPage(number, before.count(), before.size()).toMap());
         if (!refresh.repaint(viewer, session)) {
             restore(session, list, stored);
             return Optional.of("the window is not showing this GUI");

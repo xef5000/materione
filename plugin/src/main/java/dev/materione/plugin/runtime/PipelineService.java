@@ -43,6 +43,7 @@ import dev.materione.pack.allocation.AllocationTable;
 import dev.materione.pack.compile.PackCompiler;
 import dev.materione.pack.compile.PackFormats;
 import dev.materione.platform.recipes.RecipeApplier;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -430,6 +431,8 @@ public final class PipelineService {
                     new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
             builder.view(RuntimeGuis.KEY, RuntimeGuis.empty());
             builder.view(RuntimeVariables.KEY, RuntimeVariables.empty());
+            builder.view(dev.materione.core.runtime.RuntimeContentIndex.KEY,
+                    dev.materione.core.runtime.RuntimeContentIndex.empty());
             return builder.build();
         }
         var templates = new LinkedHashMap<String, Map<String, Object>>();
@@ -632,10 +635,68 @@ public final class PipelineService {
                 new dev.materione.core.runtime.RuntimeGlyphs(glyphEntries));
         builder.view(dev.materione.core.runtime.RuntimeEffects.KEY,
                 new dev.materione.core.runtime.RuntimeEffects(effectEntries));
+        // the content tree a browser walks, over the items that are live in this same shadow
+        builder.view(dev.materione.core.runtime.RuntimeContentIndex.KEY, contentIndex(packs, builder::findItem));
         // GUI slots resolve against every item of this apply, placement items included (gui.md §5)
         builder.view(RuntimeGuis.KEY, RuntimeGuis.build(
                 guiModels, builder::findItem, RuntimeGuis::vanillaMaterial, diagnostics::publish, logicLookup()));
         return builder.build();
+    }
+
+    /**
+     * The live content as packs, folders and entries (runtime-systems §8.3): every live item, and every block or
+     * furniture whose placement item the runtime generated (one with a real placement item is that item's row). An
+     * entry sits in the folders its file sits in under its content directory. Resources the shadow did not make live
+     * (a quarantined definition) are not listed.
+     */
+    static dev.materione.core.runtime.RuntimeContentIndex contentIndex(
+            List<ContentPack> packs, java.util.function.Function<NamespacedId, Optional<RuntimeItem>> live) {
+        var entries = new java.util.ArrayList<dev.materione.core.runtime.RuntimeContentIndex.Entry>();
+        for (ContentPack pack : packs) {
+            if (pack.manifest() == null) {
+                continue;
+            }
+            for (ContentResource resource : pack.resources()) {
+                var type = switch (resource.contentType()) {
+                    case "item" -> dev.materione.core.runtime.RuntimeContentIndex.Type.ITEM;
+                    case "block" -> dev.materione.core.runtime.RuntimeContentIndex.Type.BLOCK;
+                    case "furniture" -> dev.materione.core.runtime.RuntimeContentIndex.Type.FURNITURE;
+                    default -> null;
+                };
+                if (type == null) {
+                    continue;
+                }
+                RuntimeItem item = live.apply(resource.id()).orElse(null);
+                // an item resource is its own row; a block or furniture is a row only when its item is the generated one
+                boolean listed = item != null
+                        && (type == dev.materione.core.runtime.RuntimeContentIndex.Type.ITEM
+                                ? !item.synthetic() : item.synthetic());
+                if (!listed) {
+                    continue;
+                }
+                String name = dev.materione.core.runtime.RuntimeContentIndex.plainName(item.displayName(), resource.id());
+                entries.add(new dev.materione.core.runtime.RuntimeContentIndex.Entry(
+                        resource.id(), type, name,
+                        item.displayName() != null && !item.displayName().isBlank() ? item.displayName() : name,
+                        foldersOf(pack, resource)));
+            }
+        }
+        return dev.materione.core.runtime.RuntimeContentIndex.of(entries);
+    }
+
+    /** The folders between a content directory and the file that declares a resource ({@code items/gems/ruby.yml}: gems). */
+    private static List<String> foldersOf(ContentPack pack, ContentResource resource) {
+        try {
+            Path relative = pack.directory().toAbsolutePath().normalize()
+                    .relativize(resource.sourceFile().toAbsolutePath().normalize());
+            var folders = new java.util.ArrayList<String>();
+            for (int i = 1; i < relative.getNameCount() - 1; i++) {
+                folders.add(relative.getName(i).toString());
+            }
+            return folders;
+        } catch (IllegalArgumentException unrelated) {
+            return List.of(); // a source outside the pack directory: the pack's top level
+        }
     }
 
     /**
@@ -1092,8 +1153,7 @@ public final class PipelineService {
                 RuntimeItem.hashOf(item.id(), item.material(), modelId, item.displayName(), item.lore(), runtimeState),
                 null, false,
                 item.jukeboxSong(),
-                mechanics.stream().flatMap(mechanic -> mechanic.itemModifiers().stream()).toList(),
-                item.category());
+                mechanics.stream().flatMap(mechanic -> mechanic.itemModifiers().stream()).toList());
     }
 
     /** Resolves mechanics against the frozen-at-apply registry snapshot. */

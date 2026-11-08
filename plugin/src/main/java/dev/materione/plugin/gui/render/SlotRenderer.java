@@ -110,7 +110,7 @@ public final class SlotRenderer {
         int size = layer.slots().size();
         int count = ListPager.countOf(arranged.size(), size);
         int number = ListPager.clamp(pageNumber(pass.context(), layer.layerId()), count);
-        frame.page(layer.layerId(), new ListPage(number, count));
+        frame.page(layer.layerId(), new ListPage(number, count, arranged.size()));
         List<Map<String, Object>> onPage = ListPager.pageOf(arranged, number, size);
         for (int position = 0; position < size; position++) {
             int slot = layer.slots().get(position);

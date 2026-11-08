@@ -31,6 +31,7 @@ public final class PipelineRunner {
     private final ValidateStage validateStage = new ValidateStage();
     private final GraphStage graphStage = new GraphStage();
     private volatile FingerprintCache fingerprints = FingerprintCache.empty();
+    private volatile BuiltinPacks builtinPacks = BuiltinPacks.none();
 
     private final ReentrantLock runLock = new ReentrantLock();
     private final AtomicBoolean running = new AtomicBoolean();
@@ -53,6 +54,19 @@ public final class PipelineRunner {
     /** The packs parsed by the last run (empty before the first run). */
     public java.util.List<ContentPack> lastPacks() {
         return lastPacks;
+    }
+
+    /**
+     * Sets the packs the plugin ships in its jar (master §7.3); every later run parses them beside the packs on
+     * disk. Set once at boot, before the first run.
+     */
+    public void builtinPacks(BuiltinPacks packs) {
+        this.builtinPacks = packs == null ? BuiltinPacks.none() : packs;
+    }
+
+    /** The built-in packs runs parse. */
+    public BuiltinPacks builtinPacks() {
+        return builtinPacks;
     }
 
     /** Replaces the fingerprint table (boot-time load from {@code fingerprints.bin}). */
@@ -91,6 +105,7 @@ public final class PipelineRunner {
         var context = new PipelineContext(scope, packsRoot, diagnostics, quarantine);
         context.previousPacks(lastPacks);
         context.fingerprints(fingerprints);
+        context.builtinPacks(builtinPacks);
         diagnostics.publish(new Diagnostic(
                 DiagnosticCodes.SCOPE_EXPANDED, Severity.INFO,
                 "pipeline run started (scope " + scope + ")",

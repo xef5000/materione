@@ -516,60 +516,92 @@ other — referencable from menus, items, furniture, NPCs.
 
 `/materione browse [words…]` (alias `browser`) opens the browser for a player. It is the
 roadmap's "item browser" parity row (`feature-parity.md` §3.10): the surface every incumbent's
-`/ia`, `/oraxen inv` and `/nexo inv` provides, here as a 54-slot window over one snapshot of the live
-registries.
+`/ia`, `/oraxen inv` and `/nexo inv` provides, here as a 54-slot window over the live content.
 
-**Model (`plugin/gui/browse`, pure and headless-tested).** `BrowseCatalog.build` makes one row per
-live item (synthetic placement items excluded), per custom block and per furniture; a block or a
-furniture row hands out its placement item, and a row with none says how to place it
-(`/materione dev place`). Rows sort by category, then name (case-insensitive), then id.
+**It is a GUI resource in a built-in pack (owner decision on #284).** The browser is
+`materione:browser`, the file `guis/browser.yml` of the plugin's own pack `materione`
+([master §7.3](../architecture.md)). That pack ships inside the jar, is read-only, and loads, compiles and
+opens through the same pipeline and GUI runtime as a server's own GUIs. This makes the browser a proof that the plugin
+runs on its own backend, and it means a server owner reads the browser's file to learn how to build their own. The
+browser uses only what the GUI runtime offers every author:
 
-**Categories come from the registries, with one authored field.** A row's category is:
-
-| Row | Category |
+| Browser feature | Mechanism (all generic) |
 |---|---|
-| an item with `category:` | the authored label (trimmed, at most 40 characters) |
-| an item without one | its pack (the namespace) |
-| a block or furniture | its placement item's category, or its pack when it has none |
+| The list of packs, folders and items | the `list` component over the **`content` list source** (below), 45 slots a page |
+| Opening a pack or a folder | `gui.open` of the same GUI with the row's location as the argument `path` |
+| Going up | `gui.back`, which restores the previous window on the page it was left on |
+| Search | the `prompt` action (chat) writing `session.search`, and the list's `search:` key |
+| Page indicator, "nothing here" and "no results" | `text` layers in the title, reading `gui.page.entries.*` |
+| Taking an item | `give_item`, in a flow guarded by the `has_permission` condition |
+| Who may open it | the GUI's `open:` block (`permission: materione.browse`, typed arguments `path`, `search`) |
 
-`category:` is an optional item field (`ItemType` self-description, `ItemDefinition.category`,
-`RuntimeItem.category`). It inherits through `template:` like every item field, round-trips in the
-raw map, and an unusable value (blank) is read as absent: the item is never quarantined over it.
-Grouping is case-insensitive (`Tools` and `tools` are one group), and a group shows the label of its
-first row in sort order, so one group never shows two spellings. The first screen lists the
-categories; each is shown as its first row's item, with its count.
+**The tree is the files' own: packs, then folders, then entries (owner decision on #284).** The browser has no
+category field. The first screen lists the packs that hold content, each with how many entries it has. Inside a pack,
+the folders under its content directories (`items/`, `blocks/`, `furnitures/`) are shown first, then the
+entries directly in the pack. Opening a folder shows its folders and entries in the same way, to any depth. The
+content directories merge into one tree (`items/gems/ruby.yml` and `blocks/gems/ruby_ore.yml` are both in `gems`), so
+a folder an author makes *is* a category, with nothing to label. Folders and entries sort by name, ignoring case, folders
+first.
 
-**Search.** `BrowseCatalog.search` matches the words of the query (split on whitespace) against each
-row's lower-cased id and plain display name (formatting tags and legacy colour codes removed); every
-word must match. `/materione browse red gem` opens the browser already filtered, and the window's search
-button types that command for the player. An in-window prompt is not built: the prompt action is the
-GUI runtime's, and the browser is not a GUI resource (below).
+**What is an entry.** An entry is something a player can take, and its id is the id of the item handed out.
 
-**Taking.** A left click hands one item to the viewer, a shift-click a full stack, both through
-`Give.deliver`, so nothing lands on the cursor and nothing can be duplicated by a drop, a drag or a number
-key. Only the four left and right clicks are acted on: a drop, a number key or a middle click on a row does
-nothing. The window is a `PluginGui`, so the shared click router (`GuiListener`) cancels the moves a window
-must not take: a shift-click from the viewer into it, a drag that touches it, and a drop or a number-key swap
-of its own slots.
+| Declared as | Listed as | Folder |
+|---|---|---|
+| an item resource | itself | its file's folders under `items/` |
+| a block or furniture whose placement item is a real item (an `item:` link, or an item of the same id) | nothing: the placement item is already an entry, in its own folder | none |
+| a block or furniture with no item of its own (the runtime generates its placement item) | itself, with the generated item | its file's folders under `blocks/` or `furnitures/` |
 
-**Permissions.** `materione.browse` opens the browser (and runs `/materione browse`); `materione.browse.get`
-takes from it. Both are declared at enable with the operator default, like `materione.give`. A viewer
-who may open but not take still sees, searches and browses everything; a click says what is missing.
+A block or furniture is therefore always one row, and a row always hands out something a player can place. A definition
+the pipeline quarantined is not live and is not listed. The synthetic placement items are never listed apart from
+their block or furniture.
 
-**Why not the GUI runtime.** The browser could be a `gui` resource with a `list` over a new
-`ListSource` and a `prompt` for search, and this surface then becomes the same code as a server's own
-GUIs. It is not done here, because a GUI resource that ships with the plugin is a built-in pack. That is
-a new source of content that the owner has not decided: a second copy of a GUI in the jar, seeded into
-`content/packs`, or loaded from the classpath beside the packs (the D1 question, §14). The browser is
-built on the kit it would use (`PluginGui`, `Pagination`, the click router), so moving it to the runtime
-later changes its window, not its rules. Open question for the owner, recorded in the PR.
+**The `content` list source.** `source: {type: content, arg: path, search: search}` (`api.logic.ListSource`,
+registered under `materione:` like the other built-ins, self-described in the registry so the editor offers its
+`entry.*` variables). It reads `RuntimeContentIndex`, a view the pipeline builds in the same shadow as the
+registries, so it swaps atomically with them and names only what is live. Its location is a GUI argument (`arg`,
+`path` by default): empty is the root, `shop` is a pack, `shop/gems` a folder. While the session variable named by
+`search` holds text, the source lists every item of every pack, flat, and the list's own `search:` key keeps the
+matches. The rows carry `kind` (`pack`, `folder` or `item`), `name` (plain), `label` (the item's name as authored,
+formatting included, so the window shows it as it really looks), `path`, `count`, `id`, `type`, `stack`, `detail`
+and `search`.
 
-**Diagnostics.** The browser adds no `MTR-` code. An entry that cannot be handed out (no placement item, or
-an item that is no longer live) tells the player why and gives nothing; a reload is the fix. The browser
-logs `MATERIONE-BROWSE-OPEN` and `MATERIONE-BROWSE-GET` for the QA suite (`qa/catalog/browse.mjs`).
+**Search.** The list's `search:` matches **every whitespace-separated word** of the text against the row's id and its plain
+display name (formatting tags and legacy colour codes removed), ignoring case, in any order: `ruby sword` finds
+`Ruby Sword` and `shop:ruby_sword`. `/materione browse red gem` opens the browser already searching: the command
+only names the GUI and passes `search`, and the GUI's `gui.open` rule applies it. The search button asks for the words in
+chat (the window closes while the question waits and comes back with the answer applied); `cancel`, a timeout or leaving
+the server is no answer and changes nothing. A search shows items from every pack, wherever they are filed.
 
-**Not in this milestone.** Configurable slot layout, icons, titles and navigation icons (the parity row's
-"configurable" part, and Nexo's FILE and DIRECTORY layouts) follow from the GUI runtime and are not built.
+**Taking.** A left click on an item takes **one**, a shift-click takes a full stack (the item's own stack size, which the
+source reads from its base material), both with `give_item`. What does not fit drops at the player's feet, as
+`/materione give` does. A right click, a middle click, a drop and a number key take nothing. A click on a pack or a
+folder opens it. The window is an ordinary GUI window: the click router cancels every click on it and the moves a
+window must not take (a shift-click from the player's inventory into it, a drag over it).
+
+**Permissions (owner decision on #284: the browser is like creative mode, so operators by default).**
+
+| Node | Gate | Default |
+|---|---|---|
+| `materione.browse` | opening the browser, by the GUI's `open.permission` (the gate refuses with the generic `no permission (materione.browse)`); `/materione browse` needs nothing else | operator |
+| `materione.browse.get` | taking, checked **on every take** by the `has_permission` condition in the GUI's `take` flow, so a node revoked while the window is open is honoured at once; a player without it sees, searches and walks the whole tree and a click says what is missing | operator |
+
+Both nodes are declared at enable (like `materione.give`); grant them through the permissions plugin.
+
+**`/materione browse` is an alias for the generic open path.** It resolves the GUI `materione:browser`, passes the typed
+argument `search`, and hands it to the same opener as every other way into a GUI (`GuiRuntime.openForCommand`). It needs
+no `materione.gui.open`; the GUI's own `open:` block governs, as it does for any open command. It has no browser logic. A server
+without the built-in pack (a damaged jar, `MTR-0096`) answers that the GUI is not live.
+
+**Unaffected by reloads.** The index is part of each shadow, so a reload applies on the next render. An open browser
+refreshes in place like any GUI (`gui.md` §5).
+
+**Diagnostics.** The browser adds no code of its own. The built-in pack's two failure modes are `MTR-0095` and
+`MTR-0096` (plugin.md §5). Markers for the QA suite are the player-visible results themselves (the inventory, the
+messages), since a shipped GUI does not print to the server console.
+
+**Not in this milestone.** A configurable layout, titles and navigation icons are not options of a shipped
+GUI because it is not editable; a server that wants its own browser builds one from the same parts (the `content`
+source is public), and Nexo's FILE and DIRECTORY layouts are the pack and folder tree above.
 
 ---
 

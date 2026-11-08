@@ -97,11 +97,24 @@ public final class GuiFixture {
     public LayerVisibility visibility = LayerVisibility.ALL;
     public final FakeInputs inputPort = new FakeInputs();
 
+    /** The pack a GUI written as YAML belongs to; {@link #PACK} unless the test names another. */
+    private final String pack;
+    /** The permission nodes the stand-in player holds; mutable, so a test can grant or revoke between clicks. */
+    public final java.util.Set<String> permissions = new java.util.LinkedHashSet<>();
+
     public GuiFixture() {
+        this(PACK, dev.materione.plugin.logic.support.ItemCatalog.none());
+    }
+
+    /**
+     * A fixture whose GUIs belong to {@code pack} and whose item sources and list sources read {@code items}.
+     */
+    public GuiFixture(String pack, dev.materione.plugin.logic.support.ItemCatalog items) {
+        this.pack = pack;
         var registries = new RegistryService();
         logic = LogicTestSupport.newService(registries);
         Plugin owner = LogicTestSupport.owner("materione");
-        BuiltinLogic.register(logic, owner, dev.materione.plugin.logic.support.ItemCatalog.none(), bridge);
+        BuiltinLogic.register(logic, owner, items, bridge);
         logic.actions().register(owner, NamespacedId.of("materione", "mark"), new Mark(ran));
         logic.actions().register(owner, NamespacedId.of("materione", "fail"), new Fail());
 
@@ -111,7 +124,7 @@ public final class GuiFixture {
         }
         type = new GuiType(components);
 
-        player = player(UUID.randomUUID(), "Probe", messages);
+        player = player(UUID.randomUUID(), "Probe", messages, permissions);
         viewer = Viewer.of(player);
         engine = new RuleEngine(new FlowInterpreter(new InlineScheduler(), RunBudget.DEFAULT, diagnostics::add),
                 new CooldownStore());
@@ -160,13 +173,13 @@ public final class GuiFixture {
         Map<String, Map<String, Object>> document = (Map<String, Map<String, Object>>)
                 new Yaml().load(yaml.replaceAll("(?m)^(\\s*(?:- )?)on:", "$1\"on\":"));
         var entry = document.entrySet().iterator().next();
-        NamespacedId id = NamespacedId.of(PACK, entry.getKey());
+        NamespacedId id = NamespacedId.of(pack, entry.getKey());
         return (GuiDefinition) type.parse(id, entry.getValue(), Map.of()).orElseThrow();
     }
 
     /** Removes a GUI from the live view, as a reload that drops it does. */
     public void remove(String name) {
-        compiled.remove(NamespacedId.of(PACK, name));
+        compiled.remove(NamespacedId.of(pack, name));
         publish();
     }
 
@@ -412,12 +425,18 @@ public final class GuiFixture {
 
     /** A player that records the messages sent to it and answers the few queries a run context makes. */
     public static Player player(UUID id, String name, List<String> messages) {
+        return player(id, name, messages, java.util.Set.of());
+    }
+
+    /** As above, holding the permission nodes in {@code permissions} (read live, so a test can change them). */
+    public static Player player(UUID id, String name, List<String> messages, java.util.Set<String> permissions) {
         return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[] {Player.class},
                 (proxy, method, args) -> switch (method.getName()) {
                     case "getUniqueId" -> id;
                     case "getName" -> name;
                     case "isOnline" -> true;
                     case "isSneaking", "isOp" -> false;
+                    case "hasPermission" -> permissions.contains(String.valueOf(args[0]));
                     case "getGameMode" -> GameMode.SURVIVAL;
                     case "getHealth" -> 20.0;
                     case "getLevel" -> 3;

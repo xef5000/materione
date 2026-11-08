@@ -68,12 +68,13 @@ class ListSourcesTest {
         var sources = BuiltinListSources.all(ItemCatalog.none());
 
         assertThat(sources).extracting(ListSource::id)
-                .containsExactly("online_players", "pack_items", "variable", "static");
+                .containsExactly("online_players", "pack_items", "content", "variable", "static");
         assertThat(sources.get(1).describe().cached()).isTrue();
         assertThat(sources.get(1).describe().shorthand()).isEqualTo("pack");
         assertThat(sources.get(0).describe().entry()).extracting(variable -> variable.path())
                 .containsExactly("entry.name", "entry.uuid");
-        assertThat(sources.get(2).describe().shorthand()).isEqualTo("var");
+        assertThat(sources.get(2).describe().shorthand()).isNull();
+        assertThat(sources.get(3).describe().shorthand()).isEqualTo("var");
     }
 
     @Test

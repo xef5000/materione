@@ -357,7 +357,7 @@ barrier item that carries the reason in its lore (fail-soft and visible), never 
 | `PermissionProvider` (grant, revoke, temporary grant) | `give_permission`, `take_permission`, `run_command as: op` | Bukkit attachments, for the session only | Vault, LuckPerms |
 | `ServerTransfer` | `connect` | the 1.20.5+ transfer packet when configured with a host | BungeeCord or Velocity plugin messaging |
 | `InputMethod` | `prompt` (§6.6) | chat, anvil; sign registered but unavailable on this build (§29) | dialogs (#6) |
-| `ListSource` | the `list` component (§6.7) | online players, a pack's items, a variable list, static `entries:` | addon sources |
+| `ListSource` | the `list` component (§6.7) | online players, a pack's items, the content tree (§35), a variable list, static `entries:` | addon sources |
 
 Providers are resolved at use, not cached at load, so installing Vault later only needs a reload. Money
 is the one provider kind that is content rather than a slot: a currency file names its integration, and
@@ -623,7 +623,7 @@ As built (#220): the decisions, the diagnostics (`MTR-0081` to `MTR-0084`) and t
     lore: ["<gray>Click to teleport"]
 ```
 
-- **State.** Page state is per session per list (`gui.page.<list>`: `number` and `count`).
+- **State.** Page state is per session per list (`gui.page.<list>`: `number`, `count` and, since #8, `size`, the entries after search and filter).
 - **Paging actions.** `gui.page: {list, to: next|previous|first|last|<n>}`. It fires `gui.page`, once per
   page change.
 - **Context.** Clicks on a list slot carry `entry.*` in context, so a single rule handles every
@@ -634,7 +634,8 @@ As built (#220): the decisions, the diagnostics (`MTR-0081` to `MTR-0084`) and t
   itself `cached`, and the session snapshots it on open and on `gui.refresh`, not on every tick.
 
 As built (#219): the decisions, the diagnostics (`MTR-0077` to `MTR-0080`) and the seams for search (#220) are
-in §28. The search key is built (#220, §29).
+in §28. The search key is built (#220, §29). The content browser (#8, §35) is a GUI built from a `list` over the
+`content` source, `prompt`, `gui.open` and `gui.back`: the worked example of this section.
 
 ---
 
@@ -2700,7 +2701,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    is in the registry, so the editor reads it from there. **Deferred:** the vocabulary does not yet carry list sources,
    so the Logic tab cannot autocomplete `entry.*` from it. This is the same gap item sources have (§26), and it is
    closed with the node inspector (#224), not here. *Closed in §31 (decisions 9 and 17).*
-6. **Four built-ins, registered through the public API like an addon's (`materione:`).** `online_players` (`name`,
+6. **Four built-ins, registered through the public API like an addon's (`materione:`).** *(A fifth, `content`, arrived with #8: §35.)* `online_players` (`name`,
    `uuid`, and `exclude_viewer`; the viewer's own state is never read, because a list on one viewer's thread must not
    touch another player's state on Folia). `pack_items` (`pack`, the shorthand; each live item of a pack as `item`;
    cached). `variable` (`var`, the shorthand, a declared player or server string variable, split by `separator`; a
@@ -2720,7 +2721,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
    field last whatever the direction.
 9. **The `sort:` is on the list, not on the source.** One mechanism, applied to every source after the filter, so a source
    never has to sort its own entries. §6.7's example is corrected to match (`source: online_players`, `sort: name`).
-10. **The page state is per session per list, in `GuiSession.pages()`, as `{number, count}`.** The renderer writes the
+10. **The page state is per session per list, in `GuiSession.pages()`, as `{number, count}`** *(plus `size` since #8, §35 decision 5)*. The renderer writes the
     count it computed and the number it clamped, before the window's title is laid out, so a text or an item name can
     read `gui.page.<list>.number` and `gui.page.<list>.count` (for "Page 2 of 5"). A page past the end is clamped, not
     refused. The stored state survives a reload (the session carries on, §21 decision 17) and is what `gui.back` restores.
@@ -2877,7 +2878,7 @@ Where the design left a choice open, these are the choices. Each is reversible b
 **The search key (§28.21)**
 
 17. **`search:` on a list is `{fields: [...], var: <name>}`.** The fields are the entry fields a search text is matched
-    against (case-insensitive substring, any listed field); `var` names the session variable the text is read from,
+    against (case-insensitive substring, any listed field; *since #8 every whitespace-separated word must match, §35 decision 4*); `var` names the session variable the text is read from,
     default `search`. A prompt writes its answer there (`var: session.search`). A list without `search:` ignores the
     session text. The seam is `ListEntries.arrange`, and only there: the search is a second keep-condition ANDed with the
     author's `filter:`, applied before the sort and the paging (§6.7 order). An empty or unset search keeps every entry,
@@ -3484,3 +3485,53 @@ end, its QA entries, and the coverage in §1.1. No engine change was needed for 
 13. **Every §1 row that is not "Later" has a line in §1.1**, naming the showcase GUI or the QA entry that demonstrates it, or the
     existing entry (the `guilogic`, `guidynamic`, `guioverlay`, `logic`, `opencommands` and `variables` suites), or **a gap** with
     its reason. The gaps are collected at the end of §1.1.
+
+## 35. Decisions taken in #8 (the content browser is a GUI resource)
+
+#8 ships the in-game content browser, and its owner decision (#284) is that the browser is an ordinary `gui` resource in a
+built-in pack ([`architecture.md`](../architecture.md) §7.3, [`runtime-systems.md`](runtime-systems.md) §8.3). The GUI runtime
+needed three small, generic additions to carry it, none of them browser-specific. Each decision is reversible by the owner.
+The code is in `plugin.gui.list` (`ContentTreeSource`, `ListEntries`, `ListPage`), `plugin.gui` (`GuiRuntime.openForCommand`),
+`core.runtime` (`RuntimeContentIndex`) and the pack `plugin/src/main/resources/builtin-packs/materione/`.
+
+1. **`content` is a fifth built-in list source** (`api.logic.ListSource`, registered under `materione:` through the public API
+   like the others, §28.6). It lists the live content as packs, folders and entries, one location at a time, from a view of the
+   shadow (`RuntimeContentIndex`, §28 decision 12 does not apply: it is not `cached`, because it reads an in-memory tree). Its
+   parameters are `arg` (the GUI argument that carries the location, default `path`) and `search` (the session variable that
+   carries a search). The location is **a GUI argument, not a session variable**, so opening a folder is `gui.open` of the
+   same GUI with a new `path`, and `gui.back` is the way up: the back stack (§21, *Sessions and the back stack*) restores the previous window with its
+   arguments, variables and page. The alternative, a session variable plus a parent computed in YAML, was rejected because the
+   expression language has no substring function and a "back" would then have to be tracked by hand.
+2. **A source may read the window's context.** `entries(params, context)` reads `gui.args.<arg>` and `gui.session.<search>` from
+   the viewer's context, as `variable` reads a declared variable. This was always allowed (§28 decision 4); it is now used for
+   navigation, and the source names which arguments it reads, so the editor and a reader of the GUI can see them.
+3. **While the search variable holds text, `content` lists every item of every pack, flat.** The source decides the scope (all
+   content, not the current folder); the list's own `search:` key still decides which entries match (§29 decision 17). The two
+   do not overlap: with no search text the list is unfiltered and the tree shows.
+4. **A list's `search:` matches every word.** The text is split on whitespace and every word must be contained, ignoring case, in
+   at least one of the listed fields (§29 decision 17 read it as one substring). One word behaves as before; several words may
+   match in any order and across fields, so a search over an item's id and its name finds `ruby sword` in `Ruby Sword` and in
+   `shop:ruby_sword`. A phrase that matched as a substring still matches, so no existing search narrows.
+5. **The page state gains `size`.** `gui.page.<list>` is now `{number, count, size}`; `size` is the number of entries after the
+   list's search and filter, over every page (0 when it has none), so a GUI can say "no results". `ListPage.of` reads a state
+   without it as 0. Reading it from an **item** layer lags one render, because the item layers of a render read the page state
+   the previous render recorded (§28 decision 10 records it after the slots are decided, before the title); a **text** layer
+   reads it in step, so the browser shows its page indicator and its "nothing here" messages as title text.
+6. **`GuiRuntime.openForCommand(player, gui, args)` is the open path for a command that names a GUI.** It checks that the GUI is
+   live and hands the open to the opener on the player's thread, and it answers with the opener's own result. Unlike
+   `GuiRuntime.open` (the API), it does not require `materione.gui.open`: the GUI's `open:` block governs, as it does for an open
+   command (§23 decision 17). `/materione browse` is this call with the id `materione:browser` and the argument `search`.
+7. **The pipeline publishes `RuntimeContentIndex`** with each shadow: a row per live item, plus a row per block or furniture whose
+   placement item was generated; a block or furniture with a real placement item is that item's row (runtime-systems §8.3). A
+   row's folders are the folders of its declaring file under its content directory. The view is built from the same `ContentPack`s
+   the shadow is, so a quarantined definition is not in it.
+8. **The browser's own rules.** `materione:browser` takes `path` and `search` arguments (both optional), opens only with
+   `materione.browse`, and takes with `give_item` inside a flow whose first step is `has_permission: materione.browse.get`
+   (the deny is a `message`). Every take goes through the flow, so the check is made on every take.
+
+**Verification.** `BuiltinBrowserPackTest` (plugin) compiles the shipped file with zero diagnostics, then runs the same file
+through the real router and rule engine: root, pack, nested folders, back, take one, take a stack, the permission checked on every
+take (revoked between two clicks), the open refusal, search (words, case, id), the empty messages, paging and the page kept across
+a folder and back. The one step it replaces is `give_item`, which needs a server to build a stack. `ContentTreeSourceTest` and
+`RuntimeContentIndexTest` pin the source and the tree; `ContentIndexBuildTest` pins which resources become rows. The QA entries
+(`qa/catalog/browse.mjs`) are the in-game half and are **not run against a client** in this change.

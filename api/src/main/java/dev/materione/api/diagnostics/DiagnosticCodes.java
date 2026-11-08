@@ -540,6 +540,23 @@ public final class DiagnosticCodes {
     public static final DiagnosticCode GUI_CLICK_OUTSIDE_CONTAINER =
             new DiagnosticCode("MTR-0092", Severity.WARN, "Clickable GUI layer is outside the container; clicks cannot reach it");
 
+    /**
+     * A pack in {@code content/packs} uses the id of a built-in pack (master section 7.3, plugin.md section 4.2). A
+     * built-in pack ships inside the plugin jar and cannot be overridden, extended or replaced, so the folder is
+     * ignored whole and the built-in pack stays as shipped. The authoring API refuses to create a pack with such an
+     * id under the same code.
+     */
+    public static final DiagnosticCode BUILTIN_PACK_ID_RESERVED =
+            new DiagnosticCode("MTR-0095", Severity.ERROR, "Pack id belongs to a built-in pack; the folder is ignored");
+
+    /**
+     * A built-in pack could not be read from the plugin jar: its index entry, manifest or documents are missing or
+     * unreadable (master section 7.3). The pack is left out and the server runs without it; whatever depends on it
+     * (the content browser) is unavailable until the plugin is reinstalled. A damaged jar is the usual cause.
+     */
+    public static final DiagnosticCode BUILTIN_PACK_UNAVAILABLE =
+            new DiagnosticCode("MTR-0096", Severity.ERROR, "Built-in pack could not be loaded from the plugin jar");
+
     private static final List<DiagnosticCode> ALL = List.of(
             PLATFORM_UNSUPPORTED,
             PHASE_FAILED,
@@ -632,7 +649,9 @@ public final class DiagnosticCodes {
             TRACE_REFUSED,
             GUI_ART_CLIPPED,
             GUI_ART_GEOMETRY_INVALID,
-            GUI_CLICK_OUTSIDE_CONTAINER);
+            GUI_CLICK_OUTSIDE_CONTAINER,
+            BUILTIN_PACK_ID_RESERVED,
+            BUILTIN_PACK_UNAVAILABLE);
 
     private DiagnosticCodes() {}
 

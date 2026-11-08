@@ -36,7 +36,7 @@ const param = (id: string, extra: Partial<ParamInfo> = {}): ParamInfo => ({ id, 
 
 describe('the vocabulary the inspector reads', () => {
   it('reads the registries added since the Logic tab: list sources, item sources, input methods and takesElse', () => {
-    expect([...vocabulary.listSources.keys()]).toEqual(['online_players', 'pack_items', 'static', 'variable']);
+    expect([...vocabulary.listSources.keys()]).toEqual(['content', 'online_players', 'pack_items', 'static', 'variable']);
     expect(vocabulary.listSources.get('online_players')!.entry.map((variable) => variable.path)).toEqual(['entry.name', 'entry.uuid']);
     expect([...vocabulary.itemSources.keys()]).toEqual(['head', 'item', 'player_slot']);
     expect(vocabulary.itemSources.get('player_slot')!.shorthand).toBe('slot');

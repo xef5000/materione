@@ -65,6 +65,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private final ResourceSummaryComputer summaryComputer;
     private final Function<AuthoringApi, GuiAuthoringApi> guiFactory;
     private volatile GuiAuthoringApi guiApi;
+    private volatile List<String> builtinPackIds = List.of();
     private final Function<AuthoringApi, LogicAuthoringApi> logicFactory;
     private volatile LogicAuthoringApi logicApi;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
@@ -224,6 +225,16 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return ApiResult.ok(packs);
     }
 
+    /** Declares the built-in packs (master section 7.3) so the editor can show them read-only. Set once at boot. */
+    public void builtinPackIds(java.util.Collection<String> ids) {
+        this.builtinPackIds = ids.stream().sorted().toList();
+    }
+
+    @Override
+    public List<String> builtinPackIds() {
+        return builtinPackIds;
+    }
+
     @Override
     public ApiResult<PackInfo> createPack(ActorContext actor, String packId) {
         try {
@@ -231,7 +242,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
             audit.record(actorId(actor), "edit.createPack", packId);
             return ApiResult.ok(new PackInfo(packId));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return badRequest(e.getMessage());
+            return refused(e);
         } catch (Exception e) {
             return handlerFailure(e);
         }
@@ -523,7 +534,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
             return ApiResult.ok(view(created));
         } catch (IllegalArgumentException | IllegalStateException e) {
-            return badRequest(e.getMessage());
+            return refused(e);
         } catch (Exception e) {
             return handlerFailure(e);
         }
@@ -1301,6 +1312,15 @@ public final class AuthoringApiImpl implements AuthoringApi {
                 DiagnosticCodes.DUPLICATE_RESOURCE_ID, Severity.ERROR,
                 "resource " + id + " is already declared in " + existing,
                 null, null, "open the existing resource, or choose a different id")));
+    }
+
+    /** A refusal: a built-in pack's id is {@code MTR-0095}; everything else a bad request. */
+    private static <T> ApiResult<T> refused(RuntimeException e) {
+        if (e instanceof DocumentStore.ReservedPackException) {
+            return new ApiResult<T>(false, null, List.of(Diagnostic.error(
+                    DiagnosticCodes.BUILTIN_PACK_ID_RESERVED, e.getMessage())));
+        }
+        return badRequest(e.getMessage());
     }
 
     private static <T> ApiResult<T> badRequest(String message) {

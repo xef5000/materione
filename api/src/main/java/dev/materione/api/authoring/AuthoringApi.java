@@ -25,8 +25,17 @@ import java.util.function.Consumer;
  */
 public interface AuthoringApi {
 
-    /** Every enabled pack under {@code content/packs/}. */
+    /** Every enabled pack under {@code content/packs/}. Built-in packs are not in it: they are not files to edit. */
     ApiResult<List<PackInfo>> listPacks();
+
+    /**
+     * The ids of the packs the plugin ships inside its jar (master section 7.3). They are read-only: no authoring
+     * operation can write them, and they are not listed by {@link #listPacks()}. An editor that wants to show them
+     * marks them read-only. Empty when the plugin ships none.
+     */
+    default List<String> builtinPackIds() {
+        return List.of();
+    }
 
     /** Scaffolds {@code content/packs/<packId>/pack.yml} (idempotent shape of {@code edit.createPack}). */
     ApiResult<PackInfo> createPack(ActorContext actor, String packId);

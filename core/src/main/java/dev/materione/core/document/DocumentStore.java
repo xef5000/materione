@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
@@ -44,6 +45,7 @@ public final class DocumentStore {
     private static final int JOURNAL_CAP = 200;
 
     private final Path packsRoot;
+    private volatile Set<String> reservedPackIds = Set.of();
     private final Path revisionsDir;
     private final Object lock = new Object();
 
@@ -100,6 +102,7 @@ public final class DocumentStore {
             dirs.filter(Files::isDirectory)
                     .filter(dir -> Files.isRegularFile(dir.resolve("pack.yml")))
                     .map(dir -> dir.getFileName().toString())
+                    .filter(id -> !reservedPackIds.contains(id))
                     .sorted()
                     .forEach(id -> packs.add(new PackSummary(id)));
         } catch (IOException e) {
@@ -831,6 +834,7 @@ public final class DocumentStore {
     /** Creates a minimal pack scaffold ({@code pack.yml} + type dirs). */
     public void createPack(String packId, String actor) throws IOException {
         validatePackId(packId);
+        refuseReserved(packId);
         synchronized (lock) {
             createPackLocked(packId, actor);
         }
@@ -845,6 +849,7 @@ public final class DocumentStore {
             String pack, String path, String content, boolean createPack, String actor)
             throws IOException {
         validatePackId(pack);
+        refuseReserved(pack);
         Optional<String> parseError = LosslessYaml.parse(content).parseError();
         if (parseError.isPresent()) {
             throw new IllegalArgumentException("invalid YAML: " + parseError.get());
@@ -888,6 +893,28 @@ public final class DocumentStore {
                 + "\n"
                 + "depends: []\n";
         write(packId, "pack.yml", 0, manifest, actor);
+    }
+
+    /**
+     * Declares the ids of the built-in packs (master §7.3): they belong to the plugin's jar, so the store neither
+     * lists a folder of that name nor creates a pack with it. Set once at boot.
+     */
+    public void reservePackIds(Set<String> ids) {
+        this.reservedPackIds = Set.copyOf(ids);
+    }
+
+    /** Thrown when a pack id is a built-in pack's: the caller reports it as {@code MTR-0095}. */
+    public static final class ReservedPackException extends IllegalArgumentException {
+        public ReservedPackException(String packId) {
+            super("the pack id '" + packId + "' belongs to a built-in pack that ships inside the plugin; "
+                    + "choose another id");
+        }
+    }
+
+    private void refuseReserved(String packId) {
+        if (reservedPackIds.contains(packId)) {
+            throw new ReservedPackException(packId);
+        }
     }
 
     private static void validatePackId(String packId) {

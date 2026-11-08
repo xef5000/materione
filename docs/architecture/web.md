@@ -314,7 +314,8 @@ return a clean error, never a disconnect; capabilities (§4.1) let the panel avo
 ops the connected jar predates.
 
 *As built (M3 + workbench update):* session `ping` / `session.info` (host status
-extras); browse packs / resources (type + query filters) / **folders** / get / history / types;
+extras); browse packs (`browse.packs` answers `packs`, the editable ones, and, when the plugin ships built-in
+packs, an additive `builtin` array of their ids: read-only, never in `packs`, master §7.3) / resources (type + query filters) / **folders** / get / history / types;
 edit put / delete / setScalar (scalars **and scalar lists** through the lossless
 layer) / create (curated per-type scaffolds, duplicate-refusing) / createPack /
 move (journal-truthful renames) / **createFolder, deleteFolder, moveFolder** (the
