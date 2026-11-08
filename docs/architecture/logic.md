@@ -35,7 +35,7 @@ incumbent feature family to the Materione construct that covers it. "Later" rows
 | Incumbent feature | DeluxeMenus | CommandPanels | Materione |
 |---|---|---|---|
 | Menu file, id, title | `menu_title`, `gui_menus` | panel file, `title` | `guis/**/*.yml` (gui.md §2). The title can be dynamic text (§6.4). |
-| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `rows` (chest) in v1. Other containers stay a gui.md §8 seam (later). |
+| Size and container type | `size`, `inventory_type` (18 types) | `rows` or a type | `rows` (chest) in v1. Other containers: `container:` with a profile per type, **designed in gui.md §12** (hopper and dispenser first; anvil and furnaces later), awaiting the owner's approval. |
 | Open commands and aliases | `open_command`, `register_command` | `command`, `aliases` | `open.commands` (§6.1), registered with Brigadier. |
 | Open arguments | `args`, `args_usage_message`, per-argument requirements | command args read as session data | Typed `open.args` (§6.1), validated by conditions and exposed as `gui.args.<name>`. |
 | Open gate | `open_requirement` with deny commands, bypass permission | panel `conditions` | `open.permission`, plus an `open.requirement` condition with a `deny` flow (§6.1). |
@@ -79,7 +79,7 @@ an explicit **gap**. A gap is not covered by any client run; the reason is given
 | §1 row | Demonstrated by | Status |
 |---|---|---|
 | Menu file, id, title | All five showcase GUIs. | Partial. Titles are static in the showcase. A dynamic title (§6.4) has no client entry; `GuiTitleTest` covers it. **Gap.** |
-| Size and container type | `rows: 1` (servers, settings, confirm) and `rows: 3` (shop, players). | Covered (chest only, as §1 says). |
+| Size and container type | `rows: 1` (servers, settings, confirm) and `rows: 3` (shop, players). | Covered for the chest, as §1 says. Other containers are designed (gui.md §12), not built; the row lists a hopper and a dispenser when they ship. |
 | Open commands and aliases | `showcase:shop` opens with `/shop` (`showcase.shop-open-command`). | Partial. One name per GUI here. Several names: `opencommands.deferred-alias-applies-automatically` (existing). |
 | Open arguments | Shop `category` (choice, default `all`): the console marker carries `category=gems`. | Covered. `suggest:` is not checked client-side. |
 | Open gate | Not in the showcase. `opencommands.failed-requirement-denies-with-its-message` (existing, the `guilogic:opener` GUI). | Covered by an existing entry. The `open.permission` gate has no client entry. **Gap.** |
@@ -877,7 +877,7 @@ Each row below names the class of problem, and every one carries a step path whe
 |---|---|
 | Dialogs (#6) | `dialog.submit` is a trigger, `dialog` is an `InputMethod`, and dialog buttons run flows. |
 | HUDs (#7) | `hud.threshold` is a trigger, and `hud.set` is an action. |
-| Non-chest containers | `container:` (gui.md §8), with click-kind mapping per container. |
+| Non-chest containers | `container:` (gui.md §8, designed in §12). v1 needs no click-kind mapping: the click kinds are Bukkit's and the v1 menus are plain slots. A container's own behaviour (rename, buttons, trades, progress) becomes triggers and components of that container when it is designed. |
 | Cross-resource flow libraries | `call` already takes a namespaced id. |
 | Loops | A `repeat` step with a hard iteration cap, if real menus need it. |
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |

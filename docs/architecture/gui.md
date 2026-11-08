@@ -18,8 +18,8 @@
 
 | Term | Meaning |
 |---|---|
-| **GUI** | One `guis/**/*.yml` resource: a container screen design (v1: a chest of 1–6 rows). |
-| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. *Replaced by the open canvas of §11 (#274): the compiler (#276) flattens over the art cap, so art may extend past the screen; the studio (#277) and the starter GUI (#278) follow.* |
+| **GUI** | One `guis/**/*.yml` resource: a container screen design (v1: a chest of 1–6 rows; other containers are designed in §12, awaiting approval). |
+| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. *Replaced by the open canvas of §11 (#274): the compiler (#276) flattens over the art cap, so art may extend past the screen; the studio (#277) and the starter GUI (#278) follow.* The `176 × (114 + rows·18)` is the chest's; a container profile (§12.5.1, design) states the screen size of every other container. |
 | **Layer** | One entry in the GUI's ordered `layers:` list (bottom → top). Every layer is an instance of one component. |
 | **Component** | A registered layer kind (`gui-components` registry): `panel`, `slots`, `image`, `paint`, `button`, `text`, `item` in v1. Addons register more through the same path. |
 | **Render target** | Where a component's output physically lands in the client: the **raster** background, the **title text**, or a container **slot** (§4). |
@@ -32,7 +32,7 @@
 # content/packs/<pack>/guis/shop.yml
 shop:                          # one resource per key (master §7.2); the key is the GUI id
   title: Shop                  # accessibility/fallback title (narration, title-less clients)
-  rows: 6                      # 1..6 (chest); other containers are a later extension
+  rows: 6                      # 1..6 (chest); other containers: `container:`, designed in §12 (not built)
   layers:                      # bottom → top
     - id: frame                # stable, unique within the GUI; [a-z0-9_]+
       type: panel              # component name in the gui-components registry
@@ -256,7 +256,10 @@ the same function, so the pack and the running server cannot disagree):
 
 **Title geometry (verified against the 26.1.2 client jar).** The arithmetic below is read from
 the client's bytecode, not from memory; the probe loop (`docs/probe.md`) still has to confirm
-it on screen (§9.1).
+it on screen (§9.1). It is the **chest's** geometry: the pen origin 8 and the label row 6 are
+`titleLabelX` and `titleLabelY` of the chest screen. Other containers have their own (the anvil's x is 60,
+the dispenser's is centred by the client); §12.5.3 (design) makes both parameters of a container profile
+and keeps this arithmetic unchanged for the chest.
 
 - *Draw origin.* `AbstractContainerScreen.extractLabels` draws the title at `(titleLabelX,
   titleLabelY) = (8, 6)`, relative to the screen's top-left, in colour `0xFF404040`.
@@ -439,7 +442,7 @@ canvas tool, not a form.
 - **Truthful preview**: the canvas renders through the shared raster (§4) plus the
   first-party font, in compiled target order.
 - **Layers**: drag to reorder, visibility, lock, rename, duplicate, delete; a new GUI starts
-  with no layers: the title and the rows, nothing else (§11.2, built in #278). The vanilla chest is the client's own, and the studio draws the owner's reference art under it (§11, #277). A new **panel** starts with `corners: vanilla`.
+  with no layers: the title and the rows, nothing else (§11.2, built in #278). The vanilla chest is the client's own, and the studio draws the owner's reference art under it (§11, #277). A new **panel** starts with `corners: vanilla`. Other containers (§12.7, design) draw their own screen under the same canvas, from a container profile.
 - **Components palette**: add any registered component; unknown addon components get a
   schema-derived inspector automatically.
 - **Paint tools** on `paint` layers reuse the `pixels.ts` engine (brush, eraser, fill,
@@ -582,7 +585,7 @@ diff; `gui.edit` is the path for other consumers (§10 #12).
 | Pagination, search, dynamic fill | new components with target `SLOT` (+ runtime state) |
 | Placeholders in text | `TEXT` runs are already title text, not baked pixels |
 | Groups/folders of layers | a `group` component with children; flattening already recursive-ready |
-| Hopper/dispenser/anvil containers | `container:` field; canvas size per container |
+| Hopper/dispenser/anvil containers | `container:` field and a container profile per type. **Designed in §12** (#286, awaiting the owner's approval): hopper and dispenser in v1, anvil and the furnaces in a later phase |
 | Animated layers | frame cycling from issue #9 |
 
 ## 9. Open questions — answered (#188, #275)
@@ -744,6 +747,9 @@ because merging makes them unnecessary.
   screenshot, so it cannot close the gap either; the probe would need a 1.21.4 build of its client
   bridge.
 - **26.2:** only the texture and the advances were compared (byte-identical). No probe run.
+- **Containers other than the chest (§12.12):** the menus' slot facts are verified on both pins by reading the Paper server
+  jars; every screen fact (size, title position, background) is read from the 26.1.2 client jar only; nothing was seen on
+  screen, and the 1.21.4 screens are unverified for the same reason as above.
 
 ### 9.8 Research for the open canvas (#275): method and evidence
 
@@ -1259,6 +1265,8 @@ Each one is reversible by the owner.
 > #276*). **#277 has landed:** the studio side of this section is built (§6 *As built (issue 277)*): the vanilla
 > underlay and the veil, the open canvas with the cap and the player-window guides, and paint layers that own
 > their box. With #278, every part of the design is built; the visual QA entries await a blessing run.
+> This section describes the **chest**. How the same model extends to other containers (a profile per container for the
+> screen size, the slots, the title origin, the art cap's top and the veil) is §12.5.
 
 ### 11.1 Why
 
@@ -1431,3 +1439,465 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 6. **Owner answers on PR #285.** (a) Items are selectable in the template picker (see 5). (b) A shared
    template/item id is resolved by renaming; `MTR-0094` stays as it is and no spelling reaches the shadowed item.
    (c) Customize on a shadowed base refuses (decision 3) rather than copying.
+
+---
+
+## 12. Containers beyond the chest (#286) — design, awaiting the owner's approval
+
+> **Status: design only.** Nothing in this section is built. It answers #286 (Paper menu types, v1 scope, file model,
+> compiler, runtime, studio, logic and QA, the row split) so that implementation issues can be filed from it, as #274 did
+> for the open canvas. The owner approves it, or amends it, before any row is filed. Until then §1 to §11 describe what
+> ships: **a GUI is a chest of 1 to 6 rows**. The consistency edits this design makes to §1, §4, §6, §8 and §11 are
+> one-line pointers; they change no behaviour.
+>
+> Traceability: files canonical (D1): the new field is one line of YAML and nothing else stores a container. One
+> pipeline (D6): the container is read by the same `GuiCompiler` the pack and the runtime share. Registries with
+> self-description (D5): the container list reaches the studio through `authoring.describe`, not through a studio-side
+> list. Fail-soft: an unknown container quarantines that GUI, never the server. Lossless round-trip (master §5.6): a file
+> without `container:` is read and written exactly as before.
+
+### 12.1 Goal and non-goals
+
+DeluxeMenus offers 18 `inventory_type`s (logic.md §1). A GUI should be able to be a hopper (five slots), a dispenser
+(3 x 3), and later a furnace or an anvil, with the same layers, art, logic and studio as a chest. The point of the first
+cut is the **abstraction**: one container description that the compiler, the runtime and the studio all read, instead of
+`rows` and `176 x (114 + 18 * rows)` spread through them (§12.6 lists every place). Non-goals: a custom client screen
+(the client decides every screen, §12.2), a type the Paper API cannot open from a plugin, and any behaviour that needs a
+block (a furnace that really smelts).
+
+### 12.2 Research: what a Paper plugin can open
+
+#### 12.2.1 Evidence and its limits
+
+Each fact below carries a label for how it was verified, in the manner of §9.
+
+| Label | Source | Used for |
+|---|---|---|
+| **API** | Paper API sources of both pins, from the Gradle cache: `paper-api-1.21.4-R0.1-SNAPSHOT-sources.jar` and `paper-api-26.1.2.build.74-stable-sources.jar` | `MenuType`, `InventoryType`, the view interfaces, `Server.createInventory` |
+| **SRV** | The Paper **server** jars the harness and the probe already hold: `paper-1.21.4.jar` (the harness pin) and `paper-26.1.2.jar` (the probe pin), read with `javap -c -p -constants` | `CraftContainer`, the `net.minecraft.world.inventory.*Menu` slot constructors, the packet handlers |
+| **CLI** | The 26.1.2 **client** jar of the launcher install (the probe's), read with `javap`; texture sizes are the PNG headers (`IHDR`); nothing was extracted into the repo | Screen sizes, title positions, backgrounds, sprites, menu classes |
+| **CMP** | The same menu constructors read in the 1.21.4 server jar (SRV) and the 26.1.2 client jar (CLI) and compared | Slot coordinates on the 1.21.4 floor (the only 1.21.4 evidence there is) |
+| **U** | Not verified | Everything the sections below mark so |
+
+To reproduce: extract `net/minecraft/client/gui/screens/inventory/*Screen.class` and
+`net/minecraft/world/inventory/*Menu.class` from a client or server jar and run `javap -p -c -constants` on them (the
+constructors hold the slot coordinates and the screen sizes; `init()` holds a centred title; `extractBackground` holds the
+blits); read a texture's size from its PNG `IHDR`.
+
+No client ran in this research pass, and no 1.21.4 *client* exists on this machine (§9.7). So: **menu and slot facts are
+verified on both pins** (CMP, SRV), **screen facts (size, title position, background) are verified on 26.1.2 only** and
+expected on 1.21.4, and **nothing here was seen on screen**. The unverified list is §12.12; the probe row R (§12.10)
+closes it.
+
+CMP result: `HopperMenu`, `DispenserMenu`, `ChestMenu`, `AbstractFurnaceMenu`, `AnvilMenu` (with `ItemCombinerMenu`),
+`ShulkerBoxMenu`, `BrewingStandMenu`, `BeaconMenu`, `MerchantMenu` and `CrafterMenu` have the same slot coordinates, the same
+standard-inventory origin and the same `MenuType` on both pins; the only differences are fields the Bukkit patches add to the
+1.21.4 server classes. `EnchantmentMenu`, `LoomMenu`, `StonecutterMenu`, `CartographyTableMenu`, `GrindstoneMenu`,
+`SmithingMenu` and `CraftingMenu` were read on 1.21.4 (SRV) only. The Paper API this design uses is the same on both pins:
+`MenuType` lists the same 25 menu types, the view interfaces are identical, and `InventoryType` differs only by `PLAYER`
+(41 to 43 slots) and a new `SHELF` (not creatable). `CraftContainer` has the same delegate structure on both pins [SRV].
+
+#### 12.2.2 Two ways to open a menu
+
+| | Legacy: `createInventory(holder, InventoryType, Component)` | `MenuType.X.create(player, Component)` (or its builder) |
+|---|---|---|
+| API | [API] `Server.createInventory`, Paper's `Component` overload. The Javadoc says some types "do not support titles" and that `WORKBENCH` and `ENCHANTING` do not compute results (use `MenuType`) | [API] `MenuType.Typed.create(HumanEntity, Component)`; `LocationInventoryViewBuilder` takes an optional `location` and `checkReachable` (per its Javadoc, `checkReachable(true)` with no location closes the view at once, so a view with no location is a plain view with the check off) |
+| Holder | **Yes**: a custom `InventoryHolder`. `GuiMenu` is the holder and `GuiListener` routes by it | **No**: the holder of the view's top inventory is not ours to set. Routing must identify the window by its `InventoryView` (the `AnvilInput` prompt already does) |
+| Server menu | [SRV] `CraftContainer` (both pins). For each `InventoryType` it builds a **real vanilla menu as a delegate** and *adopts the delegate's `slots`, `lastSlots`, `remoteSlots` and data slots*: `ChestMenu`, `DispenserMenu`, `FurnaceMenu` (with a 4-value `SimpleContainerData`), `BlastFurnaceMenu`, `SmokerMenu`, `BrewingStandMenu`, `HopperMenu`, `BeaconMenu`, `ShulkerBoxMenu`, `LecternMenu`, `LoomMenu`, `CartographyTableMenu`, `GrindstoneMenu`, `EnchantmentMenu`, `MerchantMenu`, `CrafterMenu`. `ANVIL`, `WORKBENCH`, `SMITHING` and `STONECUTTER` get plain `Slot`s (`setupAnvil`, `setupWorkbench`, `setupSmithing`, `setupStoneCutter`); for the first two an `AnvilMenu` or `CraftingMenu` delegate is created afterwards, used only for `quickMoveStack`. Chest-like types are chosen by size (9, 18, 27, 36, 41, 45, 54). `stillValid` is always true; `quickMoveStack` is the delegate's | The real vanilla menu (`AnvilMenu`, `FurnaceMenu`, ...), with its logic |
+| What the server does for you | Slot placement rules (`Slot.mayPlace`) of the delegate apply to any click that is not cancelled; no result computation, no recipe book, no rename, no button effects: the packet handlers test the *class* of the player's menu, and `CraftContainer` is none of `AnvilMenu`, `RecipeBookMenu`, `BeaconMenu`, `MerchantMenu` [SRV: `handleRenameItem`, `handlePlaceRecipe`, `handleSetBeaconPacket`, `handleSelectTrade`] | Everything vanilla does: an anvil renames and prices, a furnace menu accepts a recipe-book placement (`PlayerRecipeBookClickEvent` is the hook that can stop it) |
+| Progress and properties | `InventoryView.setProperty(Property, int)` [API: `BURN_TIME`, `COOK_TIME`, `BREW_TIME`, ...]; reaches the delegate's data slots [U: the `CraftContainer` shares them, [SRV], but no `setProperty` call was traced] | `FurnaceView.setCookTime/setBurnTime`, `BrewingStandView.getBrewingTicks`, `AnvilView.getRenameText/setRepairCost`, `BeaconView.setPrimaryEffect`, ... [API] |
+| Title refresh | **Works unchanged**: `PaperRichTitles` (platform) asks `CraftContainer.getNotchInventoryType(inventory)` for the menu type, which is type-aware (`Inventory.getType()` and, for chests, the size) [SRV, platform source] | Needs its own binding: the view's menu is not a `CraftContainer` |
+| Fit for GUIs | Chest, hopper, dispenser: exactly right (plain slots) | Types whose behaviour is the point (anvil rename, furnace progress) |
+
+*Recommendation.* v1 uses the **legacy path** for every type it ships, because it keeps the one router (holder identity)
+and the one title transport, and v1's types are plain-slot. The `MenuType` path is reserved for the types that need it
+(§12.11) and brings a second window identity with it; that is why those types are a later phase.
+
+Both paths open without a block for every type listed below: the legacy path never touches the world, and
+`MenuType.create` has no block requirement [API]. `InventoryType.isCreatable()` is false for `CRAFTING`, `CREATIVE`,
+`MERCHANT`, `COMPOSTER`, `CHISELED_BOOKSHELF`, `JUKEBOX`, `DECORATED_POT` (and 26.x's `SHELF`) [API]; a merchant is opened
+through `MenuType.MERCHANT.builder().merchant(...)` only.
+
+#### 12.2.3 The catalogue
+
+Slot ids are the menu's own (what the client's click packets carry and what `event.getSlot()` reports for the top
+inventory); `(x, y)` is the item's top-left in screen pixels, the 18 x 18 well being one pixel up and left. Every menu below
+is followed by the 36 player slots (27 main, then the hotbar 58 px below the first row) at the listed origin. All background
+textures are 256 x 256 sheets blitted from `(0, 0)` unless noted (`villager.png` is 512 x 256). Title and label positions
+are the screen's `titleLabelX/Y` and `inventoryLabelX/Y` (defaults `(8, 6)` and `(8, imageHeight - 94)`).
+
+| Type (`MenuType` / `InventoryType`) | Slots (id: x, y) | Screen | Player inv. origin | Title (x, y) | Background | Notes |
+|---|---|---|---|---|---|---|
+| **Chest** 1 to 6 rows (`GENERIC_9X1..6` / `CHEST`, `BARREL`, `ENDER_CHEST`) | `0..9r-1`: `8+18·(i mod 9), 18+18·(i div 9)` | 176 x (114+18r) | (8, 31+18r) | (8, 6) | `generic_54.png`, two blits (§11.2) | Barrel and ender chest are the same menu and screen; shipped |
+| **Hopper** (`HOPPER`) | `0..4`: `44+18i, 20` | 176 x 133 | (8, 51) | (8, 6) | `hopper.png`, one blit `(0,0,176,133)` | label y = 39; plain slots |
+| **Dispenser / dropper** (`GENERIC_3X3` / `DISPENSER`, `DROPPER`) | `0..8`: `62+18·(i mod 3), 17+18·(i div 3)` | 176 x 166 | (8, 84) | **centred**, y 6 | `dispenser.png`, one blit `(0,0,176,166)` | one screen for both; label y = 72; plain slots |
+| **Shulker box** (`SHULKER_BOX`) | `0..26`: `8+18·(i mod 9), 18+18·(i div 9)` | 176 x 167 | (8, 84) | (8, 6) | `shulker_box.png` | a 3-row chest with its own texture; `ShulkerBoxSlot` refuses shulker boxes client-side |
+| **Furnace / blast furnace / smoker** (`FURNACE`, `BLAST_FURNACE`, `SMOKER`) | `0` ingredient `56,17`; `1` fuel `56,53` (`FurnaceFuelSlot`); `2` result `116,35` (`FurnaceResultSlot`) | 176 x 166 | (8, 84) | **centred**, y 6 | `furnace.png`, `blast_furnace.png`, `smoker.png` | 4 data values (lit time and duration, cook progress and total); client draws a 14 x 14 flame at `(56,36)` and a 24 x 16 arrow at `(79,34)` from them; recipe book (below) |
+| **Anvil** (`ANVIL`) | `0 27,47`; `1 76,47`; `2` result `134,47` | 176 x 166 | (8, 84) | (**60**, 6) | `anvil.png` | rename field (110 x 16 sprite at `(59,20)`, an `EditBox` of 103 x 12 at `(62,24)`); cost data slot; error sprite 28 x 21 at `(99,45)`; client predicts the result (below) |
+| **Brewing stand** (`BREWING_STAND` / `BREWING`) | `0 56,51`; `1 79,58`; `2 102,51` (potions); `3 79,17` ingredient; `4 17,17` fuel | 176 x 166 | (8, 84) | **centred**, y 6 | `brewing_stand.png` | 3 data values; bubbles 12 x 29, brew progress 9 x 28, fuel bar 18 x 4; `PotionSlot`, `IngredientsSlot`, `FuelSlot` refuse other items |
+| **Enchanting table** (`ENCHANTMENT` / `ENCHANTING`) | `0 15,47`; `1 35,47` (lapis only) | 176 x 166 | (8, 84) | (8, 6) | `enchanting_table.png` | 10 data slots (3 costs, seed, 3 clues, 3 level clues); three 108 x 19 buttons; the legacy path does not compute offers [API] |
+| **Beacon** (`BEACON`) | `0 136,110` (payment items only) | **230 x 219** | **(36, 137)** | (8, 6) | `beacon.png` | 3 data values; 22 x 22 effect buttons; the set-effect packet needs a real `BeaconMenu` |
+| **Loom** (`LOOM`) | `0 13,26` banner; `1 33,26` dye; `2 23,45` pattern; `3 143,57` result | 176 x 166 | (8, 84) | (8, **4**) | `loom.png` | pattern grid and scroller are client widgets; one data value (selected pattern) |
+| **Stonecutter** (`STONECUTTER`) | `0 20,33`; `1 143,33` result | 176 x 166 | (8, 84) | (8, **5**) | `stonecutter.png` | recipe grid is a client widget; one data value |
+| **Cartography table** (`CARTOGRAPHY_TABLE`) | `0 15,15` map; `1 15,52` paper or glass; `2 145,39` result | 176 x 166 | (8, 84) | (8, **4**) | `cartography_table.png` | map preview drawn from the item's data |
+| **Grindstone** (`GRINDSTONE`) | `0 49,19`; `1 49,40`; `2 129,34` result | 176 x 166 | (8, 84) | (8, 6) | `grindstone.png` | error sprite 28 x 21 at `(92,31)` |
+| **Smithing table** (`SMITHING`) | `0 8,48` template; `1 26,48` base; `2 44,48` addition; `3 98,48` result | 176 x 166 | (8, 84) | (**44**, **15**) | `smithing.png` | armour-stand preview; cycling slot icons |
+| **Crafting table** (`CRAFTING` / `WORKBENCH`) | `0` result `124,35`; `1..9` grid `30+18·((i-1) mod 3), 17+18·((i-1) div 3)` | 176 x 166 | (8, 84) | (**29**, 6) | `crafting_table.png` | recipe book; the legacy path computes no recipes [API] |
+| **Crafter** (`CRAFTER_3X3` / `CRAFTER`) | `0..8` grid `26+18·(i mod 3), 17+18·(i div 3)`; result (the last slot, 45) `134,35` | 176 x 166 | (8, 84) | **centred**, y 6 | `crafter.png` | per-slot disabled state and powered flag are data; `CrafterSlot` |
+| **Merchant** (`MERCHANT`) | `0 136,37`; `1 162,37`; `2` result `220,37` | **276 x 166** | **(108, 84)** | bespoke (own `extractLabels`) | `villager.png` (512 x 256) | trade list from the offers packet; **not creatable** through `InventoryType` |
+| **Lectern** (`LECTERN`) | `0 0,0` (the book) | a book screen | none | none | none (book) | `LecternScreen` extends `BookViewScreen`, not the container screen; the page is a data value |
+| Not menus a plugin opens | `PLAYER`, `CREATIVE`, `CRAFTING` (2 x 2), `COMPOSTER`, `CHISELED_BOOKSHELF`, `JUKEBOX`, `DECORATED_POT`, `SHELF` | | | | | not creatable [API] |
+
+Provenance of the table: slots and origins are [SRV]/[CMP] (and [CLI] for the 26.1.2 menus); screen size, title and label
+positions, backgrounds and sprite sizes are [CLI]. `i` is the slot id and `r` the chest's row count. The slot restrictions named (lapis, beacon
+payment items, fuel, shulker boxes) were read from the slot classes' `mayPlace` [CLI]. The hopper's `inventoryTop` (where the vanilla player-inventory art begins, `baseY - 14`) is derived, not read
+from the screen: 37 for the hopper and 70 for the dispenser, from the same rule that gives `18r + 17` for the chest [U:
+check against the owner's art].
+
+#### 12.2.4 Behaviour that matters to a GUI
+
+| Behaviour | Types | Verified how | Policy |
+|---|---|---|---|
+| **The client picks the screen from the menu type.** The server sends only `(containerId, menuType, title)`; layout, widgets and sprites are the client's | all | [SRV] `CraftContainer.getNotchInventoryType`, `PaperRichTitles`; [CLI] the screen classes | A GUI cannot restyle a screen's widgets; it draws *under* them (the title is behind widgets or over them: §12.12 U4) |
+| **Centred title.** `init()` sets `titleLabelX = (imageWidth - font.width(title)) / 2`, and `Font.width` is `ceil` of the *sum of glyph advances*, shift characters included | dispenser, furnace family, brewing stand, crafter | [CLI] bytecode of `DispenserScreen`, `AbstractFurnaceScreen`, `BrewingStandScreen`, `CrafterScreen`; `Font.width`, `StringSplitter.stringWidth` | Compiled titles end with a trailing shift that makes the width `imageWidth - 16`, which puts the origin back at 8 (§12.5) |
+| **Fixed non-default title positions** | anvil x 60; crafting x 29; smithing (44, 15); loom y 4; stonecutter y 5; cartography y 4 | [CLI] | Per-profile `titleX0`, `titleY0` (§12.5) |
+| **Result prediction.** The menu's own `slotsChanged` also runs in the client's copy of the menu. No `isClientSide`, `ServerLevel` or `ServerPlayer` test guards it in the anvil (`ItemCombinerMenu` and `AnvilMenu.createResult`; its only `ServerPlayer` use is the text filter), grindstone, loom, stonecutter and cartography menus. Smithing, enchanting, crafting and the merchant also override `slotsChanged` but test `ServerLevel` or `ServerPlayer`, so whether the client computes a result there is not established | anvil, grindstone, loom, stonecutter, cartography (shown); smithing, enchanting, crafting, merchant (U) | [CLI] `slotsChanged` overrides and the absence of side tests in those classes | A display GUI built on one of these types must expect the **client to compute and show a result the server did not send**, until the server resyncs. Out of v1 for this reason |
+| **Slots that refuse items client-side** (`Slot.mayPlace`) | furnace fuel and result, brewing slots, beacon payment, enchanting lapis, shulker boxes, every result slot, crafter slots | [CLI]/[SRV] the slot classes named in the table | An `input: true` slot on such a slot is a diagnostic, not a silent failure (reserved `MTR-0100`, §12.4) |
+| **Rename** | anvil | [SRV] `handleRenameItem` runs `AnvilMenu.setItemName` only for an `AnvilMenu`; [API] `AnvilView.getRenameText` | The legacy anvil (plain slots) ignores the packet; the `MenuType` anvil gives the text (the prompt's `AnvilInput` does this today) |
+| **Progress arrows and fuel bars** | furnace family (4 data values), brewing (3) | [SRV] `checkContainerDataCount`; [CLI] sprite blits; [API] `FurnaceView`, `BrewingStandView`, `InventoryView.Property` | Not in v1. A `progress` component would be a fourth render target (§12.11) |
+| **Buttons** (`ServerboundContainerButtonClickPacket`) | enchanting, loom, stonecutter, lectern, beacon (separate packet) | [SRV] the handlers; `CraftContainer` does not forward `clickMenuButton` to its delegate (it uses the delegate only for slots, data and `quickMoveStack`) | Inert on the legacy path [U: no click was sent]; a trigger per button is a later design |
+| **Recipe book** | furnace family, crafting table | [CLI] `AbstractRecipeBookScreen`; [SRV] `handlePlaceRecipe` requires a `RecipeBookMenu` | The screen shifts when the book is open (art moves with it, being relative to `leftPos`); on the legacy path a book click moves nothing; on the `MenuType` path cancel `PlayerRecipeBookClickEvent`. The button itself cannot be removed from the server [U] |
+| **Quick move** | all | [SRV] `CraftContainer.quickMoveStack` delegates to the real menu | Never reached: every shift-click into or out of a GUI is cancelled and planned by the input rules (logic.md §25) |
+| **Sync after a cancelled click** | all | existing behaviour of `GuiListener` | Unchanged |
+
+### 12.3 Scope: which types v1 supports
+
+*Recommendation: v1 is the chest, the hopper and the dispenser. No "rich" type in v1.*
+
+| Type | v1 | Reason |
+|---|---|---|
+| Chest, 1 to 6 rows (barrel and ender chest are the same menu) | shipped | the default; nothing about it changes |
+| **Hopper** | **in** | Plain slots, fixed title position, a single background blit. A 5-slot, one-row container with its own screen size (176 x 133) forces every `rows`-shaped assumption into the open |
+| **Dispenser** (also the dropper: one menu, one screen) | **in** | Plain slots in a 3 x 3 grid (3 columns, not 9). Its **centred title** proves the per-profile title origin that every later type needs (§12.5.3). Conditional on the probe (R): if the centring arithmetic does not hold on screen, v1 is chest + hopper and the dispenser moves to phase 2 |
+| Shulker box | later | Only a texture and a slot restriction on top of a 3-row chest; cheap, but nothing it teaches is missing from v1 |
+| **Anvil**, **furnace / blast furnace / smoker** | phase 2 | The "rich" types the issue names. Each needs the `MenuType` path or progress data, a second window identity (§12.2.2) and, for the anvil, a client-predicted result slot (§12.2.4). They are worth doing *after* the abstraction exists and one non-chest type is seen working on a client |
+| Brewing stand, enchanting table, beacon, loom, stonecutter, cartography table, grindstone, smithing table, crafter | later, one design each | Buttons, data values, slot restrictions or client-side result prediction: each is a behaviour design, not a geometry entry |
+| Merchant | out | `InventoryType` cannot create it, its screen is 276 wide with a bespoke layout and a client-side offer list |
+| Lectern | out | A book screen: no container background, no title, one slot at (0, 0) |
+| Crafting table | out | A crafting UI, not a menu: the legacy path computes no recipes, the `MenuType` path adds the recipe book |
+| `PLAYER`, `CREATIVE`, `CRAFTING` (2 x 2), composter, jukebox, chiseled bookshelf, decorated pot | out | not creatable by a plugin (§12.2.2) |
+
+Why this small: every type adds geometry (data), but the **behaviours** are the cost, and v1's three have none. A small v1
+also gives one cheap probe pass (R) that settles the unknowns shared by all types (title centring, the veil boundary,
+legacy-path routing, title refresh) before any rich type spends effort on them.
+
+### 12.4 The file model
+
+```yaml
+orders:
+  title: Orders
+  container: hopper        # chest (the default; may be absent) | hopper | dispenser
+  layers: [ ... ]          # the same layers; slots are the container's own, 0..4
+guide:
+  title: Guide
+  rows: 3                  # a chest keeps `rows`; a file without `container:` is a chest
+```
+
+| Rule | Decision |
+|---|---|
+| **Name and values** | `container:`, lower-snake-case, the id of a built-in container profile: `chest`, `hopper`, `dispenser` in v1. `dispenser` is also how a dropper is written (one menu, one screen, §12.2.3; the importer maps `DROPPER` to it). Later ids follow the menu names (`furnace`, `blast_furnace`, `smoker`, `anvil`, ...). Not the Bukkit enum names: they would be a second vocabulary beside `region: container` and `font: smallcaps` |
+| **Default and round-trip** | Absent means `chest`. Existing files are untouched: a GUI with no `container:` loads, compiles and saves byte for byte as before (master §5.6), and nothing ever *adds* `container: chest` to a file that lacks it. The studio writes `container:` only when the author sets it to something other than chest |
+| **`rows`** | Required **iff** the container is a chest (1 to 6, as today). On any other container it is not read: the profile fixes the slot count. A hand-written `container: hopper` with `rows: 3` loads without a diagnostic (the field is documented "chest only"); the compiler ignores it |
+| **Unknown or unsupported value** | The GUI is quarantined with `MTR-0097` (error): the message names the value and lists the supported ones. A file written for a newer plugin therefore costs that one GUI on an older server, never the pack, and the file is untouched (fail-soft, D1). Layers keep their per-layer fail-soft behaviour (`MTR-0052`) as before |
+| **Slot numbers** | A slot is the container's own slot id (§12.2.3): `0..4` on a hopper, `0..8` on a dispenser, row-major `0..9r-1` on a chest. An `item` layer, a `list` slot set or a rule's `slot:` outside the container is the existing diagnostic (`MTR-0052` for an item or list layer, `MTR-0021` for a rule), with the message saying "container" and the slot count instead of "rows". No new code |
+| **Schema self-description (D5)** | `container` joins the gui type's `SelfDescription` as an `ENUM` (default `chest`, options from the profile table, group `placement`, before `rows`), and `rows` becomes optional with the description "Chest only". The inspector must show `rows` only for a chest, and `ParameterSchema` cannot say that today: the row M adds an additive `appliesWhen` hint to the editor metadata (field, value) so the studio does not hard-code it. `authoring.describe` gains `guiContainers` (id, label, slot count, columns, screen size) next to `guiComponents`, and the studio offers **only the containers the connected server lists**, because the editor ships separately from the jar |
+| **Older plugin, newer file** | An older plugin ignores `container:` as an unknown top-level key (preserved, master §5.6). A hopper GUI has no `rows`, so it is **quarantined** there (the `rows` field is required), never shown as a wrong chest. For that reason the studio **removes `rows`** from a document when the author switches to a non-chest container and restores the session's last chest row count when they switch back (one undo step each way, §12.7) |
+| **Capability** | The jar advertises a new session capability, `gui.containers`; the studio offers non-chest containers only when it is present (the `gui` capability pattern of #185/#204, `editor-op-gates.json`). A demo or older connection edits chests exactly as today |
+
+**Diagnostics reserved for this feature.** The next free code is `MTR-0097`. The block `MTR-0097` to `MTR-0100` is
+reserved here, in one place, and the implementing rows take them in this order (plugin.md §5 gets the rows when they land;
+the reservation is noted there now so another change does not take them):
+
+| Code | Severity | Meaning | When it lands |
+|---|---|---|---|
+| `MTR-0097` | error | A GUI's `container:` is not a supported container id (or is not a string). The GUI is quarantined; the rest of the pack compiles | M |
+| `MTR-0098` | error | A GUI's container cannot be opened on this server (a platform without the menu API a later type needs). The open is refused with this code, before the previous session changes, like the unavailable-window refusal of logic.md §6.1 step 4. **Unused in v1**: all v1 types open on every supported Paper | phase 2 |
+| `MTR-0099` | warning | An `input: true` slot sits on a container slot the client refuses items for (§12.2.4: a fuel slot, a result slot, a beacon payment slot, ...). The layer is kept; the item would not go in. **Unused in v1** (all v1 slots accept anything) | phase 2 |
+| `MTR-0100` | - | reserved, unassigned | - |
+
+### 12.5 The compiler
+
+#### 12.5.1 The container profile
+
+Every container is **data**: a profile in one file that both Java and the studio read (the pattern of `smallcaps.txt` and
+`advances.txt`: one source, a golden that pins its digest, a test on each side), not constants in either language. The
+file lives with the other shared data (name decided by row M) and is mirrored into `authoring.describe` only as the list of
+ids and labels.
+
+| Field | Meaning | chest(r) | hopper | dispenser |
+|---|---|---|---|---|
+| `id`, `label` | the `container:` value and the studio's name | `chest` | `hopper` | `dispenser` |
+| `slotCount`, `columns` | slots and the grid's width (lists and `skip_columns` use `columns`) | `9r`, 9 | 5, 5 | 9, 3 |
+| `slot(i)` | the item's top-left in screen px | `(8+18·(i mod 9), 18+18·(i div 9))` | `(44+18i, 20)` | `(62+18·(i mod 3), 17+18·(i div 3))` |
+| `width`, `height` | the screen | `176`, `114+18r` | `176`, `133` | `176`, `166` |
+| `inventory` | the player's 27 slots' origin; the hotbar is `+58` below | `(8, 31+18r)` | `(8, 51)` | `(8, 84)` |
+| `inventoryTop` | first row of the player-inventory art (the veil starts here): `inventory.y - 14` | `18r+17` | `37` | `70` |
+| `title` | the pen origin `titleX0` (a number, or `centred`) and the label row `titleY0` | `8`, `6` | `8`, `6` | `centred`, `6` |
+| `label` | the vanilla "Inventory" label | `(8, 18r+20)` | `(8, 39)` | `(8, 72)` |
+| `underlay` | the sheet and the blits that compose the vanilla screen | `generic_54` (two blits, §11.2) | `hopper` | `dispenser` |
+
+The values are §12.2.3's, [SRV]/[CMP] for slots and origins and [CLI] for sizes and title rules. A later container is
+one more entry; the geometry is never a code change.
+
+#### 12.5.2 What changes, and what does not
+
+**Identical for every container, byte for byte:** the flatten over the art cap (§4 step 1), the cut into 256-px tiles, the
+PNG encoder, the glyph allocation and the `<ns>:gui` font, the offset fonts, `ShiftMath`, the dynamic-visual path (§4 step
+7), `MTR-0090`/`MTR-0091`, and every existing golden and vector. **A row's exit criterion is that no existing golden
+changes.** A GUI without `container:` compiles exactly as today because the chest profile reproduces today's constants.
+
+**Generalised** (the compiler's `rows`-shaped places, found by reading the code, §12.6 has the plugin and studio ones):
+
+| Where | Today | With a profile |
+|---|---|---|
+| `GuiType` (`MAX_ROWS`, the `rows` schema entry and range check) | rows 1 to 6 or quarantine | `container` read first; rows read only for a chest |
+| `GuiDefinition`, `CompiledGui` (`rows`, `WIDTH`, `height(rows)`) | chest size | carry the profile id (and rows for a chest); `width()`/`height()` from the profile; the public `rows()` stays for chests |
+| `GuiCompiler` slot table (`for slot < rows * 9`) | 9-wide | `slotCount` |
+| `ItemComponent` (`rows * 9`, "outside the GUI's N row(s)") | chest slot | `slotCount`, message says container |
+| `ListSlots` (`COLUMNS = 9`, `rows * 9`), `ListComponent` | chest slot grid | profile `columns` and `slotCount` |
+| `SlotsComponent.itemOrigins` and the well painter (`rows * 18 + 31`, `8 + col * 18`) | chest geometry | the profile's `slot(i)` and `inventory`; `region: player` uses `inventory` |
+| `ClickMapCompiler` (`centreX(slot % 9)`, `centreY(slot / 9)`, `rows * 9`), `GuiTextRules.slots`, `GuiVisualCompiler` | 9-wide centres | the profile's slot centres |
+| `GuiAuthoringApiImpl.render` (the preview flattened at `CompiledGui.height(rows)`), `GuiLayerEdits` (screen edit: rows 1 to 6) | chest | profile height; the `screen` edit takes a `container` |
+| `GuiComponentConfiguration.rows` (api) | the component's view of the geometry | gains the profile; `rows()` stays for source compatibility |
+
+#### 12.5.3 The title origin, including centred titles
+
+§4's arithmetic is `ascent = 13 - y` and a pen that starts at 8. Both are the chest's `titleLabelY + 7` and
+`titleLabelX`. A profile makes them parameters: **`ascent = (titleY0 + 7) - y`** and the pen starts at `titleX0`. The
+hopper and the chest have `(8, 6)`, so their strings are unchanged; later types differ (anvil 60, loom y 4, smithing
+`(44, 15)`).
+
+The centred screens (dispenser, and later the furnaces, the brewing stand and the crafter) set `titleLabelX` in `init()` to
+`(imageWidth - font.width(title)) / 2` [CLI], and `font.width` is the `ceil` of the signed sum of the string's glyph
+advances, shift characters included [CLI: `Font.width` -> `StringSplitter.stringWidth`]. The compiler knows every advance
+(it already tracks the pen), so it can make the width a constant. Let `W` be the title's total advance; the origin is
+`(176 - W) / 2` (Java integer division). Choosing `W = 160` gives `(176 - 160) / 2 = 8`: **the origin is back at 8, so every
+position in §4 and §11.3 holds unchanged.** Because the pieces of a title already track the pen, the rule is one step:
+
+> After the last piece, shift the pen to `titleX0 + (imageWidth - 16)`, that is `168` on a 176-px screen.
+
+That is one trailing `<shift:168 - pen>` (nothing when the pen is already 168), added by `GuiTitle` and by the dynamic
+`TitleRenderer` at the end of every assembled title that has art or text runs. A GUI with neither keeps its plain `title:`
+as the title, and the client centres it: the vanilla look. The check is exact integer arithmetic, so the golden can pin it.
+It rests on `Font.width` summing negative advances without a clamp, which the bytecode shows ([CLI]: the lambda adds each
+`getAdvance` to a `MutableFloat`) and no screen has yet confirmed (§12.12 U1). **If the probe refutes it, the dispenser leaves
+v1** (§12.3); nothing else depends on it.
+
+#### 12.5.4 The art cap and the regions
+
+- **Cap.** The cap is the box of §11.2 (`x -424..599`, `y -243..780`). Its top row is a client fact,
+  `titleY0 + 7 - 256`: `-243` for `titleY0 = 6`, which is every v1 container, so **v1 shares one cap**. A later container with
+  another `titleY0` has its own top (smithing `-234`; loom `-245`); the cap is stated per profile and `GuiArt.CAP_*` become
+  functions of it. Its width is centred on the screen: 176-px screens share `-424..599`; a 230- or 276-px screen shifts it.
+- **Regions** (§11.2). Container = the profile's slot area, **player** = `y >= inventoryTop` within the screen, **outside** =
+  the rest of the cap. The veil starts at `inventoryTop`. `item` and `list` layers stay container-only.
+- **Window guides** (§11.5) are the same formulas with the profile's `height`; a hopper (133) leaves more room above and
+  below than any chest.
+
+#### 12.5.5 Click areas and slot ids
+
+`ClickMap` maps each of the container's slots (`0..slotCount-1`) to the layers covering it, by the rule of logic.md §6.2:
+a rectangle covers a slot when the slot's 16 x 16 centre `(x+8, y+8)` falls inside it. Only `slot(i)` changes. The player
+slots keep being the viewer's: the client sends them with `slotNum >= slotCount`. A click outside is still slot -999 with no
+position (§9.14), for every container.
+
+#### 12.5.6 Tests
+
+Per profile: a compiled golden (the pack-output summary), shared raster vectors for the underlay composition, a
+click-map table, and a **title vector** with a trailing shift. A ban test forbids `rows * 9`, `% 9` and `/ 9` and the
+numbers `176`, `114`, `18 * rows` and `rows * 18` outside the profile file and the chest's adapter. The existing
+`chest-*` vectors and every shipped golden stay as they are.
+
+### 12.6 Runtime
+
+**Opening.** `GuiOpener` is unchanged (logic.md §6.1). `BukkitWindowHost` builds the window from the compiled GUI's
+profile: a chest stays `Bukkit.createInventory(holder, size, title)`; a hopper or dispenser is
+`Bukkit.createInventory(holder, InventoryType.HOPPER | DISPENSER, title)` [API], so `PluginGui` gains a constructor taking
+an `InventoryType` and `GuiMenu` takes the profile instead of `rows`. The holder is still the identity: `GuiListener`
+routes by `getTopInventory().getHolder() instanceof PluginGui`, which this keeps.
+
+**The router.** `GuiListener.route` and `dragRoute` already take the top inventory's *size* (`event.getView()
+.getTopInventory().getSize()`), and `ClickTarget.of(policy, outside, top, slot)` is size-agnostic, so the click table is
+unchanged. The viewer-side raw slots are `slotCount + 0..35`, as for a chest. Input slots (logic.md §25),
+`gui.slot_change`, `player_inventory: locked` and `gui.click_inventory` need nothing new. The plain-slot delegates
+(`HopperMenu`, `DispenserMenu`) add no `mayPlace` rule [SRV: both build plain `Slot`s], so an input slot behaves as in a
+chest. No block exists, so a hopper window pulls nothing and a dispenser dispenses nothing.
+
+**Refresh and live reload.** `GuiRefreshPlan`/`RuntimeGuis.Live` compare `rows` and title to decide "rewrite in place" or
+"open a new window"; they compare the **container** (profile id and, for a chest, rows) instead. A container change
+re-opens, with the cursor lifted and restored as today. The dynamic-title transport needs no change: `PaperRichTitles`
+asks `CraftContainer.getNotchInventoryType(expected)` for the menu type, which is type-aware on both pins, so a hopper's
+title refresh sends `MenuType.HOPPER` [SRV; platform source].
+
+**API.** `RuntimeApi.GuiView(id, rows, title, slots)` keeps `rows` (0 for a non-chest) and gains the container id as a new
+component through a source-compatible secondary constructor; `/materione gui open` and the editor's preview are
+container-agnostic. `GuiRuleDiagnoser`'s "outside this GUI's N row(s)" becomes "container slots 0 to N-1".
+
+**`player_inventory`.** The policy is a property of the viewer's inventory and is container-independent. The only per-type
+fact is where that inventory is drawn (the profile's `inventory`); a merchant would draw it at x 108, which is why the
+profile carries an origin and not a constant.
+
+**Special behaviours.** None in v1, which is the point. For the later types (§12.11): the anvil's result slot and rename
+text, the furnaces' recipe book, the beacon and enchanting buttons and the merchant's offers are either *supported*
+through a `MenuType` view and a named trigger, or *neutralised* (cancel the click, cancel `PlayerRecipeBookClickEvent`,
+set the repair cost to 0), never left to vanilla.
+
+### 12.7 The studio
+
+**Canvas and underlay.** `chest.ts` (28 sites), `open-canvas.ts` (20), `model.ts`, `vanilla.ts`, `studio.svelte.ts`,
+`scene.ts`, `snap.ts`, `GuiCanvas.svelte`, the inspector and the layers panel read `rows` and `canvasHeight(rows)`. They
+read the **profile** instead: slot cells and their numbers (the slot grid overlay shows the container's own ids), snap
+targets, `screenRect`, `inventoryTop`, `regionAt`, the window guides, the decoration-only rule (`coversContainerSlot`) and
+the "Inventory" ghost label. The art cap box is drawn from the profile too (§12.5.4).
+
+**The underlay without Mojang art.** The chest's underlay is the owner's own redraw (`webui/static/vanilla/README.md`).
+The same cannot be committed for other screens from Mojang's files. Options:
+
+| Option | What the studio draws | For | Against |
+|---|---|---|---|
+| **A. Owner-drawn sheets** | A sheet per container in `webui/static/vanilla/`, drawn by the owner as `generic_54.png` was, composed by the profile's blits | Legal by construction; deterministic; the same pixel tests as the chest | Manual art per type (2 sheets for v1: 176 x 133 and 176 x 166, and 17 more for the rest); fidelity depends on the redraw (the chest's corners took #278) |
+| **B. The user's own client, read in the browser** | The studio asks once for the user's Minecraft jar (a file picker; the browser unzips `assets/minecraft/textures/gui/container/<name>.png`, which the 26.1.2 jar contains [CLI]) and caches it in IndexedDB. Nothing is uploaded, stored by the relay or committed | Pixel-exact for every present and future type, any version; no art to draw | The user must own and locate a jar; needs the owner's comfort that using a user's own copy locally is acceptable; not available to CI (tests keep synthetic fixtures); the dynamic sprites (flames, arrows) are not part of the sheet |
+| **C. Generated diagram** | A neutral drawing from the profile alone: the screen outline, the slot wells at the exact positions, the player-inventory block, a label "vanilla art not shown" | Zero assets; works for every type on day one; correct for geometry and snapping, which is most of what the underlay is for | Not the vanilla look: art cannot be judged against the frame's real features |
+| **D. Nothing** | Open space and the outline | Trivial | Authors cannot see the slots |
+
+*Recommendation:* **A for the hopper and dispenser, with C as the fallback while a sheet is missing**, so the studio row
+never waits for art and any future type has a working canvas the day its profile is added. **B as a follow-up row when the
+set grows past a handful of types**, because it removes the drawing cost that is linear in the type count; it needs the
+owner's decision (question 3). Mojang assets never enter the repository under any option.
+
+**Switching the type of an existing GUI.** The container is a document field like `rows`, edited in the Screen panel as a
+select (the options come from `authoring.describe`, §12.4); the switch is **one undo step** and loses nothing:
+
+| What the document holds | On a switch | How the author sees it |
+|---|---|---|
+| `rows` | removed from the document on a switch to a non-chest container; the session remembers the last chest value and writes it back when the author returns to chest or undoes the switch | the field is hidden for non-chest |
+| `item` layers in slots the new container lacks | kept, unchanged | the existing server verdict (`gui.validate`, `MTR-0052`) flags each: the orange `!` on the canvas, the warning in the layers panel, the reason in the inspector; the compiler skips only those layers |
+| `list` slot sets, rules with `slot:` | kept | `MTR-0052` and `MTR-0021` respectively, as above |
+| `slots` layers | kept; they are drawn from the new container's wells | none needed |
+| Art, panels, text, buttons | kept at the same pixels | the underlay changes under them; a button that now covers no slot gets the existing "decoration only" badge |
+| Rules | kept | none |
+
+Before the switch is applied, the Screen panel states the cost in one line from the server's last verdict computed for the
+target container ("3 item layers use slots a hopper does not have; they are kept and skipped until you move them"),
+and the status bar repeats it after. No layer is moved, resized or deleted by the switch: that would be a silent edit. A
+**Move out-of-range slots** helper (a deliberate, undoable action that remaps by index) is a possible later convenience, not
+part of this design. Without the `gui.containers` capability the select shows the chest only (§12.4).
+
+**New GUI.** The starter document stays `title` and `rows`; the New GUI dialog gains a container choice, and the file gets
+`container:` only when it is not a chest.
+
+### 12.8 Logic, importer and QA
+
+- **logic.md §1 / §11.** The "Size and container type" row becomes: `rows` (chest), `container: hopper | dispenser` (v1,
+  gui.md §12); DeluxeMenus' `inventory_type` maps `CHEST`, `HOPPER`, `DISPENSER`, `DROPPER` now and the rest as the later
+  phases add profiles. The deferred row "Non-chest containers: click-kind mapping per container" is answered for v1: **no
+  mapping is needed**, because the click kinds are Bukkit's and the v1 menus are plain slots; a container's own behaviours
+  (rename, buttons, trades, progress) become **triggers and components of that container** when it is designed, never a change
+  to the existing ones. The coverage table (§1.1) row "Size and container type" stays "Covered (chest)" until the
+  types ship, and then lists the showcase's hopper and dispenser GUIs.
+- **Components.** `slots` wells, `item`, `list` (`columns`), `text` click footprints and `visible_if` need nothing but the
+  profile. No new component and no new render target in v1.
+- **Importer (#17).** DeluxeMenus `size` maps to `rows`, `inventory_type` to `container:`; an unsupported type is a skipped
+  GUI with a message, not a chest.
+- **QA catalog (`qa/catalog/`).** Auto: the window opens as the right `InventoryType` with the right size; a click on each
+  slot id runs the layer's rule; shift-click and drag stay cancelled; input slots and `player_inventory: locked` behave as in
+  a chest; the dynamic title refreshes on a hopper; and **the open dispenser screen's `titleLabelX` is 8 for a compiled title
+  and `(176 - width) / 2` for a plain one**, read with `ctx.exec` from the client (the check that closes U1 and then guards the
+  trailing shift). Studio auto: switching chest to hopper keeps every layer, flags the out-of-range ones, and undo restores
+  `rows`. Visual: art over a hopper and a dispenser (tiles across the screen edge, the veil boundary, the "Inventory" label
+  over the art, items over art), and the studio canvas for each container. Showcase: a hopper GUI and a dispenser GUI join
+  `fixtures/packs/showcase`.
+
+### 12.9 Decisions this design takes
+
+Each is reversible by the owner.
+
+1. **A container is data (a profile), not code.** One file read by Java and the studio, pinned by a golden; adding a type is a
+   data change plus its probe.
+2. **`container:` is a top-level GUI field; absent means chest.** No existing file changes.
+3. **`rows` belongs to the chest.** The studio removes it on a switch to another container, so an older plugin quarantines
+   the GUI instead of showing a wrong chest.
+4. **v1 opens through `InventoryType` (the legacy path), keeping the holder as the window's identity.** The `MenuType` path
+   arrives with the first type that needs it, with a view-identity router beside the holder one.
+5. **Centred titles are neutralised by a trailing shift, so the pen origin stays 8.** Conditional on the probe.
+6. **One art cap for v1**, stated per profile so later containers can differ.
+7. **Switching container never edits a layer.** It reports; the author decides.
+8. **`MTR-0097` to `MTR-0100` are reserved for this feature**, three of them defined.
+
+### 12.10 Implementation rows
+
+Proposed after approval, as #274 did (R research, C compiler, S studio, Q close-out; M and P are new here because the
+runtime and the model are first-class). Models follow the delegation policy: senior work and web UI on Sonnet at high
+effort, regular implementation on Haiku.
+
+| Row | Title | Scope | Depends on | Model |
+|---|---|---|---|---|
+| **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high |
+| **M** | Model and profiles | `container:` in the schema and `GuiType.parse`, `MTR-0097`, the profile data file with Java and TS readers and its golden, `appliesWhen` in the editor metadata, `guiContainers` in `describe`, the `gui.containers` capability, `GuiComponentConfiguration` gains the profile, lossless-round-trip tests for files with and without `container:` | none | Haiku, reviewed by Sonnet |
+| **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, goldens and vectors for hopper and dispenser, the ban test; **no existing golden changes** | M; R for the dispenser | Sonnet, high |
+| **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open by `InventoryType`, `GuiRefreshPlan` and `RuntimeGuis` compare containers, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor | M | Haiku |
+| **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C) | owner (question 3) | owner / Haiku for C |
+| **S** | Studio | Container select with the capability gate, the profile-driven canvas, slot grid, snap, regions, guides, ghost label and cap, the underlay (A or C), the switch UX and its one-line cost, the starter dialog, `webui` specs | M; C for the verdict text | Sonnet, high |
+| **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes, plugin.md §5 rows, importer note on #17 | R, C, P, S | Haiku |
+| **B** (optional) | Underlay from the user's jar | Option B of §12.7 | owner decision | Sonnet, high |
+
+R, M and A can start together. If R refutes U1, C ships the hopper and the dispenser is re-filed as phase 2.
+
+### 12.11 Later phases (not designed here)
+
+So the v1 seams do not paint the rich types into a corner:
+
+- **A `MenuType` window.** A second way to open a window (`MenuType.X.create(player, title)`, §12.2.2) and a router that
+  identifies it by `InventoryView` beside the holder. `AnvilInput` already opens an anvil this way.
+- **Anvil.** A `gui.rename` trigger carrying the text (`AnvilView.getRenameText`), the result slot neutralised (the client
+  predicts one, §12.2.4: cancel `PrepareAnvilEvent`, repair cost 0), the rename field left to the client (it cannot be
+  removed from the server; art draws over or under it, U4).
+- **Furnace family.** A `progress` component writing the data values (`FurnaceView.setCookTime/setBurnTime`), which is a
+  fourth render target next to raster, text and slot; the SPI (`RenderTarget`) gains a value, an API change that gets its own
+  design. The recipe book cannot be hidden from the server (U6).
+- **The others** each get a design when asked for, with a probe row first.
+
+### 12.12 What is unverified
+
+| # | Claim | Why unverified | What verifies it |
+|---|---|---|---|
+| **U1** | A compiled title with a trailing shift makes `Font.width = 160` and puts a dispenser's pen origin at 8 | Bytecode only; nothing was drawn | R: read `titleLabelX` from the open `DispenserScreen`, and look at the art |
+| **U2** | The hopper and dispenser screens place art exactly as the chest does (`leftPos + x`, `topPos + 13 - ascent`) | The chest was measured (§9.8-§9.15); these screens were not | R: marker boxes on both screens |
+| **U3** | The veil boundaries `37` (hopper) and `70` (dispenser) match the vanilla art | Derived from `baseY - 14` | R, and the owner's sheets |
+| **U4** | Title art draws over or under a screen's own widgets (the anvil's text field, enchanting buttons) | Only plain-slot screens are in v1 | the phase-2 probe |
+| **U5** | A dynamic title refresh on a hopper or dispenser behaves as on a chest (including `init()` re-centring) | Source says `getNotchInventoryType` is type-aware; no run | R |
+| **U6** | The recipe-book button on a furnace screen cannot be avoided and what it does to art | Not run | the phase-2 probe |
+| **U7** | `InventoryView.setProperty` reaches a legacy window's data values | `CraftContainer` shares the delegate's data slots [SRV]; no call traced | the phase-2 probe |
+| **U8** | Legacy window buttons are inert (`CraftContainer` does not forward `clickMenuButton`) | Read in bytecode, not sent | the phase-2 probe |
+| **U9** | Every screen fact on **1.21.4** (title positions, sizes, backgrounds): no 1.21.4 client jar is on this machine (§9.7), and a download is out of scope here | Needs the vanilla 1.21.4 client jar | a 1.21.4 jar read with `javap`; or the probe on a 1.21.4 bridge build |
+| **U10** | The background sheets' names and sizes (256 x 256 sheets, blitted at the screen's size) on **1.21.4** | same | same |
+
+The slot and menu facts are verified on both pins (§12.2.1); this table is only what a person looking at the screen, or a
+jar this machine lacks, can add.
+
+### 12.13 Questions for the owner
+
+1. **Scope.** Approve v1 = chest + hopper + dispenser (the dispenser conditional on R), with the anvil and the furnaces as
+   phase 2? Or add a rich type to v1?
+2. **The file shape.** `container:` with `dispenser` also meaning a dropper, `rows` for chests only and removed by the studio on
+   a switch (so an older plugin quarantines, §12.4). Acceptable, or prefer `rows` kept in the file?
+3. **The underlay.** Option A (you draw the hopper and the dispenser sheets, with the generated diagram C until they exist),
+   B (read the user's own jar in the browser), or C alone? §12.7 recommends A + C now and B when the type count grows. B needs
+   your view on using a user's own copy locally.
+4. **Reserving `MTR-0097` to `MTR-0100`** in plugin.md §5 now, as §12.4 defines them.
+5. **The capability.** Gate non-chest containers behind a new `gui.containers` session capability, so a studio never offers a
+   container the connected plugin lacks. OK?
+6. **The importer.** An unsupported DeluxeMenus `inventory_type` skips the GUI with a message rather than falling back to a
+   chest. OK?
+7. **Furnaces in phase 2.** The recipe book button cannot be removed from the server; if it spoils the art on screen, is
+   that acceptable, or do the furnaces stay out?
