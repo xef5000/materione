@@ -592,8 +592,9 @@ diff; `gui.edit` is the path for other consumers (§10 #12).
 
 Each answer states what was verified and how: client bytecode (the 26.1.2 client jar, read with
 `javap`; method names are given) or a probe run (`docs/probe.md`: the 26.1.2 client joined to the
-pinned Paper 26.1.2 server). **There is no 1.21.4 evidence yet.** This machine has no 1.21.4
-client jar, and the probe loop runs 26.x only, so every 1.21.4 statement here is *unverified*.
+pinned Paper 26.1.2 server). **There is almost no 1.21.4 evidence.** This machine has no 1.21.4
+client jar, and the probe loop runs 26.x only, so every 1.21.4 statement here is *unverified*; the one exception is the
+hopper's and dispenser's window type and size (§12.2.6), asserted on the 1.21.4 server by the harness.
 
 ### 9.1 Draw order of title vs slot items (26.1.2)
 
@@ -748,8 +749,10 @@ because merging makes them unnecessary.
   bridge.
 - **26.2:** only the texture and the advances were compared (byte-identical). No probe run.
 - **Containers other than the chest (§12.12):** the menus' slot facts are verified on both pins by reading the Paper server
-  jars; every screen fact (size, title position, background) is read from the 26.1.2 client jar only; nothing was seen on
-  screen, and the 1.21.4 screens are unverified for the same reason as above.
+  jars. For the hopper and the dispenser, the screens were seen on the 26.1.2 probe (§12.2.6, #289); on 1.21.4 only the
+  window type and size are measured (a harness test, headless), and every screen fact (size, title position, background,
+  art placement, centring) is unverified there for the same reason as above. Every other container's screen fact is
+  read from the 26.1.2 client jar only.
 
 ### 9.8 Research for the open canvas (#275): method and evidence
 
@@ -1491,8 +1494,8 @@ blits); read a texture's size from its PNG `IHDR`.
 
 No client ran in this research pass, and no 1.21.4 *client* exists on this machine (§9.7). So: **menu and slot facts are
 verified on both pins** (CMP, SRV), **screen facts (size, title position, background) are verified on 26.1.2 only** and
-expected on 1.21.4, and **nothing here was seen on screen**. The unverified list is §12.12; the probe row R (§12.10)
-closes it.
+expected on 1.21.4, and **nothing here was seen on screen** by this research pass. Row R (#289) then saw the hopper and the
+dispenser on the probe: §12.2.6 has what it confirmed, and §12.12 what is still unverified.
 
 CMP result: `HopperMenu`, `DispenserMenu`, `ChestMenu`, `AbstractFurnaceMenu`, `AnvilMenu` (with `ItemCombinerMenu`),
 `ShulkerBoxMenu`, `BrewingStandMenu`, `BeaconMenu`, `MerchantMenu` and `CrafterMenu` have the same slot coordinates, the same
@@ -1598,6 +1601,133 @@ is an id, an id names a profile, a profile is data. The test that would reopen t
 geometry varies independently of its id (a configurable slot count on a non-chest menu). None exists in vanilla; adding such
 a container would be the point to design one.
 
+#### 12.2.6 Verified in game (#289, row R)
+
+Row R put a hopper and a dispenser on the probe client (26.1.2, windowed, real GPU) and measured them in the manner of
+§9.8. **U1, U2, U3 and U5 are confirmed, and so is the plain-slot half of U4; the dispenser stays in v1.** The 1.21.4 floor
+gets a harness test for the window type and size; the screens themselves are still 26.1.2 evidence (§12.12 U9, U10).
+
+*Rig.* A test-only Paper plugin, [`harness/src/containerProbe`](../../harness/src/containerProbe/java/dev/materione/harness/probe/ContainerProbe.java)
+(built by `:harness:containerProbeJar`, never shipped, no part of the `container:` model, the profiles or the opener of
+rows M, C and P), opens the window through the legacy path, `Bukkit.createInventory(holder, InventoryType.HOPPER | DISPENSER,
+title)`, with a holder of its own, a different item in every slot, and a title read from Adventure JSON. The title is the shape
+the compiler emits: one run in a font that holds the shift `space` providers and the art's `bitmap` providers
+([`fixtures/gui/containers/gen.mjs`](../../fixtures/gui/containers/gen.mjs), pack `r289`; README next to it). The client side is read
+with Groovy through the bridge: `mc.screen.@target` (`imageWidth`, `imageHeight`, `leftPos`, `topPos`, `titleLabelX/Y`,
+`inventoryLabelX/Y`), `mc.font.width(title)`, `player.containerMenu`; pixels with `Screenshot.grab` (lossless) and the
+model's predictions, as in §9.8; clicks with `AbstractContainerScreen.mouseClicked`. Windows of 1920 x 1080 at GUI scales 1, 2
+and 3. The drivers are in [`fixtures/gui/containers/runs/`](../../fixtures/gui/containers/runs/).
+
+*The two windows, as the server and the client see them.*
+
+| | Hopper | Dispenser (and dropper) |
+|---|---|---|
+| Server window | `InventoryType.HOPPER`, top size 5, menu type `minecraft:hopper`, 41 menu slots, holder kept | `DISPENSER`, top size 9, menu type `minecraft:generic_3x3`, 45 menu slots, holder kept |
+| Client screen | `HopperScreen` | `DispenserScreen` |
+| `imageWidth` x `imageHeight` | 176 x 133 | 176 x 166 |
+| `titleLabelX`, `titleLabelY` | 8, 6 | centred (below), 6 |
+| `inventoryLabelX`, `inventoryLabelY` | 8, 39 | 8, 72 |
+| `leftPos`, `topPos` at 1080p, scale 1 / 2 / 3 | 872, 473 / 392, 203 / 232, 113 | 872, 457 / 392, 187 / 232, 97 |
+
+The positions are §9.12's formulas (`leftPos = ⌊(⌈W/s⌉ − 176) / 2⌋`, `topPos = ⌊(⌈H/s⌉ − imageHeight) / 2⌋`). The window type
+and sizes are what the 1.21.4 harness test asserts on the floor server (`PaperContainerWindowIT`: `HOPPER`, 5,
+`minecraft:hopper`; `DISPENSER`, 9, `minecraft:generic_3x3`; the holder survives creation).
+
+**U1 confirmed: the trailing shift puts the dispenser's title origin at 8.** `DispenserScreen.init()` sets
+`titleLabelX = (imageWidth − font.width(title)) / 2`, and the width is the sum of the advances, shift characters included,
+with no clamp on negative ones:
+
+| Title (dispenser) | `font.width` | `titleLabelX` read from the screen | Art |
+|---|---|---|---|
+| plain text "Probe dispenser", no font | 84 | **46** = (176 − 84) / 2 | none |
+| one 16-px marker at x = 8, **with** the trailing shift (+143) | **160** | **8** | marker at the model's place |
+| the same, **without** it | 17 | 79 = ⌊159 / 2⌋ | marker 71 px to the right of its place, exactly `titleLabelX − 8` |
+| seven markers (x −300 to 476), **with** the trailing shift (**−341**: the pen ended at 509, past 168) | **160** | **8** | all seven at the model's place |
+| the same, **without** it | 501 | **−162** = trunc((176 − 501) / 2) | all seven displaced by exactly −170 GUI px |
+
+So the §12.5.3 rule holds: `W = 160` gives origin 8, the same on every scale, and a trailing shift may be **negative** (the
+art ran past 168) without trouble. Java's integer division truncates toward zero, so a wide title without the shift lands at
+−162, not −163; that is the failure the shift prevents, and it is visible (`dispenser-no-trailing-shift`). The hopper ignores
+the width: `titleLabelX` is 8 with a width of 501 or of 160, and its art is identical either way, so the shift is harmless
+on a profile whose title is not centred, and the compiler may add it for every container or only for `centred` ones.
+
+**U2 confirmed: both screens place art as the chest does.** A glyph with ascent `a` at title position `x` has its top-left pixel
+at `(leftPos + x, topPos + titleLabelY + 7 − a)`, with `titleLabelY = 6`, i.e. `topPos + 13 − a` (§9.8). Checked with seven
+markers per screen (left, right, above with padding, below, on the slots, and two far ones at x = −300 and 476), at three
+scales, on both screens: every fill box is exactly the predicted one (82 boxes matched, 0 off the model; far markers outside
+the window are absent, as the window cuts them, §9.12). Art past the screen is drawn, never clipped, as on the chest.
+
+**U3 confirmed: the veil starts at row 37 (hopper) and 70 (dispenser).**
+
+- *The sheets.* The bottom 96 rows of `hopper.png` (rows 37..132) and of `dispenser.png` (rows 70..165) are **identical** to the
+  chest's player-inventory block, rows 126..221 of `generic_54.png` (the second blit of the chest's `extractBackground`);
+  the row above each (36 and 69) is not. So the player-inventory art begins at `imageHeight − 96`, which is `inventory.y − 14`
+  (51 − 14, 84 − 14). Read from the sheets of the 26.1.2 client jar (not committed; `u3-sheets.mjs`).
+- *The screens.* With no art and an empty window, each screen is **pixel-identical to its sheet** over the whole
+  176 x 133 and 176 x 166 area at scales 1, 2 and 3 (21 606, 86 424 and 194 454 hopper samples; 27 414, 109 656 and
+  246 726 dispenser samples; 0 mismatches), except the sheet's transparent corner pixels (the world shows), the title text and the
+  "Inventory" label. So each screen is one blit of its sheet at `(leftPos, topPos)`, sized as the screen.
+
+**U4, plain-slot screens: items and the label draw above the art; art is seamless across the screen edge.** With a title whose
+art covers the whole screen (a 176-px position-coded image over every slot):
+
+- the slot items and their counts are drawn above it: every slot rectangle holds pixels that are not the art (100 to 167 of 256
+  per slot; none of the art lost in a slot-free patch, 200 of 200);
+- the "Inventory" label (`0x404040`) is drawn above it (104 pixels at its place, row 39 and row 72);
+- a lone 32-px marker over slots (no full-screen art) is covered by the items of the slots it overlaps (hopper slots 1 to 3,
+  dispenser slots 0 to 5) just as on the chest, so the invariant of §9.13 holds on these screens.
+
+A 300 x 230 position-coded image placed at (−60, −40), cut into two 256-px tiles as the compiler cuts, across all four edges of each screen:
+**0 mismatching pixels** of 956 144 per screen (1 912 288 in all: scales 1, 2 and 3; the 704 GUI pixels
+under the label excluded), with no seam at the tile border. The hover highlight and the tooltip are not captured (§9.1). What
+U4 asked about a screen's own widgets (the anvil's field, the enchanting buttons) needs those screens and stays open (§12.12).
+
+**Clicks: slot ids and `gui.click_outside`.** Real client clicks, with the probe plugin logging the `InventoryClickEvent` (the
+facts `GuiListener.route` reads: `getClickedInventory() == null` for "outside", whether it is the top inventory, `getSlot()`):
+
+| Click | Server event |
+|---|---|
+| Slot `i` of the hopper, `i` = 0..4; of the dispenser, `i` = 0..8 (full-screen art over it) | top inventory, `slot = rawSlot = i`, type `CONTAINER`, top size 5 / 9 |
+| Player inventory, first main slot / first hotbar slot | bottom inventory, slot 9 / 0, raw slot 5 and 32 (hopper), 9 and 36 (dispenser): `slotCount + 0..35`, as for a chest |
+| Left, right, above, below the screen (on art, §9.14's arrangement), empty ground far away, and the right button on art | **outside**: `getClickedInventory() == null`, `slot = rawSlot = −999`, type `OUTSIDE`, on both screens |
+| Inside the screen between slots | no event (the client sends nothing) |
+| Slot 1 with the right button | top, `slot = 1`, `click = RIGHT` |
+
+So `gui.click_outside` has the same signal on a hopper and a dispenser as on a chest, art outside the container is inert, art over
+slots takes no click from them, and the router's size-agnostic `ClickTarget.of(policy, outside, top, slot)` receives a 5- or 9-slot top
+with the slot ids of §12.2.3. *Limit:* the holder here is the probe's, not `PluginGui` (the runtime that opens a Materione GUI as a
+hopper is row P), so the layer rule that `gui.click_outside` runs is the chest-tested product code, not exercised on a hopper.
+
+**U5 confirmed: a dynamic title refresh behaves as on a chest, including `init()` re-centring.** Through the packet that
+`PaperRichTitles.send` sends (a `ClientboundOpenScreenPacket` with the open menu's id, the type `CraftContainer.getNotchInventoryType`
+gives, the new title, then `updateInventory`; the probe reproduces it) on an open window, three refreshes in turn:
+
+| | Hopper | Dispenser |
+|---|---|---|
+| Menu id before and after each refresh | unchanged | unchanged |
+| Items in the client's menu after each refresh | all five intact | all nine intact |
+| Server `InventoryOpenEvent` / `InventoryCloseEvent` | none | none |
+| Art after a refresh to another compiled title (trailing shift) | at the model's place | at the model's place |
+| `titleLabelX` after a refresh to a title **without** the shift (width 123) | 8 (not centred) | **26** = ⌊(176 − 123) / 2⌋: `init()` ran again and re-centred |
+| `titleLabelX` after a refresh back to a compiled title | 8 | 8 |
+| A click after the refreshes | `slot = 2`, top, holder routed | `slot = 1`, top, holder routed |
+
+The client builds a new screen object on each refresh (its identity changes), which is what re-runs `init()`; nothing is lost
+and no event fires. The cursor-held case is the chest's (`HeldTitleRefresh`) and unchanged.
+
+*Evidence* (halved or cropped copies in [`docs/screenshots/gui-containers/`](../screenshots/gui-containers/); drivers `u1.mjs`, `u3.mjs`, `u5.mjs`,
+`clicks.mjs`): [`hopper-markers-1080p-s2.png`](../screenshots/gui-containers/hopper-markers-1080p-s2.png) (the seven markers around the hopper),
+[`dispenser-trailing-shift-1080p-s2.png`](../screenshots/gui-containers/dispenser-trailing-shift-1080p-s2.png) and
+[`dispenser-no-trailing-shift-1080p-s2.png`](../screenshots/gui-containers/dispenser-no-trailing-shift-1080p-s2.png) (the same title, origin 8 and −162),
+[`hopper-tiles-1080p-s2.png`](../screenshots/gui-containers/hopper-tiles-1080p-s2.png) and
+[`dispenser-tiles-1080p-s2.png`](../screenshots/gui-containers/dispenser-tiles-1080p-s2.png) (the position-coded image across the edges),
+[`hopper-draw-order-1080p-s2.png`](../screenshots/gui-containers/hopper-draw-order-1080p-s2.png) and
+[`dispenser-draw-order-1080p-s2.png`](../screenshots/gui-containers/dispenser-draw-order-1080p-s2.png) (1:1: items and the label over full-screen art),
+[`dispenser-refresh-recentred-1080p-s2.png`](../screenshots/gui-containers/dispenser-refresh-recentred-1080p-s2.png) (after a refresh to a title with no shift: origin 26).
+
+*Not covered.* Nothing here ran on a 1.21.4 client (§12.12 U9, U10). The runtime path (`PluginGui` with an `InventoryType`
+opener) does not exist yet. The hover highlight and tooltip order, and the recipe-book and widget screens, are not v1.
+
 ### 12.3 Scope: which types v1 supports
 
 *Approved (§12.13): v1 is the chest, the hopper and the dispenser. No "rich" type in v1. The point is to prove that GUIs work across container types, not to build the full array.*
@@ -1606,7 +1736,7 @@ a container would be the point to design one.
 |---|---|---|
 | Chest, 1 to 6 rows: six containers, `chest_1` .. `chest_6` (barrel and ender chest are the same menu) | shipped | nothing about the chest changes; it stops being special |
 | **Hopper** | **in** | Plain slots, fixed title position, a single background blit. A 5-slot, one-row container with its own screen size (176 x 133) forces every `rows`-shaped assumption into the open |
-| **Dispenser** (also the dropper: one menu, one screen) | **in** | Plain slots in a 3 x 3 grid (3 columns, not 9). Its **centred title** proves the per-profile title origin that every later type needs (§12.5.3). Conditional on the probe (R): if the centring arithmetic does not hold on screen, v1 is chest + hopper and the dispenser moves to phase 2 |
+| **Dispenser** (also the dropper: one menu, one screen) | **in** | Plain slots in a 3 x 3 grid (3 columns, not 9). Its **centred title** proves the per-profile title origin that every later type needs (§12.5.3). The probe (row R, #289) confirmed the centring arithmetic on screen (§12.2.6, U1), so the dispenser stays in v1 |
 | Shulker box | later | Only a texture and a slot restriction on top of a 3-row chest; cheap, but nothing it teaches is missing from v1 |
 | **Anvil**, **furnace / blast furnace / smoker** | phase 2 | The "rich" types the issue names. Each needs the `MenuType` path or progress data, a second window identity (§12.2.2) and, for the anvil, a client-predicted result slot (§12.2.4). They are worth doing *after* the abstraction exists and one non-chest type is seen working on a client |
 | Brewing stand, enchanting table, beacon, loom, stonecutter, cartography table, grindstone, smithing table, crafter | later, one design each | Buttons, data values, slot restrictions or client-side result prediction: each is a behaviour design, not a geometry entry |
@@ -1722,8 +1852,10 @@ That is one trailing `<shift:168 - pen>` (nothing when the pen is already 168), 
 `TitleRenderer` at the end of every assembled title that has art or text runs. A GUI with neither keeps its plain `title:`
 as the title, and the client centres it: the vanilla look. The check is exact integer arithmetic, so the golden can pin it.
 It rests on `Font.width` summing negative advances without a clamp, which the bytecode shows ([CLI]: the lambda adds each
-`getAdvance` to a `MutableFloat`) and no screen has yet confirmed (§12.12 U1). **If the probe refutes it, the dispenser leaves
-v1** (§12.3); nothing else depends on it.
+`getAdvance` to a `MutableFloat`) and the probe confirmed on a real `DispenserScreen` (§12.2.6, U1: `font.width = 160`,
+`titleLabelX = 8`; without the shift a 501-px title lands at −162). The shift is harmless on a profile whose title is not centred
+(the hopper's art is identical with and without it), so it may be added uniformly. Had the probe refuted it, the dispenser would have left
+v1 (§12.3); nothing else depends on it.
 
 #### 12.5.4 The art cap and the regions
 
@@ -1869,7 +2001,7 @@ Each is reversible by the owner (the owner's own are in §12.13).
 5. **v1 opens through `InventoryType` or by size (the legacy path), keeping the holder as the window's identity,** chosen by
    the profile's `open` descriptor. The `MenuType` path arrives with the first type that needs it, with a view-identity router
    beside the holder one.
-6. **Centred titles are neutralised by a trailing shift, so the pen origin stays 8.** Conditional on the probe.
+6. **Centred titles are neutralised by a trailing shift, so the pen origin stays 8.** Verified on a real dispenser screen (§12.2.6, U1).
 7. **One art cap for v1**, stated per profile so later containers can differ.
 8. **Switching container never edits a layer.** It reports; the author decides.
 9. **`MTR-0097` to `MTR-0100` are reserved for this feature**; three are defined and `MTR-0100` stays unassigned (§12.4).
@@ -1882,7 +2014,7 @@ effort, regular implementation on Haiku.
 
 | Row | Title | Scope | Depends on | Model |
 |---|---|---|---|---|
-| **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high |
+| **R** | Verify containers in game | On the 26.1.2 probe: open a hopper and a dispenser through the legacy path with a holder; read `titleLabelX/Y` and the screen size from the client; check the dispenser's centring with and without the trailing shift (U1); art placement, tiles across the screen edge, the veil boundary rows 37 and 70, draw order and the "Inventory" label (U2, U3, U4); `gui.click_outside`; a dynamic title refresh on a hopper (U5); clicks by slot id. Output: a §9-style subsection with screenshots, and the 1.21.4 CI harness test for window type and size | none | Sonnet, high. **Done (#289, §12.2.6)** |
 | **M** | Model, profiles and the conversion | `container:` replaces `rows:` in the schema and `GuiType.parse` (required; `MTR-0097` for an unknown id); the profile data file (six chest entries, hopper, dispenser; `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; `GuiComponentConfiguration` and `CompiledGui` carry the profile; the scaffold change in `core` and `web`. **The conversion, in this row:** every `rows:` of a GUI becomes `container: chest_N` in the same change: `fixtures/gui/*.yml` and `fixtures/gui/open-canvas`, `fixtures/packs/*/guis` (showcase, guilogic, guitext, opencanvas, overlay), the built-in `plugin/src/main/resources/builtin-packs/materione/guis/browser.yml`, `harness/protocol/floor.yml`, YAML embedded in Java and TS tests and runners (`content`, `core`, `pack`, `plugin`, `harness`, `web`, `webui` demo data and specs), the vector generator, the goldens they regenerate (`editor-demo-snapshot.json` and the pack-output goldens), and the docs' examples (gui.md §2, logic.md). Glyph sheets and the satchel item have their own `rows` that are not GUI rows and stay. The CHANGELOG entry states the breaking change and why it is acceptable (GUIs are unreleased). A grep-based test fails the build on any GUI file with `rows:` | none | Haiku for the sweep, Sonnet reviews the parser |
 | **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high |
 | **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor | M | Haiku |
@@ -1891,7 +2023,7 @@ effort, regular implementation on Haiku.
 | **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
 | **B** (later) | Underlay from the user's jar | Option B of §12.7, approved as the follow-up once the type count grows | after v1 | Sonnet, high |
 
-R, M and A can start together. If R refutes U1, C ships the hopper and the dispenser is re-filed as phase 2.
+R, M and A can start together. R (#289) did not refute U1, so C ships the hopper and the dispenser (§12.2.6); had it refuted U1, C would have shipped the hopper only and the dispenser been re-filed as phase 2.
 
 ### 12.11 Later phases (not designed here)
 
@@ -1907,20 +2039,32 @@ So the v1 seams do not paint the rich types into a corner:
   design. The recipe book cannot be hidden from the server (U6).
 - **The others** each get a design when asked for, with a probe row first.
 
-### 12.12 What is unverified
+### 12.12 What was unverified, and what still is
+
+Row R (#289) answered U1, U2, U3 and U5, and the plain-slot half of U4, on the 26.1.2 probe (§12.2.6). They are no longer open:
+
+| # | Claim | Answer | Measured |
+|---|---|---|---|
+| **U1** | A compiled title with a trailing shift makes `Font.width = 160` and puts a dispenser's pen origin at 8 | **Confirmed** | `font.width = 160`, `titleLabelX = 8`; without the shift a 501-px title gives −162, a 17-px one 79, a plain 84-px one 46 (§12.2.6) |
+| **U2** | The hopper and dispenser screens place art exactly as the chest does (`leftPos + x`, `topPos + 13 - ascent`) | **Confirmed** | 82 marker boxes at three scales, 0 off the model; `titleLabelY = 6` on both |
+| **U3** | The veil boundaries `37` (hopper) and `70` (dispenser) match the vanilla art | **Confirmed** | the bottom 96 rows of each sheet equal the chest's player block, the row above does not; each live screen equals its sheet |
+| **U4** (plain-slot half) | Title art draws over or under the slot items and the "Inventory" label | **Under the items, the counts and the label** | 100 to 167 of 256 pixels per slot are items; the label is above the art; a lone marker is covered by the items under it |
+| **U5** | A dynamic title refresh on a hopper or dispenser behaves as on a chest (including `init()` re-centring) | **Confirmed** | same menu id, items intact, no open or close event; the dispenser re-centred to 26 on a title with no shift |
+
+What is still unverified:
 
 | # | Claim | Why unverified | What verifies it |
 |---|---|---|---|
-| **U1** | A compiled title with a trailing shift makes `Font.width = 160` and puts a dispenser's pen origin at 8 | Bytecode only; nothing was drawn | R: read `titleLabelX` from the open `DispenserScreen`, and look at the art |
-| **U2** | The hopper and dispenser screens place art exactly as the chest does (`leftPos + x`, `topPos + 13 - ascent`) | The chest was measured (§9.8-§9.15); these screens were not | R: marker boxes on both screens |
-| **U3** | The veil boundaries `37` (hopper) and `70` (dispenser) match the vanilla art | Derived from `baseY - 14` | R, and the owner's sheets |
-| **U4** | Title art draws over or under a screen's own widgets (the anvil's text field, enchanting buttons) | Only plain-slot screens are in v1 | the phase-2 probe |
-| **U5** | A dynamic title refresh on a hopper or dispenser behaves as on a chest (including `init()` re-centring) | Source says `getNotchInventoryType` is type-aware; no run | R |
+| **U4** (widgets half) | Title art draws over or under a screen's own widgets (the anvil's text field, enchanting buttons) | Only plain-slot screens are in v1 | the phase-2 probe |
 | **U6** | The recipe-book button on a furnace screen cannot be avoided and what it does to art | Not run | the phase-2 probe |
 | **U7** | `InventoryView.setProperty` reaches a legacy window's data values | `CraftContainer` shares the delegate's data slots [SRV]; no call traced | the phase-2 probe |
 | **U8** | Legacy window buttons are inert (`CraftContainer` does not forward `clickMenuButton`) | Read in bytecode, not sent | the phase-2 probe |
-| **U9** | Every screen fact on **1.21.4** (title positions, sizes, backgrounds): no 1.21.4 client jar is on this machine (§9.7), and a download is out of scope here | Needs the vanilla 1.21.4 client jar | a 1.21.4 jar read with `javap`; or the probe on a 1.21.4 bridge build |
+| **U9** | Every screen fact on **1.21.4** (title positions, sizes, backgrounds, and now also U1, U2, U3 and U5): no 1.21.4 client jar is on this machine (§9.7), and a download is out of scope here | Needs the vanilla 1.21.4 client jar | a 1.21.4 jar read with `javap`; or the probe on a 1.21.4 bridge build. The harness test (`PaperContainerWindowIT`) covers the window type and size on 1.21.4 only |
 | **U10** | The background sheets' names and sizes (256 x 256 sheets, blitted at the screen's size) on **1.21.4** | same | same |
+
+Also not exercised by row R: the hover highlight and tooltip order (§9.1: the bridge cannot steer the mouse), the layer rule that
+`gui.click_outside` runs on a hopper (the holder was the probe's, not `PluginGui`; the signal it reads was measured, §12.2.6), and the
+runtime opener itself (rows M and P).
 
 The slot and menu facts are verified on both pins (§12.2.1); this table is only what a person looking at the screen, or a
 jar this machine lacks, can add.
@@ -1928,7 +2072,7 @@ jar this machine lacks, can add.
 ### 12.13 Decided by the owner (PR #287)
 
 1. **v1 = chest + hopper + dispenser: approved.** The goal is to prove that GUIs work across container types, not to build the
-   full array yet. The dispenser stays conditional on the probe (U1); anvil and furnaces are phase 2.
+   full array yet. The dispenser was conditional on the probe (U1), which confirmed it (row R, §12.2.6); anvil and furnaces are phase 2.
 2. **The dropper is the dispenser: approved. The chest's rows become part of the type** if the chest is the only container with
    parameters, otherwise a parameter API: answered by §12.2.5 (the chest is the only one, and vanilla already splits it into six
    types), so the file model is types-as-parameters (§12.4).

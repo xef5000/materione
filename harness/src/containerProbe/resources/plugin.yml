@@ -1,0 +1,8 @@
+name: MaterioneContainerProbe
+version: '1'
+main: dev.materione.harness.probe.ContainerProbe
+api-version: '1.21'
+commands:
+  ctprobe:
+    description: Test-only legacy-path container windows (hopper, dispenser) for gui.md section 12 row R
+    permission: materione.ctprobe
