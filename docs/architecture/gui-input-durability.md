@@ -164,8 +164,8 @@ account is the one state in which guessing could destroy items.)
 atMillis)`, `DONE(txn)`. Appends are `FileChannel.write` in `APPEND` mode; a **torn tail** (kill mid-append) fails its CRC
 and is *not a record* — it is ignored on read and truncated by the next writer. A bad record **before** the end is
 corruption: the file is renamed `<uuid>.ledger.corrupt-<millis>`, `MTR-0102`, strict transfers refused.
-`escrow.fsync` (default `true`) adds `force(false)` after each append — a Non-goal-boundary for power loss, free for the
-process-crash guarantee (F11), and affordable because it is off the region thread (§5.6). Compaction (rewrite to a temp
+`escrow.fsync` (default `true`) adds `force(false)` after each append — it helps only against power loss, is not needed for the
+process-crash guarantee (F11), and is affordable because it is off the region thread (§5.6). Compaction (rewrite to a temp
 file, atomic rename) runs off-thread at recovery and drops `INTENT`+`DONE` pairs older than `escrow.retention`
 (default 30 days — it bounds how old a restored player-data backup may be before G2 stops covering it, Q6).
 
