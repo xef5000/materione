@@ -537,6 +537,8 @@ The built-in packs (master architecture §7.3, #8) add two codes, both from the 
 
 **Reserved for GUI containers beyond the chest** ([`gui.md`](gui.md) §12.4, #286, scope approved by the owner): `MTR-0099` an input slot on a slot the client refuses items for (warning; phase 2), and `MTR-0100` stays unassigned. Nothing emits them yet and no other change may take them. `MTR-0097` was defined by #290 and `MTR-0098` by #292.
 
+**Proposed, not yet assigned, for crash-safe input ownership** ([`gui-input-durability.md`](gui-input-durability.md) §5.9, #247 design, awaiting the owner): `MTR-0101` (platform lacks checkpoint support), `MTR-0102` (a player's escrow state is unreadable), `MTR-0103` (a strict transfer was refused because it could not be recorded) and `MTR-0104` (recovery left stacks owed). They are not in `DiagnosticCodes`; no other change may take them until the owner approves or releases them.
+
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
 meaning and step paths as for items (`gui.validate` returns them for a `saved` or `yaml` source). `MTR-0021`

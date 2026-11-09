@@ -2409,7 +2409,8 @@ ticker. Where the design left a choice open, these are the choices. Each is reve
 
 ## 25. Decisions taken in #218 (G5: input slots, gui.slot_change, player_inventory: locked, click-policy rows)
 
-#218 ships §6.5, including the crash journal (decision 12). The code is in `plugin.gui.input` (`SlotPolicy`,
+#218 ships §6.5, including the best-effort recovery journal (decision 12; it is not a crash journal, see
+[`gui-input-durability.md`](gui-input-durability.md) §2). The code is in `plugin.gui.input` (`SlotPolicy`,
 `Transfers`, `InputSlots`, `WindowPolicy`, `ClickTarget`, `InputSlotClicks`, `InputReturns`, `InputSlotOps`,
 `SlotOp`, `InputJournal`, `GuiJournal`), in the `GuiListener` policy table, in `content.gui` (`SlotsComponent`, `PlayerInventory`,
 `CompiledGui.Input`), and in the logic vocabulary (`slot_has`, `gui.slot_item`). Each choice below is reversible
@@ -2453,6 +2454,11 @@ by the owner.
    gets them first; what does not fit drops at their feet. A shape-changing reload's re-open carries them to the
    new window, and a rewrite keeps them in slots that are still inputs and returns the rest. Nothing is deleted unless
    a flow says so (`gui.slot_item: {op: clear}`).
+   **Correction (#247 design, [`gui-input-durability.md`](gui-input-durability.md) §2 W4):** "nothing is deleted" is not proved on
+   three paths. On death the window closes after the death drops are fixed (`ServerPlayer.die` fires `PlayerDeathEvent`, then
+   `closeContainer(DEATH)` [SRV, both pins]), so the returned stacks probably vanish at respawn without `keepInventory` [U]. What
+   does not fit is dropped into the world, a store separate from the player's data, so a crash around that drop can lose or
+   duplicate it. An item picked up from an input slot is on the cursor, which is in no save.
 9. **`gui.click_inventory` fires for every click in the viewer's inventory while the window is open**, whatever
    `player_inventory` says, and a rule may cancel it. A `locked` inventory cancels the click regardless. A free one
    lets it through.
@@ -2500,6 +2506,15 @@ by the owner.
     follow-up to that extension: #247 and the dependent consume-incoming trash action (#248, used by #222) remain
     blocked. Existing input behavior stays enabled and best-effort; no crash-safety or transactional-consumption
     guarantee is introduced. Live QA of normal input transfers cannot substitute for a process-kill checkpoint test.
+
+    **Refinement (design, not a change of status).** [`gui-input-durability.md`](gui-input-durability.md) shows that the
+    sentence "a separate plugin journal … cannot coordinate subsequent server saves" is too broad: the player's persistent data
+    is written in the same compound as the inventory (`Entity.saveWithoutId`, one file replace, [SRV] both pins), so a marker
+    changed in the same owner-thread step as the inventory is atomic with it without coordinating any save. What stays
+    unavailable is a platform acknowledgment of *when* a snapshot is durable. The design proposes an account in the snapshot
+    plus an exit ledger (G1 to G4 there) and asks the owner (Q1) whether to lift or narrow this block. Until the owner answers,
+    this decision stands as written: #247 and #248 stay blocked, and the shipped journal is still not crash-safe (its
+    one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1).
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real
