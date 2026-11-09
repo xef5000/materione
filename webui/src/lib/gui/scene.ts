@@ -9,8 +9,8 @@
  * through `compose.ts` and item icons from the item pipeline), so this module
  * only says where they are and in what order.
  */
-import { canvasSize, cellsOf, itemRect, slotCell, wellRect } from './chest';
-import { isHidden, isLocked, type GuiDocument, type GuiLayer } from './model';
+import { canvasSize, cellsOf, itemRect, slotCell, wellRect, type ContainerProfile } from './containers';
+import { drawingProfileOf, isHidden, isLocked, type GuiDocument, type GuiLayer } from './model';
 import type { ArgbCanvas, Rect } from './raster/canvas';
 import { bareType, regionOf, whole } from './raster/flatten';
 import { componentOf, type GuiRegistry, type RenderTarget } from './registry';
@@ -21,7 +21,8 @@ import { paintReferenceOf, paintRect } from './paint-geometry';
 export { measureTextLayer };
 
 export interface Scene {
-  rows: number;
+  /** The container profile the screen is drawn in (gui.md section 12.5.1). */
+  container: ContainerProfile;
   width: number;
   height: number;
   registry: GuiRegistry | null;
@@ -33,8 +34,9 @@ export function sceneOf(
   registry: GuiRegistry | null,
   image: (reference: string) => ArgbCanvas | null,
 ): Scene {
-  const { width, height } = canvasSize(doc.rows);
-  return { rows: doc.rows, width, height, registry, image };
+  const container = drawingProfileOf(doc);
+  const { width, height } = canvasSize(container);
+  return { container, width, height, registry, image };
 }
 
 export function renderTargetOf(layer: GuiLayer, scene: Pick<Scene, 'registry'>): RenderTarget {
@@ -56,7 +58,7 @@ function union(rects: Rect[]): Rect | null {
  */
 export function layerBounds(layer: GuiLayer, scene: Scene): Rect | null {
   const target = renderTargetOf(layer, scene);
-  if (bareType(layer) === 'slots') return union(cellsOf(scene.rows, regionOf(layer)).map(wellRect));
+  if (bareType(layer) === 'slots') return union(cellsOf(scene.container, regionOf(layer)).map(wellRect));
   if (bareType(layer) === 'paint') {
     // a paint layer owns its geometry (gui.md section 11.2): its x, y and the bitmap's own size; none while it holds no pixel
     const bitmap = paintReferenceOf(layer) ? scene.image(paintReferenceOf(layer)) : null;
@@ -64,7 +66,7 @@ export function layerBounds(layer: GuiLayer, scene: Scene): Rect | null {
     return isEmptyRect(rect) ? null : rect;
   }
   if (target === 'slot' && typeof layer.slot === 'number') {
-    const cell = slotCell(scene.rows, layer.slot);
+    const cell = slotCell(scene.container, layer.slot);
     return cell ? itemRect(cell) : null;
   }
   const x = whole(layer.x, Number.NaN);
@@ -173,7 +175,7 @@ export function hitTest(
     const layer = order[index]!;
     if (isLocked(layer)) continue;
     if (bareType(layer) === 'slots') {
-      const hit = cellsOf(scene.rows, regionOf(layer)).some((cell) => {
+      const hit = cellsOf(scene.container, regionOf(layer)).some((cell) => {
         const well = wellRect(cell);
         return point.x >= well.x && point.x < well.x + well.w && point.y >= well.y && point.y < well.y + well.h;
       });
@@ -217,7 +219,7 @@ export function layersInRect(
       bounds.y < marquee.y + marquee.h && bounds.y + bounds.h > marquee.y;
     // slot wells count one by one (their bounding box is the whole screen) and only when the marquee covers one
     if (bareType(layer) === 'slots') {
-      return cellsOf(scene.rows, regionOf(layer)).some((cell) => {
+      return cellsOf(scene.container, regionOf(layer)).some((cell) => {
         const well = wellRect(cell);
         return well.x >= marquee.x && well.y >= marquee.y && well.x + well.w <= marquee.x + marquee.w &&
           well.y + well.h <= marquee.y + marquee.h;

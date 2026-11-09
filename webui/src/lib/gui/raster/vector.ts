@@ -4,7 +4,7 @@
  * pixel for pixel. This module is the TS side of the contract: it turns the
  * JSON into a `RasterScene` and runs the same `flattenRaster` the studio does.
  */
-import { containerProfile, gridRows } from '../containers';
+import { CONTAINERS, containerProfile } from '../containers';
 import { ArgbCanvas } from './canvas';
 import { parseColor } from './color';
 import { flattenRaster, type Layer, type RasterScene } from './flatten';
@@ -22,7 +22,7 @@ export interface RasterVector {
   canvas: { width: number; height: number };
   /**
    * The container the vector is drawn in (gui.md section 12.4), needed by `slots` layers: the slot grid is its profile's.
-   * A vector with none is a 1-row chest, as before.
+   * A vector with none uses the profile file's first entry.
    */
   container?: string;
   /** Bitmaps by the `image:` reference layers use. */
@@ -48,12 +48,13 @@ export function renderVector(vector: RasterVector): ArgbCanvas {
   for (const [reference, image] of Object.entries(vector.images ?? {})) {
     images.set(reference, decodeVectorImage(image));
   }
-  const profile = containerProfile(vector.container ?? 'chest_1');
+  // a vector with no container uses the file's first profile, as the Java runner does
+  const profile = containerProfile(vector.container ?? CONTAINERS[0]!.id);
+  if (!profile) throw new Error(`raster vector ${vector.name} names an unknown container: ${String(vector.container)}`);
   const scene: RasterScene = {
     width: vector.canvas.width,
     height: vector.canvas.height,
-    rows: profile ? gridRows(profile) : 6,
-    ...(profile ? { container: profile } : {}),
+    container: profile,
     image: (reference) => images.get(reference) ?? null,
   };
   return flattenRaster(vector.layers, scene);

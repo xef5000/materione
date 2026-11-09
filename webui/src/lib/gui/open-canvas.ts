@@ -8,8 +8,10 @@
  *
  * Pure: no DOM, no Svelte.
  */
-import { CANVAS_WIDTH, SLOT_PITCH, canvasHeight, containerCells, itemRect } from './chest';
+import { cellsOf, itemRect, screenRect, type ContainerProfile } from './containers';
 import type { Rect } from './raster/canvas';
+
+export { screenRect };
 
 /**
  * The art cap, gui.md section 11.2: x -424..599, y -243..780. The top edge is a client fact (a glyph's
@@ -18,23 +20,13 @@ import type { Rect } from './raster/canvas';
  */
 export const ART_CAP: Readonly<Rect> = { x: -424, y: -243, w: 1024, h: 1024 };
 
-/** The vanilla screen: the chest's 176 wide and `114 + 18 * rows` tall, at the origin. */
-export function screenRect(rows: number): Rect {
-  return { x: 0, y: 0, w: CANVAS_WIDTH, h: canvasHeight(rows) };
-}
-
-/** Where the player's inventory part of the screen starts: `rows * 18 + 17` (gui.md section 11.2). */
-export function inventoryTop(rows: number): number {
-  return rows * SLOT_PITCH + 17;
-}
-
 export type Region = 'container' | 'player' | 'outside';
 
-/** Which region of the open canvas a GUI-pixel point is in. */
-export function regionAt(rows: number, x: number, y: number): Region {
-  const screen = screenRect(rows);
+/** Which region of the open canvas a GUI-pixel point is in; the player's part starts at the profile's `inventoryTop` (gui.md section 12.5.1). */
+export function regionAt(profile: ContainerProfile, x: number, y: number): Region {
+  const screen = screenRect(profile);
   if (x < screen.x || y < screen.y || x >= screen.x + screen.w || y >= screen.y + screen.h) return 'outside';
-  return y >= inventoryTop(rows) ? 'player' : 'container';
+  return y >= profile.inventoryTop ? 'player' : 'container';
 }
 
 export function isEmptyRect(rect: Rect): boolean {
@@ -95,22 +87,22 @@ export interface WindowGuide {
  * What a player's window shows around the screen at one GUI scale (gui.md section 9.12): the screen is centered in a
  * `ceil(W / s) x ceil(H / s)` area, `leftPos = floor((area.w - 176) / 2)` and `topPos = floor((area.h - imageHeight) / 2)`.
  */
-export function windowGuide(rows: number, scale: number, window: { w: number; h: number } = GUIDE_WINDOW): WindowGuide {
+export function windowGuide(profile: ContainerProfile, scale: number, window: { w: number; h: number } = GUIDE_WINDOW): WindowGuide {
   const area = { w: Math.ceil(window.w / scale), h: Math.ceil(window.h / scale) };
-  const height = canvasHeight(rows);
-  const left = Math.floor((area.w - CANVAS_WIDTH) / 2);
+  const { width, height } = profile;
+  const left = Math.floor((area.w - width) / 2);
   const top = Math.floor((area.h - height) / 2);
   return {
     scale,
     area,
     rect: { x: -left, y: -top, w: area.w, h: area.h },
-    margin: { top, bottom: area.h - top - height, left, right: area.w - left - CANVAS_WIDTH },
+    margin: { top, bottom: area.h - top - height, left, right: area.w - left - width },
     label: `Scale ${scale} at ${window.w} x ${window.h}`,
   };
 }
 
-export function windowGuides(rows: number): WindowGuide[] {
-  return GUIDE_SCALES.map((scale) => windowGuide(rows, scale));
+export function windowGuides(profile: ContainerProfile): WindowGuide[] {
+  return GUIDE_SCALES.map((scale) => windowGuide(profile, scale));
 }
 
 // ------------------------------------------------------------------ clicks that reach no container slot (sections 9.14, 11.4)
@@ -124,24 +116,24 @@ export function isClickable(componentName: string, ruleCount: number): boolean {
 }
 
 /** The sentence the layers panel and the inspector show for a clickable layer placed outside the screen. */
-export const DECORATION_ONLY = 'Decoration only — clicks outside the chest arrive as click_outside';
+export const DECORATION_ONLY = 'Decoration only — clicks outside the screen arrive as click_outside';
 /** A clickable layer on the screen that covers no container slot: nothing under it is the layer's to click. */
 export const DECORATION_NO_SLOT = 'Decoration only — it covers no container slot, so a click on it is never a click on this layer';
-export const DECORATION_PARTLY = 'Partly decoration only — clicks on the part outside the chest arrive as click_outside';
+export const DECORATION_PARTLY = 'Partly decoration only — clicks on the part outside the screen arrive as click_outside';
 
 export type ClickReach = 'inside' | 'partial' | 'outside';
 
-/** How much of a rectangle is on the screen, where clicks are the chest's own. */
-export function clickReach(bounds: Rect, rows: number): ClickReach {
-  const screen = screenRect(rows);
+/** How much of a rectangle is on the screen, where clicks are the container's own. */
+export function clickReach(bounds: Rect, profile: ContainerProfile): ClickReach {
+  const screen = screenRect(profile);
   if (isEmptyRect(bounds)) return 'inside';
   if (containsRect(screen, bounds)) return 'inside';
   return intersectRects(screen, bounds) ? 'partial' : 'outside';
 }
 
 /** Whether a rectangle covers at least one container slot (the 16 x 16 area the client hits). The compiler warns when it covers none (MTR-0092). */
-export function coversContainerSlot(bounds: Rect, rows: number): boolean {
-  return containerCells(rows).some((cell) => intersectRects(bounds, itemRect(cell)) !== null);
+export function coversContainerSlot(bounds: Rect, profile: ContainerProfile): boolean {
+  return cellsOf(profile, 'container').some((cell) => intersectRects(bounds, itemRect(cell)) !== null);
 }
 
 /**
@@ -151,9 +143,9 @@ export function coversContainerSlot(bounds: Rect, rows: number): boolean {
  * (gui.md section 11.4). This is the compiler's own rule (MTR-0092), stated where the author is looking; a layer that covers a slot
  * but also extends outside the screen is only partly decoration.
  */
-export function decorationNote(clickable: boolean, bounds: Rect | null, rows: number): string | null {
+export function decorationNote(clickable: boolean, bounds: Rect | null, profile: ContainerProfile): string | null {
   if (!clickable || !bounds || isEmptyRect(bounds)) return null;
-  const reach = clickReach(bounds, rows);
-  if (!coversContainerSlot(bounds, rows)) return reach === 'inside' ? DECORATION_NO_SLOT : DECORATION_ONLY;
+  const reach = clickReach(bounds, profile);
+  if (!coversContainerSlot(bounds, profile)) return reach === 'inside' ? DECORATION_NO_SLOT : DECORATION_ONLY;
   return reach === 'inside' ? null : DECORATION_PARTLY;
 }

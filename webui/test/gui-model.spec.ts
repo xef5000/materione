@@ -27,7 +27,7 @@ describe('parseGui', () => {
     const parsed = parseGui(sample, 'main')!;
     expect(parsed.location.prefix).toEqual(['main']);
     expect(parsed.doc.title).toBe('Shop');
-    expect(parsed.doc.rows).toBe(3);
+    expect(parsed.doc.container).toBe('chest_3');
     expect(parsed.doc.layers.map((layer) => layer.id)).toEqual(
       ['frame', 'wells', 'art', 'heading', 'tag', 'buy', 'coin', 'sword', 'apple']);
     expect(parsed.blocking).toEqual([]);
@@ -126,10 +126,10 @@ describe('helpers', () => {
   it('a new GUI starts with no layers: the vanilla chest is the client\'s own, not art (gui.md 11.2)', () => {
     const starter = starterDocument('chest_6');
     expect(starter.layers).toEqual([]);
-    expect(starter.rows).toBe(6);
+    expect(starter.container).toBe('chest_6');
     // the server's own starter, as recorded in the golden snapshot: title and container, no layers
     const scaffold = parseGui(parse(scaffoldGui('shop_two', 'Shop Two')), 'shop_two')!;
-    expect(scaffold.doc.rows).toBe(3);
+    expect(scaffold.doc.container).toBe('chest_3');
     expect(scaffold.doc.title).toBe('Shop Two');
     expect(scaffold.doc.layers).toEqual([]);
   });

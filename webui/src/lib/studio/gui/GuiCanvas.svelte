@@ -12,7 +12,7 @@
    * document, and the pointer release commits one command.
    */
   import { cssColor } from '../../gui/raster/color';
-  import { cellsOf, wellRect, slotCell, itemRect, nearestContainerCell } from '../../gui/chest';
+  import { cellsOf, wellRect, slotCell, itemRect, nearestContainerCell } from '../../gui/containers';
   import { toImageData } from '../../gui/browser-image';
   import { BRUSH_CURSOR, BUCKET_CURSOR, DROPPER_CURSOR } from '../../gui/cursors';
   import { isLocked, type GuiLayer } from '../../gui/model';
@@ -52,7 +52,7 @@
   const view = $derived(studio.view);
   const zoom = $derived(view.zoom);
   const size = $derived(studio.size);
-  /** The screen (the vanilla chest) and the art cap around it, as boxes on the stage. */
+  /** The screen (the container's own) and the art cap around it, as boxes on the stage. */
   const paperStyle = $derived(
     `left:${Math.round(view.panX)}px;top:${Math.round(view.panY)}px;width:${size.width * zoom}px;height:${size.height * zoom}px`,
   );
@@ -71,10 +71,10 @@
 
   $effect(() => {
     const target = underlay;
-    const chest = studio.underlay;
-    if (!target || !chest) return;
-    // the vanilla chest under the art, the player's inventory veiled except under painted pixels (gui.md section 11.2)
-    target.getContext('2d')!.putImageData(toImageData(chest), 0, 0);
+    const screen = studio.underlay;
+    if (!target || !screen) return;
+    // the container's screen under the art, the player's inventory veiled except under painted pixels (gui.md section 11.2)
+    target.getContext('2d')!.putImageData(toImageData(screen), 0, 0);
   });
 
   // ---------------------------------------------------------------- measuring
@@ -299,7 +299,7 @@
     return collectTargets({
       width: studio.size.width,
       height: studio.size.height,
-      rows: studio.doc.rows,
+      container: studio.profile,
       slots: true,
       cap: ART_CAP,
       siblings: studio.doc.layers.flatMap((layer) => {
@@ -375,7 +375,7 @@
       for (const layer of studio.doc.layers) {
         if (ids.includes(layer.id) && transformability(studio.infoOf(layer), layer).slotBound && rects[layer.id]) {
           const r = rects[layer.id]!;
-          studio.dropSlot = nearestContainerCell(studio.doc.rows, r.x + r.w / 2, r.y + r.h / 2).index;
+          studio.dropSlot = nearestContainerCell(studio.profile, r.x + r.w / 2, r.y + r.h / 2).index;
         }
       }
       pending = ops.setRects(studio.doc, studio.scene, rects, ids.length > 1 ? 'Move layers' : 'Move layer');
@@ -495,11 +495,11 @@
 
   // ---------------------------------------------------------------- overlay helpers
 
-  const cells = $derived(cellsOf(studio.doc.rows, 'all'));
+  const cells = $derived(cellsOf(studio.profile, 'all'));
 
   /** A slot layer is outlined well by well (its bounding box would be the whole screen). */
   function outlines(layer: GuiLayer, rect: Rect): Rect[] {
-    return bareType(layer) === 'slots' ? cellsOf(studio.doc.rows, regionOf(layer)).map(wellRect) : [rect];
+    return bareType(layer) === 'slots' ? cellsOf(studio.profile, regionOf(layer)).map(wellRect) : [rect];
   }
   const showGrid = $derived(zoom >= GRID_ZOOM && studio.showPixelGrid);
   /** Image layers whose texture is not available get a marked placeholder instead of silence. */
@@ -538,7 +538,7 @@
   });
 
   /** The player-window guides, drawn when toggled (gui.md section 11.5). */
-  const windowRects = $derived(studio.showGuides ? windowGuides(studio.doc.rows) : []);
+  const windowRects = $derived(studio.showGuides ? windowGuides(studio.profile) : []);
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -563,7 +563,7 @@
   oncontextmenu={(event) => event.preventDefault()}
   class:dropping
 >
-  <!-- the open canvas (gui.md section 11): open space within the art cap, the vanilla chest on it, the art over both -->
+  <!-- the open canvas (gui.md section 11): open space within the art cap, the container screen on it, the art over both -->
   <div class="open" style={capStyle} data-testid="gui-open-space"></div>
   <canvas
     bind:this={underlay}
@@ -591,10 +591,14 @@
     <text
       class="mc inventory"
       data-testid="inventory-label"
-      x={sx(8)}
-      y={sy(size.height - 94) + 7 * zoom}
+      x={sx(studio.profile.inventoryLabel.x)}
+      y={sy(studio.profile.inventoryLabel.y) + 7 * zoom}
       style:font-size="{8 * zoom}px"
     >Inventory</text>
+    {#if studio.underlayKind === 'diagram'}
+      <!-- no owner art for this container: the screen is a generated diagram, correct for the slots and nothing more (gui.md section 12.7) -->
+      <text class="diagram-note" data-testid="underlay-note" x={sx(0)} y={sy(0) - 6}>Generated diagram, vanilla art not shown</text>
+    {/if}
     {#each approxTexts as mark (mark.layer.id)}
       {@const skipped = isSkipped(studio.flagsFor(mark.layer.id))}
       {#if !(editingLayer && editingLayer.id === mark.layer.id && fontOf(mark.layer) === 'smallcaps')}
@@ -648,10 +652,14 @@
       {#each cells as cell (cell.index)}
         {@const item = itemRect(cell)}
         <rect class="slot" x={sx(item.x) + 0.5} y={sy(item.y) + 0.5} width={item.w * zoom - 1} height={item.h * zoom - 1} />
+        <!-- the container's own slot ids, the numbers an item layer's slot: takes (gui.md section 12.7) -->
+        {#if cell.region === 'container' && zoom >= 3}
+          <text class="slot-id" data-testid="slot-id" x={sx(item.x) + 2} y={sy(item.y) + Math.min(zoom * 4, 14) + 1} style:font-size="{Math.min(zoom * 4, 14)}px">{cell.index}</text>
+        {/if}
       {/each}
     {/if}
     {#if studio.dropSlot !== null}
-      {@const cell = slotCell(studio.doc.rows, studio.dropSlot)}
+      {@const cell = slotCell(studio.profile, studio.dropSlot)}
       {#if cell}
         {@const well = wellRect(cell)}
         <rect class="drop" x={sx(well.x)} y={sy(well.y)} width={well.w * zoom} height={well.h * zoom} />
@@ -825,6 +833,10 @@
     fill: var(--fg);
     opacity: 0.2;
   }
+  .texts .diagram-note {
+    fill: var(--muted);
+    font-size: var(--text-xs);
+  }
   .texts .ghost {
     opacity: 0.35;
   }
@@ -887,6 +899,13 @@
     fill: none;
     stroke: var(--gui-slot-grid);
     stroke-dasharray: 3 3;
+  }
+  .slot-id {
+    fill: var(--gui-slot-grid);
+    font-family: var(--mono);
+    paint-order: stroke;
+    stroke: var(--bg-app);
+    stroke-width: 2;
   }
   .drop {
     fill: var(--gui-marquee);

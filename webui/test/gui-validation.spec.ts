@@ -13,7 +13,7 @@ import { flagsOf, isSkipped, layerIndexOf } from '../src/lib/gui/validation';
 import type { Response } from '../src/lib/protocol/wire';
 
 const layer = (id: string, extra: Record<string, unknown> = {}): GuiLayer => ({ id, type: 'text', ...extra }) as GuiLayer;
-const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: 'Shop', container: 'chest_3', rows: 3, layers, rest: {}, order: [] });
+const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: 'Shop', container: 'chest_3', layers, rest: {}, order: [] });
 const diagnostic = (message: string, field?: string[]): ServerDiagnostic => ({
   code: 'MTR-0052',
   severity: 'warn',

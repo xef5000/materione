@@ -52,7 +52,7 @@ public final class SlotsComponent implements GuiComponent {
                                         "Region", "placement", 10, false, "select", "", "all")
                                         .withOptions(List.of(
                                                 ParameterSchema.EditorOption.of("container", "Container",
-                                                        "The chest's own slots"),
+                                                        "The container's own slots"),
                                                 ParameterSchema.EditorOption.of("player", "Player inventory",
                                                         "The player's inventory and hotbar"),
                                                 ParameterSchema.EditorOption.of("all", "Both",

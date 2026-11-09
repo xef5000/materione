@@ -1,6 +1,7 @@
 import { SAMPLE_GUI_ASSETS, sampleGuiRaw } from '../src/lib/demo/gui';
 import { parse as parseYaml } from 'yaml';
 import { scanReferences } from '../src/lib/demo/references';
+import { containerProfile } from '../src/lib/gui/containers';
 import { detached, itemLinks, startingFields, templateCatalog, templateDefinition } from '../src/lib/demo/templates';
 // The real server's type self-descriptions, recorded by the plugin's golden
 // test: the ?modules fixture serves the block/furniture/... schemas exactly as
@@ -335,6 +336,28 @@ const MODULES_RESOURCES: ResourceRef[] = [
 /** The server's own New GUI starter (recorded in the golden snapshot), for `id` titled `title`. */
 function guiScaffold(id: string, title: string): string {
   return goldenSnapshot.scaffolds.guis.replaceAll('demo_scaffold', id).replace('Demo Scaffold', title);
+}
+
+/**
+ * The one compiler rule the container switch tests rest on, as the fixture's `gui.validate` verdict: an `item` layer in a
+ * slot the draft's container lacks is skipped with MTR-0052 (the real compiler's rule, pinned by the Java tests). The
+ * slot count is the container profile's, read from the shared file, never a number of the fixture's own.
+ */
+function guiSlotDiagnostics(payload: Record<string, unknown>): Record<string, unknown>[] {
+  const source = payload.source as { document?: { container?: unknown; layers?: { type?: unknown; parameters?: { slot?: unknown } }[] } } | undefined;
+  const container = containerProfile(source?.document?.container);
+  if (!container) return [];
+  return (source?.document?.layers ?? []).flatMap((layer, index) => {
+    const slot = layer.parameters?.slot;
+    const bare = typeof layer.type === 'string' ? layer.type.replace(/^materione:/, '') : '';
+    if (bare !== 'item' || typeof slot !== 'number' || slot < container.slotCount) return [];
+    return [{
+      code: 'MTR-0052',
+      severity: 'warn',
+      message: `item slot ${slot} is outside the container's ${container.slotCount} slot(s)`,
+      field: ['layers', String(index)],
+    }];
+  });
 }
 
 function goldenType(name: string): TypeInfo {
@@ -862,15 +885,18 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
   readonly #gui: boolean;
   /** `?logic&economy`: a server with an economy provider, so the money actions and conditions are available. */
   readonly #economy: boolean;
+  /** `?noContainers`: a server too old to list GUI containers (`authoring.describe` has no `guiContainers`). */
+  readonly #noContainers: boolean;
   /** Only the `?logic` fixture advertises a capability list (the GUI and logic APIs); the others have no blob, like the demo. */
   readonly blob?: SessionBlob;
 
-  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; economy?: boolean; seed?: string; rows?: number } = {}) {
+  constructor(options: { summaryError?: boolean; modelGallery?: boolean; guided?: boolean; catalog?: boolean; modules?: boolean; gui?: boolean; logic?: boolean; economy?: boolean; noContainers?: boolean; seed?: string; rows?: number } = {}) {
     this.#summaryError = options.summaryError ?? false;
     this.#guided = options.guided ?? false;
     this.#modules = options.modules ?? false;
     this.#gui = !!(options.gui || options.logic);
     this.#economy = options.economy ?? false;
+    this.#noContainers = options.noContainers ?? false;
     if (options.logic) {
       this.blob = { sessionId: 'fixture', protocolVersions: [1], capabilities: ['gui', 'logic'], pluginSigningPubKey: new Uint8Array(32) };
     }
@@ -1160,6 +1186,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
             types: this.typeList(),
             behavior: structuredClone(GUIDED_VOCABULARY),
             guiComponents: structuredClone(goldenSnapshot.describe.guiComponents),
+            ...(this.#noContainers ? {} : { guiContainers: structuredClone(goldenSnapshot.describe.guiContainers) }),
           });
         }
         if (this.#modules) {
@@ -1196,7 +1223,7 @@ export class DeterministicRpcAdapter implements RpcChannel, BrowserTestControls 
       case 'authoring.setFields':
         return this.setFields(op, payload);
       case 'gui.validate':
-        return this.success(op, { diagnostics: [] });
+        return this.success(op, { diagnostics: guiSlotDiagnostics(payload) });
       case 'gui.customizeItem':
         return this.customizeItem(op, payload);
       case 'logic.vocabulary':

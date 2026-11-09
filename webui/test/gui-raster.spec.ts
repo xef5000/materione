@@ -14,7 +14,7 @@ import { argb, formatColor, parseColor } from '../src/lib/gui/raster/color';
 import { raisedPart, insetPart } from '../src/lib/gui/raster/bevel';
 import { flattenRaster, RAISED_DEFAULT, SLOT_DEFAULT } from '../src/lib/gui/raster/flatten';
 import { renderVector, type RasterVector } from '../src/lib/gui/raster/vector';
-import { canvasSize, cellsOf, slotCell, wellRect } from '../src/lib/gui/chest';
+import { canvasSize, cellsOf, containerProfile, slotCell, wellRect } from '../src/lib/gui/containers';
 
 const DIR = fileURLToPath(new URL('../../fixtures/gui/raster/', import.meta.url));
 const names = readdirSync(DIR)
@@ -54,7 +54,7 @@ describe('shared raster vectors (fixtures/gui/raster)', () => {
   });
 
   it('the vanilla chest vector has the chest canvas size', () => {
-    const size = canvasSize(6);
+    const size = canvasSize(containerProfile('chest_6')!);
     const expected = decodePng(readFileSync(`${DIR}chest-6-rows.png`));
     expect([expected.width, expected.height]).toEqual([size.width, size.height]);
     expect([size.width, size.height]).toEqual([176, 222]);
@@ -106,7 +106,7 @@ describe('bevel rules', () => {
   });
 
   it('degenerate rectangles never throw and never draw more than they contain', () => {
-    const scene = { width: 8, height: 8, rows: 1, image: () => null };
+    const scene = { width: 8, height: 8, container: containerProfile('chest_1')!, image: () => null };
     const layers = [
       { id: 'a', type: 'button', x: 1, y: 1, width: 0, height: 4 },
       { id: 'b', type: 'button', x: 3, y: 3, width: 1, height: 1 },
@@ -119,15 +119,16 @@ describe('bevel rules', () => {
   });
 });
 
-describe('chest geometry', () => {
+describe('chest profile geometry', () => {
+  const chest = (rows: number) => containerProfile(`chest_${rows}`)!;
   it('matches the vanilla slot grid', () => {
-    expect(canvasSize(1)).toEqual({ width: 176, height: 132 });
-    expect(canvasSize(6)).toEqual({ width: 176, height: 222 });
-    const six = cellsOf(6, 'container');
+    expect(canvasSize(chest(1))).toEqual({ width: 176, height: 132 });
+    expect(canvasSize(chest(6))).toEqual({ width: 176, height: 222 });
+    const six = cellsOf(chest(6), 'container');
     expect(six).toHaveLength(54);
     expect(six[0]).toMatchObject({ index: 0, x: 8, y: 18 });
     expect(six[53]).toMatchObject({ index: 53, x: 8 + 8 * 18, y: 18 + 5 * 18 });
-    const player = cellsOf(6, 'player');
+    const player = cellsOf(chest(6), 'player');
     expect(player).toHaveLength(36);
     expect(player[0]).toMatchObject({ index: 54, x: 8, y: 6 * 18 + 31 });
     expect(player[26]).toMatchObject({ y: 6 * 18 + 31 + 2 * 18 });
@@ -135,8 +136,8 @@ describe('chest geometry', () => {
     // vanilla 6-row chest: inventory at y=139, hotbar at y=197
     expect([player[0]!.y, player[27]!.y]).toEqual([139, 197]);
     expect(wellRect(six[0]!)).toEqual({ x: 7, y: 17, w: 18, h: 18 });
-    expect(slotCell(3, 27)).toMatchObject({ region: 'player', y: 3 * 18 + 31 });
-    expect(slotCell(3, 999)).toBeNull();
+    expect(slotCell(chest(3), 27)).toMatchObject({ region: 'player', y: 3 * 18 + 31 });
+    expect(slotCell(chest(3), 999)).toBeNull();
   });
 });
 

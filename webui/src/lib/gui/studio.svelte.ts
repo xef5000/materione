@@ -8,12 +8,13 @@
 import { assetOps, RpcError, unwrap, type AssetUpload, type RpcChannel } from '../api';
 import { reconcileDocumentDraft, type DocumentDraft } from '../drafts.svelte';
 import { decodeImage, encodePng, readImageFile } from './browser-image';
-import { canvasSize } from './chest';
+import { canvasSize, containerProfile, type ContainerChoice, type ContainerProfile } from './containers';
 import { composeCanvas } from './compose';
 import { ART_CAP, clipToCap, insideCap, isEmptyRect, screenRect, unionRects } from './open-canvas';
-import { addLayer, compose, patchLayers, setDocumentFields, type Command } from './commands';
+import { addLayer, patchLayers, setDocumentFields, type Command } from './commands';
 import { GuiHistory } from './history';
 import {
+  drawingProfileOf,
   findLayer,
   isLocked,
   layerLabel,
@@ -60,8 +61,9 @@ import {
 import type { Guide } from './snap';
 import { compiledOrder, layerBounds, orderBadges, overlays, sceneOf, type Scene } from './scene';
 import { customizeItem, draftOf, guiApiAvailable, validateDraft } from './server';
-import { composeVanilla, veiledScreen } from './vanilla';
-import { loadVanillaSheet } from './vanilla-sheet';
+import { composeUnderlay, veiledScreen, type UnderlayKind } from './underlay';
+import { loadUnderlaySheets } from './underlay-sheets';
+import { newlyFlagged, switchCost, SWITCH_COST_UNKNOWN } from './switch-cost';
 import { isLogicCommand, withBlock } from '../logic/command';
 import { LogicLog } from '../logic/log';
 import { logicApiAvailable, logicEditResponse } from '../logic/server';
@@ -134,8 +136,14 @@ export class GuiStudioState {
   showSlots = $state(false);
   /** The guides for what a 1920 x 1080 window shows around the screen at GUI scales 2, 3 and 4 (gui.md section 11.5). */
   showGuides = $state(false);
-  /** The owner's vanilla chest sheet, once decoded; the underlay draws from it. */
-  vanillaSheet = $state.raw<ArgbCanvas | null>(null);
+  /** The owner's sheets, once decoded (whichever exist); the underlay draws from them, else from a generated diagram. */
+  underlaySheets = $state.raw<ReadonlyMap<string, ArgbCanvas> | null>(null);
+  /** The containers the connected server lists (`authoring.describe`, gui.md section 12.4); none from a server too old to list them. */
+  containerChoices = $state.raw<readonly ContainerChoice[]>([]);
+  /** A container the author chose in the Screen panel and has not applied yet, and the one-line cost of switching to it. */
+  pendingContainer = $state<string | null>(null);
+  pendingCost = $state('');
+  #pendingSeq = 0;
   showPixelGrid = $state(true);
   snapping = $state(true);
   /** The GUI pixel under the pointer, for the status bar. */
@@ -175,16 +183,22 @@ export class GuiStudioState {
     readonly rootId: string,
   ) {
     this.#restorePaintSettings();
-    void loadVanillaSheet().then(
-      (sheet) => (this.vanillaSheet = sheet),
-      () => this.say('The vanilla chest art could not be loaded; the canvas shows no underlay.'),
+    void loadUnderlaySheets().then(
+      (sheets) => (this.underlaySheets = sheets),
+      () => {
+        // no sheet at all: every container is drawn as the generated diagram
+        this.underlaySheets = new Map();
+        this.say('The vanilla art could not be loaded; the canvas shows the generated diagram.');
+      },
     );
   }
 
   /** The document the canvas draws: the live drag preview, else the committed one. */
   shown = $derived(this.preview ?? this.doc);
   readOnly = $derived(this.blocking.length > 0);
-  size = $derived(canvasSize(this.doc.rows));
+  /** The container profile the screen is drawn in (a GUI whose container is unknown is read-only and draws the default). */
+  profile = $derived<ContainerProfile>(drawingProfileOf(this.doc));
+  size = $derived(canvasSize(this.profile));
   scene = $derived.by<Scene>(() => {
     void this.imageVersion;
     return sceneOf(this.shown, this.registry, (reference) => this.imageFor(reference));
@@ -207,18 +221,23 @@ export class GuiStudioState {
       height: ART_CAP.h,
       originX: ART_CAP.x,
       originY: ART_CAP.y,
-      rows: this.shown.rows,
+      container: this.profile,
       image: (reference) => this.imageFor(reference),
     }, this.skippedIds);
   });
-  /** The vanilla chest for the row count (gui.md section 11.2): not a layer, never saved, not in the history. */
-  vanilla = $derived<ArgbCanvas | null>(this.vanillaSheet ? composeVanilla(this.vanillaSheet, this.shown.rows) : null);
-  /** The chest as drawn: the vanilla screen with the player's inventory veiled except under painted pixels. */
+  /**
+   * The container's screen (gui.md sections 11.2 and 12.7): the owner's art composed from the profile's blits when its
+   * sheets exist, else a generated diagram. Not a layer, never saved, not in the history. Null until the sheets are known.
+   */
+  screenBase = $derived.by(() => (this.underlaySheets ? composeUnderlay(this.profile, this.underlaySheets) : null));
+  /** Whether the screen under the art is the owner's art or the generated diagram (null until it is known). */
+  underlayKind = $derived<UnderlayKind | null>(this.screenBase?.kind ?? null);
+  /** The screen as drawn: the underlay with the player's inventory veiled except under painted pixels. */
   underlay = $derived.by<ArgbCanvas | null>(() => {
-    const vanilla = this.vanilla;
-    if (!vanilla) return null;
+    const base = this.screenBase;
+    if (!base) return null;
     const art = this.composite;
-    return veiledScreen(vanilla, this.shown.rows, (x, y) => (art.get(x, y) >>> 24) > 0);
+    return veiledScreen(base.screen, this.profile, (x, y) => (art.get(x, y) >>> 24) > 0);
   });
   selected = $derived(this.shown.layers.filter((layer) => this.selection.includes(layer.id)));
 
@@ -243,6 +262,7 @@ export class GuiStudioState {
     this.#strokeLayer = null;
     this.editingText = null;
     this.choosing = false;
+    this.cancelContainer();
     // pixels edited or uploaded here and never saved are discarded; the next read gets the server's
     for (const reference of this.#dirtyAssets.keys()) this.#images.delete(reference);
     this.#dirtyAssets.clear();
@@ -378,24 +398,63 @@ export class GuiStudioState {
     this.run(setDocumentFields(this.doc, { title }, 'Edit title', 'title'));
   }
 
-  /** Changing rows resizes the canvas; a frame panel that spans the whole canvas follows it. */
-  setRows(rows: number): void {
-    const next = Math.min(6, Math.max(1, Math.round(rows)));
-    if (next === this.doc.rows) return;
-    const from = canvasSize(this.doc.rows);
-    const to = canvasSize(next);
-    const frames: Record<string, { height: number }> = {};
-    for (const layer of this.doc.layers) {
-      if (bareType(layer) === 'panel' && layer.x === 0 && layer.y === 0 && layer.width === from.width && layer.height === from.height) {
-        frames[layer.id] = { height: to.height };
-      }
+  // ------------------------------------------------------------------ container
+
+  /** The containers the server lists (`authoring.describe`); an older server lists none and the studio offers none. */
+  setContainers(choices: readonly ContainerChoice[]): void {
+    this.containerChoices = choices;
+  }
+
+  /**
+   * The author chose a container in the Screen panel: it is staged, not applied, and the panel states the cost in one line
+   * from the server's verdict on this document with the target container (gui.md section 12.7). The studio keeps no
+   * rules of its own, so without the server's check the line says the cost is unknown (and that no layer changes).
+   */
+  stageContainer(id: string, channel: RpcChannel | null): void {
+    const seq = ++this.#pendingSeq;
+    if (this.readOnly || id === this.doc.container || !containerProfile(id)) {
+      this.pendingContainer = null;
+      this.pendingCost = '';
+      return;
     }
-    this.run(compose('Change rows', [
-      // the studio's row control picks a chest (`chest_N`) until the container select (gui.md section 12.10, row S)
-      setDocumentFields(this.doc, { container: `chest_${next}` }, 'Change rows'),
-      patchLayers(this.doc, frames, 'Resize frame'),
-    ]));
+    this.pendingContainer = id;
+    this.pendingCost = '';
+    void this.#switchCost(id, channel).then((text) => {
+      if (seq === this.#pendingSeq) this.pendingCost = text;
+    });
+  }
+
+  cancelContainer(): void {
+    this.#pendingSeq++;
+    this.pendingContainer = null;
+    this.pendingCost = '';
+  }
+
+  async #switchCost(id: string, channel: RpcChannel | null): Promise<string> {
+    const label = containerProfile(id)!.label;
+    if (!channel || !guiApiAvailable(channel)) return SWITCH_COST_UNKNOWN;
+    try {
+      const draft = draftOf({ ...this.doc, container: id }, this.rootId, this.pack, this.path);
+      const diagnostics = await validateDraft(channel, draft, await this.#unsavedPixels());
+      return switchCost(label, newlyFlagged(this.doc.layers, this.flags, flagsOf(diagnostics, this.doc).byLayer));
+    } catch (error) {
+      return `The server's check failed (${error instanceof Error ? error.message : String(error)}), so what the switch flags is not shown. No layer is changed by the switch.`;
+    }
+  }
+
+  /**
+   * Switches the GUI to another container: the one `container:` line changes, as one undo step, and no layer is moved,
+   * resized or deleted (gui.md sections 12.7 and 12.9 item 8). What no longer fits is flagged by the server's verdict
+   * like any other layer the compiler skips; the status bar repeats the cost the panel stated.
+   */
+  switchContainer(id: string): void {
+    const profile = containerProfile(id);
+    if (this.readOnly || !profile || id === this.doc.container) return;
+    const cost = this.pendingContainer === id ? this.pendingCost : '';
+    this.run(setDocumentFields(this.doc, { container: id }, `Switch to ${profile.label}`));
+    this.cancelContainer();
     this.fit();
+    this.say(cost ? `Switched to ${profile.label}. ${cost}` : `Switched to ${profile.label}.`, 8000);
   }
 
   // ------------------------------------------------------------------ camera
@@ -718,7 +777,7 @@ export class GuiStudioState {
     const target = this.#paintTarget();
     if (!target) return;
     const rect = paintRect(target.layer, target.bitmap);
-    const window = clipToCap(unionRects(rect, screenRect(this.doc.rows)));
+    const window = clipToCap(unionRects(rect, screenRect(this.profile)));
     if (!window || point.x < window.x || point.y < window.y || point.x >= window.x + window.w || point.y >= window.y + window.h) {
       this.say('Fill works on the screen and inside painted shapes. Use the brush to paint further out.');
       return;
@@ -765,11 +824,12 @@ export class GuiStudioState {
 
   /**
    * The eyedropper: the colour at a GUI pixel. What Materione draws comes first (the composited art, text included, as the
-   * player sees it); where it draws nothing the vanilla chest underneath answers, in its own colour and not the veiled one.
+   * player sees it); where it draws nothing the owner's vanilla art underneath answers, in its own colour and not the veiled one (a generated diagram is not vanilla colour, so it answers nothing).
    */
   pickAt(point: Point): boolean {
     const art = this.composite.get(point.x, point.y);
-    const color = art >>> 24 !== 0 ? art : (this.vanilla?.get(point.x, point.y) ?? 0);
+    const base = this.screenBase?.kind === 'art' ? this.screenBase.screen : null;
+    const color = art >>> 24 !== 0 ? art : (base?.get(point.x, point.y) ?? 0);
     if (color >>> 24 === 0) {
       this.say('That pixel is transparent: nothing to pick.');
       return false;
@@ -926,7 +986,7 @@ export class GuiStudioState {
   /** The first free container slot, for a new item layer. */
   freeSlot(): number {
     const taken = new Set(this.doc.layers.filter((layer) => bareType(layer) === 'item').map((layer) => layer.slot));
-    for (let slot = 0; slot < this.doc.rows * 9; slot++) if (!taken.has(slot)) return slot;
+    for (let slot = 0; slot < this.profile.slotCount; slot++) if (!taken.has(slot)) return slot;
     return 0;
   }
 
@@ -1046,7 +1106,7 @@ export class GuiStudioState {
     try {
       // Every paint layer is saved trimmed to its painted pixels (gui.md section 11.2): the PNG holds no transparent
       // margin, and a layer with no pixel at all saves no PNG and is written with width 0 and height 0.
-      // Only when the layout or a texture is being saved anyway: a save of the title, the rows or the logic never rewrites art.
+      // Only when the layout or a texture is being saved anyway: a save of the title, the container or the logic never rewrites art.
       const savingArt = this.#dirtyAssets.size > 0 || JSON.stringify(this.#history.baseline.layers) !== JSON.stringify(this.#history.doc.layers);
       const trim = savingArt
         ? trimPaintLayers(this.#history.doc, (reference) => this.#images.get(reference), (reference) => this.#dirtyAssets.has(reference))

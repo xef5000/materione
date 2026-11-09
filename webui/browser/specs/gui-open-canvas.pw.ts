@@ -53,7 +53,8 @@ async function openEmpty(page: Page, rows = 6): Promise<void> {
   await page.keyboard.press('Delete');
   await expect(page.locator('.layers .row')).toHaveCount(0);
   if (rows !== 3) {
-    await page.getByRole('group', { name: 'Rows', exact: true }).getByRole('button', { name: String(rows), exact: true }).click();
+    await page.getByTestId('container-select').selectOption(`chest_${rows}`);
+    await page.getByTestId('container-switch-apply').click();
   }
   await expect.poll(() => underlaySize(page)).toEqual([176, rows * 18 + 114]);
 }
@@ -436,7 +437,7 @@ test.describe('clickable layers outside the chest are decoration only', () => {
     const x = page.getByRole('textbox', { name: 'X', exact: true });
     await x.fill('220');
     await x.press('Enter');
-    await expect(badge(page, 'Buy button')).toHaveAttribute('aria-label', /Decoration only.*clicks outside the chest arrive as click_outside/);
+    await expect(badge(page, 'Buy button')).toHaveAttribute('aria-label', /Decoration only.*clicks outside the screen arrive as click_outside/);
     await expect(note(page)).toContainText('click_outside');
     await expect(note(page)).toContainText('Decoration only');
 

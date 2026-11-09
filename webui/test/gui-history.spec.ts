@@ -76,11 +76,11 @@ describe('commands are invertible', () => {
     expect(moveLayers(doc, ['ghost'], 0)).toBeNull();
   });
 
-  it('document fields (title, rows) revert', () => {
+  it('document fields (title, container) revert', () => {
     const doc = sample();
     const command = setDocumentFields(doc, { title: 'Bazaar', container: 'chest_5' }, 'Edit')!;
     const after = command.apply(doc);
-    expect([after.title, after.rows]).toEqual(['Bazaar', 5]);
+    expect([after.title, after.container]).toEqual(['Bazaar', 'chest_5']);
     expect(json(command.revert(after))).toBe(json(doc));
     expect(setDocumentFields(doc, { title: 'Shop' }, 'Edit')).toBeNull();
   });
@@ -91,7 +91,7 @@ describe('commands are invertible', () => {
     const second = setDocumentFields(doc, { container: 'chest_2' }, 'b')!;
     const both = compose('both', [first, null, second])!;
     const after = both.apply(doc);
-    expect(after.rows).toBe(2);
+    expect(after.container).toBe('chest_2');
     expect(json(both.revert(after))).toBe(json(doc));
     expect(compose('none', [null])).toBeNull();
   });
@@ -165,7 +165,7 @@ describe('the history', () => {
     expect(history.canUndo).toBe(false);
     history.execute(patchLayers(history.doc, { buy: { x: 1 } }, 'a'));
     history.reset(starterDocument('chest_2'));
-    expect([history.canUndo, history.dirty, history.doc.rows]).toEqual([false, false, 2]);
+    expect([history.canUndo, history.dirty, history.doc.container]).toEqual([false, false, 'chest_2']);
   });
 });
 
@@ -242,14 +242,28 @@ describe('layer operations', () => {
     expect('x' in item).toBe(false);
   });
 
-  it('changing rows resizes a frame panel that spanned the canvas', () => {
-    // exercised through the same commands the studio composes; a new GUI has no layers, so the panel is added first
-    const doc = { ...starterDocument('chest_6'), layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 }] };
-    const command = compose('Change rows', [
-      setDocumentFields(doc, { container: 'chest_3' }, 'rows'),
-      patchLayers(doc, { frame: { height: 168 } }, 'frame'),
-    ])!;
-    const after = command.apply(doc);
-    expect([after.rows, after.layers[0]!.height]).toEqual([3, 168]);
+  it('switching the container rewrites the one line and touches no layer, whatever the target (gui.md section 12.7)', () => {
+    // a frame that spanned a six-row screen, an item in a slot the hopper lacks, a list of wells: all kept as they are
+    const layers = [
+      { id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 },
+      { id: 'sword', type: 'item', slot: 40, item: 'minecraft:diamond_sword' },
+    ];
+    const doc = { ...starterDocument('chest_6'), layers };
+    for (const target of ['chest_3', 'hopper', 'dispenser']) {
+      const command = setDocumentFields(doc, { container: target }, `Switch to ${target}`)!;
+      const after = command.apply(doc);
+      expect(after.container).toBe(target);
+      expect(after.layers).toBe(doc.layers); // the very same layers: nothing moved, resized or deleted
+      expect(json(command.revert(after))).toBe(json(doc)); // undo restores the exact original line
+    }
+    expect(setDocumentFields(doc, { container: 'chest_6' }, 'same')).toBeNull();
+  });
+
+  it('a container switch is one undo step in the history', () => {
+    const history = new GuiHistory({ ...starterDocument('chest_6'), layers: [{ id: 'frame', type: 'panel', x: 0, y: 0, width: 176, height: 222 }] });
+    history.execute(setDocumentFields(history.doc, { container: 'hopper' }, 'Switch to Hopper'));
+    expect([history.doc.container, history.undoLabel]).toEqual(['hopper', 'Switch to Hopper']);
+    history.undo();
+    expect([history.doc.container, history.canUndo, history.dirty]).toEqual(['chest_6', false, false]);
   });
 });

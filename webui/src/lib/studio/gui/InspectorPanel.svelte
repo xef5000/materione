@@ -14,7 +14,8 @@
   import { transformability, componentIcon } from '../../gui/registry';
   import type { GuiStudioState } from '../../gui/studio.svelte';
   import { unionOf } from '../../gui/transform';
-  import { MAX_ROWS, MIN_ROWS, canvasSize } from '../../gui/chest';
+  import { containerProfile, groupChoices } from '../../gui/containers';
+  import { session } from '../../state.svelte';
   import { decorationNote, isClickable } from '../../gui/open-canvas';
   import { formatColor } from '../../gui/raster/color';
   import { RAISED_DEFAULT, SLOT_DEFAULT, bareType } from '../../gui/raster/flatten';
@@ -44,10 +45,10 @@
   const can = $derived(layer ? transformability(info, layer) : null);
   const bounds = $derived(layer ? studio.boundsOf(layer) : null);
   const target = $derived(layer ? (info?.target ?? 'raster') : 'raster');
-  const rows = $derived(studio.doc.rows);
+  const profile = $derived(studio.profile);
   /** A button, or a layer with a click rule, placed outside the screen takes no clicks of its own (gui.md section 11.4). */
   const decoration = $derived(
-    layer ? decorationNote(isClickable(bareType(layer), links?.ruleCount(layer.id) ?? 0), bounds, rows) : null,
+    layer ? decorationNote(isClickable(bareType(layer), links?.ruleCount(layer.id) ?? 0), bounds, profile) : null,
   );
   const isPaint = $derived(layer ? bareType(layer) === 'paint' : false);
   const locked = $derived(layer ? isLocked(layer) : false);
@@ -143,8 +144,16 @@
       .map(([id, label]) => ({ id, label, fallback: formatColor(base[id]) }));
   }
 
-  const rowCounts = Array.from({ length: MAX_ROWS - MIN_ROWS + 1 }, (_, index) => MIN_ROWS + index);
-  const sizeText = $derived(`${canvasSize(rows).width} x ${canvasSize(rows).height} px`);
+  /** The containers the server lists, under the profiles' group headings. */
+  const groups = $derived(groupChoices(studio.containerChoices));
+  /** The document's own container is one of the choices the server lists. */
+  const listed = $derived(groups.some((group) => group.choices.some((choice) => choice.id === studio.doc.container)));
+  /** The container staged in the select and not applied yet. */
+  const pending = $derived.by(() => {
+    const target = containerProfile(studio.pendingContainer);
+    return target && target.id !== studio.doc.container ? target : null;
+  });
+  const sizeText = $derived(`${profile.width} x ${profile.height} px, ${profile.slotCount} slots`);
 </script>
 
 <aside class="inspector" aria-label="Inspector">
@@ -163,14 +172,37 @@
         />
       </label>
       <div class="field">
-        <span>Rows</span>
-        <div class="segmented" role="group" aria-label="Rows">
-          {#each rowCounts as count (count)}
-            <button type="button" class:on={rows === count} disabled={studio.readOnly} aria-pressed={rows === count} onclick={() => studio.setRows(count)}>{count}</button>
+        <label for="gui-container"><span>Container</span></label>
+        <select
+          id="gui-container"
+          data-testid="container-select"
+          value={studio.pendingContainer ?? studio.doc.container}
+          disabled={studio.readOnly || groups.length === 0}
+          onchange={(event) => studio.stageContainer(event.currentTarget.value, session.channel)}
+        >
+          {#if !listed}
+            <option value={studio.doc.container} disabled>{studio.doc.container || 'none'}</option>
+          {/if}
+          {#each groups as group (group.group)}
+            <optgroup label={group.group}>
+              {#each group.choices as choice (choice.id)}
+                <option value={choice.id}>{choice.label}</option>
+              {/each}
+            </optgroup>
           {/each}
-        </div>
+        </select>
       </div>
-      <p class="readout"><Icon name="ruler" size={14} /> {sizeText}</p>
+      {#if groups.length === 0}
+        <p class="note" data-testid="container-unlisted">This server does not list GUI containers, so the container cannot be changed here. Update the plugin to switch it.</p>
+      {/if}
+      {#if pending}
+        <p class="note switch" data-testid="container-switch-note" role="status">{studio.pendingCost || 'Checking what the switch flags…'}</p>
+        <div class="switch-actions">
+          <button type="button" class="btn" data-testid="container-switch-apply" onclick={() => studio.switchContainer(pending.id)}>Switch to {pending.label}</button>
+          <button type="button" class="btn" data-testid="container-switch-cancel" onclick={() => studio.cancelContainer()}>Cancel</button>
+        </div>
+      {/if}
+      <p class="readout" data-testid="screen-size"><Icon name="ruler" size={14} /> {sizeText}</p>
       <p class="hint">Select a layer on the canvas or in the list to edit it.</p>
     </section>
   {:else if layer}
@@ -464,7 +496,8 @@
     gap: var(--space-1);
     min-width: 0;
   }
-  .field > span {
+  .field > span,
+  .field > label > span {
     color: var(--muted);
     font-size: var(--text-sm);
   }
@@ -554,6 +587,23 @@
   }
   .note.decoration {
     color: var(--warn);
+  }
+  .note.switch {
+    padding: 0;
+    color: var(--fg);
+  }
+  .switch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+  .field select {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  .field label {
+    display: contents;
   }
   .actions {
     display: flex;

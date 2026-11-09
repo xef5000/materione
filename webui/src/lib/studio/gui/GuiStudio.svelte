@@ -25,7 +25,7 @@
   import { onDestroy } from 'svelte';
   import Icon from '../../components/Icon.svelte';
   import type { IconName } from '../../components/icons';
-  import { ops, unwrap } from '../../api';
+  import { guiContainersOf, ops, unwrap } from '../../api';
   import type { ResourceRef } from '../../api';
   import {
     draftDirty,
@@ -105,10 +105,14 @@
     if (!channel) return;
     void (async () => {
       try {
-        const registry = readRegistry(unwrap(await ops.describe(channel)));
+        const described = unwrap(await ops.describe(channel));
+        const registry = readRegistry(described);
         studio.setRegistry(registry, registry ? '' : 'This server does not describe GUI components yet.');
+        // the containers the server compiles and opens: the Screen panel's select offers exactly these (gui.md section 12.4)
+        studio.setContainers(guiContainersOf(described));
       } catch (error) {
         studio.setRegistry(null, error instanceof Error ? error.message : String(error));
+        studio.setContainers([]);
       }
     })();
   });
@@ -305,10 +309,10 @@
   );
   /** Which region of the open canvas the pointer is over (gui.md section 11.2). */
   const cursorRegion = $derived(
-    studio.cursor ? REGION_NAMES[regionAt(studio.doc.rows, studio.cursor.x, studio.cursor.y)] : '',
+    studio.cursor ? REGION_NAMES[regionAt(studio.profile, studio.cursor.x, studio.cursor.y)] : '',
   );
   const selectionText = $derived.by(() => {
-    if (studio.selected.length === 0) return `${studio.size.width} x ${studio.size.height} px, ${studio.doc.rows} row${studio.doc.rows === 1 ? '' : 's'}`;
+    if (studio.selected.length === 0) return `${studio.size.width} x ${studio.size.height} px, ${studio.profile.label}`;
     if (studio.selected.length > 1) return `${studio.selected.length} layers`;
     const rect = studio.boundsOf(studio.selected[0]!);
     return rect ? `${studio.selected[0]!.id} · ${rect.w} x ${rect.h}` : studio.selected[0]!.id;

@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ResourceRef } from '../src/lib/api';
-import { nearestContainerCell } from '../src/lib/gui/chest';
+import { containerProfile, nearestContainerCell } from '../src/lib/gui/containers';
 import { customFolder, isCustomized, resolveItem } from '../src/lib/gui/customize';
 import { storedItemRef } from '../src/lib/gui/items';
 import type { GuiDocument, GuiLayer } from '../src/lib/gui/model';
@@ -17,21 +17,41 @@ import { registry } from './helpers/gui-registry';
 
 const item = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'item', slot: 13, item: 'minecraft:diamond_sword', ...extra }) as GuiLayer;
-const doc = (rows: number, ...layers: GuiLayer[]): GuiDocument => ({ title: '', container: `chest_${rows}`, rows, layers, rest: {}, order: [] });
+const profile = (id: string) => containerProfile(id)!;
+const doc = (container: string, ...layers: GuiLayer[]): GuiDocument => ({ title: '', container, layers, rest: {}, order: [] });
 const resource = (id: string, path: string, type = 'items'): ResourceRef => ({ pack: 'sample', type, path, id, name: id } as ResourceRef);
 
 describe('item layers snap to the container only', () => {
-  it('the nearest slot is always a chest slot, even over the player inventory', () => {
+  it('the nearest slot is always a container slot, even over the player inventory', () => {
     // a point over the first inventory slot of a 3-row chest (y = 3*18 + 31 = 85) is still a container slot
-    const cell = nearestContainerCell(3, 12, 90);
+    const cell = nearestContainerCell(profile('chest_3'), 12, 90);
     expect(cell.region).toBe('container');
     expect(cell.index).toBeLessThan(27);
-    expect(nearestContainerCell(3, 8 + 4 * 18 + 8, 18 + 18 + 8).index).toBe(13);
-    expect(nearestContainerCell(1, 500, 500).index).toBe(8); // clamped to the last slot of a 1-row chest
+    expect(nearestContainerCell(profile('chest_3'), 8 + 4 * 18 + 8, 18 + 18 + 8).index).toBe(13);
+    expect(nearestContainerCell(profile('chest_1'), 500, 500).index).toBe(8); // clamped to the last slot of a 1-row chest
+  });
+
+  it('the hopper has five slots and the dispenser a 3 x 3 grid: the nearest slot is theirs, never the player\'s', () => {
+    const hopper = profile('hopper');
+    expect(nearestContainerCell(hopper, 500, 20).index).toBe(4); // clamped to the last of five slots
+    expect(nearestContainerCell(hopper, 12, 60).index).toBe(0); // over the player's inventory (y = 51...), still slot 0
+    const dispenser = profile('dispenser');
+    expect(nearestContainerCell(dispenser, 62 + 18 + 8, 17 + 18 + 8).index).toBe(4); // the middle of the grid
+    expect(nearestContainerCell(dispenser, 500, 500).index).toBe(8);
+  });
+
+  it('an item dragged onto a hopper lands on one of its five slots; a nudge never leaves them', () => {
+    const d = doc('hopper', item('sword', { slot: 0 }));
+    const scene = sceneOf(d, registry, () => null);
+    const moved = ops.setRects(d, scene, { sword: { x: 400, y: 20, w: 16, h: 16 } }, 'Move layer')!.apply(d).layers[0]!;
+    expect(moved.slot).toBe(4); // a far point lands on the last of the five slots
+    const last = doc('hopper', item('sword', { slot: 4 }));
+    expect(ops.nudge(last, sceneOf(last, registry, () => null), ['sword'], 1, 0)).toBeNull();
+    expect(ops.nudge(last, sceneOf(last, registry, () => null), ['sword'], -1, 0)!.apply(last).layers[0]!.slot).toBe(3);
   });
 
   it('dragging an item to a rectangle over the inventory lands it on a container slot', () => {
-    const d = doc(3, item('sword'));
+    const d = doc('chest_3', item('sword'));
     const scene = sceneOf(d, registry, () => null);
     const command = ops.setRects(d, scene, { sword: { x: 8, y: 140, w: 16, h: 16 } }, 'Move layer')!;
     const moved = command.apply(d).layers[0]!;
@@ -40,7 +60,7 @@ describe('item layers snap to the container only', () => {
   });
 
   it('arrow-key nudges hop one slot and never leave the container', () => {
-    const d = doc(3, item('sword', { slot: 26 }));
+    const d = doc('chest_3', item('sword', { slot: 26 }));
     const scene = sceneOf(d, registry, () => null);
     // already on the last container slot: nowhere further to go, so the nudge is a no-op (no player slot 27)
     expect(ops.nudge(d, scene, ['sword'], 1, 1)).toBeNull();

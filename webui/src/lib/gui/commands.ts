@@ -11,7 +11,6 @@
  */
 import {
   layerIndex,
-  withContainer,
   type GuiDocument,
   type GuiLayer,
   type Json,
@@ -19,10 +18,9 @@ import {
 
 type DocFields = { title?: string; container?: string };
 
-/** The document with these fields set; a container also sets the rows its profile gives (gui.md section 12.4). */
+/** The document with these fields set (a container is one field, gui.md section 12.4). */
 function applyFields(doc: GuiDocument, fields: DocFields): GuiDocument {
-  const next = { ...doc, ...fields };
-  return fields.container !== undefined ? withContainer(next, fields.container) : next;
+  return { ...doc, ...fields };
 }
 
 export interface Command {
@@ -249,7 +247,7 @@ class DocFieldsCommand implements Command {
   }
 }
 
-/** Title or container edits (the canvas height follows the container's rows). */
+/** Title or container edits (the canvas follows the container's profile). */
 export function setDocumentFields(
   doc: GuiDocument,
   fields: DocFields,
