@@ -16,11 +16,11 @@ import java.util.Set;
  *
  * <ul>
  *   <li><b>Rectangle</b> (button, text, image): a slot is covered when the centre of its 16 x 16
- *       interior falls inside the rectangle. Slot {@code n} has its item origin at
- *       {@code (8 + 18·col, 18 + 18·row)}, so its centre is the pixel {@code (16 + 18·col,
- *       26 + 18·row)}; the rectangle is the half-open range {@code [x, x + width) x [y, y + height)}.
+ *       interior falls inside the rectangle. Slot {@code n} has its item origin at the profile's
+ *       {@code slot(n)} (gui.md §12.5.1), so its centre is that origin plus 8 on both axes; the rectangle is
+ *       the half-open range {@code [x, x + width) x [y, y + height)}.
  *       A rectangle that only grazes a slot's edge does not take it.
- *   <li><b>Slot set</b> (item, slot wells): exactly those container slots, clipped to the GUI's rows.
+ *   <li><b>Slot set</b> (item, slot wells): exactly those container slots, clipped to the container's slot count.
  * </ul>
  *
  * <p>The order inside a slot is the layer order reversed, so the topmost layer comes first. A layer

@@ -1,0 +1,13 @@
+container: hopper
+title: <shift:-8><font:shop:gui><#FFFFFF>{E2xx}</font><shift:-169><font:shop:gui/smallcaps_y6><#404040>Orders</font>
+font shop:gui {type=bitmap, file=shop:font/materione/gui/test.png, ascent=43, height=163, chars=[{E2xx}]}
+font shop:gui/smallcaps_y6 {type=space, advances={ =3}}
+font shop:gui/smallcaps_y6 {type=bitmap, file=shop:font/materione/smallcaps.png, ascent=7, height=16, chars=[\u0000!"#$%&'()*+,-./, 0123456789:;<=>?, @ABCDEFGHIJKLMNO, PQRSTUVWXYZ[\]^_, `abcdefghijklmno, pqrstuvwxyz{|}~\u0000]}
+asset assets/shop/textures/font/materione/gui/test.png 176x163 66d187d17e0ffa737e7b9d975979e6299797292e541ff11d909623ee8aa0cfe5
+asset assets/shop/textures/font/materione/smallcaps.png 128x96 3a800a0ac6656933d78ca25a38654fb9778522bc95d988344a039ccdc8dc4897
+slot 0 minecraft:diamond_sword x1
+clicks 0 [sword, wells]
+clicks 1 [wells]
+clicks 2 [tab, wells]
+clicks 3 [tab, wells]
+clicks 4 [wells]

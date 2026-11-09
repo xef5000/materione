@@ -53,6 +53,7 @@ export function renderVector(vector: RasterVector): ArgbCanvas {
     width: vector.canvas.width,
     height: vector.canvas.height,
     rows: profile ? gridRows(profile) : 6,
+    ...(profile ? { container: profile } : {}),
     image: (reference) => images.get(reference) ?? null,
   };
   return flattenRaster(vector.layers, scene);

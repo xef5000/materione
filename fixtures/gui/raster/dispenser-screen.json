@@ -1,0 +1,33 @@
+{
+  "name": "dispenser-screen",
+  "description": "A dispenser GUI: vanilla-corner panel over its whole 176x166 screen, wells for the container (3 x 3 at (62, 17)) and the player inventory (inventory at y = 84, hotbar at y = 142), and a button over four slots.",
+  "canvas": {
+    "width": 176,
+    "height": 166
+  },
+  "container": "dispenser",
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 166,
+      "corners": "vanilla"
+    },
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all"
+    },
+    {
+      "id": "tab",
+      "type": "button",
+      "x": 80,
+      "y": 36,
+      "width": 32,
+      "height": 34
+    }
+  ]
+}

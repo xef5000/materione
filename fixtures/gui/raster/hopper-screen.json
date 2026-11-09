@@ -1,0 +1,33 @@
+{
+  "name": "hopper-screen",
+  "description": "A hopper GUI: vanilla-corner panel over its whole 176x133 screen, wells for the container and the player inventory (inventory at y = 51, hotbar at y = 109), and a button over slots 2 and 3.",
+  "canvas": {
+    "width": 176,
+    "height": 133
+  },
+  "container": "hopper",
+  "layers": [
+    {
+      "id": "frame",
+      "type": "panel",
+      "x": 0,
+      "y": 0,
+      "width": 176,
+      "height": 133,
+      "corners": "vanilla"
+    },
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "all"
+    },
+    {
+      "id": "tab",
+      "type": "button",
+      "x": 80,
+      "y": 20,
+      "width": 40,
+      "height": 16
+    }
+  ]
+}

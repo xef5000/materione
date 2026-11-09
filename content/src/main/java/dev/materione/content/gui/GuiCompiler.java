@@ -94,10 +94,11 @@ public final class GuiCompiler {
 
         boolean dynamicVisuals = GuiVisualCompiler.needed(gui);
         // the open canvas (gui.md §11): the raster is flattened over the art cap and cut to its painted bounds
-        ArgbCanvas background = dynamicVisuals ? null : GuiFlatten.flatten(GuiArt.CAP_X, GuiArt.CAP_Y, GuiArt.CAP_SIZE,
+        GuiArt.Cap cap = GuiArt.Cap.of(gui.container());
+        ArgbCanvas background = dynamicVisuals ? null : GuiFlatten.flatten(cap.x(), cap.y(), GuiArt.CAP_SIZE,
                 GuiArt.CAP_SIZE, gui.layers(), bound, (layer, reason) -> report.skip(gui, layer.id(), reason),
                 layer -> report.clipped(gui, layer.id()));
-        List<GuiArt.Tile> tiles = background == null ? List.of() : GuiArt.cut(background);
+        List<GuiArt.Tile> tiles = background == null ? List.of() : GuiArt.cut(background, gui.container());
 
         var runs = new ArrayList<TextRun>();
         var slots = new LinkedHashMap<Integer, SlotPlacement>();
@@ -133,7 +134,7 @@ public final class GuiCompiler {
                     GuiFonts.tileProvider(namespace, texture, tile, codepoint)));
             art.add(new GuiTitle.ArtGlyph(codepoint, tile.x(), tile.width()));
         }
-        var title = new GuiTitle(namespace);
+        var title = new GuiTitle(namespace, gui.container());
         title.art(art);
         var textFonts = new LinkedHashMap<String, List<Map<String, Object>>>();
         boolean smallcapsUsed = false;
@@ -141,8 +142,8 @@ public final class GuiCompiler {
             title.place(run.x(), run.y(), run.text(), run.font(), run.argb());
             String key = GuiFonts.text(namespace, run.font(), run.y());
             textFonts.computeIfAbsent(key, ignored -> run.font() == TitleSink.Font.SMALLCAPS
-                    ? GuiFonts.smallcaps(namespace, run.y())
-                    : GuiFonts.defaults(run.y()));
+                    ? GuiFonts.smallcaps(namespace, gui.container(), run.y())
+                    : GuiFonts.defaults(gui.container(), run.y()));
             smallcapsUsed |= run.font() == TitleSink.Font.SMALLCAPS;
         }
 
@@ -264,7 +265,7 @@ public final class GuiCompiler {
             return;
         }
         for (TextRun run : collected) {
-            String problem = textProblem(run);
+            String problem = textProblem(gui, run);
             if (problem != null) {
                 report.skip(gui, layerId, problem);
                 return;
@@ -274,7 +275,7 @@ public final class GuiCompiler {
     }
 
     /** Why a run cannot be drawn, or {@code null} when it can. */
-    private static String textProblem(TextRun run) {
+    private static String textProblem(GuiDefinition gui, TextRun run) {
         for (int index = 0; index < run.text().length(); index++) {
             char character = run.text().charAt(index);
             if (RESERVED_TEXT.indexOf(character) >= 0) {
@@ -288,8 +289,9 @@ public final class GuiCompiler {
                         + " font draws printable ASCII only";
             }
         }
-        if (run.font() == TitleSink.Font.DEFAULT && GuiTitle.ascentFor(run.y()) > GuiFonts.VANILLA_ASCII_HEIGHT) {
-            return "default-font text must start on row " + (GuiTitle.ascentFor(0) - GuiFonts.VANILLA_ASCII_HEIGHT)
+        if (run.font() == TitleSink.Font.DEFAULT
+                && GuiTitle.ascentFor(gui.container(), run.y()) > GuiFonts.VANILLA_ASCII_HEIGHT) {
+            return "default-font text must start on row " + GuiTextRules.firstDefaultRow(gui.container())
                     + " or lower, because its glyphs are " + GuiFonts.VANILLA_ASCII_HEIGHT + " px high";
         }
         return null;
@@ -353,10 +355,11 @@ public final class GuiCompiler {
 
         /** {@code MTR-0090}: the layer paints past the art cap. The layer is not skipped. */
         void clipped(GuiDefinition gui, String layerId) {
+            GuiArt.Cap cap = GuiArt.Cap.of(gui.container());
             diagnostics.add(new Diagnostic(
                     DiagnosticCodes.GUI_ART_CLIPPED, Severity.WARN,
-                    "GUI layer '" + layerId + "' paints past the art cap (x " + GuiArt.CAP_X + ".." + GuiArt.CAP_RIGHT
-                            + ", y " + GuiArt.CAP_Y + ".." + GuiArt.CAP_BOTTOM + "); the part outside is clipped",
+                    "GUI layer '" + layerId + "' paints past the art cap (x " + cap.x() + ".." + cap.right()
+                            + ", y " + cap.y() + ".." + cap.bottom() + "); the part outside is clipped",
                     gui.id(), null,
                     "move or shrink the layer so it stays inside the cap; the GUI and the rest of the layer still compile",
                     DiagnosticTarget.field("layers", String.valueOf(authoredIndex(gui, layerId)))));

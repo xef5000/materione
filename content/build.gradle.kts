@@ -23,3 +23,10 @@ sourceSets {
         }
     }
 }
+
+// The container-agnostic ban (GuiContainerAgnosticTest, gui.md §12.5.6) reads the plugin module's GUI sources too, which
+// are not on this module's classpath: declare them so a change there reruns the test instead of hitting the cache.
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootProject.layout.projectDirectory.dir("plugin/src/main/java/dev/materione/plugin/gui"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+}

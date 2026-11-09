@@ -62,6 +62,28 @@ class TitleRendererTest {
     }
 
     @Test
+    void aCentredContainersDynamicTitleEndsWithTheTrailingShiftAndAHoppersDoesNot() {
+        // gui.md §12.5.3: the dynamic title is assembled by the same GuiTitle as the static one, so a dispenser's
+        // ends at origin + 176 - 16 = 168 (here: pen 8 -> -30 -> -9 -> 8 after the art, then to 168), a hopper's at 8
+        var plan = new GuiVisualPlan("shop", List.of(
+                new GuiVisualPlan.Raster("tab", 0, null, List.of(glyph(0xE201, -30, 20, Set.of())), 0)));
+        var program = TitleProgram.compile(RenderFixtures.GUI, plan, RenderFixtures.lookup());
+        var renderer = new TitleRenderer(RenderReporter.SILENT);
+        String dispenser = renderer.render(RenderFixtures.GUI, GuiContainers.byId("dispenser").orElseThrow(),
+                program.program(), RenderFixtures.viewer(1), 0).title();
+        String hopper = renderer.render(RenderFixtures.GUI, GuiContainers.byId("hopper").orElseThrow(),
+                program.program(), RenderFixtures.viewer(1), 0).title();
+        assertThat(hopper).isEqualTo("<shift:-38><font:shop:gui><#FFFFFF></font><shift:17>");
+        assertThat(dispenser).isEqualTo(hopper + "<shift:160>");
+        // and an empty dynamic title (everything hidden) stays empty: the client centres the plain title
+        var hiddenPlan = new GuiVisualPlan("shop", List.of(
+                new GuiVisualPlan.Raster("tab", 0, "player.level > 100", List.of(glyph(0xE201, 0, 20, Set.of())), 0)));
+        var hiddenProgram = TitleProgram.compile(RenderFixtures.GUI, hiddenPlan, RenderFixtures.lookup());
+        assertThat(renderer.render(RenderFixtures.GUI, GuiContainers.byId("dispenser").orElseThrow(),
+                hiddenProgram.program(), RenderFixtures.viewer(1), 0).title()).isEmpty();
+    }
+
+    @Test
     void invalidConditionIsHiddenAndMalformedTextIsReported() {
         var plan = new GuiVisualPlan("shop", List.of(
                 new GuiVisualPlan.Text("bad", 0, "player.level >", 8, 18,

@@ -1,0 +1,16 @@
+{
+  "name": "slots-container-hopper",
+  "description": "Inset slot wells for the container region of a hopper (gui.md section 12.5): five wells in one row at x = 44 + 18*i, y = 20, on the hopper's 176x133 screen.",
+  "canvas": {
+    "width": 176,
+    "height": 133
+  },
+  "container": "hopper",
+  "layers": [
+    {
+      "id": "wells",
+      "type": "slots",
+      "region": "container"
+    }
+  ]
+}

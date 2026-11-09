@@ -91,7 +91,7 @@ public record CompiledGui(
     /**
      * One container slot that takes the player's items.
      *
-     * @param slot the chest slot, 0 at the top-left
+     * @param slot the container slot, 0 at the top-left
      * @param layer the input layer that claims the slot (its topmost layer)
      * @param accept the layer's {@code accept:} as authored, or null to accept anything
      */
@@ -100,7 +100,7 @@ public record CompiledGui(
     /**
      * One filled slot.
      *
-     * @param slot the chest slot, 0 at the top-left, row by row
+     * @param slot the container slot, 0 at the top-left, row by row
      * @param item the Materione item or vanilla material, resolved at apply time
      * @param amount how many, 1 to 64
      */
@@ -111,7 +111,7 @@ public record CompiledGui(
      *
      * @param layerId the layer's id
      * @param order the layer's index in the GUI's layer list: a higher index is a higher layer and wins its slot
-     * @param slot the chest slot
+     * @param slot the container slot
      * @param visibleIf the authored {@code visible_if}, or null when the layer is always shown
      * @param item the parsed item layer: its source, overrides and animation
      */

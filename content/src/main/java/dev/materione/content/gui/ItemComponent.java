@@ -29,10 +29,11 @@ import java.util.Set;
  */
 public final class ItemComponent implements GuiComponent {
 
-    /** The largest chest (six rows) has 54 slots, indexed 0..53. */
-    static final int MAX_SLOT = 53;
+    /** The last slot of the largest container profile (gui.md §12.5.1); the profile of the GUI itself bounds it further. */
+    static final int MAX_SLOT = GuiContainers.all().stream().mapToInt(dev.materione.api.gui.GuiContainer::slotCount)
+            .max().orElseThrow() - 1;
 
-    /** The largest stack a chest slot shows. */
+    /** The largest stack a container slot shows. */
     public static final int MAX_AMOUNT = 64;
 
     private static final Set<String> LORE_MODES = Set.of("replace", "append", "prepend");
@@ -258,7 +259,7 @@ public final class ItemComponent implements GuiComponent {
     /**
      * One parsed item layer.
      *
-     * @param slot the chest slot
+     * @param slot the container slot
      * @param item the item source, or null for an animation
      * @param frames the animation, or null for a single item
      * @param amount how many, as text: a whole number from 1 to 64, or a template
