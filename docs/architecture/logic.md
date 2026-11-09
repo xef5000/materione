@@ -2512,8 +2512,9 @@ by the owner.
     is written in the same compound as the inventory (`Entity.saveWithoutId`, one file replace, [SRV] both pins), so a marker
     changed in the same owner-thread step as the inventory is atomic with it without coordinating any save. What stays
     unavailable is a platform acknowledgment of *when* a snapshot is durable. The design proposes an account in the snapshot
-    plus an exit ledger (G1 to G4 there) and asks the owner (Q1) whether to lift or narrow this block. Until the owner answers,
-    this decision stands as written: #247 and #248 stay blocked, and the shipped journal is still not crash-safe (its
+    plus an exit ledger (G1 to G4 there) and the owner answered (PR #303, design §14 Q1): the block stands until the platform acknowledges saves, and that
+    design is the accepted target once it does (per-layer `durable: required | best_effort`; the cursor exposure accepted;
+    Folia a supported target; death released at `PlayerDeathEvent`). This decision therefore stands as written: #247 and #248 stay blocked, and the shipped journal is still not crash-safe (its
     one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1).
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
