@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
  */
 class ShowcasePackTest {
 
-    static final List<String> GUIS = List.of("shop", "servers", "players", "settings", "confirm");
+    static final List<String> GUIS = List.of("shop", "servers", "players", "settings", "confirm", "hopper", "dispenser");
 
     private static final Map<NamespacedId, VariableDeclaration> DECLARED = Map.of(
             NamespacedId.of("showcase", "show_tips"),
@@ -89,7 +89,7 @@ class ShowcasePackTest {
     }
 
     @Test
-    void theShowcaseHoldsExactlyTheFiveGuisAndTheDeclarations() throws IOException {
+    void theShowcaseHoldsExactlyTheSevenGuisAndTheDeclarations() throws IOException {
         try (Stream<Path> files = Files.list(showcase().resolve("guis"))) {
             assertThat(files.map(p -> p.getFileName().toString()).sorted())
                     .containsExactlyElementsOf(GUIS.stream().sorted().map(name -> name + ".yml").toList());

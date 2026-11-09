@@ -9,6 +9,12 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Containers beyond the chest, closed out (gui.md §12, #295).** A GUI's `container:` now selects a hopper or a dispenser as well as
+  the six chests, and the showcase pack ships a `hopper` and a `dispenser` GUI (`showcase:hopper`, `showcase:dispenser`, opened with
+  `materione gui open`) that show the window type and size, the clicks by slot id, the outside click, a dynamic title on a hopper and the
+  art. The in-game QA catalog gains `guicontainers.*` (nine entries, not yet blessed; blessing runs on main). The as-built GUI and logic
+  docs describe `container:`. **Breaking for unreleased content:** `rows:` is gone (the #290 entry below); a GUI without `container:` is
+  a schema error and an unknown id quarantines that GUI with `MTR-0097`.
 - **The GUI studio draws and edits every container (gui.md §12.7, #294).** A GUI's Screen panel has a **Container** select listing every
   container the server describes (the six chests, the hopper and the dispenser), grouped. The canvas, the slot grid (each container
   slot now shows its own number), the snapping, the inventory veil, the window guides and the "Inventory" label are all drawn from the

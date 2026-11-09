@@ -78,12 +78,12 @@ an explicit **gap**. A gap is not covered by any client run; the reason is given
 
 | §1 row | Demonstrated by | Status |
 |---|---|---|
-| Menu file, id, title | All five showcase GUIs. | Partial. Titles are static in the showcase. A dynamic title (§6.4) has no client entry; `GuiTitleTest` covers it. **Gap.** |
-| Size and container type | `container: chest_1` (servers, settings, confirm) and `container: chest_3` (shop, players). | Covered for the chest, as §1 says. Other containers are profiles (gui.md §12.5.1) that compile; the plugin opens them with row P, so the row lists a hopper and a dispenser when they ship. |
+| Menu file, id, title | All seven showcase GUIs. | Partial. Titles are static in the showcase. A dynamic title (§6.4) has a client entry on the hopper, `guicontainers.hopper-dynamic-title-auto` (not blessed yet); on the chest it has none, and `GuiTitleTest` covers it. **Gap** on the chest. |
+| Size and container type | `container: chest_1` (servers, settings, confirm), `container: chest_3` (shop, players), `container: hopper` (`showcase:hopper`) and `container: dispenser` (`showcase:dispenser`), the last two opened by name with `materione gui open`. | Covered for the chest, the hopper and the dispenser: the `guicontainers.*` entries (window type and size, clicks by slot id, the outside click, the hopper's dynamic title, the art; not blessed yet). Other containers are profiles (gui.md §12.5.1) that compile and that the runtime opens (row P); they get a client entry when they ship. |
 | Open commands and aliases | `showcase:shop` opens with `/shop` (`showcase.shop-open-command`). | Partial. One name per GUI here. Several names: `opencommands.deferred-alias-applies-automatically` (existing). |
 | Open arguments | Shop `category` (choice, default `all`): the console marker carries `category=gems`. | Covered. `suggest:` is not checked client-side. |
 | Open gate | Not in the showcase. `opencommands.failed-requirement-denies-with-its-message` (existing, the `guilogic:opener` GUI). | Covered by an existing entry. The `open.permission` gate has no client entry. **Gap.** |
-| Open, close and refresh hooks | `gui.open` in all five; `gui.close` in the shop; `gui.click_outside` in confirm (`showcase.confirm-click-outside`); `refresh: 20` on the shop; `gui.tick` in servers. | Partial. `gui.tick` is authored and compiled, and no client entry counts its refreshes. **Gap** (the ticker has unit tests). |
+| Open, close and refresh hooks | `gui.open` in all seven; `gui.close` in the shop; `gui.click_outside` in confirm (`showcase.confirm-click-outside`); `refresh: 20` on the shop; `gui.tick` in servers. | Partial. `gui.tick` is authored and compiled, and no client entry counts its refreshes. **Gap** (the ticker has unit tests). |
 | Item forms | Vanilla items in every GUI. | Partial. The `head:` source is `guidynamic.viewer-head` (existing). Materione items, external sources, `player_slot` and templates are not in the showcase, by design (no items in the pack). **Gap.** |
 | Item text and meta | `name` and `lore` on every item layer; lore templated (`${vars.server.showcase.stock}`, `${gui.args.category}`). | Partial. `amount`, `glint` and `lore_mode` have no client entry. **Gap.** |
 | Conditional items | `visible_if` on the sold-out barrier, the tip line and the two toggle overlays. | Covered: `showcase.shop-sold-out`, `showcase.settings-toggle`, `showcase.tip-line-follows-the-toggle` (visual). `guidynamic.conditional-item` (existing). |
@@ -110,7 +110,7 @@ an explicit **gap**. A gap is not covered by any client run; the reason is given
 | Admin commands | `/materione var get|set` in every showcase entry; `/materione gui open` (existing). | Covered. |
 | Extension API | Not demonstrated: the showcase uses built-ins only. | **Gap** at client level. Registries are unit-tested (`BuiltinLogic`, `LogicServiceTest`). |
 
-**Gaps, collected.** The client-level gaps are: a dynamic title; the `open.permission` gate; `gui.tick` refresh counts; Materione item
+**Gaps, collected.** The client-level gaps are: a dynamic title on the chest; the `open.permission` gate; `gui.tick` refresh counts; Materione item
 forms and item meta beyond name and lore; `has_money` and `has_item_space` as conditions; `minimum_requirements`; `as: player` and
 `as: op`; `gui.slot_item`; `give_money` in a live run; `potion`; the delay and chance options; the PlaceholderAPI variable
 expansion; sign and anvil input; the `locked` inventory; and the extension API. Each of these is either covered by an existing
@@ -877,11 +877,11 @@ Each row below names the class of problem, and every one carries a step path whe
 |---|---|
 | Dialogs (#6) | `dialog.submit` is a trigger, `dialog` is an `InputMethod`, and dialog buttons run flows. |
 | HUDs (#7) | `hud.threshold` is a trigger, and `hud.set` is an action. |
-| Non-chest containers | `container:` (gui.md §8, designed in §12). v1 needs no click-kind mapping: the click kinds are Bukkit's and the v1 menus are plain slots. A container's own behaviour (rename, buttons, trades, progress) becomes triggers and components of that container when it is designed. |
+| Non-chest containers | `container:` (gui.md §12). The hopper and the dispenser are built (rows P and S), and the furnaces, the anvil and the rest are later phases with a design each (gui.md §12.3, §12.11). v1 needs no click-kind mapping: the click kinds are Bukkit's and the v1 menus are plain slots. A container's own behaviour (rename, buttons, trades, progress) becomes triggers and components of that container when it is designed. |
 | Cross-resource flow libraries | `call` already takes a namespaced id. |
 | Loops | A `repeat` step with a hard iteration cap, if real menus need it. |
 | Bedrock forms (#24) | A Geyser-side renderer of the same GUI and flows. |
-| Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. |
+| Importing incumbent menus (#17) | Map DeluxeMenus and CommandPanels YAML onto §1's constructs. The container mapping is fixed (gui.md §12.13 item 6): an imported chest menu's `size` maps to `container: chest_N` (N = size / 9), `HOPPER` and `DISPENSER` (and `DROPPER`, the same menu) to `container: hopper` and `container: dispenser`, and an unsupported `inventory_type` is a skipped GUI with a diagnostic, never a chest. |
 | Item and block rules in the node editor | The canvas is resource-agnostic (§8, `AuthoringApi.logic()`). The item studio's rule editor can switch to it. |
 | Currency integrations beyond Vault, XP and the command pair (#213, §18) | An addon registers a `CurrencyIntegration` in its own namespace (`example:coinsengine`, `example:playerpoints`), and a currency file names it. No core change. |
 | The `variable` and `item` currency integrations (§18) | A declared player number variable (#211) and an item count in the inventory. Reserved names; not implemented in #213. |

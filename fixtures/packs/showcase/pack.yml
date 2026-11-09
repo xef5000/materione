@@ -1,6 +1,7 @@
-# The GUI showcase pack (#227, logic.md §1, §34): five GUIs that together demonstrate the parity rows of the GUI
+# The GUI showcase pack (#227, logic.md §1, §34): seven GUIs that together demonstrate the parity rows of the GUI
 # logic model: the shop (with its open command), the server selector, the paged player list with search, the
-# settings toggles and the confirm dialog. It holds no items on purpose: other suites pin the item counts of the
+# settings toggles and the confirm dialog, plus a hopper and a dispenser (gui.md section 12, row Q) that show the
+# container types beyond the chest. It holds no items on purpose: other suites pin the item counts of the
 # packs they load.
 id: showcase
 version: 1.0.0
