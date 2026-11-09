@@ -18,8 +18,8 @@
 
 | Term | Meaning |
 |---|---|
-| **GUI** | One `guis/**/*.yml` resource: a container screen design (v1: a chest of 1–6 rows; other containers are designed in §12). |
-| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. *Replaced by the open canvas of §11 (#274): the compiler (#276) flattens over the art cap, so art may extend past the screen; the studio (#277) and the starter GUI (#278) follow.* The `176 × (114 + rows·18)` is the chest's; a container profile (§12.5.1, design) states the screen size of every other container. |
+| **GUI** | One `guis/**/*.yml` resource: a container screen design. Its `container:` names the profile it is drawn on: a chest of 1–6 rows, a hopper or a dispenser in v1 (§12). |
+| **Canvas** | The full container screen in GUI pixels: `176 × (114 + rows·18)` — top container *and* the player-inventory area, exactly the area of the vanilla screen. *Replaced by the open canvas of §11 (#274): the compiler (#276) flattens over the art cap, so art may extend past the screen; the studio (#277) and the starter GUI (#278) follow.* The `176 × (114 + rows·18)` is the chest's; the container profile (§12.5.1) states the screen size of every container (a hopper's is 176 × 133, a dispenser's 176 × 166). |
 | **Layer** | One entry in the GUI's ordered `layers:` list (bottom → top). Every layer is an instance of one component. |
 | **Component** | A registered layer kind (`gui-components` registry): `panel`, `slots`, `image`, `paint`, `button`, `text`, `item` in v1. Addons register more through the same path. |
 | **Render target** | Where a component's output physically lands in the client: the **raster** background, the **title text**, or a container **slot** (§4). |
@@ -149,7 +149,7 @@ Why these cuts:
   assembler) live in `content` and stay Bukkit-free so the compiler and goldens run headless
   (ban rules unchanged; no new module).
 - **The runtime does not know about components.** It receives a compiled `RuntimeGui`
-  (title component + slot contents + rows) from the shadow swap and renders it through the
+  (title component + slot contents + container profile) from the shadow swap and renders it through the
   existing `PluginGui` kit (runtime-systems §8.1). Adding a component never touches
   `plugin/`.
 - **The studio does not invent a model.** It edits the same `layers:` list, gets component
@@ -395,13 +395,13 @@ only (§9.4).
   Markers: `MATERIONE-GUI-OPENED`, `MATERIONE-GUI-DENIED`, `MATERIONE-GUI-FAILED`.
 - *Live refresh.* After every successful swap, `PipelineService.observeSwaps` runs on the global
   thread (after recipes; a rolled-back apply notifies nobody). `GuiRefreshPlan` compares the two views:
-  a GUI whose compiled view differs (rows, title, or an item's definition hash in a slot) is CHANGED,
+  a GUI whose compiled view differs (container, title, or an item's definition hash in a slot) is CHANGED,
   and one no longer live is REMOVED. Each viewer's region thread then acts on its own window
   only when it shows a changed or removed GUI (since #214 the viewers are the open sessions, and the
   session carries on through a rewrite or a re-open: arguments, variables and the back stack survive,
   logic.md §21 decision 17):
-  - *items only* (same rows and title): the slots are rewritten in place and the window stays;
-  - *title or rows changed*: a new window is opened. The cursor item is lifted off the old window
+  - *items only* (same container and title): the slots are rewritten in place and the window stays;
+  - *title or container changed*: a new window is opened. The cursor item is lifted off the old window
     first and put back on the new one, so closing the old window does not return it to the inventory.
     The player's own inventory is never touched;
   - *no longer live*: the window is closed and the viewer gets a chat note.
@@ -461,12 +461,12 @@ Content for any `guis/**` file.
 | Piece | Where | Notes |
 |---|---|---|
 | Raster mirror | `gui/raster/` | `ArgbCanvas`, `paintRaised`/`paintInset`, `blitScaled`, `flattenRaster`; the canvas preview calls the very function the vectors test |
-| Document model | `gui/model.ts` | the API's own `title`/`rows`/`layers` structure, immutable; unknown fields, layer types and top-level keys ride along; a file with a layer the model cannot hold (no type, missing or duplicate id) opens **read-only** instead of being rewritten. The file is keyed by its resource id (`<id>:` then the fields) and field paths are `[id, 'layers']`; an unkeyed file is read for display only and never written |
+| Document model | `gui/model.ts` | the API's own `title`/`container`/`layers` structure, immutable; unknown fields, layer types and top-level keys ride along; a file with a layer the model cannot hold (no type, missing or duplicate id) opens **read-only** instead of being rewritten. The file is keyed by its resource id (`<id>:` then the fields) and field paths are `[id, 'layers']`; an unkeyed file is read for display only and never written |
 | History | `gui/commands.ts`, `gui/history.ts` | every edit is an invertible command (patch, insert, remove, reorder, document fields, composite); drags commit one command on release; nudges and scrubs coalesce within 900 ms; undoing back to the saved baseline makes the document clean |
 | Canvas rules | `gui/scene.ts`, `snap.ts`, `transform.ts`, `viewport.ts` | bounds, hit testing, snapping (canvas edges and middle, slot grid, sibling edges and centers; whole pixels only), 8-handle resize, zoom 1-16x anchored at the cursor |
 | Compiled order | `gui/scene.ts` | raster layers, then text, then slot items, each in list order; a layer listed on the wrong side of a layer of another target carries a `#n` badge. The relative order of title text and slot items is still the open question of section 9.1, so the studio states the assumption in one place (`TARGET_RANK`) |
 | Registry | `gui/registry.ts` | palette, inspector fields, defaults for a new layer and what may be dragged or resized are all derived from the component descriptions (`guiComponentsOf` over `authoring.describe`; `x`/`y`/`width`/`height` fields mean movable and resizable, `slot` means slot-bound; a layer's `type:` matches the registry id with `materione:` optional); no component list lives in the studio. Cosmetic icons and the bevel style's four colors (a raw map in the schema) are the only studio-side knowledge |
-| Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `rows`, `layers`, and `open` since #225) and `assets: [{ path, data }]` (base64 PNG, via `ops.setFields`) for pixel assets a layer still refers to; a pixels-only save sends empty `edits` |
+| Save | `gui/save.ts` | `authoring.setFields` with the changed top-level fields (`title`, `container`, `layers`, and `open` since #225) and `assets: [{ path, data }]` (base64 PNG, via `ops.setFields`) for pixel assets a layer still refers to; a pixels-only save sends empty `edits` |
 
 Shortcuts: `V` select, `H` hand, `Space` (hold) pan, `0` fit, `1` 100%, `+`/`-` zoom,
 `Ctrl+Z` / `Ctrl+Shift+Z` undo/redo, `Ctrl+D` duplicate, `Del` delete, `Ctrl+A` all, `Ctrl+]`/`[`
@@ -501,7 +501,7 @@ filter and nothing is stored. The studio's `open:` block (§6.1) is edited in th
 | Piece | Where | Notes |
 |---|---|---|
 | Vanilla underlay | `gui/vanilla.ts`, `gui/vanilla-sheet.ts`, `static/vanilla/generic_54.png` | the owner's sheet, composed for 1-6 rows as the client blits it (the top `rows*18+17` rows, then 96 rows from `v = 126`; the last row of the screen stays empty). It is not a layer: it is never listed, saved or in the history. The vitest and the browser spec compare it pixel for pixel with the sheet for every row count |
-| Regions and veil | `gui/vanilla.ts` `veiledScreen`, `gui/open-canvas.ts` | container normal; the player's inventory (`y >= rows*18+17`) under a translucent grey veil (`VEIL`) that lifts **per painted pixel** (any pixel of the composed art with alpha above 0 shows the vanilla pixel at full strength, the neighbours stay veiled); the open space outside the screen has the screen outline and the cap box. The status bar names the region under the pointer. `item` and `list` layers stay container-only |
+| Regions and veil | `gui/vanilla.ts` `veiledScreen`, `gui/open-canvas.ts` | container normal; the player's inventory (`y >= rows*18+17` on a chest; the profile's `inventoryTop` for any container) under a translucent grey veil (`VEIL`) that lifts **per painted pixel** (any pixel of the composed art with alpha above 0 shows the vanilla pixel at full strength, the neighbours stay veiled); the open space outside the screen has the screen outline and the cap box. The status bar names the region under the pointer. `item` and `list` layers stay container-only |
 | The canvas | `GuiCanvas.svelte` | three stacked canvases: the open space (the cap's box), `gui-underlay` (the chest, screen-sized) and `gui-art` (the composed art over the cap: 1024 x 1024, its top-left at GUI pixel -424, -243; `ArgbCanvas` gained an origin for this, `RasterScene` an `originX`/`originY`). Pan and zoom cover the whole cap (`panBy` takes the content's origin); the pixel grid covers what the stage shows. Snapping also pulls to the cap's edges |
 | Guides | `gui/open-canvas.ts` `windowGuide`, toolbar "Window guides" | dashed rectangles for what a 1920 x 1080 window shows around the screen at GUI scales 2, 3 and 4 (§9.12 and §11.5: `leftPos = floor((ceil(W/s) - 176) / 2)`, `topPos = floor((ceil(H/s) - imageHeight) / 2)`), with the margins in the label; off by default, like the slot grid |
 | Paint layers own their box | `gui/paint-geometry.ts`, `gui/pixel-command.ts`, `GuiStudioState` | see *Decisions taken in #277*: x, y, width, height; a stroke runs on a working copy that covers the cap, so it can leave the layer and is clipped to the cap; the layer grows to hold it in the same undo step; **Save trims** every paint layer to its painted pixels (the PNG holds no margin), and the studio adopts the trimmed layer so what is saved is what it holds. A paint layer moves with X and Y and is never dragged to a size |
@@ -1445,14 +1445,17 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 ---
 
-## 12. Containers beyond the chest (#286) — design approved and merged (#287); rows M (#290), C (#291), P (#292) and S (#294) built
+## 12. Containers beyond the chest (#286) — design approved and merged (#287); rows R (#289), M (#290), C (#291), P (#292), S (#294) and Q (#295) built; row A (#293, owner art) open; row B (#296) later
 
 > **Status: the design is approved and merged (#287, all owner questions answered, §12.13, none open, §12.14). Row M is built
 > (#290): `container:` replaces `rows:`, the container profiles are one file (`shared/gui/containers.json`, §12.5.1), and every
 > GUI in the repository is converted. Row R (the in-game probe, #289) is done (§12.2.6). Row C is built (#291): the compiler
 > is profile-driven for every container, hopper and dispenser included (§12.5.7). Row P is built (#292): the runtime opens
 > every GUI by the profile's `open` descriptor. Row S is built (#294): the studio draws every profile, with a container select
-> in the Screen panel and a generated diagram under a container that has no owner art (§12.7 as built).** The chest, the hopper
+> in the Screen panel and a generated diagram under a container that has no owner art (§12.7 as built). Row Q is built (#295):
+> the QA catalog entries for the hopper and the dispenser (`guicontainers.*`, §12.8 as built), the showcase's two GUIs, and the
+> as-built notes of logic.md §1, §1.1 and §11 and this document. Row A (the owner's sheets, #293) and row B (the user's own jar,
+> #296) remain.** The chest, the hopper
 > and the dispenser work end to end. The consistency edits of this design to §1, §2, §4, §6,
 > §8 and §11 are one-line pointers; they change no behaviour.
 >
@@ -2046,6 +2049,16 @@ part of this design.
   over the art, items over art), and the studio canvas for each container. Showcase: a hopper GUI and a dispenser GUI join
   `fixtures/packs/showcase`.
 
+**As built (#295, row Q).** The QA entries are `qa/catalog/guicontainers.mjs`, nine in all. A hopper opens as a `HopperMenu` of 41 slots
+(five container slots and the player inventory) and a dispenser as a `DispenserMenu` of 45; a click on each slot id runs its rule once
+and the server names the id; a click outside (slot -999) runs `gui.click_outside`; the hopper's title text follows the server stock with
+no reopen; the dispenser's `titleLabelX` is 8; and two `visual` entries capture the art for the verdict. They drive `showcase:hopper` and
+`showcase:dispenser` (`fixtures/packs/showcase/guis/`), which are opened by name with `materione gui open` and have no open command. The
+showcase now holds seven GUIs, and `ShowcasePackTest` pins them. No golden moved: the showcase is in no golden (the editor demo reads
+`sample` and `world`), and the pack count is unchanged. The entries are not blessed; blessing runs on main (qa/README.md). Importer (#17):
+no importer doc exists yet (docs/architecture/README.md lists the importer specs as still to be written), so the mapping above is recorded
+in logic.md §11 ("Importing incumbent menus") and posted on the issue.
+
 ### 12.9 Decisions this design takes
 
 Each is reversible by the owner (the owner's own are in §12.13).
@@ -2079,7 +2092,7 @@ effort, regular implementation on Haiku.
 | **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor. **Built (#292, §12.6 as built): `MTR-0098` is its one new code; the IT is opt-in (`harness.containerGuiFloor`)** | M | Haiku |
 | **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row shipped first (#294) | owner (§12.13 item 3) | owner / Haiku for C. **Open for the owner**: the `hopper` and `dispenser` sheets; the studio uses them as soon as `webui/static/vanilla/<sheet>.png` exists |
 | **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high. **Built (#294, §12.7 as built)**: option C ships now; the select stages a switch and states its cost; the New GUI dialog stays a name field |
-| **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
+| **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku. **Done (#295, §12.8 as built)** |
 | **B** (later) | Underlay from the user's jar | Option B of §12.7, approved as the follow-up once the type count grows | after v1 | Sonnet, high |
 
 R, M and A can start together. R (#289) did not refute U1, so C ships the hopper and the dispenser (§12.2.6); had it refuted U1, C would have shipped the hopper only and the dispenser been re-filed as phase 2.
@@ -2159,6 +2172,6 @@ jar this machine lacks, can add.
 
 ### 12.14 Still open
 
-None. All owner questions are answered (§12.13); the design awaits final approval to merge, after which the rows of §12.10
-are filed.
+None. All owner questions are answered (§12.13) and the design is merged (#287). Row A (#293, the owner's hopper and dispenser
+sheets) and row B (#296, the user's own jar) are open implementation rows, not design questions (§12.10).
 
