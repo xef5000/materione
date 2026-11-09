@@ -6,11 +6,12 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); nothing here is built.** The owner's answer to the first
-> question is that **the work stays blocked until the platform acknowledges saves**: #247 stays open, #248 (the
-> transactional consume-incoming trash action) stays **blocked**, and this document is the **accepted target** to build
-> once that acknowledgment exists — it does not unblock either. Until then logic.md §25 decision 12 stands: input slots
-> are enabled and **best-effort**, and nothing may be described as crash-safe.
+> **Status: design, answered by the owner on PR #303 (§14); nothing here is built.** The owner first kept the work
+> blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
+> read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
+> to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
+> (row X), not on an outside ack. Nothing is built yet, so logic.md §25 decision 12 still describes the code: input slots
+> are enabled and **best-effort**, and nothing may be described as crash-safe until rows M, L, P, B and H are green on main.
 >
 > Traceability: **D1** (§9: the escrow is runtime player state, not content, and creates no second source of truth for
 > content); **D4/D6** (the feature is runtime plumbing under the one ECA engine and the one GUI pipeline; no flow reaches
@@ -65,7 +66,7 @@ clicks and drags are applied by the server after the handler returns, so they mi
 | W4 | logic.md §6.5 and §25 decision 8: items "go back on every end of a session"; "nothing is ever deleted unless a flow says so" | **False in two paths, unproved in a third** | *Death:* `ServerPlayer.die` computes the drop list from the inventory, fires `PlayerDeathEvent`, and only then calls `closeContainer(DEATH)` [SRV, both pins]; our close handler therefore hands the window's items to a player whose death drops are already fixed — with `keepInventory=false` they most likely vanish at respawn [U: the clearing step was not traced]. *Overflow:* what does not fit is `dropItemNaturally`'d; a world entity is a different store from the player's data, so a crash after the drop and before the save, or an entity that despawns, or a cancelled spawn, deletes or duplicates (W6). *Cursor:* an item picked up from an input slot is on the cursor, in neither the journal nor any save (the owner accepted this exposure, G5). |
 | W5 | `GuiJournal.mirror` / `restore` catch `RuntimeException` and log one warning | **Silent loss of protection** | A failure to record leaves the window unprotected with the player unaware and the click already applied. Fail-soft is right for content (D6); it is wrong for an ownership transfer, which must fail *closed*: refuse the transfer. |
 | W6 | `restore` on join: "gives back what the journal still holds, once" | **Not idempotent under overflow** | `restore` clears the journal in the live data, hands items to `InputReturns.giveBack`, which drops what does not fit. Crash again before the next save: the saved data still has the journal *and* a dropped entity may already be in the world. |
-| W7 | logic.md §25 decision 12: "A separate plugin journal or `.dat` replacement cannot coordinate subsequent server saves" and "A server extension must coordinate all saves … acknowledge an ordered asynchronous write before interaction resumes" | **Too broad, in one respect** | True that the platform gives no acknowledged save and that the plugin cannot order a write against the server's. **Not true that this makes plugin-side crash-safety impossible:** the player's persistent data is serialised *in the same compound as the inventory* and written in one file replace (§3 F1, F3). A marker in that data is therefore atomic with the inventory *by construction*, with no coordination, if the plugin changes both in one owner-thread step. What genuinely stays unavailable is a platform acknowledgment of *when* a snapshot is durable — which only matters for the optional barrier (tier 3). This design uses that. The owner's answer (§14 Q1): the block nevertheless stands until the platform acknowledges saves, and this design is the accepted target once it does. |
+| W7 | logic.md §25 decision 12: "A separate plugin journal or `.dat` replacement cannot coordinate subsequent server saves" and "A server extension must coordinate all saves … acknowledge an ordered asynchronous write before interaction resumes" | **Too broad, in one respect** | True that the platform gives no acknowledged save and that the plugin cannot order a write against the server's. **Not true that this makes plugin-side crash-safety impossible:** the player's persistent data is serialised *in the same compound as the inventory* and written in one file replace (§3 F1, F3). A marker in that data is therefore atomic with the inventory *by construction*, with no coordination, if the plugin changes both in one owner-thread step. What genuinely stays unavailable is a platform acknowledgment of *when* a snapshot is durable — which only matters for the optional barrier (tier 3). This design uses that. The owner first kept the block until a platform acknowledgment existed (§14 Q1), then ruled that the tier-3 barrier is that acknowledgment (§14 Q1b) and lifted the block. |
 
 Corrections made in the same PR as this document: the logic.md wording of W2, W4 and W7 (§25 decisions 8 and 12 carry
 a pointer here). The Javadoc text of W1/W2 is a **comment-only** fix that lives in the module the QA ledger's `covers`
@@ -93,7 +94,7 @@ Gradle cache; **SRV** — the Paper server jars the harness and the probe alread
 | **F9** | `AsyncPlayerPreLoginEvent` is fired off the main thread, before the player exists (it knows the UUID), so IO may run in it. | API | ✔ | ✔ |
 | **F10** | `ServerPlayer.die`: drop list from `getInventory().getContents()` → `CraftEventFactory.callPlayerDeathEvent` (fires the event, then drops the list) → `closeContainer(DEATH)`. | SRV | ✔ | ✔ (`die` signature differs; same order read) |
 | **F11** | A kill of the JVM (`destroyForcibly`/`kill -9`) cannot interrupt a `rename` half-way on the platforms we run on, and data already `write()`n to the OS survives it (page cache) — so for **process** crashes a completed `write`+`rename` is durable without `fsync`. | U (OS semantics, not Paper) | probe §11 | probe §11 |
-| **F12** | **Folia:** the thread that runs the player's save is the same one that runs `Entity` scheduler tasks (so a plugin step and a save cannot interleave). **Folia must be supported for every layer (§14 Q9), so this is a target to prove, not a reason to refuse.** | **U** — no Folia jar is on this machine; fetching one for P1 needs the owner's approval and none was downloaded | probe §11 | probe §11 |
+| **F12** | **Folia:** the thread that runs the player's save is the same one that runs `Entity` scheduler tasks (so a plugin step and a save cannot interleave). **Folia must be supported for every layer (§14 Q9), so this is a target to prove, not a reason to refuse.** | **U** — no Folia jar is on this machine; the owner approved fetching one for P1 (§14 Q9b); none was downloaded in this pass | probe §11 | probe §11 |
 | **F13** | `ItemStack.serializeAsBytes`/`deserializeBytes` (Paper) round-trip a stack including its data version, and are what `GuiJournal` already uses. | API / REPO | ✔ | ✔ |
 | **F14** | `spigot.yml` `players.disable-saving` is readable at enable (a file read off-thread) and equals `disablePlayerDataSaving` (F1). | SRV (field) / API (`Spigot#getSpigotConfig`, deprecated for removal) | ✔ | ✔ |
 
@@ -111,7 +112,7 @@ death can do. F6 is why the next-tick mirror is a real hole. F12 is the one genu
 |---|---|
 | **A. Mirror everything into the PDC synchronously (today's journal, minus the one-tick hole).** | Atomic with the inventory by F3; no IO, no latency. Correct *as rollback to a snapshot*. Cannot by itself keep a **consumption** from being rolled back (G2), cannot track overflow without a world drop, cannot detect that its own record was lost. **Kept as tier 1 — it is the anchor.** |
 | **B. A plugin file as the escrow (items live in `storage/`).** | A file write and a player save are two durable steps with no common commit; the protocol that makes them safe is write-ahead plus a marker *in the player's data* — i.e. A plus a log, with IO on the hot path of every click. Rejected as the primary store. |
-| **C. Server-side checkpoint extension (the earlier "needs" in logic.md §25.12).** | Would give an acknowledged save, at the price of a server patch/agent every operator must install. Not needed for G1–G4; only tier 3 wants an acknowledgment, and §5.4 builds one from `saveData()` plus a read-back. Whether that read-back counts as the "platform acknowledgment" that lifts the block is the owner's call (§14, still open). |
+| **C. Server-side checkpoint extension (the earlier "needs" in logic.md §25.12).** | Would give an acknowledged save, at the price of a server patch/agent every operator must install. Not needed for G1–G4; only tier 3 wants an acknowledgment, and §5.4 builds one from `saveData()` plus a read-back. The owner ruled that this read-back *is* the acknowledgment that lifts the block (§14 Q1b). |
 | **D. Call `Player.saveData()` after every transfer.** | Synchronous disk IO on the owner thread per click: violates D8 and the budget (§9 of plugin.md). Allowed only as the approved, rate-limited tier-3 barrier (a D8 exception, §13). |
 | **E. Pre-login gating alone.** | Gives recovery-before-interaction (used, §5.7) but no online checkpoint. |
 
@@ -205,7 +206,8 @@ the click is cancelled, `MTR-0102`, the player is told (I7).
 3  owner:  on ack, re-enter the owner thread via the scheduling gateway; if the player is online and E is still
            in the account as EXITING(T): delete E (tier-1 step: slot cleared, account−E, gen++)
            otherwise: nothing (the decision is durable; recovery finishes it — §5.7)
-4  async:  append DONE(T) (best effort; only for pruning and diagnostics)
+4  async:  once the barrier (tier 3) has acknowledged a snapshot with gen ≥ g(E), append DONE(T) — only then is the
+           exit *acknowledged*; before that it is decided (durable, applied live) but still exposed to G3's rollback case
 ```
 
 *The decision point is the CRC-valid `INTENT` record.* Before it: a crash returns E (recovery sees `EXITING` with no
@@ -220,14 +222,15 @@ That is a rollback, not a duplicate (no second copy exists), **but** if the cons
 that pays money after consuming), the effect survived the rollback. #248's trash has no effect. For effect-carrying
 exits, **tier 3**:
 
-**Tier 3 — the barrier (approved by the owner, §14 Q4; built in row B once the block lifts).** Before the effect, require proof that a snapshot with `gen ≥ g(E)` is on disk:
+**Tier 3 — the barrier, which is the acknowledgment (owner-approved §14 Q4; ruled to be the platform acknowledgment that lifts the block, §14 Q1b; row B).** Before the effect, require proof that a snapshot with `gen ≥ g(E)` is on disk:
 (a) wait for it (the next autosave; minutes), or (b) request one: on the owner thread call `Player.saveData()` once per
 player per `escrow.barrier.cooldown` (default 5 s) — this is the *platform's own* save, bounded in cost to what the
 autosave already pays per player, and the only synchronous IO this design asks for. **This is an explicit, owner-approved exception to D8**
 (recorded in §13 and as an amendment note on D8 in architecture.md, effective when row B ships) — then confirm by **reading the file back** off-thread (parse the gzip NBT, read `BukkitValues → materione:gui_escrow`,
 compare `gen`). The read-back is the acknowledgment the platform does not provide (`saveData` is `void`, F1); a failed
-or stale read-back means "not yet", never "assume". It applies only to exits that carry an effect; #248's trash does not
-need it. The exception is narrow: one `Player.saveData()` per player per cooldown, only for such exits, and never on a
+or stale read-back means "not yet", never "assume". Every tier-2 exit is acknowledged by it (step 4: `DONE`, and the end of its G3 exposure), and an exit that
+carries an *effect* additionally **waits** for it before the effect runs. #248's trash has no effect, so it does not
+wait: the player sees the deletion at step 3, the acknowledgment follows within the cooldown. The exception is narrow: one `Player.saveData()` per player per cooldown, only for such exits, and never on a
 tier-1 or recovery path.
 
 ### 5.5 What every action does
@@ -365,6 +368,7 @@ records that completed. "Kill" = `kill -9` at that instant; the next boot runs �
 | **K20** | **Plugin disable / `/reload`** with windows open | releases ran before the server's save | as K8 | `onDisable` is synchronous tier 1. |
 | **K21** | **Pickup** (slot → cursor), kill with the stack on the cursor | `S'` (stack in `A`) before the pickup step, or `S''` (gone from `A`) after a save that followed it | before a save of the pickup: the stack is returned (rollback, as K5); after it: **the stack is lost** | G5: the cursor is in no save (F4); owner-accepted (§14 Q3). The one row where the answer is "loss", and it is vanilla's. |
 | **K22** | **Placement** (cursor → slot) | `S` with no entry (the stack was on the cursor), or `S'` with it HELD | nothing owed, or returned once | The step creates the entry atomically with the cursor reduction; a kill before it is the vanilla cursor case (G5), after it K2. |
+| **K23** | **Barrier**: kill after `saveData()` before the read-back confirms, or the read-back finds an older `gen` | the snapshot may or may not contain E's exit; `INTENT(T)` without `DONE` | an effect-carrying exit's effect **never ran** (it waits for the acknowledgment); recovery applies the `INTENT` as K11/K12 | "Not acknowledged" is never read as "acknowledged" (§5.4); the effect is delivered at most once and only after the decision and the snapshot are both durable. |
 
 Rows K10–K14 are the answer to "does the delete happen exactly once": it happens iff `INTENT` is durable, applied by the
 live step 3 or by recovery, and a record applied twice is a no-op because the entry id is gone.
@@ -376,7 +380,7 @@ live step 3 or by recovery, and a record applied twice is a no-op because the en
 * **#218 (shipped):** its click policy, `accept:`, `gui.slot_change` before the change, `SlotPolicy`/`Transfers`/
   `InputSlots` stay. What changes is *how a result is applied* (one tier-1 API instead of "let the server apply, mirror
   later") and what is recorded (the account instead of the flat journal). `gui.slot_change` still fires pre-move.
-* **#248 (blocked):** its "share the recoverable ownership transaction with the durability follow-up" is §5.4 tier 2;
+* **#248 (unblocked by the lift of the block, waits for rows M, L, P, B, H):** its "share the recoverable ownership transaction with the durability follow-up" is §5.4 tier 2;
   "stage consumption against the incoming amount, effective only after every check for the whole move passes" is step 1
   (nothing is removed from the source until every check passed, and the removal is the tier-1 step that creates E);
   "prevent stale/delayed/out-of-context requests and duplicate consumption" is §5.5's stale rule plus the entry-id
@@ -400,7 +404,7 @@ at most once per player per minute. `doctor` lists the capability result and any
 | **Model-based property test** | Random sequences of {move-in, move-out, swap, close, overflow, consume, quit, death, reload} × a **crash at every step boundary** × **every earlier snapshot** as the saved one; the oracle checks G1–G3 after recovery. The seed set is committed; failures print the seed. | this is the executable form of the K table; it also replays K19 against the *old* design as a negative control |
 | **Golden fixtures** | Account v1 and ledger v1 as hex goldens (empty, one HELD, OWED+EXITING, a torn tail, a bad CRC, a newer version, the legacy `gui_inputs`); decode→encode is byte-identical; N−1 accepted, N+1 opaque. The corpus only grows (roadmap rule 2). | `fixtures/escrow/` |
 | **Ban tests** | owner-side half has no `java.io`/`java.nio.file`/`Future#get`; IO half has no Bukkit entity import; no `dropItemNaturally` in the input package; no `mirrorNextTick`. | plugin.md §11 style |
-| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K22 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. Needs spike R1 (a headless player). |
+| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. Needs spike R1 (a headless player). |
 | **Probe loop (local)** | The same boundaries with a real client on 26.1.2 for the ones a fake player cannot show (cursor, UI messages, hotbar swaps). | local only (CLAUDE.md) |
 | **QA catalog** (`qa/catalog/guiescrow.mjs`) | `guiescrow.refused-unsupported` (auto: the layer is inert, message line, `MTR-0100`), `guiescrow.owed-claim` (auto: full inventory, close, `/materione claim`), `guiescrow.recovery-message` (auto: the join line after a runner-side `kill`), `guiescrow.pickup-lifts-to-cursor` (visual: the stack lifts as in vanilla and the account loses it in the same step), `guiescrow.death-release` (auto: `keepInventory` on/off). | blessed on main; kill/restart needs a `probe.mjs` server-restart verb (row Q) |
 | **Perf** | `EscrowPerfTest`: a 27-stack account encode ≤ 200 µs on the owner thread (added to plugin.md §9 by row P); a tier-1 step allocates no IO. | budget enforced in CI |
@@ -428,13 +432,13 @@ consumed* is the ledger. Neither duplicates the other, and recovery is defined f
    any platform where the account exists.
 3. Downgrade: an older plugin ignores `gui_escrow`; a player whose account holds entries would not get them back until
    upgraded again — documented, and `doctor` lists accounts with entries.
-4. None of this ships while the block stands (§14 Q1).
+4. Nothing ships until rows M, L, P, B and H are green on main; the block no longer gates it (§14 Q1b).
 
 ## 11. Unverified, and the probe that settles each
 
 | # | Claim | Why unverified | Probe |
 |---|---|---|---|
-| **P1** | **F12:** on Folia the player save and `executeEntity` tasks share a thread | no Folia jar on this machine; **fetching one needs the owner's approval, still open** (§14); none was downloaded | row R2 on a Folia jar the owner supplies or approves. Folia must be supported (Q9): P1 either confirms F12 or designs the Folia mechanism (§5.8) |
+| **P1** | **F12:** on Folia the player save and `executeEntity` tasks share a thread | no Folia jar on this machine; **the owner approved fetching one** (§14 Q9b); none was downloaded in this pass | row R2 on a Folia jar the owner supplies or approves. Folia must be supported (Q9): P1 either confirms F12 or designs the Folia mechanism (§5.8) |
 | **P2** | **F11:** a completed `write`+`rename` survives `destroyForcibly` | OS semantics, not Paper | the K-row IT (it kills the JVM at every boundary) |
 | **P3** | **W4/F10:** `keepInventory=false` — what becomes of stacks released by the close after the death event; and that appending to `PlayerDeathEvent#getDrops()` drops them and `keepInventory=true` keeps the returned ones | the clearing step of the dead inventory was not traced | row R3, both gamerule values |
 | **P4** | A fake-connection player on the 1.21.4 harness is enough for `PlayerDataStorage` saves, PDC, `InventoryClickEvent`/`DragEvent` and `closeContainer` | not tried | row R1 (the whole IT depends on it; fallback is the local probe loop only) |
@@ -449,16 +453,17 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | Row | Title | Scope | Depends on | Model |
 |---|---|---|---|---|
 | **D0** | Claims correction | Javadoc/comment-only fix of W1/W2 in `InputJournal`, `GuiJournal`, `GuiWindowListener`; re-bless note for `guilogic.input-slots`. Docs half is in this PR. | none | Haiku |
-| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a jar the owner approves fetching, and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high |
+| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high |
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI) |
-| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K22. | R, P | Sonnet, high |
+| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23. | R, P | Sonnet, high |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
-| **B** | Barrier (tier 3, owner-approved) | `saveData()` rate limit + read-back ack; the D8 exception's code is this row only; ban-test allowlist for exactly one call site. | P | Sonnet, high |
+| **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high |
 | **T** (follow-up) | Admin tooling | `/materione escrow <player>` (list, force-return, force-drop). Out of scope here (§14 Q11). | P | later |
-| **X** | #248 consume-incoming action | Unblocked only when P and H are green on main **and the platform acknowledges saves** (§14 Q1). Not part of this design. | P, H | per #248 |
+| **X** | #248 consume-incoming action | Starts when rows M, L, P, B and H are green on main (the block was lifted, §14 Q1b, so no outside acknowledgment is awaited). Not part of this design. | M, L, P, B, H | per #248 |
+| **F** | Folia platform axis in the harness and the QA suite | **Design note only; not implemented.** The owner approved fetching a Folia jar for P1 (§14 Q9b) and noted the whole QA suite may need to run on Folia. (1) `:harness` gains a platform axis `paper \| folia` beside the existing pin mechanism (`gradle/libs.versions.toml` pin, sha256-verified download, Gradle cache): each existing IT is parameterised, the log-marker contract is unchanged, and `PaperEscrowCrashIT` runs on both. (2) The probe server gains a platform choice (a Folia 26.x build, if one exists for the probe pin [U]); the QA runner records the platform in each ledger entry's `env`, so a pass on Paper never counts as a pass on Folia, and `plan` lists due tests per platform. (3) Tests whose steps assume the Bukkit main thread (RCON-driven `give`, `tp`, teleports to an anchor) get a Folia path or a documented skip with a reason. (4) Open: whether Folia ships builds for both pins; the size of the suite's Folia gaps is found by running it, which is row R2's first output. Its own issue, not folded into #247. | R2 | Sonnet, high |
 
 ## 13. Decisions this design takes
 
@@ -482,7 +487,8 @@ The owner answered the eleven questions of the first draft on PR #303. Each answ
 
 | # | Question | Owner answer | Folded into |
 |---|---|---|---|
-| 1 | Lift or narrow the block on #247/#248? | **No: wait for a platform acknowledgment.** The work stays blocked; this design is the accepted target once the platform acks. | Status, §2 W7, §6, §10, row X; logic.md §25 decision 12 (status unchanged) |
+| 1 | Lift or narrow the block on #247/#248? | First answer: **no, wait for a platform acknowledgment** (superseded by 1b). | Status, §2 W7 |
+| 1b | Does the tier-3 barrier count as the platform acknowledgment? (follow-up) | **Yes. The block on #247 and #248 is lifted.** #248 now waits on rows M, L, P, B and H, not on an outside ack. | Status, §2 W7, §5.4 (step 4, K23), §6, §10, rows B and X; logic.md §25 decision 12 |
 | 2 | Per-layer or global durability setting? | **Per-layer `durable: required \| best_effort`.** | §5.8, §10, row S, §13.11 |
 | 3 | Cursor handling | **Accept the vanilla cursor exposure**: no pickup-into-inventory redirect, no lien mode; document it honestly as a non-guarantee. | §1 (non-goals, G1, G5), I3, §5.5, K21/K22, §13.4 |
 | 4 | Tier-3 barrier | **Yes**, with the D8 exception recorded explicitly. | §5.4, §5.6, §13.9, row B, architecture.md D8 note |
@@ -491,11 +497,12 @@ The owner answered the eleven questions of the first draft on PR #303. Each answ
 | 7 | Caps | **256 KiB account, 54 entries.** | §5.3, §5.4 |
 | 8 | Diagnostic codes | **Start at `MTR-0100`**: `MTR-0100` to `MTR-0103`, still proposed and unassigned (read as: the block starts at 0100, one earlier than the draft). | §5.9, plugin.md §5, gui.md §12.4 |
 | 9 | Folia | **Must be supported for all layers.** The capability design is "probe and support Folia", not "refuse until probed". | F12, §5.8, §11 P1, row R2, §13.7 |
+| 9b | May a Folia jar be fetched for P1? (follow-up) | **Yes, approved.** The owner notes the whole QA suite may need to run on Folia too. | F12, §11 P1, rows R2 and F |
 | 10 | Death | **Release at `PlayerDeathEvent`** (into the inventory or the drops per the event, before the drops are fixed). | §5.5, K9, §13.10 |
 | 11 | Admin tooling | **Follow-up**, out of scope. | §5.9 (`MTR-0101`), row T |
 
-**Still open** (owner actions or decisions, none of which this document can close):
+**Still open** (none of which this document can close):
 
-1. **Fetching a Folia jar for probe P1 needs the owner's approval.** None was downloaded. Until P1 runs, Folia's F12 is unproven and Folia is "not yet probed" for `required` layers.
-2. **Does the tier-3 read-back count as the "platform acknowledgment" that lifts the block?** The owner approved the barrier (Q4) and kept the block until the platform acks (Q1); this design does not assume the first satisfies the second.
+1. **The Folia jar has not been fetched.** The owner approved it (Q9b); it is row R2's first step (a sha256-pinned download like the other pins), not part of this design pass. Until P1 runs, F12 is unproven on Folia.
+2. **The size of the Folia work in the QA suite** is unknown until the suite runs there (row F, a separate issue); whether Folia has builds for both pins is unchecked [U].
 3. The probes P2 to P4 of §11 (kill durability, `keepInventory` on death, a fake-connection harness player) are not run; they are row R.
