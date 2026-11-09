@@ -250,6 +250,9 @@ export default [
     },
   }),
 
+  // RE-BLESS ON MAIN (#305, design docs/architecture/gui-input-durability.md §12 row D0): InputJournal, GuiJournal and
+  // GuiWindowListener, which this entry covers, had comment-only Javadoc corrections (no behaviour change). Any blessing
+  // recorded before that change is stale on the covers rule; the next main swarm re-blesses it. Do not bless from a branch.
   test({
     id: 'guilogic.input-slots',
     title: 'guilogic:trade accepts and returns corpus:gem_red, rejects dirt without moving it, conserves cursor and inventory items on player close and reopen, and leaves an empty click as a no-op',
