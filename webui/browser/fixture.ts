@@ -19,6 +19,7 @@ async function startFixture(): Promise<void> {
     gui: params.has('gui'),
     logic: params.has('logic'),
     economy: params.has('economy'),
+    noContainers: params.has('noContainers'),
     seed: params.get('seed') ?? '',
     rows: Number(params.get('rows')) || 0,
   });

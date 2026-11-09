@@ -9,6 +9,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The GUI studio draws and edits every container (gui.md §12.7, #294).** A GUI's Screen panel has a **Container** select listing every
+  container the server describes (the six chests, the hopper and the dispenser), grouped. The canvas, the slot grid (each container
+  slot now shows its own number), the snapping, the inventory veil, the window guides and the "Inventory" label are all drawn from the
+  container's profile, so a hopper (176 x 133, slots 0-4) and a dispenser (176 x 166, a 3 x 3 grid) are edited exactly like a chest.
+  Where no owner-drawn vanilla art exists for a container (today the hopper and the dispenser) the screen under your layers is a
+  generated diagram, labelled as such; dropping `webui/static/vanilla/<sheet>.png` in is all a container needs to get art. Choosing
+  another container first states in one line what the switch would flag (from the server's verdict) and then applies as a single undo
+  step that rewrites only the `container:` line and moves, resizes or deletes no layer. The older Rows buttons are gone: they also
+  resized a frame panel that spanned the screen, which a container switch no longer does. The help text of the Panel and Slots
+  components no longer says "chest".
 - **A hopper or a dispenser GUI compiles through the same code as a chest (gui.md §12.5, #291).** The compiler reads everything about the
   screen from the container's profile (`shared/gui/containers.json`): the slot table, the click areas, the item, list and slot layers, the
   title's origin, the art cap and the preview height. A dispenser's client screen centres its title, so its compiled title now ends with one

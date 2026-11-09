@@ -442,7 +442,7 @@ canvas tool, not a form.
 - **Truthful preview**: the canvas renders through the shared raster (§4) plus the
   first-party font, in compiled target order.
 - **Layers**: drag to reorder, visibility, lock, rename, duplicate, delete; a new GUI starts
-  with no layers: the title and the rows, nothing else (§11.2, built in #278). The vanilla chest is the client's own, and the studio draws the owner's reference art under it (§11, #277). A new **panel** starts with `corners: vanilla`. Other containers (§12.7, design) draw their own screen under the same canvas, from a container profile.
+  with no layers: the title and the container, nothing else (§11.2, built in #278). The vanilla chest is the client's own, and the studio draws the owner's reference art under it (§11, #277). A new **panel** starts with `corners: vanilla`. Other containers (§12.7, design) draw their own screen under the same canvas, from a container profile.
 - **Components palette**: add any registered component; unknown addon components get a
   schema-derived inspector automatically.
 - **Paint tools** on `paint` layers reuse the `pixels.ts` engine (brush, eraser, fill,
@@ -1445,15 +1445,15 @@ templates*; this records what they mean for the GUI studio. Each decision is rev
 
 ---
 
-## 12. Containers beyond the chest (#286) — design approved and merged (#287); rows M (#290), C (#291) and P (#292) built
+## 12. Containers beyond the chest (#286) — design approved and merged (#287); rows M (#290), C (#291), P (#292) and S (#294) built
 
 > **Status: the design is approved and merged (#287, all owner questions answered, §12.13, none open, §12.14). Row M is built
 > (#290): `container:` replaces `rows:`, the container profiles are one file (`shared/gui/containers.json`, §12.5.1), and every
 > GUI in the repository is converted. Row R (the in-game probe, #289) is done (§12.2.6). Row C is built (#291): the compiler
 > is profile-driven for every container, hopper and dispenser included (§12.5.7). Row P is built (#292): the runtime opens
-> every GUI by the profile's `open` descriptor. Row S (the studio's container select) is not built yet.** Until it lands,
-> the studio does not draw a hopper or dispenser GUI (it shows the reason and edits nothing); the plugin compiles and opens
-> them. The chest works end to end. The consistency edits of this design to §1, §2, §4, §6,
+> every GUI by the profile's `open` descriptor. Row S is built (#294): the studio draws every profile, with a container select
+> in the Screen panel and a generated diagram under a container that has no owner art (§12.7 as built).** The chest, the hopper
+> and the dispenser work end to end. The consistency edits of this design to §1, §2, §4, §6,
 > §8 and §11 are one-line pointers; they change no behaviour.
 >
 > **The governing rule (owner, §12.13 item 5): the system is agnostic of the container type.** The chest is the default
@@ -1907,8 +1907,8 @@ in the title and the art cap:
 every profile; `GuiTitleOriginTest` pins the trailing shift (positive, negative, absent, idempotent `build()`); `TitleRendererTest`
 pins the dynamic title; `GuiAuthoringApiTest` the preview's height per container. Four new shared vectors (`hopper-screen`,
 `dispenser-screen`, `slots-container-hopper`, `slots-container-dispenser`) are rendered by the Java compiler's flatten and by the
-studio's raster (which reads the profile through `profileCells` when a scene carries one; the studio's own scene still passes
-rows until row S). **The ban** is `GuiContainerAgnosticTest`: in the GUI sources of `content`, `api` and `plugin`, outside
+studio's raster (which reads the profile through `cellsOf`; the studio's own scene passed rows until row S, which removed that
+path: every scene now carries the profile). **The ban** is `GuiContainerAgnosticTest`: in the GUI sources of `content`, `api` and `plugin`, outside
 comments and string contents, no identifier `rows`, no `% 9` or `/ 9`, no `176` or `114`, and no `"chest` literal. Its allow-list
 is the `rows` that are not container rows (glyph sheets, the art tile grid, the entries of a list layer) and `GuiType`'s
 `NEW_GUI_CONTAINER`, the one default a New GUI starts with. No existing compiled-output golden or vector changed.
@@ -1967,7 +1967,7 @@ set the repair cost to 0), never left to vanilla.
 
 ### 12.7 The studio
 
-**Canvas and underlay.** `chest.ts` (28 sites), `open-canvas.ts` (20), `model.ts`, `vanilla.ts`, `studio.svelte.ts`,
+**Canvas and underlay.** *(As built in #294: see the table after "New GUI" below.)* `chest.ts` (28 sites), `open-canvas.ts` (20), `model.ts`, `vanilla.ts`, `studio.svelte.ts`,
 `scene.ts`, `snap.ts`, `GuiCanvas.svelte`, the inspector and the layers panel read `rows` and `canvasHeight(rows)`. They
 read the **profile** instead: slot cells and their numbers (the slot grid overlay shows the container's own ids), snap
 targets, `screenRect`, `inventoryTop`, `regionAt`, the window guides, the decoration-only rule (`coversContainerSlot`) and
@@ -2010,6 +2010,19 @@ part of this design.
 **New GUI.** The starter document is `title` and `container:`; the New GUI dialog offers every profile and starts on
 `chest_3`. The scaffold text is mirrored in `core` and `web` and pinned by a golden, so the change is made there once
 (row M).
+
+**As built (#294, row S).** The studio draws every profile with the same code; the ban below keeps it that way.
+
+| Part | As built |
+|---|---|
+| The reader | `chest.ts` is gone: its geometry (`canvasSize`, `cellsOf`, `slotCell`, `nearestContainerCell`, `wellRect`, `itemRect`) lives in `webui/src/lib/gui/containers.ts` next to the profile file's reader, every function taking a `ContainerProfile`. `studioDraws` is removed. `GuiDocument` has no `rows`; `Scene`, `RasterScene` and the snap sources carry the profile; `open-canvas.ts` (`screenRect`, `regionAt`, `windowGuide`, `clickReach`, `coversContainerSlot`, `decorationNote`) reads `width`, `height` and `inventoryTop` from it. A GUI whose `container:` the studio does not know is read-only and draws the default profile |
+| The canvas | The screen size, the slot cells and their numbers (the slot-grid overlay writes each container slot's own id in its well), the snap targets, the veil boundary (`inventoryTop`), the window guides and the ghost "Inventory" label (`inventoryLabel`) are the profile's. The art cap is the shared 1024-px box of §12.5.4 |
+| The underlay | `underlay.ts` composes the screen from the profile's blit list. When every sheet a blit names exists (`webui/static/vanilla/<sheet>.png`, found by file name, so adding a container's sheet is dropping the PNG in), the owner's art is blitted (option A); otherwise a generated diagram is drawn (option C: a flat cool-grey frame, a well at every container and player slot, a note "Generated diagram, vanilla art not shown" above the screen). The chests have `generic_54.png`; the hopper and the dispenser are the diagram until their sheets land (row A). The player's part is veiled from `inventoryTop` in both. The eyedropper reads the owner's art only: a diagram is not vanilla colour |
+| The select | The Screen panel's **Container** select offers the profiles `authoring.describe` lists in `guiContainers` (`guiContainersOf`, grouped by the profile's `group`; an id the studio has no profile for is not offered). A server that lists none gets a disabled select and a note |
+| The switch | Choosing a container **stages** it: the panel states the cost in one line and offers **Switch to X** and **Cancel**. The cost is the server's own verdict: the studio sends `gui.validate` the document with the target container and words the layers it newly flags (`switch-cost.ts`: "On Hopper, 2 item layers use slots it does not have; they are kept and skipped until you move them."); with no `gui` capability the line says the cost cannot be shown and that no layer changes. Applying is one `setDocumentFields` command (one undo step, label "Switch to X") that rewrites only `container:`; the status bar repeats the line. The earlier row control also resized a frame panel that spanned the canvas: that was a layer edit and is gone, per §12.9 item 8 (the author resizes it). The line counts layers; a rule's `slot:` (`MTR-0021`) is the Logic tab's verdict, not this line's |
+| New GUI | The scaffold (`container: chest_3`, row M) opens drawn and selectable like any container. The New GUI dialog still asks only for a name; the author picks another container in the Screen panel afterwards (the design's "dialog offers every profile" was not built: it would be a second route to the same one-line edit) |
+| The ban | `webui/test/gui-container-studio.spec.ts` scans `webui/src/lib/gui` and `webui/src/lib/studio/gui`, outside `containers.ts` and outside comments and string contents: no identifier `rows` (allow-list: the glyph sheets and the layers panel's own list), no `% 9` or `/ 9`, no `176` or `114`, and the word `chest` nowhere in code, strings or markup. The help text of the `panel` and `slots` components (compiler-side, §3) was made container-neutral, which moved the editor demo golden |
+| Tests | Unit: the profile reader for every container, the underlay and the diagram, the switch cost words, item snapping on a hopper and a dispenser, a hopper file's lossless round-trip. Playwright (`gui-containers.pw.ts`): the select and its groups, hopper and dispenser canvases (size, slot ids, veil row, label, diagram note), the cost line before and after, a switch and its single undo (document and writes untouched), the saved file differing by the one line, the older-server and no-verdict cases, the starter. QA catalog: `guicontainerstudio.*`. Screenshots of the studio on a hopper, a dispenser and the staged switch: `docs/screenshots/gui-containers/studio-*.png` |
 
 ### 12.8 Logic, importer and QA
 
@@ -2064,8 +2077,8 @@ effort, regular implementation on Haiku.
 | **M** | Model, profiles and the conversion | `container:` replaces `rows:` in the schema and `GuiType.parse` (required; `MTR-0097` for an unknown id); the profile data file (six chest entries, hopper, dispenser; `open`, `underlay`) with Java and TS readers and its golden; `guiContainers` in `describe`; `GuiComponentConfiguration` and `CompiledGui` carry the profile; the scaffold change in `core` and `web`. **The conversion, in this row:** every `rows:` of a GUI becomes `container: chest_N` in the same change: `fixtures/gui/*.yml` and `fixtures/gui/open-canvas`, `fixtures/packs/*/guis` (showcase, guilogic, guitext, opencanvas, overlay), the built-in `plugin/src/main/resources/builtin-packs/materione/guis/browser.yml`, `harness/protocol/floor.yml`, YAML embedded in Java and TS tests and runners (`content`, `core`, `pack`, `plugin`, `harness`, `web`, `webui` demo data and specs), the vector generator, the goldens they regenerate (`editor-demo-snapshot.json` and the pack-output goldens), and the docs' examples (gui.md §2, logic.md). Glyph sheets and the satchel item have their own `rows` that are not GUI rows and stay. The CHANGELOG entry states the breaking change and why it is acceptable (GUIs are unreleased). A grep-based test fails the build on any GUI file with `rows:` | none | Haiku for the sweep, Sonnet reviews the parser |
 | **C** | Compiler | The profile-driven slot table, click map, `ItemComponent`/`ListSlots`/`SlotsComponent`, `GuiTitle`/`TitleRenderer` origin and the trailing shift, the per-profile cap, the render/preview height, the underlay as a blit list, goldens and vectors for hopper and dispenser, the ban test (no `rows`, no `"chest"` outside the profile data); **no compiled-output golden changes** (the conversion in M moves only the goldens that echo a file's `rows:`) | M; R for the dispenser | Sonnet, high. **Done (#291, §12.5.7)** |
 | **P** | Plugin runtime | `PluginGui`/`GuiMenu`/`BukkitWindowHost` open from the profile's `open` descriptor, `GuiRefreshPlan` and `RuntimeGuis` compare profile ids, `RuntimeApi.GuiView`, diagnoser messages, router unit tests with a 5-slot and a 9-slot top, a harness IT on the 1.21.4 floor. **Built (#292, §12.6 as built): `MTR-0098` is its one new code; the IT is opt-in (`harness.containerGuiFloor`)** | M | Haiku |
-| **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row can ship first | owner (§12.13 item 3) | owner / Haiku for C |
-| **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high |
+| **A** | Underlay art | The owner's `hopper` and `dispenser` sheets and README entries (option A), or the generated diagram (option C), which the studio row shipped first (#294) | owner (§12.13 item 3) | owner / Haiku for C. **Open for the owner**: the `hopper` and `dispenser` sheets; the studio uses them as soon as `webui/static/vanilla/<sheet>.png` exists |
+| **S** | Studio | The container select (all profiles, grouped, from `guiContainers`), the profile-driven canvas (`chest.ts` becomes the profile reader; `model.ts` drops `rows` and its clamping), slot grid, snap, regions, guides, ghost label and cap, the underlay from the blit list (A or C), the switch UX and its one-line cost, the starter dialog (`container: chest_3`), `webui` specs; **no `if chest` in any of it** | M; C for the verdict text | Sonnet, high. **Built (#294, §12.7 as built)**: option C ships now; the select stages a switch and states its cost; the New GUI dialog stays a name field |
 | **Q** | Close-out | QA catalog entries (§12.8), showcase hopper and dispenser, logic.md §1/§1.1/§11 and gui.md as-built notes (the shipped sections stop saying `rows:`), plugin.md §5 rows, importer note on #17 (chest size to `chest_N`; unsupported types skipped) | R, C, P, S | Haiku |
 | **B** (later) | Underlay from the user's jar | Option B of §12.7, approved as the follow-up once the type count grows | after v1 | Sonnet, high |
 

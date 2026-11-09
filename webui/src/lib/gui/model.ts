@@ -1,13 +1,13 @@
 /**
  * The studio's document model for a GUI file (gui.md section 2). It is not a
- * second model: a document is the same `title` / `rows` / `layers` structure
+ * second model: a document is the same `title` / `container` / `layers` structure
  * the authoring API returns, held immutably, and every layer is the plain
  * record the YAML holds. The studio never invents fields and never drops the
  * ones it does not know (master 5.6): unknown layer fields, unknown layer
  * types and unknown top-level keys ride along untouched, and a document that
  * was never edited serializes to a value equal to what was loaded.
  */
-import { containerProfile, gridRows, NEW_GUI_CONTAINER, studioDraws, supportedContainerIds, type ContainerProfile } from './containers';
+import { containerProfile, drawingProfile, NEW_GUI_CONTAINER, supportedContainerIds, type ContainerProfile } from './containers';
 
 export type Json = Record<string, unknown>;
 
@@ -18,8 +18,6 @@ export interface GuiDocument {
   readonly title: string;
   /** The container profile the GUI is designed in (gui.md section 12.4): the value the file holds. */
   readonly container: string;
-  /** The slot grid's rows of `container`, derived from its profile: the canvas geometry is drawn from it. */
-  readonly rows: number;
   readonly layers: readonly GuiLayer[];
   /** Every other top-level key, preserved verbatim (never interpreted). */
   readonly rest: Readonly<Json>;
@@ -106,23 +104,18 @@ export function parseGui(parsed: unknown, rootId: string): ParsedGui | null {
     seen.add(id);
   }
   // The container is the file's value, kept as authored. An unknown one quarantines the GUI on the server (MTR-0097),
-  // so the studio says so and edits nothing; a container the studio does not draw yet is shown read-only the same way.
+  // so the studio says so and edits nothing. Every known container is drawn, from its profile.
   const container = typeof body.container === 'string' ? body.container : '';
-  const profile = containerProfile(container);
-  if (!profile) {
+  if (!containerProfile(container)) {
     blocking.push(container
       ? `container ${container} is not a supported container (the supported ones: ${supportedContainerIds()})`
-      : 'container is missing or not a string (the GUI needs container: chest_3 or another supported container)');
-  } else if (!studioDraws(profile)) {
-    blocking.push(`the studio does not draw the ${profile.id} container yet (it is opened by its inventory type)`);
+      : `container is missing or not a string (the GUI needs container: ${NEW_GUI_CONTAINER} or another supported container)`);
   }
-  const rows = profile ? gridRows(profile) : gridRows(containerProfile(NEW_GUI_CONTAINER)!);
   const { title: _title, container: _container, layers: _layers, ...rest } = body;
   return {
     doc: {
       title: typeof body.title === 'string' ? body.title : '',
       container,
-      rows,
       layers,
       rest: clone(rest),
       order: Object.keys(body),
@@ -135,7 +128,7 @@ export function parseGui(parsed: unknown, rootId: string): ParsedGui | null {
 
 /**
  * The document as the structure the API stores: the original keys in their
- * original order, with `title`, `rows` and `layers` replaced by the current
+ * original order, with `title`, `container` and `layers` replaced by the current
  * values. A field the file never had (a missing `title`) is not invented
  * unless it was edited to something other than its empty default.
  */
@@ -200,31 +193,34 @@ export function sameDocument(a: GuiDocument, b: GuiDocument): boolean {
 }
 
 /**
- * The document with another container (gui.md section 12.4): the value is set and the derived rows follow its
- * profile. Switching never edits a layer; the studio reports what no longer fits (gui.md section 12.13 item 8).
+ * The document with another container (gui.md section 12.4): the one line changes and nothing else. Switching never
+ * edits a layer; the studio reports what no longer fits (gui.md section 12.13 item 8).
  */
 export function withContainer(doc: GuiDocument, container: string): GuiDocument {
-  const profile = containerProfile(container);
-  return { ...doc, container, rows: profile ? gridRows(profile) : doc.rows };
+  return { ...doc, container };
 }
 
 /**
- * A starter GUI (gui.md section 11.2): a title and a container and no layers. The vanilla chest is the client's own,
- * drawn under the GUI by the studio, so a new GUI has no art and costs nothing in the pack. A new GUI starts on
- * `chest_3` (gui.md section 12.4).
+ * A starter GUI (gui.md section 11.2): a title and a container and no layers. The container's screen is the client's
+ * own, drawn under the GUI by the studio, so a new GUI has no art and costs nothing in the pack. A new GUI starts on
+ * the default container (gui.md section 12.4).
  */
 export function starterDocument(container: string = NEW_GUI_CONTAINER, title = ''): GuiDocument {
-  return withContainer({
+  return {
     title,
     container,
-    rows: 0,
     layers: [],
     rest: {},
     order: ['title', 'container', 'layers'],
-  }, container);
+  };
 }
 
 /** The profile of a document's container, or undefined when the studio does not know it. */
 export function profileOf(doc: GuiDocument): ContainerProfile | undefined {
   return containerProfile(doc.container);
+}
+
+/** The profile the canvas draws a document in: its container's, else the default (a GUI with an unknown container is read-only). */
+export function drawingProfileOf(doc: Pick<GuiDocument, 'container'>): ContainerProfile {
+  return drawingProfile(doc.container);
 }

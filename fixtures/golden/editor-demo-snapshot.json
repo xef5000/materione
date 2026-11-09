@@ -7056,7 +7056,7 @@
     },
     "guiComponents": [
       {
-        "description": "A raised frame: the chest background, or any large raised area behind other layers",
+        "description": "A raised frame: the screen background, or any large raised area behind other layers",
         "displayName": "Panel",
         "id": "materione:panel",
         "parameters": [
@@ -7094,7 +7094,7 @@
           },
           {
             "advanced": false,
-            "description": "Width in GUI pixels (a chest is 176)",
+            "description": "Width in GUI pixels (the container screens are 176 wide)",
             "example": "176",
             "id": "width",
             "label": "Width",
@@ -7109,7 +7109,7 @@
           },
           {
             "advanced": false,
-            "description": "Height in GUI pixels (a three-row chest is 168)",
+            "description": "Height in GUI pixels (the screen's own height depends on the container)",
             "example": "168",
             "id": "height",
             "label": "Height",
@@ -7129,13 +7129,13 @@
               "vanilla"
             ],
             "default": "square",
-            "description": "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the chest's own rounded corners, pixel for pixel)",
+            "description": "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the vanilla screen's own rounded corners, pixel for pixel)",
             "example": "square",
             "id": "corners",
             "label": "Corners",
             "options": [
               {
-                "description": "The chest's rounded corners (new panels start here)",
+                "description": "The vanilla screen's rounded corners (new panels start here)",
                 "label": "Vanilla",
                 "value": "vanilla"
               },
@@ -7186,7 +7186,7 @@
             "label": "Region",
             "options": [
               {
-                "description": "The chest's own slots",
+                "description": "The container's own slots",
                 "label": "Container",
                 "value": "container"
               },

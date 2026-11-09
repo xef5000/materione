@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { canvasHeight } from '../src/lib/gui/chest';
+import { containerProfile } from '../src/lib/gui/containers';
 import type { GuiDocument, GuiLayer } from '../src/lib/gui/model';
 import {
   ART_CAP,
@@ -20,7 +20,6 @@ import {
   DECORATION_PARTLY,
   insideCap,
   intersectRects,
-  inventoryTop,
   isClickable,
   regionAt,
   screenRect,
@@ -34,16 +33,23 @@ import { blendOver } from '../src/lib/gui/raster/canvas';
 import { flattenRaster } from '../src/lib/gui/raster/flatten';
 import { coversScreen, hitTest, layerBounds, layersInRect, sceneOf } from '../src/lib/gui/scene';
 import { collectTargets, snapMove } from '../src/lib/gui/snap';
-import { composeVanilla, INVENTORY_HEIGHT, INVENTORY_V, VEIL, veiledScreen } from '../src/lib/gui/vanilla';
+import { composeDiagram, composeUnderlay, hasArt, VEIL, veiledScreen } from '../src/lib/gui/underlay';
 import { centered, panBy } from '../src/lib/gui/viewport';
 import { decodePng } from './helpers/png';
 import { registry } from './helpers/gui-registry';
 
 const SHEET = decodePng(new Uint8Array(readFileSync(fileURLToPath(new URL('../static/vanilla/generic_54.png', import.meta.url)))));
 const RED = 0xffff0000;
+/** The owner's sheet by the name the chest profiles' blits give. */
+const SHEETS = new Map([['generic_54', SHEET]]);
+/** Where the sheet's player-inventory part starts and how tall it is (the second blit of every chest profile). */
+const INVENTORY_V = 126;
+const INVENTORY_HEIGHT = 96;
+const chest = (rows: number) => containerProfile(`chest_${rows}`)!;
+const vanillaOf = (rows: number) => composeUnderlay(chest(rows), SHEETS).screen;
 
 function documentOf(layers: GuiLayer[], rows = 6): GuiDocument {
-  return { title: '', container: `chest_${rows}`, rows, layers, rest: {}, order: ['title', 'container', 'layers'] };
+  return { title: '', container: `chest_${rows}`, layers, rest: {}, order: ['title', 'container', 'layers'] };
 }
 
 describe('the art cap and the regions (gui.md section 11.2)', () => {
@@ -63,18 +69,18 @@ describe('the art cap and the regions (gui.md section 11.2)', () => {
     expect(clipToCap({ x: 700, y: 0, w: 10, h: 10 })).toBeNull();
   });
 
-  it('knows the container, the player inventory (y >= rows * 18 + 17) and the open space', () => {
-    expect(screenRect(6)).toEqual({ x: 0, y: 0, w: 176, h: 222 });
-    expect(inventoryTop(6)).toBe(125);
-    expect(inventoryTop(1)).toBe(35);
-    expect(regionAt(6, 10, 124)).toBe('container');
-    expect(regionAt(6, 10, 125)).toBe('player');
-    expect(regionAt(6, 175, 221)).toBe('player');
-    expect(regionAt(6, 176, 10)).toBe('outside');
-    expect(regionAt(6, -1, 10)).toBe('outside');
-    expect(regionAt(6, 10, 222)).toBe('outside');
-    expect(regionAt(1, 10, 34)).toBe('container');
-    expect(regionAt(1, 10, 35)).toBe('player');
+  it('knows the container, the player inventory (y >= the profile inventoryTop) and the open space', () => {
+    expect(screenRect(chest(6))).toEqual({ x: 0, y: 0, w: 176, h: 222 });
+    expect(chest(6).inventoryTop).toBe(125);
+    expect(chest(1).inventoryTop).toBe(35);
+    expect(regionAt(chest(6), 10, 124)).toBe('container');
+    expect(regionAt(chest(6), 10, 125)).toBe('player');
+    expect(regionAt(chest(6), 175, 221)).toBe('player');
+    expect(regionAt(chest(6), 176, 10)).toBe('outside');
+    expect(regionAt(chest(6), -1, 10)).toBe('outside');
+    expect(regionAt(chest(6), 10, 222)).toBe('outside');
+    expect(regionAt(chest(1), 10, 34)).toBe('container');
+    expect(regionAt(chest(1), 10, 35)).toBe('player');
   });
 
   it('joins and cuts rectangles; an empty one adds nothing', () => {
@@ -87,7 +93,7 @@ describe('the art cap and the regions (gui.md section 11.2)', () => {
 
 describe('the player-window guides (gui.md section 9.12 and 11.5)', () => {
   it('reproduce the measured margins of a 6-row screen at 1920 x 1080', () => {
-    const [two, three, four] = windowGuides(6);
+    const [two, three, four] = windowGuides(chest(6));
     expect(two!.margin).toEqual({ top: 159, bottom: 159, left: 392, right: 392 });
     expect(three!.margin).toEqual({ top: 69, bottom: 69, left: 232, right: 232 });
     expect(four!.margin).toEqual({ top: 24, bottom: 24, left: 152, right: 152 });
@@ -97,14 +103,14 @@ describe('the player-window guides (gui.md section 9.12 and 11.5)', () => {
   });
 
   it('give a 1-row screen 45 more px above and below', () => {
-    expect(windowGuide(1, 2).margin.top).toBe(159 + 45);
-    expect(windowGuide(1, 4).margin.top).toBe(24 + 45);
-    expect(windowGuide(1, 2).margin.left).toBe(392);
+    expect(windowGuide(chest(1), 2).margin.top).toBe(159 + 45);
+    expect(windowGuide(chest(1), 4).margin.top).toBe(24 + 45);
+    expect(windowGuide(chest(1), 2).margin.left).toBe(392);
   });
 
   it('can describe the small windows too', () => {
-    expect(windowGuide(6, 3, { w: 1280, h: 720 }).margin).toMatchObject({ top: 9, left: 125 });
-    expect(windowGuide(6, 2, { w: 854, h: 480 }).margin).toMatchObject({ top: 9, left: 125 });
+    expect(windowGuide(chest(6), 3, { w: 1280, h: 720 }).margin).toMatchObject({ top: 9, left: 125 });
+    expect(windowGuide(chest(6), 2, { w: 854, h: 480 }).margin).toMatchObject({ top: 9, left: 125 });
   });
 });
 
@@ -117,30 +123,30 @@ describe('clickable layers outside the container are decoration only (gui.md sec
   });
 
   it('is decided by the geometry of the screen alone', () => {
-    expect(clickReach({ x: 10, y: 10, w: 20, h: 20 }, 3)).toBe('inside');
-    expect(clickReach({ x: 0, y: 0, w: 176, h: 168 }, 3)).toBe('inside');
-    expect(clickReach({ x: 200, y: 10, w: 20, h: 20 }, 3)).toBe('outside');
-    expect(clickReach({ x: -5, y: 10, w: 20, h: 20 }, 3)).toBe('partial');
-    expect(clickReach({ x: 10, y: 160, w: 20, h: 20 }, 3)).toBe('partial'); // 3 rows is 168 tall
+    expect(clickReach({ x: 10, y: 10, w: 20, h: 20 }, chest(3))).toBe('inside');
+    expect(clickReach({ x: 0, y: 0, w: 176, h: 168 }, chest(3))).toBe('inside');
+    expect(clickReach({ x: 200, y: 10, w: 20, h: 20 }, chest(3))).toBe('outside');
+    expect(clickReach({ x: -5, y: 10, w: 20, h: 20 }, chest(3))).toBe('partial');
+    expect(clickReach({ x: 10, y: 160, w: 20, h: 20 }, chest(3))).toBe('partial'); // 3 rows is 168 tall
   });
 
   it('the note names click_outside, only for clickable layers placed outside', () => {
-    expect(DECORATION_ONLY).toContain('clicks outside the chest arrive as click_outside');
-    expect(decorationNote(true, { x: 200, y: 20, w: 10, h: 10 }, 3)).toBe(DECORATION_ONLY);
-    expect(decorationNote(true, { x: 160, y: 20, w: 40, h: 10 }, 3)).toBe(DECORATION_PARTLY); // covers the last column of slots, then leaves the screen
-    expect(decorationNote(true, { x: 10, y: 20, w: 10, h: 10 }, 3)).toBeNull(); // over a slot
-    expect(decorationNote(false, { x: 200, y: 20, w: 10, h: 10 }, 3)).toBeNull();
-    expect(decorationNote(true, null, 3)).toBeNull();
+    expect(DECORATION_ONLY).toContain('clicks outside the screen arrive as click_outside');
+    expect(decorationNote(true, { x: 200, y: 20, w: 10, h: 10 }, chest(3))).toBe(DECORATION_ONLY);
+    expect(decorationNote(true, { x: 160, y: 20, w: 40, h: 10 }, chest(3))).toBe(DECORATION_PARTLY); // covers the last column of slots, then leaves the screen
+    expect(decorationNote(true, { x: 10, y: 20, w: 10, h: 10 }, chest(3))).toBeNull(); // over a slot
+    expect(decorationNote(false, { x: 200, y: 20, w: 10, h: 10 }, chest(3))).toBeNull();
+    expect(decorationNote(true, null, chest(3))).toBeNull();
   });
 
   it('is the compiler rule (MTR-0092): a clickable layer whose rectangle covers no container slot', () => {
     // a 3-row chest has slots at x = 8 + 18 c, y = 18 + 18 r, 16 x 16; the gap between two slots and the player inventory cover none
-    expect(coversContainerSlot({ x: 8, y: 18, w: 1, h: 1 }, 3)).toBe(true);
-    expect(coversContainerSlot({ x: 24, y: 18, w: 2, h: 16 }, 3)).toBe(false); // the two pixels between slot 0 and slot 1
-    expect(coversContainerSlot({ x: 8, y: 100, w: 100, h: 20 }, 3)).toBe(false); // the player's inventory
-    expect(decorationNote(true, { x: 24, y: 18, w: 2, h: 16 }, 3)).toBe(DECORATION_NO_SLOT);
-    expect(decorationNote(true, { x: 8, y: 100, w: 100, h: 20 }, 3)).toBe(DECORATION_NO_SLOT);
-    expect(decorationNote(true, { x: 8, y: 18, w: 160, h: 52 }, 3)).toBeNull(); // the whole container
+    expect(coversContainerSlot({ x: 8, y: 18, w: 1, h: 1 }, chest(3))).toBe(true);
+    expect(coversContainerSlot({ x: 24, y: 18, w: 2, h: 16 }, chest(3))).toBe(false); // the two pixels between slot 0 and slot 1
+    expect(coversContainerSlot({ x: 8, y: 100, w: 100, h: 20 }, chest(3))).toBe(false); // the player's inventory
+    expect(decorationNote(true, { x: 24, y: 18, w: 2, h: 16 }, chest(3))).toBe(DECORATION_NO_SLOT);
+    expect(decorationNote(true, { x: 8, y: 100, w: 100, h: 20 }, chest(3))).toBe(DECORATION_NO_SLOT);
+    expect(decorationNote(true, { x: 8, y: 18, w: 160, h: 52 }, chest(3))).toBeNull(); // the whole container
   });
 });
 
@@ -152,8 +158,9 @@ describe('the vanilla underlay (gui.md section 11.2)', () => {
   });
 
   it.each([1, 2, 3, 4, 5, 6])('composes %i rows as the client blits them: top rows*18+17, then 96 rows from v = 126', (rows) => {
-    const screen = composeVanilla(SHEET, rows);
-    expect([screen.width, screen.height]).toEqual([176, canvasHeight(rows)]);
+    const screen = vanillaOf(rows);
+    expect([screen.width, screen.height]).toEqual([176, chest(rows).height]);
+    expect(composeUnderlay(chest(rows), SHEETS).kind).toBe('art');
     const top = rows * 18 + 17;
     for (let y = 0; y < top; y++) for (let x = 0; x < 176; x++) expect(screen.get(x, y), `top ${x},${y}`).toBe(SHEET.get(x, y));
     for (let y = 0; y < INVENTORY_HEIGHT; y++) {
@@ -164,7 +171,7 @@ describe('the vanilla underlay (gui.md section 11.2)', () => {
   });
 
   it('a 6-row screen is the sheet, but for the row between the two blits and the last row', () => {
-    const screen = composeVanilla(SHEET, 6);
+    const screen = vanillaOf(6);
     let different = 0;
     for (let y = 0; y < 222; y++) for (let x = 0; x < 176; x++) if (screen.get(x, y) !== SHEET.get(x, y)) different++;
     // the sheet's row 125 is dropped and everything below it moves up a row: the rest of the screen differs only where the rows differ
@@ -173,7 +180,7 @@ describe('the vanilla underlay (gui.md section 11.2)', () => {
   });
 
   it('a 1-row screen has the container part of the sheet then its inventory part, 132 px tall', () => {
-    const screen = composeVanilla(SHEET, 1);
+    const screen = vanillaOf(1);
     expect(screen.height).toBe(132);
     expect(screen.get(8, 34)).toBe(SHEET.get(8, 34));
     expect(screen.get(8, 35)).toBe(SHEET.get(8, 126));
@@ -181,12 +188,12 @@ describe('the vanilla underlay (gui.md section 11.2)', () => {
 });
 
 describe('the veil lifts per painted pixel', () => {
-  const rows = 3;
-  const vanilla = composeVanilla(SHEET, rows);
-  const top = inventoryTop(rows);
+  const profile = chest(3);
+  const vanilla = vanillaOf(3);
+  const top = profile.inventoryTop;
 
   it('veils exactly the opaque vanilla pixels of the inventory part and nothing above it', () => {
-    const out = veiledScreen(vanilla, rows, () => false);
+    const out = veiledScreen(vanilla, profile, () => false);
     for (let y = 0; y < vanilla.height; y++) {
       for (let x = 0; x < 176; x++) {
         const v = vanilla.get(x, y);
@@ -199,7 +206,7 @@ describe('the veil lifts per painted pixel', () => {
 
   it('lifts it under a painted pixel and only there; the vanilla pixels around it stay veiled', () => {
     const painted = new Set(['20,' + (top + 10), '21,' + (top + 10), '20,' + (top + 11)]);
-    const out = veiledScreen(vanilla, rows, (x, y) => painted.has(`${x},${y}`));
+    const out = veiledScreen(vanilla, profile, (x, y) => painted.has(`${x},${y}`));
     for (const key of painted) {
       const [x, y] = key.split(',').map(Number) as [number, number];
       expect(out.get(x, y), key).toBe(vanilla.get(x, y)); // full strength: the vanilla colour itself
@@ -209,13 +216,13 @@ describe('the veil lifts per painted pixel', () => {
   });
 
   it('paint above the inventory part changes nothing: the container is never veiled', () => {
-    const out = veiledScreen(vanilla, rows, () => true);
+    const out = veiledScreen(vanilla, profile, () => true);
     expect(out.equals(vanilla)).toBe(true);
   });
 
   it('does not touch the vanilla canvas it was given', () => {
     const before = vanilla.clone();
-    veiledScreen(vanilla, rows, () => false);
+    veiledScreen(vanilla, profile, () => false);
     expect(vanilla.equals(before)).toBe(true);
   });
 });
@@ -240,7 +247,7 @@ describe('a canvas with an origin', () => {
       { id: 'out', type: 'panel', x: -300, y: -100, width: 20, height: 10 },
       { id: 'under', type: 'panel', x: 590, y: 770, width: 50, height: 50 },
     ];
-    const flat = flattenRaster(layers, { width: 1024, height: 1024, originX: -424, originY: -243, rows: 3, image: () => null });
+    const flat = flattenRaster(layers, { width: 1024, height: 1024, originX: -424, originY: -243, container: chest(3), image: () => null });
     expect(flat.get(-300, -100) >>> 24).toBe(0); // the panel's cut corner
     expect(flat.get(-299, -100) >>> 24).toBe(255);
     expect(flat.get(-281, -91) >>> 24).toBe(0);
@@ -254,7 +261,7 @@ describe('a canvas with an origin', () => {
     bitmap.set(0, 0, RED);
     bitmap.set(2, 1, RED);
     const layers = [{ id: 'art', type: 'paint', image: 'gui/a', x: 50, y: -20, width: 3, height: 2 }];
-    const flat = flattenRaster(layers, { width: 1024, height: 1024, originX: -424, originY: -243, rows: 3, image: () => bitmap });
+    const flat = flattenRaster(layers, { width: 1024, height: 1024, originX: -424, originY: -243, container: chest(3), image: () => bitmap });
     expect(flat.get(50, -20)).toBe(RED);
     expect(flat.get(52, -19)).toBe(RED);
     expect(flat.get(51, -20)).toBe(0);
@@ -395,10 +402,10 @@ describe('the canvas rules outside the screen', () => {
   });
 
   it('snaps to the art cap\'s edges as well as the screen', () => {
-    const targets = collectTargets({ width: 176, height: 168, rows: 3, slots: false, siblings: [], cap: ART_CAP });
+    const targets = collectTargets({ width: 176, height: 168, container: chest(3), slots: false, siblings: [], cap: ART_CAP });
     expect(snapMove({ x: -422, y: 0, w: 10, h: 10 }, targets, 3).dx).toBe(-2);
     expect(snapMove({ x: 0, y: 770, w: 10, h: 13 }, targets, 3).dy).toBe(-2); // bottom edge 783 -> the cap's 781
-    expect(snapMove({ x: 0, y: 0, w: 10, h: 10 }, collectTargets({ width: 176, height: 168, rows: 3, slots: false, siblings: [] }), 3).dx).toBe(0);
+    expect(snapMove({ x: 0, y: 0, w: 10, h: 10 }, collectTargets({ width: 176, height: 168, container: chest(3), slots: false, siblings: [] }), 3).dx).toBe(0);
   });
 
   it('pans over the whole cap, not just the screen', () => {

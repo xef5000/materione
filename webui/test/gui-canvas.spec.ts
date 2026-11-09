@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { sampleGuiRaw } from '../src/lib/demo/gui';
 import { registry } from './helpers/gui-registry';
+import { containerProfile } from '../src/lib/gui/containers';
 import { parseGui, type GuiDocument, type GuiLayer } from '../src/lib/gui/model';
 import { smallcaps } from '../src/lib/gui/font/render';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
@@ -144,8 +145,8 @@ describe('hit testing', () => {
 describe('snapping', () => {
   const siblings = [{ x: 100, y: 40, w: 30, h: 20 }];
   // the slot grid is dense on purpose, so the edge/sibling cases use targets without it
-  const targets = collectTargets({ width: 176, height: 222, rows: 6, slots: false, siblings });
-  const withSlots = collectTargets({ width: 176, height: 222, rows: 6, slots: true, siblings: [] });
+  const targets = collectTargets({ width: 176, height: 222, container: containerProfile('chest_6')!, slots: false, siblings });
+  const withSlots = collectTargets({ width: 176, height: 222, container: containerProfile('chest_6')!, slots: true, siblings: [] });
 
   it('pulls a moving rectangle onto the canvas edge, the middle or a sibling edge', () => {
     expect(snapMove({ x: 2, y: 100, w: 20, h: 10 }, targets, 3).dx).toBe(-2); // canvas left edge
@@ -160,7 +161,7 @@ describe('snapping', () => {
     const slot = snapMove({ x: 27, y: 100, w: 4, h: 4 }, withSlots, 2);
     expect(slot.dx).toBe(-1); // item origin x = 8 + 18
     expect(slot.guides.some((guide) => guide.kind === 'slot' && guide.pos === 26)).toBe(true);
-    // vanilla chest: the first container row starts at y = 18
+    // the first container row starts at y = 18
     expect(snapMove({ x: 60, y: 19, w: 4, h: 4 }, withSlots, 1).dy).toBe(-1);
   });
 

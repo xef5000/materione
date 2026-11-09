@@ -196,6 +196,21 @@ export function guiComponentsOf(describe: Record<string, unknown>): GuiComponent
   });
 }
 
+/**
+ * The container choices from an `authoring.describe` payload (`guiContainers`, gui.md section 12.4): the ids this
+ * server compiles and opens, with the label and heading the select shows. Entries without the three strings are
+ * dropped, never guessed at; a server too old to list any gives an empty list and the studio offers none.
+ */
+export function guiContainersOf(describe: Record<string, unknown>): { id: string; label: string; group: string }[] {
+  const list = describe.guiContainers;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((entry) => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const { id, label, group } = entry as Record<string, unknown>;
+    return typeof id === 'string' && typeof label === 'string' && typeof group === 'string' ? [{ id, label, group }] : [];
+  });
+}
+
 export function unwrap(response: Response): Record<string, unknown> {
   if (!response.ok) {
     throw new RpcError(response.error.code, response.error.message);

@@ -109,7 +109,7 @@
       {@const problems = studio.flagsFor(layer.id).map((flag) => flag.message)}
       {@const rules = links?.ruleCount(layer.id) ?? 0}
       {@const logicFlags = links?.flagsFor(layer.id) ?? []}
-      {@const decoration = decorationNote(isClickable(bareType(layer), rules), studio.boundsOf(layer), studio.doc.rows)}
+      {@const decoration = decorationNote(isClickable(bareType(layer), rules), studio.boundsOf(layer), studio.profile)}
       <li
         class="row"
         class:selected={studio.selection.includes(layer.id)}

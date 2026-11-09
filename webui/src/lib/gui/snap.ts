@@ -5,7 +5,7 @@
  * are always whole GUI pixels (pixel snapping is rounding); everything here
  * returns an adjustment plus the guide lines to draw.
  */
-import { ITEM_SIZE, cellsOf, wellRect } from './chest';
+import { ITEM_SIZE, cellsOf, wellRect, type ContainerProfile } from './containers';
 import type { Rect } from './raster/canvas';
 import type { Handle } from './transform';
 
@@ -30,7 +30,7 @@ export interface Guide extends SnapLine {}
 export interface TargetSources {
   width: number;
   height: number;
-  rows: number;
+  container: ContainerProfile;
   /** Rectangles of the layers that are not being dragged. */
   siblings: readonly Rect[];
   /** Include the slot grid (item origins and wells). */
@@ -53,7 +53,7 @@ export function collectTargets(source: TargetSources): SnapTargets {
   addRect({ x: 0, y: 0, w: source.width, h: source.height }, 'canvas');
   if (source.cap) addRect(source.cap, 'canvas', false);
   if (source.slots) {
-    const cells = cellsOf(source.rows, 'all');
+    const cells = cellsOf(source.container, 'all');
     for (const cell of cells) {
       // the item area (16 px) and the well around it (18 px) both read as "the slot"
       addRect({ x: cell.x, y: cell.y, w: ITEM_SIZE, h: ITEM_SIZE }, 'slot', false);

@@ -5,13 +5,14 @@
  * the studio is only told the ids, and draws accordingly.
  */
 import { describe, expect, it } from 'vitest';
+import { containerProfile } from '../src/lib/gui/containers';
 import type { GuiDocument, GuiLayer } from '../src/lib/gui/model';
 import { composeCanvas } from '../src/lib/gui/compose';
 import { smallcaps } from '../src/lib/gui/font/render';
 import { ArgbCanvas } from '../src/lib/gui/raster/canvas';
 import { colorOf, measureTextLayer } from '../src/lib/gui/text';
 
-const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: '', container: 'chest_3', rows: 3, layers, rest: {}, order: [] });
+const doc = (...layers: GuiLayer[]): GuiDocument => ({ title: '', container: 'chest_3', layers, rest: {}, order: [] });
 const text = (id: string, extra: Record<string, unknown> = {}): GuiLayer =>
   ({ id, type: 'text', x: 8, y: 6, text: 'Shop', font: 'smallcaps', ...extra }) as GuiLayer;
 const NONE = new Set<string>();
@@ -28,7 +29,7 @@ describe('measuring and drawing', () => {
   });
 
   it('composes smallcaps text over the background at its x and y', () => {
-    const scene = { width: 64, height: 24, rows: 1, image: () => null };
+    const scene = { width: 64, height: 24, container: containerProfile('chest_1')!, image: () => null };
     const shown = composeCanvas(doc(text('a', { x: 4, y: 3, color: '#FF0000' })), scene, NONE);
     const expected = new ArgbCanvas(64, 24);
     smallcaps.draw(expected, 4, 3, 'Shop', 0xffff0000);
@@ -36,13 +37,13 @@ describe('measuring and drawing', () => {
   });
 
   it('leaves out a text layer the server says the compiler skips', () => {
-    const scene = { width: 64, height: 24, rows: 1, image: () => null };
+    const scene = { width: 64, height: 24, container: containerProfile('chest_1')!, image: () => null };
     const skipped = composeCanvas(doc(text('a', { x: 4, y: 3 })), scene, new Set(['a']));
     expect(skipped.equals(new ArgbCanvas(64, 24))).toBe(true);
   });
 
   it('draws default-font text as nothing the studio owns (the client draws it)', () => {
-    const scene = { width: 64, height: 24, rows: 1, image: () => null };
+    const scene = { width: 64, height: 24, container: containerProfile('chest_1')!, image: () => null };
     const approx = composeCanvas(doc(text('a', { font: 'default', y: 8 })), scene, NONE);
     expect(approx.equals(new ArgbCanvas(64, 24))).toBe(true);
   });

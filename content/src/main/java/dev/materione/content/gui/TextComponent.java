@@ -19,7 +19,7 @@ import java.util.List;
  */
 public final class TextComponent implements GuiComponent {
 
-    /** Vanilla container title colour: a dark grey that reads on the chest background. */
+    /** Vanilla container title colour: a dark grey that reads on the screen background. */
     static final int DEFAULT_COLOR = 0xFF404040;
 
     private static final int MAX_LENGTH = 128;

@@ -30,7 +30,7 @@ public final class PanelComponent implements GuiComponent {
     public SelfDescription describe() {
         return new SelfDescription(
                 "Panel",
-                "A raised frame: the chest background, or any large raised area behind other layers",
+                "A raised frame: the screen background, or any large raised area behind other layers",
                 List.of(
                         new ParameterSchema("x", ParameterType.INTEGER, false, "0",
                                 "Left edge in GUI pixels", null, null)
@@ -43,23 +43,23 @@ public final class PanelComponent implements GuiComponent {
                                         "Y", "placement", 20, false, "number", "", "0")
                                         .withRange(-1024.0, 1024.0, "px")),
                         new ParameterSchema("width", ParameterType.INTEGER, true, null,
-                                "Width in GUI pixels (a chest is 176)", null, null)
+                                "Width in GUI pixels (the container screens are 176 wide)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Width", "placement", 30, false, "number", "", "176")
                                         .withRange(0.0, 1024.0, "px")),
                         new ParameterSchema("height", ParameterType.INTEGER, true, null,
-                                "Height in GUI pixels (a three-row chest is 168)", null, null)
+                                "Height in GUI pixels (the screen's own height depends on the container)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Height", "placement", 40, false, "number", "", "168")
                                         .withRange(0.0, 1024.0, "px")),
                         new ParameterSchema("corners", ParameterType.ENUM, false, "square",
-                                "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the chest's own rounded corners, pixel for pixel)",
+                                "Outer corners: square (the 1-px cut of every earlier panel) or vanilla (the vanilla screen's own rounded corners, pixel for pixel)",
                                 List.of("square", "vanilla"), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Corners", "appearance", 45, false, "select", "", "square")
                                         .withOptions(List.of(
                                                 ParameterSchema.EditorOption.of("vanilla", "Vanilla",
-                                                        "The chest's rounded corners (new panels start here)"),
+                                                        "The vanilla screen's rounded corners (new panels start here)"),
                                                 ParameterSchema.EditorOption.of("square", "Square",
                                                         "The 1-px cut corner of earlier panels")))),
                         new ParameterSchema("style", ParameterType.RAW, false, null,
