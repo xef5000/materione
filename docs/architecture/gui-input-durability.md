@@ -457,7 +457,7 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. **Built (#307), as built below the table.** | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
-| **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI) |
+| **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
 | **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23. | R, P | Sonnet, high |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
 | **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high |
@@ -536,6 +536,21 @@ OWED + EXITING with a non-ASCII origin, bad CRC, newer version, truncated, valid
 v1 empty, INTENT + DONE, torn tail, bad-CRC last record, corrupt mid-file, newer version, zero-filled tail, torn
 header. Every readable one decodes to the expected model and re-encodes byte-identically; every unreadable one keeps
 its raw bytes. Single-bit-flip and every-prefix tests cover the rest.
+
+### Row S as built (#308)
+
+Schema only: **nothing at runtime reads `durable` yet** (row P, #310, does), so a `required` layer is not crash-safe and the
+build says so wherever the value appears.
+
+| Question | As built |
+|---|---|
+| Schema source | `SlotsComponent.describe()` declares `durable`: `enum`, optional, default `best_effort`, allowed `best_effort` / `required`, section `behavior`, order 35 (right after `input`); component version `1.2.0`; the editor demo snapshot golden moved. The option descriptions carry the "not available in this build yet" wording, so the studio shows it from the schema (D5), not from a copy |
+| Parse | `SlotsComponent.Layer.durable()` (`SlotsComponent.Durability`, `BEST_EFFORT` when absent). Any other value, or a non-string, skips the layer with `MTR-0052` rather than reading it as `best_effort`: guessing would quietly weaken what the author asked for |
+| Non-input layer | Meaningful only with `input: true`. On a layer that is not an input, `durable: required` loads and is ignored with `MTR-0076` (the rule `accept:` already follows); `durable: best_effort` there is the default and says nothing. Not skipped, so no authored layer is lost |
+| Input layer, `required` | Loads and behaves exactly as `best_effort`. `gui.validate` returns an `MTR-0076` warning on the layer saying crash-safe slots are not available in this build and the items are not crash-safe. Row P replaces that warning with the real capability check (`MTR-0100`, §5.9) when it makes `required` do something. `MTR-0100` is **not** emitted by row S: it stays proposed and unassigned |
+| Round trip | Layers are kept as authored maps, so a load and untouched save is byte-identical, an absent `durable` stays absent (the default is implicit, never written) and an unknown field survives. Fixture `fixtures/gui/durable-slots.yml` joins the byte-for-byte round-trip corpus |
+| Studio | The inspector's Durability segmented control (Behavior section, with the other slots fields) is rendered from the registry like every field. It shows the chosen option's description under the control (a generic addition to every segmented schema field). Nothing is written until the author clicks an option; clicking `Best effort` writes `durable: best_effort` explicitly |
+| Tests | `GuiInputSlotsTest` (default, both values, rejects a bad value, the warnings, the description, the fixture); `webui/test/gui-model.spec.ts` and `gui-save.spec.ts` (description, round trip, save writes only what was chosen); `gui-studio.pw.ts` (the control, its help text, the saved file); QA `guidurability.*` (not blessed) |
 
 ## 13. Decisions this design takes
 

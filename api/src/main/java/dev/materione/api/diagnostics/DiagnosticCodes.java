@@ -395,7 +395,9 @@ public final class DiagnosticCodes {
     /**
      * An input-slot setting cannot apply (logic.md §25): {@code accept:} on a layer that is not an input,
      * {@code input:} on a layer with no container slots, or a {@code player_inventory:} that is neither
-     * {@code locked} nor {@code free}. The setting is ignored; the GUI and its other layers still work.
+     * {@code locked} nor {@code free}. The setting is ignored; the GUI and its other layers still work. Also
+     * {@code durable: required} on a slots layer: ignored on a non-input layer, and on an input layer it does
+     * nothing yet (crash-safe slots are not in this build; the layer behaves as {@code best_effort}).
      */
     public static final DiagnosticCode GUI_INPUT_SETTING_IGNORED =
             new DiagnosticCode("MTR-0076", Severity.WARN, "Input-slot setting ignored; the GUI loads without it");

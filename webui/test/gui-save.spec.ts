@@ -99,6 +99,31 @@ describe('against the server', () => {
     expect(assets.ok).toBe(true);
   });
 
+  it('writes `durable` only where the author set it, and an unrelated edit leaves it absent (#308)', async () => {
+    const before = await read();
+    const gui = parseGui(before.parsed, 'main')!;
+    expect(gui.doc.layers.find((layer) => layer.id === 'wells')).not.toHaveProperty('durable');
+
+    // moving another layer touches no durable key anywhere
+    const moved = new GuiHistory(gui.doc);
+    moved.execute(patchLayers(moved.doc, { buy: { x: 101 } }, 'Move'));
+    const first = await sendSave(server, 'sample', PATH, before.rev, planSave(gui.location.prefix, moved.baseline, moved.doc, new Map()));
+    expect(first.ok).toBe(true);
+    expect((await read()).raw).not.toContain('durable');
+
+    // choosing it writes the value on that layer alone and keeps the rest byte-identical
+    const mid = await read();
+    const history = new GuiHistory(parseGui(mid.parsed, 'main')!.doc);
+    history.execute(patchLayers(history.doc, { wells: { input: true, durable: 'required' } }, 'Durability'));
+    const second = await sendSave(server, 'sample', PATH, mid.rev, planSave(gui.location.prefix, history.baseline, history.doc, new Map()));
+    expect(second.ok).toBe(true);
+    const after = await read();
+    const wells = parseGui(after.parsed, 'main')!.doc.layers.find((layer) => layer.id === 'wells');
+    expect(wells).toMatchObject({ input: true, durable: 'required' });
+    expect(after.raw.match(/durable/g)).toHaveLength(1);
+    expect(after.raw.startsWith('# main — a shop screen')).toBe(true);
+  });
+
   it('a stale revision is refused and writes neither fields nor assets', async () => {
     const before = await read();
     const gui = parseGui(before.parsed, 'main')!;
