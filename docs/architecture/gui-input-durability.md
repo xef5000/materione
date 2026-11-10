@@ -6,7 +6,7 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); nothing here is built.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows R (the probes, #306) and S (the `durable:` schema and studio field, #308) are built, as recorded in §12; nothing of the runtime is.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
@@ -538,7 +538,7 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
-| **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI) |
+| **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
 | **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
 | **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high |
@@ -563,6 +563,21 @@ Not run on Folia: `PaperEditorHandshakeIT`, `PaperRelayEditorIT`, the opt-in pro
 bridge and RCON). The platform axis of (1) is, from this run, one property (the server jar) plus the per-IT expectations above; a Folia 26.1.2
 server needs a JDK 25 server process, while the harness launches the server with the test JVM (21), so that axis also needs a configurable server
 `java`.
+
+### Row S as built (#308)
+
+Schema only: **nothing at runtime reads `durable` yet** (row P, #310, does), so a `required` layer is not crash-safe and the
+build says so wherever the value appears.
+
+| Question | As built |
+|---|---|
+| Schema source | `SlotsComponent.describe()` declares `durable`: `enum`, optional, default `best_effort`, allowed `best_effort` / `required`, section `behavior`, order 35 (right after `input`); component version `1.2.0`; the editor demo snapshot golden moved. The option descriptions carry the "not available in this build yet" wording, so the studio shows it from the schema (D5), not from a copy |
+| Parse | `SlotsComponent.Layer.durable()` (`SlotsComponent.Durability`, `BEST_EFFORT` when absent). Any other value, or a non-string, skips the layer with `MTR-0052` rather than reading it as `best_effort`: guessing would quietly weaken what the author asked for |
+| Non-input layer | Meaningful only with `input: true`. On a layer that is not an input, `durable: required` loads and is ignored with `MTR-0076` (the rule `accept:` already follows); `durable: best_effort` there is the default and says nothing. Not skipped, so no authored layer is lost |
+| Input layer, `required` | Loads and behaves exactly as `best_effort`. `gui.validate` returns an `MTR-0076` warning on the layer saying crash-safe slots are not available in this build and the items are not crash-safe. Row P replaces that warning with the real capability check (`MTR-0100`, §5.9) when it makes `required` do something. `MTR-0100` is **not** emitted by row S: it stays proposed and unassigned |
+| Round trip | Layers are kept as authored maps, so a load and untouched save is byte-identical, an absent `durable` stays absent (the default is implicit, never written) and an unknown field survives. Fixture `fixtures/gui/durable-slots.yml` joins the byte-for-byte round-trip corpus |
+| Studio | The inspector's Durability segmented control (Behavior section, with the other slots fields) is rendered from the registry like every field. It shows the chosen option's description under the control (a generic addition to every segmented schema field). Nothing is written until the author clicks an option; clicking `Best effort` writes `durable: best_effort` explicitly |
+| Tests | `GuiInputSlotsTest` (default, both values, rejects a bad value, the warnings, the description, the fixture); `webui/test/gui-model.spec.ts` and `gui-save.spec.ts` (description, round trip, save writes only what was chosen); `gui-studio.pw.ts` (the control, its help text, the saved file); QA `guidurability.*` (not blessed) |
 
 ## 13. Decisions this design takes
 

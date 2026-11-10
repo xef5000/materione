@@ -7241,10 +7241,39 @@
             "section": "behavior",
             "type": "raw",
             "uiHint": "advanced"
+          },
+          {
+            "advanced": false,
+            "allowedValues": [
+              "best_effort",
+              "required"
+            ],
+            "default": "best_effort",
+            "description": "Input slots only: how the player's items are protected while they sit in these slots. required asks for crash-safe ownership, which this build does not provide yet (it behaves as best_effort and validation says so); best_effort is today's behaviour. Ignored on a layer that is not an input",
+            "example": "best_effort",
+            "id": "durable",
+            "label": "Durability",
+            "options": [
+              {
+                "description": "Today's behaviour: items in these slots are returned on close, but a server crash can lose or duplicate them. Input slots only.",
+                "label": "Best effort",
+                "value": "best_effort"
+              },
+              {
+                "description": "Asks for crash-safe slots. Not available in this build yet: it behaves as Best effort and the layer is not crash-safe.",
+                "label": "Required",
+                "value": "required"
+              }
+            ],
+            "order": 35,
+            "required": false,
+            "section": "behavior",
+            "type": "enum",
+            "uiHint": "select"
           }
         ],
         "registeredBy": "materione",
-        "sinceVersion": "1.1.0",
+        "sinceVersion": "1.2.0",
         "target": "raster"
       },
       {

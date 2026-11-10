@@ -15,10 +15,13 @@ import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
 
 /**
- * The Bukkit side of the crash journal (logic.md §25, decision 12): stores {@link InputJournal} in the player's
+ * The Bukkit side of the recovery journal (logic.md §25, decision 12): stores {@link InputJournal} in the player's
  * persistent data and reads the player's current window. The journal always reflects the player's current
  * session's window, so every caller passes only the player: a window that closed while another one is current
  * never touches the journal of the current one.
+ *
+ * <p>Best-effort, not crash-safe: the mirrors can trail the server's own changes, so an autosave can capture an
+ * item in neither place or in both (see {@link InputJournal} and docs/architecture/gui-input-durability.md §2, W1).
  */
 public final class GuiJournal {
 
@@ -39,7 +42,9 @@ public final class GuiJournal {
 
     /**
      * Makes the journal hold what the player's current window holds in its input slots. Call it after every
-     * change to those slots, once the change is made.
+     * change to those slots, once the change is made. A failure is logged and not rethrown: the journal then keeps
+     * what it held before, which may not match the window, and the player is not told (§2, W5). The design makes
+     * this a refusal of the transfer instead.
      */
     public void mirror(Player player) {
         try {
@@ -52,13 +57,19 @@ public final class GuiJournal {
 
     /**
      * As {@link #mirror}, one tick later: for a click the server applies after the handler has returned, so
-     * the window does not hold the change yet.
+     * the window does not hold the change yet. Until this runs, an autosave can capture the change out of step
+     * with the journal (§2, W1).
      */
     public void mirrorNextTick(Player player) {
         scheduling.executeEntityLater(plugin, player, 1, () -> mirror(player), () -> { });
     }
 
-    /** Gives back what a crash left in the journal, once; called when the player joins. */
+    /**
+     * Gives back what a crash left in the journal, once per live session; called when the player joins. The journal
+     * is cleared before the items are handed out, so a failure is logged and the items it had not yet handed out
+     * are no longer in the journal (§2, W5). A crash before the next save can hand them out again (W6). See
+     * {@link InputJournal#restore}.
+     */
     public void restore(Player player) {
         try {
             for (ItemStack item : journal.restore(player)) {

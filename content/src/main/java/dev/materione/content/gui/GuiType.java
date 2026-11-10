@@ -218,7 +218,7 @@ public final class GuiType implements ContentType {
         var out = new ArrayList<Diagnostic>();
         diagnoseLayers(gui, out);
         diagnoseClickFootprints(gui, out);
-        diagnoseInputSettings(gui, out);
+        GuiInputDiagnostics.diagnose(gui, out);
         diagnoseRefresh(gui, out);
         diagnoseRules(gui, out);
         return List.copyOf(out);
@@ -279,31 +279,6 @@ public final class GuiType implements ContentType {
                     gui.id(), null,
                     "write refresh as a whole number of ticks, such as refresh: 20",
                     DiagnosticTarget.field("refresh")));
-        }
-    }
-
-    /**
-     * The input-slot settings that cannot apply (logic.md §25, MTR-0076): {@code accept:} on a layer that
-     * is not an input, and a {@code player_inventory:} that is neither value. Each is ignored, so the GUI
-     * loads and says so.
-     */
-    private static void diagnoseInputSettings(GuiDefinition gui, List<Diagnostic> out) {
-        if (!PlayerInventory.valid(gui.raw().get("player_inventory"))) {
-            out.add(new Diagnostic(
-                    DiagnosticCodes.GUI_INPUT_SETTING_IGNORED, Severity.WARN,
-                    gui.id() + ": player_inventory must be locked or free; free is used",
-                    gui.id(), null, "write player_inventory: locked or player_inventory: free",
-                    DiagnosticTarget.field("player_inventory")));
-        }
-        for (int index = 0; index < gui.layers().size(); index++) {
-            GuiLayer layer = gui.layers().get(index);
-            if (layer.compiled() instanceof SlotsComponent.Layer wells && !wells.input() && wells.accept() != null) {
-                out.add(new Diagnostic(
-                        DiagnosticCodes.GUI_INPUT_SETTING_IGNORED, Severity.WARN,
-                        gui.id() + ": layer '" + layer.id() + "' has accept, which applies to input slots only; it is ignored",
-                        gui.id(), null, "add input: true to the layer, or remove accept",
-                        DiagnosticTarget.field("layers", String.valueOf(index))));
-            }
         }
     }
 
