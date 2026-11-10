@@ -165,10 +165,39 @@ public final class MaterionePlugin extends JavaPlugin {
             escrowRuntime = new dev.materione.plugin.escrow.runtime.EscrowRuntime(this, scheduling, escrowLedger,
                     dev.materione.plugin.escrow.runtime.EscrowMessages.from(
                             (key, fallback) -> settings == null ? fallback : settings.getString(key, fallback)),
-                    diagnostics::publish, System::currentTimeMillis, org.bukkit.Bukkit::getOnlinePlayers);
+                    diagnostics::publish, System::currentTimeMillis, org.bukkit.Bukkit::getOnlinePlayers,
+                    escrowSnapshots(), barrierCooldownMillis());
             escrowRuntime.onChecked(() -> escrowRuntime.publishCapability(requiredLayerLive()));
         }
         return escrowRuntime;
+    }
+
+    /**
+     * The tier-3 read-back (gui-input-durability.md §5.4, row B): the player's saved file, read on the IO executor. The
+     * server keeps player files in {@code <world>/playerdata} (Paper 1.21.4) or {@code <world>/players/data} (26.x); the
+     * folders are asked at each read, because the overworld exists only after the plugin enables. Null when the
+     * ledger did not start (nothing can exit then).
+     */
+    private dev.materione.plugin.escrow.io.SnapshotReader escrowSnapshots() {
+        if (escrowLedger == null) {
+            return null;
+        }
+        return new dev.materione.plugin.escrow.io.EscrowReadBack(() -> {
+            var worlds = org.bukkit.Bukkit.getWorlds();
+            if (worlds.isEmpty()) {
+                return java.util.List.of();
+            }
+            java.nio.file.Path folder = worlds.get(0).getWorldFolder().toPath();
+            return java.util.List.of(folder.resolve("playerdata"), folder.resolve("players").resolve("data"));
+        }, task -> scheduling.executeAsync(this, task),
+                new org.bukkit.NamespacedKey(this, dev.materione.plugin.escrow.runtime.EscrowRuntime.ACCOUNT_KEY)
+                        .toString());
+    }
+
+    /** {@code escrow_barrier_cooldown_seconds} (default 5, between 1 and 300): one barrier save per player per period. */
+    private long barrierCooldownMillis() {
+        long seconds = settings == null ? 5 : settings.getInt("escrow_barrier_cooldown_seconds", 5);
+        return Math.max(1, Math.min(300, seconds)) * 1000L;
     }
 
     /** Whether a live GUI has a {@code durable: required} input layer (it makes {@code MTR-0100} an error). */
@@ -296,6 +325,7 @@ public final class MaterionePlugin extends JavaPlugin {
             }
             if (escrowRuntime != null) {
                 escrowRuntime.releaseAll(); // K20: every open window is released before the server saves
+                escrowRuntime.stop(); // exits still waiting on the tier-3 barrier are abandoned: their effects never run
             }
             if (escrowLedger != null) {
                 escrowLedger.close(); // an INTENT still in flight reaches its file before the async scheduler goes

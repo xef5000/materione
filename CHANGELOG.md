@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The escrow save barrier and the exit path behind it (gui-input-durability.md §12 row B, #311).** The tier-3 acknowledgment of crash-safe input
+  slots: the plugin can now carry an *exit* (a consumed stack, #248's trash and any later effect) through its four steps: freeze the stack,
+  record the decision in the ledger, apply the deletion, and then **prove a saved snapshot with the exit is on disk** by asking the server to
+  save that player (`Player.saveData()`, at most once per player per `escrow_barrier_cooldown_seconds`, default 5 s, backing off while the
+  disk does not confirm) and reading the player file back off-thread, tolerating the server replacing it. Only that proof releases an
+  effect that waited for it (at most once), and writes the ledger's `DONE`; a kill between the save and the read-back, a stale read-back, a
+  save that fails, a quit and a shutdown all leave the effect un-run and the decision to recovery. An exit with no effect asks for no save at
+  all: it is acknowledged by the server's own next save. This is the one synchronous disk IO the architecture admits on an owner thread (the
+  D8 exception, now in effect): the call has exactly one site in the codebase and the build fails on a second, on any other caller of the
+  barrier's save, and on `Server#savePlayers`. **Nothing in the product starts an exit yet** (#248's consume action does), so no player-visible
+  behavior changed and a `durable: required` layer is still not called crash-safe until the kill-boundary tests (row H) are green. New setting
+  `escrow_barrier_cooldown_seconds` (optional, 1 to 300); no new diagnostic codes. Probe P6 (reading the player file back while the server replaces it)
+  is settled against the server's replace sequence; its live-server half is row H's.
 - **Crash-safe input slots, the plugin runtime: `durable: required` now does something (gui-input-durability.md §12 row P, #310).**
   An input layer with `durable: required` takes the escrow path: every click on its slots (place, pickup, swap, number key, offhand swap,
   shift, drag, double-click collect) is applied by the plugin itself, in one step with an account kept in the player's own saved data, so

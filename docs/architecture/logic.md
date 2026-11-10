@@ -593,7 +593,7 @@ The decisions taken in #217 are recorded in §27.
   as in vanilla and the account loses it in the same step), and nothing is ever dropped in the world for it (what does not
   fit is *owed*, `/materione claim`). On a server that cannot support it (player-data saving off, `storage/escrow/` not
   writable, no ledger) the layer renders and its slots accept nothing (`MTR-0100`). It is **not yet verified by the
-  kill-boundary tests** (rows B and H), so nothing calls it crash-safe. `best_effort` is the journal of §25.12, unchanged.
+  kill-boundary tests** (row H; the tier-3 barrier, row B, is built), so nothing calls it crash-safe. `best_effort` is the journal of §25.12, unchanged.
 - **Returning items.** On close, items left in input slots go back to the player; for a `best_effort` layer what does not
   fit drops at the player's feet, for a `durable: required` layer it stays owed in the player's account and is claimed with
   `/materione claim` (on join and on the next close too). Nothing is ever deleted unless a flow says so
@@ -2530,7 +2530,7 @@ by the owner.
     clicks are manual, with no deferred mirror, so the W1 window does not exist for them, and a death releases inside
     `PlayerDeathEvent` (W4) for them. The `best_effort` journal described above is unchanged and still not crash-safe (its
     one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1; a death still
-    loses the items of a `best_effort` window). Rows B and H are not built, so nothing is called crash-safe yet.
+    loses the items of a `best_effort` window). **Row B (#311) built the tier-3 barrier and the tier-2 exit path** (see the design's *Row B as built*); row H is not built, so nothing is called crash-safe yet.
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real
