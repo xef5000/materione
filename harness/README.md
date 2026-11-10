@@ -169,6 +169,27 @@ node --test harness\protocol\floor-bot.test.mjs
   metadata with the compiled font, a queued console reload acts as a completion barrier:
   older `push.reload` events and allocation visibility alone do not prove that save's
   archive is ready. Failures include the server log tail in the assertion summary.
+- `PaperInputDurabilityIT` — the platform probes of
+  [`gui-input-durability.md`](../docs/architecture/gui-input-durability.md) §11 (row R, #306) and the K-row skeleton row H
+  (#313) fills in. Opt-in (`-Pharness.inputDurability=true`; each scenario boots the server two to five times). It runs
+  on the **crash rig** (`CrashRig`): a workspace that can be booted, killed at a **named crash gate** (`dprobe gate
+  <name>` logs `MATERIONE-DPROBE gate reached=<name>` and parks the main thread; the harness then `destroyForcibly`s the
+  process tree, a `kill -9` at that instant) and booted again on the same world, with the player's `.dat` readable from
+  the harness (`PlayerDat`, a minimal gzip-NBT reader). The player is a **fake-connection player**: a real
+  `ServerPlayer` placed by `PlayerList.placeNewPlayer` over a `Connection` on a netty `EmbeddedChannel`, driven by the
+  test-only `durabilityProbe` plugin (`harness/src/durabilityProbe`, `:harness:durabilityProbeJar`, never shipped; every
+  answer is one `MATERIONE-DPROBE <stage> …` line). Three tests: the save paths (`saveData`, quit, shutdown, autosave)
+  and reload (P4); four K rows (K1, K2, K4 with its file state simulated, K21) killed at their gates (P2); and the death
+  matrix, a window released at `InventoryCloseEvent` versus in `PlayerDeathEvent` under both `keepInventory` values (P3).
+  The probe's persistent-data account stands in for the escrow account until row P exists.
+- `FoliaInputDurabilityIT` — probe P1 / F12 on a **Folia** server. Opt-in (`-Pharness.folia=true`): it fetches the
+  sha256-pinned Folia jar (`folia-harness-*` in `gradle/libs.versions.toml`, `:harness:downloadFoliaServer`, verified by
+  the same task as the Paper pin) into the Gradle cache and needs `npm ci --ignore-scripts` in `harness/protocol`
+  (the player is the real protocol client `idle-bot.mjs`: Folia's join is region-scheduled and a fake connection
+  does not reproduce it). A `folia-supported` probe plugin (`harness/src/foliaProbe`) runs a two-write step on the
+  player's entity scheduler while the autosave runs every tick and the harness reads the `.dat` in a loop, with an
+  off-thread `saveData` loop as the positive control. Not a Folia port of the harness: the Folia platform axis for the
+  existing ITs and the QA suite is #314.
 
 ## Related: the agent probe loop (`scripts/probe/`, `docs/probe.md`)
 

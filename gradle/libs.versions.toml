@@ -57,6 +57,21 @@ paper-harness-build = "232"
 paper-harness-url = "https://fill-data.papermc.io/v1/objects/5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc/paper-1.21.4-232.jar"
 paper-harness-sha256 = "5ee4f542f628a14c644410b08c94ea42e772ef4d29fe92973636b6813d4eaffc"
 
+# Folia pins (#306, row R2 of docs/architecture/gui-input-durability.md): the regionised-threading fork, fetched from the
+# official PaperMC downloads API (fill.papermc.io project `folia`; owner-approved, #247 section 14 Q9b). Used ONLY by the
+# opt-in Folia probe scenario (`-Pharness.folia=true`), never by a default build or test. Same shape as the Paper pins:
+# absolute URL + sha256, verified by the same download task, no API call at build or test time. Folia publishes both
+# pinned Minecraft versions (docs/architecture/gui-input-durability.md section 11, P1): 1.21.4 (alpha channel, latest
+# build 6) and 26.1.2 (stable channel, latest build 8, needs Java 25).
+folia-harness-version = "1.21.4"
+folia-harness-build = "6"
+folia-harness-url = "https://fill-data.papermc.io/v1/objects/dcf2333211c1468c8eddc482bc8549600818cc661a709124a79c752f8fa2ac3a/folia-1.21.4-6.jar"
+folia-harness-sha256 = "dcf2333211c1468c8eddc482bc8549600818cc661a709124a79c752f8fa2ac3a"
+folia-probe-version = "26.1.2"
+folia-probe-build = "8"
+folia-probe-url = "https://fill-data.papermc.io/v1/objects/607afd1c3320008e1ffd2eaee6780ace4419d5f8c527b75e79f259be79ebf57b/folia-26.1.2-8.jar"
+folia-probe-sha256 = "607afd1c3320008e1ffd2eaee6780ace4419d5f8c527b75e79f259be79ebf57b"
+
 # Probe stack pins — the local agent-probe loop (scripts/probe/probe.mjs,
 # docs/probe.md), issue #34. NOT used by any Gradle module: the script parses
 # these lines so the probe stays hermetic like the harness pin above. The

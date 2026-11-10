@@ -1,0 +1,9 @@
+name: MaterioneFoliaProbe
+version: '1'
+main: dev.materione.harness.probe.FoliaProbe
+api-version: '1.21'
+folia-supported: true
+commands:
+  fprobe:
+    description: Test-only Folia probe for gui-input-durability.md F12 (row R2)
+    permission: materione.fprobe
