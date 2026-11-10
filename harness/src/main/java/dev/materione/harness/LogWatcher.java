@@ -54,6 +54,30 @@ public final class LogWatcher {
     }
 
     /**
+     * Like {@link #awaitLine(String, Duration, int)}, but returns the first matching line <em>at or beyond</em>
+     * {@code fromIndex}. {@code awaitLine} waits for a fresh occurrence yet returns the first line of the whole log that
+     * contains the marker, which is a stale line when the same marker was printed before; a scenario that repeats one
+     * command and reads each answer (the input-durability rig) needs this one.
+     */
+    public String awaitNewLine(String marker, Duration timeout, int fromIndex) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        while (System.nanoTime() < deadline) {
+            String content = readAll();
+            if (content != null) {
+                int from = Math.min(fromIndex, content.length());
+                int at = content.indexOf(marker, from);
+                if (at >= 0) {
+                    int start = content.lastIndexOf('\n', at) + 1;
+                    int end = content.indexOf('\n', at);
+                    return content.substring(Math.max(start, 0), end < 0 ? content.length() : end);
+                }
+            }
+            Thread.sleep(200);
+        }
+        return null;
+    }
+
+    /**
      * The current end of the log content: pass to
      * {@link #awaitLine(String, Duration, int)} so only lines written after
      * this point can match.
