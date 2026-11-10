@@ -6,7 +6,7 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); only row M (the pure model, codecs and recovery, #307) is built, as recorded in §12; nothing of the runtime is.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307) and S (the `durable:` schema and studio field, #308) are built, as recorded in §12; nothing of the runtime is.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
