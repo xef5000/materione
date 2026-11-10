@@ -6,11 +6,11 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); nothing here is built.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); only row M (the pure model, codecs and recovery, #307) is built, as recorded in §12; nothing of the runtime is.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
-> (row X), not on an outside ack. Nothing is built yet, so logic.md §25 decision 12 still describes the code: input slots
+> (row X), not on an outside ack. Nothing of the runtime is built yet (row M is a pure model nothing calls), so logic.md §25 decision 12 still describes the code: input slots
 > are enabled and **best-effort**, and nothing may be described as crash-safe until rows M, L, P, B and H are green on main.
 >
 > Traceability: **D1** (§9: the escrow is runtime player state, not content, and creates no second source of truth for
@@ -446,7 +446,7 @@ consumed* is the ledger. Neither duplicates the other, and recovery is defined f
 | **P6** | Read-back of `BukkitValues → materione:gui_escrow` from a live `<uuid>.dat` while the server may replace it (F2 window) | needed for tier 3 (approved) | row B |
 | **P7** | An inventory-sync plugin that does not copy our PDC defeats G1 (F8) | by construction | documented limit; `doctor` warns when a known sync plugin is present (list is data) |
 
-## 12. Implementation rows (proposed; none started)
+## 12. Implementation rows (proposed; row M built)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
@@ -454,7 +454,7 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 |---|---|---|---|---|
 | **D0** | Claims correction | Javadoc/comment-only fix of W1/W2 in `InputJournal`, `GuiJournal`, `GuiWindowListener`; re-bless note for `guilogic.input-slots`. Docs half is in this PR. | none | Haiku |
 | **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high |
-| **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. | none (R informs) | Sonnet, high |
+| **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. **Built (#307), as built below the table.** | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI) |
@@ -464,6 +464,78 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **T** (follow-up) | Admin tooling | `/materione escrow <player>` (list, force-return, force-drop). Out of scope here (§14 Q11). | P | later |
 | **X** | #248 consume-incoming action | Starts when rows M, L, P, B and H are green on main (the block was lifted, §14 Q1b, so no outside acknowledgment is awaited). Not part of this design. | M, L, P, B, H | per #248 |
 | **F** | Folia platform axis in the harness and the QA suite | **Design note only; not implemented.** The owner approved fetching a Folia jar for P1 (§14 Q9b) and noted the whole QA suite may need to run on Folia. (1) `:harness` gains a platform axis `paper \| folia` beside the existing pin mechanism (`gradle/libs.versions.toml` pin, sha256-verified download, Gradle cache): each existing IT is parameterised, the log-marker contract is unchanged, and `PaperEscrowCrashIT` runs on both. (2) The probe server gains a platform choice (a Folia 26.x build, if one exists for the probe pin [U]); the QA runner records the platform in each ledger entry's `env`, so a pass on Paper never counts as a pass on Folia, and `plan` lists due tests per platform. (3) Tests whose steps assume the Bukkit main thread (RCON-driven `give`, `tp`, teleports to an anchor) get a Folia path or a documented skip with a reason. (4) Open: whether Folia ships builds for both pins; the size of the suite's Folia gaps is found by running it, which is row R2's first output. Its own issue, not folded into #247. | R2 | Sonnet, high |
+
+### Row M as built (#307)
+
+**Where.** `plugin` module, package `dev.materione.plugin.escrow.model` (`plugin/src/main/java/.../escrow/model/`).
+The doc names an `escrow` package but no module (§5.6 says "the `escrow` package's owner-side half"); the plugin module
+is where #218's input code (`plugin.gui.input`, `InputJournal<K, T>`) lives and where rows L and P will put the sibling
+IO and runtime packages, so the model sits beside them. The alternatives fail on the evidence of plugin.md §11:
+`behavior` is the embeddable ECA engine (R7) and has nothing to do with player inventories; `core` and the others have
+no GUI input concept; a *new* Gradle module for a dozen classes would change the master §10 module list (a D-level
+amendment) for a property an ArchUnit rule already enforces. Purity is therefore a build rule, not module isolation:
+`EscrowModelBansTest` fails the build if a model class depends on anything but JDK value types (so: no Bukkit or Paper
+type, no `java.io`/`java.nio.file`/`java.nio.channels`, no `java.util.concurrent`, no `java.time`) or on a clock, a
+random source, `Thread` or `UUID`; both rules are proven against a planted violation. The package is deliberately
+*outside* `plugin/.../gui/**`, so adding it does not stale the blessed QA results whose `covers` globs watch that
+tree (`guicontainers.*`, `guilogic.input-slots`), and it is not under the 400-line GUI size guard.
+
+**What exists.** `Account`/`Entry`/`EntryState`, `Ledger`/`LedgerRecord` (`Intent`, `Done`)/`ExitKind`, the codecs
+(`AccountCodec`, `LedgerCodec`; reads return the sealed `AccountRead`/`LedgerRead`, never throw), `Inventory` (the
+two-method port: `remove`, `tryAdd`; there is deliberately no drop method, which is G4 by construction),
+`EscrowTransfer` (every tier-1 step as one call taking both sides: `moveIn`, `place`, `pickUp`, `swap`, `moveOut`,
+`editStack`, `reslot`, `close`, `claim`, `death`, `adoptLegacy`), `Exits` (tier 2: `beginExit`, `freeze`, `intent`,
+`complete`, `abortUndecided`, `acknowledge`) and `Recovery`. Steps return `Applied` (the next account, its eagerly
+encoded bytes, and what was released to the cursor or drop list, returned, owed or consumed), `NoOp`, or `Refused` with
+a `Refusal` (I7); a refusal changes neither side. No diagnostic code is assigned (`MTR-0100` to `MTR-0103` stay
+proposed); `Refusal` and `Recovery.Result.Unrecoverable` are what rows L and P will map to them.
+
+**Ambiguities the doc left, as resolved.**
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | Ledger record layout (§5.3 gives names, not widths) | `length` counts `type + payload` and is a `u32`; `INTENT` payload is `16B txn, 16B entryId, u8 kind, 16B stackHash16, u32 amount, u64 atMillis` (62 bytes with the type); `DONE` is `16B txn`; types `1`/`2`; kinds `CONSUME = 1`, `HAND_OFF = 2` (reserved). Header is `"MTRL"` and `u16 1`. |
+| 2 | Torn tail versus corruption | A record cut short (fewer than 8 head bytes, or an extent past the end), a record that fails its CRC and *ends the file*, and a zero-filled tail are torn: not records, ignored, `validLength` says where the next writer truncates. A bad CRC or malformed record *before* the end, an unknown type or kind, and **a length above 256 are corruption**: an append is one write, so a prefix of a record always carries its true length, and reading a garbled mid-file length as "a long record cut short" would silently drop every later INTENT and resurrect their entries. A header cut short is a file not yet born (valid, empty, `validLength` 0). |
+| 3 | "Accept N and N-1" when N = 1 | The window is `[1, 1]` today (`MIN_READABLE_VERSION`); a newer version is `NEWER_VERSION` / `LedgerRead.Newer`, opaque, never appended to. |
+| 4 | When does `gen` advance | Once per step, however many entries it moves. Recovery advances it only when it changed the account (an absent or empty account, or one whose entries stay OWED unchanged, is left as is, so a drained account really does nothing and costs no write). |
+| 5 | Where the caps (54 entries, 256 KiB) bind | On steps that can *grow* the account (`moveIn`, `place`, `swap`, `editStack`, `adoptLegacy`), before the inventory is touched, as `ENTRY_CAP`/`SIZE_CAP`. Never on decode and never on a step that only shrinks or keeps the account (move-out, pick-up, close, claim, death, recovery): releasing items must not be refused because an account is over a cap it was not written under. |
+| 6 | Recovery for OWED, and for a frozen entry that does not fit | Recovery retries every entry: HELD, OWED, and EXITING without an INTENT. What does not fit stays OWED (an EXITING entry that stays loses its `txn`, since it is now simply owed). An INTENT drops the entry in any state. Matching is by **entry id** (the INTENT's `stackHash16` and `amount` are audit fields, never matched on): a stack that re-entered the account under a new id after an older snapshot held it under another is a rollback to that snapshot (G3), not a G2 breach. |
+| 7 | `close` order | OWED entries try the inventory before HELD ones (they are the oldest debt); frozen entries are untouched; with nothing to release it is a `NoOp`. |
+| 8 | A failed INTENT append (the `MTR-0102` path) | `Exits.abortUndecided` returns the frozen stack (or owes it) **only while no INTENT is durable**; after the decision it refuses (`DECIDED`). There is no other abort. `Exits.complete` (step 3) refuses without a durable INTENT (`UNDECIDED`) and is a `NoOp` when the entry is already gone. |
+| 9 | Step 4 | `Exits.acknowledge` yields `DONE` only for a decided, not-yet-done exit whose step-1 `gen` the saved snapshot's `gen` has reached (unsigned order); "not yet" is empty, never "acknowledged" (K23's model half; the `saveData()` and read-back are row B). |
+| 10 | The legacy `gui_inputs` golden of §8 | Deferred to row P: the legacy bytes are Bukkit's `ItemStack.serializeItemsAsBytes`, which cannot be decoded without a server. The model offers `adoptLegacy` (the decoded stacks as OWED entries in one step); the legacy golden lands where its decoder does. |
+
+**What the property test proves** (`CrashBoundaryPropertyTest`, 400 committed seeds x 60 steps, ~490,000 simulated
+`kill -9`s, about 2 s). Random sequences of give, move-in, move-out, pick-up, place, swap, close, claim, edit, reslot,
+freeze, incoming consume, ledger append, apply (step 3), acknowledge, abort-while-undecided, save, death (both
+`keepInventory` values), quit and rejoin run against the production model with real byte codecs (the account goes
+through `AccountCodec` at every step, the ledger is a byte file written by `LedgerCodec`). After **every** step a kill
+is simulated against **every save so far and the join-time disk**, with the ledger as it stood and with a torn partial
+append of the next record cut at three places. The oracle checks: **G1/G3** the recovered inventory plus what is still
+owed equals exactly the saved snapshot's holdings minus the stacks whose INTENT is durable (nothing lost, nothing
+twice, at stack granularity); **G2** no stack of an entry with a durable INTENT returns, from any snapshot, however
+old; **G4** recovery wrote nothing to a world; **I6/K15/K16** recovering twice is identical and a kill right after a
+saved recovery recovers to the same holdings; **save atomicity** (I1, "never half-visible") every save holds exactly
+what the player owned at that instant, checked before any crash, because a save can land between any two steps (F6);
+and I7 (a refused step leaves the inventory untouched). Coverage counters assert that the run really reached G2
+recoveries, G3 "INTENT for a predating snapshot" recoveries, overflow-stays-owed recoveries and torn tails. It proves
+the *model*; the kill-boundary IT on a real server (row H) and the platform facts (F1-F12, probes P1-P4) are not
+touched by it, K21/K22 are modelled only as "the entry leaves or enters the account in the same step as the cursor",
+and K23's `saveData()` and read-back are row B.
+
+**Negative controls (the oracle must be able to fail).** (1) The shipped design: the real `InputJournal` with the
+next-tick mirror (`OldMirrorWorld`) is caught on most seeds as a **loss at save** (move-in saved before its mirror,
+K19), a **duplicate at save** (move-out saved before its mirror, W1), a **loss on recovery** and a **world write**
+(release overflow dropped at the feet, W6); `k19ByHand...` scripts the first two. (2) `IGNORE_LEDGER` (recovery forgets
+the ledger) is caught as **resurrection**; (3) `DROP_ON_OVERFLOW` (overflow dropped instead of owed) is caught as a
+**world write** and a **loss**. Rows that follow reproduce a failure with
+`CrashHarness.run(new EscrowWorld(seed, Mutation.NONE), seed, 60)`; a failing seed is printed with its step trace.
+
+**Goldens.** `fixtures/escrow/*.hex` (15 byte-exact fixtures, see `fixtures/README.md`): account v1 empty, one HELD,
+OWED + EXITING with a non-ASCII origin, bad CRC, newer version, truncated, valid CRC with an unknown state byte; ledger
+v1 empty, INTENT + DONE, torn tail, bad-CRC last record, corrupt mid-file, newer version, zero-filled tail, torn
+header. Every readable one decodes to the expected model and re-encodes byte-identically; every unreadable one keeps
+its raw bytes. Single-bit-flip and every-prefix tests cover the rest.
 
 ## 13. Decisions this design takes
 
