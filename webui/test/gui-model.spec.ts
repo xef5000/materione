@@ -86,6 +86,23 @@ describe('losslessness (master 5.6)', () => {
     expect(JSON.stringify(serializeGui(parsed.doc))).toBe(JSON.stringify(file.main));
   });
 
+  it('keeps `durable` exactly as authored on slots layers: present stays present, absent stays absent (#308)', () => {
+    const file = {
+      main: {
+        container: 'chest_2',
+        layers: [
+          { id: 'plain', type: 'slots', region: 'container', input: true },
+          { id: 'strict', type: 'slots', region: 'container', input: true, durable: 'required', future: 1 },
+          { id: 'loose', type: 'slots', region: 'container', input: true, durable: 'best_effort' },
+        ],
+      },
+    };
+    const parsed = parseGui(file, 'main')!;
+    expect(JSON.stringify(serializeGui(parsed.doc))).toBe(JSON.stringify(file.main));
+    expect(Object.keys(parsed.doc.layers[0]!)).not.toContain('durable');
+    expect(parsed.doc.layers[1]).toMatchObject({ durable: 'required', future: 1 });
+  });
+
   it('does not invent a title the file never had', () => {
     const parsed = parseGui({ main: { container: 'chest_1', layers: [] } }, 'main')!;
     expect(Object.keys(serializeGui(parsed.doc))).toEqual(['container', 'layers']);
@@ -169,6 +186,21 @@ describe('the gui-components registry description', () => {
     // an addon component the studio has never heard of, described with x/y/width/height, is just as movable
     const addon = { ...componentOf(registry, 'panel')!, id: 'addon:bar' };
     expect(transformability(addon).resizable).toBe(true);
+  });
+
+  it('describes `durable` on slots: an optional enum defaulting to best_effort, in the Behavior section after Input slots (#308)', () => {
+    const slots = componentOf(registry, 'slots')!;
+    const durable = slots.parameters.find((param) => param.id === 'durable')!;
+    expect(durable).toMatchObject({
+      type: 'enum', required: false, default: 'best_effort', allowedValues: ['best_effort', 'required'], uiHint: 'select', section: 'behavior',
+    });
+    expect(durable.options!.map((option) => [option.value, option.label])).toEqual([['best_effort', 'Best effort'], ['required', 'Required']]);
+    // schema only: the chosen words say Required is not crash-safe in this build
+    expect(durable.options!.find((option) => option.value === 'required')!.description).toContain('Not available in this build');
+    const order = slots.parameters.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((param) => param.id);
+    expect(order.indexOf('durable')).toBe(order.indexOf('input') + 1);
+    // a new slots layer is written from required defaults only: durable is never added on its own
+    expect(Object.keys(newLayer(slots, []))).not.toContain('durable');
   });
 
   it('builds a new layer from required defaults only, with a unique id', () => {

@@ -32,6 +32,41 @@ public final class SlotsComponent implements GuiComponent {
         ALL
     }
 
+    /**
+     * What an input layer asks for when the player's items sit in its slots (gui-input-durability.md §5.8, §10):
+     * {@code best_effort} is today's behaviour and the default; {@code required} asks for the crash-safe path.
+     *
+     * <p><strong>Schema only in this build.</strong> {@code required} is parsed, described and round-tripped, and
+     * nothing at runtime reads it yet (row P of #247 does): a {@code required} layer behaves exactly as
+     * {@code best_effort}, and the GUI's validation says so ({@code MTR-0076}) rather than let anyone read it as
+     * crash-safe.
+     */
+    public enum Durability {
+        BEST_EFFORT("best_effort"),
+        REQUIRED("required");
+
+        private final String key;
+
+        Durability(String key) {
+            this.key = key;
+        }
+
+        /** The authored spelling. */
+        public String key() {
+            return key;
+        }
+
+        /** The value for an authored spelling, or null when it is neither {@code required} nor {@code best_effort}. */
+        public static Durability of(String key) {
+            for (Durability value : values()) {
+                if (value.key.equals(key)) {
+                    return value;
+                }
+            }
+            return null;
+        }
+    }
+
     /** The well's side: an 18 px inset around a 16 px item origin. */
     static final int WELL = 18;
 
@@ -72,8 +107,23 @@ public final class SlotsComponent implements GuiComponent {
                                 "Input slots only: a condition on slot.item that an item must meet to be placed "
                                         + "(an expression or a predicate, logic.md §2.3)", null, null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
-                                        "Accept", "behavior", 40, true, "advanced", "", ""))),
-                "1.1.0");
+                                        "Accept", "behavior", 40, true, "advanced", "", "")),
+                        new ParameterSchema("durable", ParameterType.ENUM, false, "best_effort",
+                                "Input slots only: how the player's items are protected while they sit in these slots. "
+                                        + "required asks for crash-safe ownership, which this build does not provide yet "
+                                        + "(it behaves as best_effort and validation says so); best_effort is today's behaviour. "
+                                        + "Ignored on a layer that is not an input",
+                                List.of("best_effort", "required"), null)
+                                .withEditor(new ParameterSchema.EditorMetadata(
+                                        "Durability", "behavior", 35, false, "select", "", "best_effort")
+                                        .withOptions(List.of(
+                                                ParameterSchema.EditorOption.of("best_effort", "Best effort",
+                                                        "Today's behaviour: items in these slots are returned on close, "
+                                                                + "but a server crash can lose or duplicate them. Input slots only."),
+                                                ParameterSchema.EditorOption.of("required", "Required",
+                                                        "Asks for crash-safe slots. Not available in this build yet: "
+                                                                + "it behaves as Best effort and the layer is not crash-safe."))))),
+                "1.2.0");
     }
 
     @Override
@@ -95,8 +145,16 @@ public final class SlotsComponent implements GuiComponent {
             throw new IllegalArgumentException(
                     "layer " + configuration.layerId() + ": input slots need the container, so region must be container or all");
         }
+        String durableKey = configuration.text("durable", Durability.BEST_EFFORT.key());
+        Durability durable = Durability.of(durableKey);
+        if (durable == null) {
+            // a durability that cannot be read is never guessed: guessing best_effort would quietly weaken
+            // what the author asked for, so the layer is skipped and says why
+            throw new IllegalArgumentException("layer " + configuration.layerId()
+                    + ": durable must be required or best_effort, not '" + durableKey + "'");
+        }
         return new Layer(region, GuiBevel.read(configuration, GuiBevel.SLOT_WELL), configuration.container(),
-                input, configuration.parameters().get("accept"));
+                input, configuration.parameters().get("accept"), durable);
     }
 
     /**
@@ -138,8 +196,11 @@ public final class SlotsComponent implements GuiComponent {
      * @param input whether the container slots take the player's items (logic.md §25)
      * @param accept the authored {@code accept:} condition as written, or null; compiled by the runtime
      *     (it needs the flow engine), and read only when {@code input} is true
+     * @param durable the authored {@code durable:} ({@link Durability#BEST_EFFORT} when absent); meaningful only
+     *     when {@code input} is true, and <strong>not read by the runtime yet</strong> (schema only, row S of #247)
      */
-    public record Layer(Region region, GuiBevel bevel, GuiContainer container, boolean input, Object accept)
+    public record Layer(Region region, GuiBevel bevel, GuiContainer container, boolean input, Object accept,
+                        Durability durable)
             implements CompiledGuiLayer {
 
         @Override

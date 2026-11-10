@@ -97,6 +97,99 @@ class GuiInputSlotsTest {
                 .contains(DiagnosticCodes.GUI_INPUT_SETTING_IGNORED);
     }
 
+    private static SlotsComponent.Layer wells(Map<String, Object> definition) {
+        var layers = GuiTestSupport.parse(GuiTestSupport.type(), definition).layers();
+        assertThat(layers).hasSize(1);
+        return (SlotsComponent.Layer) layers.get(0).compiled();
+    }
+
+    @Test
+    void durableDefaultsToBestEffortAndReadsBothValues() {
+        assertThat(wells(GuiTestSupport.definition(1,
+                GuiTestSupport.layer("w", "slots", "input", true))).durable())
+                .isEqualTo(SlotsComponent.Durability.BEST_EFFORT);
+        assertThat(wells(GuiTestSupport.definition(1,
+                GuiTestSupport.layer("w", "slots", "input", true, "durable", "best_effort"))).durable())
+                .isEqualTo(SlotsComponent.Durability.BEST_EFFORT);
+        assertThat(wells(GuiTestSupport.definition(1,
+                GuiTestSupport.layer("w", "slots", "input", true, "durable", "required"))).durable())
+                .isEqualTo(SlotsComponent.Durability.REQUIRED);
+    }
+
+    @Test
+    void anUnreadableDurableSkipsTheLayerInsteadOfGuessingBestEffort() {
+        for (Object bad : new Object[] {"strict", "Required", "", true, 1}) {
+            var parsed = GuiTestSupport.parse(GuiTestSupport.type(), GuiTestSupport.definition(1,
+                    GuiTestSupport.layer("w", "slots", "input", true, "durable", bad)));
+
+            assertThat(parsed.layers()).as("durable: %s", bad).isEmpty();
+            assertThat(parsed.skipped()).as("durable: %s", bad).hasSize(1);
+            assertThat(parsed.skipped().get(0).reason()).contains("durable must be");
+        }
+    }
+
+    @Test
+    void durableRequiredOnAnInputSaysItIsNotCrashSafeYetAndChangesNothingAtRuntime() {
+        Map<String, Object> strict = GuiTestSupport.layer("strict", "slots", "region", "container",
+                "input", true, "durable", "required");
+        Map<String, Object> loose = GuiTestSupport.layer("loose", "slots", "region", "container",
+                "input", true, "durable", "best_effort");
+        Map<String, Object> plain = GuiTestSupport.layer("plain", "slots", "region", "container", "input", true);
+
+        var warnings = diagnose(GuiTestSupport.definition(1, strict, loose, plain)).stream()
+                .filter(d -> d.code().equals(DiagnosticCodes.GUI_INPUT_SETTING_IGNORED)).toList();
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).message()).contains("'strict'").contains("not available in this build")
+                .contains("behaves as best_effort").contains("not crash-safe");
+        // the compiled model is identical to the same GUI with the key removed: nothing reads durable yet
+        var withKey = compile(GuiTestSupport.definition(1, strict)).model();
+        var without = compile(GuiTestSupport.definition(1,
+                GuiTestSupport.layer("strict", "slots", "region", "container", "input", true))).model();
+        assertThat(withKey.inputs()).isEqualTo(without.inputs());
+        assertThat(withKey.title()).isEqualTo(without.title());
+    }
+
+    @Test
+    void durableRequiredOnALayerThatIsNotAnInputIsDiagnosedAndIgnored() {
+        Map<String, Object> notInput = GuiTestSupport.layer("w", "slots", "region", "container", "durable", "required");
+        Map<String, Object> harmless = GuiTestSupport.layer("h", "slots", "region", "container", "durable", "best_effort");
+
+        var warnings = diagnose(GuiTestSupport.definition(1, notInput, harmless)).stream()
+                .filter(d -> d.code().equals(DiagnosticCodes.GUI_INPUT_SETTING_IGNORED)).toList();
+        assertThat(warnings).hasSize(1);
+        assertThat(warnings.get(0).message()).contains("'w'").contains("applies to input slots only");
+        assertThat(compile(GuiTestSupport.definition(1, notInput)).model().inputs()).isEmpty();
+    }
+
+    @Test
+    void theSlotsDescriptionDeclaresDurableOnceWithTheDefaultBestEffort() {
+        var durable = new SlotsComponent().describe().parameters().stream()
+                .filter(p -> p.id().equals("durable")).toList();
+
+        assertThat(durable).hasSize(1);
+        assertThat(durable.get(0).allowedValues()).containsExactly("best_effort", "required");
+        assertThat(durable.get(0).defaultValue()).isEqualTo("best_effort");
+        assertThat(durable.get(0).required()).isFalse();
+        assertThat(durable.get(0).editor().options()).extracting(o -> o.value())
+                .containsExactly("best_effort", "required");
+        assertThat(durable.get(0).editor().options().get(1).description()).contains("Not available in this build");
+    }
+
+    @Test
+    void theDurableFixtureParsesAndItsRawLayersKeepTheKeyOnlyWhereAuthored() throws Exception {
+        var definition = GuiTestSupport.golden("durable-slots.yml", "vault");
+        var layers = GuiTestSupport.parse(GuiTestSupport.type(), definition).layers();
+
+        assertThat(layers).extracting(GuiLayer::id).containsExactly("plain_wells", "strict_wells", "loose_wells");
+        assertThat(layers).extracting(layer -> ((SlotsComponent.Layer) layer.compiled()).durable())
+                .containsExactly(SlotsComponent.Durability.BEST_EFFORT, SlotsComponent.Durability.REQUIRED,
+                        SlotsComponent.Durability.BEST_EFFORT);
+        @SuppressWarnings("unchecked")
+        var raw = (List<Map<String, Object>>) definition.get("layers");
+        assertThat(raw.get(0)).doesNotContainKey("durable");
+        assertThat(raw.get(1)).containsEntry("durable", "required").containsEntry("materione:note", "kept untouched");
+    }
+
     @Test
     void anInputOnThePlayerRegionIsRejectedWithItsLayer() {
         Map<String, Object> player = GuiTestSupport.layer("bag", "slots", "region", "player", "input", true);

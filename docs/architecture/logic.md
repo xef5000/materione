@@ -586,7 +586,10 @@ The decisions taken in #217 are recorded in §27.
 
 - **Input slots.** A `slots` layer may set `input: true` (with an optional `accept: <condition>` on
   `slot.item`). Its slots accept the player's items, and moves into or out of them fire
-  `gui.slot_change`.
+  `gui.slot_change`. It may also set `durable: required | best_effort` (default `best_effort`; input layers only;
+  [`gui-input-durability.md`](gui-input-durability.md) §10). **Schema only until row P of #247:** `required` is parsed,
+  described and kept, and does nothing at runtime yet, so a `required` layer is not crash-safe (§25.12; validation
+  warns with `MTR-0076`).
 - **Returning items.** On close, items left in input slots go back to the player (or drop at the
   player's feet when the inventory is full). Nothing is ever deleted unless a flow says so
   (`gui.slot_item: {slot, op: clear}`).
@@ -2525,7 +2528,8 @@ by the owner.
     client and are blessed on main.
 
 **Diagnostics.** `MTR-0074` (accept does not compile), `MTR-0075` (static item under an input slot) and `MTR-0076`
-(an input-slot setting that cannot apply), documented in plugin.md §5. The next free code is `MTR-0077`.
+(an input-slot setting that cannot apply; since row S of #247 (#308) also `durable: required`, ignored on a non-input
+layer and, on an input layer, a warning that crash-safe slots are not in this build yet), documented in plugin.md §5. The next free code is `MTR-0077`.
 
 **Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
 `GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a
