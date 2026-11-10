@@ -37,8 +37,10 @@ public final class GuiWindowListener implements Listener {
         if (!(event.getInventory().getHolder() instanceof GuiMenu menu) || !(event.getPlayer() instanceof Player player)) {
             return;
         }
-        // whatever window closes, the player's items in its input slots are theirs: a window that was
-        // replaced by a reopen has already handed them over, so this finds nothing and changes nothing
+        // on every close the server reports, the window's input items go back to the player; a window that was
+        // replaced by a reopen has already handed them over, so this finds nothing and changes nothing. This does
+        // not cover a death (the server has fixed the drop list before this event) or an item on the cursor
+        // (§2, W4). The release and its journal mirror are one synchronous step, the part of the journal that holds (W1)
         InputReturns.release(player, menu);
         journal.mirror(player); // the journal follows the player's current window, which may be another one
         GuiSession session = menu.session();
@@ -56,7 +58,10 @@ public final class GuiWindowListener implements Listener {
         lifecycle.playerQuit(Viewer.of(event.getPlayer()));
     }
 
-    /** A join after a crash: whatever the journal still holds was in an open window's input slots, and goes back. */
+    /**
+     * A join after a crash: whatever the journal still holds was in an open window's input slots, and goes back
+     * once. Best-effort, not crash-safe: see {@link GuiJournal} and docs/architecture/gui-input-durability.md §2.
+     */
     @EventHandler(priority = EventPriority.LOW)
     public void onJoin(PlayerJoinEvent event) {
         journal.restore(event.getPlayer());
