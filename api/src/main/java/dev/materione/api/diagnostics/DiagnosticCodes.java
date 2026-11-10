@@ -559,6 +559,25 @@ public final class DiagnosticCodes {
             new DiagnosticCode("MTR-0098", Severity.ERROR, "GUI container cannot be opened on this server; the open is refused");
 
     /**
+     * A player's crash-safe input escrow state is unreadable (gui-input-durability.md section 5.9, #309): the
+     * ledger file is corrupt (renamed aside, never deleted), a newer version than this build reads, left over from
+     * an earlier quarantine, or could not be read at all, or the pre-login preload did not finish. The data is
+     * preserved untouched and that player's strict input transfers are refused until an admin resolves it by hand.
+     */
+    public static final DiagnosticCode ESCROW_STATE_UNREADABLE =
+            new DiagnosticCode("MTR-0101", Severity.WARN,
+                    "A player's escrow state is unreadable; their strict input transfers are refused");
+
+    /**
+     * A strict input transfer was refused because it could not be recorded (gui-input-durability.md section 5.9,
+     * #309): a ledger append failed (disk full, permissions) or an account could not be encoded or is over its cap.
+     * The click did nothing; the player was told. Reported at most once per player per minute.
+     */
+    public static final DiagnosticCode ESCROW_TRANSFER_REFUSED =
+            new DiagnosticCode("MTR-0102", Severity.WARN,
+                    "A strict input transfer was refused because it could not be recorded");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -689,7 +708,9 @@ public final class DiagnosticCodes {
             TEMPLATE_CYCLE,
             TEMPLATE_AMBIGUOUS,
             BUILTIN_PACK_ID_RESERVED,
-            BUILTIN_PACK_UNAVAILABLE);
+            BUILTIN_PACK_UNAVAILABLE,
+            ESCROW_STATE_UNREADABLE,
+            ESCROW_TRANSFER_REFUSED);
 
     private DiagnosticCodes() {}
 

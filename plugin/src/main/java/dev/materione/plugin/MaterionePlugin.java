@@ -75,6 +75,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private DeliveryService delivery;
     private BehaviorService behavior;
     private dev.materione.core.storage.PlacementIndex placements;
+    /** The crash-safe input ledger writer (gui-input-durability.md row L); null until storage is up. */
+    private dev.materione.plugin.escrow.io.EscrowLedgerStore escrowLedger;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
@@ -144,6 +146,14 @@ public final class MaterionePlugin extends JavaPlugin {
         return pipeline;
     }
 
+    /**
+     * The per-player escrow ledger store (gui-input-durability.md §5.3, row L): async, FIFO per player, on the IO
+     * executor. Null when the {@code escrow-ledger} phase degraded.
+     */
+    public dev.materione.plugin.escrow.io.EscrowLedgerStore escrowLedger() {
+        return escrowLedger;
+    }
+
     /** The thread gateway (commands hop to the player/region that owns their target). */
     public SchedulingGateway scheduling() {
         return scheduling;
@@ -196,6 +206,7 @@ public final class MaterionePlugin extends JavaPlugin {
                 BootstrapPhase.degrade("core-services", this::startCoreServices),
                 BootstrapPhase.disable("platform-probe", this::probePlatform),
                 BootstrapPhase.degrade("storage-init", this::initStorage),
+                BootstrapPhase.degrade("escrow-ledger", this::startEscrowLedger),
                 BootstrapPhase.degrade("built-in-registration", this::registerBuiltins),
                 BootstrapPhase.degrade("content-load", this::loadContent),
                 BootstrapPhase.degrade("editor-transport", this::startEditorTransport),
@@ -237,6 +248,9 @@ public final class MaterionePlugin extends JavaPlugin {
             }
             if (integrations != null) {
                 integrations.close();
+            }
+            if (escrowLedger != null) {
+                escrowLedger.close(); // an INTENT still in flight reaches its file before the async scheduler goes
             }
             if (variables != null) {
                 variables.close(); // the server store is written once more before the registries go
@@ -304,6 +318,25 @@ public final class MaterionePlugin extends JavaPlugin {
         settingsDiagnostics.addAll(storage.diagnostics());
         settingsDiagnostics.forEach(diagnostics::publish);
         scheduling = new SchedulingGatewayImpl();
+    }
+
+    /**
+     * The escrow ledger writer and its pre-login/quit listener (gui-input-durability.md §5.7). Nothing consumes the
+     * ledger until row P; the preload runs for every allowed login so the join path needs no IO, and a player with
+     * no ledger file costs one failed file open. Options: {@code escrow_fsync} (default true) and
+     * {@code escrow_retention_days} (default 30), optional keys not written to a fresh settings file.
+     */
+    private void startEscrowLedger() {
+        var options = new dev.materione.plugin.escrow.io.LedgerOptions(
+                settings.getBoolean("escrow_fsync", true),
+                java.time.Duration.ofDays(Math.max(1, settings.getInt("escrow_retention_days", 30))).toMillis());
+        escrowLedger = new dev.materione.plugin.escrow.io.EscrowLedgerStore(
+                storage.storageDir().resolve(dev.materione.plugin.escrow.io.EscrowLedgerStore.DIRECTORY),
+                task -> scheduling.executeAsync(this, task), options, System::currentTimeMillis,
+                diagnostics::publish, getLogger()::warning);
+        getServer().getPluginManager().registerEvents(new dev.materione.plugin.escrow.runtime.EscrowLedgerListener(
+                escrowLedger, dev.materione.plugin.escrow.io.EscrowLedgerStore.PRELOAD_TIMEOUT,
+                diagnostics::publish), this);
     }
 
     private void registerBuiltins() {

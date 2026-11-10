@@ -537,7 +537,12 @@ The built-in packs (master architecture §7.3, #8) add two codes, both from the 
 
 **Reserved for GUI containers beyond the chest** ([`gui.md`](gui.md) §12.4, #286, scope approved by the owner): `MTR-0099` an input slot on a slot the client refuses items for (warning; phase 2), and `MTR-0100`, which the owner has since given to the crash-safe input design below. Nothing emits them yet and no other change may take them. `MTR-0097` was defined by #290 and `MTR-0098` by #292.
 
-**Proposed, not yet assigned, for crash-safe input ownership** ([`gui-input-durability.md`](gui-input-durability.md) §5.9, #247 design; the owner chose to start the block at `MTR-0100` on PR #303): `MTR-0100` (platform lacks checkpoint support), `MTR-0101` (a player's escrow state is unreadable), `MTR-0102` (a strict transfer was refused because it could not be recorded) and `MTR-0103` (recovery left stacks owed). They are not in `DiagnosticCodes` and nothing emits them until the #247 design's rows land; no other change may take them.
+Crash-safe input ownership ([`gui-input-durability.md`](gui-input-durability.md) §5.9, #247; the owner chose to start the block at `MTR-0100` on PR #303) takes `MTR-0100` to `MTR-0103`. Row L (#309) **assigned and emits** `MTR-0101` and `MTR-0102`, below. `MTR-0100` (platform lacks checkpoint support) and `MTR-0103` (recovery left stacks owed) stay **proposed, not yet assigned**: they are not in `DiagnosticCodes` and nothing emits them until row P lands; no other change may take them.
+
+| Code | Severity | Meaning and recovery |
+|---|---|---|
+| `MTR-0101` | warning | A player's crash-safe-input escrow state is unreadable, so that player's strict input transfers are refused and **nothing is returned or deleted** for them. Causes, named in the message: the ledger file `storage/escrow/<uuid>.ledger` is corrupt (a bad record before its end; it is renamed to `<uuid>.ledger.corrupt-<millis>`, never deleted), it is a newer version than this build reads (left untouched), a `.corrupt-*` file of an earlier quarantine is still beside it, it could not be read (permissions, a failing disk; retried the next time the player loads), or the pre-login preload did not finish within 5 s. The state is re-derived from the files on every load, so it survives a restart: the player stays refused until an admin resolves it by hand (inspect the preserved file, then move any `.corrupt-*` file out of `storage/escrow/`); admin tooling is a follow-up. Reported at most once per player per minute. Built in #309 ([`gui-input-durability.md`](gui-input-durability.md) §12, row L). |
+| `MTR-0102` | warning | A strict input transfer was refused because it could not be recorded: a ledger append failed (disk full, permissions, a failing disk), so an exit decision could not be made durable. The click did nothing and the player was told. Fix the disk or the permissions of `storage/escrow/`; the next transfer retries. Reported at most once per player per minute. Row L emits it for the ledger append; row P emits it for an account that cannot be encoded or is over its cap (the same refusal). Built in #309. |
 
 The GUI runtime ([`logic.md`](logic.md) §21, #214) takes no new code. A GUI's `behavior:` is compiled in the
 GUI type's diagnose stage, so `MTR-0021`, `MTR-0057`, `MTR-0058` and `MTR-0060` appear for GUIs with the same
@@ -694,6 +699,8 @@ produced by the YAML dumper, so it carries no comments; this table is the refere
 | `transfer_host` | blank | Target host of the 1.20.5+ transfer packet used by `connect`. Blank means the packet is off and `connect` is unavailable (logic.md §18). |
 | `transfer_port` | `25565` | Target port of the transfer packet. Must be 1 to 65535. |
 | `transfer_mode` | `packet` | `bungeecord` selects the BungeeCord/Velocity plugin channel for `connect` instead of the packet. |
+| `escrow_fsync` | `true` (optional; not written to a fresh file) | Crash-safe input slots (gui-input-durability.md §5.3): force each escrow-ledger append to disk (`force(false)`). Protects against power loss only; a process crash needs no `fsync`. It runs on the IO executor, never on a region thread. |
+| `escrow_retention_days` | `30` (optional; not written to a fresh file; minimum 1) | How long an acknowledged exit's decision is kept in `storage/escrow/<uuid>.ledger` before compaction may drop it: how old a restored player-data backup may be before consumed entries could come back. |
 
 ### 7.2 Usage metrics (bStats) and the opt-out
 

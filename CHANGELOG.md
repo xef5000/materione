@@ -9,6 +9,16 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **The escrow ledger's file IO (gui-input-durability.md §12 row L, #309).** The per-player exit ledger
+  `storage/escrow/<uuid>.ledger` now has its async writer: FIFO per player on the plugin's IO executor, parallel across players, never on a
+  region or main thread (a build rule bans file IO and blocking waits from the owner-side escrow code, and Bukkit from the IO half). Appends
+  complete after the write and, with `escrow_fsync` (default on), the force; a failed one is cut back off so a refusal means nothing was
+  recorded. A torn tail is cut by the next append, a corrupt ledger is renamed `<uuid>.ledger.corrupt-<millis>` (never deleted) and keeps the
+  player refused across restarts until an admin moves it away, and compaction rewrites the file atomically, dropping acknowledged exits older
+  than `escrow_retention_days` (default 30). Every allowed login's ledger is read into memory in `AsyncPlayerPreLoginEvent`, so the join path
+  needs no IO. **Nothing consumes it yet**: the click paths, the recovery gate and the barrier are the later rows of #247, so input slots are
+  still best-effort. New diagnostics: `MTR-0101` (a player's escrow state is unreadable) and `MTR-0102` (a strict transfer could not be
+  recorded); `MTR-0100` and `MTR-0103` stay reserved.
 - **`durable: required | best_effort` on input slot layers, schema and studio only (gui-input-durability.md §10, #308).** A `slots`
   layer with `input: true` may declare `durable:` (default `best_effort`, never written unless chosen); the studio's inspector has a
   Durability control for it and the editor schema describes it. **It does nothing at runtime yet**: `required` behaves as
