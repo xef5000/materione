@@ -13,6 +13,13 @@
 > (row X), not on an outside ack. Nothing is built yet, so logic.md §25 decision 12 still describes the code: input slots
 > are enabled and **best-effort**, and nothing may be described as crash-safe until rows M, L, P, B and H are green on main.
 >
+> **Row R (#306) has run the platform probes P1 to P4 (§11).** All four are settled and the design stands: a fake-connection
+> player works on the 1.21.4 harness (P4), a completed save survives `destroyForcibly` (P2), the death ordering and both
+> `keepInventory` values are as designed (P3), and on Folia the player save runs on the thread that runs entity-scheduler
+> tasks, shown by experiment with a positive control (P1, F12), so Folia needs no atomicity mechanism of its own. What the probes
+> added to the design is small and listed in §11 ("What the results changed"): the Folia stop path, the Folia off-thread-save
+> exposure, and a platform note on the fake player's reach.
+>
 > Traceability: **D1** (§9: the escrow is runtime player state, not content, and creates no second source of truth for
 > content); **D4/D6** (the feature is runtime plumbing under the one ECA engine and the one GUI pipeline; no flow reaches
 > the player's items except through it); **D7** (derived runtime state is durable and lives in `storage/`);
@@ -63,7 +70,7 @@ clicks and drags are applied by the server after the handler returns, so they mi
 | W1 | `InputJournal` Javadoc: "the crash journal"; "the invariant that makes it duplication-proof"; "so a save can never see both" | **Overstated** | Holds only for steps done synchronously on the owner thread. For a server-applied click or drag the mirror is the next tick, and the autosave pass runs *between* (§3 F6). Two states a save can capture: **move-in** (item gone from the inventory, journal not yet written) → a crash **loses** it; **move-out** (item back in the inventory, journal still holds it) → a crash **duplicates** it. `InputJournalTest.aReleaseWithoutAMirrorWouldReturnTheItemTwice` already encodes the second. |
 | W2 | `GuiJournal`/`InputJournal` Javadoc, logic.md §25 header "including the crash journal" | **Misnamed** | It is a recovery journal with a known open window (W1), not a crash journal. logic.md §25 decision 12 already says "best-effort"; the header and the Javadocs do not. |
 | W3 | #218 exit criterion: "items placed in an input slot survive close/quit/crash-safe paths … dupes impossible" | **Unproved** | No test kills a process. `InputJournalTest` models "saved" as plain lists; `guilogic.input-slots` is a client run on a live server. Neither can show a crash boundary. |
-| W4 | logic.md §6.5 and §25 decision 8: items "go back on every end of a session"; "nothing is ever deleted unless a flow says so" | **False in two paths, unproved in a third** | *Death:* `ServerPlayer.die` computes the drop list from the inventory, fires `PlayerDeathEvent`, and only then calls `closeContainer(DEATH)` [SRV, both pins]; our close handler therefore hands the window's items to a player whose death drops are already fixed — with `keepInventory=false` they most likely vanish at respawn [U: the clearing step was not traced]. *Overflow:* what does not fit is `dropItemNaturally`'d; a world entity is a different store from the player's data, so a crash after the drop and before the save, or an entity that despawns, or a cancelled spawn, deletes or duplicates (W6). *Cursor:* an item picked up from an input slot is on the cursor, in neither the journal nor any save (the owner accepted this exposure, G5). |
+| W4 | logic.md §6.5 and §25 decision 8: items "go back on every end of a session"; "nothing is ever deleted unless a flow says so" | **False in two paths, unproved in a third** | *Death:* `ServerPlayer.die` computes the drop list from the inventory, fires `PlayerDeathEvent`, and only then calls `closeContainer(DEATH)` [SRV, both pins]; our close handler therefore hands the window's items to a player whose death drops are already fixed — with `keepInventory=false` they vanish at the respawn: not dropped, and not copied to the respawned player [PROBE P3, §11: confirmed]. *Overflow:* what does not fit is `dropItemNaturally`'d; a world entity is a different store from the player's data, so a crash after the drop and before the save, or an entity that despawns, or a cancelled spawn, deletes or duplicates (W6). *Cursor:* an item picked up from an input slot is on the cursor, in neither the journal nor any save (the owner accepted this exposure, G5). |
 | W5 | `GuiJournal.mirror` / `restore` catch `RuntimeException` and log one warning | **Silent loss of protection** | A failure to record leaves the window unprotected with the player unaware and the click already applied. Fail-soft is right for content (D6); it is wrong for an ownership transfer, which must fail *closed*: refuse the transfer. |
 | W6 | `restore` on join: "gives back what the journal still holds, once" | **Not idempotent under overflow** | `restore` clears the journal in the live data, hands items to `InputReturns.giveBack`, which drops what does not fit. Crash again before the next save: the saved data still has the journal *and* a dropped entity may already be in the world. |
 | W7 | logic.md §25 decision 12: "A separate plugin journal or `.dat` replacement cannot coordinate subsequent server saves" and "A server extension must coordinate all saves … acknowledge an ordered asynchronous write before interaction resumes" | **Too broad, in one respect** | True that the platform gives no acknowledged save and that the plugin cannot order a write against the server's. **Not true that this makes plugin-side crash-safety impossible:** the player's persistent data is serialised *in the same compound as the inventory* and written in one file replace (§3 F1, F3). A marker in that data is therefore atomic with the inventory *by construction*, with no coordination, if the plugin changes both in one owner-thread step. What genuinely stays unavailable is a platform acknowledgment of *when* a snapshot is durable — which only matters for the optional barrier (tier 3). This design uses that. The owner first kept the block until a platform acknowledgment existed (§14 Q1), then ruled that the tier-3 barrier is that acknowledgment (§14 Q1b) and lifted the block. |
@@ -79,7 +86,10 @@ globs watch, so it rides row D0 rather than a docs PR (it would stale the blesse
 Evidence labels (the manner of gui.md §12.2.1): **API** — Paper API sources of the 1.21.4 and 26.1.2 pins, from the
 Gradle cache; **SRV** — the Paper server jars the harness and the probe already hold (`paper-1.21.4.jar`,
 `paper-26.1.2.jar`), read with `javap -p -c -constants`, method names given; **REPO** — this repository's code;
-**U** — assumption, with the probe that settles it (§11). No file was downloaded; no server or client was run.
+**U** — assumption, with the probe that settles it (§11); **PROBE** — a harness run on a real server (row R, #306, §11); **FOLIA** —
+the Folia server jars (`folia-1.21.4-6`, `folia-26.1.2-8`, §11 P1) read with `javap -p -c -constants`, method names given. The
+design pass (#303) downloaded nothing and ran no server; row R fetched the two Folia jars (owner-approved, §14 Q9b) and ran the
+Paper 1.21.4 and Folia 1.21.4 servers.
 
 | # | Fact | Label | 1.21.4 | 26.1.2 |
 |---|---|---|---|---|
@@ -89,20 +99,22 @@ Gradle cache; **SRV** — the Paper server jars the harness and the probe alread
 | **F4** | The cursor is not saved. `PlayerList.remove` calls `closeContainer(DISCONNECT)` (which fires `InventoryCloseEvent` and runs `AbstractContainerMenu.removed`, returning the carried item to the inventory or the world) **before** `PlayerQuitEvent` and **before** `save`. | SRV | ✔ | ✔ |
 | **F5** | `CraftPlayer.saveData()` calls `playerIo.save(handle)` directly: synchronous, `void`, **on whatever thread calls it**. `PlayerList.saveAll(int)` goes through `MCUtil.ensureMain`, and `PlayerList.save` skips non-persistent players and stamps `lastSave`. | SRV / API (`Player.saveData` Javadoc) | ✔ | ✔ |
 | **F6** | In `MinecraftServer.tickServer`: `mainThreadHeartbeat` (plugin scheduler tasks) → `tickConnection` (`ServerConnectionListener.tick`: packet handlers, hence `handleContainerClick`) → `tickChildren` → **`PlayerList.saveAll(rate)`** (the Paper per-player autosave; a negative `player-autosave.rate` falls back to the world autosave period, Paper's 6000 ticks by its documentation, not read here) → tick end. All on the main thread. `tickChildren` also contains a heartbeat and a `tickConnection`, in that order (heartbeat first). A task scheduled "one tick later" from a packet handled by that last `tickConnection` therefore runs in the **next** tick, after this tick's `saveAll`; the hole is real whenever a click arrives there (whether the earlier `tickConnection` is also exposed was not traced). | SRV | ✔ | ✔ (same order) |
-| **F7** | Shutdown: `stopServer` stops the connection listener, calls `PlayerList.saveAll()` **while windows are still open**, then `removeAll(true)` (which disconnects each player). A quit or kick goes through `PlayerList.remove`: close the container, fire the quit event, **then** save. | SRV | ✔ | ✔ (same order) |
+| **F7** | Shutdown: `stopServer` stops the connection listener, calls `PlayerList.saveAll()` **while windows are still open**, then `removeAll(true)` (which disconnects each player). A quit or kick goes through `PlayerList.remove`: close the container, fire the quit event, **then** save. **On Folia the stop path has no such full save: F15.** | SRV | ✔ | ✔ (same order) |
 | **F8** | Nothing prevents another plugin from calling `Player.saveData()` from another thread, or from replacing inventories wholesale (inventory-sync plugins that serialise the inventory but not our persistent data). | API / SRV (F5) | ✔ | ✔ |
 | **F9** | `AsyncPlayerPreLoginEvent` is fired off the main thread, before the player exists (it knows the UUID), so IO may run in it. | API | ✔ | ✔ |
-| **F10** | `ServerPlayer.die`: drop list from `getInventory().getContents()` → `CraftEventFactory.callPlayerDeathEvent` (fires the event, then drops the list) → `closeContainer(DEATH)`. | SRV | ✔ | ✔ (`die` signature differs; same order read) |
-| **F11** | A kill of the JVM (`destroyForcibly`/`kill -9`) cannot interrupt a `rename` half-way on the platforms we run on, and data already `write()`n to the OS survives it (page cache) — so for **process** crashes a completed `write`+`rename` is durable without `fsync`. | U (OS semantics, not Paper) | probe §11 | probe §11 |
-| **F12** | **Folia:** the thread that runs the player's save is the same one that runs `Entity` scheduler tasks (so a plugin step and a save cannot interleave). **Folia must be supported for every layer (§14 Q9), so this is a target to prove, not a reason to refuse.** | **U** — no Folia jar is on this machine; the owner approved fetching one for P1 (§14 Q9b); none was downloaded in this pass | probe §11 | probe §11 |
+| **F10** | `ServerPlayer.die`: drop list from `getInventory().getContents()` → `CraftEventFactory.callPlayerDeathEvent` (fires the event, then drops the list) → `closeContainer(DEATH)`. | SRV + **PROBE (P3)**: the order was observed, death event, then `InventoryCloseEvent(DEATH)`, then the respawn event, with `inventoryAtClose` still holding the dead inventory | ✔ | ✔ (`die` signature differs; same order read) |
+| **F11** | A kill of the JVM (`destroyForcibly`/`kill -9`) cannot interrupt a `rename` half-way on the platforms we run on, and data already `write()`n to the OS survives it (page cache) — so for **process** crashes a completed `write`+`rename` is durable without `fsync`. | **PROBE (P2)** for the second half: a save that returned, then a kill, left the complete new snapshot on disk (K1, K2, K21 of the skeleton IT, Windows 11). The first half (no half-done `rename`) is OS semantics: the gate cannot sit *inside* `safeReplaceFile`, so K3/K4 are checked as file states (F2's fallback is exercised, the kill itself is not) | ✔ (Paper 1.21.4 b232) | not run (the harness is the 1.21.4 floor) |
+| **F12** | **Folia:** the thread that runs the player's save is the same one that runs `Entity` scheduler tasks (so a plugin step and a save cannot interleave). **Folia must be supported for every layer (§14 Q9), so this was a target to prove, not a reason to refuse. Proved (P1).** In one region tick, `MinecraftServer.tickServer(…TickRegionData)` runs, in this order: the region task queue, `FoliaRegionScheduler.tick`, **`EntityScheduler.executeTick` for every entity of the region**, `tickChildren` (which contains the region's `tickConnections`, hence packet handlers and `handleContainerClick`), then **`PlayerList.saveAll(rate)`**. `saveAll` saves only players for which `TickThread.isTickThreadFor(player)` holds, i.e. the player's own region thread, and calls the same `PlayerList.save` → `PlayerDataStorage.save` as F1. The quit path (`ServerGamePacketListenerImpl.removePlayerFromWorld` → `PlayerList.remove`: close container, quit event, save) makes no scheduler hop; that its caller, `onDisconnect`, is driven by the region's connection tick was not traced further. | **FOLIA** (bytecode, both builds) **+ PROBE (P1)**: on Folia 1.21.4 b6 a step that writes `a=n`, holds the region thread 20 ms and writes `b=n`, against an autosave of rate 1 and a reader of the `.dat`, showed **0 torn snapshots in 4 495 reads (190 distinct saves)**; the same step against an off-thread `saveData()` loop showed **419 torn snapshots in 4 397 reads**, so the detector sees interleaving when it exists | ✔ Folia 1.21.4 b6 (read + run) | ✔ Folia 26.1.2 b8 (read: same call order, same `isTickThreadFor` guard; not run: the protocol client has no 26.x build) |
 | **F13** | `ItemStack.serializeAsBytes`/`deserializeBytes` (Paper) round-trip a stack including its data version, and are what `GuiJournal` already uses. | API / REPO | ✔ | ✔ |
 | **F14** | `spigot.yml` `players.disable-saving` is readable at enable (a file read off-thread) and equals `disablePlayerDataSaving` (F1). | SRV (field) / API (`Spigot#getSpigotConfig`, deprecated for removal) | ✔ | ✔ |
+| **F15** | **Folia stop path.** `MinecraftServer.stopServer` halts the region schedulers (`TickRegionScheduler.halt`) and then calls `PlayerList.removeAll(true)`; **there is no `PlayerList.saveAll()` before it** (Paper has one, F7). A server stop on Folia is therefore the quit path for every online player (close the container, quit event, then save), never "a full save with windows still open". `isTickThreadFor` also admits the shutdown thread for players, after the regions have stopped, so no region step runs during it. | **FOLIA** (read; `stopServer` offsets, both builds) | ✔ Folia 1.21.4 b6 | ✔ Folia 26.1.2 b8 |
+| **F16** | **Folia does not reject an off-thread `Player#saveData()`.** `CraftPlayer.saveData` calls `PlayerDataStorage.save` on the caller's thread and the serialisation of the live player reads it from there; no thread check intervenes. Another plugin that does this (F8) can capture the inventory and the persistent data from different instants of an in-flight step, on Folia as on Paper — more often on Folia, where saves and steps run concurrently on many threads. | **PROBE (P1 control)**: 400 requested, 400 completed, no failure, 419 torn snapshots in the reader | ✔ Folia 1.21.4 b6 | not run |
 
 **What follows.** F3 + F5/F6 give the one fact the whole design stands on: on a single-owner-thread platform, **a plugin
 step that changes the inventory and the persistent data cannot be split by a save** (saves run on the main thread, at a
 fixed point of the tick, never inside a handler). F1/F2 give crash-consistent file replacement for free. F11 means our
 own ledger needs a completed `write` (not an `fsync`) for process-crash durability. F4/F10 bound what the cursor and
-death can do. F6 is why the next-tick mirror is a real hole. F12 is the one genuine platform gap, and it must be closed (the owner requires Folia support).
+death can do. F6 is why the next-tick mirror is a real hole. F12 was the one genuine platform gap (the owner requires Folia support); probe P1 closed it: on Folia the same fact holds, with the one difference F15 and one exposure F16 records.
 
 ---
 
@@ -253,7 +265,7 @@ moves already do; this design extends it to every click that touches an input sl
 | **Close (player, flow, replaced window)** | tier 1: every HELD entry → inventory; what does not fit → OWED; frozen EXITING entries stay | Nothing is dropped. The player is told how many stacks are owed (`/materione claim`). |
 | **Reload / shape-changing re-open** | tier 1: entries keep ids, slot hints change; entries whose slot stopped being an input are returned | No IO. The in-flight window is replaced in one step. |
 | **Quit / kick / server stop** | the platform fires `InventoryCloseEvent(DISCONNECT)` before the save (F4, F7): the close above runs, so the snapshot has the stacks in the inventory or OWED, **not** HELD; EXITING entries stay in the account with their `txn` | The save that follows contains the matching (inventory, account). |
-| **Death** | owner-decided (§14 Q10): in `PlayerDeathEvent`, one tier-1 step: with `getKeepInventory()` the HELD entries return to the inventory; otherwise their stacks are appended to `event.getDrops()` (the list is mutable and dropped right after the event, F10). EXITING entries follow the ledger: consumed if an `INTENT` exists, else treated like HELD | Fixes W4. The ordering is F10; both `keepInventory` values are probe P3. |
+| **Death** | owner-decided (§14 Q10): in `PlayerDeathEvent`, one tier-1 step: with `getKeepInventory()` the HELD entries return to the inventory; otherwise their stacks are appended to `event.getDrops()` (the list is mutable and dropped right after the event, F10). EXITING entries follow the ledger: consumed if an `INTENT` exists, else treated like HELD | Fixes W4. The ordering is F10 and both `keepInventory` values were measured (P3, §11): a stack appended to `getDrops()` is dropped at the death location, a stack added to the inventory in the event survives the respawn, and a stack released later, at the `closeContainer(DEATH)`, survives only when `keepInventory` is true. |
 | **Plugin disable / `/reload`** | `onDisable` releases every window synchronously (tier 1) before the server saves | |
 | **Overflow** | stays **OWED** in the account; claimed by `/materione claim`, on join, and on the next close; never `dropItemNaturally` | G4. Fixes W6. |
 | **Cursor held across a re-open** | carried as today (`setItemOnCursor`); not escrowed | Vanilla exposure (G5). |
@@ -269,6 +281,8 @@ moves already do; this design extends it to every click that touches an input sl
 | Tier-3 read-back | IO executor | yes (read) |
 | Tier-3 `Player.saveData()` | owner, rate-limited | yes — the platform's own; the owner-approved D8 exception (Q4) |
 | Continuation after a write ack | back to the owner via `executeEntity`; never a blocking `get()` | none |
+
+**On Folia** the owner thread of a player is the thread of the region that owns it (F12): a tier-1 step is one `executeEntity` task, and the tier-3 `Player.saveData()` is called from such a task too (it ran there in P1, in 9 ms). A step split over two entity tasks is not atomic against the save, on Folia as anywhere: I1 is unchanged.
 
 A ban test (build.md R-series, new rule) fails the build if a class of the `escrow` package's owner-side half imports
 `java.io`/`java.nio.file` or calls `Future#get`/`join`; the IO half may not import Bukkit entities.
@@ -307,13 +321,23 @@ published to `/materione doctor`.
 | Check | Source | If false |
 |---|---|---|
 | The platform is a pin whose F1–F7 and F10 were read (Paper 1.21.4, 26.1.2) | the platform probe (plugin.md §1) + this table | unsupported platform |
-| Single-owner-thread saves (F12) hold on this platform. Paper 1.21.4 and 26.1.2: read. **Folia: a supported target** — enabled once probe P1 passes on a Folia jar; until then the Folia result is "not yet probed", an interim rollout state of an unbuilt feature, not an end state | platform probe | not yet probed / unsupported |
+| Single-owner-thread saves (F12) hold on this platform. Paper 1.21.4 and 26.1.2: read. **Folia: supported** — probe P1 passed on Folia 1.21.4 b6 (run, with a positive control) and the same call order and guard were read on Folia 26.1.2 b8; the platform probe recognises Folia and the capability check applies the Folia rules below | platform probe | unsupported platform |
 | Player-data saving enabled (F14) | `spigot.yml` `players.disable-saving` at enable | unsupported platform |
 | The escrow directory is writable (a create+delete probe at enable, off-thread) | `storage/escrow/` | ledger unavailable |
 
-**If P1 shows the save can interleave with entity tasks on Folia**, the answer is a Folia-specific atomicity mechanism
-designed from that evidence (row R2 then re-opens §5.4 for Folia), not a permanent refusal: the owner requires every layer
-to work on Folia (§14 Q9). The capability check keeps its other rows for environments that genuinely cannot meet G1–G4
+**Folia (P1 passed, so no Folia-specific atomicity mechanism is designed).** F12 holds: the save and the entity-scheduler
+tasks of a player run on the player's region thread, one after the other within a region tick, so a tier-1 step (one
+`executeEntity` task) cannot be split by a save. Folia changes four things, none of them a new mechanism:
+
+1. every tier-1 step and every tier-3 `Player.saveData()` runs inside an `executeEntity` task of the owning player (§5.6);
+2. **K8's server-stop row is the quit row on Folia** (F15): `stopServer` calls `removeAll` only, so every window is closed
+   before the one save, never saved while open;
+3. F8's foreign off-thread `saveData()` is a live exposure on Folia (F16: not rejected, torn snapshots seen), which the plugin
+   cannot prevent; it stays the documented limit of P7 and `doctor` lists known offenders the same way;
+4. a player in transit between regions is not on any region thread, so the autosave guard skips it (read from `saveAll`'s
+   `isTickThreadFor` test, not run) and no step runs on it either.
+
+The capability check keeps its other rows for environments that genuinely cannot meet G1–G4
 (saving disabled, an unwritable `storage/escrow/`, a platform build nobody has read).
 
 **When a check fails** the platform lacks checkpoint support. This is an **explicit documented blocker, not a silent
@@ -353,8 +377,8 @@ records that completed. "Kill" = `kill -9` at that instant; the next boot runs �
 | **K5** | Tier-1 **move-out** (slot → inventory), no save since | `S'` (stack in `A`, not in the inventory) | stack returned once | The older snapshot still holds the stack in the account only. |
 | **K6** | …a save then completed | `S''` (stack in the inventory, gone from `A`) | nothing owed | Same instant for both (I2). The old design duplicated here on the next-tick mirror (W1). |
 | **K7** | **Close with overflow** | the save has the stacks OWED in `A`, inventory full | stacks stay OWED; claim later | No world drop (G4). Kill after the save: still OWED. Before it: as K5. |
-| **K8** | **Quit** (`remove`: close → quit event → save) or **server stop** (`saveAll` with windows still open, then `removeAll`) | `S` of that save: on a quit, stacks in the inventory or OWED (none HELD); on a stop, HELD entries may still be in `A` | as K2/K7 | F4/F7: on a quit the close runs before the save; on a stop the full save already holds HELD entries in the account (tier 1), and the later releases only move them. Kill mid-quit before the save: as K1/K5. |
-| **K9** | **Death** | the next save holds the stacks in the inventory (`keepInventory`) or they are drops on the ground (the world's store, outside the guarantee once dropped); the account no longer holds them | stacks follow the normal death path | F10: the event handler moves the entries in the same step, before the list is dropped. (Probe P3 confirms both `keepInventory` values.) |
+| **K8** | **Quit** (`remove`: close → quit event → save) or **server stop** (`saveAll` with windows still open, then `removeAll`) | `S` of that save: on a quit, stacks in the inventory or OWED (none HELD); on a stop, HELD entries may still be in `A` | as K2/K7 (on Folia a server stop is the quit sequence: F15) | F4/F7: on a quit the close runs before the save; on a stop the full save already holds HELD entries in the account (tier 1), and the later releases only move them. Kill mid-quit before the save: as K1/K5. |
+| **K9** | **Death** | the next save holds the stacks in the inventory (`keepInventory`) or they are drops on the ground (the world's store, outside the guarantee once dropped); the account no longer holds them | stacks follow the normal death path | F10: the event handler moves the entries in the same step, before the list is dropped. (Probe P3 confirmed both `keepInventory` values, §11.) |
 | **K10** | Tier-2 consume, **before `INTENT` completed** (mid-append / not yet written) | `S` with E not yet in `A`, or `S'` with E EXITING; no valid `INTENT` | E returned (or the item stays in the inventory) | The decision point is the CRC-valid record; a torn tail is not a record (§5.3). |
 | **K11** | …`INTENT` completed, step 3 not yet run | `INTENT(T)`; `S'` with E EXITING (or `S` without E) | E dropped by recovery (or nothing to drop: the item is in the inventory, G3) | Decision durable ⇒ never returned (G2/I5). |
 | **K12** | …step 3 ran, no save since | `INTENT(T)`; `S'` with E EXITING | E dropped by recovery | Same. |
@@ -404,7 +428,7 @@ at most once per player per minute. `doctor` lists the capability result and any
 | **Model-based property test** | Random sequences of {move-in, move-out, swap, close, overflow, consume, quit, death, reload} × a **crash at every step boundary** × **every earlier snapshot** as the saved one; the oracle checks G1–G3 after recovery. The seed set is committed; failures print the seed. | this is the executable form of the K table; it also replays K19 against the *old* design as a negative control |
 | **Golden fixtures** | Account v1 and ledger v1 as hex goldens (empty, one HELD, OWED+EXITING, a torn tail, a bad CRC, a newer version, the legacy `gui_inputs`); decode→encode is byte-identical; N−1 accepted, N+1 opaque. The corpus only grows (roadmap rule 2). | `fixtures/escrow/` |
 | **Ban tests** | owner-side half has no `java.io`/`java.nio.file`/`Future#get`; IO half has no Bukkit entity import; no `dropItemNaturally` in the input package; no `mirrorNextTick`. | plugin.md §11 style |
-| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. Needs spike R1 (a headless player). |
+| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. **R1 is done (#306, §11 P4):** the rig exists (`CrashRig`, the probe plugin's fake-connection player and `dprobe gate`) and `PaperInputDurabilityIT` carries K1, K2, K4 (file state simulated) and K21 as the skeleton, opt-in (`-Pharness.inputDurability=true`). Row H swaps the probe's stand-in account for the product's, the `dprobe gate` command for the production gate, and decides what moves into the default run. |
 | **Probe loop (local)** | The same boundaries with a real client on 26.1.2 for the ones a fake player cannot show (cursor, UI messages, hotbar swaps). | local only (CLAUDE.md) |
 | **QA catalog** (`qa/catalog/guiescrow.mjs`) | `guiescrow.refused-unsupported` (auto: the layer is inert, message line, `MTR-0100`), `guiescrow.owed-claim` (auto: full inventory, close, `/materione claim`), `guiescrow.recovery-message` (auto: the join line after a runner-side `kill`), `guiescrow.pickup-lifts-to-cursor` (visual: the stack lifts as in vanilla and the account loses it in the same step), `guiescrow.death-release` (auto: `keepInventory` on/off). | blessed on main; kill/restart needs a `probe.mjs` server-restart verb (row Q) |
 | **Perf** | `EscrowPerfTest`: a 27-stack account encode ≤ 200 µs on the owner thread (added to plugin.md §9 by row P); a tier-1 step allocates no IO. | budget enforced in CI |
@@ -434,36 +458,111 @@ consumed* is the ledger. Neither duplicates the other, and recovery is defined f
    upgraded again — documented, and `doctor` lists accounts with entries.
 4. Nothing ships until rows M, L, P, B and H are green on main; the block no longer gates it (§14 Q1b).
 
-## 11. Unverified, and the probe that settles each
+## 11. Probes: what was unverified, and what row R found
+
+Row R (#306) ran P1 to P4. The harness pieces are in `harness/` (opt-in, §12 row R): the **crash rig** (`CrashRig`: boot, kill at a
+named gate, boot again on the same world, read the player's `.dat` from the harness with `PlayerDat`), the test-only
+`durabilityProbe` plugin (the fake-connection player, the gate command and the K-row primitives, never shipped), `DeathProbeRunner`,
+`FoliaRunner` and the test-only `foliaProbe` plugin. To reproduce:
+
+```
+./gradlew :harness:integrationTest --tests dev.materione.harness.PaperInputDurabilityIT -Pharness.inputDurability=true
+./gradlew :harness:integrationTest --tests dev.materione.harness.FoliaInputDurabilityIT -Pharness.folia=true   # after: npm ci --ignore-scripts, in harness/protocol
+```
+
+| # | Claim | Result | Evidence |
+|---|---|---|---|
+| **P1** | **F12:** on Folia the player save and `executeEntity` tasks share a thread | **Verified** on Folia 1.21.4 build 6 (read and run); read on Folia 26.1.2 build 8 | F12, F15, F16 (§3). The call order of `tickServer`, the `isTickThreadFor` guard of `PlayerList.saveAll` and the stop path are the same in both builds (`javap`). The experiment ran on 1.21.4 only: its protocol client has no 26.x build. **0 torn snapshots in 4 495 reads (190 distinct saves)** against an autosave of rate 1 and a step that holds the region thread 20 ms between two writes; the positive control (an off-thread `saveData()` loop against the same step) showed **419 in 4 397**, so the detector is sensitive. A `saveData()` called inside an entity-scheduler task ran on `Region Scheduler Thread #0` (`owned=true`) and took 9 ms. F12 holds, so §5.8 gets no Folia atomicity mechanism; it gets the three consequences F15, F16 and the "one entity task per step" rule |
+| **P2** | **F11:** a completed `write`+`rename` survives `destroyForcibly` | **Verified** for the half that matters (a completed save is on disk after a kill); the half about a kill *inside* the replace is OS semantics and was not exercised (K3/K4 are file states) | `PaperInputDurabilityIT` rows K1, K2, K21: the JVM tree is `destroyForcibly`'d while the main thread is parked at a named gate, the harness reads the `.dat`, the same workspace boots and the rejoined player is asked what it holds. **K1** (a move-in, no save since): the disk holds the earlier snapshot, the stack is still in the inventory and no account exists; after the boot the stack is in the inventory. **K2** (move-in, then a save): the disk holds the stack in the account (`gen=1`) and not in the inventory, from one save (F3); after the boot the account still owes it. **K21** (a stack lifted to the cursor by a real click packet, then a save): the stack is in neither the inventory nor any cursor key on disk, and gone after the boot: G5 as designed. **K4** (file state simulated: `.dat` deleted after two saves): `.dat_old` exists and is the *first* snapshot, whole, and the boot loads it: F2's fallback, and the observation that after every completed save `.dat_old` is the snapshot before it. Windows 11, Java 21, Paper 1.21.4 b232; nothing in the IT is Windows-specific, but only Windows was run. The gate cannot sit inside `PlayerDataStorage.save`, so K3 (a kill mid-write) and a real K4 (between the two moves) stay untested at the kill itself; row H can add a JVM-level hook if wanted |
+| **P3** | **W4/F10:** `keepInventory=false` — what becomes of stacks released by the close after the death event; and that appending to `PlayerDeathEvent#getDrops()` drops them and `keepInventory=true` keeps the returned ones | **Verified**, all four cells (table below) | `DeathProbeRunner`: a fake player holds 3 apples in the inventory and 5 diamonds in an open window, then `setHealth(0)`; two release strategies, both gamerule values. The event order was observed: `PlayerDeathEvent` (drops computed from the inventory only: the window's diamonds are not in them), then `InventoryCloseEvent(DEATH)` (the inventory still holds the dead player's items), then `PlayerRespawnEvent` |
+| **P4** | A fake-connection player on the 1.21.4 harness is enough for `PlayerDataStorage` saves, PDC, `InventoryClickEvent`/`DragEvent` and `closeContainer` | **Verified**, with the limits below | `platformPaths`: a real `ServerPlayer` placed by `PlayerList.placeNewPlayer` over a `Connection` on a netty `EmbeddedChannel` (reflection only, no server dependency at build time), on a server that also runs Materione's own join handlers. **Saves:** `Player#saveData`, the quit path (`PlayerList.remove`), the shutdown path (`stop` with the player online, exit 0) and the Paper autosave (`player-auto-save.rate: 20`, a later change reached the file with no save command) each wrote the player's PDC to `<uuid>.dat`, and the next join loaded it. **Persistent data:** a string, a long and a byte-array account round-tripped, atomically with the inventory (K2). **Events:** a `ServerboundContainerClickPacket` handled by the player's own listener fired `InventoryClickEvent` (raw 54 in the probe window), three quick-craft packets fired `InventoryDragEvent` (raw slots `[0, 1]`, two diamonds each, one left on the cursor), and `Player#closeInventory` fired `InventoryCloseEvent` showing the window and returned the cursor remainder to the inventory (F4). **Death and respawn** (P3) work on the same player |
+
+**P3, the four cells** (Paper 1.21.4 b232; "released" = the window's 5 diamonds; the inventory held 3 apples):
+
+| Release strategy | `keepInventory` | Dropped in the world | Respawned player holds | Reading |
+|---|---|---|---|---|
+| at `InventoryCloseEvent` (the shipped behaviour) | false | the apples only | nothing | **the diamonds vanish**: given to the inventory after the drops were fixed, then not copied to the respawned player. W4 is confirmed |
+| at `InventoryCloseEvent` | true | nothing | apples and diamonds | survives, because the inventory is kept whole, including what was added after the event |
+| in `PlayerDeathEvent`: appended to `getDrops()` | false | apples and diamonds | nothing | **the design's path**: the list is mutable and is dropped right after the event (F10) |
+| in `PlayerDeathEvent`: added to the inventory | true | nothing | apples and diamonds | **the design's path** |
+
+**What the fake player does not reach** (the limits of P4; none changes the design, all matter to row H):
+
+* No login sequence: `AsyncPlayerPreLoginEvent` and `PlayerLoginEvent` are not fired, so the pre-login ledger preload (§5.7, F9) cannot
+  be exercised through a join. Row H calls the preload directly, or fires the event by hand.
+* The connection is not in `ServerConnectionListener`'s list, so the listener's per-tick work (keep-alive, packet limits, the
+  disconnect handling) never runs; `leave` calls `PlayerList.remove` directly, which is what `onDisconnect` does.
+* Clientbound packets are discarded, so nothing about what a *client* sees (a title, a cursor sync, a hotbar swap) can be asserted:
+  that is the protocol client's and the 26.x probe loop's ground (§8, "Probe loop").
+* The probe reaches the server by reflection on Mojang-mapped names, which Paper 1.21.4 uses at runtime; it was not run on 26.1.2.
+* The probe's account (a byte array and a `gen` in the player's persistent data) is a stand-in for the escrow account, and its
+  `dprobe gate` command stands in for the production crash gate (`-Dmaterione.escrow.gate`, §8). Row H replaces both.
+
+**Folia versions relative to the pins** (fill.papermc.io, project `folia`, checked for row R):
+
+| Pin | Folia builds | Pinned | Channel | Java |
+|---|---|---|---|---|
+| Paper harness pin 1.21.4 (build 232) | 1.21.4: builds 1, 4, 6 (2024-12-15 to 2025-06-13) | `folia-harness-*`: build 6, sha256 `dcf23332…fa2ac3a` | ALPHA | 21 |
+| Paper probe pin 26.1.2 (build 74) | 26.1.2: builds 6, 7, 8 (2026-05-06) | `folia-probe-*`: build 8, sha256 `607afd1c…79ebf57b` | STABLE | 25 |
+
+Both pins have a Folia build. Folia also publishes 1.19.4, 1.20.1 to 1.20.6, 1.21.5, 1.21.6, 1.21.8, 1.21.11, 26.2 and 26.3, so a pin bump
+need not leave Folia behind. The two jars are pinned like the Paper jars (absolute URL and sha256 in `gradle/libs.versions.toml`, verified by
+the same download task into the Gradle cache); only the opt-in Folia scenario uses them, and nothing is committed. The Folia 1.21.4 line's last
+build is from 2025-06-13 and its channel is ALPHA; Folia's own changes to the join and disconnect flow
+(region-scheduled, `placeNewPlayer` with extra arguments on 1.21.4) are why the Folia player is a real protocol client, not a fake connection.
+
+**What the results changed in this document** (none changes G1 to G5, a D-number or the protocol):
+
+1. F11 and F12 are no longer assumptions (§3); F15 (the Folia stop path) and F16 (Folia accepts an off-thread `saveData`) are new facts.
+2. §5.8: Folia is **supported**, no longer "not yet probed"; the paragraph that held a placeholder for a Folia mechanism is replaced by the
+   four consequences of F12 (one `executeEntity` task per step; K8's stop row is the quit row on Folia; the off-thread exposure; a
+   player in transit). **This is the one substantive change: the owner's "Folia must be supported" is now met by the design as it stood.**
+3. W4's open item (the clearing step of the dead inventory was not traced) is closed: the stacks released at the close vanish at the
+   respawn; the death design (§5.5, K9) is confirmed as written.
+4. §8 and §12: rows R is done; rows H and F carry what R found (what the rig is, what the fake player cannot reach, the Folia gap list).
 
 | # | Claim | Why unverified | Probe |
 |---|---|---|---|
-| **P1** | **F12:** on Folia the player save and `executeEntity` tasks share a thread | no Folia jar on this machine; **the owner approved fetching one** (§14 Q9b); none was downloaded in this pass | row R2 on a Folia jar the owner supplies or approves. Folia must be supported (Q9): P1 either confirms F12 or designs the Folia mechanism (§5.8) |
-| **P2** | **F11:** a completed `write`+`rename` survives `destroyForcibly` | OS semantics, not Paper | the K-row IT (it kills the JVM at every boundary) |
-| **P3** | **W4/F10:** `keepInventory=false` — what becomes of stacks released by the close after the death event; and that appending to `PlayerDeathEvent#getDrops()` drops them and `keepInventory=true` keeps the returned ones | the clearing step of the dead inventory was not traced | row R3, both gamerule values |
-| **P4** | A fake-connection player on the 1.21.4 harness is enough for `PlayerDataStorage` saves, PDC, `InventoryClickEvent`/`DragEvent` and `closeContainer` | not tried | row R1 (the whole IT depends on it; fallback is the local probe loop only) |
 | **P5** | `ItemSpawnEvent` cancelled ⇒ what `dropItemNaturally` returns (W4 overflow) | irrelevant once G4 removes the drop; kept only to size W4 | none needed after row P |
-| **P6** | Read-back of `BukkitValues → materione:gui_escrow` from a live `<uuid>.dat` while the server may replace it (F2 window) | needed for tier 3 (approved) | row B |
+| **P6** | Read-back of `BukkitValues → materione:gui_escrow` from a live `<uuid>.dat` while the server may replace it (F2 window) | needed for tier 3 (approved). Row R's `PlayerDat` reads a `.dat` from outside the server and the Folia run read it about 8 900 times under a live autosave of rate 1 with every unreadable read simply skipped, which is encouraging but not the probe: the F2 window was not forced | row B |
 | **P7** | An inventory-sync plugin that does not copy our PDC defeats G1 (F8) | by construction | documented limit; `doctor` warns when a known sync plugin is present (list is data) |
 
-## 12. Implementation rows (proposed; none started)
+## 12. Implementation rows (row R done in #306; the others proposed, none started)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
 | Row | Title | Scope | Depends on | Model |
 |---|---|---|---|---|
 | **D0** | Claims correction | Javadoc/comment-only fix of W1/W2 in `InputJournal`, `GuiJournal`, `GuiWindowListener`; re-bless note for `guilogic.input-slots`. Docs half is in this PR. | none | Haiku |
-| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high |
+| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high. **Done (#306):** R1 to R3 ran, §11 is filled in (P1 to P4 verified). As built: the crash rig (`CrashRig`, `PlayerDat`), the `durabilityProbe` plugin (fake-connection player, `dprobe gate`, the K-row primitives), `PaperInputDurabilityIT` (the save paths, K1/K2/K4/K21, death) and `FoliaInputDurabilityIT`, all opt-in, plus the sha256-pinned Folia jars (`folia-harness-*`, `folia-probe-*`) |
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI) |
-| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23. | R, P | Sonnet, high |
+| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
 | **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high |
 | **T** (follow-up) | Admin tooling | `/materione escrow <player>` (list, force-return, force-drop). Out of scope here (§14 Q11). | P | later |
 | **X** | #248 consume-incoming action | Starts when rows M, L, P, B and H are green on main (the block was lifted, §14 Q1b, so no outside acknowledgment is awaited). Not part of this design. | M, L, P, B, H | per #248 |
-| **F** | Folia platform axis in the harness and the QA suite | **Design note only; not implemented.** The owner approved fetching a Folia jar for P1 (§14 Q9b) and noted the whole QA suite may need to run on Folia. (1) `:harness` gains a platform axis `paper \| folia` beside the existing pin mechanism (`gradle/libs.versions.toml` pin, sha256-verified download, Gradle cache): each existing IT is parameterised, the log-marker contract is unchanged, and `PaperEscrowCrashIT` runs on both. (2) The probe server gains a platform choice (a Folia 26.x build, if one exists for the probe pin [U]); the QA runner records the platform in each ledger entry's `env`, so a pass on Paper never counts as a pass on Folia, and `plan` lists due tests per platform. (3) Tests whose steps assume the Bukkit main thread (RCON-driven `give`, `tp`, teleports to an anchor) get a Folia path or a documented skip with a reason. (4) Open: whether Folia ships builds for both pins; the size of the suite's Folia gaps is found by running it, which is row R2's first output. Its own issue, not folded into #247. | R2 | Sonnet, high |
+| **F** | Folia platform axis in the harness and the QA suite | **Design note only; not implemented.** The owner approved fetching a Folia jar for P1 (§14 Q9b) and noted the whole QA suite may need to run on Folia. (1) `:harness` gains a platform axis `paper \| folia` beside the existing pin mechanism (`gradle/libs.versions.toml` pin, sha256-verified download, Gradle cache): each existing IT is parameterised, the log-marker contract is unchanged, and `PaperEscrowCrashIT` runs on both. (2) The probe server gains a platform choice (Folia 26.1.2 build 8 exists for the probe pin, §11); the QA runner records the platform in each ledger entry's `env`, so a pass on Paper never counts as a pass on Folia, and `plan` lists due tests per platform. (3) Tests whose steps assume the Bukkit main thread (RCON-driven `give`, `tp`, teleports to an anchor) get a Folia path or a documented skip with a reason. (4) **Row R2's first output is the measured gap list in §12.1** (Folia ships builds for both pins, §11). Its own issue, not folded into #247. | R2 | Sonnet, high |
+
+### 12.1 Row F's gap list: the Paper integration tests on Folia (measured in row R, #306)
+
+The Paper integration tests were run once against the pinned Folia 1.21.4 build 6 by pointing the existing `paper.jar` property at the Folia jar
+(a temporary local edit, not committed; the product plugin already declares `folia-supported: true`). Of six, **three passed unchanged**
+(`PaperBootstrapIT`, `PaperFailSoftIT`, `PaperWorldPersistenceIT`: the M1 and M2 exit gates, including placed blocks, furniture and a restart) and
+**three failed, for three different reasons**, which is the gap list for #314:
+
+| Failed on Folia | Why | Kind |
+|---|---|---|
+| `PaperContainerWindowIT` (and any IT that installs a test-only plugin: `containerProbe`, `richTitleProbe`) | Folia refuses to load a plugin not marked `folia-supported` ("Could not load plugin 'MaterioneContainerProbe v1' as it is not marked as supporting Folia!"); the probes' commands also act on players from the console's (global) thread, which on Folia must go through the entity scheduler | harness: mark the probes `folia-supported` and route per-player calls through `executeEntity` (the `foliaProbe` of row R shows the shape) |
+| `PaperOpenCommandIT` | `OpenCommandRegistrar` asks for `Server#reloadData()` when a content swap adds or changes an open command (logic.md §23, decision 15); on Folia the reload fails with `UnsupportedOperationException` (Folia stubs the server's main-thread executor methods, e.g. `MinecraftServer.submit`, to throw; the exact throw site of `reloadData` was not traced). The product already degrades (`MTR-0069`: "applies at the next restart") but the IT expects the live path | **product**: a Folia path for open-command reload (restart-only is the current fallback) or an accepted, documented limit; the IT then expects `MTR-0069` on Folia |
+| `PaperGuiRuntimeIT` | the 2 s live-loop budget (plugin.md §9) was exceeded (47.8 s and 3.5 s) while the Folia watchdog reported a 5.8 s global-region stall in class loading | **undiagnosed**: a real scheduling cost or machine load (the run was on a 1-tick-thread Folia, the default for this machine); needs a rerun with nothing else running before it is called a Folia defect |
+
+Not run on Folia: `PaperEditorHandshakeIT`, `PaperRelayEditorIT`, the opt-in protocol-client floors, the QA suite and the probe loop (the 26.x client
+bridge and RCON). The platform axis of (1) is, from this run, one property (the server jar) plus the per-IT expectations above; a Folia 26.1.2
+server needs a JDK 25 server process, while the harness launches the server with the test JVM (21), so that axis also needs a configurable server
+`java`.
 
 ## 13. Decisions this design takes
 
@@ -503,6 +602,7 @@ The owner answered the eleven questions of the first draft on PR #303. Each answ
 
 **Still open** (none of which this document can close):
 
-1. **The Folia jar has not been fetched.** The owner approved it (Q9b); it is row R2's first step (a sha256-pinned download like the other pins), not part of this design pass. Until P1 runs, F12 is unproven on Folia.
-2. **The size of the Folia work in the QA suite** is unknown until the suite runs there (row F, a separate issue); whether Folia has builds for both pins is unchecked [U].
-3. The probes P2 to P4 of §11 (kill durability, `keepInventory` on death, a fake-connection harness player) are not run; they are row R.
+1. ~~The Folia jar has not been fetched.~~ **Done (row R, #306):** both Folia jars are pinned and P1 ran (§11); F12 holds on Folia 1.21.4.
+2. **The size of the Folia work in the QA suite** is partly known: Folia has builds for both pins (§11), and row F's gap list (§12) records what a
+   first run of the Paper integration tests on Folia found. The QA suite itself has not run there (row F, #314).
+3. ~~The probes P2 to P4 of §11 are not run.~~ **Done (row R, #306):** all verified (§11). P5 to P7 remain, by design.

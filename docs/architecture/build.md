@@ -248,6 +248,13 @@ make **zero** metadata API calls. The task also handles the 26.x response shape
 (`id`/`checksums.sha256`) and takes `-PpinPrefix=` — the agent probe loop's
 `paper-probe-*` pins are maintained the same way (see `docs/probe.md`).
 
+**Folia pins (#306).** The opt-in Folia probe (`-Pharness.folia=true`, `FoliaInputDurabilityIT`) boots a Folia server: `folia-harness-*`
+(1.21.4, build 6) and `folia-probe-*` (26.1.2, build 8, Java 25) in `gradle/libs.versions.toml` are the same absolute-URL-plus-sha256 shape as the
+Paper pins and are fetched by the same `DownloadPaperServerTask` (`:harness:downloadFoliaServer`, `:harness:downloadFoliaProbeServer`) into the
+Gradle cache; no default build or test touches them, and no jar is committed. `printLatestPaperPin` is Paper-only: bump a Folia pin from
+`https://fill.papermc.io/v3/projects/folia/versions/<version>/builds` (the entry's `downloads["server:default"]` carries the URL and
+`checksums.sha256`).
+
 **Running it from IntelliJ:** the `harness` module is an `application`
 (main class `dev.materione.harness.PaperHarnessRunner`). After one `:harness:integrationTest`
 run (or a manual `:harness:downloadPaperServer` + `:plugin:shadowJar`), create an
