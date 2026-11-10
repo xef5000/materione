@@ -9,6 +9,19 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Crash-safe input slots, the plugin runtime: `durable: required` now does something (gui-input-durability.md §12 row P, #310).**
+  An input layer with `durable: required` takes the escrow path: every click on its slots (place, pickup, swap, number key, offhand swap,
+  shift, drag, double-click collect) is applied by the plugin itself, in one step with an account kept in the player's own saved data, so
+  a save can never see an item in neither place or in both. A pickup lifts the stack to the cursor as in vanilla (a stack on the cursor
+  at a crash is lost, as in vanilla). **Nothing is ever dropped in the world for these slots**: what does not fit when a window closes,
+  or on join, is *owed* and collected with the new `/materione claim` (permission `materione.claim`, everyone by default). A death
+  releases the items into the death event, honouring `keepInventory`. On join a recovery returns what a crash left, before any
+  interaction; a crash-era `gui_inputs` journal is adopted as owed items instead of being dropped. On a server that cannot support it
+  (player-data saving off in `spigot.yml`, `storage/escrow/` not writable, no ledger) the layer renders and its slots accept nothing,
+  with a one-line message; `/materione doctor` lists the capability. `gui.slot_item` `clear` and `set_amount 0` are refused on a required
+  layer until the exit ledger of #248 exists. `best_effort` layers are unchanged. **It is not yet verified by kill-boundary tests (rows
+  B and H of #247), so it is not called crash-safe.** New diagnostics: `MTR-0100` (the platform lacks checkpoint support) and `MTR-0103`
+  (recovery left items owed); `gui.validate` no longer warns `MTR-0076` for `durable: required` on an input layer.
 - **The escrow ledger's file IO (gui-input-durability.md §12 row L, #309).** The per-player exit ledger
   `storage/escrow/<uuid>.ledger` now has its async writer: FIFO per player on the plugin's IO executor, parallel across players, never on a
   region or main thread (a build rule bans file IO and blocking waits from the owner-side escrow code, and Bukkit from the IO half). Appends

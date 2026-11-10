@@ -6,6 +6,7 @@ import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.behavior.runtime.RuleEngine;
 import dev.materione.core.runtime.RuntimeRegistries;
 import dev.materione.platform.gui.PaperRichTitles;
+import dev.materione.plugin.escrow.runtime.EscrowRuntime;
 import dev.materione.plugin.gui.event.GuiEvents;
 import dev.materione.plugin.gui.event.RuleDispatcher;
 import dev.materione.plugin.gui.input.ClickRouter;
@@ -15,6 +16,7 @@ import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputSlotClicks;
 import dev.materione.plugin.gui.input.InputSlotOps;
 import dev.materione.plugin.gui.input.InventoryInput;
+import dev.materione.plugin.gui.input.StrictInputs;
 import dev.materione.plugin.gui.input.LayerVisibility;
 import dev.materione.plugin.gui.list.GuiPages;
 import dev.materione.plugin.gui.live.GuiLiveRefresh;
@@ -81,6 +83,18 @@ public final class GuiStack {
     public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
             RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
             Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables) {
+        this(plugin, scheduling, live, engine, visibility, diagnostics, built, platform, variables, null);
+    }
+
+    /** @param escrow the crash-safe input runtime ({@code durable: required} layers); null refuses those layers */
+    public GuiStack(Plugin plugin, SchedulingGateway scheduling, Supplier<RuntimeRegistries> live,
+            RuleEngine engine, LayerVisibility visibility, Consumer<Diagnostic> diagnostics,
+            Supplier<RuntimeRegistries> built, PlatformDescriptor platform, VariableService variables,
+            EscrowRuntime escrow) {
+        StrictInputs strict = escrow == null ? StrictInputs.NONE : new StrictInputs(escrow);
+        if (escrow != null) {
+            escrow.bindWindows(strict);
+        }
         GuiLookup guis = GuiLookup.over(live);
         InputGuard guard = new InputGuard();
         RuleDispatcher dispatcher = engine::fire;
@@ -90,7 +104,7 @@ public final class GuiStack {
         var reporter = new LoggingRenderReporter(plugin.getLogger());
         GuiRenderer renderer = new GuiRenderer(reporter, variables);
         WindowHost windows = new BukkitWindowHost(
-                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, renderer,
+                plugin, scheduling, new InventoryInput(sessions, router), guard, journal, strict, renderer,
                 PaperRichTitles.create(platform), reporter);
         GuiTicker ticker = new GuiTicker(guis, events,
                 (viewer, ticks, task, retired) -> scheduling.executeEntityLater(
@@ -104,10 +118,10 @@ public final class GuiStack {
         var handler = new OpenCommandHandler(plugin, scheduling, view, opener, PlayerNames.server());
         this.openCommands = new OpenCommandRegistrar(plugin, handler, view, guisOf(built), diagnostics, scheduling);
         this.refresh = new GuiLiveRefresh(plugin, scheduling, guis, sessions, windows, lifecycle, ticker);
-        this.windowListener = new GuiWindowListener(lifecycle, journal);
-        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal);
+        this.windowListener = new GuiWindowListener(lifecycle, journal, strict);
+        this.inputClicks = new InputSlotClicks(guis, sessions, events, guard, journal, strict);
         this.services = new GuiBridge.Services(guis, sessions, opener, lifecycle, refresh,
-                new InputSlotOps(guis, journal), new GuiPages(events, refresh));
+                new InputSlotOps(guis, journal, strict), new GuiPages(events, refresh));
     }
 
     /** The input-slot rules the click router consults (logic.md §25). */

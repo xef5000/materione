@@ -1,5 +1,6 @@
 package dev.materione.plugin.gui.input;
 
+import dev.materione.plugin.escrow.runtime.Tier1;
 import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.RuntimeGuis;
@@ -19,9 +20,16 @@ import org.bukkit.inventory.meta.Damageable;
 public final class InputSlotOps implements InputSlotPort {
 
     private final GuiJournal journal;
+    private final StrictInputs strict;
 
     public InputSlotOps(GuiLookup guis, GuiJournal journal) {
+        this(guis, journal, StrictInputs.NONE);
+    }
+
+    /** @param strict the escrow path of {@code durable: required} slots (gui-input-durability.md §5.5, row P of #247) */
+    public InputSlotOps(GuiLookup guis, GuiJournal journal, StrictInputs strict) {
         this.journal = journal;
+        this.strict = strict;
     }
 
     @Override
@@ -37,19 +45,44 @@ public final class InputSlotOps implements InputSlotPort {
             return Optional.of("slot " + slot + " is not an input slot of an open GUI");
         }
         Inventory inventory = top.get();
-        ItemStack item = inventory.getItem(slot);
+        GuiMenu menu = (GuiMenu) session.window();
+        boolean escrowed = strict.escrowed(menu, slot);
+        // an escrowed slot is edited on a copy: the live stack changes only inside the tier-1 step, with the account
+        ItemStack item = escrowed && inventory.getItem(slot) != null
+                ? inventory.getItem(slot).clone() : inventory.getItem(slot);
         if (BukkitStacks.view(item).empty()) {
             return Optional.of("slot " + slot + " is empty");
         }
+        if (escrowed && !strict.usable(player, menu, slot)) {
+            strict.refuse(player, Tier1.Reason.UNAVAILABLE);
+            return Optional.of("crash-safe input slots are not available for this player right now");
+        }
         switch (op.kind()) {
-            case CLEAR -> inventory.setItem(slot, null);
+            case CLEAR -> {
+                if (escrowed) {
+                    // a deletion of an escrowed stack is a tier-2 exit (its decision must outlive a rollback); that
+                    // is #248's consume action, not built yet, so it is refused rather than done unsafely
+                    return Optional.of("clear is not available on a durable: required slot yet (it needs the exit "
+                            + "ledger); take the item, or use durable: best_effort");
+                }
+                inventory.setItem(slot, null);
+            }
             case TAKE -> {
+                if (escrowed) {
+                    return strict.take(player, menu, slot);
+                }
                 inventory.setItem(slot, null);
                 InputReturns.giveBack(player, item);
             }
             case SET_AMOUNT -> {
                 if (op.amount() > item.getMaxStackSize()) {
                     return Optional.of("the stack holds at most " + item.getMaxStackSize());
+                }
+                if (escrowed) {
+                    return op.amount() <= 0
+                            ? Optional.of("set_amount 0 deletes the stack, which a durable: required slot does not "
+                                    + "allow yet (it needs the exit ledger)")
+                            : strict.edit(player, menu, slot, BukkitStacks.withAmount(item, op.amount()));
                 }
                 inventory.setItem(slot, BukkitStacks.withAmount(item, op.amount()));
             }
@@ -59,6 +92,9 @@ public final class InputSlotOps implements InputSlotPort {
                 }
                 damageable.setDamage(0);
                 item.setItemMeta(damageable);
+                if (escrowed) {
+                    return strict.edit(player, menu, slot, item);
+                }
                 inventory.setItem(slot, item);
             }
             case ENCHANT -> {
@@ -73,6 +109,9 @@ public final class InputSlotOps implements InputSlotPort {
                     return Optional.of("an enchantment level is at least 1");
                 }
                 item.addUnsafeEnchantment(enchantment, op.level());
+                if (escrowed) {
+                    return strict.edit(player, menu, slot, item);
+                }
                 inventory.setItem(slot, item);
             }
             default -> {

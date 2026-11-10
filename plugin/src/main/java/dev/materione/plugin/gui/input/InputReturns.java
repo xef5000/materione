@@ -37,7 +37,7 @@ public final class InputReturns {
     public static Map<Integer, ItemStack> take(GuiMenu menu) {
         Inventory top = menu.getInventory();
         var out = new TreeMap<Integer, ItemStack>();
-        for (int slot : menu.inputSlots()) {
+        for (int slot : menu.journaledSlots()) { // the escrowed slots are the escrow's: see StrictInputs
             ItemStack item = top.getItem(slot);
             if (item != null && !item.getType().isAir()) {
                 out.put(slot, item);

@@ -34,8 +34,16 @@ public final class InputSlots {
      * @param layer the input layer that claims it
      * @param accept the compiled {@code accept:}, or null when the layer accepts anything
      * @param acceptBroken true when the authored {@code accept:} did not compile; nothing is accepted
+     * @param durable true when the layer is {@code durable: required}: its slots take the escrow path
+     *     (gui-input-durability.md, row P of #247), or accept nothing where the platform cannot support it
      */
-    public record Input(int slot, String layer, Condition accept, boolean acceptBroken) {}
+    public record Input(int slot, String layer, Condition accept, boolean acceptBroken, boolean durable) {
+
+        /** A best-effort input slot. */
+        public Input(int slot, String layer, Condition accept, boolean acceptBroken) {
+            this(slot, layer, accept, acceptBroken, false);
+        }
+    }
 
     /** A GUI with no input slots and a free viewer inventory: every GUI before #218. */
     public static final InputSlots NONE = new InputSlots(Map.of(), false);
@@ -74,13 +82,13 @@ public final class InputSlots {
         var out = new ArrayList<Input>();
         for (CompiledGui.Input input : inputs) {
             if (input.accept() == null) {
-                out.add(new Input(input.slot(), input.layer(), null, false));
+                out.add(new Input(input.slot(), input.layer(), null, false, input.durable()));
             } else if (lookup == null) {
-                out.add(new Input(input.slot(), input.layer(), null, true));
+                out.add(new Input(input.slot(), input.layer(), null, true, input.durable()));
             } else {
                 var compiled = FlowCompiler.compileCondition(owner, input.accept(), SLOT_CHANGE, lookup);
                 out.add(new Input(input.slot(), input.layer(), compiled.condition().orElse(null),
-                        compiled.condition().isEmpty()));
+                        compiled.condition().isEmpty(), input.durable()));
             }
         }
         return of(out, locked);

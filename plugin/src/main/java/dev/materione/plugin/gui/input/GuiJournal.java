@@ -89,7 +89,7 @@ public final class GuiJournal {
         }
         Inventory top = menu.getInventory();
         var out = new ArrayList<ItemStack>();
-        for (int slot : menu.inputSlots()) {
+        for (int slot : menu.journaledSlots()) { // escrowed slots are in the account, not in this journal
             ItemStack item = top.getItem(slot);
             if (item != null && !item.getType().isAir()) {
                 out.add(item.clone());

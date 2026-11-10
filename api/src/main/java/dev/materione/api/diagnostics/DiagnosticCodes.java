@@ -578,6 +578,25 @@ public final class DiagnosticCodes {
                     "A strict input transfer was refused because it could not be recorded");
 
     /**
+     * This platform lacks checkpoint support for crash-safe input slots (gui-input-durability.md sections 5.8 and 5.9,
+     * #310): player-data saving is disabled, the escrow directory is not writable, the ledger could not start, or the
+     * platform is not one whose save ordering was read. The failed check is named. An error while a {@code durable:
+     * required} input layer exists (it is refused: its slots accept nothing), a warning otherwise.
+     */
+    public static final DiagnosticCode ESCROW_UNSUPPORTED =
+            new DiagnosticCode("MTR-0100", Severity.ERROR,
+                    "This platform lacks checkpoint support for crash-safe input slots");
+
+    /**
+     * Recovery on join could not return every stack of a player's escrow account (gui-input-durability.md sections 5.7
+     * and 5.9, #310): the inventory was full, so the stacks stay OWED in the account, are listed by count, and are
+     * claimed with {@code /materione claim}. Reported once per join.
+     */
+    public static final DiagnosticCode ESCROW_RECOVERY_OWED =
+            new DiagnosticCode("MTR-0103", Severity.WARN,
+                    "Recovery left stacks owed to a player because their inventory is full");
+
+    /**
      * A {@code template:} chain loops back on itself: a template or an item (an item may be the template of
      * another item, plugin.md section 3.1) is reached twice while resolving. Every resource whose chain meets
      * the loop is quarantined; nothing else is affected.
@@ -710,7 +729,9 @@ public final class DiagnosticCodes {
             BUILTIN_PACK_ID_RESERVED,
             BUILTIN_PACK_UNAVAILABLE,
             ESCROW_STATE_UNREADABLE,
-            ESCROW_TRANSFER_REFUSED);
+            ESCROW_TRANSFER_REFUSED,
+            ESCROW_UNSUPPORTED,
+            ESCROW_RECOVERY_OWED);
 
     private DiagnosticCodes() {}
 

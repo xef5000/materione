@@ -195,8 +195,10 @@ describe('the gui-components registry description', () => {
       type: 'enum', required: false, default: 'best_effort', allowedValues: ['best_effort', 'required'], uiHint: 'select', section: 'behavior',
     });
     expect(durable.options!.map((option) => [option.value, option.label])).toEqual([['best_effort', 'Best effort'], ['required', 'Required']]);
-    // schema only: the chosen words say Required is not crash-safe in this build
-    expect(durable.options!.find((option) => option.value === 'required')!.description).toContain('Not available in this build');
+    // the chosen words say what Required does, and that the crash tests have not verified it yet
+    const required = durable.options!.find((option) => option.value === 'required')!.description!;
+    expect(required).toContain('never dropped in the world');
+    expect(required).toContain('Not yet verified');
     const order = slots.parameters.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((param) => param.id);
     expect(order.indexOf('durable')).toBe(order.indexOf('input') + 1);
     // a new slots layer is written from required defaults only: durable is never added on its own

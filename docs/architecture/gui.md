@@ -1793,14 +1793,14 @@ guide:
 | **The editor ships apart from the jar** | The studio offers the profiles that `guiContainers` lists, the same for every container. A server too old to list them has no GUI containers at all; the studio says so and offers none. Plugin and editor are released together while GUIs are unreleased, so no fallback is designed |
 
 **Diagnostics reserved for this feature.** The next free code is `MTR-0097`. The block `MTR-0097` to `MTR-0100` is
-reserved here, in one place (plugin.md §5 notes the reservation so another change does not take them); `MTR-0100` was left unassigned and has since been taken by the crash-safe input design ([`gui-input-durability.md`](gui-input-durability.md) §5.9, owner decision on PR #303; proposed, not yet emitted):
+reserved here, in one place (plugin.md §5 notes the reservation so another change does not take them); `MTR-0100` was left unassigned and has since been taken by the crash-safe input design ([`gui-input-durability.md`](gui-input-durability.md) §5.9, owner decision on PR #303; assigned and emitted by row P, #310):
 
 | Code | Severity | Meaning | When it lands |
 |---|---|---|---|
 | `MTR-0097` | error | A GUI's `container:` is not a supported container id (or is not a string). The GUI is quarantined; the rest of the pack compiles | M |
 | `MTR-0098` | error | A GUI's container cannot be opened on this server (a platform without the menu API a later type needs). The open is refused with this code, before the previous session changes, like the unavailable-window refusal of logic.md §6.1 step 4. **Unused in v1**: all v1 containers open on every supported Paper | phase 2 |
 | `MTR-0099` | warning | An `input: true` slot sits on a container slot the client refuses items for (§12.2.4: a fuel slot, a result slot, a beacon payment slot, ...). The layer is kept; the item would not go in. **Unused in v1** (all v1 slots accept anything) | phase 2 |
-| `MTR-0100` | error / warning | **Taken by #247's design, not by containers:** this platform lacks checkpoint support for durable input slots ([`gui-input-durability.md`](gui-input-durability.md) §5.9, with `MTR-0101` to `MTR-0103`). Proposed and unassigned until that work is built. (It had been the legacy-alias disagreement of an earlier draft; with `rows:` dropped nothing here needs it.) | #247 rows |
+| `MTR-0100` | error / warning | **Taken by #247's design, not by containers:** this platform lacks checkpoint support for durable input slots ([`gui-input-durability.md`](gui-input-durability.md) §5.9, with `MTR-0101` to `MTR-0103`). Assigned and emitted by row P (#310). (It had been the legacy-alias disagreement of an earlier draft; with `rows:` dropped nothing here needs it.) | #247 rows |
 
 ### 12.5 The compiler
 
@@ -2091,7 +2091,7 @@ Each is reversible by the owner (the owner's own are in §12.13).
 6. **Centred titles are neutralised by a trailing shift, so the pen origin stays 8.** Verified on a real dispenser screen (§12.2.6, U1).
 7. **One art cap for v1**, stated per profile so later containers can differ.
 8. **Switching container never edits a layer.** It reports; the author decides.
-9. **`MTR-0097` to `MTR-0100` are reserved for this feature**; three are defined and `MTR-0100` stays unassigned (§12.4).
+9. **`MTR-0097` to `MTR-0100` are reserved for this feature**; three are defined and `MTR-0100` went to the crash-safe input design and is emitted by it (§12.4).
 
 ### 12.10 Implementation rows
 

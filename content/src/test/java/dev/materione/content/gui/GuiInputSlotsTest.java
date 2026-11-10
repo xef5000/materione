@@ -129,24 +129,24 @@ class GuiInputSlotsTest {
     }
 
     @Test
-    void durableRequiredOnAnInputSaysItIsNotCrashSafeYetAndChangesNothingAtRuntime() {
+    void durableRequiredOnAnInputIsNoLongerALoadWarningAndTheCompiledInputCarriesIt() {
         Map<String, Object> strict = GuiTestSupport.layer("strict", "slots", "region", "container",
                 "input", true, "durable", "required");
         Map<String, Object> loose = GuiTestSupport.layer("loose", "slots", "region", "container",
                 "input", true, "durable", "best_effort");
         Map<String, Object> plain = GuiTestSupport.layer("plain", "slots", "region", "container", "input", true);
 
+        // whether a server can honour required is the platform's capability check (MTR-0100), not a load warning
         var warnings = diagnose(GuiTestSupport.definition(1, strict, loose, plain)).stream()
                 .filter(d -> d.code().equals(DiagnosticCodes.GUI_INPUT_SETTING_IGNORED)).toList();
-        assertThat(warnings).hasSize(1);
-        assertThat(warnings.get(0).message()).contains("'strict'").contains("not available in this build")
-                .contains("behaves as best_effort").contains("not crash-safe");
-        // the compiled model is identical to the same GUI with the key removed: nothing reads durable yet
-        var withKey = compile(GuiTestSupport.definition(1, strict)).model();
-        var without = compile(GuiTestSupport.definition(1,
-                GuiTestSupport.layer("strict", "slots", "region", "container", "input", true))).model();
-        assertThat(withKey.inputs()).isEqualTo(without.inputs());
-        assertThat(withKey.title()).isEqualTo(without.title());
+        assertThat(warnings).isEmpty();
+        // the compiled input says which of its slots take the escrow path: the strict layer's, and only those
+        var strictModel = compile(GuiTestSupport.definition(1, strict)).model();
+        assertThat(strictModel.inputs()).isNotEmpty().allMatch(CompiledGui.Input::durable);
+        var looseModel = compile(GuiTestSupport.definition(1, loose)).model();
+        assertThat(looseModel.inputs()).isNotEmpty().noneMatch(CompiledGui.Input::durable);
+        var plainModel = compile(GuiTestSupport.definition(1, plain)).model();
+        assertThat(plainModel.inputs()).isNotEmpty().noneMatch(CompiledGui.Input::durable);
     }
 
     @Test
@@ -172,7 +172,7 @@ class GuiInputSlotsTest {
         assertThat(durable.get(0).required()).isFalse();
         assertThat(durable.get(0).editor().options()).extracting(o -> o.value())
                 .containsExactly("best_effort", "required");
-        assertThat(durable.get(0).editor().options().get(1).description()).contains("Not available in this build");
+        assertThat(durable.get(0).editor().options().get(1).description()).contains("never dropped in the world").contains("Not yet verified");
     }
 
     @Test

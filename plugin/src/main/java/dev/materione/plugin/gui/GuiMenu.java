@@ -25,6 +25,8 @@ public final class GuiMenu extends PluginGui {
     private final GuiInput input;
     /** The input slots this window was shown with: the only slots whose items are the player's (logic.md §25). */
     private volatile Set<Integer> inputSlots = Set.of();
+    /** The subset of {@link #inputSlots} that belong to {@code durable: required} layers (the escrow path). */
+    private volatile Set<Integer> durableSlots = Set.of();
 
     public GuiMenu(GuiSession session, GuiContainer container, String title, GuiInput input) {
         this(session, container, title, title, input);
@@ -44,9 +46,33 @@ public final class GuiMenu extends PluginGui {
         return inputSlots;
     }
 
-    /** Records the input slots the window now shows (on open, and on every rewrite). */
+    /** Records the input slots the window now shows (on open, and on every rewrite); none is durable. */
     public void inputSlots(Set<Integer> slots) {
+        inputSlots(slots, Set.of());
+    }
+
+    /**
+     * Records the input slots the window now shows and which of them are {@code durable: required}: those take the
+     * escrow path (gui-input-durability.md), the rest the journal.
+     */
+    public void inputSlots(Set<Integer> slots, Set<Integer> durable) {
         this.inputSlots = Set.copyOf(slots);
+        this.durableSlots = Set.copyOf(durable);
+    }
+
+    /** The input slots of {@code durable: required} layers; always a subset of {@link #inputSlots()}. */
+    public Set<Integer> durableSlots() {
+        return durableSlots;
+    }
+
+    /** The input slots the recovery journal covers: the best-effort ones. */
+    public Set<Integer> journaledSlots() {
+        if (durableSlots.isEmpty()) {
+            return inputSlots;
+        }
+        var out = new java.util.TreeSet<>(inputSlots);
+        out.removeAll(durableSlots);
+        return out;
     }
 
     /** The session this window shows. It outlives a re-open of the window (a title or size change). */

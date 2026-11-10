@@ -7249,7 +7249,7 @@
               "required"
             ],
             "default": "best_effort",
-            "description": "Input slots only: how the player's items are protected while they sit in these slots. required asks for crash-safe ownership, which this build does not provide yet (it behaves as best_effort and validation says so); best_effort is today's behaviour. Ignored on a layer that is not an input",
+            "description": "Input slots only: how the player's items are protected while they sit in these slots. required puts the items in the player's escrow account in the same step as every click, never drops them in the world (what does not fit is owed, /materione claim), and is refused on a server that cannot support it; best_effort is the journal of earlier builds. Ignored on a layer that is not an input",
             "example": "best_effort",
             "id": "durable",
             "label": "Durability",
@@ -7260,7 +7260,7 @@
                 "value": "best_effort"
               },
               {
-                "description": "Asks for crash-safe slots. Not available in this build yet: it behaves as Best effort and the layer is not crash-safe.",
+                "description": "Items in these slots are tracked in the player's saved data in the same step as every click and are never dropped in the world; what does not fit is owed (/materione claim). The slots accept nothing on a server that cannot support it. Not yet verified by the crash tests.",
                 "label": "Required",
                 "value": "required"
               }
@@ -7273,7 +7273,7 @@
           }
         ],
         "registeredBy": "materione",
-        "sinceVersion": "1.2.0",
+        "sinceVersion": "1.3.0",
         "target": "raster"
       },
       {

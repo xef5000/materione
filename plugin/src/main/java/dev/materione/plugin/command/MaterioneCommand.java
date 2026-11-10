@@ -35,7 +35,7 @@ import org.jetbrains.annotations.NotNull;
 public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> SUBCOMMANDS =
-            List.of("version", "doctor", "reload", "dev", "give", "browse", "editor", "gui", "var");
+            List.of("version", "doctor", "reload", "dev", "give", "browse", "editor", "gui", "var", "claim");
 
     private final MaterionePlugin plugin;
     private final DevCommands devCommands;
@@ -128,10 +128,33 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
             case "editor" -> editorCommands.handle(sender, args);
             case "gui" -> guiCommands.handle(sender, args);
             case "var" -> varCommand.handle(sender, args);
+            case "claim" -> claim(sender);
             default -> sender.sendMessage(Component.text(
-                    "usage: /materione <version|doctor|reload|dev|give|browse|editor|gui|var>", NamedTextColor.RED));
+                    "usage: /materione <version|doctor|reload|dev|give|browse|editor|gui|var|claim>", NamedTextColor.RED));
         }
         return true;
+    }
+
+    /**
+     * {@code /materione claim}: a player collects the items they are owed (what did not fit when a window closed or
+     * on join; gui-input-durability.md section 5.5). Their own property, so the node {@code materione.claim} defaults
+     * to everyone. Players only; it runs on the player's own thread, the one the escrow steps need.
+     */
+    private void claim(CommandSender sender) {
+        if (!(sender instanceof Player player)) {
+            sender.sendMessage(Component.text("only a player can claim owed items", NamedTextColor.RED));
+            return;
+        }
+        if (!sender.hasPermission("materione.claim")) {
+            sender.sendMessage(Component.text("no permission (materione.claim)", NamedTextColor.RED));
+            return;
+        }
+        var escrow = plugin.escrowRuntime();
+        if (escrow == null) {
+            sender.sendMessage(Component.text("crash-safe input slots are not running", NamedTextColor.RED));
+            return;
+        }
+        plugin.scheduling().executeEntity(plugin, player, () -> escrow.claim(player));
     }
 
     /** The in-game content browser: a GUI of the plugin's built-in pack (master §7.3), opened like any GUI. */
@@ -418,6 +441,7 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
         sender.sendMessage(Component.text(
                 "quarantined: " + Math.max(0, report.quarantinedCount()),
                 NamedTextColor.GRAY));
+        escrowDoctor(sender);
 
         sender.sendMessage(Component.text(
                 "diagnostics: " + report.errorCount() + " error, "
@@ -426,6 +450,23 @@ public final class MaterioneCommand implements CommandExecutor, TabCompleter {
 
         // Stable harness marker: doctor completed against an M0-empty system.
         plugin.getLogger().info("MATERIONE-DOCTOR-OK");
+    }
+
+    /** The capability result of the crash-safe input slots (gui-input-durability.md section 5.8) and who is blocked. */
+    private void escrowDoctor(CommandSender sender) {
+        var escrow = plugin.escrowRuntime();
+        if (escrow == null) {
+            return;
+        }
+        var capability = escrow.capability();
+        sender.sendMessage(Component.text(capability.describe(),
+                capability.supported() ? NamedTextColor.GRAY : NamedTextColor.YELLOW));
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (escrow.standing(online) == dev.materione.plugin.escrow.runtime.EscrowRuntime.Standing.BLOCKED) {
+                sender.sendMessage(Component.text("  escrow state unreadable (MTR-0101): " + online.getName(),
+                        NamedTextColor.RED));
+            }
+        }
     }
 
     @Override

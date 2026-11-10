@@ -94,8 +94,16 @@ public record CompiledGui(
      * @param slot the container slot, 0 at the top-left
      * @param layer the input layer that claims the slot (its topmost layer)
      * @param accept the layer's {@code accept:} as authored, or null to accept anything
+     * @param durable whether the layer is {@code durable: required} (gui-input-durability.md, row P of #247): its
+     *     slots take the crash-safe escrow path, or are refused where the platform cannot support it
      */
-    public record Input(int slot, String layer, Object accept) {}
+    public record Input(int slot, String layer, Object accept, boolean durable) {
+
+        /** A best-effort input slot (the default). */
+        public Input(int slot, String layer, Object accept) {
+            this(slot, layer, accept, false);
+        }
+    }
 
     /**
      * One filled slot.

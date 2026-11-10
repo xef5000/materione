@@ -36,10 +36,11 @@ public final class SlotsComponent implements GuiComponent {
      * What an input layer asks for when the player's items sit in its slots (gui-input-durability.md §5.8, §10):
      * {@code best_effort} is today's behaviour and the default; {@code required} asks for the crash-safe path.
      *
-     * <p><strong>Schema only in this build.</strong> {@code required} is parsed, described and round-tripped, and
-     * nothing at runtime reads it yet (row P of #247 does): a {@code required} layer behaves exactly as
-     * {@code best_effort}, and the GUI's validation says so ({@code MTR-0076}) rather than let anyone read it as
-     * crash-safe.
+     * <p>The runtime reads it (row P of #247): a {@code required} layer takes the escrow path (every click on its
+     * slots is applied by the plugin in one step with the player's escrow account, overflow is owed and never
+     * dropped), and is refused, its slots accepting nothing, where the platform cannot support it
+     * ({@code MTR-0100}). It is <strong>not yet verified by the kill-boundary tests</strong> (rows B and H of #247),
+     * so nothing here calls it crash-safe.
      */
     public enum Durability {
         BEST_EFFORT("best_effort"),
@@ -110,9 +111,10 @@ public final class SlotsComponent implements GuiComponent {
                                         "Accept", "behavior", 40, true, "advanced", "", "")),
                         new ParameterSchema("durable", ParameterType.ENUM, false, "best_effort",
                                 "Input slots only: how the player's items are protected while they sit in these slots. "
-                                        + "required asks for crash-safe ownership, which this build does not provide yet "
-                                        + "(it behaves as best_effort and validation says so); best_effort is today's behaviour. "
-                                        + "Ignored on a layer that is not an input",
+                                        + "required puts the items in the player's escrow account in the same step as every "
+                                        + "click, never drops them in the world (what does not fit is owed, /materione claim), "
+                                        + "and is refused on a server that cannot support it; best_effort is the journal of "
+                                        + "earlier builds. Ignored on a layer that is not an input",
                                 List.of("best_effort", "required"), null)
                                 .withEditor(new ParameterSchema.EditorMetadata(
                                         "Durability", "behavior", 35, false, "select", "", "best_effort")
@@ -121,9 +123,12 @@ public final class SlotsComponent implements GuiComponent {
                                                         "Today's behaviour: items in these slots are returned on close, "
                                                                 + "but a server crash can lose or duplicate them. Input slots only."),
                                                 ParameterSchema.EditorOption.of("required", "Required",
-                                                        "Asks for crash-safe slots. Not available in this build yet: "
-                                                                + "it behaves as Best effort and the layer is not crash-safe."))))),
-                "1.2.0");
+                                                        "Items in these slots are tracked in the player's saved data in the "
+                                                                + "same step as every click and are never dropped in the world; "
+                                                                + "what does not fit is owed (/materione claim). The slots accept "
+                                                                + "nothing on a server that cannot support it. Not yet verified "
+                                                                + "by the crash tests."))))),
+                "1.3.0");
     }
 
     @Override
@@ -197,7 +202,7 @@ public final class SlotsComponent implements GuiComponent {
      * @param accept the authored {@code accept:} condition as written, or null; compiled by the runtime
      *     (it needs the flow engine), and read only when {@code input} is true
      * @param durable the authored {@code durable:} ({@link Durability#BEST_EFFORT} when absent); meaningful only
-     *     when {@code input} is true, and <strong>not read by the runtime yet</strong> (schema only, row S of #247)
+     *     when {@code input} is true; the runtime reads it (row P of #247)
      */
     public record Layer(Region region, GuiBevel bevel, GuiContainer container, boolean input, Object accept,
                         Durability durable)

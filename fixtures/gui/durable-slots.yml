@@ -1,7 +1,7 @@
 # `durable:` on input slots layers (gui-input-durability.md section 10, row S of #247). Golden for the lossless
 # round trip: load -> untouched save is byte-identical; `durable` absent stays absent (best_effort is the implicit
-# default), `durable` present is kept as written, and the unknown field survives. Schema only: nothing at runtime
-# reads `durable` yet.
+# default), `durable` present is kept as written, and the unknown field survives. The runtime reads `durable`
+# (row P of #247): required takes the escrow path, best_effort the journal.
 vault:
   title: Vault
   container: chest_3
@@ -10,7 +10,7 @@ vault:
       type: slots
       region: container
       input: true
-    - id: strict_wells           # asks for crash-safe slots (not available in this build yet)
+    - id: strict_wells           # asks for the escrow path (refused where the platform cannot support it)
       type: slots
       region: container
       input: true

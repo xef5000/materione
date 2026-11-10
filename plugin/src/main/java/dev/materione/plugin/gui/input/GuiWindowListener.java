@@ -26,10 +26,17 @@ public final class GuiWindowListener implements Listener {
 
     private final GuiLifecycle lifecycle;
     private final GuiJournal journal;
+    private final StrictInputs strict;
 
     public GuiWindowListener(GuiLifecycle lifecycle, GuiJournal journal) {
+        this(lifecycle, journal, StrictInputs.NONE);
+    }
+
+    /** @param strict the escrow path of {@code durable: required} slots (gui-input-durability.md, row P of #247) */
+    public GuiWindowListener(GuiLifecycle lifecycle, GuiJournal journal, StrictInputs strict) {
         this.lifecycle = lifecycle;
         this.journal = journal;
+        this.strict = strict;
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -42,6 +49,7 @@ public final class GuiWindowListener implements Listener {
         // not cover a death (the server has fixed the drop list before this event) or an item on the cursor
         // (§2, W4). The release and its journal mirror are one synchronous step, the part of the journal that holds (W1)
         InputReturns.release(player, menu);
+        strict.release(player, menu); // the required slots' stacks: the account's, returned in the same step
         journal.mirror(player); // the journal follows the player's current window, which may be another one
         GuiSession session = menu.session();
         if (session.window() != menu) {
