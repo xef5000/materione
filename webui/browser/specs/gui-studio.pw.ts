@@ -194,7 +194,7 @@ test('adds components from the registry palette, schema-derived inspector, then 
   expect((saved!.parsed.main as { layers: { id: string }[] }).layers.map((layer) => layer.id)).toContain('panel');
 });
 
-test('a slots layer has a Durability field (default Best effort) that says Required is not crash-safe in this build, and writes `durable` only when chosen (#308)', async ({ page }) => {
+test('a slots layer has a Durability field (default Best effort) that says what Required does and that it is not yet verified, and writes `durable` only when chosen (#308)', async ({ page }) => {
   await openShop(page);
   await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Slots', exact: true }).click();
   const durability = page.getByRole('group', { name: 'Durability' });
@@ -214,13 +214,13 @@ test('a slots layer has a Durability field (default Best effort) that says Requi
   await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
   expect((await documentOf(page, 'guis/shop/main.yml'))!.raw).not.toContain('durable');
 
-  // choosing Required states, in the schema's own words, that it is not crash-safe yet; then it is saved on that layer alone
+  // choosing Required states, in the schema's own words, what it does and that it is not yet verified; then it is saved on that layer alone
   await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Slots', exact: true }).click();
   await page.getByRole('checkbox', { name: 'Input slots' }).check();
   await durability.getByRole('button', { name: 'Required' }).click();
   await expect(durability.getByRole('button', { name: 'Required' })).toHaveAttribute('aria-pressed', 'true');
-  await expect(page.getByTestId('choice-help-durable')).toContainText('Not available in this build yet');
-  await expect(page.getByTestId('choice-help-durable')).toContainText('not crash-safe');
+  await expect(page.getByTestId('choice-help-durable')).toContainText('never dropped in the world');
+  await expect(page.getByTestId('choice-help-durable')).toContainText('Not yet verified');
   await page.keyboard.press('Control+s');
   await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
   const saved = (await documentOf(page, 'guis/shop/main.yml'))!;

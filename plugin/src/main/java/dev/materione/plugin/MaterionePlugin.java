@@ -77,6 +77,8 @@ public final class MaterionePlugin extends JavaPlugin {
     private dev.materione.core.storage.PlacementIndex placements;
     /** The crash-safe input ledger writer (gui-input-durability.md row L); null until storage is up. */
     private dev.materione.plugin.escrow.io.EscrowLedgerStore escrowLedger;
+    /** The crash-safe input runtime (row P): capability, recovery gate, death release, claim; built once. */
+    private dev.materione.plugin.escrow.runtime.EscrowRuntime escrowRuntime;
     private dev.materione.plugin.runtime.blocks.CustomBlockService customBlocks;
     private dev.materione.plugin.runtime.furniture.FurnitureService furniture;
     private dev.materione.core.storage.RestartStaging restartStaging;
@@ -152,6 +154,49 @@ public final class MaterionePlugin extends JavaPlugin {
      */
     public dev.materione.plugin.escrow.io.EscrowLedgerStore escrowLedger() {
         return escrowLedger;
+    }
+
+    /**
+     * The crash-safe input runtime (gui-input-durability.md, row P of #247). Present once storage is up; when the
+     * ledger did not start its capability fails, so {@code durable: required} layers are refused.
+     */
+    public dev.materione.plugin.escrow.runtime.EscrowRuntime escrowRuntime() {
+        if (escrowRuntime == null && scheduling != null) {
+            escrowRuntime = new dev.materione.plugin.escrow.runtime.EscrowRuntime(this, scheduling, escrowLedger,
+                    dev.materione.plugin.escrow.runtime.EscrowMessages.from(
+                            (key, fallback) -> settings == null ? fallback : settings.getString(key, fallback)),
+                    diagnostics::publish, System::currentTimeMillis, org.bukkit.Bukkit::getOnlinePlayers);
+            escrowRuntime.onChecked(() -> escrowRuntime.publishCapability(requiredLayerLive()));
+        }
+        return escrowRuntime;
+    }
+
+    /** Whether a live GUI has a {@code durable: required} input layer (it makes {@code MTR-0100} an error). */
+    private boolean requiredLayerLive() {
+        var live = pipeline == null || pipeline.runtime() == null ? null : pipeline.runtime().registries();
+        var view = live == null ? null : live.view(dev.materione.plugin.gui.RuntimeGuis.KEY);
+        return view != null && view.all().stream().anyMatch(gui -> gui.inputs().all().stream()
+                .anyMatch(dev.materione.plugin.gui.input.InputSlots.Input::durable));
+    }
+
+    /** Computes the checkpoint capability (section 5.8) and publishes MTR-0100 when it fails; at enable and on reload. */
+    @SuppressWarnings("removal") // Server.Spigot#getSpigotConfig: the only reading of players.disable-saving (F14)
+    private void checkEscrowCapability() {
+        var escrow = escrowRuntime();
+        if (escrow == null) {
+            return;
+        }
+        boolean savingDisabled = false;
+        try {
+            savingDisabled = org.bukkit.Bukkit.spigot().getSpigotConfig().getBoolean("players.disable-saving", false);
+        } catch (RuntimeException | LinkageError unreadable) {
+            getLogger().warning("could not read spigot.yml players.disable-saving: " + unreadable);
+        }
+        var directory = storage == null ? null
+                : storage.storageDir().resolve(dev.materione.plugin.escrow.io.EscrowLedgerStore.DIRECTORY);
+        escrow.check(descriptorOrNull() != null, savingDisabled, directory == null ? null
+                : () -> dev.materione.plugin.escrow.io.DirectoryProbe.run(directory));
+        escrow.publishCapability(requiredLayerLive());
     }
 
     /** The thread gateway (commands hop to the player/region that owns their target). */
@@ -249,6 +294,9 @@ public final class MaterionePlugin extends JavaPlugin {
             if (integrations != null) {
                 integrations.close();
             }
+            if (escrowRuntime != null) {
+                escrowRuntime.releaseAll(); // K20: every open window is released before the server saves
+            }
             if (escrowLedger != null) {
                 escrowLedger.close(); // an INTENT still in flight reaches its file before the async scheduler goes
             }
@@ -337,6 +385,12 @@ public final class MaterionePlugin extends JavaPlugin {
         getServer().getPluginManager().registerEvents(new dev.materione.plugin.escrow.runtime.EscrowLedgerListener(
                 escrowLedger, dev.materione.plugin.escrow.io.EscrowLedgerStore.PRELOAD_TIMEOUT,
                 diagnostics::publish), this);
+        // the recovery gate, the death release and the respawn/quit upkeep (row P); players already online (a
+        // plugin reload) are recovered on their own threads
+        getServer().getPluginManager().registerEvents(
+                new dev.materione.plugin.escrow.runtime.EscrowPlayerListener(escrowRuntime()), this);
+        checkEscrowCapability();
+        escrowRuntime().adoptOnline();
     }
 
     private void registerBuiltins() {
@@ -562,6 +616,9 @@ public final class MaterionePlugin extends JavaPlugin {
         refreshLogicProviders();
         var summary = pipeline.reload(
                 storage.contentPacksDir(), storage.generatedDir(), storage.storageDir());
+        if (escrowRuntime != null) {
+            checkEscrowCapability(); // re-checked on every reload (5.8): a GUI may have gained a required layer
+        }
         if (!summary.skipped() && summary.packSha256() != null && summary.packZip() != null) {
             // deliver after apply — delivery failure never rolls apply back (§4.6).
             // Changed pack bytes always publish (a boot has no editor flow to
@@ -634,7 +691,7 @@ public final class MaterionePlugin extends JavaPlugin {
         guiStack = new dev.materione.plugin.gui.GuiStack(
                 this, scheduling, () -> pipeline.runtime().registries(), logic.engine(),
                 dev.materione.plugin.gui.input.LayerVisibility.RENDERED, diagnostics::publish,
-                () -> pipeline.builtRegistries(), descriptorOrNull(), variables);
+                () -> pipeline.builtRegistries(), descriptorOrNull(), variables, escrowRuntime());
         guiBridge.bind(guiStack.services());
         // %materione_gui_open% and %materione_gui_last% read the live sessions (logic.md §3.3)
         variables.guiSessions(new dev.materione.plugin.gui.session.GuiSessionsPort(guiStack.sessions()));
@@ -689,6 +746,11 @@ public final class MaterionePlugin extends JavaPlugin {
                 "materione.editor", "materione.pipeline", "materione.dev",
                 "materione.give", "materione.admin", dev.materione.plugin.gui.GuiRuntime.OPEN_PERMISSION,
                 "materione.browse", "materione.browse.get"));
+        // /materione claim collects the player's own owed items: everyone may (gui-input-durability.md section 5.5)
+        if (getServer().getPluginManager().getPermission("materione.claim") == null) {
+            getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(
+                    "materione.claim", org.bukkit.permissions.PermissionDefault.TRUE));
+        }
         for (String permission : permissions) {
             if (getServer().getPluginManager().getPermission(permission) == null) {
                 getServer().getPluginManager().addPermission(new org.bukkit.permissions.Permission(

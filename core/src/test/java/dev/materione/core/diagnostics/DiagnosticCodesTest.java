@@ -50,8 +50,9 @@ class DiagnosticCodesTest {
         // MTR-0095 pack id belongs to a built-in pack, MTR-0096 built-in pack unavailable: master section 7.3, #8;
         // MTR-0097 GUI container is not supported: gui.md section 12.4, #290;
         // MTR-0098 GUI container cannot be opened on this server: gui.md section 12.6, #292;
-        // MTR-0101 a player's escrow state is unreadable, MTR-0102 a strict input transfer could not be recorded:
-        // gui-input-durability.md section 5.9, #309; MTR-0100 and MTR-0103 stay proposed until row P)
-        assertThat(DiagnosticCodes.all()).hasSize(100);
+        // MTR-0100 the platform lacks checkpoint support, MTR-0101 a player's escrow state is unreadable,
+        // MTR-0102 a strict input transfer could not be recorded, MTR-0103 recovery left stacks owed:
+        // gui-input-durability.md section 5.9, #309 and #310)
+        assertThat(DiagnosticCodes.all()).hasSize(102);
     }
 }

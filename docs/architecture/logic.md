@@ -587,12 +587,18 @@ The decisions taken in #217 are recorded in §27.
 - **Input slots.** A `slots` layer may set `input: true` (with an optional `accept: <condition>` on
   `slot.item`). Its slots accept the player's items, and moves into or out of them fire
   `gui.slot_change`. It may also set `durable: required | best_effort` (default `best_effort`; input layers only;
-  [`gui-input-durability.md`](gui-input-durability.md) §10). **Schema only until row P of #247:** `required` is parsed,
-  described and kept, and does nothing at runtime yet, so a `required` layer is not crash-safe (§25.12; validation
-  warns with `MTR-0076`).
-- **Returning items.** On close, items left in input slots go back to the player (or drop at the
-  player's feet when the inventory is full). Nothing is ever deleted unless a flow says so
-  (`gui.slot_item: {slot, op: clear}`).
+  [`gui-input-durability.md`](gui-input-durability.md) §10). **Row P of #247 (#310) makes `required` do something:** every click
+  that touches such a slot is applied by the plugin itself, in one step with the player's escrow account (single-slot
+  place, pickup, swap, number key, offhand swap, shift, drag, double-click collect; a pickup lifts the stack to the cursor
+  as in vanilla and the account loses it in the same step), and nothing is ever dropped in the world for it (what does not
+  fit is *owed*, `/materione claim`). On a server that cannot support it (player-data saving off, `storage/escrow/` not
+  writable, no ledger) the layer renders and its slots accept nothing (`MTR-0100`). It is **not yet verified by the
+  kill-boundary tests** (rows B and H), so nothing calls it crash-safe. `best_effort` is the journal of §25.12, unchanged.
+- **Returning items.** On close, items left in input slots go back to the player; for a `best_effort` layer what does not
+  fit drops at the player's feet, for a `durable: required` layer it stays owed in the player's account and is claimed with
+  `/materione claim` (on join and on the next close too). Nothing is ever deleted unless a flow says so
+  (`gui.slot_item: {slot, op: clear}`; on a `required` layer `clear` and `set_amount 0` are refused until the exit ledger of
+  #248 exists, since a deletion must outlive a rollback).
 - **The trash recipe.** "Trash slot" is a recipe that clears an input slot on `gui.slot_change`.
 - **`player_inventory: locked | free`** (default `free`, as today, gui.md §5). `locked` cancels
   every bottom-inventory click and fires `gui.click_inventory`.
@@ -2519,9 +2525,12 @@ by the owner.
     a file read-back, **is** the platform acknowledgment this outcome said was missing: **the block on #247 and #248 is
     lifted.** The design is the accepted one (per-layer `durable: required | best_effort`; the cursor exposure accepted;
     Folia a supported target, its probe jar approved; death released at `PlayerDeathEvent`; the D8 exception for the
-    barrier noted on D8). #248 now waits on the design's rows M, L, P, B and H, not on an outside acknowledgment. Nothing
-    is built, so this decision's description of the code stands: the shipped journal is still not crash-safe (its
-    one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1).
+    barrier noted on D8). #248 now waits on the design's rows M, L, P, B and H, not on an outside acknowledgment.
+    **Row P (#310) built the tier-1 runtime** for `durable: required` layers (see the design's *Row P as built*): their
+    clicks are manual, with no deferred mirror, so the W1 window does not exist for them, and a death releases inside
+    `PlayerDeathEvent` (W4) for them. The `best_effort` journal described above is unchanged and still not crash-safe (its
+    one-tick mirror for server-applied clicks and drags can lose or duplicate an item across an autosave, W1; a death still
+    loses the items of a `best_effort` window). Rows B and H are not built, so nothing is called crash-safe yet.
 13. **The `layer:` filter of `gui.slot_change` is not yet checked against input layers.** A rule that names a non-input
     layer loads and never runs. `GuiRuleDiagnoser` checks that the layer exists, not that it is an input.
 14. **The QA entries (`guilogic.input-slots`, the `trade` fixture) are written but not run here.** They need a real
@@ -2529,7 +2538,8 @@ by the owner.
 
 **Diagnostics.** `MTR-0074` (accept does not compile), `MTR-0075` (static item under an input slot) and `MTR-0076`
 (an input-slot setting that cannot apply; since row S of #247 (#308) also `durable: required`, ignored on a non-input
-layer and, on an input layer, a warning that crash-safe slots are not in this build yet), documented in plugin.md §5. The next free code is `MTR-0077`.
+layer; an input layer's `durable: required` is no longer a load warning since row P: whether the server can honour it is the
+capability check, `MTR-0100`), documented in plugin.md §5. The next free code is `MTR-0104`.
 
 **Seams this leaves for later issues.** `GuiStack.inputClicks()` is the input collaborator the router consults;
 `GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a

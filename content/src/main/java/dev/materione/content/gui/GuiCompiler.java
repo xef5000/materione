@@ -175,10 +175,14 @@ public final class GuiCompiler {
      */
     static List<CompiledGui.Input> inputsOf(GuiDefinition gui, ClickMap clicks) {
         var accepts = new LinkedHashMap<String, Object>();
+        var durables = new java.util.HashSet<String>();
         var variable = new java.util.HashSet<String>();
         for (GuiLayer layer : gui.layers()) {
             if (layer.visible() && layer.compiled() instanceof SlotsComponent.Layer wells && wells.input()) {
                 accepts.put(layer.id(), wells.accept());
+                if (wells.durable() == SlotsComponent.Durability.REQUIRED) {
+                    durables.add(layer.id());
+                }
             }
             if (layer.visibleIf() != null || layer.frames() != null
                     || (layer.compiled() instanceof TextComponent.Layer text
@@ -191,7 +195,7 @@ public final class GuiCompiler {
             List<String> top = clicks.layersAt(slot);
             for (String layer : top) {
                 if (accepts.containsKey(layer)) {
-                    inputs.add(new CompiledGui.Input(slot, layer, accepts.get(layer)));
+                    inputs.add(new CompiledGui.Input(slot, layer, accepts.get(layer), durables.contains(layer)));
                     break;
                 }
                 if (!variable.contains(layer)) {

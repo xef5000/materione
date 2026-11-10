@@ -1,0 +1,38 @@
+# The crash-safe input fixture (gui-input-durability.md, row P of #247): a one-row chest whose slots are a
+# `durable: required` input layer and take anything. The player's items go into the escrow account in the same step as
+# every click; a close returns them, and what does not fit is owed (`/materione claim`), never dropped. The open and
+# the close are announced on the server console, which the QA catalog (qa/catalog/guiescrow.mjs) reads as markers.
+escrow:
+  title: Escrow
+  container: chest_1
+  player_inventory: free
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: vault
+      type: slots
+      region: container
+      input: true
+      durable: required
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "ESCROW"
+      font: smallcaps
+      color: "#404040"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUIESCROW-OPEN ${gui.id}"
+            as: console
+    - on: gui.close
+      do:
+        - run_command:
+            command: "say MATERIONE-GUIESCROW-CLOSED reason=${close.reason}"
+            as: console

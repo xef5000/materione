@@ -59,6 +59,24 @@ class EscrowGoldenFixturesTest {
         roundTrips(bytes, mixed());
     }
 
+    /**
+     * The account a crash-era {@code gui_inputs} journal turns into on join (row P, §10): its stacks as OWED entries of
+     * origin {@code legacy:gui_inputs}, adopted in one step. The journal's own bytes are Bukkit's
+     * {@code ItemStack.serializeItemsAsBytes}, which only a server can write and read; the decode is checked on a
+     * server (QA {@code guiescrow.legacy-migration}), and this golden fixes what the adoption writes.
+     */
+    @Test
+    void accountLegacyAdopted() throws IOException {
+        Entry first = new Entry(Fx.id(1), EntryState.OWED, Id128.ZERO, 5_000L, "legacy:gui_inputs", 0,
+                Fx.stack("diamond x3"));
+        Entry second = new Entry(Fx.id(2), EntryState.OWED, Id128.ZERO, 5_000L, "legacy:gui_inputs", 0,
+                Fx.stack("bread x64"));
+        Step step = EscrowTransfer.adoptLegacy(Fx.account(4), List.of(first, second));
+        byte[] bytes = ((Step.Applied) step).encoded();
+        check("account-v1-legacy-adopted", "gen 5: two OWED entries adopted from a legacy gui_inputs journal", bytes);
+        roundTrips(bytes, Fx.account(5, first, second));
+    }
+
     @Test
     void accountBadCrcIsUnreadableAndKeepsItsBytes() throws IOException {
         byte[] bytes = AccountCodec.encode(oneHeld());

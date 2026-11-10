@@ -1,9 +1,9 @@
 // Input durability, row S (roadmap M6, docs/architecture/gui-input-durability.md section 10 and 12, issue 308):
-// `durable: required | best_effort` on `slots` layers is SCHEMA ONLY in this build. These entries drive the real
-// local App against a server that has the `gui` type and read the saved file from the probe's own content copy:
-// the studio's Durability field exists on a slots layer, defaults to Best effort without writing anything, says in
-// the schema's own words that Required is not crash-safe yet, and is written to the file only when the author
-// chooses it. Nothing here claims crash-safety: the runtime does not read `durable` until row P (#310).
+// `durable: required | best_effort` on `slots` layers. These entries drive the real local App against a server that
+// has the `gui` type and read the saved file from the probe's own content copy: the studio's Durability field exists
+// on a slots layer, defaults to Best effort without writing anything, says in the schema's own words what Required
+// does and that the crash tests have not verified it yet, and is written to the file only when the author chooses it.
+// Nothing here claims crash-safety. The runtime behaviour of the escrow path (row P, #310) is in guiescrow.mjs.
 //
 // Blessing is pending: the entries were authored with the schema change; the ledger records a pass only after a
 // blessing run on main.
@@ -61,7 +61,7 @@ async function save(page) {
 export default [
   test({
     id: 'guidurability.studio-field-auto',
-    title: 'sample:qa_durability: a slots layer\'s Durability field defaults to Best effort and writes nothing; choosing Required on an input layer states that it is not crash-safe in this build, and `durable: required` reaches the file on that layer only',
+    title: 'sample:qa_durability: a slots layer\'s Durability field defaults to Best effort and writes nothing; choosing Required on an input layer states what it does and that it is not yet verified, and `durable: required` reaches the file on that layer only',
     covers: COVERS,
     timeoutMs: 240_000,
     steps: async (ctx) => {
@@ -79,8 +79,8 @@ export default [
         await page.getByRole('checkbox', { name: 'Input slots' }).check();
         await durability.getByRole('button', { name: 'Required' }).click();
         const help = (await page.getByTestId('choice-help-durable').innerText()).toLowerCase();
-        ctx.expect(help).toContain('not available in this build');
-        ctx.expect(help).toContain('not crash-safe');
+        ctx.expect(help).toContain('never dropped in the world');
+        ctx.expect(help).toContain('not yet verified');
         await save(page);
         const saved = fs.readFileSync(GUI_FILE, 'utf8');
         ctx.expect(saved).toContain('input: true');
@@ -93,7 +93,7 @@ export default [
 
   test({
     id: 'guidurability.studio-field-visual',
-    title: 'sample:qa_durability studio inspector: the Durability field under Input slots with Best effort chosen, then Required with the not-crash-safe-yet line',
+    title: 'sample:qa_durability studio inspector: the Durability field under Input slots with Best effort chosen, then Required with the not-yet-verified line',
     mode: 'visual',
     dependsOn: ['guidurability.studio-field-auto'],
     covers: COVERS,
@@ -107,7 +107,7 @@ export default [
         await page.getByRole('group', { name: 'Durability' }).getByRole('button', { name: 'Required' }).click();
         await ctx.browser.browserShot('gui-durability-required');
         ctx.needsEyes(
-          'the inspector of the Slots layer shows Region, Input slots (checked) and a Durability segmented control directly under it. First shot: Best effort is highlighted and the line under it says a server crash can lose or duplicate the items. Second shot: Required is highlighted and the line under it says it is not available in this build yet, behaves as Best effort and is not crash-safe. The text stays inside the inspector column, wraps instead of clipping, and keeps the editor tokens.',
+          'the inspector of the Slots layer shows Region, Input slots (checked) and a Durability segmented control directly under it. First shot: Best effort is highlighted and the line under it says a server crash can lose or duplicate the items. Second shot: Required is highlighted and the line under it says the items are tracked in the saved data of the player, are never dropped in the world, that the slots accept nothing on a server that cannot support it, and that it is not yet verified by the crash tests. The text stays inside the inspector column, wraps instead of clipping, and keeps the editor tokens.',
         );
       } finally {
         removeFixtureFile();

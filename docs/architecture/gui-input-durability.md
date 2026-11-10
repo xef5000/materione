@@ -6,12 +6,11 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308) and L (the ledger IO, #309) are built, as recorded in §12; the tier-1 runtime (rows P, B, H) is not.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308), L (the ledger IO, #309) and P (the plugin runtime: manual clicks, owed and claim, the death release, the recovery gate, #310) are built, as recorded in §12; the tier-3 barrier (row B) and the kill-boundary IT (row H) are not.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
-> (row X), not on an outside ack. Nothing of the runtime is built yet (row M is a pure model nothing calls; row L is the ledger's file IO, which only preloads and appends on request), so logic.md §25 decision 12 still describes the code: input slots
-> are enabled and **best-effort**, and nothing may be described as crash-safe until rows M, L, P, B and H are green on main.
+> (row X), not on an outside ack. Row P (#310) made `durable: required` layers take the escrow path; `best_effort` layers (the default) are the journal of logic.md §25 decision 12, unchanged. **Nothing may be described as crash-safe until rows M, L, P, B and H are green on main:** rows B and H are not built, so a `required` layer is *tracked and recoverable by construction* and *not yet verified by a kill-boundary run*, and every word in the product says so.
 >
 > **Row R (#306) has run the platform probes P1 to P4 (§11).** All four are settled and the design stands: a fake-connection
 > player works on the 1.21.4 harness (P4), a completed save survives `destroyForcibly` (P2), the death ordering and both
@@ -354,8 +353,8 @@ block lifts; #248's consume action requires a `durable: required` layer.
 `MTR-0099` stays with gui.md §12.4 (an input on a slot the client refuses). **Owner answer (§14 Q8): this feature takes
 `MTR-0100`, the code gui.md §12.4 had left reserved-unassigned, so its codes are `MTR-0100` to `MTR-0103`** (the block runs
 from `MTR-0100`, one number earlier than the first draft). `MTR-0101` and `MTR-0102` were **assigned by row L (#309)**: they are in
-`DiagnosticCodes`, the ledger IO emits them, and plugin.md §5 documents them. `MTR-0100` and `MTR-0103` stay **proposed and
-unassigned** until row P lands: nothing emits them, they are not in `DiagnosticCodes`, plugin.md §5 and gui.md §12.4 carry the reservation.
+`DiagnosticCodes`, the ledger IO emits them, and plugin.md §5 documents them. `MTR-0100` and `MTR-0103` were **assigned by row P
+(#310)** and are emitted by the runtime (§12, *Row P as built*).
 
 | Code | Severity | Meaning and recovery |
 |---|---|---|
@@ -528,7 +527,7 @@ build is from 2025-06-13 and its channel is ALPHA; Folia's own changes to the jo
 | **P6** | Read-back of `BukkitValues → materione:gui_escrow` from a live `<uuid>.dat` while the server may replace it (F2 window) | needed for tier 3 (approved). Row R's `PlayerDat` reads a `.dat` from outside the server and the Folia run read it about 8 900 times under a live autosave of rate 1 with every unreadable read simply skipped, which is encouraging but not the probe: the F2 window was not forced | row B |
 | **P7** | An inventory-sync plugin that does not copy our PDC defeats G1 (F8) | by construction | documented limit; `doctor` warns when a known sync plugin is present (list is data) |
 
-## 12. Implementation rows (rows M, R, S and L built; the others proposed)
+## 12. Implementation rows (rows M, R, S, L and P built; the others proposed)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
@@ -538,7 +537,7 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high. **Done (#306):** R1 to R3 ran, §11 is filled in (P1 to P4 verified). As built: the crash rig (`CrashRig`, `PlayerDat`), the `durabilityProbe` plugin (fake-connection player, `dprobe gate`, the K-row primitives), `PaperInputDurabilityIT` (the save paths, K1/K2/K4/K21, death) and `FoliaInputDurabilityIT`, all opt-in, plus the sha256-pinned Folia jars (`folia-harness-*`, `folia-probe-*`) |
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. **Built (#307), as built below the table.** | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. **Built (#309)**: see *Row L as built* below | M | Sonnet, high |
-| **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
+| **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. **Built (#310)**: see *Row P as built* below | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
 | **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
@@ -725,6 +724,59 @@ build says so wherever the value appears.
 | Round trip | Layers are kept as authored maps, so a load and untouched save is byte-identical, an absent `durable` stays absent (the default is implicit, never written) and an unknown field survives. Fixture `fixtures/gui/durable-slots.yml` joins the byte-for-byte round-trip corpus |
 | Studio | The inspector's Durability segmented control (Behavior section, with the other slots fields) is rendered from the registry like every field. It shows the chosen option's description under the control (a generic addition to every segmented schema field). Nothing is written until the author clicks an option; clicking `Best effort` writes `durable: best_effort` explicitly |
 | Tests | `GuiInputSlotsTest` (default, both values, rejects a bad value, the warnings, the description, the fixture); `webui/test/gui-model.spec.ts` and `gui-save.spec.ts` (description, round trip, save writes only what was chosen); `gui-studio.pw.ts` (the control, its help text, the saved file); QA `guidurability.*` (not blessed) |
+
+### Row P as built (#310)
+
+The plugin runtime: a `durable: required` layer takes the escrow path. Tier-2 exits (#248's consume) and the tier-3 barrier
+(row B) are not here, and the kill-boundary IT is row H.
+
+**Where.**
+
+| Package | What |
+|---|---|
+| `escrow.runtime` (owner side, no IO, no `Future#get`) | `Tier1<T>` (**the one tier-1 API**, generic over the stack so it is tested without a server), `Stacks`, `Live`, `BagInventory`, `Delta`, `ClickPlanner`, `PlayerEscrow`, `EscrowCapability`, `EscrowMessages`; the Bukkit side `ItemStacks`, `BukkitLive`, `EscrowRuntime` (capability, one `PlayerEscrow` per online player, the gate, death, claim, refusal copy), `EscrowPlayerListener` |
+| `escrow.io` | `DirectoryProbe` (the §5.8 create-and-delete check; file IO, so it lives here and runs on the IO executor) |
+| `gui.input` | `StrictInputs` (the GUI side's one door to `Tier1`), `ManualClicks` (single-slot and drag), `SlotMoves` (shift in and out, collect; carved out of `InputSlotClicks` for the 400-line guard) |
+
+**The one tier-1 API.** Every method takes both sides, a `PlayerEscrow` (account, gate, the writer into the player's persistent data) and a `Live` (window slots, cursor, inventory), and does *plan on the account alone, write the persistent value, change the live
+stacks* in one owner-thread call; a refusal changes neither side. `apply(Delta)` is every manual click (the click planner or the move planners build the `Delta`: the final window slots, inventory slots and cursor), `release` is a close, `take`/`edit` are `gui.slot_item`, `claim`, `death`, `recover` (join), and `beginCarry`/`placeCarried`/`restoreCarried` are a re-open. It composes the row M model steps (`place`, `pickUp`, `editStack`, `moveOut`, `close`, `claim`, `death`, `adoptLegacy`) and the account is encoded eagerly by the last of them. A strict click can therefore take several model steps (and several `gen`s): `gen` is an ordering, not a count of clicks.
+
+**What every strict action does** (the §5.5 table, as built):
+
+| Action | Built as |
+|---|---|
+| Single-slot click (place, pickup, swap, number key, offhand swap) | `GuiListener` answers `Verdict.MANUAL`: the event is cancelled, the gui's `gui.click` rules see it, then `ManualClicks` applies `ClickPlanner`'s outcome (vanilla's rules per `InventoryAction`) as one `Delta`. The server never applies it. The `accept:` and `gui.slot_change` checks ran first on the server's own prediction (`SlotPolicy`), as for `best_effort` |
+| Drag | cancelled, `ManualClicks.drag` applies `getNewItems()` (window and inventory slots) and the cursor left, in one step |
+| Shift in/out, double-click collect | `SlotMoves`: the existing planners, now building a `Delta` that goes through `StrictInputs.apply` for every layer (for a window with no required slot the writes are the plain ones, as before) |
+| Pickup | the stack lands on the cursor and the entry leaves the account in the same step (G5: nothing guards the cursor) |
+| Drop key, Ctrl-drop, clone, unknown | refused, as before |
+| `gui.slot_item` | `take`: the inventory, or OWED; `set_amount`/`repair`/`enchant`: `Tier1.edit` on a copy of the stack. **`clear` and `set_amount 0` are refused** on a required layer ("needs the exit ledger"): a deletion is a tier-2 exit (#248), and doing it as tier 1 would let a crash resurrect it |
+| Close, session end, replaced window | `StrictInputs.release` from `GuiWindowListener` and `BukkitWindowHost.releaseInputs`: every HELD entry to the inventory, OWED retried first, the rest OWED, the slots cleared. Entries *between windows* are skipped |
+| Re-open, rewrite that changes the input slots | `beginCarry` lifts the old window's escrowed stacks out (they stay HELD, in the account, marked *carrying*), `placeCarried` puts each back at the same slot when it is still escrowed, else returns it to the player (inventory, or OWED); the old window's close, which fires inside `openInventory`, therefore cannot return a carried stack a second time. A window that does not open gets its stacks back (`restoreCarried`) |
+| Death | `PlayerDeathEvent` at `MONITOR` (so `getKeepInventory()` is final): `keepInventory` returns the HELD entries to the inventory (OWED on overflow), otherwise appends them to `getDrops()`; the window's escrowed slots are cleared in the same step, so the `closeContainer(DEATH)` after it returns nothing a second time. A respawn rewrites the live account into the respawned player's data |
+| Quit, kick, server stop | the platform's `InventoryCloseEvent(DISCONNECT)` runs the close first (F4, F7); `PlayerQuitEvent` drops the live state. `onDisable` releases every online player's open window before the server saves (K20) |
+
+**The gate and recovery (§5.7).** `EscrowPlayerListener` handles `PlayerJoinEvent` at `LOWEST`: a new closed `PlayerEscrow`, then `Tier1.recover` with the account decoded from `materione:gui_escrow`, the preloaded ledger (`EscrowLedgerStore#preloaded`, memory only) and the legacy journal. If the preload has not finished the gate stays closed, the player is told, and `store.preload(uuid)` (idempotent) is continued with `executeEntity` to run the recovery then: never a blocking wait. An unreadable account (`MTR-0101`, reported here) or ledger (already reported by the store) leaves the gate `UNRECOVERABLE` and touches nothing; the player's strict clicks are refused. Players already online at enable or reload are recovered the same way (`adoptOnline`). The recovery result is announced: a chat line for what returned, `MTR-0103` plus a line when stacks stay OWED.
+
+**Capability and refusal (§5.8, §7).** `EscrowCapability` is the pure decision (platform known, `spigot.yml players.disable-saving` off, ledger started, `storage/escrow/` writable by `DirectoryProbe`); `EscrowRuntime.check` runs at enable and again on every reload (the plugin wires both), `publishCapability` emits `MTR-0100` once per change of the failed check or severity (error while a loaded GUI has a required layer, warning otherwise; a probe still running is not reported), and `/materione doctor` prints the capability and any player whose state is unreadable. When the capability fails, or the player's gate is not open, every click that touches a required slot is refused (`Verdict.DENY`, a `MoveOut`/`collect` skips the slot): the layer renders, accepts nothing, and the player sees one actionbar line from `EscrowMessages` (`gui.escrow.unavailable`, `.busy`, `.owed`; overridable by the settings keys `message_gui_escrow_*`, read with a fallback and never written, like row L's options); the reason is logged with its code at most once per player per minute (`MTR-0102` for an account over its cap, `MTR-0100` for the capability). `StrictInputs.NONE`, a host with no runtime, refuses required slots too: a required layer is never quietly `best_effort`. Row S's interim `MTR-0076` warning for `durable: required` on an input layer is gone (it stays for a non-input layer); the studio's description of `Required` now says what it does and that it is not yet verified (`SlotsComponent` 1.3.0).
+
+**Legacy migration (§10.2).** At join, when the gate can open, the `gui_inputs` journal of a crash-era leftover is decoded with Bukkit (`ItemStack.deserializeItemsFromBytes`), its stacks go through `adoptLegacy` as OWED entries of origin `legacy:gui_inputs` in the same recovery step and are claimed at once; the old key is removed. If the account is at its cap the key is left alone and the old `GuiJournal.restore` still runs; if the gate cannot open, `restore` runs as before. The golden `fixtures/escrow/account-v1-legacy-adopted.hex` fixes what the adoption writes; the raw Bukkit bytes need a server to produce, so their decode is exercised by the live server, not a unit test.
+
+**Decisions and ambiguities, as resolved.**
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | Which slots take the escrow path in a window with both kinds | Per slot: `GuiMenu.durableSlots()` (a subset of `inputSlots()`, set when the window is shown or rewritten from `InputSlots.Input#durable`). The journal's `held`, `InputReturns.take` and `release` use `journaledSlots()` (the rest), so the two paths never touch each other's slots |
+| 2 | Slot to entry | An entry stands for the stack in window slot *s* when it is HELD or EXITING with `slotHint == s`; nothing else is stored. The slot a window shows is what the player sees, so it is the truth the account is brought back to when they disagree (another plugin changed a stack under us): a stack with no entry is adopted, an entry for an empty slot dropped before a click; a release returns what the slot holds *and* what the account owes. A stack the account cannot hold (a cap hit on a desync) is returned the old way (`Done.strays`), never lost |
+| 3 | Strict GUI opens "refused until OPEN" (§5.7) | Not refused: the window opens and its required slots accept nothing while the gate is not open, which is a refused open as far as items go and avoids a second refusal path in the opener |
+| 4 | `best_effort` labelling in the GUI's validation result (§5.8.3) | Done in `/materione doctor` only; the content module cannot know the platform, and the load-time `MTR-0076` warning would be wrong on a supported server |
+| 5 | The cursor across a re-open | Unchanged: carried by the window host as before, never escrowed (G5) |
+| 6 | Permission of `/materione claim` | `materione.claim`, **default true** (it returns the player's own items; the other nodes default to op). Players only, run through the entity scheduler |
+| 7 | `death` for a `best_effort` window | Unchanged (W4 stays for that path) |
+
+**Tests.** `ClickPlannerTest` (every action), `Tier1ClicksTest` (each click type on a required slot, refusals, a frozen slot, a desync), `Tier1LifecycleTest` (close and overflow, claim, take, edit, carry, death with both `keepInventory` values and a ledger decision, recovery, the gate, idempotence, the legacy adoption, an unreadable account or ledger), `Tier1CrashPropertyTest` (150 seeds x 70 steps of random strict clicks, closes, claims and deaths, with a simulated kill after every step recovered by the real codec and recovery), `EscrowCapabilityTest`, `EscrowPerfTest` (27-stack encode under 200 microseconds; a strict click on a 27-entry account under 1 ms; a nine-slot shift under 2 ms, medians), `EscrowIoBansTest` still holds the runtime (`java.nio.file` moved to `DirectoryProbe`), `EscrowGoldenFixturesTest.accountLegacyAdopted`, `GuiInputSlotsTest` (the compiled input carries `durable`). QA entries `guiescrow.*` (not blessed): `pickup-lifts-to-cursor` (auto and visual), `owed-claim`, `death-release`.
+
+**Left for rows B, H and Q.** The tier-2 consume exit and the `clear` refusal (X/#248); the barrier (B); the kill-boundary IT and its swap of the probe's stand-in account for this runtime (H); the QA entries that need the `probe.mjs` restart verb (`guiescrow.refused-unsupported`, `guiescrow.recovery-message`, the legacy migration) and the persistence-table row (Q). `StrictInputs` and `Tier1` are the hooks: tier 2 adds `Exits` calls beside `take`, and row B adds the one `saveData()` call site.
 
 ## 13. Decisions this design takes
 

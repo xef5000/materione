@@ -99,10 +99,16 @@ public final class GuiListener implements Listener {
                 // the viewer's own inventory keeps working
             }
             case CHECKED -> {
-                if (inputs.checked((GuiMenu) gui, event)) {
-                    gui.onClick(event); // the server applies the click; the gui sees it for gui.click
-                } else {
-                    event.setCancelled(true);
+                switch (inputs.checked((GuiMenu) gui, event)) {
+                    case SERVER -> gui.onClick(event); // the server applies the click; the gui sees it for gui.click
+                    case MANUAL -> {
+                        // a durable: required slot: the plugin applies the whole click in one step with the account
+                        // (gui-input-durability.md §5.5), after the gui's rules have seen it
+                        event.setCancelled(true);
+                        gui.onClick(event);
+                        inputs.applyManual((GuiMenu) gui, event);
+                    }
+                    case DENY -> event.setCancelled(true);
                 }
             }
             case MOVE_IN -> {
@@ -133,8 +139,13 @@ public final class GuiListener implements Listener {
         switch (dragRoute(topSize, event.getRawSlots(), input, locked)) {
             case CANCEL -> event.setCancelled(true);
             case CHECKED -> {
-                if (!inputs.drag((GuiMenu) gui, event)) {
-                    event.setCancelled(true);
+                switch (inputs.drag((GuiMenu) gui, event)) {
+                    case SERVER -> { } // the server places the drag
+                    case MANUAL -> {
+                        event.setCancelled(true);
+                        inputs.applyDrag((GuiMenu) gui, event);
+                    }
+                    case DENY -> event.setCancelled(true);
                 }
             }
             case PASS -> {

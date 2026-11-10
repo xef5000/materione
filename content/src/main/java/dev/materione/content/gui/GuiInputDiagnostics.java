@@ -14,9 +14,10 @@ final class GuiInputDiagnostics {
 
     /**
      * The input-slot settings that cannot apply (logic.md §25, MTR-0076): {@code accept:} on a layer that
-     * is not an input, a {@code player_inventory:} that is neither value, and {@code durable: required}
-     * (ignored on a non-input; on an input it is schema only until row P of #247, so it is stated to behave as
-     * {@code best_effort}). Each is ignored, so the GUI loads and says so.
+     * is not an input, a {@code player_inventory:} that is neither value, and {@code durable: required} on a layer
+     * that is not an input (ignored). On an input layer {@code durable: required} is honoured by the runtime, or
+     * refused where the platform cannot support it ({@code MTR-0100}, row P of #247). Each is ignored, so the GUI loads
+     * and says so.
      */
     static void diagnose(GuiDefinition gui, List<Diagnostic> out) {
         if (!PlayerInventory.valid(gui.raw().get("player_inventory"))) {
@@ -35,23 +36,16 @@ final class GuiInputDiagnostics {
                         gui.id(), null, "add input: true to the layer, or remove accept",
                         DiagnosticTarget.field("layers", String.valueOf(index))));
             }
-            if (layer.compiled() instanceof SlotsComponent.Layer wells
+            if (layer.compiled() instanceof SlotsComponent.Layer wells && !wells.input()
                     && wells.durable() == SlotsComponent.Durability.REQUIRED) {
-                // durable is schema only until row P of #247: a required layer is not crash-safe yet, and the
-                // validation result says so rather than let the word be read as a guarantee
-                boolean input = wells.input();
+                // durable applies to input slots only. On an input layer it is no longer a load-time warning: whether
+                // the server can honour it is the platform's capability check (MTR-0100, row P of #247), which the
+                // content module cannot know
                 out.add(new Diagnostic(
                         DiagnosticCodes.GUI_INPUT_SETTING_IGNORED, Severity.WARN,
-                        input
-                                ? gui.id() + ": layer '" + layer.id() + "' sets durable: required, but crash-safe input "
-                                        + "slots are not available in this build; it behaves as best_effort and its "
-                                        + "items are not crash-safe"
-                                : gui.id() + ": layer '" + layer.id() + "' has durable, which applies to input slots "
-                                        + "only; it is ignored",
-                        gui.id(), null,
-                        input ? "keep durable: required to ask for crash-safe slots once this build supports them, "
-                                + "or write durable: best_effort"
-                                : "add input: true to the layer, or remove durable",
+                        gui.id() + ": layer '" + layer.id() + "' has durable, which applies to input slots "
+                                + "only; it is ignored",
+                        gui.id(), null, "add input: true to the layer, or remove durable",
                         DiagnosticTarget.field("layers", String.valueOf(index), "durable")));
             }
         }

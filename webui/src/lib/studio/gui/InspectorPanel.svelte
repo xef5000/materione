@@ -286,7 +286,7 @@
               {/each}
             </div>
             <!-- the schema's own words for the chosen option (the registry describes it, D5): for Durability they say
-                 what Required does not do yet, so the control never reads as a crash-safety guarantee -->
+                 what Required does and that the crash tests have not verified it yet, so the control never reads as a guarantee -->
             {#each choices(param).filter((choice) => choice.value === (typeof raw === 'string' ? raw : (param.default ?? ''))) as choice (choice.value)}
               {#if choice.description}
                 <p class="hint" data-testid="choice-help-{param.id}">{choice.description}</p>

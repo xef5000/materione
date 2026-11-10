@@ -6,6 +6,7 @@ import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.platform.gui.PaperRichTitles;
 import dev.materione.platform.gui.RichTitleTransport;
 import dev.materione.platform.text.MaterioneText;
+import dev.materione.plugin.escrow.runtime.Tier1;
 import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.PluginGui;
 import dev.materione.plugin.gui.RuntimeGuis;
@@ -15,10 +16,12 @@ import dev.materione.plugin.gui.input.GuiJournal;
 import dev.materione.plugin.gui.input.InputGuard;
 import dev.materione.plugin.gui.input.InputReturns;
 import dev.materione.plugin.gui.input.InputSlots;
+import dev.materione.plugin.gui.input.StrictInputs;
 import dev.materione.plugin.gui.render.GuiRenderer;
 import dev.materione.plugin.gui.render.Rendered;
 import dev.materione.plugin.gui.render.RenderReporter;
 import dev.materione.plugin.gui.session.GuiSession;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -51,6 +54,7 @@ public final class BukkitWindowHost implements WindowHost {
     private final GuiInput input;
     private final InputGuard guard;
     private final GuiJournal journal;
+    private final StrictInputs strict;
     private final GuiRenderer renderer;
     private final RichTitleTransport titles;
     private final RenderReporter reporter;
@@ -70,7 +74,15 @@ public final class BukkitWindowHost implements WindowHost {
 
     public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
             GuiJournal journal, GuiRenderer renderer, RichTitleTransport titles, RenderReporter reporter) {
+        this(plugin, scheduling, input, guard, journal, StrictInputs.NONE, renderer, titles, reporter);
+    }
+
+    /** @param strict the escrow path of {@code durable: required} slots (gui-input-durability.md, row P of #247) */
+    public BukkitWindowHost(Plugin plugin, SchedulingGateway scheduling, GuiInput input, InputGuard guard,
+            GuiJournal journal, StrictInputs strict, GuiRenderer renderer, RichTitleTransport titles,
+            RenderReporter reporter) {
         this.plugin = plugin;
+        this.strict = strict;
         this.scheduling = scheduling;
         this.input = input;
         this.guard = guard;
@@ -94,15 +106,11 @@ public final class BukkitWindowHost implements WindowHost {
         return Optional.of(reason);
     }
 
-    /**
-     * Whether the GUI's container profile names a window this server can create (gui.md §12.6): a size the
-     * inventory API accepts (a multiple of 9 from 9 to 54), or an {@code InventoryType} that exists and is
-     * creatable. Reports {@code MTR-0098} and returns the reason when it does not.
-     */
     /** Bukkit's {@code createInventory(holder, size, title)} contract, not a container's geometry. */
     private static final int API_SIZE_STEP = 9;
     private static final int API_SIZE_MAX = 54;
 
+    /** Whether the container profile names a window this server can create (gui.md §12.6); else reports MTR-0098. */
     private Optional<String> unopenable(RuntimeGuis.Live gui) {
         GuiContainer.Open open = gui.container().open();
         String reason = null;
@@ -166,7 +174,7 @@ public final class BukkitWindowHost implements WindowHost {
         Rendered previousRender = session.rendered();
         RuntimeGuis.Live previousDisplayed = session.displayed().orElse(null);
         GuiMenu menu = new GuiMenu(session, gui.container(), next.title(), gui.title(), input);
-        menu.inputSlots(slotsOf(gui, next));
+        menu.inputSlots(slotsOf(gui, next), durableOf(gui, next));
         later(viewer, () -> {
             if (!player.isOnline()) {
                 failed.accept("the player is offline");
@@ -190,7 +198,9 @@ public final class BukkitWindowHost implements WindowHost {
             // the player's items in the old window's input slots move to this window with the session
             Map<Integer, ItemStack> items = carryCursor && session.window() instanceof GuiMenu previous
                     && previous != menu ? InputReturns.take(previous) : Map.of();
-            if (!carryCursor) {
+            // the escrowed stacks of that window stay HELD in the account, between the two windows
+            List<Tier1.Carried<ItemStack>> inFlight = carryCursor && session.window() instanceof GuiMenu previous
+                    && previous != menu ? strict.beginCarry(player, previous) : List.of();            if (!carryCursor) {
                 session.forgetWindow();
             }
             renderer.paint(menu.getInventory(), session, Rendered.EMPTY, next);
@@ -211,14 +221,17 @@ public final class BukkitWindowHost implements WindowHost {
                 session.displayed(previousDisplayed);
                 if (previousWindow instanceof GuiMenu old && player.getOpenInventory().getTopInventory() == old.getInventory()) {
                     items.forEach((slot, item) -> old.getInventory().setItem(slot, item));
+                    strict.restoreCarried(player, old, inFlight);
                 } else {
                     items.values().forEach(item -> InputReturns.giveBack(player, item));
+                    strict.returnCarried(player, inFlight);
                 }
                 journal.mirror(player);
                 failed.accept("the window was refused by the server (an InventoryOpenEvent was cancelled)");
                 return;
             }
             placeInputs(player, menu, items);
+            strict.placeCarried(player, menu, inFlight);
             journal.mirror(player);
             plugin.getLogger().info("MATERIONE-GUI-OPENED id=" + gui.id() + " player=" + viewer.name()
                     + " container=" + gui.container().id() + " slots=" + gui.slots().size());
@@ -252,6 +265,7 @@ public final class BukkitWindowHost implements WindowHost {
         Player player = viewer.player();
         if (session.window() instanceof GuiMenu menu) {
             InputReturns.release(player, menu);
+            strict.release(player, menu);
         }
         if (player != null) {
             journal.mirror(player); // the items are with the player now; the journal lets go of them in the same tick
@@ -296,7 +310,8 @@ public final class BukkitWindowHost implements WindowHost {
             }
             heldTitles.cancel(session);
             Set<Integer> now = slotsOf(gui, next);
-            boolean ownershipChanged = !menu.inputSlots().equals(now);
+            Set<Integer> nowDurable = durableOf(gui, next);
+            boolean ownershipChanged = !menu.inputSlots().equals(now) || !menu.durableSlots().equals(nowDurable);
             titleRefreshes.update(session, changed || ownershipChanged, guard.dispatching(viewer.id()), () -> {
                 if (changed) {
                     String error = titles.send(viewer.player(), menu.getInventory(), MaterioneText.parseData(next.title()));
@@ -311,9 +326,11 @@ public final class BukkitWindowHost implements WindowHost {
                     renderer.paint(menu.getInventory(), session, session.rendered(), next);
                 } else {
                     Map<Integer, ItemStack> kept = InputReturns.take(menu);
+                    List<Tier1.Carried<ItemStack>> escrowed = strict.beginCarry(viewer.player(), menu);
                     renderer.paint(menu.getInventory(), session, session.rendered(), next);
-                    menu.inputSlots(now);
+                    menu.inputSlots(now, nowDurable);
                     placeInputs(viewer.player(), menu, kept);
+                    strict.placeCarried(viewer.player(), menu, escrowed);
                     journal.mirror(viewer.player());
                 }
                 session.displayed(gui);
@@ -352,6 +369,10 @@ public final class BukkitWindowHost implements WindowHost {
                 item -> InputReturns.giveBack(player, item));
     }
 
+    private static Set<Integer> durableOf(RuntimeGuis.Live gui, Rendered rendered) {
+        return gui.inputs().effective(gui.clicks(), rendered).all().stream().filter(InputSlots.Input::durable)
+                .map(InputSlots.Input::slot).collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
     private static Set<Integer> slotsOf(RuntimeGuis.Live gui, Rendered rendered) {
         return gui.inputs().effective(gui.clicks(), rendered).all().stream()
                 .map(InputSlots.Input::slot).collect(java.util.stream.Collectors.toUnmodifiableSet());
