@@ -6,11 +6,11 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307) and S (the `durable:` schema and studio field, #308) are built, as recorded in §12; nothing of the runtime is.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), S (the `durable:` schema and studio field, #308) and L (the ledger IO, #309) are built, as recorded in §12; the tier-1 runtime (rows P, B, H) is not.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
-> (row X), not on an outside ack. Nothing of the runtime is built yet (row M is a pure model nothing calls), so logic.md §25 decision 12 still describes the code: input slots
+> (row X), not on an outside ack. Nothing of the runtime is built yet (row M is a pure model nothing calls; row L is the ledger's file IO, which only preloads and appends on request), so logic.md §25 decision 12 still describes the code: input slots
 > are enabled and **best-effort**, and nothing may be described as crash-safe until rows M, L, P, B and H are green on main.
 >
 > Traceability: **D1** (§9: the escrow is runtime player state, not content, and creates no second source of truth for
@@ -329,8 +329,9 @@ block lifts; #248's consume action requires a `durable: required` layer.
 
 `MTR-0099` stays with gui.md §12.4 (an input on a slot the client refuses). **Owner answer (§14 Q8): this feature takes
 `MTR-0100`, the code gui.md §12.4 had left reserved-unassigned, so its codes are `MTR-0100` to `MTR-0103`** (the block runs
-from `MTR-0100`, one number earlier than the first draft). They are **proposed and unassigned** until the implementation
-rows land: nothing emits them, they are not in `DiagnosticCodes`, plugin.md §5 and gui.md §12.4 carry the reservation.
+from `MTR-0100`, one number earlier than the first draft). `MTR-0101` and `MTR-0102` were **assigned by row L (#309)**: they are in
+`DiagnosticCodes`, the ledger IO emits them, and plugin.md §5 documents them. `MTR-0100` and `MTR-0103` stay **proposed and
+unassigned** until row P lands: nothing emits them, they are not in `DiagnosticCodes`, plugin.md §5 and gui.md §12.4 carry the reservation.
 
 | Code | Severity | Meaning and recovery |
 |---|---|---|
@@ -446,7 +447,7 @@ consumed* is the ledger. Neither duplicates the other, and recovery is defined f
 | **P6** | Read-back of `BukkitValues → materione:gui_escrow` from a live `<uuid>.dat` while the server may replace it (F2 window) | needed for tier 3 (approved) | row B |
 | **P7** | An inventory-sync plugin that does not copy our PDC defeats G1 (F8) | by construction | documented limit; `doctor` warns when a known sync plugin is present (list is data) |
 
-## 12. Implementation rows (proposed; row M built)
+## 12. Implementation rows (proposed; rows M, S and L built)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
@@ -455,7 +456,7 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **D0** | Claims correction | Javadoc/comment-only fix of W1/W2 in `InputJournal`, `GuiJournal`, `GuiWindowListener`; re-bless note for `guilogic.input-slots`. Docs half is in this PR. | none | Haiku |
 | **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high |
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. **Built (#307), as built below the table.** | none (R informs) | Sonnet, high |
-| **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. | M | Sonnet, high |
+| **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. **Built (#309)**: see *Row L as built* below | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
 | **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23. | R, P | Sonnet, high |
@@ -536,6 +537,80 @@ OWED + EXITING with a non-ASCII origin, bad CRC, newer version, truncated, valid
 v1 empty, INTENT + DONE, torn tail, bad-CRC last record, corrupt mid-file, newer version, zero-filled tail, torn
 header. Every readable one decodes to the expected model and re-encodes byte-identically; every unreadable one keeps
 its raw bytes. Single-bit-flip and every-prefix tests cover the rest.
+
+### Row L as built (#309)
+
+The ledger's file IO, its preload, compaction and quarantine, and the two diagnostics. **Nothing at runtime calls the
+append API yet**: the tier-1 runtime and the recovery gate are row P, the barrier is row B. What does run on a live server
+is the preload (every allowed login reads that player's ledger into memory; a player with no file costs one failed file
+open) and the release on quit, wired by the bootstrap phase `escrow-ledger`.
+
+**Where.** Three packages under `plugin/.../escrow/`, one per permission set of §5.6 (`EscrowModelBansTest` and
+`EscrowIoBansTest` enforce all three):
+
+| Package | May | May not |
+|---|---|---|
+| `model` (row M, plus `Compaction`) | JDK value types | everything else (row M's rule) |
+| `io` | files, channels, blocking an executor thread | any `org.bukkit` or `io.papermc` type, so it cannot do owner-thread work |
+| `runtime` (the listener now; rows P and B's owner-side classes later) | Bukkit | `java.io`, `java.nio.file`, `java.nio.channels`, `Future#get`/`join`, `Thread#sleep`, a latch or condition `await`; calling `EscrowLedgerStore#awaitPreload` (only `EscrowLedgerListener` may, across the whole plugin) |
+
+**The API rows P and B call** (`EscrowLedgerStore`, one per plugin, `MaterionePlugin#escrowLedger()`). Every method
+returns at once and does no IO on the caller's thread; the work runs on the IO executor, behind every earlier operation
+for the same player. A future completes on an IO thread: continue by hopping back with
+`scheduling.executeEntity(plugin, player, ...)`, never `get()`/`join()`.
+
+| Call | Use | Result |
+|---|---|---|
+| `preloaded(uuid)` | the join handler's recovery input; memory only, any thread | `Optional<LedgerState>`: **empty means the preload has not finished or the image was dropped, and the recovery gate stays closed** (§5.7) |
+| `preload(uuid)` | a player who is already online when the plugin enables or reloads (the pre-login event is past); idempotent | `CompletableFuture<LedgerState>` |
+| `LedgerState#recover(AccountRead, Inventory)` | the join handler: `Recovery.recover` against the preloaded ledger, no IO | `Recovery.Result` (an `Unrecoverable` state maps to `Result.Unrecoverable`, cause `LEDGER`; an unreadable account is reported first, cause `ACCOUNT`) |
+| `append(uuid, LedgerRecord)` | tier 2 step 2 (`Exits.intent(...)`) and step 4 (`Exits.acknowledge(...)`'s `DONE`) | `CompletableFuture<AppendResult>`: `Durable(ledger)` after the write (and the force when `fsync`) returned, and the ledger image to give `Exits.complete` (step 3); `Refused(reason, detail)` with `UNRECOVERABLE`, `WRITE_FAILED` or `SHUTDOWN` |
+| `compact(uuid)` | on demand (the preload also does it when something is droppable) | `CompactResult` (`COMPACTED`, `NOTHING_TO_DO`, `SKIPPED`, `FAILED`); never throws |
+| `release(uuid)` | quit (the listener does it) | drops the in-memory image once the player's queue is empty |
+| `fileOf(uuid)`, `close()` | tests; plugin disable | |
+
+The decision rule on a result: `Durable` is the decision point (§5.4), apply step 3 on the owner thread. `Refused` means
+**no record exists**: `Exits.abortUndecided` is correct, and the click is refused (I7). That "refused means not recorded"
+is made true by cutting the record back off when its write or force fails (below). An `UNRECOVERABLE` refusal is the
+`MTR-0101` state, not `MTR-0102`.
+
+**Decisions and ambiguities, as resolved.**
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | What "the IO executor" is | `SchedulingGateway.executeAsync` runs each task on Paper's async pool with **no ordering between tasks**, so FIFO per player is built on top: a per-player queue drained by at most one task at a time (a lock, so `close` can take over a drain that never started), at most 16 tasks per executor task before it yields. Different players' queues run in parallel; nothing blocks an executor thread on another player |
+| 2 | Torn-tail truncation: "on open" or "by the next writer" (§5.3 says the latter) | **When the writer opens the file for its first append after a load** (and by a compaction, which rewrites only valid records). A read never mutates, so a preload leaves a torn tail (a kill mid-append, or a flipped bit in the last record) on disk for forensics until the next write. The append also checks the file's size against what it last saw and re-reads on a mismatch, so a tail added or a file rewritten behind its back is handled the same way |
+| 3 | "Refused" versus a record that landed | A failed write or force cuts the partial record back off (`truncate(validLength)`, best effort) before the refusal, so a caller that aborts the exit is never contradicted by a CRC-valid INTENT. The residue is a disk too broken to truncate, which the next load reads as it finds it |
+| 4 | Quarantine (K18) across a restart | The corrupt file is renamed to `<uuid>.ledger.corrupt-<millis>` (a numeric suffix when taken; never replaced, never deleted), `MTR-0101`, the player's appends are refused. After a restart there is no ledger file, and a fresh empty one would forget every INTENT and let their entries return, so **a `.corrupt-*` file beside the ledger keeps the player unrecoverable (`QUARANTINED`)**; the admin resolves it by hand by moving that file out of `storage/escrow/` (admin tooling is row T) |
+| 5 | A newer-version ledger | Untouched, never appended to, `MTR-0101`, `NEWER_VERSION`. Not quarantined: it is valid for the newer build |
+| 6 | A read error (permissions, disk) | `IO_ERROR` for that load only, `MTR-0101`; retried the next time the player is loaded or appended to, because it says nothing about the file |
+| 7 | Compaction rule (§5.3 says "INTENT+DONE pairs older than `escrow.retention`") | `Compaction.plan`, pure: an INTENT is dropped, with its DONE, when its DONE is durable **and** its `atMillis` is at least the retention old (the DONE record carries no time, so the INTENT's decides). **An INTENT without a DONE is never dropped, at any age**: with no acknowledgment no snapshot is known to have replaced the one holding the entry, so G2 may not weaken; until row B writes DONE records nothing is droppable (70 bytes per consume). A DONE whose INTENT is gone is inert and dropped. A ledger compacted to nothing stays a valid header-only file (no delete) |
+| 8 | When compaction runs | In the preload (so at join, off-thread, per §5.3) when `Compaction.plan` would drop something, and on request. Serialised with the player's appends by the same queue |
+| 9 | Compaction atomicity | The kept records are written to `<uuid>.ledger.tmp` (forced when `fsync`), then `ATOMIC_MOVE` over the ledger (a plain replace where the file system has no atomic move, the pattern `ServerVariableStore` uses). A kill before the rename leaves the old file whole and a stray temp that is never read and the next compaction overwrites; a failed rewrite is logged and leaves memory and the file as they were |
+| 10 | The in-memory image | A join-time cache, not a store: `release` on quit drops it after the queue drains (a rejoin's preload already queued behind it keeps it alive), and an image untouched for 5 minutes is dropped by the next preload, which also bounds a login that passed pre-login and never joined. Anything dropped is re-derived from the files, deterministically. Appends carry the fresh ledger in their `Durable`, so row P needs the image only at join |
+| 11 | An append for a player nobody preloaded (a reload) | The queue loads the file first, then appends, so it is correct without a preload |
+| 12 | The pre-login preload | `EscrowLedgerListener` at `MONITOR` priority, for a login still `ALLOWED`, waits at most `PRELOAD_TIMEOUT` (5 s) with `awaitPreload`. It never refuses the login. A timeout leaves `preloaded` empty (the gate stays closed) and reports `MTR-0101` ("did not finish loading"); the read continues and fills in later |
+| 13 | Plugin disable | `onDisable` calls `close`, which drains every queued operation **on the disabling thread** (Paper cancels async tasks on disable, and an INTENT in flight must reach its file): the one place the IO half runs on the main thread, as `variables.close()` does; it waits for a drain already running (one batch of file IO per player). Work after `close` is refused (`SHUTDOWN`) |
+| 14 | Diagnostics | `MTR-0101` (warning): corrupt, newer, an unresolved quarantine, an unreadable file, a preload timeout. `MTR-0102` (warning): a failed append. Both are reported at most once per player per code per minute (§7), through `diagnostics::publish`; they are assigned in `DiagnosticCodes` (the count is 100) and documented in plugin.md §5. `MTR-0100` and `MTR-0103` stay proposed (row P) |
+| 15 | Settings | `escrow_fsync` (default `true`) and `escrow_retention_days` (default 30, minimum 1), flat keys like every other setting (§5.3 wrote `escrow.fsync`/`escrow.retention`), **read with fallbacks and not added to the written defaults**, so the settings golden and the editor's settings snapshot did not move. Documented in plugin.md §7.1 |
+| 16 | Where the ledger directory is created | Lazily, by the first append (`storage/escrow/`). A preload of a player with no file creates nothing |
+
+**Tests** (`plugin/src/test/.../escrow/`): `EscrowLedgerOrderingTest` (FIFO per player under an 8-thread pool and under
+four submitting threads, one player's appends never overlap, two players write at the same instant, the caller's thread
+does no IO and the work runs on the executor, a rejoin's preload waits for its own in-flight INTENT, release and the idle
+sweep, the preload timeout, `close` draining on the caller); `EscrowLedgerFilesTest` (preload reads without mutating, the
+torn tail cut at four places, a torn header, a file changed behind the writer, corruption quarantined and reported once,
+the quarantine surviving a restart until the admin moves it, a newer version untouched, an unreadable file retried,
+compaction by retention and by DONE, nothing-to-do, compaction to nothing, a kill before the rename leaves the old file whole
+and a restart reads it, a stray partial temp, `fsync` counted on and off, a failed append refused and reported once per minute
+and healed, a failed force cut back off, a torn tail added behind the writer's back); `CompactionTest` (the pure rule);
+`LedgerStateRecoveryTest` (the recovery input); `EscrowLedgerListenerTest`; `EscrowIoBansTest` (the three rules over the real
+packages, and each proven against a planted violation).
+
+**Not done here, by design.** The click paths and the one tier-1 API (row P); the recovery gate and the join-time
+`recover` call (row P); the barrier's `DONE` and read-back (row B); a kill-boundary IT (row H); the persistence-table row in
+plugin.md §7 and the glossary (row Q). The ban rule is recorded here and in `EscrowIoBansTest`; adding it to build.md's
+R-series table is left to row Q with the rest of the close-out.
 
 ### Row S as built (#308)
 
