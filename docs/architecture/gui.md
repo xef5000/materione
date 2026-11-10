@@ -45,6 +45,8 @@ shop:                          # one resource per key (master §7.2); the key is
     - id: wells
       type: slots
       region: container        # container | player | all
+      # input: true            # input slots (logic.md §6.5); with it, optionally:
+      # durable: best_effort   # best_effort (default, absent) | required: schema only, see below
     - id: art
       type: paint              # pixel layer, backed by a canvas-sized PNG asset
       image: gui/shop/main/art # textures/ implied, like every other texture reference
@@ -83,6 +85,19 @@ order within each target, matching static compilation and the studio. The namesp
 an opt-in; a component declaring that field retains it, and its own `frames` is untouched.
 The authoring preview displays the first raster frame without evaluating viewer conditions;
 the live title is per viewer. Conditional or animated input slots are rejected.
+
+**`slots` layer fields: `region`, `style`, `input`, `accept`, `durable`.** `input: true` makes the layer's container slots
+input slots (logic.md §6.5, §25); `accept:` is a condition on the candidate item. **`durable: required | best_effort`**
+([`gui-input-durability.md`](gui-input-durability.md) §5.8, §10; row S, #308) says what an input layer asks for while the
+player's items sit in it. It is per layer, owner-decided, and **absent means `best_effort`** (the key is never added by a
+save: a layer without it round-trips without it; the studio writes it only when the author chooses). It is meaningful
+**only with `input: true`**: on a layer that is not an input, `durable: required` loads and is ignored with `MTR-0076`
+(the same rule as `accept`), and `best_effort` there is the harmless default and says nothing. Any other value skips the
+layer (`MTR-0052`) rather than being read as `best_effort`, because guessing would quietly weaken what the author asked
+for. **It is schema only in this build:** nothing at runtime reads `durable` yet (row P, #310, does), so a
+`durable: required` input layer behaves exactly as `best_effort`, its items are **not crash-safe**, and `gui.validate`
+says so with an `MTR-0076` warning on the layer. The studio's Durability control (inspector, Behavior section, with the
+other slots fields) carries the same words.
 
 **Item layers can be dynamic (logic.md §6.3, §24, #216).** An `item` layer takes `item:` (a plain
 id, a template such as `${entry.item}`, or one named source such as `head: {player: "${player.name}"}`

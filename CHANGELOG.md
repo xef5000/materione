@@ -9,6 +9,12 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **`durable: required | best_effort` on input slot layers, schema and studio only (gui-input-durability.md §10, #308).** A `slots`
+  layer with `input: true` may declare `durable:` (default `best_effort`, never written unless chosen); the studio's inspector has a
+  Durability control for it and the editor schema describes it. **It does nothing at runtime yet**: `required` behaves as
+  `best_effort`, its items are not crash-safe, and `gui.validate` says so with an `MTR-0076` warning; a `durable: required` on a layer
+  that is not an input is ignored with the same code, and an unreadable value skips the layer (`MTR-0052`). The crash-safe slots
+  themselves are the later rows of #247.
 - **Containers beyond the chest, closed out (gui.md §12, #295).** A GUI's `container:` now selects a hopper or a dispenser as well as
   the six chests, and the showcase pack ships a `hopper` and a `dispenser` GUI (`showcase:hopper`, `showcase:dispenser`, opened with
   `materione gui open`) that show the window type and size, the clicks by slot id, the outside click, a dynamic title on a hopper and the

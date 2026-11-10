@@ -194,6 +194,41 @@ test('adds components from the registry palette, schema-derived inspector, then 
   expect((saved!.parsed.main as { layers: { id: string }[] }).layers.map((layer) => layer.id)).toContain('panel');
 });
 
+test('a slots layer has a Durability field (default Best effort) that says Required is not crash-safe in this build, and writes `durable` only when chosen (#308)', async ({ page }) => {
+  await openShop(page);
+  await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Slots', exact: true }).click();
+  const durability = page.getByRole('group', { name: 'Durability' });
+  await expect(durability.getByRole('button')).toHaveText(['Best effort', 'Required']);
+  await expect(durability.getByRole('button', { name: 'Best effort' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('choice-help-durable')).toContainText('server crash can lose or duplicate');
+  // the field comes right after Input slots, from the registry's order
+  const labels = await page.locator('.inspector .check span, .inspector .segmented[aria-label]').evaluateAll(
+    (nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? node.textContent));
+  expect(labels.indexOf('Durability')).toBe(labels.indexOf('Input slots') + 1);
+
+  // an untouched slots layer writes no durable key, even after another edit is saved
+  await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Buy button', exact: true }).click();
+  await page.getByTestId('gui-art').focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
+  expect((await documentOf(page, 'guis/shop/main.yml'))!.raw).not.toContain('durable');
+
+  // choosing Required states, in the schema's own words, that it is not crash-safe yet; then it is saved on that layer alone
+  await page.getByRole('region', { name: 'Layers' }).getByRole('button', { name: 'Slots', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Input slots' }).check();
+  await durability.getByRole('button', { name: 'Required' }).click();
+  await expect(durability.getByRole('button', { name: 'Required' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('choice-help-durable')).toContainText('Not available in this build yet');
+  await expect(page.getByTestId('choice-help-durable')).toContainText('not crash-safe');
+  await page.keyboard.press('Control+s');
+  await expect(page.locator('[data-status]')).toHaveText('Saved', { timeout: 15_000 });
+  const saved = (await documentOf(page, 'guis/shop/main.yml'))!;
+  const wells = (saved.parsed.main as { layers: { id: string; input?: boolean; durable?: string }[] }).layers.find((layer) => layer.id === 'wells');
+  expect(wells).toMatchObject({ input: true, durable: 'required' });
+  expect(saved.raw.match(/durable/g)).toHaveLength(1);
+});
+
 test('dragging on the frame marquee-selects what is on it; a click selects the frame, and a selected frame moves', async ({ page }) => {
   await openShop(page);
   await page.getByRole('button', { name: 'Lock Slots' }).click(); // the wells under the tag would be covered by the marquee too

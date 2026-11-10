@@ -117,9 +117,9 @@
     studio.setField(l.id, id, Object.keys(next).length ? next : undefined);
   }
 
-  function choices(param: TypeParam): { value: string; label: string }[] {
+  function choices(param: TypeParam): { value: string; label: string; description?: string }[] {
     return param.options?.length
-      ? param.options.map((option) => ({ value: option.value, label: option.label }))
+      ? param.options.map((option) => ({ value: option.value, label: option.label, description: option.description }))
       : (param.allowedValues ?? []).map((value) => ({ value, label: value }));
   }
 
@@ -285,6 +285,13 @@
                 <button type="button" class:on {disabled} aria-pressed={on} onclick={() => studio.setField(layer.id, param.id, choice.value)}>{choice.label}</button>
               {/each}
             </div>
+            <!-- the schema's own words for the chosen option (the registry describes it, D5): for Durability they say
+                 what Required does not do yet, so the control never reads as a crash-safety guarantee -->
+            {#each choices(param).filter((choice) => choice.value === (typeof raw === 'string' ? raw : (param.default ?? ''))) as choice (choice.value)}
+              {#if choice.description}
+                <p class="hint" data-testid="choice-help-{param.id}">{choice.description}</p>
+              {/if}
+            {/each}
           </div>
         {:else if kind === 'number'}
           <ScrubNumber
