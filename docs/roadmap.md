@@ -6,7 +6,7 @@
 > contributor can see where their work lands, and nothing lands half-built waiting for a
 > later milestone.
 >
-> **Rule:** every milestone respects the load-bearing decisions D1–D11 from day one (files
+> **Rule:** every milestone respects the load-bearing decisions D1–D12 from day one (files
 > canonical, one pipeline, registries, fail-soft). Milestones add *capability*, never
 > re-architecture. If a milestone seems to require breaking a decision, the milestone is
 > wrong — stop and amend the architecture doc first.
@@ -410,13 +410,20 @@ Worker is unchanged — no new endpoint, no cost-model change.
 
 **Exit:** a datapack-free "server GUI" — menus + dialogs + HUDs built entirely in Materione.
 
+**D12 pointer (architecture §3.1, [`architecture/primitives.md`](architecture/primitives.md)).** The milestone definition above is
+unchanged. What changes is how its remaining work is shaped: dialogs and HUDs are *view kinds* over state rather than separate
+systems, the input-slot durability work is the **custody** primitive's proof, and the backpack (#304) is the first **preset**
+(primitives.md §6 lists each re-scope). The MCP server and the fold-down of the audit's directions are tracked in #320 and sit
+in no milestone yet (architecture §14.9).
+
 ## M7 — Parity close-out (the long tail)
 
 **Goal:** everything in the parity MVP list that M1–M6 didn't cover.
 
 - All recipe types + in-game recipe builder; loot tables.
 - Armor: component path, mob armor/saddles/harness (capability-gated).
-- Mechanics catalog: combat + farming spells (the Oraxen list) as canned ECA.
+- Mechanics catalog: combat + farming spells (the Oraxen list) as canned ECA (under D12, each entry a preset over primitives;
+  the verbs and triggers the spells need are universal primitives, not per-spell natives: primitives.md §4.4, §5.7).
 - Importers: ItemsAdder → Oraxen → Nexo order (biggest audience first).
 - Delivery extras: S3/R2, proxy dedup, pre-join send, obfuscation/PackSquash steps.
 - Integrations: PlaceholderAPI, ModelEngine, MythicMobs, anti-cheat bridges.

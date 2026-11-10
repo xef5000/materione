@@ -10,7 +10,7 @@ glyphs/sounds/paintings/text-effects, the cloud relay editor at editor.materione
 ## Required reading (in order)
 
 1. [`docs/idea.txt`](docs/idea.txt) — the problem, one page
-2. [`docs/architecture.md`](docs/architecture.md) — **master architecture: decisions D1–D11 are binding**
+2. [`docs/architecture.md`](docs/architecture.md) — **master architecture: decisions D1–D12 are binding**
 3. [`docs/roadmap.md`](docs/roadmap.md) — M0→M8; work belongs to a milestone
 4. [`docs/architecture/README.md`](docs/architecture/README.md) — index, then the subsystem
    doc(s) relevant to your task:
@@ -45,7 +45,7 @@ updates ride the same PR; close the issue via the PR.
 
 ## Hard rules (violating any of these is a defect, not a style choice)
 
-- **Decisions D1–D11 bind.** If work seems to require breaking one, stop and amend
+- **Decisions D1–D12 bind.** If work seems to require breaking one, stop and amend
   `docs/architecture.md` first (explicitly, with rationale) — never silently work around it.
 - **Subsystem docs may not contradict the master doc.** New design detail goes in the
   subsystem doc and traces back to a D-number or master section.
@@ -60,6 +60,11 @@ updates ride the same PR; close the issue via the PR.
 - **Fail-soft everywhere**: content errors quarantine; the server never crashes on content.
 - **Lossless round-trip** (master §5.6): load → untouched save is byte-identical; unknown
   fields preserved; one schema source per content type (registry self-description).
+- **Primitives, not features (D12).** The engine ships universal primitives; a feature is content in a pack. A change
+  that adds engine surface (a registry entry, a content type, a native mechanic, a hard-coded command) states which
+  primitive it is or which composition already covers it, and passes the universality tests in architecture §3.1 (audit:
+  [`docs/architecture/primitives.md`](docs/architecture/primitives.md)). A preset is ordinary content on disk expanded by the
+  one pipeline; it does nothing a person could not write by hand.
 - **Module boundaries are enforced by the build** (plugin.md §11), not by review goodwill.
 - **Performance budgets (plugin.md §9) are enforced from M1**, not retrofitted.
 - **Cloudflare cost guardrails bind** (§ below) — deploys and account mutations are
