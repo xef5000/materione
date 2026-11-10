@@ -47,6 +47,27 @@ val containerProbeJar by tasks.registering(Jar::class) {
     from(containerProbe.output)
 }
 
+// A third test-only plugin (#306, row R of docs/architecture/gui-input-durability.md): a fake-connection player, a crash gate
+// and the K-row primitives. Installed by the input-durability scenarios; never shipped.
+val durabilityProbe = sourceSets.create("durabilityProbe")
+dependencies {
+    add(durabilityProbe.compileOnlyConfigurationName, libs.paper.api)
+}
+val durabilityProbeJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("durability-probe")
+    from(durabilityProbe.output)
+}
+
+// The Folia probe plugin (#306, row R2): declares folia-supported and runs its experiment on the player's region thread.
+val foliaProbe = sourceSets.create("foliaProbe")
+dependencies {
+    add(foliaProbe.compileOnlyConfigurationName, libs.paper.api)
+}
+val foliaProbeJar by tasks.registering(Jar::class) {
+    archiveClassifier.set("folia-probe")
+    from(foliaProbe.output)
+}
+
 val catalog = extensions.getByType<org.gradle.api.artifacts.VersionCatalogsExtension>().named("libs")
 val paperUrl = catalog.findVersion("paper-harness-url").get().requiredVersion
 val paperSha256 = catalog.findVersion("paper-harness-sha256").get().requiredVersion
@@ -57,6 +78,26 @@ val downloadPaperServer by tasks.registering(DownloadPaperServerTask::class) {
     output.set(
         rootProject.gradle.gradleUserHomeDir
             .resolve("caches/materione-paper/$paperSha256/paper.jar"),
+    )
+}
+
+// Folia (#306, row R2): the same download task, two pins (1.21.4 build 6, 26.1.2 build 8). Opt-in use only.
+val foliaHarnessSha256 = catalog.findVersion("folia-harness-sha256").get().requiredVersion
+val downloadFoliaServer by tasks.registering(DownloadPaperServerTask::class) {
+    url.set(catalog.findVersion("folia-harness-url").get().requiredVersion)
+    sha256.set(foliaHarnessSha256)
+    output.set(
+        rootProject.gradle.gradleUserHomeDir
+            .resolve("caches/materione-paper/$foliaHarnessSha256/folia.jar"),
+    )
+}
+val foliaProbeSha256 = catalog.findVersion("folia-probe-sha256").get().requiredVersion
+val downloadFoliaProbeServer by tasks.registering(DownloadPaperServerTask::class) {
+    url.set(catalog.findVersion("folia-probe-url").get().requiredVersion)
+    sha256.set(foliaProbeSha256)
+    output.set(
+        rootProject.gradle.gradleUserHomeDir
+            .resolve("caches/materione-paper/$foliaProbeSha256/folia.jar"),
     )
 }
 
@@ -76,13 +117,15 @@ val integrationTest by tasks.registering(Test::class) {
         includeTags("integration")
     }
     maxParallelForks = 1
-    dependsOn(":plugin:shadowJar", downloadPaperServer, containerProbeJar)
+    dependsOn(":plugin:shadowJar", downloadPaperServer, containerProbeJar, durabilityProbeJar)
     val shadowJarPath = rootProject.projectDir.resolve("plugin/build/libs/Materione-${project.version}.jar")
     systemProperty("paper.jar", downloadPaperServer.get().output.get().asFile.absolutePath)
     systemProperty("plugin.jar", shadowJarPath.absolutePath)
     systemProperty("materione.version", project.version.toString())
     systemProperty("harness.containerProbeJar", containerProbeJar.get().archiveFile.get().asFile.absolutePath)
     inputs.file(containerProbeJar.flatMap { it.archiveFile })
+    systemProperty("harness.durabilityProbeJar", durabilityProbeJar.get().archiveFile.get().asFile.absolutePath)
+    inputs.file(durabilityProbeJar.flatMap { it.archiveFile })
     systemProperty("harness.workroot", layout.buildDirectory.dir("work").get().asFile.absolutePath)
     // The container GUI floor (#292, row P): the product opens a hopper and a dispenser for a protocol client. It needs
     // `npm ci` in harness/protocol, so it is opt-in like the rich-title floor.
@@ -90,6 +133,24 @@ val integrationTest by tasks.registering(Test::class) {
         testLogging.showStandardStreams = true
         systemProperty("harness.containerGuiFloor", "true")
         systemProperty("harness.protocolDir", layout.projectDirectory.dir("protocol").asFile.absolutePath)
+        inputs.files(fileTree(layout.projectDirectory.dir("protocol")) { exclude("node_modules/**") })
+    }
+    // The input-durability probes (#306): a fake-connection player, a crash gate and restart on the Paper floor, and the
+    // death scenario. Each boots the server several times, so they are opt-in like the floor tests above.
+    if (providers.gradleProperty("harness.inputDurability").orNull == "true") {
+        testLogging.showStandardStreams = true
+        systemProperty("harness.inputDurability", "true")
+    }
+    // The Folia probe (#306, row R2): a Folia server jar (sha256-pinned, see libs.versions.toml) and a protocol client,
+    // which needs `npm ci --ignore-scripts` in harness/protocol. Opt-in.
+    if (providers.gradleProperty("harness.folia").orNull == "true") {
+        dependsOn(downloadFoliaServer, foliaProbeJar)
+        testLogging.showStandardStreams = true
+        systemProperty("harness.folia", "true")
+        systemProperty("harness.folia.jar", downloadFoliaServer.get().output.get().asFile.absolutePath)
+        systemProperty("harness.foliaProbeJar", foliaProbeJar.get().archiveFile.get().asFile.absolutePath)
+        systemProperty("harness.protocolDir", layout.projectDirectory.dir("protocol").asFile.absolutePath)
+        inputs.file(foliaProbeJar.flatMap { it.archiveFile })
         inputs.files(fileTree(layout.projectDirectory.dir("protocol")) { exclude("node_modules/**") })
     }
     if (providers.gradleProperty("harness.richTitleFloor").orNull == "true") {

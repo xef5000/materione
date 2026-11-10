@@ -1,0 +1,8 @@
+name: MaterioneDurabilityProbe
+version: '1'
+main: dev.materione.harness.probe.DurabilityProbe
+api-version: '1.21'
+commands:
+  dprobe:
+    description: Test-only fake-connection player and crash gate for gui-input-durability.md (rows R and H)
+    permission: materione.dprobe
