@@ -26,7 +26,7 @@ here.
 | **Definition** | The immutable, validated data of one resource, post-parse. | runtime-systems.md §1 |
 | **Diagnostics** | Structured failure records (`{code, severity, message, resource, file:line, hint}`) with stable `MTR-####` codes; the fail-soft backbone. | plugin.md §5 |
 | **Direct mode** | Editor transport where the plugin serves the API itself on loopback (or reverse-proxied); relay cut out; same protocol. | web.md §4.4 |
-| **D1–D11** | The eleven binding architectural decisions. | master §3 |
+| **D1–D12** | The twelve binding architectural decisions. | master §3 |
 | **ECA** | Event → Condition → Action: the single behavior model used by items, blocks, furniture, menus, dialogs, HUDs. | master D4, runtime-systems.md §2 |
 | **Envelope** | Standard encrypted container format for store blobs and chunks. | web.md §5.4 |
 | **Expression engine** | The one universal condition/interpolation language across all content types (single settled decision; PlaceholderAPI resolves inside strings). | runtime-systems.md §2.1 |
@@ -56,7 +56,9 @@ here.
 | **Pipeline** | The single path from files to runtime: scope → parse → validate → graph → allocate → compile → apply → deliver. | plugin.md §4 |
 | **Placement index** | Acceleration cache in `generated/index/` mapping positions → placed blocks/furniture; rebuildable by chunk scan, never load-bearing truth. | plugin.md §7 |
 | **Platform layer** | The only module aware of server versions; exposes capabilities, hides version churn. | plugin.md §6 |
+| **Preset** | The first-experience layer of D12: a named, parameterised composition the editor offers as a quick setting ("this item is a backpack"). The author's file declares it by reference (parameters only); its logic is resolved from its definition at runtime and built from primitives and built-in content, and it does nothing a person could not write by hand. The alternative is defining the behavior yourself. | master §3.1, §14.7, primitives.md §7 |
 | **Pre-apply report** | Operator-visible diff before commit: migrations, removals by policy, restart-required changes. | plugin.md §4.5 |
+| **Primitive** | A typed, composable engine capability that passes the universality tests U1 to U5 (named for what it does, general over key, holder, viewer and host, composable, self-describing, safe). The engine ships primitives, not features; a feature is content. | master §3.1 (D12), primitives.md §2 |
 | **Quarantine** | Runtime state of a resource excluded from compilation/gameplay due to diagnostics; visible, never silently dropped. | master §5.4 |
 | **Relay mode** | Default editor transport: server and browser both dial out to the relay over plain HTTPS (payload store + frame mailbox); no inbound connections (D11). | web.md §3, master D11 |
 | **Resource** | The atomic unit of content: identity (`ns:id`) + type + facets + provenance. | master §5.1 |

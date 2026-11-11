@@ -188,6 +188,12 @@ including separate console/player declarations in existing packs. Parameterized
 or conditional addons should generally opt into repeatability when their
 bindings can execute independently rather than overwrite shared state.
 
+**D12 reading** (architecture §3.1, [`primitives.md`](primitives.md) §4.2): these five are classified as feature-shaped. `commands`,
+`food`, `durability`, `soulbound` and `backpack` each fold down over time into a preset over a primitive (a rule, the component
+pass-through, keyed state on a stack, custody), and a *built-in* mechanic that needs native listeners where ECA would do is
+evidence of a missing trigger or verb. The SPI above stays: it is the extension seam for third parties whose behavior no
+primitive expresses. Nothing is removed in this document's scope.
+
 Existing YAML keys and durable PDC keys are retained. Commands now honor the
 same block-protection cancellation policy as authored ECA rules. Malformed
 parameter types are rejected at load rather than silently coerced. Soulbound

@@ -1,6 +1,6 @@
 # Plugin Architecture — Technical
 
-> **Traceability.** Implements the master decisions [D1–D11](../architecture.md#3-the-eleven-architectural-decisions).
+> **Traceability.** Implements the master decisions [D1–D12](../architecture.md#3-the-twelve-architectural-decisions).
 > Parent: [`architecture.md`](../architecture.md) · Companions: [`web.md`](web.md) (Cloudflare
 > ecosystem) · [`runtime-systems.md`](runtime-systems.md) (per content-type runtime).
 >

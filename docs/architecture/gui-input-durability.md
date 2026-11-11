@@ -27,6 +27,11 @@
 > content); **D4/D6** (the feature is runtime plumbing under the one ECA engine and the one GUI pipeline; no flow reaches
 > the player's items except through it); **D7** (derived runtime state is durable and lives in `storage/`);
 > **D8** (no IO on a region thread — §5.6); **D10** (both pins, 1.21.4 and 26.1.2, are read — §3).
+>
+> **D12 reading** (architecture §3.1, [`primitives.md`](primitives.md) §4.8, §5.1): the account and the ledger are the **custody**
+> primitive under a GUI-specific name. Input slots are one place custody can sit, and the reserved `HAND_OFF` kind is the atomic
+> transfer between holders. Nothing in this design changes, and no row is reordered: the generalization of the name, the holders
+> and the entry points waits for rows B and H, so that it never weakens a guarantee that is not yet proven.
 
 ---
 
