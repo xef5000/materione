@@ -39,7 +39,7 @@ Historically, `api/` (and `MaterioneAPI`) has been a minimal read-only facade (`
 
 1. **Files & Commands (`plugin/` + file watcher):** `/materione reload|doctor|give|dev|editor` and the file watcher become thin CLI/event adapters that parse arguments, construct an `ActorContext`, and invoke `MaterioneAPI`.
 2. **Web Panel (`web/` + `webui/`):** `RpcDispatcher` handlers in `web/` no longer reach into `core.document.DocumentStore`, `SettingsService`, or plugin-internal bridges (`ReloadTrigger`, `DeliveryControl`). `web/` depends **only on `api/`** (plus crypto/wire framing) and translates JSON RPC frames 1:1 into `MaterioneAPI` calls.
-3. **MCP Server (Long-Range Goal):** Because every action on `MaterioneAPI` is typed, actor-attributed, fail-soft, and backed by `SelfDescription` / `ParameterSchema` metadata, an MCP server adapter can automatically expose every API operation and content schema as MCP Tools and Resources without touching plugin internals. D12 (master §3.1) fixes what those tools expose: the universal primitives and, above them, presets, both derived from self-description; the transport and auth question is master §14.8.
+3. **MCP Server (Long-Range Goal):** Because every action on `MaterioneAPI` is typed, actor-attributed, fail-soft, and backed by `SelfDescription` / `ParameterSchema` metadata, an MCP server adapter can automatically expose every API operation and content schema as MCP Tools and Resources without touching plugin internals. D12 (master §3.1) fixes what those tools expose: the universal primitives and, above them, presets, both derived from self-description. Per the owner (master §14.8) the tool layer is deployed at the level of the cloud editor only, as a chatbot calling the editor's own operations over the existing protocol: no new endpoint, no new token scope.
 
 ---
 
@@ -388,6 +388,11 @@ The implementation is `dev.materione.behavior.logic.authoring.LogicAuthoringApiI
   - This mechanically guarantees that the Web Editor cannot perform *any* action that is not in `MaterioneAPI`.
 
 ### 4.3 Consumer 3: Future MCP Server Readiness (`mcp/` or external adapter)
+
+> **Deployment decided (owner, PR #322; architecture §14.8).** The consumer is a chatbot fixed on the cloud editor's page, calling the
+> editor's own operations over the existing editor protocol: no new endpoint, no new token scope, the relay stays untrusted. The
+> embedded stdio/SSE option below is not the chosen deployment; the introspection properties still hold, and they are what generates the
+> chatbot's tools.
 
 Because every operation in `MaterioneAPI` is modeled as a self-contained request/response record with `SelfDescription` schemas:
 

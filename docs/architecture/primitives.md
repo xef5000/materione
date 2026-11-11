@@ -19,9 +19,9 @@
 > | D12 | The whole document: the primitive test (§2.2), the classification (§2.3), the audit (§4), the fold-down (§5, §6). |
 > | D1 | A preset is ordinary content on disk, never editor-only state (§7). A fold-down never changes what an existing file means (master §5.5, §5.6). |
 > | D4 | Behavior stays one Event, Condition, Action system. The audit asks which parts of it are host-shaped (§4.3) and which verbs are missing (§4.4). |
-> | D5 | A primitive is a registry entry that describes itself, because that description is what the editor and the MCP server render. A surface that does not self-describe is invisible to an agent (§2.2, test U4). |
-> | D6 | Presets expand inside the pipeline; there is no "apply preset" side channel (§7). |
-> | D11 | The MCP transport question stays inside outbound-only connectivity (master §14.8). |
+> | D5 | A primitive is a registry entry that describes itself, because that description is what the editor and the agent's tool layer render. A surface that does not self-describe is invisible to an agent (§2.2, test U4). |
+> | D6 | A preset declaration is resolved by the pipeline when it builds the runtime; there is no "apply preset" side channel (§7). |
+> | D11 | The agent surface is a chatbot in the cloud editor over the existing protocol: no new endpoint, relay still untrusted (master §14.8). |
 > | §7.3 | Built-in packs are where first-party features live as content (§4.9). |
 
 ---
@@ -30,7 +30,7 @@
 
 Materione's reason to exist (master §1) is that incumbents each generalize one area (resource packs, GUIs, mobs) and make the owner
 wire them together. The strategic bet of [#320](https://github.com/xef5000/materione/issues/320) is one step further: an agent
-connected through an MCP server (api.md §1, the third consumer) should be able to build a whole gameplay feature by *composing*
+connected through an MCP-style tool layer (api.md §1, the third consumer; deployed as a chatbot in the cloud editor, master §14.8) should be able to build a whole gameplay feature by *composing*
 Materione's building blocks, with typed, validated calls instead of the Skript pattern of rebuilding every primitive from
 scratch. That only holds if the building blocks are universal. A feature-shaped piece of engine surface ("input slots",
 "GUI sessions", a "trade system") is the opposite: it solves one case, its name tells an agent so, and the next case needs
@@ -49,7 +49,7 @@ The audit measures how far the shipped surface is from that, and it does so with
 | **Primitive** | A typed, composable capability of the engine that names *what it does*, works for any key, holder, viewer or host that content names, and describes itself through a registry (D5). Examples that already exist: the `if`/`require`/`wait` steps, `set_var`, a `gui` layer component, an item source. |
 | **Feature-shaped** | Surface that is named for a use case (trade, backpack, input slots, session, shop) or hard-wired to one subject (the run's player, one GUI window). It works, and a second use case needs a copy of it. |
 | **Composition** | A feature built from primitives alone: content in a pack, with no engine code. |
-| **Preset** | The first-experience layer (D12 Layer 2): a named, parameterised composition the editor offers as a quick setting ("this item is a backpack"). It expands onto primitives and built-in content. §7. |
+| **Preset** | The first-experience layer (D12 Layer 2): a named, parameterised composition the editor offers as a quick setting ("this item is a backpack"). It is declared by reference and its logic is resolved from its definition at runtime, built from primitives and built-in content. §7. |
 | **Gap** | A primitive that does not exist and that a plausible feature needs. Found by the benchmark of §3, closed by adding a primitive, never by adding the feature. |
 | **Holder** | Something that holds items (or state) on someone's behalf: a player's account, an item stack, a keyed state, a block. Used in §3 and §5.1. |
 | **View** | A rendering of state to one or more viewers: a container GUI today; a dialog (#6) and a HUD (#7) are the same shape. §5.3. |
@@ -64,7 +64,7 @@ feature-shaped on that axis.
 | **U1** | **Name.** Is it named for a capability (hold, transfer, key, view, emit, command) and not for a use case (trade, backpack, shop, input slot)? | The name would be wrong in a second feature. |
 | **U2** | **Generality.** Does it work for any key, holder, viewer or host that content names? | It is hard-wired to one: the run's own player, one GUI window, one item. |
 | **U3** | **Composition.** Can content combine it with the other primitives without engine code? | Wiring it into a new feature needs Java. |
-| **U4** | **Self-description.** Is it a registry entry with a typed schema and stable diagnostics, so the editor and the MCP server render it (D5)? | It is reachable only from code, a hard-coded command or a hand-written tool. |
+| **U4** | **Self-description.** Is it a registry entry with a typed schema and stable diagnostics, so the editor and the agent's tool layer render it (D5)? | It is reachable only from code, a hard-coded command or a hand-written tool. |
 | **U5** | **Safety.** Does it validate offline, dry-run without side effects, fail soft and keep its crash semantics (D6, master §11)? | It cannot be tested or rolled back without a live player. |
 
 And the **benchmark** that makes the tests concrete: a feature such as `/trade <player>` with a custom two-player UI must be
@@ -77,7 +77,7 @@ missing piece is a primitive, and that is the issue to file. #320's 20 to 30 ben
 |---|---|---|
 | **P** | Primitive. Passes U1 to U5. | Nothing. |
 | **P+** | A primitive with feature-shaped coupling: the mechanism is general, the API, name or hosting is not. | Generalize in place; the file format keeps its meaning. |
-| **F** | Feature-shaped. | Becomes a preset (expands onto primitives) or a composition. The shipped YAML keeps loading. |
+| **F** | Feature-shaped. | Becomes a preset (declared by reference, defined over primitives) or a composition. The shipped YAML keeps loading. |
 | **G** | Gap: a primitive that is missing. | A design document, then a primitive. |
 
 "Feature-shaped" is not a verdict on quality. Backpacks and soulbound items are shipped, tested and used. The class says where
@@ -151,7 +151,7 @@ Content types registered by `content/` (D5), 11 in total:
 | `gui` (`guis/`) | One file holding the view (layers), the opening command (`open:`), the rules, and the input and custody policy (`input:`, `durable:`) | **P+** | Split the concerns, not the format: view / command / state / custody (§5.1 to §5.4). `open:` keeps working as sugar for a command whose flow is `gui.open`. |
 | `currency` (`currencies/`) | A named binding to a money provider (logic.md §18) | P | Watch: providers are a fixed set (§4.11). |
 | `variable` (`variables/`) | Declared typed state | **P+** | Keyed scope and TTL (§5.2). Existing declarations keep their meaning. |
-| templates (pack layout, not a type; plugin.md §3.1) | Inheritance bases, including items as templates (#203, PR #285) | P | The precedent for preset representation option (a) (master §14.7). |
+| templates (pack layout, not a type; plugin.md §3.1) | Inheritance bases, including items as templates (#203, PR #285) | P | A precedent for referencing a base by id (master §14.7); presets resolve at runtime and are not copied. |
 
 **Content types that do not exist and that the audit needs:**
 
@@ -159,7 +159,7 @@ Content types registered by `content/` (D5), 11 in total:
 |---|---|
 | A **command** type | §3 need 1. |
 | A **rule or flow unit** that is not owned by an item, block, furniture or GUI | Rules live in a host resource today (logic.md §2.1, §2.4: named flows are callable only inside one resource). A command, a world-event rule or a timer has no host. §5.5. |
-| A **preset** type (if presets are data, master §14.7 sub-question ii) | A preset's definition must be content, or presets become an addon-only Java surface. §7. |
+| A **preset** type (if presets are data, master §14.7 sub-question ii) | A preset's definition must be content, or presets become an addon-only Java surface (the recommended answer to master §14.7 (ii)). §7. |
 | Other **view kinds**: dialog (#6), HUD (#7) | They are the GUI's siblings (§5.3). |
 
 ### 4.2 Mechanics (the natives)
@@ -173,7 +173,7 @@ items. Five built-ins, each in `plugin/runtime/mechanics/builtin/`:
 | `food` | Platform item modifier plus a typed consume-effect listener | **F** | The vanilla `food`/`consumable` components plus a consume trigger. | A preset over the component pass-through (#161). |
 | `durability` | Native damage listener; counters in the stack's PDC | **F** | A counter held on a stack (keyed state whose holder is a stack) plus the item damage trigger. | Keyed state (§5.2) with a stack holder, a preset on top. |
 | `soulbound` | Native death, respawn and join listeners; a death stash in player PDC (`SoulboundMechanic`) | **F** | Custody of items across a death, plus death and respawn triggers. | Custody (§5.1): the stash is a *second* hand-rolled holder. |
-| `backpack` | Native interaction and close listeners; a plain `Bukkit.createInventory` chest; contents serialized into the stack's PDC (`backpack-id`, `backpack-data`) (`BackpackMechanic`) | **F** | A container whose items are held on an item's behalf, plus a view of it. It does not use the GUI system at all. | The first preset (#304): custody with a stack holder, plus the built-in backpack GUI. Existing stacks keep their stored contents. |
+| `backpack` | Native interaction and close listeners; a plain `Bukkit.createInventory` chest; contents serialized into the stack's PDC (`backpack-id`, `backpack-data`) (`BackpackMechanic`) | **F** | A container whose items are held on an item's behalf, plus a view of it. It does not use the GUI system at all. | The first preset (#304): custody with a stack holder, plus the built-in backpack GUI, declared with `rows` and `title`. **A backpack is not an engine behavior** (owner, PR #322): the native mechanic folds into the preset, and existing stacks keep their stored contents. |
 
 **The finding that matters here: three separate hand-rolled holders of items.** Backpack contents live in the stack's PDC,
 the soulbound stash in the player's PDC, and the escrow account of #247 in the player's PDC under its own key. Each has its own
@@ -293,8 +293,8 @@ the right home for D12's "a feature is content": the browser is a GUI built from
 | **Logic recipe**: a parameterised flow fragment the studio inserts (`Recipe` SPI, `RegistryKeys.RECIPES`), YAML in the jar: `back_button`, `close_button`, `confirm_dialog`, `paged_player_list`, `pay_to_receive`, `server_selector`, `toggle_setting`, `welcome_message` (`plugin/src/main/resources/recipes/`) | logic.md §4.6, §30 | **P** (and the seed of presets, §7) |
 
 The logic recipes are the existing precedent for the preset layer, at flow scale: parameters with types and ranges, expansion
-server-side into ordinary steps, and (logic.md §4.6) "a recipe never survives into the file as a recipe". That is option (b) of the
-representation question (master §14.7). This document does not rename either meaning; it uses *preset* for the new layer so that
+server-side into ordinary steps, and (logic.md §4.6) "a recipe never survives into the file as a recipe". That is the *rejected* option (b) of the
+representation question, which the owner decided against for presets (master §14.7): it fits fragments, not features. This document does not rename either meaning; it uses *preset* for the new layer so that
 there are not three.
 
 ### 4.11 Integrations and providers
@@ -313,8 +313,8 @@ there are not three.
 | Surface | Class | Direction |
 |---|---|---|
 | `/materione version\|doctor\|reload\|dev\|give\|browse\|editor\|gui\|var\|claim` (`plugin/command`) | Mostly P (operate, don't author: master §9.5) | `browse` is already an alias that opens a GUI. `claim` is the F in §4.8. |
-| Typed GUI authoring ops (`gui.get`, `gui.edit`, `gui.customizeItem`, `gui.render`, `gui.validate`; api.md §3.9) beside the generic authoring ops | **P+** | MCP should expose generic typed content operations derived from self-description, and expose a typed high-level operation only where it earns it (#320 open question 3). Whether a *preset* is the high-level operation is master §14.7. |
-| The `MaterioneAPI` facade (api.md): registries, authoring, assets, pipeline, delivery, runtime, admin | P | The MCP server is an adapter over it (api.md §1). |
+| Typed GUI authoring ops (`gui.get`, `gui.edit`, `gui.customizeItem`, `gui.render`, `gui.validate`; api.md §3.9) beside the generic authoring ops | **P+** | The chatbot's tools should be generic typed content operations derived from self-description, with a typed high-level operation only where it earns it (#320 open question 3). A *declared preset* is the high-level operation for features (master §14.7). |
+| The `MaterioneAPI` facade (api.md): registries, authoring, assets, pipeline, delivery, runtime, admin | P | The chatbot's tool layer is an adapter over it (api.md §1, master §14.8). |
 
 ---
 
@@ -388,7 +388,7 @@ a re-title if the owner agrees.
 |---|---|---|
 | #247, #311, #312, #313, #314 | Input slots: crash-safe ownership | The custody primitive's proof (§5.1). Work and rows proceed unchanged; the vocabulary generalizes after row H. |
 | #248 | Custody exit primitive | The `consume` verb of custody; with `HAND_OFF`, the `transfer` verb (§5.1). Already custody-named. |
-| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1) and on master §14.7. |
+| #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). |
 | #162 | Item modules: parameter-level modules | The editor surface presets plug into: a preset parameter is a module; derivation stays registry-driven. |
 | #6 | Server-side dialogs | A **view kind** over state with `dialog.submit` as a trigger (§5.3), not a separate dialog system. |
 | #7 | Native HUD system | A **view kind** bound to keyed state (§5.3), not a HUD-specific binding engine. |
@@ -404,21 +404,22 @@ a re-title if the owner agrees.
 ## 7. Presets: what the first catalog is seeded from
 
 D12's second layer (master §3.1). The end-user experience is not primitives: a first-time user making a backpack must not learn
-custody, views or keyed state. The editor offers "this item is a backpack"; behind it the built-in pack's GUI and the logic are
-wired. Four things already exist that point at the same shape:
+custody, views or keyed state. The editor offers "this item is a backpack"; the author's file then declares the preset and its
+parameters, and at runtime the preset's definition (the built-in pack's GUI and logic) supplies the behavior. The owner's two routes
+(master §14.7) are the whole model: **define the exact behavior yourself, or declare the preset.** The file carries no copy. Four things already exist that point at the same shape:
 
 | Existing piece | What it does today | Relation to presets |
 |---|---|---|
 | Item modules (#152, web.md §6) | A searchable picker that adds a mechanic or a field to an item, derived from self-description | The editor surface: a preset appears as a module or a quick setting. |
 | The Start workspace's starters (master §9.1) | Creation starters derived from the registered content types | The entry point: starters for a *feature* ("a backpack") beside starters for a *type*. |
-| Logic recipes (§4.10) | Parameterised flow fragments, expanded into steps | The precedent at flow scale; option (b) of the representation question. |
-| Customize and template linking (gui.md *Decisions taken in #203*, PR #285; plugin.md §3.1) | A new item that `template:`-links a base and overrides only what the author changes; Detach materializes the inherited values in one revision | The precedent for option (a): reference now, take apart later, losslessly. |
+| Logic recipes (§4.10) | Parameterised flow fragments, expanded into steps | The precedent at flow scale, and the model the owner did *not* choose for presets (master §14.7). |
+| Customize and template linking (gui.md *Decisions taken in #203*, PR #285; plugin.md §3.1) | A new item that `template:`-links a base and overrides only what the author changes; Detach materializes the inherited values in one revision | A precedent for the route *from declaring a preset to defining it yourself* (Customize), and for referencing by id. |
 
 **First candidates**, to prove the layer, each chosen because it is already shipped as a feature and therefore exercises the
 fold-down: *backpack* (#304; custody with a stack holder plus the built-in backpack GUI), *soulbound* (custody across death),
 *durability bar* (a stack-held counter), *food* (the component pass-through), *confirm dialog* and *paged player list* (the
-existing logic recipes lifted to resources). The representation question that decides how each is stored is open
-(master §14.7).
+existing logic recipes lifted to resources). How each is stored is decided (a declaration resolved at runtime,
+master §14.7); the spelling and versioning are open.
 
 The rules a preset must satisfy are D12's (master §3.1, R1 to R7); in particular the **by-hand rule**: a benchmark task that is
 solved with a preset must be solvable, with the same result, by an agent that writes only primitives. That is what makes the preset
@@ -428,8 +429,8 @@ layer a convenience and never a capability.
 
 ## 8. Owner questions, and what was not verified
 
-The owner questions (preset representation, MCP transport and auth, milestone placement) are recorded in master §14.7 to §14.9, with
-their options and recommendations. Not repeated here.
+The owner answered the three questions of the first draft on PR #322; the decisions and what remains open (the preset reference's
+spelling and versioning, who runs and pays for the model behind the chatbot) are in master §14.7 to §14.9. Not repeated here.
 
 **Not verified in this audit** (read from docs and from registration code, not run):
 

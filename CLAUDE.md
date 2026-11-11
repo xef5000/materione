@@ -63,8 +63,9 @@ updates ride the same PR; close the issue via the PR.
 - **Primitives, not features (D12).** The engine ships universal primitives; a feature is content in a pack. A change
   that adds engine surface (a registry entry, a content type, a native mechanic, a hard-coded command) states which
   primitive it is or which composition already covers it, and passes the universality tests in architecture §3.1 (audit:
-  [`docs/architecture/primitives.md`](docs/architecture/primitives.md)). A preset is ordinary content on disk expanded by the
-  one pipeline; it does nothing a person could not write by hand.
+  [`docs/architecture/primitives.md`](docs/architecture/primitives.md)). A preset is declared by reference in ordinary content
+  and resolved by the one pipeline; its logic is not copied into the author's files, and it does nothing a person could not
+  write by hand. A backpack is a preset, not an engine behavior.
 - **Module boundaries are enforced by the build** (plugin.md §11), not by review goodwill.
 - **Performance budgets (plugin.md §9) are enforced from M1**, not retrofitted.
 - **Cloudflare cost guardrails bind** (§ below) — deploys and account mutations are
