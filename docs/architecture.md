@@ -73,6 +73,9 @@ Concrete corollaries:
   ranges, font codepoint allocation, note-block state ids). Those are *compiler output*.
 - The web UI must explain **Minecraft-domain concepts** (durability, hitboxes, display contexts)
   in its own words, with inline previews — it is also the documentation.
+- **T1–T2 meet presets, not primitives (D12).** "This item is a backpack" is one quick setting; the
+  custody, view and state primitives it expands onto are for T4 and for agents, and the same file
+  is honest at both (§3.1).
 - T2/T3 work must be **safe by default**: validation happens before anything reaches the live
   server, and destructive operations are explained in domain terms ("3 placed chairs will be
   removed"), not file terms.
@@ -83,7 +86,7 @@ bound to in-game identities and their permission nodes, and concurrent editing i
 
 ---
 
-## 3. The eleven architectural decisions
+## 3. The twelve architectural decisions
 
 These are the load-bearing decisions. Everything else in this document follows from them.
 
@@ -100,6 +103,122 @@ These are the load-bearing decisions. Everything else in this document follows f
 | **D9** | **Blockbench is integrated as an unmodified, separately-distributed artifact**, driven through its plugin API across a messaging boundary. | Blockbench is GPL-3; its plugin exception explicitly allows proprietary plugins. Keeping it unmodified and out-of-process (in the browser) keeps our license surface clean regardless of the license we choose. | We never fork or vendor Blockbench source; we pin a version and adapt via a Blockbench plugin. |
 | **D10** | **Modern-Paper-only floor (1.21.4+), multi-client via pack output.** We anchor on ItemModels (1.21.4+), data components (1.20.5+), display entities (1.19.4+), and `equippable` (1.21.2+) as the *baseline*, per the parity doc's "be more modern than Nexo" guidance. | Supporting legacy server versions would tax every subsystem with compatibility branches; the component surface churns per release and must be isolated anyway (§8.2). | We deliberately abandon pre-1.21.4 servers. Lower *clients* are served via versioned pack output + ViaVersion, not by lowering the floor. |
 | **D11** | **Outbound-only editor connectivity (the LuckPerms pattern).** The server never accepts inbound connections for authoring. The editor is a stateless SPA (centrally hosted, self-hostable); server and browser meet through one open relay — a payload store for bulk data plus a signed **long-poll frame mailbox** for interactive traffic, plain HTTPS in both roles, dialed *out* to. *(Amended M5, 2026-10: the mailbox replaces the originally sketched WebSocket channel — no WebSocket, no Durable Objects, no long-lived cloud state; see web.md §3.2. The principle — outbound-only, zero port-forwarding — is unchanged.)* A direct mode (embedded HTTP server) speaks the same API for LAN/air-gapped setups (§9.1). | The T1/T2 personas (§2) often cannot open ports. "Zero port-forwarding" is the difference between *every* server owner being able to use the editor and only VPS admins. LuckPerms proved the pattern at massive scale; the HTTP-mailbox variant additionally keeps the cloud stateless, so the free tier's hard stops — not billing — are the only ceiling. | The project must operate (and open-source) relay infrastructure, and treat it as untrusted — content payloads are end-to-end encrypted (§9.2). |
+| **D12** | **Primitives, not features; presets for the first experience.** The engine ships *universal primitives* — typed, composable capabilities that name what they do, work for any key, holder, viewer or host, and describe themselves through the registries (D5) — and no feature-shaped surface. A feature (a backpack, a trade command, a shop) is **content**: a pack, built-in or the owner's. The first experience of a T1–T2 author is a layer of **presets** ("this item is a backpack") that expand onto primitives and built-in content; a preset is **declared by reference** in ordinary content on disk (D1, parameters only), its logic is loaded from its definition when the one pipeline builds the runtime (D6), and it does nothing a person could not write by hand. Full statement: §3.1. *(Added M6, 2026-11, owner direction on #320.)* | An agent (the MCP consumer, api.md §1) can only *compose* what is universal; a feature-shaped piece of engine surface ("input slots", "GUI sessions", a "trade system") solves one case and the next case needs another, which is how the incumbents grew. Universal primitives make each new feature a pack, not a release. But a first-time author must not have to learn primitives, so the first experience is a separate layer that hides them without removing them. | Every piece of engine surface must pass the universality tests (§3.1) or stay out; shipped feature-shaped surface is folded down over time, never deleted from under existing files (primitives.md). Primitives cost more design up front than a feature would. Presets are a second layer to keep and version. |
+
+### 3.1 D12 in full
+
+> **Status.** Decided as a direction by the owner on #320 (2026-11). The owner answered the three open questions of the first draft
+> on PR #322 (2026-11): presets are declared by reference and resolved at runtime (§14.7), the agent surface is a chatbot in the
+> cloud editor over the existing protocol (§14.8), and its milestone sits between M6 and M7 (§14.9). **Still open:** the preset
+> reference's spelling and versioning (§14.7), and who runs and pays for the model behind the chatbot (§14.8).
+> Companion: [`architecture/primitives.md`](architecture/primitives.md), the audit of today's surface against this decision.
+
+**Context.** Minecraft's content tooling is fragmented: each plugin generalizes one area (resource packs, GUIs, mobs) and the
+owner wires them together (§1). Skript is general but makes every author, and every agent, rebuild each primitive from scratch,
+with less safety than a typed, validated call. The competing free plugins that ship a web panel stop at resource-pack
+authoring with trivial triggers. Materione's difference is **deep logic in one engine**, and the strategic bet of
+[#320](https://github.com/xef5000/materione/issues/320) is an **AI-native authoring platform**: one engine that can do anything,
+exposed through an MCP-style **tool layer** whose tools and schemas come from registry self-description (D5), so that an agent can build any
+feature by composing Materione's building blocks. The tool layer is the third consumer of the one typed surface (api.md §1), a
+peer of the web editor (constraint #2), never a different path (D6). Per the owner's answer (§14.8) it is deployed **at the level of the cloud editor only**: a chatbot
+in the editor page calls the editor's own authoring operations over the existing editor protocol; there is no new endpoint. That bet holds only if the building blocks are universal,
+and it must not cost the first-time server owner the content-creation experience the editor exists to give.
+
+D12 therefore has **two layers**, and the layers are kept apart on purpose.
+
+#### Layer 1: primitives (the engine, MCP, what is technically possible)
+
+> The engine ships **universal primitives, not a growing list of concrete implementations.** A **feature** is content. The
+> engine has no feature-shaped surface.
+
+A surface is a primitive only if it passes five tests (the **universality tests**; primitives.md §2.2 applies them to every piece
+of shipped surface):
+
+| # | Test | Fails when |
+|---|---|---|
+| **U1** | **Name.** It is named for a capability (hold, transfer, key, view, emit, command), not a use case (trade, backpack, shop, input slot). | The name would be wrong in a second feature. |
+| **U2** | **Generality.** It works for any key, holder, viewer or host that content names. | It is hard-wired to one: the run's own player, one GUI window, one item. |
+| **U3** | **Composition.** Content combines it with the other primitives without engine code. | Wiring it into a new feature needs Java. |
+| **U4** | **Self-description.** It is a registry entry with a typed schema and stable diagnostics (D5), so the editor and the agent's tool layer render it. | It is reachable only from code, a hard-coded command or a hand-written tool. |
+| **U5** | **Safety.** It validates offline, dry-runs without side effects, fails soft and keeps its crash semantics (D6, §11). | It cannot be tested or rolled back without a live player. |
+
+**The benchmark.** A feature such as `/trade <player>` with a custom two-player UI must be buildable **from content alone,
+through MCP, with no new engine code.** If it is not, the gap is a missing primitive, and the fix is to add or generalize the
+primitive, never to add the feature. #320's 20 to 30 benchmark tasks are D12's regression suite.
+
+`/trade` decomposes, with no concept called "trade" in the engine, into: **commands as content** with typed arguments and a gate;
+**keyed state with a TTL** (variables scoped by an arbitrary key, not only player or server); **a view over state**, rendered for
+any number of viewers (a GUI with no "session" concept); **item custody** (Materione holds items on someone's behalf: the escrow
+work of #247, [`gui-input-durability.md`](architecture/gui-input-durability.md), is this primitive under a GUI-specific name, and
+input slots are one place custody can sit); and an **atomic transfer between holders** with crash recovery (the ledger, whose
+reserved `HAND_OFF` kind fits). primitives.md §3 does the decomposition against what is shipped and finds that five of its nine
+needs are gaps or half-primitives.
+
+#### Layer 2: presets (the first experience)
+
+> The end-user experience is **not** primitives. A first-time user making a backpack must not learn primitives.
+
+The content editor offers **presets**: quick settings such as "this item is a backpack". A preset wires, behind the scenes, the
+built-in resources (the built-in pack, §7.3: for example a built-in backpack GUI) and the logic. The result must feel like a
+content-creation experience, not a blank file in an IDE. Presets are the answer to progressive disclosure (§2) for features, the
+way the studios' modules are for fields: T1 to T2 meet presets, T4 and agents meet primitives, and the same file is honest
+at both.
+
+A preset is bound by seven rules. Together they keep Layer 2 from becoming a second engine.
+
+| # | Rule | Traces to |
+|---|---|---|
+| **R1** | **A definition made of primitives.** A preset's definition is data: logic and resources built from primitives and built-in resources, never Java behavior. The preset is not a behavior of the engine. | D4, D5 |
+| **R2** | **On disk, by declaration.** The author's file *declares* the preset and its parameters; that declaration is ordinary content in a pack. It loads, round-trips losslessly and diffs like any file, and the editor remembers nothing a file does not say. | D1, §5.6 |
+| **R3** | **One pipeline.** The preset's logic is resolved and loaded by the pipeline when it builds the runtime, with graph edges so impact analysis sees through the declaration. There is no "apply preset" shortcut in the UI, and nothing is written into the author's files by declaring one. | D6, D2 |
+| **R4** | **The by-hand rule.** Nothing a preset does is impossible to do by hand. A preset that needs engine code the primitives lack is a missing primitive. | D12 Layer 1 |
+| **R5** | **Define it yourself instead.** An author who needs different behavior does not fight the preset: they write the exact behavior with primitives. A preset can be taken apart into editable content ("Customize") as the route from declaring it to defining it, never as a requirement. | D1 |
+| **R6** | **Self-described.** A preset's parameters, and the quick-setting UI built from them, derive from its schema. There is no hand-written editor per preset. | D5, §5.6 |
+| **R7** | **One mechanism.** First-party presets ship in built-in packs (§7.3); other packs and add-ons define theirs the same way. | §7.3 |
+
+**How a preset is represented: decided (owner, PR #322; §14.7).** A preset loads its logic behind the scenes. To get a backpack,
+an author has exactly two routes: **define the exact behavior themselves** with primitives, or **declare the preset** by
+reference with its parameters (for example `rows` and `title`). At runtime the preset's definition, held in a built-in pack or
+in a pack, supplies all the logic; the author's files do not carry a copy. **A backpack is therefore not a defined engine
+behavior**: today's native `backpack` mechanic is to be folded into a preset over primitives (primitives.md §4.2). The
+spelling of the reference and the versioning of a preset's behavior across plugin updates are still open (§14.7).
+
+#### Consequences accepted
+
+1. **A review gate on engine surface.** A change that adds a registry entry, a content type, a native mechanic or a hard-coded
+   command states which primitive it is, or which composition of existing primitives already covers it. If neither, it is
+   content (a pack), not engine.
+2. **Shipped feature-shaped surface is folded down, not deleted.** primitives.md classifies it and proposes directions. Existing
+   files keep their meaning (§5.5, §5.6); a fold-down is a migration with a compatibility promise, and each one needs its own
+   design and issue.
+3. **Generalizing costs design up front.** A keyed-state store is more work than a session map. The cost is paid once; each
+   feature afterwards costs the engine nothing. Generality may not regress the performance budgets of plugin.md §9 or a shipped
+   durability guarantee: the custody primitive is generalized only after its kill-boundary proof lands (primitives.md §5.1).
+4. **Presets are a second layer to maintain and version.** Defining them as data (R1), through the same mechanism for first-party
+   and third-party (R7), and exposing them to the agent's tools (R6) keeps the cost bounded.
+5. **Features live in packs.** The backpack GUI, a trade UI and a shop are content in the built-in pack or a user's. "The plugin
+   works as shipped" (§7.3) becomes a property of a catalog, not of Java.
+
+#### Traceability
+
+| Decision | How D12 relates |
+|---|---|
+| **D1** | A preset is ordinary content on disk (R2); option (a)'s reference resolves into the built-in pack, the one source D1's M6 amendment lets live in the jar (§7.3). Nothing is editor-only. |
+| **D2** | A preset declaration is a graph edge to the preset definition and the resources it uses, so "where is this used" and impact analysis see through it (R3). |
+| **D4** | One behavior system stays one. D12 adds that built-in mechanics are canned ECA bundles *only* (§8.1): a built-in mechanic that needs native listeners is evidence of a missing trigger or verb. |
+| **D5** | Primitives are registry entries with self-description (U4); that description is what the editor and the agent's tool layer render. Presets self-describe the same way (R6). |
+| **D6** | Preset resolution is part of the pipeline; the agent's tools write files and run the one pipeline exactly as the editor does (api.md §2). |
+| **D11** | No new endpoint and no new trust model: the agent surface is a chatbot in the cloud editor, an editor client like any other, under the same in-game-approved handshake and permissions, with the relay still untrusted (§14.8). |
+| **§7.3** | Built-in packs are where first-party features, and the presets that point at them, live. |
+
+#### What D12 does not do
+
+- It does not forbid concrete built-in *verbs*: `give_item` is a primitive verb; "give an item" is not a feature. The test is the
+  name and the generality, not the count.
+- It does not remove, rename or break shipped surface (primitives.md §4 proposes directions; §6 proposes issue re-scopes).
+- It does not change §12: mob AI, vehicles and pets stay delegated.
+- It does not decide the preset reference's spelling or versioning (§14.7), or who runs and pays for the model behind the
+  chatbot (§14.8). It does not name the milestone (§14.9: between M6 and M7, name TBD).
 
 ---
 
@@ -450,12 +569,13 @@ that is read from the jar cannot be missing or half-edited) without naming it.
 | **Override** | A folder in `content/packs` whose name is a built-in pack's id **cannot** override, extend or replace it. The folder is ignored whole (none of its resources reach the pipeline) and the pipeline reports **`MTR-0095`** (error) naming the folder. Renaming or removing the folder is the fix. |
 | **Fail-soft** | A built-in pack that cannot be read from the jar (a damaged jar) is reported with **`MTR-0096`** (error) and left out; the server runs without it, and whatever depends on it, such as `/materione browse`, says the GUI is not live. A built-in document that does not parse or validate is quarantined like any other. |
 | **Permissions** | A built-in pack's resources name permission nodes like any resource (`materione.browse`, `materione.browse.get`). The plugin declares those nodes at enable with the operator default, as it does for `materione.give`. |
-| **No special case** | No code names a built-in pack or one of its resources, except a command alias that opens a GUI by id through the generic opener (`/materione browse`). The browser is a GUI like any other: its list is the `content` list source, its search is the `prompt` action, its navigation is `gui.open` and `gui.back`. |
+| **No special case** | No code names a built-in pack or one of its resources, except a command alias that opens a GUI by id through the generic opener (`/materione browse`). The browser is a GUI like any other: its list is the `content` list source, its search is the `prompt` action, its navigation is `gui.open` and `gui.back`. A preset (D12, §3.1) that points at a built-in resource is not an exception: it is content naming content, as a user pack may, resolved by the one generic pipeline stage and not by code that knows the resource's id. |
 
 Why a classpath pack and not a seeded one: seeding copies files into `content/packs` where the owner can edit
 them (so the code could no longer assume the GUI is as shipped) and where an update has to merge with those edits.
 Reading from the jar makes "the plugin works as shipped" a property of the install, and an update of the plugin is
-an update of its pack. Why not code-built windows: a second, private way to build a GUI is what D5 and D6
+an update of its pack. This is also where D12's first-party **features** live: the backpack GUI, and the presets that point at
+it, are content in a built-in pack (§3.1). Why not code-built windows: a second, private way to build a GUI is what D5 and D6
 forbid, and it leaves the GUI runtime untested by the plugin's own use.
 
 ---
@@ -476,7 +596,9 @@ forbid, and it leaves the GUI runtime untested by the plugin's own use.
 
 **Built-in mechanics** (soulbound, backpack, auto-smelt, lifeleech, aura, …) are *canned ECA
 bundles with parameters*, registered exactly like third-party mechanics (D5). This keeps the
-parity catalog extensible without core churn.
+parity catalog extensible without core churn. Under D12 (§3.1) the catalog is a set of presets
+over primitives: a mechanic that needs native listeners where ECA would do is evidence of a missing
+trigger or verb, and the fix is the primitive, not another native (primitives.md §4.2).
 
 ### 8.2 Platform isolation layer
 
@@ -827,6 +949,7 @@ primary method (display entities only; legacy paths only if a converter needs th
 | Risk | Mitigation built into this design |
 |---|---|
 | Mega-plugin scope creep | D5 registries: parity gaps become addons; `content` types are isolated; scope list above is contractual |
+| Feature-shaped engine surface erodes universality (the agent can no longer compose; the next use case costs a release) | D12: the universality tests U1 to U5 gate every addition, features are content in packs, presets sit above primitives (§3.1); the audit tracks the shipped debt ([`architecture/primitives.md`](architecture/primitives.md)) |
 | Mojang per-release churn | `platform` isolation + capability descriptor (§8.2); modern-only floor (D10) |
 | Web UI drift from file reality | D1 files-canonical + document store + watcher (§9.4); UI is never a second truth |
 | Concurrent edits / team conflicts | Revision numbers, audit log, in-game identity binding (§9.2, §9.4) |
@@ -859,6 +982,49 @@ primary method (display entities only; legacy paths only if a converter needs th
 6. **Community pack hub** — whether the project also hosts a public pack registry/marketplace
    (natural extension of constraint #3, but real infrastructure and moderation scope); decide
    after the editor proves out.
+7. **Preset representation (D12) — decided (owner, PR #322); spelling and versioning open.** The owner's answer: *a preset loads
+   logic behind the scenes. To get a backpack behavior, the user can either define the exact behavior themselves or declare the preset
+   used. At runtime the preset loads all the logic. A backpack should not be a defined "behavior".* Recorded as the **declared reference,
+   resolved at runtime** form of option (a):
+
+   | | Decided |
+   |---|---|
+   | What the author's file holds | A declaration of the preset and its parameters, like today's `backpack:` block with `rows` and `title`. Nothing else is written. |
+   | Where the logic is | In the preset's definition (a built-in pack, §7.3, or another pack), loaded by the pipeline when it builds the runtime (R3). It is **not** copied into the author's files. |
+   | The alternative route | The author defines the exact behavior themselves with primitives (R4, R5). |
+   | Going from one to the other | **Customize** (copy the definition into the author's pack as editable content, mirroring Customize and Detach for templates: gui.md *Decisions taken in #203*, PR #285) is available as the way from "declare" to "define yourself". It is not required by the decision; whether the editor ships it for presets is a product choice. |
+   | The engine | Has no "backpack" behavior. The native `backpack` mechanic folds into a preset over primitives (custody on a stack plus a view; #304, primitives.md §4.2). |
+   | D1 | Holds: the declaration is a file; the definition is files (the built-in pack is the one jar-borne source D1 admits, §7.3). |
+
+   Option (b), writing the full expanded content files into the author's pack, is **not** the representation: it has no upgrade
+   path and a copy per instance, and the editor could only show "this is a backpack" by inferring it from the copy (a second truth
+   in waiting, D1). It survives as the model for flow-scale logic recipes (logic.md §4.6). **Still open:** **(i)** the spelling: keep the
+   mechanic-entry shape where one exists (`backpack: {rows, title}` unchanged, so no existing file migrates) or a generic `preset:`
+   key for non-item resources; **(ii)** where definitions live: data in packs (a `preset` content type, recommended by R1 and R7) or
+   Java registry entries like the logic `Recipe` SPI; **(iii)** pinning and versioning, so that a plugin update that improves a
+   built-in preset cannot silently change existing content; **(iv)** a read-only expanded view of what a declaration resolves to, for
+   debugging and for the agent. Tracked in #320 and #304.
+8. **MCP transport and auth (#320) — decided (owner, PR #322); the model's host and billing open.** The owner's answer: *the MCP
+   would get deployed at the level of the cloud editor only. The cloud editor (editor.materione.com) has an extra fixed layer on the
+   page that opens a chatbot. The chatbot has full access to content authoring, through tool calls. We do not create a new endpoint;
+   relays remain untrusted.* Recorded as:
+
+   | | Decided |
+   |---|---|
+   | The agent surface | A chatbot layer fixed on the cloud editor's page. |
+   | Its tools | The editor's existing authoring operations (`MaterioneAPI`, api.md §1) over the **existing editor protocol** (§9), generated from registry self-description (D5). "The MCP server" means this tool layer; it is not a separate service. |
+   | Auth and trust | None new. The chatbot is another editor client in the browser: the same in-game-approved handshake, the same permission nodes (§9.2), no new token scope. |
+   | Endpoints | None new. The relay stays untrusted and sees ciphertext only; no D11 change. |
+   | Scope | The cloud editor. A standalone MCP server for external agents is not part of this decision. |
+
+   **Still open, and not decided here:** who runs the model behind the chatbot and who pays. Any LLM API call or billing from the
+   cloud side is bound by the Cloudflare cost guardrails in `CLAUDE.md` (Workers AI is off-limits; no plan purchases; no public endpoint
+   without rate limits), and a model call that leaves the browser is a place where content leaves the end-to-end boundary of §9.2.
+   The owner decides where inference runs (for example the user's own key from the browser) before any code.
+9. **Milestone placement of D12's work — decided (owner, PR #322); name TBD.** The agent vertical slice (the chatbot and its tools,
+   plus the fold-down of primitives.md §5 it needs) is a **milestone between M6 and M7**, name to be decided (written "M6.5 / TBD" in
+   [`roadmap.md`](roadmap.md); existing milestones are not renumbered). The goal is a nice vertical slice before expanding
+   horizontally: M7 and M8 are mainly horizontal expansion, M8 very late.
 
 > **Resolved since first draft:** project naming (Materione, everywhere), the ECA expression
 > engine (one universal engine — D4), relay pattern (LuckPerms-style, D11), cloud platform
@@ -871,4 +1037,4 @@ primary method (display entities only; legacy paths only if a converter needs th
 ---
 
 *This document is the contract between the idea and the implementation. When subsystem design
-begins, each subsystem doc must trace back to a decision (D1–D11) or explicitly amend this one.*
+begins, each subsystem doc must trace back to a decision (D1–D12) or explicitly amend this one.*

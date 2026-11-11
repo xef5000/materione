@@ -6,7 +6,7 @@
 > contributor can see where their work lands, and nothing lands half-built waiting for a
 > later milestone.
 >
-> **Rule:** every milestone respects the load-bearing decisions D1–D11 from day one (files
+> **Rule:** every milestone respects the load-bearing decisions D1–D12 from day one (files
 > canonical, one pipeline, registries, fail-soft). Milestones add *capability*, never
 > re-architecture. If a milestone seems to require breaking a decision, the milestone is
 > wrong — stop and amend the architecture doc first.
@@ -410,13 +410,36 @@ Worker is unchanged — no new endpoint, no cost-model change.
 
 **Exit:** a datapack-free "server GUI" — menus + dialogs + HUDs built entirely in Materione.
 
+**D12 pointer (architecture §3.1, [`architecture/primitives.md`](architecture/primitives.md)).** The milestone definition above is
+unchanged. What changes is how its remaining work is shaped: dialogs and HUDs are *view kinds* over state rather than separate
+systems, the input-slot durability work is the **custody** primitive's proof, and the backpack (#304) is the first **preset**
+(primitives.md §6 lists each re-scope). The agent work has its own milestone, next.
+
+## M6.5 (name TBD) — The agent vertical slice (owner decision on PR #322, architecture §14.9)
+
+**Goal:** a nice vertical slice before expanding horizontally: a server owner describes a feature to a chatbot in the cloud editor
+and the agent builds it, validates it and applies it, entirely from Materione's primitives and presets (the story of #320).
+Placed between M6 and M7; **TBD** in name and scope. Existing milestones keep their numbers. M7 and M8 are mainly horizontal
+expansion (parity long tail, then scale), and M8 is very late, so this slice comes before them.
+
+- The chatbot layer fixed on the cloud editor page (`editor.materione.com`), whose tools are the editor's existing authoring
+  operations over the existing editor protocol, generated from registry self-description (D5). No new endpoint, no new token scope,
+  the relay stays untrusted (architecture §14.8). Who runs and pays for the model is an open owner question under the Cloudflare cost
+  guardrails.
+- The primitives the audit proposes that the slice needs, and the presets over them (architecture §3.1, primitives.md §5, §7),
+  chosen by the benchmark of #320 (20 to 30 realistic feature tasks), not by completeness.
+- Validate and dry-run without side effects, a readable diff before apply, transactional apply with rollback (#320's flow).
+
+**Exit:** #320's acceptance criteria, shown by the benchmark. Not scheduled; it needs the M6 close-out and a scope pass first.
+
 ## M7 — Parity close-out (the long tail)
 
 **Goal:** everything in the parity MVP list that M1–M6 didn't cover.
 
 - All recipe types + in-game recipe builder; loot tables.
 - Armor: component path, mob armor/saddles/harness (capability-gated).
-- Mechanics catalog: combat + farming spells (the Oraxen list) as canned ECA.
+- Mechanics catalog: combat + farming spells (the Oraxen list) as canned ECA (under D12, each entry a preset over primitives;
+  the verbs and triggers the spells need are universal primitives, not per-spell natives: primitives.md §4.4, §5.7).
 - Importers: ItemsAdder → Oraxen → Nexo order (biggest audience first).
 - Delivery extras: S3/R2, proxy dedup, pre-join send, obfuscation/PackSquash steps.
 - Integrations: PlaceholderAPI, ModelEngine, MythicMobs, anti-cheat bridges.

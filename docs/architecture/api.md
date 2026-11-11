@@ -1,6 +1,6 @@
 # API-First Architecture & Transformation Plan
 
-> **Traceability.** Implements and extends master decisions [D1–D11](../architecture.md#3-the-eleven-architectural-decisions) —
+> **Traceability.** Implements and extends master decisions [D1–D12](../architecture.md#3-the-twelve-architectural-decisions) —
 > specifically **D1** (files on disk remain the canonical source of truth), **D4** (one ECA behavior system),
 > **D5** (registries all the way down), **D6** (one pipeline from files to runtime), and **D8** (async-first, Folia-native).
 > Parent: [`architecture.md`](../architecture.md) · Companions: [`plugin.md`](plugin.md) · [`web.md`](web.md) · [`runtime-systems.md`](runtime-systems.md).
@@ -39,7 +39,7 @@ Historically, `api/` (and `MaterioneAPI`) has been a minimal read-only facade (`
 
 1. **Files & Commands (`plugin/` + file watcher):** `/materione reload|doctor|give|dev|editor` and the file watcher become thin CLI/event adapters that parse arguments, construct an `ActorContext`, and invoke `MaterioneAPI`.
 2. **Web Panel (`web/` + `webui/`):** `RpcDispatcher` handlers in `web/` no longer reach into `core.document.DocumentStore`, `SettingsService`, or plugin-internal bridges (`ReloadTrigger`, `DeliveryControl`). `web/` depends **only on `api/`** (plus crypto/wire framing) and translates JSON RPC frames 1:1 into `MaterioneAPI` calls.
-3. **MCP Server (Long-Range Goal):** Because every action on `MaterioneAPI` is typed, actor-attributed, fail-soft, and backed by `SelfDescription` / `ParameterSchema` metadata, an MCP server adapter can automatically expose every API operation and content schema as MCP Tools and Resources without touching plugin internals.
+3. **MCP Server (Long-Range Goal):** Because every action on `MaterioneAPI` is typed, actor-attributed, fail-soft, and backed by `SelfDescription` / `ParameterSchema` metadata, an MCP server adapter can automatically expose every API operation and content schema as MCP Tools and Resources without touching plugin internals. D12 (master §3.1) fixes what those tools expose: the universal primitives and, above them, presets, both derived from self-description. Per the owner (master §14.8) the tool layer is deployed at the level of the cloud editor only, as a chatbot calling the editor's own operations over the existing protocol: no new endpoint, no new token scope.
 
 ---
 
@@ -389,6 +389,11 @@ The implementation is `dev.materione.behavior.logic.authoring.LogicAuthoringApiI
 
 ### 4.3 Consumer 3: Future MCP Server Readiness (`mcp/` or external adapter)
 
+> **Deployment decided (owner, PR #322; architecture §14.8).** The consumer is a chatbot fixed on the cloud editor's page, calling the
+> editor's own operations over the existing editor protocol: no new endpoint, no new token scope, the relay stays untrusted. The
+> embedded stdio/SSE option below is not the chosen deployment; the introspection properties still hold, and they are what generates the
+> chatbot's tools.
+
 Because every operation in `MaterioneAPI` is modeled as a self-contained request/response record with `SelfDescription` schemas:
 
 - **Introspectable Schemas:** `api.registries()` provides `SelfDescription` and `ParameterSchema` for every content type, mechanic, action, and condition — mapping directly to JSON Schema for MCP tool input definitions.
@@ -464,4 +469,4 @@ Each phase is a self-contained, testable slice that keeps all existing unit test
 - [ ] **Zero Bypass in `web/`:** `web/build.gradle.kts` depends only on `:api` (enforced by Gradle + ArchUnit rule R9).
 - [ ] **Zero Bypass in `plugin/command/`:** All `/materione` subcommands delegate to `MaterioneAPI` with a command-derived `ActorContext`.
 - [ ] **Addon & MCP Ready:** Third-party addons can register `ContentType`s, `Mechanic`s, and ECA extensions purely against `:api`, and every authoring/runtime operation is self-described and JSON-serializable for a future MCP server.
-- [ ] **D1–D11 Preserved:** Files remain the sole source of truth, all mutations funnel through the single pipeline, and lossless YAML round-trips remain byte-identical.
+- [ ] **D1–D12 Preserved:** Files remain the sole source of truth, all mutations funnel through the single pipeline, and lossless YAML round-trips remain byte-identical.
