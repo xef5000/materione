@@ -34,6 +34,14 @@ final class LedgerFiles {
             return Files.readAllBytes(file);
         } catch (NoSuchFileException absent) {
             return new byte[0];
+        } catch (java.nio.file.FileSystemException notThere) {
+            // the parent is not a directory: Windows reports the file as absent, Linux as "Not a directory".
+            // Treat both as absent so the platforms agree; the next append then fails as a write (MTR-0102).
+            Path parent = file.toAbsolutePath().getParent();
+            if (parent != null && Files.exists(parent) && !Files.isDirectory(parent)) {
+                return new byte[0];
+            }
+            throw notThere;
         }
     }
 
