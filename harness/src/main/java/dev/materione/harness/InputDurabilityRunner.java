@@ -2,7 +2,6 @@ package dev.materione.harness;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,20 +9,11 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 
 /**
- * Probes P4 and P2 of gui-input-durability.md section 11 (row R1, #306) on the 1.21.4 floor, and the K-row skeleton
- * that row H (#313) fills in.
- *
- * <ul>
- *   <li>{@link #platformPaths}: P4. A fake-connection player (a real {@code ServerPlayer} on a netty
- *       {@code EmbeddedChannel}, placed by {@code PlayerList.placeNewPlayer}) is saved by every save path the design
- *       relies on: {@code Player#saveData}, the quit path, the shutdown path and (second boot) the Paper per-player
- *       autosave; and it reloads from the same file on the next join.</li>
- *   <li>{@link #kRows}: P2 and the skeleton. A row runs steps against the live server, parks the main thread at a named
- *       crash gate, kills the JVM there, reads the player's {@code .dat} from the harness, boots the same workspace and
- *       asks the rejoined player what it holds. The four rows here are the platform half of K1, K2, K4 and K21 (the
- *       probe plugin's persistent-data account stands in for the escrow account); row H replaces the stand-in with the
- *       product's and adds K3, K5 to K20 and K22 to K23.</li>
- * </ul>
+ * Probe P4 of gui-input-durability.md section 11 (row R1, #306) on the 1.21.4 floor: a fake-connection player (a real
+ * {@code ServerPlayer} on a netty {@code EmbeddedChannel}, placed by {@code PlayerList.placeNewPlayer}) is saved by every
+ * save path the design relies on: {@code Player#saveData}, the quit path, the shutdown path and (second boot) the Paper
+ * per-player autosave; and it reloads from the same file on the next join. (Probe P2, a completed save surviving a kill,
+ * and the K-row skeleton are now {@link EscrowCrashRunner}'s, row H: the same kills against the product's account.)
  */
 public final class InputDurabilityRunner {
 
@@ -33,18 +23,6 @@ public final class InputDurabilityRunner {
               rate: 20
               max-per-tick: 10
             """;
-
-    /** What a row does before the kill, where it kills, and what it expects on disk and after the reboot. */
-    interface Step {
-        void run(CrashRig rig, String player) throws Exception;
-    }
-
-    interface Check {
-        void check(CrashRig rig, String player, Problems problems) throws Exception;
-    }
-
-    /** One K row: the row id of section 5.10, the steps, the gate, the disk state after the kill, the state after boot. */
-    record KRow(String id, String player, String gate, Step prepare, Step afterKill, Check disk, Check boot) {}
 
     /** Problem collector: an assertion that records instead of throwing, so one run reports every failure. */
     static final class Problems {
@@ -162,157 +140,11 @@ public final class InputDurabilityRunner {
         // The player is left online on purpose: the stop path below saves it too
     }
 
-    /** The four K rows, chained so one reboot is both the check of a row and the start of the next. */
-    public HarnessResult kRows(HarnessOptions options) {
-        Problems problems = new Problems();
-        CrashRig rig = null;
-        try {
-            rig = CrashRig.create(options, "input-durability-krows", null);
-            rig.boot();
-            List<KRow> rows = rows();
-            for (int i = 0; i < rows.size(); i++) {
-                KRow row = rows.get(i);
-                problems.in(row.id());
-                row.prepare().run(rig, row.player());
-                rig.killAtGate(row.gate());
-                problems.expect(!rig.alive(), "the server survived the kill");
-                if (row.afterKill() != null) {
-                    row.afterKill().run(rig, row.player());
-                }
-                row.disk().check(rig, row.player(), problems);
-                rig.boot();
-                row.boot().check(rig, row.player(), problems);
-            }
-            rig.stop();
-        } catch (Exception e) {
-            problems.all().add("scenario error: " + e);
-        } finally {
-            if (rig != null) {
-                rig.close();
-            }
-        }
-        return result(rig, problems);
-    }
-
-    // ---- the rows ---------------------------------------------------------------------------------------------------
-
-    /** The shared start: the player joins, holds five diamonds in slot 0 and an apple stack in slot 1, and a save fixes S. */
-    private static void seed(CrashRig rig, String p) throws Exception {
-        rig.probe("join", p);
-        rig.probe("set", p + " 0 DIAMOND 5");
-        rig.probe("set", p + " 1 APPLE 3");
-        rig.probe("save", p);
-    }
-
-    static List<KRow> rows() {
-        return List.of(
-                // K1: a tier-1 move-in whose save never happened. The older snapshot is self-consistent (F3): the stack is
-                // still in the inventory on disk and after the boot, and no account was ever written.
-                new KRow("K1 move-in, no save since", "K1Bot", "k1-after-move-in",
-                        (rig, p) -> {
-                            seed(rig, p);
-                            rig.probe("movein", p + " 0");
-                        },
-                        null,
-                        (rig, p, problems) -> {
-                            PlayerDat dat = rig.savedData(p);
-                            problems.expect("minecraft:diamond x5".equals(dat.inventory().get(0)),
-                                    "disk S should still hold the diamonds in slot 0: " + dat.inventory());
-                            problems.expect(!hasKey(dat, ":account"), "disk S has an account: " + dat.bukkitValues().keySet());
-                        },
-                        (rig, p, problems) -> {
-                            String inv = rig.probe("join", p) + rig.probe("inv", p);
-                            problems.expect(inv.contains("0:DIAMOND*5") && inv.contains("account=none"),
-                                    "after boot the stack should be in the inventory only: " + inv);
-                        }),
-                // K2: the same move-in, then a save completed. The snapshot holds the stack in the account and not in the
-                // inventory, from the same instant (F3): nothing is lost, the account is what recovery would return.
-                new KRow("K2 move-in, then a save", "K2Bot", "k2-after-save",
-                        (rig, p) -> {
-                            seed(rig, p);
-                            rig.probe("movein", p + " 0");
-                            rig.probe("save", p);
-                        },
-                        null,
-                        (rig, p, problems) -> {
-                            PlayerDat dat = rig.savedData(p);
-                            problems.expect(!dat.inventory().containsKey(0), "disk S' still has slot 0: " + dat.inventory());
-                            problems.expect("minecraft:apple x3".equals(dat.inventory().get(1)),
-                                    "the bystander stack changed: " + dat.inventory());
-                            problems.expect(hasKey(dat, ":account"), "disk S' has no account: " + dat.bukkitValues().keySet());
-                            problems.expect(Long.valueOf(1).equals(value(dat, ":gen")),
-                                    "gen should be 1: " + dat.bukkitValues());
-                        },
-                        (rig, p, problems) -> {
-                            String inv = rig.probe("join", p) + rig.probe("inv", p);
-                            problems.expect(!inv.contains("0:DIAMOND") && inv.contains("account=[DIAMOND*5,]")
-                                            && inv.contains("gen=1"),
-                                    "after boot the stack should be owed by the account only: " + inv);
-                        }),
-                // K4 (simulated): a kill between safeReplaceFile's two moves leaves .dat_old = the previous snapshot and no
-                // .dat (F2). The server cannot be stopped inside that call from a plugin, so the harness reproduces the file
-                // state the kill would leave and checks the claim that matters: the next boot loads .dat_old (S), whole.
-                new KRow("K4 kill between the two renames (file state simulated)", "K4Bot", "k4-after-save",
-                        (rig, p) -> {
-                            seed(rig, p);
-                            rig.probe("movein", p + " 0");
-                            rig.probe("save", p);
-                        },
-                        (rig, p) -> {
-                            Files.delete(rig.playerDataFile(p));
-                        },
-                        (rig, p, problems) -> {
-                            Path old = rig.playerDataFile(p).resolveSibling(rig.playerDataFile(p).getFileName() + "_old");
-                            problems.expect(Files.exists(old), "no .dat_old next to the deleted .dat");
-                            PlayerDat dat = PlayerDat.read(old);
-                            problems.expect("minecraft:diamond x5".equals(dat.inventory().get(0)),
-                                    ".dat_old should be the previous complete snapshot S: " + dat.inventory());
-                        },
-                        (rig, p, problems) -> {
-                            String inv = rig.probe("join", p) + rig.probe("inv", p);
-                            problems.expect(inv.contains("0:DIAMOND*5") && inv.contains("account=none"),
-                                    "boot should fall back to .dat_old (S): " + inv);
-                        }),
-                // K21: a stack on the cursor at a save. A real click packet (the path a client takes) lifts the hotbar stack
-                // to the cursor while a window is open; a save completes; the kill follows. The cursor is in no save (F4),
-                // so the stack is gone from disk and from the rebooted player: the one row where the answer is "loss" (G5).
-                new KRow("K21 pickup to the cursor, then a save", "K21Bot", "k21-after-save",
-                        (rig, p) -> {
-                            seed(rig, p);
-                            rig.probe("open", p);
-                            // Raw slot 54 is the player's hotbar slot 0 in a 27-slot chest window (27 + 27 main + 0)
-                            String click = rig.probe("click", p + " 54 0 PICKUP");
-                            if (!click.contains("cursor=DIAMOND*5")) {
-                                throw new IllegalStateException("the click packet did not lift the stack: " + click);
-                            }
-                            rig.probe("save", p);
-                        },
-                        null,
-                        (rig, p, problems) -> {
-                            PlayerDat dat = rig.savedData(p);
-                            problems.expect(!dat.inventory().containsKey(0),
-                                    "the cursor stack must not be in the saved inventory: " + dat.inventory());
-                            problems.expect("minecraft:apple x3".equals(dat.inventory().get(1)),
-                                    "the bystander stack changed: " + dat.inventory());
-                            problems.expect(!dat.root().containsKey("CarriedItem") && !dat.root().containsKey("Cursor"),
-                                    "a cursor key exists: " + dat.root().keySet());
-                        },
-                        (rig, p, problems) -> {
-                            String inv = rig.probe("join", p) + rig.probe("inv", p);
-                            problems.expect(!inv.contains("DIAMOND") && inv.contains("1:APPLE*3"),
-                                    "after boot the cursor stack should be lost (G5): " + inv);
-                        }));
-    }
-
     // ---- helpers ----------------------------------------------------------------------------------------------------
 
     /** True when the player's saved persistent data holds the probe marker {@code value} (a string under {@code :mark}). */
     private static boolean markIs(CrashRig rig, String player, String value) throws IOException {
         return new RigHolder(rig, player).markIs(value);
-    }
-
-    private static boolean hasKey(PlayerDat dat, String suffix) {
-        return dat.bukkitValues().keySet().stream().anyMatch(key -> key.endsWith(suffix));
     }
 
     private static Object value(PlayerDat dat, String suffix) {

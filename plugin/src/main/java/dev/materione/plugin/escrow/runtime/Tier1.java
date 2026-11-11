@@ -1,5 +1,6 @@
 package dev.materione.plugin.escrow.runtime;
 
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.LedgerState;
 import dev.materione.plugin.escrow.model.Account;
 import dev.materione.plugin.escrow.model.AccountRead;
@@ -151,6 +152,9 @@ public final class Tier1<T> {
             }
         }
         write(live, delta);
+        if (strict) {
+            CrashGate.at(CrashGate.Gates.CLICK_APPLIED); // test-only, inert in production
+        }
         return nothing();
     }
 
@@ -216,6 +220,7 @@ public final class Tier1<T> {
         }
         finish(escrow, work);
         clear(live, escrowedSlots);
+        CrashGate.at(CrashGate.Gates.RELEASE_DONE); // test-only, inert in production
         return new Done<>(work.returned, countOwed(work.account), strays);
     }
 
@@ -538,10 +543,12 @@ public final class Tier1<T> {
         if (work.run(EscrowTransfer.claim(work.account, bag)) && work.last instanceof Step.Applied claimed) {
             returned += claimed.returned().size();
         }
+        CrashGate.at(CrashGate.Gates.RECOVERY_BEFORE_COMMIT); // test-only, inert in production
         if (work.bytes != null) {
             escrow.commit(work.account, work.bytes);
         }
         escrow.open(work.account);
+        CrashGate.at(CrashGate.Gates.RECOVERY_DONE); // test-only, inert in production
         return new Opened(returned, countOwed(work.account), recovered.dropped().size(), adopted, legacyKept);
     }
 

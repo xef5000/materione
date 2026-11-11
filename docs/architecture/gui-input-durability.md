@@ -6,11 +6,11 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308), L (the ledger IO, #309) P (the plugin runtime: manual clicks, owed and claim, the death release, the recovery gate, #310) and B (the tier-3 barrier and the tier-2 exit path, #311) are built, as recorded in §12; the kill-boundary IT (row H) is not.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308), L (the ledger IO, #309), P (the plugin runtime: manual clicks, owed and claim, the death release, the recovery gate, #310), B (the tier-3 barrier and the tier-2 exit path, #311) and H (the kill-boundary IT, K1 to K22 against a real `kill -9`, #313) are built, as recorded in §12; the barrier's crash row K23 is not yet in the IT.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
-> (row X), not on an outside ack. Row P (#310) made `durable: required` layers take the escrow path; `best_effort` layers (the default) are the journal of logic.md §25 decision 12, unchanged. **Nothing may be described as crash-safe until rows M, L, P, B and H are green on main:** row H is not built, so a `required` layer is *tracked and recoverable by construction* and *not yet verified by a kill-boundary run*, and every word in the product says so.
+> (row X), not on an outside ack. Row P (#310) made `durable: required` layers take the escrow path; `best_effort` layers (the default) are the journal of logic.md §25 decision 12, unchanged. **Nothing may be described as crash-safe until rows M, L, P, B and H are green on main:** rows B and H are built, **but H's K23 (the barrier) is not yet written** (§12, *Row H as built*), so a `required` layer is *tracked, recoverable by construction and verified by a kill-boundary run for every tier-1 and recovery row (K1 to K22)* and *not yet verified for the barrier (K23)*, and every word in the product says so.
 >
 > **Row R (#306) has run the platform probes P1 to P4 (§11).** All four are settled and the design stands: a fake-connection
 > player works on the 1.21.4 harness (P4), a completed save survives `destroyForcibly` (P2), the death ordering and both
@@ -435,7 +435,7 @@ at most once per player per minute. `doctor` lists the capability result and any
 | **Model-based property test** | Random sequences of {move-in, move-out, swap, close, overflow, consume, quit, death, reload} × a **crash at every step boundary** × **every earlier snapshot** as the saved one; the oracle checks G1–G3 after recovery. The seed set is committed; failures print the seed. | this is the executable form of the K table; it also replays K19 against the *old* design as a negative control |
 | **Golden fixtures** | Account v1 and ledger v1 as hex goldens (empty, one HELD, OWED+EXITING, a torn tail, a bad CRC, a newer version, the legacy `gui_inputs`); decode→encode is byte-identical; N−1 accepted, N+1 opaque. The corpus only grows (roadmap rule 2). | `fixtures/escrow/` |
 | **Ban tests** | owner-side half has no `java.io`/`java.nio.file`/`Future#get`; IO half has no Bukkit entity import; no `dropItemNaturally` in the input package; no `mirrorNextTick`. | plugin.md §11 style |
-| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. **R1 is done (#306, §11 P4):** the rig exists (`CrashRig`, the probe plugin's fake-connection player and `dprobe gate`) and `PaperInputDurabilityIT` carries K1, K2, K4 (file state simulated) and K21 as the skeleton, opt-in (`-Pharness.inputDurability=true`). Row H swaps the probe's stand-in account for the product's, the `dprobe gate` command for the production gate, and decides what moves into the default run. |
+| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. **R1 is done (#306, §11 P4):** the rig exists (`CrashRig`, the probe plugin's fake-connection player and `dprobe gate`) and `PaperInputDurabilityIT` carries K1, K2, K4 (file state simulated) and K21 as the skeleton, opt-in (`-Pharness.inputDurability=true`). **Row H is built (#313, §12 *Row H as built*):** the stand-in account and `dprobe gate` are gone, the product's account and `CrashGate` replace them, `PaperInputDurabilityIT` keeps only the save-path and death probes, and `PaperEscrowCrashIT` carries K1 to K22 (K23 waits for row B): its core group (K1, K2, K5, K11/K12, K18) is in the default run, the rest opt-in. |
 | **Probe loop (local)** | The same boundaries with a real client on 26.1.2 for the ones a fake player cannot show (cursor, UI messages, hotbar swaps). | local only (CLAUDE.md) |
 | **QA catalog** (`qa/catalog/guiescrow.mjs`) | `guiescrow.refused-unsupported` (auto: the layer is inert, message line, `MTR-0100`), `guiescrow.owed-claim` (auto: full inventory, close, `/materione claim`), `guiescrow.recovery-message` (auto: the join line after a runner-side `kill`), `guiescrow.pickup-lifts-to-cursor` (visual: the stack lifts as in vanilla and the account loses it in the same step), `guiescrow.death-release` (auto: `keepInventory` on/off). | blessed on main; kill/restart needs a `probe.mjs` server-restart verb (row Q) |
 | **Perf** | `EscrowPerfTest`: a 27-stack account encode ≤ 200 µs on the owner thread (added to plugin.md §9 by row P); a tier-1 step allocates no IO. | budget enforced in CI |
@@ -474,13 +474,14 @@ named gate, boot again on the same world, read the player's `.dat` from the harn
 
 ```
 ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperInputDurabilityIT -Pharness.inputDurability=true
+./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT -Pharness.inputDurability=true     # row H: the kill rows, K1 to K22
 ./gradlew :harness:integrationTest --tests dev.materione.harness.FoliaInputDurabilityIT -Pharness.folia=true   # after: npm ci --ignore-scripts, in harness/protocol
 ```
 
 | # | Claim | Result | Evidence |
 |---|---|---|---|
 | **P1** | **F12:** on Folia the player save and `executeEntity` tasks share a thread | **Verified** on Folia 1.21.4 build 6 (read and run); read on Folia 26.1.2 build 8 | F12, F15, F16 (§3). The call order of `tickServer`, the `isTickThreadFor` guard of `PlayerList.saveAll` and the stop path are the same in both builds (`javap`). The experiment ran on 1.21.4 only: its protocol client has no 26.x build. **0 torn snapshots in 4 495 reads (190 distinct saves)** against an autosave of rate 1 and a step that holds the region thread 20 ms between two writes; the positive control (an off-thread `saveData()` loop against the same step) showed **419 in 4 397**, so the detector is sensitive. A `saveData()` called inside an entity-scheduler task ran on `Region Scheduler Thread #0` (`owned=true`) and took 9 ms. F12 holds, so §5.8 gets no Folia atomicity mechanism; it gets the three consequences F15, F16 and the "one entity task per step" rule |
-| **P2** | **F11:** a completed `write`+`rename` survives `destroyForcibly` | **Verified** for the half that matters (a completed save is on disk after a kill); the half about a kill *inside* the replace is OS semantics and was not exercised (K3/K4 are file states) | `PaperInputDurabilityIT` rows K1, K2, K21: the JVM tree is `destroyForcibly`'d while the main thread is parked at a named gate, the harness reads the `.dat`, the same workspace boots and the rejoined player is asked what it holds. **K1** (a move-in, no save since): the disk holds the earlier snapshot, the stack is still in the inventory and no account exists; after the boot the stack is in the inventory. **K2** (move-in, then a save): the disk holds the stack in the account (`gen=1`) and not in the inventory, from one save (F3); after the boot the account still owes it. **K21** (a stack lifted to the cursor by a real click packet, then a save): the stack is in neither the inventory nor any cursor key on disk, and gone after the boot: G5 as designed. **K4** (file state simulated: `.dat` deleted after two saves): `.dat_old` exists and is the *first* snapshot, whole, and the boot loads it: F2's fallback, and the observation that after every completed save `.dat_old` is the snapshot before it. Windows 11, Java 21, Paper 1.21.4 b232; nothing in the IT is Windows-specific, but only Windows was run. The gate cannot sit inside `PlayerDataStorage.save`, so K3 (a kill mid-write) and a real K4 (between the two moves) stay untested at the kill itself; row H can add a JVM-level hook if wanted |
+| **P2** | **F11:** a completed `write`+`rename` survives `destroyForcibly` | **Verified** for the half that matters (a completed save is on disk after a kill); the half about a kill *inside* the replace is OS semantics and was not exercised (K3/K4 are file states) | `PaperInputDurabilityIT` rows K1, K2, K21 (since moved to `PaperEscrowCrashIT`, row H, against the product's account): the JVM tree is `destroyForcibly`'d while the main thread is parked at a named gate, the harness reads the `.dat`, the same workspace boots and the rejoined player is asked what it holds. **K1** (a move-in, no save since): the disk holds the earlier snapshot, the stack is still in the inventory and no account exists; after the boot the stack is in the inventory. **K2** (move-in, then a save): the disk holds the stack in the account (`gen=1`) and not in the inventory, from one save (F3); after the boot the account still owes it. **K21** (a stack lifted to the cursor by a real click packet, then a save): the stack is in neither the inventory nor any cursor key on disk, and gone after the boot: G5 as designed. **K4** (file state simulated: `.dat` deleted after two saves): `.dat_old` exists and is the *first* snapshot, whole, and the boot loads it: F2's fallback, and the observation that after every completed save `.dat_old` is the snapshot before it. Windows 11, Java 21, Paper 1.21.4 b232; nothing in the IT is Windows-specific, but only Windows was run. The gate cannot sit inside `PlayerDataStorage.save`, so K3 (a kill mid-write) and a real K4 (between the two moves) stay untested at the kill itself; row H can add a JVM-level hook if wanted |
 | **P3** | **W4/F10:** `keepInventory=false` — what becomes of stacks released by the close after the death event; and that appending to `PlayerDeathEvent#getDrops()` drops them and `keepInventory=true` keeps the returned ones | **Verified**, all four cells (table below) | `DeathProbeRunner`: a fake player holds 3 apples in the inventory and 5 diamonds in an open window, then `setHealth(0)`; two release strategies, both gamerule values. The event order was observed: `PlayerDeathEvent` (drops computed from the inventory only: the window's diamonds are not in them), then `InventoryCloseEvent(DEATH)` (the inventory still holds the dead player's items), then `PlayerRespawnEvent` |
 | **P4** | A fake-connection player on the 1.21.4 harness is enough for `PlayerDataStorage` saves, PDC, `InventoryClickEvent`/`DragEvent` and `closeContainer` | **Verified**, with the limits below | `platformPaths`: a real `ServerPlayer` placed by `PlayerList.placeNewPlayer` over a `Connection` on a netty `EmbeddedChannel` (reflection only, no server dependency at build time), on a server that also runs Materione's own join handlers. **Saves:** `Player#saveData`, the quit path (`PlayerList.remove`), the shutdown path (`stop` with the player online, exit 0) and the Paper autosave (`player-auto-save.rate: 20`, a later change reached the file with no save command) each wrote the player's PDC to `<uuid>.dat`, and the next join loaded it. **Persistent data:** a string, a long and a byte-array account round-tripped, atomically with the inventory (K2). **Events:** a `ServerboundContainerClickPacket` handled by the player's own listener fired `InventoryClickEvent` (raw 54 in the probe window), three quick-craft packets fired `InventoryDragEvent` (raw slots `[0, 1]`, two diamonds each, one left on the cursor), and `Player#closeInventory` fired `InventoryCloseEvent` showing the window and returned the cursor remainder to the inventory (F4). **Death and respawn** (P3) work on the same player |
 
@@ -495,7 +496,7 @@ named gate, boot again on the same world, read the player's `.dat` from the harn
 
 **What the fake player does not reach** (the limits of P4; none changes the design, all matter to row H):
 
-* No login sequence: `AsyncPlayerPreLoginEvent` and `PlayerLoginEvent` are not fired, so the pre-login ledger preload (§5.7, F9) cannot
+* No login sequence: `AsyncPlayerPreLoginEvent` and `PlayerLoginEvent` are not fired, so the pre-login ledger preload (§5.7, F9) cannot **Row H (built):** the probe fires the pre-login event by hand from a plain thread, so the product's own listener preloads (`dprobe login`).
   be exercised through a join. Row H calls the preload directly, or fires the event by hand.
 * The connection is not in `ServerConnectionListener`'s list, so the listener's per-tick work (keep-alive, packet limits, the
   disconnect handling) never runs; `leave` calls `PlayerList.remove` directly, which is what `onDisconnect` does.
@@ -503,7 +504,7 @@ named gate, boot again on the same world, read the player's `.dat` from the harn
   that is the protocol client's and the 26.x probe loop's ground (§8, "Probe loop").
 * The probe reaches the server by reflection on Mojang-mapped names, which Paper 1.21.4 uses at runtime; it was not run on 26.1.2.
 * The probe's account (a byte array and a `gen` in the player's persistent data) is a stand-in for the escrow account, and its
-  `dprobe gate` command stands in for the production crash gate (`-Dmaterione.escrow.gate`, §8). Row H replaces both.
+  `dprobe gate` command stands in for the production crash gate (`-Dmaterione.escrow.gate`, §8). Row H replaced both (built): the probe now has neither, and the product's account and `CrashGate` are what the kill-boundary IT uses.
 
 **Folia versions relative to the pins** (fill.papermc.io, project `folia`, checked for row R):
 
@@ -555,19 +556,19 @@ replaced by an older `.dat_old`. **Not settled here, on purpose:** a *live serve
 real file, the real autosave, the real kill), and K23's kill between `saveData()` and the read-back. Both are row H's IT; `SaveBarrier#saveNow`, after `owner.save()` returns and before
 the read-back is started, is the one place its crash gate belongs.
 
-## 12. Implementation rows (rows M, R, S, L, P and B built; the others proposed)
+## 12. Implementation rows (rows M, R, S, L, P, B and H built; K23 of row H is still to write; the others proposed)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
 | Row | Title | Scope | Depends on | Model |
 |---|---|---|---|---|
 | **D0** | Claims correction | Javadoc/comment-only fix of W1/W2 in `InputJournal`, `GuiJournal`, `GuiWindowListener`; re-bless note for `guilogic.input-slots`. Docs half is in this PR. | none | Haiku |
-| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high. **Done (#306):** R1 to R3 ran, §11 is filled in (P1 to P4 verified). As built: the crash rig (`CrashRig`, `PlayerDat`), the `durabilityProbe` plugin (fake-connection player, `dprobe gate`, the K-row primitives), `PaperInputDurabilityIT` (the save paths, K1/K2/K4/K21, death) and `FoliaInputDurabilityIT`, all opt-in, plus the sha256-pinned Folia jars (`folia-harness-*`, `folia-probe-*`) |
+| **R** | Probes | R1: fake-connection player + crash gate + restart skeleton on the 1.21.4 harness (P4, P2); R2: Folia (P1) on a Folia jar the owner has **approved fetching** (sha256-pinned like the other pins; not downloaded in the design pass), and the Folia mechanism if F12 fails; R3: death/`keepInventory` (P3); output: §11 filled in, K-row skeleton IT. | none | Sonnet, high. **Done (#306):** R1 to R3 ran, §11 is filled in (P1 to P4 verified). As built: the crash rig (`CrashRig`, `PlayerDat`), the `durabilityProbe` plugin (fake-connection player, `dprobe gate`, the K-row primitives), `PaperInputDurabilityIT` (the save paths, K1/K2/K4/K21, death; the K rows moved to `PaperEscrowCrashIT` with row H) and `FoliaInputDurabilityIT`, all opt-in, plus the sha256-pinned Folia jars (`folia-harness-*`, `folia-probe-*`) |
 | **M** | Model, codecs, recovery | Pure escrow model (tier 1/2), account and ledger codecs, recovery, goldens, the property test with the old-design negative control. **Built (#307), as built below the table.** | none (R informs) | Sonnet, high |
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. **Built (#309)**: see *Row L as built* below | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. **Built (#310)**: see *Row P as built* below | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
-| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high |
+| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high. **Built (#313), K23 pending row B**: see *Row H as built* below |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
 | **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high. **Built (#311)**: see *Row B as built* below |
 | **T** (follow-up) | Admin tooling | `/materione escrow <player>` (list, force-return, force-drop). Out of scope here (§14 Q11). | P | later |
@@ -804,7 +805,7 @@ stacks* in one owner-thread call; a refusal changes neither side. `apply(Delta)`
 
 **Tests.** `ClickPlannerTest` (every action), `Tier1ClicksTest` (each click type on a required slot, refusals, a frozen slot, a desync), `Tier1LifecycleTest` (close and overflow, claim, take, edit, carry, death with both `keepInventory` values and a ledger decision, recovery, the gate, idempotence, the legacy adoption, an unreadable account or ledger), `Tier1CrashPropertyTest` (150 seeds x 70 steps of random strict clicks, closes, claims and deaths, with a simulated kill after every step recovered by the real codec and recovery), `EscrowCapabilityTest`, `EscrowPerfTest` (27-stack encode under 200 microseconds; a strict click on a 27-entry account under 1 ms; a nine-slot shift under 2 ms, medians), `EscrowIoBansTest` still holds the runtime (`java.nio.file` moved to `DirectoryProbe`), `EscrowGoldenFixturesTest.accountLegacyAdopted`, `GuiInputSlotsTest` (the compiled input carries `durable`). QA entries `guiescrow.*` (not blessed): `pickup-lifts-to-cursor` (auto and visual), `owed-claim`, `death-release`.
 
-**Left for rows B, H and Q.** The tier-2 consume exit and the `clear` refusal (X/#248); the barrier (B, built in #311, below); the kill-boundary IT and its swap of the probe's stand-in account for this runtime (H); the QA entries that need the `probe.mjs` restart verb (`guiescrow.refused-unsupported`, `guiescrow.recovery-message`, the legacy migration) and the persistence-table row (Q). `StrictInputs` and `Tier1` are the hooks: tier 2 adds `Exits` calls beside `take`, and row B adds the one `saveData()` call site.
+**Left for rows B, H and Q (H is built, see *Row H as built*).** The tier-2 consume exit and the `clear` refusal (X/#248); the barrier (B, built in #311, below); the kill-boundary IT and its swap of the probe's stand-in account for this runtime (H); the QA entries that need the `probe.mjs` restart verb (`guiescrow.refused-unsupported`, `guiescrow.recovery-message`, the legacy migration) and the persistence-table row (Q). `StrictInputs` and `Tier1` are the hooks: tier 2 adds `Exits` calls beside `take`, and row B adds the one `saveData()` call site.
 
 ### Row B as built (#311)
 
@@ -863,6 +864,100 @@ that costs no save), `PlayerDatReaderTest`, `EscrowReadBackTest` (every state of
 autosave (the other half of P6) is a call of `EscrowReadBack#read` through that same path.
 
 **Left for rows H and Q.** The kill-boundary IT (K23's kill on a real server, P6's live half); the persistence-table row, the glossary and the QA entries (Q); #248's action (X).
+
+### Row H as built (#313)
+
+The kill-boundary integration test: K1 to K22 against a real `kill -9` of a real Paper 1.21.4 server running the product's own
+runtime. **K23 is not written yet: row B (#311) is now built, so it can be**, see *Left for later* below. Run commands, the run table and the harness
+mechanics are in `harness/README.md`; this section records what was decided and what was found.
+
+**What runs.** `PaperEscrowCrashIT` (`EscrowCrashRunner`, `EscrowFiles`, `CrashRig`, the `durabilityProbe` plugin). The server
+carries the product and the `guilogic` pack, so the player opens the real `guilogic:escrow` GUI (a one-row chest, one
+`durable: required` layer). The player is row R's fake-connection player, but it now **logs in through the product's pre-login
+preload** (`dprobe login` fires `AsyncPlayerPreLoginEvent` by hand from a plain thread, so `EscrowLedgerListener` preloads the
+ledger exactly as for a real login, and retries the login as a client would if a loaded host exceeds the 5 s preload wait) and the
+**real join handler** recovers; it plays with real `ServerboundContainerClickPacket`s. The probe's persistent-data account stand-in
+(`movein`, `moveout`, `account`/`gen` keys) and `dprobe gate` are **gone**: they are replaced by the product's account and
+`CrashGate`.
+
+**The production crash gate (`dev.materione.plugin.escrow.gate.CrashGate`).** Named points inside the escrow code; only under
+`-Dmaterione.escrow.gate=<value>` the thread that reaches the point named by the property's *current* value logs
+`MATERIONE-ESCROW-GATE <name>` and parks forever (the harness sees the line and `destroyForcibly`s the process tree).
+
+| Gate | Where | Reached by |
+|---|---|---|
+| `account-written` | `PlayerEscrow#commit`, after the account is written into the player's data, before the live stacks change | every tier-1 step (K1 inside a step) |
+| `click-applied` | end of `Tier1#apply` for a click that touched an escrowed slot | K1 after the step, K5, K21b |
+| `release-done` | end of `Tier1#release` | a close, a quit (K8a), a plugin disable (K20a) |
+| `recovery-before-commit`, `recovery-done` | `Tier1#recover`, before the account is committed, and after the gate opened | the join (K15) |
+| `death-released` | `EscrowRuntime#death`, after the drops were appended | `PlayerDeathEvent` (K9a, K9b) |
+| `claim-done` | end of `EscrowRuntime#claim`, whatever the claim did | `/materione claim`: the **quiescent kill** that follows a completed save without touching any state |
+
+*Inert in production, by construction:* the property is read once into a `static final boolean` at class initialisation, so without
+it `CrashGate.at` is one load of a constant `false` the JIT folds away; nothing else (no command, no config, no editor) reads or
+sets it; with it set, the value is re-read at every reach so the harness can re-arm a gate from inside the JVM between two
+steps of one boot (a JVM argument cannot change); a value that names no gate (`off`) arms nothing. `CrashGateTest` (inert without
+the property, parks only at the armed name, re-armed live, names distinct) and `CrashGateBansTest` (ArchUnit: `CrashGate` is the
+only class of the escrow code that parks or sleeps a thread, proven against a planted parker) hold it. The call sites are in
+`PlayerEscrow`, `Tier1` and `EscrowRuntime` (one line each, plus `claim` split into `claim` and `claimNow`); the gate lives in its
+own package because `escrow.runtime` may not block (I4). Row B adds its own gate name beside `saveData()`.
+
+**What is real and what is crafted.** Everything of tier 1 (K1 to K9, K15, K16, K19 to K22) is the product end to end, killed at a
+production gate or at the quiescent `claim-done` gate. Tier 2 has no caller before #248, so for **K10 to K14 and K17** the harness crafts the
+two things the missing caller would have left: an EXITING entry (the real HELD entry of a real click, its state flipped by the
+harness's own account codec and committed through the player's live `PlayerEscrow` by the probe's `dprobe adopt`, which uses the
+product's `AccountCodec`, followed by a real `Player#saveData`), and the ledger records (`EscrowFiles` writes INTENT records
+between the kill and the boot: a second, independent implementation of the §5.3 layout, so the doc's layout and the plugin's are
+checked against each other). The preload, the gate, recovery, the quarantine and the refusal that act on them are the product's.
+**K3 and K4** are file states (a stray half-written temp file; `.dat` removed so `.dat_old` is loaded): the gate cannot sit inside
+`PlayerDataStorage.save`, and no JVM-level hook was added.
+
+**The rows.** Every row asserts against the player's `.dat` read by the harness itself and against the rebooted player: **G1**
+conservation (every stack exactly once, inventory or owed), **G2** no resurrection, **G4** no dropped item entity, **I6** idempotent
+recovery.
+
+| Row | Test | Kill | What it shows |
+|---|---|---|---|
+| K1 | `coreRows` (inside the step), `tier1Rows` (after the step) | `account-written`; `click-applied` | disk is S (stack in the inventory, no account); the boot keeps it |
+| K2 | `coreRows` | `claim-done` after a save | S' has the stack HELD in the account and not in the inventory; the boot returns it once |
+| K3 | `cursorAndFileStateRows` | file state | a stray partial temp file is never read |
+| K4 | `cursorAndFileStateRows` | file state | `.dat_old` is the previous complete snapshot and the boot loads it |
+| K5 | `coreRows` | `click-applied` of a move-out | the older snapshot still holds the stack in the account only; returned once |
+| K6 | `tier1Rows` | after a save | stack in the inventory, none owed |
+| K7 | `tier1Rows` | after a save | OWED on disk with a full inventory, `MTR-0103`, no dropped item before or after, `/materione claim` returns it |
+| K8a/b/c | `tier1Rows` | `release-done` inside a quit; a completed quit; a graceful stop with a window open | each leaves the stack exactly once |
+| K9a to d | `deathAndDisableRows` | `death-released` (both `keepInventory` values); completed deaths | an unsaved death is rolled back; a completed death drops (off) or keeps (on) once, nothing is owed or duplicated |
+| K10 | `ledgerRows` | quiescent + torn INTENT | no decision, E returned; the torn tail is left in place (a read never writes) |
+| K11/K12 | `coreRows` | quiescent + INTENT | E EXITING on disk and a durable INTENT: dropped (G2) |
+| K11 rolled back | `ledgerRows` | quiescent | INTENT for an entry the snapshot never held: the stack stays in the inventory (G3) |
+| K13 | `ledgerRows` | quiescent + INTENT | snapshot already without E: the record is inert |
+| K14a/b | `ledgerRows` | a real quit with E EXITING in the live account | the close does not return a frozen entry (no second copy); INTENT after the save: dropped; none: returned |
+| K15, K16 | `ledgerRows` | `recovery-before-commit`, `recovery-done`, then a saved recovery | recovery changes only memory (the disk is byte-identical after each kill); a drained account returns nothing on the next crash |
+| K17 | `ledgerRows` | quiescent + valid INTENT + torn tail | the INTENT counts, the tail is ignored, no quarantine, no `MTR-0101` |
+| K18 | `coreRows` | quiescent | a ledger corrupt before its end (renamed `.corrupt-<ms>`), an account with a bad CRC and one of a newer version: `MTR-0101`, the strict click is refused, nothing returned, and the account value on disk is byte-identical after a save |
+| K19 | `k19AnAutosaveNeverSeesHalfAClick` | none | Paper autosave on every tick, a click every 700 ms: every snapshot read is the state before or after a click, never both stacks or neither |
+| K20a/b | `deathAndDisableRows` | `release-done` inside `onDisable`; a completed disable then a save | released before the save; once |
+| K21a/b | `cursorAndFileStateRows` | after a save; `click-applied` | the stack on the cursor at a save is in no save and is lost (G5, vanilla); unsaved, it is returned (rollback) |
+| K22a/b | `cursorAndFileStateRows` | after a save | a stack lifted onto the cursor is lost (G5); a placement is atomic with the cursor reduction and returned once |
+
+**Which runs are default.** Only `coreRows` (K1 inside the step, K2, K5, K11/K12, K18: six boots) joins the default
+`:harness:integrationTest` run; every boot is 25 to 50 s on the development machine, so the five opt-in groups
+(`-Pharness.inputDurability=true`: 7, 7, 10, 7 and 2 boots) stay out of it. A boot that follows a kill is the check of its row and the
+start of the next, so a group of N rows costs N+1 boots. The workspace is a fresh directory per group and the harness retries a
+boot whose game port another process holds (observed when two harness runs share ports), instead of waiting out the boot timeout.
+
+**Left for later.**
+
+* **K23 (the barrier)** needs row B (#311): `saveData()`, the read-back, `DONE`. `PaperEscrowCrashIT#k23TheBarrier` is `@Disabled` with
+  that reason. When B lands: add a gate name to `CrashGate.Gates` between `saveData()` and the read-back start, a row that kills there
+  (and one where the read-back finds an older `gen`), and assert that an effect-carrying exit's effect never ran and that recovery
+  applies the `INTENT` as K11/K12. The K10 to K14 and K17 crafting should then be replaced by the real tier-2 exit.
+* **Folia (#314).** Not run. The product runs on Folia but the harness player there is a real protocol client (`idle-bot.mjs`), which
+  cannot click, and `dprobe` acts from the console's global thread, which Folia refuses for player state. The subset that matters
+  there (K1 inside a step, K8 as the quit sequence because a Folia stop has no full save (F15), K9, K15) needs a click-capable
+  protocol client and entity-scheduler routing of the probe's per-player calls, as `foliaProbe` shows.
+* **Truncation by the next writer (K17's second half)** is not exercised: no code appends to a ledger before #248, so the test shows
+  that a read leaves the torn tail alone, and `EscrowLedgerFilesTest` shows that the writer cuts it.
 
 ## 13. Decisions this design takes
 

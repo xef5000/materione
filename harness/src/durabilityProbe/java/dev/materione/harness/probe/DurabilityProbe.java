@@ -54,12 +54,17 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe leave &lt;name&gt;                        PlayerList.remove: close container, quit event, then save (F4)
  *   dprobe state &lt;name&gt;                        one line: online, health, gamemode, container, cursor
  *   dprobe set &lt;name&gt; &lt;slot&gt; &lt;MATERIAL&gt; &lt;n&gt;   put a stack into an inventory slot (n = 0 clears)
- *   dprobe inv &lt;name&gt;                          the inventory, the cursor, the probe account and the pdc marker
+ *   dprobe login &lt;name&gt;                        row H: fire AsyncPlayerPreLoginEvent by hand (the product preloads the ledger), then join
+ *   dprobe inv &lt;name&gt;                          the inventory, the cursor and the product's escrow account (hex)
  *   dprobe pdc &lt;name&gt; &lt;key&gt; [value]            read or write a string in the player's persistent data
- *   dprobe movein &lt;name&gt; &lt;slot&gt;               tier-1 analog: inventory slot -&gt; probe account, one step, gen++
- *   dprobe moveout &lt;name&gt;                      tier-1 analog: newest account entry -&gt; inventory, one step, gen++
+ *   dprobe getbytes &lt;name&gt; &lt;key&gt;               the player's byte[] value of Materione's key, as hex ("none" when absent)
+ *   dprobe putbytes &lt;name&gt; &lt;key&gt; &lt;hex&gt;        write that value (used to craft a state the product cannot make yet: EXITING)
+ *   dprobe adopt &lt;name&gt; &lt;hex&gt;             commit an account into the product's live PlayerEscrow (memory and data together)
+ *   dprobe fill &lt;name&gt; &lt;MATERIAL&gt; &lt;n&gt;          put n of a material in all 36 storage slots (an inventory with no room)
+ *   dprobe cmd &lt;name&gt; &lt;command...&gt;             Player#performCommand, as the player typed it
+ *   dprobe arm &lt;gate&gt;                          set the production crash gate's armed name (-Dmaterione.escrow.gate must be set)
+ *   dprobe disable                              disable the Materione plugin (onDisable runs, as on /reload or a stop)
  *   dprobe save &lt;name&gt;                         Player#saveData, synchronous, on the calling (main) thread
- *   dprobe gate &lt;name&gt;                         log the crash-gate marker, then park this thread forever
  *   dprobe open &lt;name&gt;                         open a 27-slot window owned by the probe
  *   dprobe win &lt;name&gt; &lt;slot&gt; &lt;MATERIAL&gt; &lt;n&gt;     put a stack into a slot of the open window
  *   dprobe click &lt;name&gt; &lt;rawSlot&gt; &lt;button&gt; &lt;PICKUP|QUICK_MOVE|SWAP|...&gt;   a ServerboundContainerClickPacket
@@ -70,9 +75,10 @@ import org.bukkit.plugin.java.JavaPlugin;
  *   dprobe items                                dropped item entities in the first world
  * </pre>
  *
- * Every answer is one log line containing {@code MATERIONE-DPROBE}. The crash gate parks the calling thread, which is the
- * main thread for a console command: nothing ticks, so no autosave can run after the marker, and the harness kills the
- * JVM while the server is exactly in that state.
+ * Every answer is one log line containing {@code MATERIONE-DPROBE}. The crash gate is the product's own
+ * ({@code CrashGate}, {@code -Dmaterione.escrow.gate}, logs {@code MATERIONE-ESCROW-GATE <name>} and parks the thread it
+ * is reached on); the probe only arms it and triggers the step that reaches it. Row R's {@code dprobe gate} and
+ * persistent-data account stand-in are gone: row H replaced them with the product's.
  */
 public final class DurabilityProbe extends JavaPlugin implements Listener {
 
@@ -88,8 +94,10 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
         }
     }
 
-    private NamespacedKey accountKey;
-    private NamespacedKey genKey;
+    /** The product's account key (row P): the probe reads and writes it only as bytes, never decoding it. */
+    private static final String ESCROW_NAMESPACE = "materione";
+    private static final String GATE_PROPERTY = "materione.escrow.gate";
+
     private final AtomicInteger ports = new AtomicInteger(40000);
     /** How the death scenario releases a window's stacks: none, on the close the death triggers, or in the death event. */
     private volatile String mode = "none";
@@ -97,8 +105,6 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
 
     @Override
     public void onEnable() {
-        accountKey = new NamespacedKey(this, "account");
-        genKey = new NamespacedKey(this, "gen");
         Bukkit.getPluginManager().registerEvents(this, this);
         log("ready");
     }
@@ -118,10 +124,15 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 case "set" -> setSlot(player(args[1]), Integer.parseInt(args[2]), args[3], Integer.parseInt(args[4]));
                 case "inv" -> inv(player(args[1]));
                 case "pdc" -> pdc(player(args[1]), args[2], args.length > 3 ? args[3] : null);
-                case "movein" -> moveIn(player(args[1]), Integer.parseInt(args[2]));
-                case "moveout" -> moveOut(player(args[1]));
+                case "login" -> login(args[1]);
+                case "getbytes" -> getBytes(player(args[1]), args[2]);
+                case "putbytes" -> putBytes(player(args[1]), args[2], args[3]);
+                case "adopt" -> adopt(player(args[1]), args[2]);
+                case "fill" -> fill(player(args[1]), args[2], Integer.parseInt(args[3]));
+                case "cmd" -> command(player(args[1]), String.join(" ", java.util.Arrays.copyOfRange(args, 2, args.length)));
+                case "arm" -> arm(args[1]);
+                case "disable" -> disableProduct();
                 case "save" -> save(player(args[1]));
-                case "gate" -> gate(args[1]);
                 case "open" -> open(player(args[1]));
                 case "win" -> win(player(args[1]), Integer.parseInt(args[2]), args[3], Integer.parseInt(args[4]));
                 case "click" -> click(player(args[1]), Integer.parseInt(args[2]), Integer.parseInt(args[3]), args[4]);
@@ -231,25 +242,119 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 out.append(slot).append(':').append(describe(contents[slot])).append(',');
             }
         }
+        StringBuilder window = new StringBuilder();
+        Inventory top = player.getOpenInventory().getTopInventory();
+        if (top.getType() != org.bukkit.event.inventory.InventoryType.CRAFTING) {
+            for (int slot = 0; slot < top.getSize(); slot++) {
+                ItemStack stack = top.getItem(slot);
+                if (stack != null && !stack.getType().isAir()) {
+                    window.append(slot).append(':').append(describe(stack)).append(',');
+                }
+            }
+        }
         log("inv player=" + player.getName() + " slots=[" + out + "] cursor=" + describe(player.getItemOnCursor())
-                + " account=" + describeAccount(player) + " gen=" + gen(player));
+                + " window=[" + window + "] escrow=" + hex(player, ESCROW_ACCOUNT));
     }
 
-    private String describeAccount(Player player) {
-        byte[] bytes = player.getPersistentDataContainer().get(accountKey, PersistentDataType.BYTE_ARRAY);
-        if (bytes == null) {
-            return "none";
-        }
-        StringBuilder out = new StringBuilder("[");
-        for (ItemStack stack : ItemStack.deserializeItemsFromBytes(bytes)) {
-            out.append(describe(stack)).append(',');
-        }
-        return out.append(']').toString();
+    private static final String ESCROW_ACCOUNT = "gui_escrow";
+
+    private static String hex(Player player, String key) {
+        byte[] bytes = player.getPersistentDataContainer().get(
+                NamespacedKey.fromString(ESCROW_NAMESPACE + ":" + key), PersistentDataType.BYTE_ARRAY);
+        return bytes == null ? "none" : java.util.HexFormat.of().formatHex(bytes);
     }
 
-    private long gen(Player player) {
-        Long value = player.getPersistentDataContainer().get(genKey, PersistentDataType.LONG);
-        return value == null ? 0 : value;
+    private void getBytes(Player player, String key) {
+        log("getbytes ok=true player=" + player.getName() + " key=" + key + " value=" + hex(player, key));
+    }
+
+    private void putBytes(Player player, String key, String hex) {
+        player.getPersistentDataContainer().set(NamespacedKey.fromString(ESCROW_NAMESPACE + ":" + key),
+                PersistentDataType.BYTE_ARRAY, java.util.HexFormat.of().parseHex(hex));
+        log("putbytes ok=true player=" + player.getName() + " key=" + key + " bytes=" + hex.length() / 2);
+    }
+
+    /**
+     * Tier 2 has no caller before #248, so a row that needs an EXITING entry <em>in the product's memory</em> (not only
+     * in the saved data) has this: the account is decoded by the product's own codec and committed through the player's
+     * own {@code PlayerEscrow} (the live account and the persistent value change together, as in any step), by
+     * reflection across the plugin boundary. Never a product path; the probe is not shipped.
+     */
+    private void adopt(Player player, String hex) throws Exception {
+        org.bukkit.plugin.Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        if (product == null) {
+            throw new IllegalStateException("Materione is not installed");
+        }
+        ClassLoader loader = product.getClass().getClassLoader();
+        byte[] bytes = java.util.HexFormat.of().parseHex(hex);
+        Object read = R.callStatic(loader.loadClass("dev.materione.plugin.escrow.model.AccountCodec"), "decode", bytes);
+        Object account = R.call(read, "account");
+        Object runtime = R.call(product, "escrowRuntime");
+        Object escrow = R.call(runtime, "of", player);
+        R.call(escrow, "commit", account, bytes);
+        log("adopt ok=true player=" + player.getName() + " bytes=" + bytes.length);
+    }
+
+    private void fill(Player player, String material, int amount) {
+        for (int slot = 0; slot < 36; slot++) {
+            player.getInventory().setItem(slot, new ItemStack(Material.valueOf(material), amount));
+        }
+        log("fill ok=true player=" + player.getName() + " material=" + material);
+    }
+
+    private void command(Player player, String command) {
+        boolean ran = player.performCommand(command);
+        log("cmd ok=" + ran + " player=" + player.getName() + " command=" + command);
+    }
+
+    /** Re-arms the product's crash gate from inside the server: the gate reads the property's current value. */
+    private void arm(String gate) {
+        if (System.getProperty(GATE_PROPERTY) == null) {
+            throw new IllegalStateException("the server was not started with -D" + GATE_PROPERTY);
+        }
+        System.setProperty(GATE_PROPERTY, gate);
+        log("arm ok=true gate=" + gate);
+    }
+
+    private void disableProduct() {
+        org.bukkit.plugin.Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        if (product == null) {
+            throw new IllegalStateException("Materione is not installed");
+        }
+        Bukkit.getPluginManager().disablePlugin(product);
+        log("disable ok=" + !product.isEnabled());
+    }
+
+    /**
+     * The login a fake connection does not have: the server's pre-login event, fired by hand from a plain thread (it is an
+     * asynchronous event, F9), so the product's own listener preloads the player's ledger exactly as it does for a real
+     * login; the join follows. The calling (main) thread waits for the event, as the login thread would.
+     */
+    @SuppressWarnings("removal")
+    private void login(String name) throws Exception {
+        UUID id = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes(StandardCharsets.UTF_8));
+        // The product waits at most 5 s for the preload and never refuses the login (a timeout leaves the recovery gate
+        // closed, which a real client sees as "still loading"). A host so loaded that the first wait times out is
+        // not what a row is about, so the login is retried as a client would until the ledger image is there.
+        for (int attempt = 1; attempt <= 4; attempt++) {
+            var event = new org.bukkit.event.player.AsyncPlayerPreLoginEvent(name,
+                    java.net.InetAddress.getLoopbackAddress(), id);
+            Thread async = new Thread(() -> Bukkit.getPluginManager().callEvent(event), "dprobe-prelogin");
+            async.start();
+            async.join(30_000);
+            log("login prelogin result=" + event.getLoginResult() + " player=" + name + " attempt=" + attempt);
+            if (preloaded(id)) {
+                break;
+            }
+        }
+        join(name);
+    }
+
+    /** Whether the product's ledger store holds a preloaded image for the player (it answers empty until the read ends). */
+    private static boolean preloaded(UUID id) throws Exception {
+        org.bukkit.plugin.Plugin product = Bukkit.getPluginManager().getPlugin("Materione");
+        Object store = product == null ? null : R.call(product, "escrowLedger");
+        return store == null || ((java.util.Optional<?>) R.call(store, "preloaded", id)).isPresent();
     }
 
     private void pdc(Player player, String key, String value) {
@@ -261,65 +366,11 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
                 + player.getPersistentDataContainer().get(namespaced, PersistentDataType.STRING));
     }
 
-    /** One owner-thread step: the stack leaves the inventory and enters the account, in the same call (I1). */
-    private void moveIn(Player player, int slot) {
-        ItemStack stack = player.getInventory().getItem(slot);
-        if (stack == null || stack.getType().isAir()) {
-            throw new IllegalStateException("slot " + slot + " is empty");
-        }
-        List<ItemStack> entries = new ArrayList<>();
-        byte[] bytes = player.getPersistentDataContainer().get(accountKey, PersistentDataType.BYTE_ARRAY);
-        if (bytes != null) {
-            entries.addAll(List.of(ItemStack.deserializeItemsFromBytes(bytes)));
-        }
-        entries.add(stack.clone());
-        player.getInventory().setItem(slot, null);
-        player.getPersistentDataContainer().set(accountKey, PersistentDataType.BYTE_ARRAY,
-                ItemStack.serializeItemsAsBytes(entries));
-        player.getPersistentDataContainer().set(genKey, PersistentDataType.LONG, gen(player) + 1);
-        log("movein ok=true player=" + player.getName() + " gen=" + gen(player) + " entries=" + entries.size());
-    }
-
-    private void moveOut(Player player) {
-        byte[] bytes = player.getPersistentDataContainer().get(accountKey, PersistentDataType.BYTE_ARRAY);
-        if (bytes == null) {
-            throw new IllegalStateException("no account");
-        }
-        List<ItemStack> entries = new ArrayList<>(List.of(ItemStack.deserializeItemsFromBytes(bytes)));
-        ItemStack stack = entries.remove(entries.size() - 1);
-        Map<Integer, ItemStack> left = player.getInventory().addItem(stack);
-        entries.addAll(left.values());
-        player.getPersistentDataContainer().set(accountKey, PersistentDataType.BYTE_ARRAY,
-                ItemStack.serializeItemsAsBytes(entries));
-        player.getPersistentDataContainer().set(genKey, PersistentDataType.LONG, gen(player) + 1);
-        log("moveout ok=true player=" + player.getName() + " gen=" + gen(player) + " entries=" + entries.size());
-    }
-
     private void save(Player player) {
         long started = System.nanoTime();
         player.saveData();
         log("save ok=true player=" + player.getName() + " thread=" + Thread.currentThread().getName()
                 + " micros=" + (System.nanoTime() - started) / 1000);
-    }
-
-    // ---- the crash gate -------------------------------------------------------------------------------------------
-
-    /**
-     * The named crash gate. In production code (row P) this is a point behind {@code -Dmaterione.escrow.gate=<name>}; here
-     * it is a command, so a K-row decides exactly where the server stops. The marker is logged first, then the calling
-     * thread parks: no further tick runs, so nothing saves behind the harness's back, and a kill lands in a known state.
-     */
-    private void gate(String name) {
-        log("gate reached=" + name);
-        // A log4j appender flushes on its own thread; give the line time to reach latest.log before the kill
-        try {
-            Thread.sleep(250);
-            while (true) {
-                Thread.sleep(60_000);
-            }
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        }
     }
 
     // ---- windows, clicks, drags -----------------------------------------------------------------------------------
@@ -478,7 +529,7 @@ public final class DurabilityProbe extends JavaPlugin implements Listener {
     public void joined(PlayerJoinEvent event) {
         log("event join player=" + event.getPlayer().getName() + " inventory="
                 + describe(java.util.Arrays.asList(event.getPlayer().getInventory().getContents()))
-                + " account=" + describeAccount(event.getPlayer()) + " gen=" + gen(event.getPlayer()));
+                + " escrow=" + hex(event.getPlayer(), ESCROW_ACCOUNT));
     }
 
     @EventHandler

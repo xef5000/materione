@@ -4,6 +4,7 @@ import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
 import dev.materione.api.scheduling.SchedulingGateway;
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.EscrowLedgerStore;
 import dev.materione.plugin.escrow.io.LedgerState;
 import dev.materione.plugin.escrow.io.SnapshotReader;
@@ -374,6 +375,7 @@ public final class EscrowRuntime {
                 window.map(WindowView.Open::gui).orElse("death"),
                 window.map(WindowView.Open::escrowed).orElse(Set.of()), decisions, event.getKeepInventory());
         event.getDrops().addAll(death.drops());
+        CrashGate.at(CrashGate.Gates.DEATH_RELEASED); // test-only, inert in production
         if (death.owed() > 0) {
             player.sendMessage(Component.text(EscrowMessages.count(messages.owed(), death.owed())));
         }
@@ -391,6 +393,11 @@ public final class EscrowRuntime {
 
     /** {@code /materione claim}: tells the player what came back and what is still owed. Owner thread. */
     public void claim(Player player) {
+        claimNow(player);
+        CrashGate.at(CrashGate.Gates.CLAIM_DONE); // test-only, inert in production
+    }
+
+    private void claimNow(Player player) {
         if (standing(player) != Standing.SERVED) {
             refuse(player, Tier1.Reason.UNAVAILABLE);
             return;

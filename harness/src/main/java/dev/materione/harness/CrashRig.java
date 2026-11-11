@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -19,10 +20,11 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>The server runs the test-only {@code durabilityProbe} plugin (a fake-connection player and the gate command, see
  * {@code DurabilityProbe}); the product plugin is installed too, as in every other scenario, so a fake player joins a
- * server that runs Materione's own join handlers. A gate is a console command that logs
- * {@code MATERIONE-DPROBE gate reached=<name>} and parks the main thread; {@link #killAtGate} sees the marker and
- * {@code destroyForcibly}s the whole process tree, which is a {@code kill -9} at exactly that instant (nothing ticks
- * once the thread is parked, so no autosave can run after the marker).
+ * server that runs Materione's own join handlers. A gate is the product's own {@code CrashGate} (row H: a named point in
+ * the escrow code that, under {@code -Dmaterione.escrow.gate}, logs {@code MATERIONE-ESCROW-GATE <name>} and parks the
+ * thread it is reached on); {@link #killAtGate} arms one, triggers the step that reaches it, sees the marker and
+ * {@code destroyForcibly}s the whole process tree, which is a {@code kill -9} at exactly that instant (the thread is on
+ * the main thread, which is parked, so no autosave can run after the marker).
  */
 public final class CrashRig implements AutoCloseable {
 
@@ -34,16 +36,47 @@ public final class CrashRig implements AutoCloseable {
     private final ServerWorkspace workspace;
     private final LogWatcher log;
     private final String readyMarker;
+    private final List<String> jvmArgs;
     private Process process;
     private ConsoleDriver console;
     private int boots;
 
-    private CrashRig(HarnessOptions options, Path serverJar, ServerWorkspace workspace, String readyMarker) {
+    private CrashRig(HarnessOptions options, Path serverJar, ServerWorkspace workspace, String readyMarker,
+            List<String> jvmArgs) {
         this.options = options;
         this.serverJar = serverJar;
         this.workspace = workspace;
         this.readyMarker = readyMarker;
+        this.jvmArgs = jvmArgs;
         this.log = new LogWatcher(workspace.logFile);
+    }
+
+    /** The production crash gate's log line ({@code CrashGate#MARKER}): the name follows. Test API, as the other markers. */
+    public static final String GATE_MARKER = "MATERIONE-ESCROW-GATE ";
+
+    /** The JVM property that creates the production gate; its current value is the armed name ({@code off} arms none). */
+    public static final String GATE_PROPERTY = "materione.escrow.gate";
+
+    /**
+     * The workspace of the kill-boundary IT (row H): the product plugin and the named content packs (the escrow GUI is in
+     * {@code guilogic}), the durability probe, and the production crash gate enabled and unarmed.
+     */
+    public static CrashRig createForEscrow(HarnessOptions options, String scenario, String paperGlobalYaml,
+            Set<String> packs) throws IOException {
+        Path probe = Path.of(System.getProperty("harness.durabilityProbeJar", ""));
+        if (!Files.isRegularFile(probe)) {
+            throw new IOException("harness.durabilityProbeJar is not set or missing: run via :harness:integrationTest");
+        }
+        ServerWorkspace workspace = ServerWorkspace.create(options, scenario, packs);
+        Files.copy(probe, workspace.pluginsDir.resolve("MaterioneDurabilityProbe.jar"),
+                StandardCopyOption.REPLACE_EXISTING);
+        if (paperGlobalYaml != null) {
+            Path config = workspace.root.resolve("config");
+            Files.createDirectories(config);
+            Files.writeString(config.resolve("paper-global.yml"), paperGlobalYaml, StandardCharsets.UTF_8);
+        }
+        return new CrashRig(options, options.paperJar(), workspace, MARKER + "ready",
+                List.of("-D" + GATE_PROPERTY + "=off"));
     }
 
     /**
@@ -78,7 +111,7 @@ public final class CrashRig implements AutoCloseable {
             Files.createDirectories(config);
             Files.writeString(config.resolve("paper-global.yml"), paperGlobalYaml, StandardCharsets.UTF_8);
         }
-        return new CrashRig(options, serverJar, workspace, readyMarker);
+        return new CrashRig(options, serverJar, workspace, readyMarker, List.of());
     }
 
     public ServerWorkspace workspace() {
@@ -102,14 +135,35 @@ public final class CrashRig implements AutoCloseable {
         if (process != null && process.isAlive()) {
             throw new IllegalStateException("the server is already running");
         }
-        moveLogAside();
-        boots++;
-        process = new ProcessBuilder(options.javaExecutable().toString(), "-Xmx2G", "-Dfile.encoding=UTF-8",
-                "-DIReallyKnowWhatIAmDoingISwear", "-jar", serverJar.toString(), "nogui")
-                .directory(workspace.root.toFile()).redirectErrorStream(true)
-                .redirectOutput(ProcessBuilder.Redirect.appendTo(workspace.stdoutFile.toFile())).start();
-        console = new ConsoleDriver(process.getOutputStream());
-        if (log.awaitLine("Done (", options.bootTimeout()) == null) {
+        // A port another process on the machine holds at that moment (a parallel run, a killed server whose socket is still
+        // closing) makes the server exit at once; that is not what a row tests, so the boot is retried a few times.
+        for (int attempt = 1; ; attempt++) {
+            moveLogAside();
+            boots++;
+            List<String> command = new ArrayList<>(List.of(options.javaExecutable().toString(), "-Xmx2G",
+                    "-Dfile.encoding=UTF-8", "-DIReallyKnowWhatIAmDoingISwear"));
+            command.addAll(jvmArgs);
+            command.addAll(List.of("-jar", serverJar.toString(), "nogui"));
+            process = new ProcessBuilder(command)
+                    .directory(workspace.root.toFile()).redirectErrorStream(true)
+                    .redirectOutput(ProcessBuilder.Redirect.appendTo(workspace.stdoutFile.toFile())).start();
+            console = new ConsoleDriver(process.getOutputStream());
+            long deadline = System.nanoTime() + options.bootTimeout().toNanos();
+            boolean done = false;
+            while (!done && process.isAlive() && System.nanoTime() < deadline) {
+                done = log.awaitLine("Done (", Duration.ofSeconds(2)) != null;
+            }
+            if (done) {
+                break;
+            }
+            String text = log.readAll();
+            boolean bindFailure = text != null && text.contains("FAILED TO BIND");
+            if (bindFailure && attempt < 5) {
+                PaperHarnessRunner.killTree(process);
+                process.waitFor(30, TimeUnit.SECONDS);
+                Thread.sleep(15_000);
+                continue;
+            }
             throw new IllegalStateException("boot " + boots + ": the server did not finish booting\n" + tail());
         }
         if (log.awaitLine(readyMarker, options.commandTimeout()) == null) {
@@ -165,15 +219,19 @@ public final class CrashRig implements AutoCloseable {
     }
 
     /**
-     * The crash: runs the named gate (the main thread parks after logging the marker), waits for the marker, then kills
-     * the process tree and waits for it to die. After this returns the world and player data are exactly what the kill
-     * left on disk.
+     * The crash: arms the production gate {@code gate} (inside the server, the JVM argument cannot change between two
+     * steps of one boot), sends the console command that makes the product reach it (the thread it is reached on parks
+     * after logging {@code MATERIONE-ESCROW-GATE <gate>}), waits for the marker, then kills the process tree and waits
+     * for it to die. After this returns the world and player data are exactly what the kill left on disk.
+     *
+     * @param trigger a console command (for example {@code dprobe click ...}); it may itself be the call that parks
      */
-    public void killAtGate(String gate) throws IOException, InterruptedException {
+    public void killAtGate(String gate, String trigger) throws IOException, InterruptedException {
+        probe("arm", gate);
         int cursor = log.mark();
-        console.send("dprobe gate " + gate);
-        if (log.awaitNewLine(MARKER + "gate reached=" + gate, options.commandTimeout(), cursor) == null) {
-            throw new IllegalStateException("gate '" + gate + "' was not reached\n" + tail());
+        console.send(trigger);
+        if (log.awaitNewLine(GATE_MARKER + gate, options.commandTimeout(), cursor) == null) {
+            throw new IllegalStateException("gate '" + gate + "' was not reached after '" + trigger + "'\n" + tail());
         }
         kill();
     }

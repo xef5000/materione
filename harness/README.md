@@ -170,18 +170,51 @@ node --test harness\protocol\floor-bot.test.mjs
   older `push.reload` events and allocation visibility alone do not prove that save's
   archive is ready. Failures include the server log tail in the assertion summary.
 - `PaperInputDurabilityIT` — the platform probes of
-  [`gui-input-durability.md`](../docs/architecture/gui-input-durability.md) §11 (row R, #306) and the K-row skeleton row H
-  (#313) fills in. Opt-in (`-Pharness.inputDurability=true`; each scenario boots the server two to five times). It runs
-  on the **crash rig** (`CrashRig`): a workspace that can be booted, killed at a **named crash gate** (`dprobe gate
-  <name>` logs `MATERIONE-DPROBE gate reached=<name>` and parks the main thread; the harness then `destroyForcibly`s the
-  process tree, a `kill -9` at that instant) and booted again on the same world, with the player's `.dat` readable from
-  the harness (`PlayerDat`, a minimal gzip-NBT reader). The player is a **fake-connection player**: a real
+  [`gui-input-durability.md`](../docs/architecture/gui-input-durability.md) §11 (row R, #306). Opt-in
+  (`-Pharness.inputDurability=true`; each scenario boots the server two to five times). It runs on the **crash rig**
+  (`CrashRig`): a workspace that can be booted, killed and booted again on the same world, with the player's `.dat`
+  readable from the harness (`PlayerDat`, a minimal gzip-NBT reader). The player is a **fake-connection player**: a real
   `ServerPlayer` placed by `PlayerList.placeNewPlayer` over a `Connection` on a netty `EmbeddedChannel`, driven by the
   test-only `durabilityProbe` plugin (`harness/src/durabilityProbe`, `:harness:durabilityProbeJar`, never shipped; every
-  answer is one `MATERIONE-DPROBE <stage> …` line). Three tests: the save paths (`saveData`, quit, shutdown, autosave)
-  and reload (P4); four K rows (K1, K2, K4 with its file state simulated, K21) killed at their gates (P2); and the death
-  matrix, a window released at `InventoryCloseEvent` versus in `PlayerDeathEvent` under both `keepInventory` values (P3).
-  The probe's persistent-data account stands in for the escrow account until row P exists.
+  answer is one `MATERIONE-DPROBE <stage> …` line). Two tests: the save paths (`saveData`, quit, shutdown, autosave) and
+  reload (P4), and the death matrix, a window released at `InventoryCloseEvent` versus in `PlayerDeathEvent` under both
+  `keepInventory` values (P3). The kill rows of its first version (P2) are `PaperEscrowCrashIT`'s now.
+- `PaperEscrowCrashIT` — the **kill-boundary test** of the crash-safe input slots (row H, #313; rows K1 to K22 of
+  [`gui-input-durability.md`](../docs/architecture/gui-input-durability.md) §5.10). The product's own runtime on a real
+  Paper 1.21.4: the `guilogic:escrow` GUI (a one-row chest, `durable: required`), a fake player that logs in through the
+  real pre-login preload (the probe fires `AsyncPlayerPreLoginEvent` from a plain thread) and the real join handler and
+  plays with real click packets, and a **production crash gate**: `CrashGate` (`plugin/.../escrow/gate/`) names points
+  inside the escrow code (`account-written`, `click-applied`, `release-done`, `recovery-before-commit`, `recovery-done`,
+  `death-released`, `claim-done`) and, **only when the server JVM has `-Dmaterione.escrow.gate=<anything>`**, parks the
+  thread that reaches the armed name after logging `MATERIONE-ESCROW-GATE <name>`; without the property the call is one
+  constant branch the JIT removes (read once into a `static final`, unit-tested and ban-tested). The rig starts the server
+  with the property set to `off` and arms a gate from inside (`dprobe arm`) just before the step that reaches it; the
+  harness sees the marker, `destroyForcibly`s the process tree (a `kill -9` at that instant), reads the `.dat` and the
+  ledger itself, boots the **same world**, logs the player in again and asserts what it holds (G1 conservation, G2 no
+  resurrection, G4 no world write, I6 idempotent recovery). A row that needs no mid-step kill kills at `claim-done`, which
+  `/materione claim` reaches without touching any state. Tier 2 (the consume exit) has no caller before #248, so rows
+  K10 to K14 and K17 craft what the missing caller would have left: an EXITING entry (the live account committed through
+  the player's own `PlayerEscrow` by `dprobe adopt`, then a real save) and ledger records (`EscrowFiles`, the harness's
+  own reader and writer of the two formats, written between the kill and the boot); recovery, the preload, the gate and
+  the refusal are the product's. K3 and K4 (a kill inside the platform's own save) are file states.
+
+  | Run | Rows | Boots | When |
+  |---|---|---|---|
+  | `PaperEscrowCrashIT.coreRows` | K1 (killed inside the step), K2, K5, K11/K12, K18 | 6 (about 2 min) | **default** `:harness:integrationTest` |
+  | `tier1Rows` | K1 (after the step), K6, K7, K8a/b/c | 7 | `-Pharness.inputDurability=true` |
+  | `deathAndDisableRows` | K9a to d, K20a/b | 7 | opt-in |
+  | `ledgerRows` | K10, K11 (rolled back, G3), K13, K14, K15/K16, K17 | 10 | opt-in |
+  | `cursorAndFileStateRows` | K21a/b, K22a/b, K3, K4 | 7 | opt-in |
+  | `k19AnAutosaveNeverSeesHalfAClick` | K19, Paper autosave on every tick | 2 | opt-in |
+  | `k23TheBarrier` | K23 | n/a | **disabled**: row B (#311) is built; the K23 gate and rows are still to write |
+
+  ```bash
+  ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT                                  # the core rows
+  ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT -Pharness.inputDurability=true   # all of them
+  ```
+
+  Each boot is about 25 s, so the opt-in groups are minutes, not seconds, and stay out of the default run. A boot that
+  follows a kill is the check of the row it follows and the start of the next, so a group of N rows costs N+1 boots.
 - `FoliaInputDurabilityIT` — probe P1 / F12 on a **Folia** server. Opt-in (`-Pharness.folia=true`): it fetches the
   sha256-pinned Folia jar (`folia-harness-*` in `gradle/libs.versions.toml`, `:harness:downloadFoliaServer`, verified by
   the same task as the Paper pin) into the Gradle cache and needs `npm ci --ignore-scripts` in `harness/protocol`
