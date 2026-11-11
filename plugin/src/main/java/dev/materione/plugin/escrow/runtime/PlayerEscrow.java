@@ -1,6 +1,7 @@
 package dev.materione.plugin.escrow.runtime;
 
 import dev.materione.plugin.escrow.model.Account;
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.model.Id128;
 import java.util.HashSet;
 import java.util.Objects;
@@ -78,6 +79,7 @@ public final class PlayerEscrow {
     void commit(Account next, byte[] encoded) {
         persist.accept(encoded);
         this.account = next;
+        CrashGate.at(CrashGate.Gates.ACCOUNT_WRITTEN); // test-only, inert in production: the row H kill point
     }
 
     /** Writes the live account's bytes again without changing it (a respawned player's data). */
