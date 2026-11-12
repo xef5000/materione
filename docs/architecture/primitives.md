@@ -22,6 +22,7 @@
 > | D5 | A primitive is a registry entry that describes itself, because that description is what the editor and the agent's tool layer render. A surface that does not self-describe is invisible to an agent (§2.2, test U4). |
 > | D6 | A preset declaration is resolved by the pipeline when it builds the runtime; there is no "apply preset" side channel (§7). |
 > | D11 | The agent surface is a chatbot in the cloud editor over the existing protocol: no new endpoint, relay still untrusted (master §14.8). |
+> | D13 | The agent reaches primitives through a generated SDK ([`codemode.md`](codemode.md)); a primitive the audit calls a gap is a *type error* in the agent's program, which is how the benchmark finds it (codemode.md §9.2). |
 > | §7.3 | Built-in packs are where first-party features live as content (§4.9). |
 
 ---

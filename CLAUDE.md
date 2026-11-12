@@ -10,13 +10,14 @@ glyphs/sounds/paintings/text-effects, the cloud relay editor at editor.materione
 ## Required reading (in order)
 
 1. [`docs/idea.txt`](docs/idea.txt) — the problem, one page
-2. [`docs/architecture.md`](docs/architecture.md) — **master architecture: decisions D1–D12 are binding**
+2. [`docs/architecture.md`](docs/architecture.md) — **master architecture: decisions D1–D13 are binding**
 3. [`docs/roadmap.md`](docs/roadmap.md) — M0→M8; work belongs to a milestone
 4. [`docs/architecture/README.md`](docs/architecture/README.md) — index, then the subsystem
    doc(s) relevant to your task:
    - [`docs/architecture/plugin.md`](docs/architecture/plugin.md) — plugin internals
    - [`docs/architecture/web.md`](docs/architecture/web.md) — Cloudflare/editor ecosystem
    - [`docs/architecture/runtime-systems.md`](docs/architecture/runtime-systems.md) — per-content-type runtime
+   - [`docs/architecture/codemode.md`](docs/architecture/codemode.md) — code mode (D13): how an agent authors (a typed SDK, a sandbox, staged operations)
 5. [`docs/glossary.md`](docs/glossary.md) — project vocabulary (consult as needed)
 6. [`docs/feature-parity.md`](docs/feature-parity.md) — requirements detail; its target specs
    map to owners in [`docs/architecture/parity-reconciliation.md`](docs/architecture/parity-reconciliation.md)
@@ -45,7 +46,7 @@ updates ride the same PR; close the issue via the PR.
 
 ## Hard rules (violating any of these is a defect, not a style choice)
 
-- **Decisions D1–D12 bind.** If work seems to require breaking one, stop and amend
+- **Decisions D1–D13 bind.** If work seems to require breaking one, stop and amend
   `docs/architecture.md` first (explicitly, with rationale) — never silently work around it.
 - **Subsystem docs may not contradict the master doc.** New design detail goes in the
   subsystem doc and traces back to a D-number or master section.
@@ -66,6 +67,11 @@ updates ride the same PR; close the issue via the PR.
   [`docs/architecture/primitives.md`](docs/architecture/primitives.md)). A preset is declared by reference in ordinary content
   and resolved by the one pipeline; its logic is not copied into the author's files, and it does nothing a person could not
   write by hand. A backpack is a preset, not an engine behavior.
+- **Code mode (D13).** An agent changes Materione by running a TypeScript program against the generated SDK in a sandbox in the
+  cloud editor's page; the program's only effect is staged authoring operations, applied only after a human reviews the diff.
+  **Code is never stored content and never runs on the server**: no runtime scripting, no raw file writes from the SDK, no
+  agent-callable apply, no new endpoint, no Cloudflare compute for it (architecture §3.2,
+  [`docs/architecture/codemode.md`](docs/architecture/codemode.md)).
 - **Module boundaries are enforced by the build** (plugin.md §11), not by review goodwill.
 - **Performance budgets (plugin.md §9) are enforced from M1**, not retrofitted.
 - **Cloudflare cost guardrails bind** (§ below) — deploys and account mutations are

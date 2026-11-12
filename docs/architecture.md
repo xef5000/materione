@@ -86,7 +86,7 @@ bound to in-game identities and their permission nodes, and concurrent editing i
 
 ---
 
-## 3. The twelve architectural decisions
+## 3. The thirteen architectural decisions
 
 These are the load-bearing decisions. Everything else in this document follows from them.
 
@@ -104,6 +104,7 @@ These are the load-bearing decisions. Everything else in this document follows f
 | **D10** | **Modern-Paper-only floor (1.21.4+), multi-client via pack output.** We anchor on ItemModels (1.21.4+), data components (1.20.5+), display entities (1.19.4+), and `equippable` (1.21.2+) as the *baseline*, per the parity doc's "be more modern than Nexo" guidance. | Supporting legacy server versions would tax every subsystem with compatibility branches; the component surface churns per release and must be isolated anyway (§8.2). | We deliberately abandon pre-1.21.4 servers. Lower *clients* are served via versioned pack output + ViaVersion, not by lowering the floor. |
 | **D11** | **Outbound-only editor connectivity (the LuckPerms pattern).** The server never accepts inbound connections for authoring. The editor is a stateless SPA (centrally hosted, self-hostable); server and browser meet through one open relay — a payload store for bulk data plus a signed **long-poll frame mailbox** for interactive traffic, plain HTTPS in both roles, dialed *out* to. *(Amended M5, 2026-10: the mailbox replaces the originally sketched WebSocket channel — no WebSocket, no Durable Objects, no long-lived cloud state; see web.md §3.2. The principle — outbound-only, zero port-forwarding — is unchanged.)* A direct mode (embedded HTTP server) speaks the same API for LAN/air-gapped setups (§9.1). | The T1/T2 personas (§2) often cannot open ports. "Zero port-forwarding" is the difference between *every* server owner being able to use the editor and only VPS admins. LuckPerms proved the pattern at massive scale; the HTTP-mailbox variant additionally keeps the cloud stateless, so the free tier's hard stops — not billing — are the only ceiling. | The project must operate (and open-source) relay infrastructure, and treat it as untrusted — content payloads are end-to-end encrypted (§9.2). |
 | **D12** | **Primitives, not features; presets for the first experience.** The engine ships *universal primitives* — typed, composable capabilities that name what they do, work for any key, holder, viewer or host, and describe themselves through the registries (D5) — and no feature-shaped surface. A feature (a backpack, a trade command, a shop) is **content**: a pack, built-in or the owner's. The first experience of a T1–T2 author is a layer of **presets** ("this item is a backpack") that expand onto primitives and built-in content; a preset is **declared by reference** in ordinary content on disk (D1, parameters only), its logic is loaded from its definition when the one pipeline builds the runtime (D6), and it does nothing a person could not write by hand. Full statement: §3.1. *(Added M6, 2026-11, owner direction on #320.)* | An agent (the MCP consumer, api.md §1) can only *compose* what is universal; a feature-shaped piece of engine surface ("input slots", "GUI sessions", a "trade system") solves one case and the next case needs another, which is how the incumbents grew. Universal primitives make each new feature a pack, not a release. But a first-time author must not have to learn primitives, so the first experience is a separate layer that hides them without removing them. | Every piece of engine surface must pass the universality tests (§3.1) or stay out; shipped feature-shaped surface is folded down over time, never deleted from under existing files (primitives.md). Primitives cost more design up front than a feature would. Presets are a second layer to keep and version. |
+| **D13** | **Code mode: an agent authors by writing TypeScript against a typed SDK, and content stays files.** All agent changes are a **program** in TypeScript, written against an SDK **generated from the registries** (D5) and run in a **sandbox in the cloud editor's page**. The program's only effect is **authoring operations**: the same validated edits the editor sends, through the one pipeline (D6), with type-check, server dry-run, human review of the diff and transactional apply. The program is **one-shot** and never stored as content (D1) or run as logic on the server. The SDK is also the preferred way for an agent to *read* content and state. Java stays for addons, which add primitives (D12). Full statement: §3.2 and [`architecture/codemode.md`](architecture/codemode.md). *(Added M6, 2026-11, owner direction on #320.)* | An agent that composes many dependent edits, needs precise feedback and must leave something reviewable is served by typed code better than by raw YAML under a skill (a second, drifting schema, late untyped feedback, no structural editing) or by one tool per operation (a large per-server catalog in context, one model round trip per step, no atomic unit). Code that only *stages edits* keeps D1, D4 and D6 intact, where code that runs on the server would not. The research on code as an action format supports efficiency and feedback-driven self-correction, not safety (codemode.md §2.4). | The SDK and sandbox are new components in the editor build; the server needs a transaction operation with a dry-run (codemode.md §10); the sandbox must have no ambient authority; a missing primitive surfaces as a *type error*, which is D12's benchmark running by itself; the sandbox technology, the model's host and billing, and whether the SDK is later published are open (§14.10). |
 
 ### 3.1 D12 in full
 
@@ -119,7 +120,8 @@ with less safety than a typed, validated call. The competing free plugins that s
 authoring with trivial triggers. Materione's difference is **deep logic in one engine**, and the strategic bet of
 [#320](https://github.com/xef5000/materione/issues/320) is an **AI-native authoring platform**: one engine that can do anything,
 exposed through an MCP-style **tool layer** whose tools and schemas come from registry self-description (D5), so that an agent can build any
-feature by composing Materione's building blocks. The tool layer is the third consumer of the one typed surface (api.md §1), a
+feature by composing Materione's building blocks. (The form of that tool layer is **code mode**, D13, §3.2: the agent writes a typed
+program that stages the editor's own operations.) The tool layer is the third consumer of the one typed surface (api.md §1), a
 peer of the web editor (constraint #2), never a different path (D6). Per the owner's answer (§14.8) it is deployed **at the level of the cloud editor only**: a chatbot
 in the editor page calls the editor's own authoring operations over the existing editor protocol; there is no new endpoint. That bet holds only if the building blocks are universal,
 and it must not cost the first-time server owner the content-creation experience the editor exists to give.
@@ -219,6 +221,80 @@ spelling of the reference and the versioning of a preset's behavior across plugi
 - It does not change §12: mob AI, vehicles and pets stay delegated.
 - It does not decide the preset reference's spelling or versioning (§14.7), or who runs and pays for the model behind the
   chatbot (§14.8). It does not name the milestone (§14.9: between M6 and M7, name TBD).
+
+---
+
+### 3.2 D13 in full
+
+> **Status.** The six points of the decision are the owner's (#320, 2026-11), recorded as decided. **Recommended and flagged for the
+> owner:** that it is a **new decision** and not an amendment to D12 (reasons below), and the sandbox technology in codemode.md §4.3.
+> **Still open:** §14.10 (sandbox technology, SDK publication, type-check location), and, from §14.8, who runs and pays for the
+> model. Design: [`architecture/codemode.md`](architecture/codemode.md).
+
+**The decision, in six points.**
+
+1. **All agent changes go through code mode.** The agent writes TypeScript against a typed SDK generated from registry
+   self-description (D5). The program runs in a sandbox, and its only effect is authoring operations: the same validated edits the
+   editor sends, through the one pipeline (D6), with validate, dry-run and transactional apply.
+2. **Changes are always stored as YAML/JSON (D1).** Code is never the stored source of a feature and never runs as runtime logic
+   on the server. Programs are one-shot: the stored files stay canonical, and each change is a new short program.
+3. **The SDK is also the preferred way to read** Materione content and state (objects, references, validation results, traces),
+   rather than raw YAML or JSON.
+4. **TypeScript, not Java.** Java would need heavy sandboxing.
+5. **The deployment is the one decided in §14.8.** The agent surface is a chatbot in the cloud editor, an ordinary editor client of
+   the existing protocol. No new endpoint; the relay stays untrusted.
+6. **Java remains for addons**, which add primitives (D12), not features.
+
+**Why a decision of its own, not an amendment to D12.** D12 says *what the engine ships* (primitives, with presets above them).
+D13 says *how an agent authors against it*, and carries two bans that deserve to be cited by number in review: **code is never
+stored content and never runs on the server**. They bind work that has nothing to do with the primitive audit (an SDK change, a
+sandbox change, a new editor feature), so a reviewer should be able to say "D13" and not "D12 layer 3". D13 also refines what §14.8
+recorded as the agent's tools (§14.10). The cost is one more number to keep in the traceability tables; the alternative, a third
+layer in D12, is described in codemode.md §12 (question 9) and is the owner's call.
+
+#### What is and is not allowed
+
+| Allowed | Not allowed |
+|---|---|
+| A program that reads through the SDK and stages editor operations | A program that writes a file, calls the pipeline, or applies its own change |
+| A sandbox in the cloud editor's page with no ambient authority | Execution on Cloudflare, on the game server, or in the editor's own origin |
+| The SDK generated from registries, including addon registrations | A hand-written list of content types, actions or mechanics in the SDK |
+| A program kept as a review witness and an audit digest | A program kept as the source of a feature, or re-run to regenerate files |
+| A missing primitive reported as a type error | A workaround that fakes the primitive in content |
+| Human approval of a diff before apply | An agent-callable apply |
+
+#### Consequences accepted
+
+1. **One more component to build and keep honest:** the SDK generator and core, the sandbox, and a checked mapping from SDK writes
+   to editor operations (codemode.md §7). Its tests (golden `.d.ts`, a program corpus, sandbox ban tests) are part of the work.
+2. **The server needs a transaction operation with a dry-run** over the heterogeneous edit list (codemode.md §10). Today's atomic
+   unit, `bulk`, is one pack and 50 documents.
+3. **The type error is the signal for a missing primitive.** A benchmark task that fails on a gap fails visibly; the count of those
+   failures measures D12's debt.
+4. **Agent context carries a slice of the SDK, not the catalog**; the checker holds the whole surface and teaches the rest.
+5. **The model call is outside this decision** and stays an owner question (§14.8, §14.10): a call that leaves the browser leaves
+   the end-to-end boundary of §9.2 and is bound by the Cloudflare cost guardrails.
+
+#### Traceability
+
+| Decision | How D13 relates |
+|---|---|
+| **D1** | The program is never the source of a feature; its output is edits to files. The raw `putDocument` stays a human T4 tool; the SDK has no raw write. |
+| **D2** | References are typed handles checked before the server checks them; impact analysis is part of the read API and of review. |
+| **D4** | No second behavior language: a program is authoring-time code that produces ECA data, never behavior. |
+| **D5** | The SDK is generated from self-description; an addon's primitive is usable with no SDK code. |
+| **D6** | Type-check, run, dry-run, review and apply funnel into the one pipeline; the SDK cannot apply. |
+| **D8** | No code runs on game threads; nothing new crosses the thread gateway. |
+| **D11** | The sandbox is in the cloud editor's page; no new endpoint, no new trust model, relay untrusted. |
+| **D12** | The SDK shows primitives and presets as what they are (a preset is a declaration, R2); a missing primitive is a type error. D13 is how D12's agent consumer works. |
+| **§5.6** | One schema source: the SDK types come from the registries; the write API cannot reach a field the schema does not describe. |
+
+#### What D13 does not do
+
+- It does not decide the sandbox technology (a recommendation is in codemode.md §4.3), the model provider or billing (§14.8), whether
+  the SDK is published for local or external agents (§14.10), or where the type-check runs.
+- It does not add a way to run code on the server, or an endpoint.
+- It does not change the editor as a human surface: the editor's forms and operations are unchanged, and are what the SDK maps onto.
 
 ---
 
@@ -950,6 +1026,7 @@ primary method (display entities only; legacy paths only if a converter needs th
 |---|---|
 | Mega-plugin scope creep | D5 registries: parity gaps become addons; `content` types are isolated; scope list above is contractual |
 | Feature-shaped engine surface erodes universality (the agent can no longer compose; the next use case costs a release) | D12: the universality tests U1 to U5 gate every addition, features are content in packs, presets sit above primitives (§3.1); the audit tracks the shipped debt ([`architecture/primitives.md`](architecture/primitives.md)) |
+| Model-written code is executed somewhere it can do harm, or becomes a second source of truth | D13: code runs only in a no-ambient-authority sandbox in the editor page, its only effect is staged authoring operations, nothing applies without human review of the diff, and a program is never stored as content or run on the server (§3.2, [`architecture/codemode.md`](architecture/codemode.md)) |
 | Mojang per-release churn | `platform` isolation + capability descriptor (§8.2); modern-only floor (D10) |
 | Web UI drift from file reality | D1 files-canonical + document store + watcher (§9.4); UI is never a second truth |
 | Concurrent edits / team conflicts | Revision numbers, audit log, in-game identity binding (§9.2, §9.4) |
@@ -1012,7 +1089,7 @@ primary method (display entities only; legacy paths only if a converter needs th
    | | Decided |
    |---|---|
    | The agent surface | A chatbot layer fixed on the cloud editor's page. |
-   | Its tools | The editor's existing authoring operations (`MaterioneAPI`, api.md §1) over the **existing editor protocol** (§9), generated from registry self-description (D5). "The MCP server" means this tool layer; it is not a separate service. |
+   | Its tools | The editor's existing authoring operations (`MaterioneAPI`, api.md §1) over the **existing editor protocol** (§9), generated from registry self-description (D5). "The MCP server" means this tool layer; it is not a separate service. **Refined by D13 (§3.2, §14.10):** the operations are reached by a TypeScript program against a generated SDK (code mode), not as a tool each. |
    | Auth and trust | None new. The chatbot is another editor client in the browser: the same in-game-approved handshake, the same permission nodes (§9.2), no new token scope. |
    | Endpoints | None new. The relay stays untrusted and sees ciphertext only; no D11 change. |
    | Scope | The cloud editor. A standalone MCP server for external agents is not part of this decision. |
@@ -1025,6 +1102,21 @@ primary method (display entities only; legacy paths only if a converter needs th
    plus the fold-down of primitives.md §5 it needs) is a **milestone between M6 and M7**, name to be decided (written "M6.5 / TBD" in
    [`roadmap.md`](roadmap.md); existing milestones are not renumbered). The goal is a nice vertical slice before expanding
    horizontally: M7 and M8 are mainly horizontal expansion, M8 very late.
+10. **Code mode (D13, #320) — decided (owner); sandbox, SDK publication and type-check location open.** The owner's decisions, recorded
+   in §3.2: all agent changes are a TypeScript program against an SDK generated from the registries; its only effect is authoring
+   operations through the one pipeline; content stays YAML/JSON and code is never stored or run on the server; the SDK is also the
+   preferred way to read; TypeScript, not Java; Java stays for addons. This **refines §14.8's "Its tools" row**: the chatbot's tool is
+   one program-running tool whose SDK is the editor's existing operations generated from self-description. It changes nothing else in
+   §14.8 (deployment, auth, endpoints, scope). **Open, for the owner** (codemode.md §12 has the full list and the recommendations):
+
+   | Question | Recommendation in codemode.md |
+   |---|---|
+   | **Sandbox technology** | QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe (§4.3 A); a Worker in a sandboxed iframe as the fallback |
+   | **Where the type-check runs** | In the editor page, in a Worker, with the TypeScript checker as a static asset |
+   | **Whether the SDK is published** for local or external agents later | Undecided; the package boundary keeps the door open (§12.3) |
+   | **Who runs and pays for the model** | Still §14.8's open question; code mode does not change it |
+   | **D13 as its own decision or an amendment to D12** | A new decision (§3.2); the owner may fold it under D12 |
+   | Autonomy, stacked proposals, the one-pack rule, program retention | codemode.md §12 |
 
 > **Resolved since first draft:** project naming (Materione, everywhere), the ECA expression
 > engine (one universal engine — D4), relay pattern (LuckPerms-style, D11), cloud platform
@@ -1037,4 +1129,4 @@ primary method (display entities only; legacy paths only if a converter needs th
 ---
 
 *This document is the contract between the idea and the implementation. When subsystem design
-begins, each subsystem doc must trace back to a decision (D1–D12) or explicitly amend this one.*
+begins, each subsystem doc must trace back to a decision (D1–D13) or explicitly amend this one.*

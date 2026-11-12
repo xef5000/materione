@@ -11,6 +11,7 @@ here.
 | **Allocation table** | Append-only, **durable** record (`storage/allocation.bin`) mapping content to finite pack namespaces (model ids, glyph codepoints, hijacked blockstates). The one derived artifact that is *not* disposable. | master §6.3, plugin.md §4.4 |
 | **Apply (stage)** | Pipeline stage that swaps new runtime state in via shadow-swap; the only stage that schedules world mutation. | plugin.md §4.5 |
 | **Asset** | Binary file (texture, model, font, sound) belonging to a pack's `assets/` tree; fingerprinted for incremental compile. | master §7.2 |
+| **Authoring operation** | One of the editor's validated edits (create, set fields, move, a behavior or GUI edit, ...). A code-mode program stages them; a transaction applies the reviewed list. | codemode.md §3.3, api.md §3.3 |
 | **Authority (network)** | In network mode, the single backend that owns content files and runs the pipeline; other backends load its compiled definitions. | master §8.5 |
 | **Ban test** | ArchUnit rule in `testing/` that fails the build on a module-boundary violation (schedulers, version queries, api isolation, leaf, raw threads). | build.md §5 |
 | **Blob (session)** | Small encrypted record in the payload store establishing a session (session id, channel id, plugin signing key); wrapping key travels in the URL fragment. | web.md §4.1 |
@@ -19,6 +20,7 @@ here.
 | **Channel** | One relay session's two-party message flow: two D1 frame queues addressed by unguessable capability tokens. | web.md §3.2 |
 | **Chunk PDC** | Persistent data container attached to a chunk (via CustomBlockData); the storage-of-truth for placed blocks/furniture. | master §8.3 |
 | **Code** | Unguessable ≥100-bit short string identifying a payload-store blob; possession = access. | web.md §5.3 |
+| **Code mode** | How an agent authors (D13): it writes a TypeScript program against the SDK, run in a sandbox in the cloud editor's page, whose only effect is staged authoring operations (the editor's own validated edits). The program is one-shot, never stored as content, never run on the server; apply is a human approval of the reviewed diff. | master §3.2, codemode.md |
 | **Content graph** | The validated network of all resources and their typed references; the heart of the product ("the intertwining, made inspectable"). | master §5.3 |
 | **Content type** | A registered kind of resource (item, block, furniture, glyph, HUD, menu, dialog, recipe, sound, painting, …), extensible by addons. | master §5.1, runtime-systems.md §1 |
 | **Canned ECA** | A built-in mechanic implemented as a parameterized Event→Condition→Action bundle rather than custom Java; registered identically to third-party mechanics. | runtime-systems.md §2.3 |
@@ -26,7 +28,7 @@ here.
 | **Definition** | The immutable, validated data of one resource, post-parse. | runtime-systems.md §1 |
 | **Diagnostics** | Structured failure records (`{code, severity, message, resource, file:line, hint}`) with stable `MTR-####` codes; the fail-soft backbone. | plugin.md §5 |
 | **Direct mode** | Editor transport where the plugin serves the API itself on loopback (or reverse-proxied); relay cut out; same protocol. | web.md §4.4 |
-| **D1–D12** | The twelve binding architectural decisions. | master §3 |
+| **D1–D13** | The thirteen binding architectural decisions. | master §3 |
 | **ECA** | Event → Condition → Action: the single behavior model used by items, blocks, furniture, menus, dialogs, HUDs. | master D4, runtime-systems.md §2 |
 | **Envelope** | Standard encrypted container format for store blobs and chunks. | web.md §5.4 |
 | **Expression engine** | The one universal condition/interpolation language across all content types (single settled decision; PlaceholderAPI resolves inside strings). | runtime-systems.md §2.1 |
@@ -59,11 +61,14 @@ here.
 | **Preset** | The first-experience layer of D12: a named, parameterised composition the editor offers as a quick setting ("this item is a backpack"). The author's file declares it by reference (parameters only); its logic is resolved from its definition at runtime and built from primitives and built-in content, and it does nothing a person could not write by hand. The alternative is defining the behavior yourself. | master §3.1, §14.7, primitives.md §7 |
 | **Pre-apply report** | Operator-visible diff before commit: migrations, removals by policy, restart-required changes. | plugin.md §4.5 |
 | **Primitive** | A typed, composable engine capability that passes the universality tests U1 to U5 (named for what it does, general over key, holder, viewer and host, composable, self-describing, safe). The engine ships primitives, not features; a feature is content. | master §3.1 (D12), primitives.md §2 |
+| **Program (code mode)** | A short, one-shot TypeScript program an agent writes against the SDK. It reads through the SDK and stages authoring operations; it is never stored as content and never run on the server. | master §3.2, codemode.md §5 |
 | **Quarantine** | Runtime state of a resource excluded from compilation/gameplay due to diagnostics; visible, never silently dropped. | master §5.4 |
 | **Relay mode** | Default editor transport: server and browser both dial out to the relay over plain HTTPS (payload store + frame mailbox); no inbound connections (D11). | web.md §3, master D11 |
 | **Resource** | The atomic unit of content: identity (`ns:id`) + type + facets + provenance. | master §5.1 |
 | **Restart-required** | Change class that cannot hot-apply (datapack-baked content); staged for next boot and reported honestly. | master §6.4 |
 | **Revision number** | Per-document counter rejecting stale concurrent writes (last-writer-wins *with visible warning*). | master §9.4 |
+| **Sandbox (code mode)** | The isolated runtime in the cloud editor's page that runs a program with no ambient authority: only the SDK object, bounded reads, bounded staged output. Recommended: QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe (owner decision pending). | codemode.md §4 |
+| **SDK** | The typed TypeScript API an agent's program is written against: a fixed core (handles, read API, staging recorder) plus a surface generated per server from the registries' self-description, including presets and addon primitives. The preferred way to read content and state as well as write it. | master §3.2, codemode.md §3 |
 | **Self-description** | Registry-entry metadata (name, description, parameter schema, since-version) that generates editor forms, docs, and tab completion — the single schema source. | plugin.md §3 |
 | **Shadow-swap** | Transactional reload: build new runtime fully, diff, swap by single volatile reference; in-flight events finish on the old snapshot; rollback = keep the old set. | plugin.md §4.5, runtime-systems.md §1 |
 | **Shaped block** | Custom stair/slab/door/trapdoor/grate using the waxed-copper blockstate technique. | runtime-systems.md §4.2 |
