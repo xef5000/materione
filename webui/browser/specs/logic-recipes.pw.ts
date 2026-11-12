@@ -43,11 +43,11 @@ async function behavior(page: Page): Promise<unknown> {
 test('lists the server\'s recipes with a name and a line each', async ({ page }) => {
   await openLogic(page);
   await openPanel(page);
-  await expect(panel(page).locator('[data-recipe]')).toHaveCount(8);
+  await expect(panel(page).locator('[data-recipe]')).toHaveCount(9);
   for (const [id, name] of [
     ['pay_to_receive', 'Pay to receive'], ['close_button', 'Close button'], ['welcome_message', 'Welcome message'],
     ['confirm_dialog', 'Confirm dialog'], ['paged_player_list', 'Paged player list'], ['toggle_setting', 'Toggle setting'],
-    ['server_selector', 'Server selector'], ['back_button', 'Back button'],
+    ['server_selector', 'Server selector'], ['back_button', 'Back button'], ['trash_slot', 'Trash slot'],
   ] as const) {
     await expect(recipe(page, id)).toContainText(name);
   }
