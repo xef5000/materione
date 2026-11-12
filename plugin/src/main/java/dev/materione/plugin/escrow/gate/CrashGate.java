@@ -51,6 +51,16 @@ public final class CrashGate {
         String DEATH_RELEASED = "death-released";
         /** {@code /materione claim} ended. */
         String CLAIM_DONE = "claim-done";
+        /** Tier 2, after step 1: the held entry is frozen EXITING in the account; the INTENT is not queued yet. Owner thread. */
+        String EXIT_BEGUN = "exit-begun";
+        /** Tier 2, after step 3: the entry is deleted and the slot cleared; the barrier has not been told yet. Owner thread. */
+        String EXIT_APPLIED = "exit-applied";
+        /** The ledger writer is about to append a record (the INTENT of an exit); nothing is written yet. IO thread. */
+        String LEDGER_BEFORE_APPEND = "ledger-before-append";
+        /** The ledger writer's append is durable; its future has not completed yet (step 3 has not run). IO thread. */
+        String LEDGER_AFTER_APPEND = "ledger-after-append";
+        /** The barrier's {@code Player.saveData()} returned; the read-back that would acknowledge it has not started. Owner thread. */
+        String BARRIER_SAVED = "barrier-saved";
     }
 
     private static final boolean ENABLED = System.getProperty(PROPERTY) != null;

@@ -1,0 +1,50 @@
+# The trash slot as a composition (#248, logic.md §36, D12): a one-row chest whose slots are a `durable: required` input
+# layer, and one rule that is the built-in recipe `trash_slot` expanded (docs/architecture/logic.md §7.5): when something
+# is put into the layer, wait a tick (gui.slot_change fires before the change lands) and consume what the slot then
+# holds with the one custody primitive, custody.consume. There is no trash-specific engine code. The console line is
+# the QA catalog's marker (qa/catalog/guiescrow.mjs); it is not part of the recipe.
+trash:
+  title: Trash
+  container: chest_1
+  player_inventory: free
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: bin
+      type: slots
+      region: container
+      input: true
+      durable: required
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "TRASH"
+      font: smallcaps
+      color: "#404040"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUITRASH-OPEN ${gui.id}"
+            as: console
+    - on: gui.slot_change
+      layer: bin
+      do:
+        - if: "${slot.amount > 0}"
+          then:
+            - wait: 1
+            - custody.consume: { slot: "${slot.index}" }
+              else:
+                - actionbar: "<red>That could not be trashed."
+                - run_command:
+                    command: "say MATERIONE-GUITRASH-REFUSED slot=${slot.index}"
+                    as: console
+            - actionbar: "<gray>Trashed."
+            - run_command:
+                command: "say MATERIONE-GUITRASH-DONE slot=${slot.index} item=${slot.item} amount=${slot.amount}"
+                as: console

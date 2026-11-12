@@ -1,12 +1,15 @@
 package dev.materione.plugin.gui.input;
 
 import dev.materione.plugin.escrow.runtime.BukkitLive;
+import dev.materione.plugin.escrow.runtime.CustodyConsume;
 import dev.materione.plugin.escrow.runtime.Delta;
 import dev.materione.plugin.escrow.runtime.EscrowRuntime;
 import dev.materione.plugin.escrow.runtime.Tier1;
 import dev.materione.plugin.gui.GuiMenu;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -100,6 +103,65 @@ public final class StrictInputs implements EscrowRuntime.WindowView {
     public Optional<String> edit(Player player, GuiMenu menu, int slot, ItemStack edited) {
         return outcome(player, runtime == null ? null : runtime.tier1().edit(runtime.of(player), live(player, menu),
                 menu.guiId().toString(), slot, edited));
+    }
+
+    // ---- consuming what a required slot holds (#248: the tier-2 exit) ------------------------------------------
+
+    /**
+     * Consumes the stack held in a required slot, atomically, through the tier-2 exit ({@link CustodyConsume}); the
+     * stage completes empty when the consume reached {@code reach}, or with the reason it did not. A refusal that
+     * changed nothing (the slot is busy, the gate is shut) is told to the player here and completes at once; one that
+     * could not record the decision is told when it happens. The caller is on the player's own thread.
+     */
+    public CompletionStage<Optional<String>> consume(Player player, GuiMenu menu, int slot, CustodyConsume.Reach reach) {
+        if (!usable(player, menu, slot)) {
+            refuse(player, Tier1.Reason.UNAVAILABLE);
+            return CompletableFuture.completedFuture(Optional.of(UNAVAILABLE));
+        }
+        Optional<CustodyConsume.Started<ItemStack>> started = runtime == null ? Optional.empty()
+                : runtime.consume(player, menu.guiId().toString(), slot, reach);
+        if (started.isEmpty()) {
+            return CompletableFuture.completedFuture(Optional.of(UNAVAILABLE));
+        }
+        if (started.get() instanceof CustodyConsume.Declined<ItemStack> declined) {
+            return CompletableFuture.completedFuture(Optional.of(reasonText(declined.reason())));
+        }
+        return ((CustodyConsume.Running<ItemStack>) started.get()).outcome().thenApply(StrictInputs::reasonOf);
+    }
+
+    /**
+     * {@code gui.slot_item clear} (and {@code set_amount 0}) on a required slot: a consume that nothing waits for. Empty
+     * when the exit began (its decision is recorded off-thread; a later refusal is told to the player), else the reason
+     * it could not begin.
+     */
+    public Optional<String> clear(Player player, GuiMenu menu, int slot) {
+        CompletionStage<Optional<String>> stage = consume(player, menu, slot, CustodyConsume.Reach.DECIDED);
+        CompletableFuture<Optional<String>> now = stage.toCompletableFuture();
+        // a step-1 refusal has already completed the stage; a running exit has not (never waited for: nothing blocks here)
+        return now.isDone() ? now.getNow(Optional.empty()) : Optional.empty();
+    }
+
+    private static final String UNAVAILABLE = "crash-safe input slots are not available for this player right now";
+
+    private static String reasonText(Tier1.Reason reason) {
+        return switch (reason) {
+            case BUSY -> "the slot is busy";
+            case UNAVAILABLE -> UNAVAILABLE;
+            case UNRECORDABLE -> "the transfer could not be recorded";
+        };
+    }
+
+    private static Optional<String> reasonOf(CustodyConsume.Outcome outcome) {
+        return switch (outcome) {
+            case CustodyConsume.Consumed consumed -> Optional.empty();
+            case CustodyConsume.Refused refused -> Optional.of(reasonText(refused.reason()));
+            case CustodyConsume.Abandoned abandoned -> Optional.of("the consume is decided, but its save was not confirmed ("
+                    + switch (abandoned.why()) {
+                        case PLAYER_LEFT -> "the player left";
+                        case TIMED_OUT -> "no saved snapshot was proven in time";
+                        case SHUTDOWN -> "the plugin is stopping";
+                    } + "), so what waited for it did not run");
+        };
     }
 
     private Optional<String> outcome(Player player, Tier1.Result<ItemStack> result) {

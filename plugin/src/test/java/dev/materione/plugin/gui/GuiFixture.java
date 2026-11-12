@@ -313,6 +313,21 @@ public final class GuiFixture {
             applied.add(slot + ":" + op.kind().id());
             return Optional.ofNullable(refuse);
         }
+
+        /** The consumes the action asked for, in order ({@code slot:reach}). */
+        public final List<String> consumed = new ArrayList<>();
+        /** What the next consume completes with: empty when null (it reached what was asked), else a refusal. */
+        public java.util.concurrent.CompletableFuture<Optional<String>> consumeResult;
+
+        @Override
+        public java.util.concurrent.CompletionStage<Optional<String>> consume(org.bukkit.entity.Player player,
+                GuiSession session, int slot, dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach) {
+            consumed.add(slot + ":" + reach.name().toLowerCase(java.util.Locale.ROOT));
+            if (consumeResult != null) {
+                return consumeResult;
+            }
+            return java.util.concurrent.CompletableFuture.completedFuture(Optional.ofNullable(refuse));
+        }
     }
 
     /** A clock the ticker schedules against; {@link #advance} runs what has come due. */

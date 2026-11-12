@@ -56,6 +56,7 @@ class BuiltinRecipesTest {
         SAMPLES.put("paged_player_list", sample("list", "roster", "previous", "prev", "next", "next"));
         SAMPLES.put("toggle_setting", sample("layer", "pvp", "variable", "sample:pvp"));
         SAMPLES.put("server_selector", sample("layer", "lobby", "server", "lobby"));
+        SAMPLES.put("trash_slot", sample("layer", "bin"));
         SAMPLES.put("back_button", sample("layer", "back"));
     }
 
@@ -79,9 +80,19 @@ class BuiltinRecipesTest {
     }
 
     @Test
-    void theTrashSlotIsNotShippedBecauseItIsBlockedOn248() {
-        assertThat(BuiltinRecipes.IDS).doesNotContain("trash_slot", "trash");
+    void theTrashSlotIsAShippedCompositionOverTheCustodyConsumePrimitive() {
+        assertThat(BuiltinRecipes.IDS).contains("trash_slot");
         assertThat(BuiltinRecipes.IDS).hasSameElementsAs(SAMPLES.keySet());
+        ApiResult<List<Map<String, Object>>> result = Setup.create().expander()
+                .expand(new InstantiateRequest("trash_slot", SAMPLES.get("trash_slot")));
+
+        assertThat(result.ok()).as(messages(result).toString()).isTrue();
+        assertThat(result.diagnostics()).as("no warning: custody.consume is available on every server").isEmpty();
+        String json = new GsonBuilder().create().toJson(result.value());
+        assertThat(json).as("the recipe is rules over the primitive and nothing else")
+                .contains("\"custody.consume\"").contains("\"gui.slot_change\"").contains("\"wait\"");
+        assertThat(json).as("no trash-specific action: only registered, general actions appear")
+                .doesNotContain("\"trash").doesNotContain("\"gui.slot_item\"");
     }
 
     @Test

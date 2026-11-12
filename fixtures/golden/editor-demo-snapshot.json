@@ -191,6 +191,48 @@
           "available": true,
           "category": "player",
           "deferred": false,
+          "description": "Consumes the items held in custody at a slot of this GUI (a durable: required input slot), atomically. The flow continues once the consume is decided, or, with await: saved, only once a saved snapshot is read back from disk, so an effect after it cannot outlive a rolled-back consume. A failure runs its else: and ends the run",
+          "displayName": "Consume held items",
+          "id": "custody.consume",
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The container slot whose held stack is consumed; a template such as ${slot.index} names the slot of the event",
+              "id": "slot",
+              "label": "Slot",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "integer",
+              "uiHint": "number"
+            },
+            {
+              "advanced": false,
+              "allowedValues": [
+                "decided",
+                "saved"
+              ],
+              "default": "decided",
+              "description": "decided: continue once the consume is applied (no save is requested). saved: continue only once a saved snapshot containing it is read back",
+              "id": "await",
+              "label": "Await",
+              "order": 0,
+              "required": false,
+              "section": "general",
+              "type": "enum",
+              "uiHint": "select"
+            }
+          ],
+          "registeredBy": "materione",
+          "shorthand": "slot",
+          "sinceVersion": "1.0.0",
+          "takesElse": true,
+          "threading": "player_region"
+        },
+        {
+          "available": true,
+          "category": "player",
+          "deferred": false,
           "description": "Grants the player experience points or levels",
           "displayName": "Give experience",
           "id": "give_exp",
@@ -3304,6 +3346,34 @@
               "default": "<red>Disabled.",
               "description": "Shown to the player when the setting turns off",
               "name": "off_message",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
+          "description": "Consumes whatever the player puts into an input layer. The layer must be a slots layer with input true and durable required. The item is gone for good once it is consumed, and a crash never brings it back or loses it twice.",
+          "displayName": "Trash slot",
+          "id": "trash_slot",
+          "params": [
+            {
+              "description": "The id of the input layer that is the trash (a slots layer with input true and durable required)",
+              "name": "layer",
+              "required": true,
+              "type": "string"
+            },
+            {
+              "default": "<gray>Trashed.",
+              "description": "Shown on the actionbar when the item has been consumed",
+              "name": "message",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "default": "<red>That could not be trashed.",
+              "description": "Shown on the actionbar when the item could not be consumed (it stays where it is)",
+              "name": "refused_message",
               "required": false,
               "type": "string"
             }

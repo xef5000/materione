@@ -92,11 +92,13 @@ public interface ActionType<P> {
     }
 
     /**
-     * Whether this action asks the player a question, so its step may carry an {@code else:} (logic.md §6.6).
+     * Whether this action guards what follows it, so its step may carry an {@code else:} (logic.md §6.6, §36): it asks
+     * the player a question, or it consumes something an effect after it depends on.
      * Such a step runs as a {@code require} around the action: when the question goes unanswered (a decline, a
-     * cancel word, a timeout) the {@code else:} steps run and the run ends, exactly as a failed {@code require}
-     * does. The engine wraps every step of such a type this way, with an empty {@code else:} when none is
-     * written, so an unanswered question never lets the steps after it run. Only the prompt is one today.
+     * cancel word, a timeout), or the consume does not happen, the {@code else:} steps run and the run ends, exactly as
+     * a failed {@code require} does. The engine wraps every step of such a type this way, with an empty {@code else:}
+     * when none is written, so an unanswered question never lets the steps after it run. {@code prompt} and
+     * {@code custody.consume} are the two today.
      */
     default boolean takesElse() {
         return false;

@@ -26,4 +26,16 @@ public interface InputSlotPort {
      * @return empty when the operation was applied, or the reason it was not
      */
     java.util.Optional<String> apply(Player player, GuiSession session, int slot, SlotOp op);
+
+    /**
+     * The custody consume primitive (#248; gui-input-durability.md §5.4): consumes the stack a {@code durable: required}
+     * input slot holds, atomically, through the tier-2 exit, and completes when it reached {@code reach}. Only a slot
+     * whose layer is {@code durable: required} is in custody; any other slot is refused with the reason. Call on the
+     * viewer's thread.
+     *
+     * @return a stage that completes empty when the consume reached {@code reach}, or with the reason it did not
+     */
+    java.util.concurrent.CompletionStage<java.util.Optional<String>> consume(
+            Player player, GuiSession session, int slot,
+            dev.materione.plugin.escrow.runtime.CustodyConsume.Reach reach);
 }

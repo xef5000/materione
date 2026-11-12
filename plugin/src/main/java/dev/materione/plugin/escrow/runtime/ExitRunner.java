@@ -1,5 +1,6 @@
 package dev.materione.plugin.escrow.runtime;
 
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.AppendResult;
 import dev.materione.plugin.escrow.io.EscrowLedgerStore;
 import dev.materione.plugin.escrow.io.LedgerState;
@@ -50,6 +51,7 @@ public final class ExitRunner<T> {
      */
     public void proceed(Owner<T> owner, Tier1.Begun begun, ExitCallbacks callbacks) {
         UUID player = owner.id();
+        CrashGate.at(CrashGate.Gates.EXIT_BEGUN); // test-only, inert in production
         ledger.append(player, begun.intent()).whenComplete((result, failure) -> {
             AppendResult outcome = failure != null
                     ? new AppendResult.Refused(AppendResult.Reason.WRITE_FAILED, String.valueOf(failure))
@@ -74,6 +76,7 @@ public final class ExitRunner<T> {
             }
         }
         Tier1.Finish completed = tier1.completeExit(escrow, owner.live(), decided, begun.txn());
+        CrashGate.at(CrashGate.Gates.EXIT_APPLIED); // test-only, inert in production
         callbacks.decided(completed instanceof Tier1.Finished finished && finished.applied());
         barrier.await(owner, begun.intent(), begun.exitGen(), callbacks);
     }

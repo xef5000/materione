@@ -1,0 +1,35 @@
+{
+  "recipe": "trash_slot",
+  "params": {
+    "layer": "bin"
+  },
+  "rules": [
+    {
+      "on": "gui.slot_change",
+      "layer": "bin",
+      "do": [
+        {
+          "if": "${slot.amount > 0}",
+          "then": [
+            {
+              "wait": 1
+            },
+            {
+              "custody.consume": {
+                "slot": "${slot.index}"
+              },
+              "else": [
+                {
+                  "actionbar": "<red>That could not be trashed."
+                }
+              ]
+            },
+            {
+              "actionbar": "<gray>Trashed."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -597,9 +597,12 @@ The decisions taken in #217 are recorded in §27.
 - **Returning items.** On close, items left in input slots go back to the player; for a `best_effort` layer what does not
   fit drops at the player's feet, for a `durable: required` layer it stays owed in the player's account and is claimed with
   `/materione claim` (on join and on the next close too). Nothing is ever deleted unless a flow says so
-  (`gui.slot_item: {slot, op: clear}`; on a `required` layer `clear` and `set_amount 0` are refused until the exit ledger of
-  #248 exists, since a deletion must outlive a rollback).
-- **The trash recipe.** "Trash slot" is a recipe that clears an input slot on `gui.slot_change`.
+  (`gui.slot_item: {slot, op: clear}`, or `custody.consume`). On a `required` layer both are the same atomic **consume**
+  (#248, §36): the stack leaves custody through the tier-2 exit (an INTENT in the ledger, then the deletion), so a deletion
+  outlives a rollback; `clear` and `set_amount 0` there start it and do not wait, `custody.consume` waits for the decision
+  and, with `await: saved`, for a saved snapshot, so an effect after it cannot outlive a rolled-back consume.
+- **The trash recipe.** "Trash slot" is a **composition** (D12), not an engine feature: the built-in recipe `trash_slot`
+  (§7.5, §36) is a rule on `gui.slot_change` whose flow waits one tick and runs `custody.consume` on the slot that changed.
 - **`player_inventory: locked | free`** (default `free`, as today, gui.md §5). `locked` cancels
   every bottom-inventory click and fires `gui.click_inventory`.
 - **Click policy.** The policy table (`GuiListener.route`, gui.md §5) gains the input-slot rows:
@@ -728,7 +731,7 @@ Recipes (§4.6) are listed with a one-line description, and inserting one expand
 The v1 recipes are:
 
 - Pay to receive
-- Trash slot (blocked on #248, so not shipped by #222; §30)
+- Trash slot (a composition over `custody.consume`, shipped with #248; §36)
 - Close button
 - Welcome message
 - Confirm dialog (a sub-GUI with yes and no)
@@ -740,7 +743,7 @@ The v1 recipes are:
 *As built (#225, §33 decisions 15 to 19):* the panel lists the vocabulary's recipes with a name and a line each, draws the chosen
 recipe's parameters with the inspector's typed fields (a parameter that names a layer is a choice of the GUI's layers), has the
 server expand it (`logic.instantiate`), shows the `MTR-0088` warnings and inserts the rules with one undo step. A recipe the server
-cannot run here is greyed with its reason and can still be inserted ("Insert anyway"). The trash slot is not listed.
+cannot run here is greyed with its reason and can still be inserted ("Insert anyway"). The trash slot is listed since #248 (§36).
 
 ### 7.6 Live trace (debugging)
 
@@ -2444,7 +2447,8 @@ by the owner.
    cancelled and nothing moves. A post-change revert would race the player's next click, and a revert of a shift
    that spans slots is not exact, so the check happens first. **Consequence:** a rule cannot delete the incoming
    item from the slot it is about; `accept:` refuses it instead. The trash recipe (#222) therefore needs its own
-   mechanism. This is flagged for the owner.
+   mechanism. This is flagged for the owner. *(Resolved by #248, §36: the rule waits one tick, so the item has landed, and
+   consumes what the slot then holds with `custody.consume`.)*
 5. **Single-slot clicks are the server's, after the check.** Pickups, places, swaps, the number-key and offhand swaps
    touch one input slot and the cursor or the viewer's slot, so the server applies them and conserves the items.
    Drop keys, the creative clone and unknown actions take an item out of the window with no check, so they are
@@ -2545,7 +2549,8 @@ capability check, `MTR-0100`), documented in plugin.md §5. The next free code i
 `GuiBridge.Services.inputs()` is the port `gui.slot_item` reaches the window through (`InputSlotPort`). `slot_has` (a
 condition, in `BuiltinLogic.conditions`, §22's convention) reads the window through the `SlotPeek` port
 (`plugin.logic.support`), which `BuiltinLogic.register` builds from the same bridge, as `in_gui` builds `OpenGuis`.
-The trash recipe (#222) is the one place that will extend it.
+The trash recipe (#222) was the one place expected to extend it; since #248 it is a composition over `custody.consume`, which
+reaches the window through the same port (`InputSlotPort#consume`, §36).
 
 ---
 
@@ -2995,7 +3000,8 @@ template form is `api.logic.RecipeTemplate`, the expansion is `behavior.logic.re
    | `server_selector` | `gui.click` on `layer` | a message, then `connect` to `server` | `layer`, `server` |
    | `back_button` | `gui.click` on `layer` | `gui.back` | `layer` |
 
-10. **Trash slot: blocked on #248, not shipped.** §25 decision 12 stands (the durability block itself was lifted on PR #303;
+10. **Trash slot: blocked on #248, not shipped.** *(Superseded by §36: #248 shipped `custody.consume` and the trash slot is the
+    built-in recipe `trash_slot`, a composition over it. What follows is the analysis that made it wait.)* §25 decision 12 stands (the durability block itself was lifted on PR #303;
     #248 now waits for its own implementation, which waits for the durability rows). The trash recipe needs a
     consume-incoming action, which the engine does not have. Nothing merged can express it safely. `gui.slot_change` fires
     before the change (§25 decision 4), so a `gui.slot_item: {op: clear}` there would clear what the slot already holds,
@@ -3041,7 +3047,7 @@ player-visible behavior is new.
 `MTR-0087` (an expansion refused, error) and `MTR-0088` (an action unavailable, warning), documented in plugin.md §5. The
 next free code is `MTR-0089` (§10).
 
-**Deferred.** The trash slot (#248). Recipes that write GUI layers, in the same transaction as their rules (a `gui.edit`
+**Deferred.** (The trash slot, once deferred to #248, shipped as a composition: §36.) Recipes that write GUI layers, in the same transaction as their rules (a `gui.edit`
 and `logic.edit` pair would need one). Conditions in the availability warning. An addon's YAML resource registered through
 a loader, not only through the `Recipe` interface.
 
@@ -3428,7 +3434,7 @@ The pure rules are `webui/src/lib/logic/linkage/`, `.../script/` and `.../recipe
     it needs no probe). A greyed recipe can still be inserted, labelled *Insert anyway*, because the server treats availability
     as a warning, not a refusal (§30): the author may be building the GUI before installing the economy. (Reversible: block it,
     as the palette does for an unavailable action.)
-19. **The trash slot is not listed** (blocked on #248, §30 decision 10), and the confirm dialog's own GUI is not created from the
+19. **The trash slot was not listed** (blocked on #248, §30 decision 10; listed since #248, §36), and the confirm dialog's own GUI is not created from the
     panel (§30 decision 11: no cross-resource write in the authoring API).
 
 **Verification.** vitest: `logic-linkage.spec.ts` (layer to rule mapping, verdicts to layers, the add plan, delete and detach with
@@ -3569,3 +3575,100 @@ take (revoked between two clicks), the open refusal, search (words, case, id), t
 a folder and back. The one step it replaces is `give_item`, which needs a server to build a stack. `ContentTreeSourceTest` and
 `RuntimeContentIndexTest` pin the source and the tree; `ContentIndexBuildTest` pins which resources become rows. The QA entries
 (`qa/catalog/browse.mjs`) are the in-game half and are **not run against a client** in this change.
+
+## 36. Decisions taken in #248 (X: the custody consume primitive; the trash slot as a composition)
+
+#248 began as "the trash slot, a consume-incoming action" and was re-scoped by the owner under D12
+([`architecture.md`](../architecture.md) §3.1, [`primitives.md`](primitives.md) §4.8, §5.1): the engine ships the primitive underneath,
+the **atomic exit of items held in custody** (tier 2 of [`gui-input-durability.md`](gui-input-durability.md)), and a trash slot is a
+recipe over it. The code is in `plugin.logic.action` (`ConsumeCustodyAction`), `plugin.escrow.runtime` (`CustodyConsume`,
+`EscrowRuntime#consume`), `plugin.gui.input` (`StrictInputs`, `InputSlotPort#consume`), the recipe
+`plugin/src/main/resources/recipes/trash_slot.yml` and the fixtures `fixtures/packs/guilogic/guis/consume.yml` and `trash.yml`.
+Each decision is reversible by the owner. The durability side (what runs, the kill-boundary rows) is
+`gui-input-durability.md` §12, *Row X as built*.
+
+**The action.**
+
+```yaml
+- custody.consume: { slot: 4 }                        # consume what slot 4 holds; the flow goes on once it is decided and applied
+- custody.consume: { slot: "${slot.index}" }          # the slot may be a template (a count, as in take_item's amount)
+- custody.consume: { slot: 4, await: saved }          # ...and only once a saved snapshot containing it is read back from disk
+  else:
+    - message: "<red>Nothing happened."               # a failure runs this and ends the run
+- give_money: 100                                     # an effect: with await: saved it cannot outlive a rolled-back consume
+```
+
+1. **Name and shape: `custody.consume: {slot, await}`.** `slot` is the window slot whose held stack is consumed (a literal or a template that
+   renders to a whole number, 0 to 53); `await` is `decided` (the default) or `saved`. Category `player` (no new palette colour), scalar
+   shorthand `slot`. It passes D12's tests:
+
+   | Test | How it passes |
+   |---|---|
+   | U1 name | `custody.consume` names a capability (consume) of a holder (custody), not a use case: the same step trashes, redeems a voucher, spends a ticket, pays out a crafted item |
+   | U2 generality | any slot of any GUI that has a `durable: required` layer, any flow (a click, a close, a command-opened GUI); the slot is a template. The one honest limit: custody has one holder today, the player's account, addressed by window slot (primitives.md §5.1); other holders (a stack, a keyed state) will address the same verb through an additive key, so the verb does not change |
+   | U3 composition | proved by `trash_slot`, which is YAML only; a voucher or ticket is `custody.consume` then `give_item` or `run_command`, in a flow, with no Java |
+   | U4 self-description | an `ActionType` in the actions registry with a typed schema (`slot`, `await` with its allowed values) and `takesElse` in the vocabulary, so the editor draws the `else` branch and an agent sees it |
+   | U5 safety | fails soft with a reason and a visible refusal; offline: `parse` rejects a bad slot or `await` at load; it never runs outside a flow; its crash semantics are tier 2 and the barrier, proved by K10 to K14, K17 and K23 against a real kill |
+
+2. **One vocabulary: `gui.slot_item clear` and `set_amount 0` route through the same exit.** On a `durable: required` layer they were refused
+   until the exit ledger existed (§25, §6.5). They are now that exit, begun and **not waited for**: `gui.slot_item` is a synchronous action and
+   not a guard. An immediate refusal (the slot is busy, the player's gate is shut) is the step's failure; a refusal that comes later (the
+   INTENT could not be recorded, so the stack went back) is told to the player on the actionbar (`MTR-0102`). A flow that must not go on
+   without the consume uses `custody.consume`. On a `best_effort` layer `clear` keeps its behaviour (the slot is emptied at once and the
+   journal follows). Alternatives rejected: keeping `clear` refused (two vocabularies for one deletion, and the refusal is the very gap
+   #248 exists to close) and a new action only (a second way to delete the same stack, with a different crash story).
+3. **`custody.consume` fails on a `best_effort` slot** ("not held in custody"). A consume the author expects to be atomic and to gate an
+   effect must not quietly become a journal deletion; the author uses `clear` there, or sets `durable: required`.
+4. **It guards what follows (`takesElse`).** Like `prompt`, the step runs as a `require` around itself: a failure runs the `else:` steps and
+   ends the run, so an effect written after it is never reached without the consume (and a `chance:` on it is a load error). The engine
+   hook (`ActionType#takesElse`, the step compiler) was generalised from "asks a question" to "guards what follows"; `prompt` and
+   `custody.consume` are the two. The vocabulary's `takesElse` list therefore grows by one (the editor demo snapshot golden moved).
+5. **What it waits for.** `await: decided` completes at step 3 of the tier-2 exit: the INTENT is durable and the stack is gone and the player
+   sees it. It requests **no** `Player.saveData()` (D8) and parks the run for the milliseconds of one ledger append. `await: saved` registers
+   the exit as one that carries an effect (`ExitCallbacks#carriesEffect`), the only kind that makes the barrier ask the platform for a save
+   (once per `escrow_barrier_cooldown_seconds`), and completes only when the barrier has read a saved snapshot that contains the consume back
+   from disk. If the proof never comes (the player leaves, the plugin stops, no snapshot within 10 minutes) the step **fails**, so the
+   effect does not run; the consume stands and recovery applies it. The effect therefore runs at most once, and only after the decision and
+   the snapshot are both durable (K23).
+6. **Failure reasons and diagnostics.** None added. The step fails with a reason in the trace for: not an input slot of the run's open GUI, an
+   empty slot, a `best_effort` slot, a busy slot (another exit is in flight), a shut gate or an unsupported platform (`MTR-0100`, the
+   actionbar line of §7), an unreadable state (`MTR-0101`), a decision that could not be recorded (`MTR-0102`) and, for `await: saved`, an
+   abandoned proof. The next free code is still `MTR-0104`.
+7. **Step 1 freezes the held entry (`Tier1.freezeSlot`).** The incoming stack became a HELD entry by an ordinary tier-1 placement, where
+   `accept:`, `gui.slot_change` and the account caps already ran, so the consume starts from custody and removes nothing from a source.
+
+**The trash slot, as a composition.** The recipe `trash_slot` (parameters `layer`, `message`, `refused_message`) expands to one rule:
+
+```yaml
+- on: gui.slot_change
+  layer: bin
+  do:
+    - if: "${slot.amount > 0}"
+      then:
+        - wait: 1
+        - custody.consume: { slot: "${slot.index}" }
+          else:
+            - actionbar: "<red>That could not be trashed."
+        - actionbar: "<gray>Trashed."
+```
+
+8. **Why `wait: 1`.** `gui.slot_change` fires before the change lands (§25 decision 4), so a consume in the event would see the slot as it
+   was. One tick later the click has been applied and the slot holds the new stack as a HELD entry. A `slot.amount` of 0 is the item being taken
+   *out*, which needs no consume. The race the recipe used to be blocked on (§30 decision 10) is closed by the entry being frozen: a second
+   item cannot land in a frozen slot (a refused click, *busy*), the consume takes whatever the slot holds when it runs, and an item the player
+   took back in the tick between leaves an empty slot, so the consume fails and the `else` runs. None of these can lose or duplicate a stack.
+9. **The layer must be `durable: required`.** A recipe writes rules, not layers (§30 decision 12), so it cannot enforce it: on a `best_effort`
+   layer the consume fails with the reason in the trace and the player sees the recipe's `refused_message`. A server without checkpoint support
+   shows the layer inert (`MTR-0100`), as for every required layer. A load-time warning for a `custody.consume` under a non-required layer is
+   not built (it would be the `GuiRuleDiagnoser`'s, like the layer-exists check of §25 decision 13).
+10. **The recipe is listed in the Recipes panel** (§7.5, §33 decision 19 no longer excludes it) and ships a golden expansion
+    (`fixtures/golden/recipes/trash_slot.json`).
+
+**Not built, on purpose.** A partial consume (`amount:`), consuming every slot of a layer (`layer:`), a `holder:` key and the atomic transfer
+(`HAND_OFF`, primitives.md §5.1): each is additive and none has a caller. A `Tier1.beginExit` caller (an incoming stack straight from the
+cursor): the trash is placed first, then consumed.
+
+**Verification.** `CustodyConsumeTest`, `ConsumeCustodyActionTest`, `BuiltinRecipesTest`, `VocabularySourcesTest` (the `takesElse` list), the
+editor demo snapshot golden, and `PaperEscrowCrashIT` (`gui-input-durability.md` §12, *Row H as built*: K10 to K14, K17, K23 and KT against a real
+`kill -9`). QA `guiescrow.trash-consumes`, `.trash-feedback`, `.consume-effect-after-save`, `.consume-refusal-runs-else` (**not blessed**:
+blessing runs happen on main).

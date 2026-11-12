@@ -19,6 +19,10 @@ const COVERS = [
   'plugin/src/main/java/dev/materione/plugin/gui/GuiListener.java',
   'plugin/src/main/java/dev/materione/plugin/command/MaterioneCommand.java',
   'fixtures/packs/guilogic/guis/escrow.yml',
+  'fixtures/packs/guilogic/guis/trash.yml',
+  'fixtures/packs/guilogic/guis/consume.yml',
+  'plugin/src/main/java/dev/materione/plugin/logic/action/ConsumeCustodyAction.java',
+  'plugin/src/main/resources/recipes/trash_slot.yml',
   'qa/catalog/guiescrow.mjs',
 ];
 
@@ -51,6 +55,13 @@ async function openEscrow(ctx) {
   await ctx.reset();
   await ctx.rcon('materione gui open guilogic:escrow Probe');
   await ctx.waitForServerLog(/MATERIONE-GUIESCROW-OPEN guilogic:escrow/);
+  await ctx.sleep(600); // the client finishes opening the window
+}
+
+/** Opens a guilogic GUI for the probe player and waits for its open marker; the runner reset the baseline at the test's start. */
+async function openGui(ctx, gui, marker) {
+  await ctx.rcon(`materione gui open ${gui} Probe`);
+  await ctx.waitForServerLog(marker);
   await ctx.sleep(600); // the client finishes opening the window
 }
 
@@ -196,6 +207,114 @@ export default [
         }
       } finally {
         await ctx.rcon('gamerule keepInventory false');
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  // ---- the custody consume primitive (#248, logic.md section 36) -----------------------------------------------------
+  // guilogic:trash is the built-in recipe `trash_slot` expanded: an item put into the durable: required layer is consumed
+  // by the flow (a one-tick wait, then custody.consume). guilogic:consume has two buttons: slot 7 consumes what slot 0
+  // holds and the flow goes on once it is decided, slot 8 does the same with `await: saved`, so its effect (a console
+  // marker) runs only after a saved snapshot containing the consume was read back from disk. Not blessed here.
+
+  test({
+    id: 'guiescrow.trash-consumes',
+    title: 'guilogic:trash (the trash_slot recipe): an item put into the trash slot is consumed by the flow, atomically through the tier-2 exit, and does not come back to the cursor, the inventory or the world',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await openGui(ctx, 'guilogic:trash', /MATERIONE-GUITRASH-OPEN guilogic:trash/);
+        await click(ctx, 36);
+        await click(ctx, 4);
+        await ctx.waitForServerLog(/MATERIONE-GUITRASH-DONE slot=4 item=corpus:gem_red amount=3/, { timeoutMs: 30_000 });
+        await ctx.sleep(600);
+        ctx.expect(await slotStack(ctx, 4)).toBe('empty');
+        ctx.expect(await cursorStack(ctx)).toBe('empty');
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+        ctx.expect(ctx.serverLogText(/MATERIONE-GUITRASH-REFUSED/)).toBe(null);
+        const drops = String(await ctx.rcon('execute as Probe at @s run data get entity @e[type=item,distance=..8,limit=1] Item.id'));
+        ctx.expect(drops).not.toContain('gem_red');
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'guiescrow.trash-feedback',
+    title: 'guilogic:trash: after the item is trashed the slot is empty and the player sees the recipe\'s "Trashed." line on the actionbar',
+    mode: 'visual',
+    dependsOn: ['guiescrow.trash-consumes'],
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await openGui(ctx, 'guilogic:trash', /MATERIONE-GUITRASH-OPEN guilogic:trash/);
+        await click(ctx, 36);
+        await click(ctx, 4);
+        await ctx.waitForServerLog(/MATERIONE-GUITRASH-DONE slot=4/, { timeoutMs: 30_000 });
+        await ctx.sleep(250);
+        await ctx.shot('guiescrow-trashed');
+        ctx.needsEyes('The one-row Trash chest is open with every slot empty (the Red Gems are gone, nothing on the cursor) and the grey line "Trashed." shows on the actionbar above the hotbar.');
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'guiescrow.consume-effect-after-save',
+    title: 'guilogic:consume: custody.consume continues the flow once decided (plain), and with await: saved runs its effect only after the consume was saved and read back; the held stack is gone each time',
+    covers: COVERS,
+    timeoutMs: 300_000,
+    steps: async (ctx) => {
+      try {
+        await ctx.rcon('materione give corpus:gem_red Probe 3');
+        await openGui(ctx, 'guilogic:consume', /MATERIONE-GUICONSUME-OPEN guilogic:consume/);
+        await click(ctx, 36);
+        await click(ctx, 0);
+        await ctx.sleep(400);
+        ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:3');
+        await click(ctx, 7); // custody.consume {slot: 0}: no save is asked for
+        await ctx.waitForServerLog(/MATERIONE-GUICONSUME-DONE/, { timeoutMs: 30_000 });
+        await ctx.sleep(400);
+        ctx.expect(await slotStack(ctx, 0)).toBe('empty');
+        ctx.expect(ctx.serverLogText(/MATERIONE-GUICONSUME-PAID/)).toBe(null);
+
+        await ctx.rcon('materione give corpus:gem_red Probe 2');
+        await ctx.sleep(400);
+        await click(ctx, 36);
+        await click(ctx, 0);
+        await ctx.sleep(400);
+        ctx.expect(await slotStack(ctx, 0)).toBe('Red Gem:2');
+        await click(ctx, 8); // custody.consume {slot: 0, await: saved}, then the effect
+        await ctx.waitForServerLog(/MATERIONE-GUICONSUME-PAID/, { timeoutMs: 60_000 });
+        ctx.expect(await slotStack(ctx, 0)).toBe('empty');
+        ctx.expect(await inventoryCount(ctx, 'Red Gem')).toBe(0);
+        ctx.expect(ctx.serverLogText(/MATERIONE-GUICONSUME-REFUSED/)).toBe(null);
+      } finally {
+        await closeWindow(ctx);
+      }
+    },
+  }),
+
+  test({
+    id: 'guiescrow.consume-refusal-runs-else',
+    title: 'guilogic:consume: a consume of an empty slot fails, its else: runs and the step after it (the "done" marker) never does',
+    covers: COVERS,
+    timeoutMs: 240_000,
+    steps: async (ctx) => {
+      try {
+        await openGui(ctx, 'guilogic:consume', /MATERIONE-GUICONSUME-OPEN guilogic:consume/);
+        await click(ctx, 7);
+        await ctx.waitForServerLog(/MATERIONE-GUICONSUME-REFUSED/, { timeoutMs: 30_000 });
+        await ctx.sleep(600);
+        ctx.expect(ctx.serverLogText(/MATERIONE-GUICONSUME-DONE/)).toBe(null);
+      } finally {
         await closeWindow(ctx);
       }
     },

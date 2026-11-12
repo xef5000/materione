@@ -201,7 +201,7 @@ Item, block and furniture triggers (`behavior/logic/BuiltinTriggers`): 17 regist
 
 ### 4.4 Actions
 
-28 built-ins (`plugin/logic/BuiltinLogic`, `plugin/logic/action/`):
+28 built-ins at the time of the audit, 29 since #248 added `custody.consume` (`plugin/logic/BuiltinLogic`, `plugin/logic/action/`):
 
 | Group | Actions | Class |
 |---|---|---|
@@ -209,6 +209,7 @@ Item, block and furniture triggers (`behavior/logic/BuiltinTriggers`): 17 regist
 | Items and experience | `give_item`, `take_item`, `give_exp`, `take_exp` | P (`take_*` fail safely and compose under `require`, logic.md §2.2) |
 | State | `set_var` | P+ (scopes fixed, §4.6) |
 | Input | `prompt` (with the input-method registry) | P |
+| Custody | `custody.consume` (#248; logic.md §36): consume what custody holds at a slot, atomically, optionally until a saved snapshot proves it | P (passes U1 to U5, logic.md §36). The trash slot is the recipe `trash_slot` over it |
 | Providers | `give_money`, `take_money`, `give_permission`, `take_permission`, `connect` | P (each reaches a provider SPI, §4.11) |
 | View | `gui.open`, `gui.close`, `gui.back`, `gui.refresh`, `gui.page`, `gui.slot_item` | **P+**: they act on "the run's own GUI session" implicitly |
 
@@ -266,7 +267,7 @@ player's PDC), the ledger (`storage/escrow/<uuid>.ledger`, `INTENT`/`DONE`), rec
 | The mechanism: items held on someone's behalf, in the holder's own snapshot, with a durable decision log and recovery | **P** | General by construction; nothing in the protocol needs a window. |
 | The surface: the account key is `gui_escrow`, the entries carry a GUI origin, the only way in is a strict `slots` layer, and `claim` is a hard-coded subcommand | **P+** | GUI-shaped naming and entry points over a general mechanism. |
 | `HAND_OFF` (reserved) | **G** | The atomic transfer of §3 need 5. |
-| #248's `consume` | P | The exit verb. The trash slot stays a composition (#222). |
+| `custody.consume` (#248) | P | The exit verb, built: the tier-2 exit as an action, with `await: saved` for an effect behind the barrier. The trash slot is the recipe `trash_slot` over it (#222), with no engine code of its own. `gui.slot_item clear` and `set_amount 0` on a required layer are the same consume without a wait. |
 | `/materione claim` | **F** | A hard-coded command (`MaterioneCommand`) for what a content command could do over a `claim` verb (§5.4). |
 
 This is the single largest piece of already-built work that D12 *validates* rather than disturbs: the design is the custody
@@ -290,7 +291,7 @@ the right home for D12's "a feature is content": the browser is a GUI built from
 | Meaning | Where | Class |
 |---|---|---|
 | **Crafting recipe**: a content type, the vanilla recipe projection | `content/recipes`, runtime-systems §9 | P |
-| **Logic recipe**: a parameterised flow fragment the studio inserts (`Recipe` SPI, `RegistryKeys.RECIPES`), YAML in the jar: `back_button`, `close_button`, `confirm_dialog`, `paged_player_list`, `pay_to_receive`, `server_selector`, `toggle_setting`, `welcome_message` (`plugin/src/main/resources/recipes/`) | logic.md §4.6, §30 | **P** (and the seed of presets, §7) |
+| **Logic recipe**: a parameterised flow fragment the studio inserts (`Recipe` SPI, `RegistryKeys.RECIPES`), YAML in the jar: `back_button`, `close_button`, `confirm_dialog`, `paged_player_list`, `pay_to_receive`, `server_selector`, `toggle_setting`, `trash_slot` (since #248), `welcome_message` (`plugin/src/main/resources/recipes/`) | logic.md §4.6, §30 | **P** (and the seed of presets, §7) |
 
 The logic recipes are the existing precedent for the preset layer, at flow scale: parameters with types and ranges, expansion
 server-side into ordinary steps, and (logic.md §4.6) "a recipe never survives into the file as a recipe". That is the *rejected* option (b) of the
@@ -387,7 +388,7 @@ a re-title if the owner agrees.
 | Issue | Today | Proposed re-scope |
 |---|---|---|
 | #247, #311, #312, #313, #314 | Input slots: crash-safe ownership | The custody primitive's proof (§5.1). Work and rows proceed unchanged; the vocabulary generalizes after row H. |
-| #248 | Custody exit primitive | The `consume` verb of custody; with `HAND_OFF`, the `transfer` verb (§5.1). Already custody-named. |
+| #248 | Custody exit primitive | **Built as `custody.consume`** (logic.md §36): the exit verb of custody; with `HAND_OFF`, the `transfer` verb is still to come (§5.1). The trash slot is the recipe `trash_slot` over it. |
 | #304 | Backpack as a preset over primitives | The first preset (§7). Depends on a stack holder (§5.1); the representation is decided (master §14.7). |
 | #162 | Item modules: parameter-level modules | The editor surface presets plug into: a preset parameter is a module; derivation stays registry-driven. |
 | #6 | Server-side dialogs | A **view kind** over state with `dialog.submit` as a trigger (§5.3), not a separate dialog system. |
