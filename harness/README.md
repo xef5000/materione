@@ -206,7 +206,7 @@ node --test harness\protocol\floor-bot.test.mjs
   | `ledgerRows` | K10, K11 (rolled back, G3), K13, K14, K15/K16, K17 | 10 | opt-in |
   | `cursorAndFileStateRows` | K21a/b, K22a/b, K3, K4 | 7 | opt-in |
   | `k19AnAutosaveNeverSeesHalfAClick` | K19, Paper autosave on every tick | 2 | opt-in |
-  | `k23TheBarrier` | K23 | n/a | **disabled**: waits for row B (#311) |
+  | `k23TheBarrier` | K23 | n/a | **disabled**: row B (#311) is built; the K23 gate and rows are still to write |
 
   ```bash
   ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT                                  # the core rows

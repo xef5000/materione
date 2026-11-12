@@ -7,6 +7,8 @@ import dev.materione.api.scheduling.SchedulingGateway;
 import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.EscrowLedgerStore;
 import dev.materione.plugin.escrow.io.LedgerState;
+import dev.materione.plugin.escrow.io.SnapshotReader;
+import dev.materione.plugin.escrow.model.BarrierBook;
 import dev.materione.plugin.escrow.model.AccountCodec;
 import dev.materione.plugin.escrow.model.AccountRead;
 import dev.materione.plugin.escrow.model.Id128;
@@ -93,6 +95,8 @@ public final class EscrowRuntime {
     private final NamespacedKey accountKey;
     private final NamespacedKey legacyKey;
     private final Tier1<ItemStack> tier1;
+    private final SaveBarrier barrier;
+    private final ExitRunner<ItemStack> exits;
     private final ConcurrentMap<UUID, PlayerEscrow> players = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Long> reported = new ConcurrentHashMap<>();
     private volatile WindowView windows = WindowView.NONE;
@@ -106,10 +110,12 @@ public final class EscrowRuntime {
     /**
      * @param ledger the ledger store; null when the {@code escrow-ledger} phase degraded (the capability then fails)
      * @param online the online players, for the enable and disable passes
+     * @param snapshots the read-back of a player's saved file (tier 3); null with {@code ledger}
+     * @param barrierCooldownMillis the minimum time between two barrier saves of one player ({@code escrow_barrier_cooldown_seconds})
      */
     public EscrowRuntime(Plugin plugin, SchedulingGateway scheduling, EscrowLedgerStore ledger,
             EscrowMessages messages, Consumer<Diagnostic> diagnostics, LongSupplier clock,
-            Supplier<Collection<? extends Player>> online) {
+            Supplier<Collection<? extends Player>> online, SnapshotReader snapshots, long barrierCooldownMillis) {
         this.plugin = plugin;
         this.scheduling = scheduling;
         this.ledger = ledger;
@@ -120,6 +126,14 @@ public final class EscrowRuntime {
         this.accountKey = new NamespacedKey(plugin, ACCOUNT_KEY);
         this.legacyKey = new NamespacedKey(plugin, LEGACY_KEY);
         this.tier1 = new Tier1<>(ItemStacks.INSTANCE, EscrowRuntime::randomId, clock);
+        if (ledger != null && snapshots != null) {
+            this.barrier = new SaveBarrier(ledger, snapshots, clock, barrierCooldownMillis,
+                    BarrierBook.DEFAULT_GIVE_UP_MILLIS, plugin.getLogger()::warning);
+            this.exits = new ExitRunner<>(tier1, ledger, barrier);
+        } else {
+            this.barrier = null;
+            this.exits = null;
+        }
     }
 
     private static Id128 randomId() {
@@ -130,6 +144,21 @@ public final class EscrowRuntime {
     /** The one tier-1 API. */
     public Tier1<ItemStack> tier1() {
         return tier1;
+    }
+
+    /**
+     * Tier 2, steps 2 to 4 (gui-input-durability.md §5.4; row B): the entry point #248's consume action calls after
+     * {@link Tier1#beginExit} or {@link Tier1#freezeSlot}. Empty when the ledger did not start (the capability fails
+     * and a required layer is refused, so no exit begins).
+     */
+    public Optional<ExitRunner<ItemStack>> exits() {
+        return Optional.ofNullable(exits);
+    }
+
+    /** The player as the tier-2 and tier-3 runtime needs them: their own thread, live state and save. */
+    public Owner<ItemStack> owner(Player player) {
+        return new PlayerOwner(plugin, scheduling, player, of(player),
+                () -> windows.open(player).map(WindowView.Open::top).orElse(null));
     }
 
     /** Where the runtime finds a player's open window (bound once the GUI stack exists). */
@@ -238,6 +267,9 @@ public final class EscrowRuntime {
 
     /** The player left: their live state is dropped (the saved account is what counts). */
     public void quit(Player player) {
+        if (barrier != null) {
+            barrier.left(player.getUniqueId()); // effects waiting on the barrier are abandoned; the quit save is polled
+        }
         players.remove(player.getUniqueId());
     }
 
@@ -450,6 +482,13 @@ public final class EscrowRuntime {
     }
 
     // ---- disable ----------------------------------------------------------------------------------------------
+
+    /** Plugin disable, after {@link #releaseAll}: every exit waiting on the barrier is abandoned (its effect never runs). */
+    public void stop() {
+        if (barrier != null) {
+            barrier.close();
+        }
+    }
 
     /**
      * Plugin disable or {@code /reload} (K20): every online player's open window is released in one step before the

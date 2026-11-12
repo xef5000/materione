@@ -38,6 +38,23 @@ public final class Exits {
         return EscrowTransfer.moveIn(account, inventory, entry);
     }
 
+    /**
+     * Step 1 for a stack whose source the model does not own (the cursor, a window slot: the caller removes it from
+     * there in the same owner-thread step, as {@link EscrowTransfer#place} does for a placement): the entry enters
+     * the account as EXITING, and nothing else changes. Refuses what {@link #beginExit} refuses, except it touches no
+     * inventory.
+     */
+    public static Step begin(Account account, Entry entry) {
+        if (entry.state() != EntryState.EXITING) {
+            return EscrowTransfer.refused(Refusal.INVALID);
+        }
+        if (account.find(entry.id()).isPresent()
+                || account.entries().stream().anyMatch(existing -> existing.txn().equals(entry.txn()))) {
+            return EscrowTransfer.refused(Refusal.INVALID);
+        }
+        return EscrowTransfer.finish(account.added(entry), List.of(), List.of(), List.of(), List.of());
+    }
+
     /** Step 1 for a stack already in a slot (HELD): it freezes as EXITING(txn); clicks on it are refused (busy). */
     public static Step freeze(Account account, Id128 entryId, Id128 txn) {
         if (txn.isZero() || account.findByTxn(txn).isPresent()) {

@@ -702,6 +702,7 @@ produced by the YAML dumper, so it carries no comments; this table is the refere
 | `transfer_port` | `25565` | Target port of the transfer packet. Must be 1 to 65535. |
 | `transfer_mode` | `packet` | `bungeecord` selects the BungeeCord/Velocity plugin channel for `connect` instead of the packet. |
 | `escrow_fsync` | `true` (optional; not written to a fresh file) | Crash-safe input slots (gui-input-durability.md §5.3): force each escrow-ledger append to disk (`force(false)`). Protects against power loss only; a process crash needs no `fsync`. It runs on the IO executor, never on a region thread. |
+| `escrow_barrier_cooldown_seconds` | `5` (optional; not written to a fresh file; clamped to 1 to 300) | The tier-3 barrier of crash-safe input slots (gui-input-durability.md §5.4, row B): the minimum time between two `Player.saveData()` calls for one player, which are made only while an exit that carries an effect waits for its acknowledgment. Every fruitless cycle doubles it, up to 5 minutes. This is the one synchronous IO on an owner thread (the D8 exception); the read-back of the saved file runs on the IO executor. |
 | `escrow_retention_days` | `30` (optional; not written to a fresh file; minimum 1) | How long an acknowledged exit's decision is kept in `storage/escrow/<uuid>.ledger` before compaction may drop it: how old a restored player-data backup may be before consumed entries could come back. |
 
 ### 7.2 Usage metrics (bStats) and the opt-out
@@ -760,6 +761,7 @@ The one-line rule: **the server stays up, the diagnostics say why, and nothing i
 | Editor save round-trip | < 2 s end-to-end | save → validate → targeted apply → confirm |
 | Flow dispatch (rule gate + interpreter, a 10-step flow, actions excluded) | ≤ 0.5 ms p99 | `FlowDispatchPerfTest`; logic.md §5.3 |
 | Crash-safe input slots: encoding a 27-stack escrow account on the owner thread; one strict click (the whole tier-1 step) on a 27-entry account; a nine-slot shift | ≤ 200 µs; ≤ 1 ms; ≤ 2 ms (medians) | `EscrowPerfTest`; the owner thread does memory only (no file, no wait: `EscrowIoBansTest`); gui-input-durability.md §8, §12 row P |
+| Crash-safe input slots, tier 3: `Player.saveData()` calls by the barrier | at most 1 per player per `escrow_barrier_cooldown_seconds` (default 5 s), backing off to 1 per 5 min while the disk does not confirm; only while an exit that carries an effect waits; none for #248's trash | `BarrierBookTest` and `BarrierBookPropertyTest` hold the limit and the narrowness, `EscrowBarrierBansTest` the single call site; the read-back and DONE append are IO-executor work (`EscrowReadBackTest`, `EscrowReadBackStressTest`); gui-input-durability.md §5.4, §12 row B. The save's own cost is the platform's per-player autosave cost, not measured in CI (row H's IT observes it) |
 | GUI refresh pass (50 open windows × 54 dynamic slots, every 20 ticks: each window's render and diff) | ≤ 2 ms per pass, best of three | `DynamicSlotsPerfTest`; measured 0.43 ms; logic.md §6.3, §24. The Bukkit stack build of a changed slot is outside the budget |
 
 Honesty notes: the < 1 µs resolve is the *cached* path; first touch of a stack pays a PDC read

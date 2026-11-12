@@ -7,8 +7,11 @@ import dev.materione.plugin.escrow.model.AccountRead;
 import dev.materione.plugin.escrow.model.Entry;
 import dev.materione.plugin.escrow.model.EntryState;
 import dev.materione.plugin.escrow.model.EscrowTransfer;
+import dev.materione.plugin.escrow.model.ExitKind;
+import dev.materione.plugin.escrow.model.Exits;
 import dev.materione.plugin.escrow.model.Id128;
 import dev.materione.plugin.escrow.model.Ledger;
+import dev.materione.plugin.escrow.model.LedgerRecord;
 import dev.materione.plugin.escrow.model.Recovery;
 import dev.materione.plugin.escrow.model.Refusal;
 import dev.materione.plugin.escrow.model.StackBytes;
@@ -263,6 +266,147 @@ public final class Tier1<T> {
         work.run(EscrowTransfer.claim(work.account, new BagInventory<>(live, stacks)));
         finish(escrow, work);
         return new Done<>(work.returned, countOwed(work.account), List.of());
+    }
+
+    // ---- tier 2: an exit with a durable decision (§5.4) -------------------------------------------------------
+
+    /** The outcome of step 1 of an exit. */
+    public sealed interface Begin permits Begun, Declined {}
+
+    /** The outcome of step 3 (or of an abort) of an exit. */
+    public sealed interface Finish permits Finished, Declined {}
+
+    /**
+     * Step 1 happened: the stack is the EXITING entry of {@code txn} in the account and frozen (clicks on its slot are
+     * {@link Reason#BUSY}); nothing is decided yet. The caller appends {@link #intent()} to the ledger (step 2), then
+     * calls {@link #completeExit} (step 3) when the append is durable, or {@link #abortExit} when it is refused.
+     *
+     * @param txn     the transaction
+     * @param entry   the entry's id
+     * @param exitGen the {@code gen} of the account after step 1: the exit is in every snapshot at or above it, which
+     *                is what the tier-3 barrier waits for
+     * @param slot    the window slot the stack is shown in (the entry's slot hint)
+     * @param intent  the INTENT record of step 2
+     */
+    public record Begun(Id128 txn, Id128 entry, long exitGen, int slot, LedgerRecord.Intent intent) implements Begin {}
+
+    /** Step 3 (or an abort) ran. {@code applied} is false when there was nothing left to do (recovery got there first). */
+    public record Finished(boolean applied, int returned, int owed) implements Finish {}
+
+    /** The step was refused and changed nothing (I7). */
+    public record Declined(Reason reason, Refusal cause) implements Begin, Finish {}
+
+    /**
+     * Step 1 of an exit for an <em>incoming</em> stack (#248's consume-incoming): {@code incoming} leaves its source
+     * (the cursor, an inventory slot: {@code source} is the live write that takes it away) and becomes the EXITING entry
+     * of a new transaction, shown in the empty escrowed window slot {@code slot}, in one owner-thread step. Nothing
+     * is removed from the source unless every check passed: that is the caller's validation before this call; this call
+     * is the removal. A refusal changes neither side. The stack is the whole amount that will be consumed.
+     */
+    public Begin beginExit(PlayerEscrow escrow, Live<T> live, String gui, int slot, T incoming, ExitKind kind,
+            Delta<T> source) {
+        if (!escrow.open()) {
+            return new Declined(Reason.UNAVAILABLE, null);
+        }
+        if (stacks.empty(incoming) || entryAt(escrow.account(), slot) != null || !stacks.empty(live.top(slot))) {
+            return new Declined(Reason.BUSY, Refusal.BUSY);
+        }
+        StackBytes bytes;
+        try {
+            bytes = stacks.encode(incoming);
+        } catch (RuntimeException unserialisable) {
+            return new Declined(Reason.UNRECORDABLE, null);
+        }
+        Id128 txn = ids.get();
+        Entry entry = new Entry(ids.get(), EntryState.EXITING, txn, clock.getAsLong(), gui, slot, bytes);
+        Work work = new Work(escrow.account());
+        if (!work.run(Exits.begin(work.account, entry))) {
+            return new Declined(work.denied.reason(), work.denied.cause());
+        }
+        escrow.commit(work.account, work.bytes);
+        write(live, source);
+        live.top(slot, incoming);
+        return new Begun(txn, entry.id(), work.account.gen(), slot,
+                Exits.intent(entry, kind, stacks.amount(incoming), clock.getAsLong()));
+    }
+
+    /**
+     * Step 1 of an exit for the stack that already sits in escrowed slot {@code slot} (HELD): it freezes as EXITING of a
+     * new transaction and stays shown there until step 3. A slot with no entry, or an entry already exiting or owed, is
+     * refused ({@link Reason#BUSY} for a frozen one).
+     */
+    public Begin freezeSlot(PlayerEscrow escrow, Live<T> live, String gui, int slot, ExitKind kind) {
+        if (!escrow.open()) {
+            return new Declined(Reason.UNAVAILABLE, null);
+        }
+        Work work = new Work(escrow.account());
+        if (!sync(work, live, gui, slot, true)) {
+            return new Declined(work.denied.reason(), work.denied.cause());
+        }
+        Entry held = entryAt(work.account, slot);
+        if (held == null) {
+            return new Declined(Reason.BUSY, Refusal.STALE);
+        }
+        Id128 txn = ids.get();
+        if (!work.run(Exits.freeze(work.account, held.id(), txn))) {
+            return new Declined(work.denied.reason(), work.denied.cause());
+        }
+        escrow.commit(work.account, work.bytes);
+        Entry frozen = work.account.findByTxn(txn).orElseThrow();
+        return new Begun(txn, frozen.id(), work.account.gen(), slot,
+                Exits.intent(frozen, kind, stacks.amount(stacks.decode(frozen.stack())), clock.getAsLong()));
+    }
+
+    /**
+     * Step 3, once the exit's INTENT is durable ({@code decided} holds it): the entry is deleted and its slot cleared (the
+     * slot is only cleared while it still shows that very stack: the window may have closed or been replaced since).
+     * Nothing happens when the entry is gone already; a ledger that does not hold the INTENT is refused
+     * ({@link Refusal#UNDECIDED}): the live path never skips the decision.
+     */
+    public Finish completeExit(PlayerEscrow escrow, Live<T> live, Ledger decided, Id128 txn) {
+        if (!escrow.open()) {
+            return new Declined(Reason.UNAVAILABLE, null);
+        }
+        Entry entry = escrow.account().findByTxn(txn).orElse(null);
+        Work work = new Work(escrow.account());
+        if (!work.run(Exits.complete(work.account, decided, txn))) {
+            return new Declined(Reason.UNRECORDABLE, work.denied.cause());
+        }
+        if (!(work.last instanceof Step.Applied)) {
+            return new Finished(false, 0, countOwed(work.account));
+        }
+        finish(escrow, work);
+        clearIfShown(live, entry);
+        return new Finished(true, 0, countOwed(work.account));
+    }
+
+    /**
+     * The INTENT append was refused, so nothing was decided (step 2 failed): the frozen stack goes back to the player,
+     * the inventory or OWED, and its slot is cleared. Refused once the INTENT is durable ({@link Refusal#DECIDED}): there
+     * is no abort after the decision.
+     */
+    public Finish abortExit(PlayerEscrow escrow, Live<T> live, Ledger decided, Id128 txn) {
+        if (!escrow.open()) {
+            return new Declined(Reason.UNAVAILABLE, null);
+        }
+        Entry entry = escrow.account().findByTxn(txn).orElse(null);
+        Work work = new Work(escrow.account());
+        if (!work.run(Exits.abortUndecided(work.account, decided, new BagInventory<>(live, stacks), txn))) {
+            return new Declined(Reason.UNRECORDABLE, work.denied.cause());
+        }
+        if (!(work.last instanceof Step.Applied)) {
+            return new Finished(false, 0, countOwed(work.account));
+        }
+        finish(escrow, work);
+        clearIfShown(live, entry);
+        return new Finished(true, work.returned, countOwed(work.account));
+    }
+
+    private void clearIfShown(Live<T> live, Entry entry) {
+        T shown = entry == null ? null : live.top(entry.slotHint());
+        if (entry != null && !stacks.empty(shown) && matches(entry, shown)) {
+            live.top(entry.slotHint(), null);
+        }
     }
 
     // ---- death ------------------------------------------------------------------------------------------------
