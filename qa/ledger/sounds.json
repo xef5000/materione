@@ -1,32 +1,39 @@
 {
   "sounds.registration": {
-    "sha": "24d556c1a8f8aff8d5fcf69e0be8563ac23d203b",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "fad9f36e7da2ad2637e29b7c15fe443783fbf73f9b2c23116d8b6ed785df6135",
     "result": "pass",
-    "at": "2026-10-20T19:53:42.496Z",
-    "run": "run-2026-10-20T19-51-13",
+    "at": "2026-10-25T15:26:31.951Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "sounds.replace-vanilla": {
-    "sha": "f33b242d071113f6f9b375353fed00a963e38ffc",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "d60c508e1f37c6bc40bb1f81219bc397927c84f07f0888e8849ee1620a2c36ff",
     "result": "pass",
-    "at": "2026-10-20T17:56:24.905Z",
-    "run": "run-2026-10-20T17-55-17",
+    "at": "2026-10-25T15:26:35.192Z",
+    "run": "run-2026-10-25T15-13-52",
     "eyes": null
   },
   "sounds.jukebox": {
-    "sha": "f33b242d071113f6f9b375353fed00a963e38ffc",
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
     "dirty": false,
     "env": "f29751d62d53",
     "def": "eb64f5a79073c5d3873a6674f644507f8ec2cbfc5c09fd50bf74d25723c9a9bc",
-    "result": "pass",
-    "at": "2026-10-20T17:56:45.287Z",
-    "run": "run-2026-10-20T17-55-17",
-    "eyes": null
+    "result": "fail",
+    "at": "2026-10-25T15:26:56.760Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\sounds.jukebox\\dossier.md",
+    "issue": 128,
+    "issueUrl": "https://github.com/xef5000/materione/issues/128",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/sounds.jukebox/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/sounds.jukebox/jukebox-playing.jpg",
+      "qa/evidence/run-2026-10-25T15-13-52/sounds.jukebox/transcript.jsonl"
+    ]
   }
 }

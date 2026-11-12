@@ -1,0 +1,18 @@
+{
+  "editor.local-url": {
+    "sha": "5a0848e9b833da0b71b8f5751b56749ed6876eb4",
+    "dirty": false,
+    "env": "f29751d62d53",
+    "def": "d929ee1291f1c671176f9ee11ef1a9c3830daea8716000031e2c52bbf14502c6",
+    "result": "fail",
+    "at": "2026-10-25T15:17:14.654Z",
+    "run": "run-2026-10-25T15-13-52",
+    "dossier": "qa\\results\\run-2026-10-25T15-13-52\\editor.local-url\\dossier.md",
+    "issue": 118,
+    "issueUrl": "https://github.com/xef5000/materione/issues/118",
+    "evidence": [
+      "qa/evidence/run-2026-10-25T15-13-52/editor.local-url/dossier.md",
+      "qa/evidence/run-2026-10-25T15-13-52/editor.local-url/transcript.jsonl"
+    ]
+  }
+}
