@@ -225,7 +225,7 @@ Item, block and furniture triggers (`behavior/logic/BuiltinTriggers`): 17 regist
 | Surface | Class | Notes |
 |---|---|---|
 | 10 conditions (`has_permission`, `has_money`, `has_exp`, `has_item`, `has_item_space`, `is_near`, `in_world`, `in_gui`, `var`, `slot_has`) | P, with `in_gui` and `slot_has` view-shaped | Fine. `slot_has` reads an input slot of the run's GUI; it stays a view condition (§5.3). |
-| 20 expression functions (`contains`, `matches`, `round`, `random`, `format_number`, ...) plus the currency pair `balance` and `format_currency` | P | The expression engine is the universal glue (D4). |
+| 23 expression functions (`contains`, `matches`, `round`, `random`, `format_number`, and since #328 the clock: `now`, `today`, `format_duration`) plus the currency pair `balance` and `format_currency` | P | The expression engine is the universal glue (D4). The clock is a primitive for U5: it is injected (a `java.time.Clock`), so a test runs a fixed one (logic.md §15). |
 
 ### 4.6 Variables and scopes
 
@@ -292,7 +292,7 @@ the right home for D12's "a feature is content": the browser is a GUI built from
 | Meaning | Where | Class |
 |---|---|---|
 | **Crafting recipe**: a content type, the vanilla recipe projection | `content/recipes`, runtime-systems §9 | P |
-| **Logic recipe**: a parameterised flow fragment the studio inserts (`Recipe` SPI, `RegistryKeys.RECIPES`), YAML in the jar: `back_button`, `close_button`, `confirm_dialog`, `paged_player_list`, `pay_to_receive`, `server_selector`, `toggle_setting`, `trash_slot` (since #248), `welcome_message` (`plugin/src/main/resources/recipes/`) | logic.md §4.6, §30 | **P** (and the seed of presets, §7) |
+| **Logic recipe**: a parameterised flow fragment the studio inserts (`Recipe` SPI, `RegistryKeys.RECIPES`), YAML in the jar: `back_button`, `close_button`, `confirm_dialog`, `paged_player_list`, `pay_to_receive`, `server_selector`, `toggle_setting`, `trash_slot` (since #248), `welcome_message`, and `cooldown_gate` (since #328: a persistent cooldown as a declared player number and `now()`) (`plugin/src/main/resources/recipes/`) | logic.md §4.6, §30 | **P** (and the seed of presets, §7) |
 
 The logic recipes are the existing precedent for the preset layer, at flow scale: parameters with types and ranges, expansion
 server-side into ordinary steps, and (logic.md §4.6) "a recipe never survives into the file as a recipe". That is the *rejected* option (b) of the

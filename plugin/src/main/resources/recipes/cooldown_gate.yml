@@ -1,0 +1,38 @@
+# Cooldown gate (logic.md §30, primitives.md §4.10): a persistent cooldown is a composition of a declared player number and
+# the clock (now()), not an engine concept. While the stored second is less than `seconds` ago, the run stops and the player
+# is told to wait. Otherwise the stored second becomes now(). The number is a player variable, so it survives a restart.
+# A recipe expands to rules, so the gate takes its trigger (on, layer) as parameters.
+name: Cooldown gate
+description: Lets the player through once every given number of seconds, per player, and survives a restart. The variable must already be declared as a player number in a variables file of its pack.
+params:
+  on:
+    type: string
+    default: gui.click
+    description: The event that is gated, such as gui.click or click:right
+  layer:
+    type: string
+    default: ""
+    description: The layer the event must come from (a gui.click layer); blank for any
+  variable:
+    type: variable
+    scope: player
+    value_type: number
+    description: The declared player number that holds the epoch second of the last use, as pack:key
+  seconds:
+    type: integer
+    min: 1
+    description: How many seconds must pass between two uses
+  message:
+    type: string
+    default: "<red>You have to wait before doing that again."
+    description: Shown to the player while the cooldown is still running
+rules:
+  - on: "{{on}}"
+    layer: "{{layer}}"
+    do:
+      - if:
+          var: { var: "{{variable}}", op: ">", value: "${now() - {{seconds}}}" }
+        then:
+          - message: "{{message}}"
+          - stop
+      - set_var: { var: "{{variable}}", value: "${now()}" }

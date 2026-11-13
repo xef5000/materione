@@ -23,18 +23,27 @@ public final class CooldownStore {
      * ({@code nowMs + cooldownMs}) when {@code cooldownMs > 0}.
      */
     public boolean tryFire(String key, long nowMs, long cooldownMs) {
+        return tryFireRemaining(key, nowMs, cooldownMs) == 0;
+    }
+
+    /**
+     * As {@link #tryFire}, but says how long a blocked key still waits: returns 0 when the key may fire now (the new
+     * window is recorded), otherwise the milliseconds left in the open window, which is positive (logic.md §16, the
+     * {@code cooldown.remaining} of an {@code on_cooldown} flow).
+     */
+    public long tryFireRemaining(String key, long nowMs, long cooldownMs) {
         if (cooldownMs <= 0) {
-            return true;
+            return 0;
         }
-        long[] result = {Long.MIN_VALUE};
+        long[] remaining = {0};
         cooldownUntil.compute(key, (k, until) -> {
             if (until != null && nowMs < until) {
-                result[0] = until;
+                remaining[0] = until - nowMs;
                 return until;
             }
             return nowMs + cooldownMs;
         });
-        return result[0] == Long.MIN_VALUE;
+        return remaining[0];
     }
 
     /** True when the key has at least one unused charge of {@code max} (null max = unlimited). */

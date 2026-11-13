@@ -40,6 +40,9 @@ class BuiltinRecipesTest {
     private static final NamespacedId FLAG = NamespacedId.of("sample", "pvp");
     private static final VariableDeclaration FLAG_DECLARATION =
             new VariableDeclaration(FLAG, VariableScope.PLAYER, VariableType.BOOLEAN, false, "PvP toggle");
+    private static final NamespacedId LAST_USE = NamespacedId.of("sample", "last_use");
+    private static final VariableDeclaration LAST_USE_DECLARATION =
+            new VariableDeclaration(LAST_USE, VariableScope.PLAYER, VariableType.NUMBER, 0, "Epoch second of the last use");
 
     /**
      * One sample per recipe. Insertion-ordered: the golden files record these maps, and their order must not depend
@@ -58,6 +61,8 @@ class BuiltinRecipesTest {
         SAMPLES.put("server_selector", sample("layer", "lobby", "server", "lobby"));
         SAMPLES.put("trash_slot", sample("layer", "bin"));
         SAMPLES.put("back_button", sample("layer", "back"));
+        SAMPLES.put("cooldown_gate", sample("on", "gui.click", "layer", "kit", "variable", "sample:last_use",
+                "seconds", 86_400, "message", "<red>Come back tomorrow."));
     }
 
     @TempDir
@@ -93,6 +98,20 @@ class BuiltinRecipesTest {
                 .contains("\"custody.consume\"").contains("\"gui.slot_change\"").contains("\"wait\"");
         assertThat(json).as("no trash-specific action: only registered, general actions appear")
                 .doesNotContain("\"trash").doesNotContain("\"gui.slot_item\"");
+    }
+
+    @Test
+    void theCooldownGateIsAGateOnADeclaredNumberAndTheClock() {
+        ApiResult<List<Map<String, Object>>> result = Setup.create().expander()
+                .expand(new InstantiateRequest("cooldown_gate", SAMPLES.get("cooldown_gate")));
+
+        assertThat(result.ok()).as(messages(result).toString()).isTrue();
+        assertThat(result.diagnostics()).isEmpty();
+        String json = new GsonBuilder().create().toJson(result.value());
+        assertThat(json).as("the gate compares the stored second with now() minus the seconds")
+                .contains("\"${now() - 86400}\"").contains("\"${now()}\"").contains("\"stop\"");
+        assertThat(json).as("the stored number is written by set_var and read by the var condition")
+                .contains("\"sample:last_use\"").doesNotContain("format_duration");
     }
 
     @Test
@@ -156,8 +175,9 @@ class BuiltinRecipesTest {
         static Setup create() {
             RegistryService registries = new RegistryService();
             LogicTestSupport.withBuiltIns(registries);
-            return new Setup(new RegistryLogicLookup(registries,
-                    id -> FLAG.equals(id) ? Optional.of(FLAG_DECLARATION) : Optional.empty()));
+            return new Setup(new RegistryLogicLookup(registries, id -> FLAG.equals(id)
+                    ? Optional.of(FLAG_DECLARATION)
+                    : LAST_USE.equals(id) ? Optional.of(LAST_USE_DECLARATION) : Optional.empty()));
         }
 
         RecipeExpander expander() {

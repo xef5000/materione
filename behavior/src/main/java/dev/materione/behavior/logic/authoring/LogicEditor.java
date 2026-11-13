@@ -22,7 +22,8 @@ final class LogicEditor {
     /** A flow id as the compiler reads one (FlowSet). */
     static final Pattern FLOW_ID = Pattern.compile("[A-Za-z0-9_.-]+");
 
-    private static final Set<String> RULE_PROTECTED = Set.of("do", "node");
+    /** The keys that hold steps (or a position) and are edited through the step operations, never patched as values. */
+    private static final Set<String> RULE_PROTECTED = Set.of("do", "node", "on_cooldown");
 
     private final Map<String, Object> resource;
     private final LogicLookup lookup;
@@ -104,7 +105,7 @@ final class LogicEditor {
         for (String key : set.keySet()) {
             if (RULE_PROTECTED.contains(key)) {
                 throw LogicRefusal.rule(path + "." + key, "'" + key + "' is not patched on a rule; "
-                        + (key.equals("do") ? "edit its steps" : "use setNodePosition"));
+                        + (key.equals("do") || key.equals("on_cooldown") ? "edit its steps" : "use setNodePosition"));
             }
         }
         for (String key : unset) {

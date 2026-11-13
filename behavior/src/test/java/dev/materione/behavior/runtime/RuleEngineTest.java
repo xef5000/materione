@@ -312,6 +312,92 @@ class RuleEngineTest {
         assertThat(ran).hasSize(2);
     }
 
+    /** The on_cooldown branch: says which value cooldown.remaining had, through an if the test can read. */
+    private static Map<String, Object> remainingIs(long seconds, String label) {
+        return Map.of(
+                "if", "${cooldown.remaining == " + seconds + "}",
+                "then", List.of(action("b", label)),
+                "else", List.of(action("b", "other")));
+    }
+
+    @Test
+    void aBlockedRuleRunsItsOnCooldownFlowWithTheWholeSecondsLeftRoundedUp() {
+        long[] now = {1_000_000L};
+        var timed = new RuleEngine(new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add),
+                new CooldownStore(), () -> now[0]);
+        Map<String, Object> throttled = rule("click:right", List.of(), List.of(action("a", "x")));
+        throttled.put("cooldown", 60_000);
+        throttled.put("on_cooldown", List.of(remainingIs(40, "forty")));
+        List<Rule> rules = rules(throttled);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+
+        timed.fire(rules, event("click", "right", root));
+        assertThat(ran).containsExactly("a:x");
+
+        now[0] += 20_000; // 40 seconds left
+        timed.fire(rules, event("click", "right", root));
+        assertThat(ran).containsExactly("a:x", "b:forty");
+        assertThat(diagnostics).isEmpty();
+
+        now[0] += 39_999; // 1 ms left: rounds up to one whole second, never to zero
+        timed.fire(rules, event("click", "right", root));
+        assertThat(ran).containsExactly("a:x", "b:forty", "b:other");
+    }
+
+    @Test
+    void aBlockedRuleWithoutOnCooldownStaysSilentAsBefore() {
+        Map<String, Object> throttled = rule("click", List.of(), List.of(action("a", "x")));
+        throttled.put("cooldown", 60_000);
+        List<Rule> rules = rules(throttled);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+
+        engine.fire(rules, event("click", "right", root));
+        engine.fire(rules, event("click", "right", root));
+
+        assertThat(ran).containsExactly("a:x");
+        assertThat(diagnostics).isEmpty();
+    }
+
+    @Test
+    void theOnCooldownFlowRunsOnlyWhenTheRulesOwnConditionHolds() {
+        long[] now = {5_000_000L};
+        var timed = new RuleEngine(new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add),
+                new CooldownStore(), () -> now[0]);
+        Map<String, Object> throttled = rule("consume", List.of("item.amount >= 5"), List.of(action("a", "x")));
+        throttled.put("cooldown", 60_000);
+        throttled.put("on_cooldown", List.of(action("b", "blocked")));
+        List<Rule> rules = rules(throttled);
+        var root = new LinkedHashMap<String, Object>();
+        root.put("player", Map.of("uuid", "u1"));
+        root.put("item", Map.of("amount", 7));
+
+        timed.fire(rules, event("consume", "", root));
+        root.put("item", Map.of("amount", 2));
+        timed.fire(rules, event("consume", "", root)); // blocked and the condition fails: nothing at all
+
+        assertThat(ran).containsExactly("a:x");
+    }
+
+    @Test
+    void aBlockedRuleDoesNotSpendItsCharges() {
+        long[] now = {9_000_000L};
+        var timed = new RuleEngine(new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add),
+                new CooldownStore(), () -> now[0]);
+        Map<String, Object> limited = rule("consume", List.of(), List.of(action("a", "x")));
+        limited.put("cooldown", 60_000);
+        limited.put("charges", 2);
+        limited.put("on_cooldown", List.of(action("b", "blocked")));
+        List<Rule> rules = rules(limited);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+
+        timed.fire(rules, event("consume", "", root));                          // charge 1, window opens
+        timed.fire(rules, event("consume", "", root));                          // blocked: on_cooldown only
+        now[0] += 61_000;
+        timed.fire(rules, event("consume", "", root));                          // charge 2
+
+        assertThat(ran).containsExactly("a:x", "b:blocked", "a:x");
+    }
+
     @Test
     void chargesRunOutAndStayOut() {
         Map<String, Object> limited = rule("consume", List.of(), List.of(action("a", "x")));

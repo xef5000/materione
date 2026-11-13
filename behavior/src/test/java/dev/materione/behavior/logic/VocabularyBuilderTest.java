@@ -137,8 +137,9 @@ class VocabularyBuilderTest {
     void ruleAndActionOptionsStayTheVersionOneShape() {
         BehaviorVocabulary vocabulary = build();
 
+        // on_cooldown (#328) is additive: the version stays 2, and the list gains one key at the end
         assertThat(vocabulary.ruleOptions()).extracting(ParameterSchema::id)
-                .containsExactly("id", "cooldown", "charges", "per");
+                .containsExactly("id", "cooldown", "charges", "per", "on_cooldown");
         assertThat(vocabulary.actionOptions()).extracting(ParameterSchema::id).containsExactly("chance", "delay");
         assertThat(BehaviorVocabulary.VERSION).isEqualTo(2);
     }
