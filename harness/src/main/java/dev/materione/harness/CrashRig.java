@@ -63,11 +63,27 @@ public final class CrashRig implements AutoCloseable {
      */
     public static CrashRig createForEscrow(HarnessOptions options, String scenario, String paperGlobalYaml,
             Set<String> packs) throws IOException {
+        return createForEscrow(options, scenario, paperGlobalYaml, packs, null);
+    }
+
+    /**
+     * As above, with {@code extraSettings} (nullable): flat {@code key: value} lines appended to the product's
+     * {@code settings.yml} before the first boot (for example {@code escrow_barrier_cooldown_seconds: 1}).
+     */
+    public static CrashRig createForEscrow(HarnessOptions options, String scenario, String paperGlobalYaml,
+            Set<String> packs, String extraSettings) throws IOException {
         Path probe = Path.of(System.getProperty("harness.durabilityProbeJar", ""));
         if (!Files.isRegularFile(probe)) {
             throw new IOException("harness.durabilityProbeJar is not set or missing: run via :harness:integrationTest");
         }
         ServerWorkspace workspace = ServerWorkspace.create(options, scenario, packs);
+        if (extraSettings != null) {
+            Path settings = workspace.pluginsDir.resolve("Materione").resolve("settings");
+            Files.createDirectories(settings);
+            Path file = settings.resolve("settings.yml");
+            String head = Files.exists(file) ? Files.readString(file, StandardCharsets.UTF_8) : "version: 1\n";
+            Files.writeString(file, head + extraSettings, StandardCharsets.UTF_8);
+        }
         Files.copy(probe, workspace.pluginsDir.resolve("MaterioneDurabilityProbe.jar"),
                 StandardCopyOption.REPLACE_EXISTING);
         if (paperGlobalYaml != null) {
@@ -227,12 +243,30 @@ public final class CrashRig implements AutoCloseable {
      * @param trigger a console command (for example {@code dprobe click ...}); it may itself be the call that parks
      */
     public void killAtGate(String gate, String trigger) throws IOException, InterruptedException {
+        killAtGate(gate, trigger, () -> { });
+    }
+
+    /** A step the harness takes while the server is parked at a gate, before it kills it. */
+    @FunctionalInterface
+    public interface WhileParked {
+        void run() throws IOException, InterruptedException;
+    }
+
+    /**
+     * As {@link #killAtGate(String, String)}, with {@code whileParked} run between the marker and the kill. It is for the
+     * gates that park a thread that is <em>not</em> the main one (the ledger writer's IO thread): the server still ticks,
+     * so the step can be a {@code dprobe save} or a {@code dprobe leave}, which is how a snapshot that holds a frozen
+     * entry gets onto the disk while the INTENT is not yet (or only just) written.
+     */
+    public void killAtGate(String gate, String trigger, WhileParked whileParked)
+            throws IOException, InterruptedException {
         probe("arm", gate);
         int cursor = log.mark();
         console.send(trigger);
         if (log.awaitNewLine(GATE_MARKER + gate, options.commandTimeout(), cursor) == null) {
             throw new IllegalStateException("gate '" + gate + "' was not reached after '" + trigger + "'\n" + tail());
         }
+        whileParked.run();
         kill();
     }
 

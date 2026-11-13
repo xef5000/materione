@@ -3,6 +3,7 @@ package dev.materione.plugin.escrow.io;
 import dev.materione.api.diagnostics.Diagnostic;
 import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.diagnostics.Severity;
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.model.Compaction;
 import dev.materione.plugin.escrow.model.Ledger;
 import dev.materione.plugin.escrow.model.LedgerCodec;
@@ -371,12 +372,14 @@ public final class EscrowLedgerStore implements AutoCloseable {
             Ledger current = ((LedgerState.Ready) slot.state).ledger();
             try {
                 hooks.beforeAppend.accept(slot.player);
+                CrashGate.at(CrashGate.Gates.LEDGER_BEFORE_APPEND); // test-only, inert in production
                 byte[] header = slot.validLength == 0 ? LedgerCodec.header() : null;
                 slot.fileLength = LedgerFiles.append(slot.file, slot.fileLength, slot.validLength, header,
                         LedgerCodec.encodeRecord(record), options.fsync(), hooks.afterWrite, hooks.afterForce);
                 slot.validLength = (int) slot.fileLength;
                 Ledger next = current.appended(record);
                 slot.state = new LedgerState.Ready(next);
+                CrashGate.at(CrashGate.Gates.LEDGER_AFTER_APPEND); // test-only, inert in production
                 return new AppendResult.Durable(next);
             } catch (LedgerFiles.StaleView changed) {
                 slot.loaded = false; // read the file again, once, and decide on what is really there

@@ -17,7 +17,7 @@ import java.util.regex.Pattern;
  * real headless Paper server, with the product's own runtime (the {@code guilogic:escrow} GUI: a one-row chest whose
  * slots are a {@code durable: required} input layer), the product's own crash gate ({@code CrashGate}, named points
  * inside the escrow code that park a thread under {@code -Dmaterione.escrow.gate}) and a real {@code kill -9}
- * ({@code destroyForcibly} on the whole process tree). K23 (the barrier) waits for row B (#311).
+ * ({@code destroyForcibly} on the whole process tree), K1 to K23 (K23 is the barrier, row B, #311).
  *
  * <p>A <b>row</b> runs against a live server: a fake-connection player (row R's rig) joins through the real pre-login
  * preload and the real join handler, plays through real click packets, and the server is killed either <em>at a
@@ -29,12 +29,17 @@ import java.util.regex.Pattern;
  * I6 (recovery is idempotent) against the disk and the rebooted player, never against the plugin's own opinion.
  *
  * <p><b>What is real and what is crafted.</b> Everything of tier 1 (K1 to K9, K15 to K16, K19 to K22) is the product,
- * end to end. Tier 2 (the consume exit, K10 to K14, K17) has no caller before #248, so the harness <em>crafts the
- * two things the missing caller would have left behind</em>: an EXITING entry (the real HELD entry of a real click, its
- * state byte flipped in the live data, then a real save) and an INTENT record (appended to the ledger file between
- * the kill and the boot, by {@link EscrowFiles}, an independent implementation of the layout); recovery, the
- * preload, the gate and the refusal are then the product's. K3 and K4 (a kill inside the platform's own save) are file
- * states: the gate cannot sit inside {@code PlayerDataStorage.save}.
+ * end to end. <b>Tier 2 (the consume exit, K10 to K14, K17) and the barrier (K23) are the product too, since #248:</b>
+ * a real click on a button of the {@code guilogic:consume} GUI runs the real flow {@code custody.consume}, which freezes
+ * the real held entry, appends the real INTENT through the real ledger writer, deletes the entry, and (for
+ * {@code await: saved}) makes the real barrier call {@code Player.saveData()} and read the file back. The kill lands at
+ * production gates between those steps ({@code exit-begun}, {@code ledger-before-append}, {@code ledger-after-append},
+ * {@code exit-applied}, {@code barrier-saved}); the two ledger gates park the writer's IO thread, not the main one, so
+ * the harness can save or quit the player while the exit is stopped half-way. The only crafted states left are the files
+ * a kill <em>inside a write</em> would leave: K3 and K4 (a kill inside the platform's own save: the gate cannot sit
+ * inside {@code PlayerDataStorage.save}), a torn INTENT or DONE record (K10c, K17: the bytes of the real record, cut
+ * short and appended after the kill, by {@link EscrowFiles}, an independent implementation of the layout), and the
+ * platform save that cannot land (K23b: the {@code .dat_old} the server renames onto is made a non-empty directory).
  *
  * <p>Rows are chained inside one workspace: the boot that checks a row is the server the next row starts on, so a
  * group of N rows costs N+1 boots (about 25 s each). The groups ({@link #core}, {@link #tier1},
@@ -51,6 +56,24 @@ public final class EscrowCrashRunner {
     static final String RECOVERY_DONE = "recovery-done";
     static final String DEATH_RELEASED = "death-released";
     static final String CLAIM_DONE = "claim-done";
+    static final String EXIT_BEGUN = "exit-begun";
+    static final String EXIT_APPLIED = "exit-applied";
+    static final String LEDGER_BEFORE_APPEND = "ledger-before-append";
+    static final String LEDGER_AFTER_APPEND = "ledger-after-append";
+    static final String BARRIER_SAVED = "barrier-saved";
+
+    /** The GUIs of the {@code guilogic} pack the rows open: escrow (no flow), consume (buttons) and trash (the recipe). */
+    static final String ESCROW_GUI = "guilogic:escrow";
+    static final String CONSUME_GUI = "guilogic:consume";
+    static final String TRASH_GUI = "guilogic:trash";
+
+    /** The consume GUI's buttons: slot 7 consumes without an effect, slot 8 waits for the save and then runs one. */
+    static final int PLAIN_BUTTON = 7;
+    static final int PAID_BUTTON = 8;
+    static final String PAID_MARKER = "MATERIONE-GUICONSUME-PAID";
+
+    /** The barrier waits 1 s between saves in the barrier group, so a row does not sit out the default 5 s. */
+    private static final String FAST_BARRIER = "escrow_barrier_cooldown_seconds: 1\n";
 
     /** The escrow GUI's pack, and Paper's per-player autosave on every tick (K19 only). */
     private static final Set<String> PACKS = Set.of("guilogic");
@@ -69,13 +92,16 @@ public final class EscrowCrashRunner {
 
     // ---- the groups -------------------------------------------------------------------------------------------------
 
-    /** The default run: the rows that carry the most per boot. K1 (mid-step), K2, K5, K11/K12 (G2) and K18 (fail closed). */
+    /**
+     * The default run: the rows that carry the most per boot. K1 (mid-step), K2, K5, K11 (a real consume killed with its
+     * INTENT durable and the entry EXITING on disk: G2) and K18 (fail closed).
+     */
     public HarnessResult core(HarnessOptions options) {
         Map<String, Row> rows = new LinkedHashMap<>();
         rows.put("K1 kill inside a move-in step", Session::k1MidStep);
         rows.put("K2 move-in then a save", Session::k2);
         rows.put("K5 move-out, no save since", Session::k5);
-        rows.put("K11/K12 INTENT durable, E EXITING on disk", Session::k11);
+        rows.put("K11 real consume: INTENT durable, E EXITING on disk", Session::k11);
         rows.put("K18 corrupt ledger, corrupt and newer account", Session::k18);
         return run(options, "escrow-crash-core", null, rows);
     }
@@ -104,16 +130,41 @@ public final class EscrowCrashRunner {
         return run(options, "escrow-crash-death", null, rows);
     }
 
-    /** Opt-in: the ledger and recovery rows (K10, K11 rolled back, K13, K14, K15, K16, K17). */
+    /** Opt-in: the real consume killed before and after each of its steps (K10, K11 rolled back, K12, K13). */
     public HarnessResult ledger(HarnessOptions options) {
         Map<String, Row> rows = new LinkedHashMap<>();
-        rows.put("K10 INTENT torn mid-append", Session::k10);
+        rows.put("K10a kill after step 1, nothing queued", Session::k10a);
+        rows.put("K10b kill before the INTENT is written, E EXITING saved", Session::k10b);
+        rows.put("K10c INTENT torn mid-append (file state)", Session::k10c);
         rows.put("K11 INTENT durable, snapshot predates E (G3)", Session::k11Rollback);
-        rows.put("K13 INTENT and a snapshot already without E", Session::k13);
-        rows.put("K14 quit before the ack, INTENT lands after the save", Session::k14);
-        rows.put("K15/K16 recovery killed, then a second crash after a saved recovery", Session::k15);
-        rows.put("K17 INTENT then a torn tail", Session::k17);
+        rows.put("K12 step 3 ran, no save since", Session::k12);
+        rows.put("K13 consume completed, then a save", Session::k13);
         return run(options, "escrow-crash-ledger", null, rows);
+    }
+
+    /** Opt-in: quit during a consume (K14), recovery (K15, K16), a torn tail (K17) and the trash composition. */
+    public HarnessResult exits(HarnessOptions options) {
+        Map<String, Row> rows = new LinkedHashMap<>();
+        rows.put("K14a quit after the INTENT, before step 3", Session::k14a);
+        rows.put("K14b quit before the INTENT lands", Session::k14b);
+        rows.put("K15/K16 recovery killed, then a second crash after a saved recovery", Session::k15);
+        rows.put("K17 INTENT then a torn tail (file state)", Session::k17);
+        rows.put("KT the trash slot, a composition of custody.consume", Session::kTrash);
+        return run(options, "escrow-crash-exits", null, rows);
+    }
+
+    /**
+     * Opt-in: K23, the barrier (tier 3). A consume that carries an effect (the console marker) must never run it before a
+     * saved snapshot containing the consume is read back from disk: killed between {@code saveData()} and the read-back
+     * (a), a read-back that finds an older snapshot (b), the effect after the proof (c) and after a disk that recovers (d).
+     */
+    public HarnessResult barrier(HarnessOptions options) {
+        Map<String, Row> rows = new LinkedHashMap<>();
+        rows.put("K23a kill between saveData() and the read-back", Session::k23a);
+        rows.put("K23b the read-back finds an older snapshot, then a kill", Session::k23b);
+        rows.put("K23c the effect runs once, after the proof", Session::k23c);
+        rows.put("K23d the disk recovers: the effect runs once, late", Session::k23d);
+        return run(options, "escrow-crash-barrier", null, FAST_BARRIER, rows);
     }
 
     /** Opt-in: the cursor (K21, K22) and the kills inside the platform's save (K3, K4: file states). */
@@ -136,10 +187,15 @@ public final class EscrowCrashRunner {
     }
 
     private HarnessResult run(HarnessOptions options, String scenario, String paperYaml, Map<String, Row> rows) {
+        return run(options, scenario, paperYaml, null, rows);
+    }
+
+    private HarnessResult run(HarnessOptions options, String scenario, String paperYaml, String settings,
+            Map<String, Row> rows) {
         Problems problems = new Problems();
         CrashRig rig = null;
         try {
-            rig = CrashRig.createForEscrow(options, scenario, paperYaml, PACKS);
+            rig = CrashRig.createForEscrow(options, scenario, paperYaml, PACKS, settings);
             rig.boot();
             Session session = new Session(rig, problems);
             for (Map.Entry<String, Row> row : rows.entrySet()) {
@@ -259,7 +315,11 @@ public final class EscrowCrashRunner {
         }
 
         void open(String p) throws IOException, InterruptedException {
-            rig.command("materione gui open guilogic:escrow " + p, "player=" + p + " container=");
+            open(p, ESCROW_GUI);
+        }
+
+        void open(String p, String gui) throws IOException, InterruptedException {
+            rig.command("materione gui open " + gui + " " + p, "player=" + p + " container=");
         }
 
         void set(String p, int slot, String material, int amount) throws IOException, InterruptedException {
@@ -311,11 +371,57 @@ public final class EscrowCrashRunner {
 
         /** The common start: the player joins, holds 5 diamonds in hotbar 0 and 3 apples in 1, opens the GUI, a save fixes S. */
         void seed(String p) throws IOException, InterruptedException {
+            seed(p, ESCROW_GUI);
+        }
+
+        void seed(String p, String gui) throws IOException, InterruptedException {
             login(p);
             set(p, 0, "DIAMOND", 5);
             set(p, 1, "APPLE", 3);
-            open(p);
+            open(p, gui);
             save(p);
+        }
+
+        /** The start of every consume row: the stack is in custody in slot 0 of the consume GUI and a save holds it HELD (S'). */
+        void heldAndSaved(String p) throws IOException, InterruptedException {
+            seed(p, CONSUME_GUI);
+            placeIn(p, 0);
+            save(p);
+        }
+
+        /** The console command that presses a button of the consume GUI with a real click packet. */
+        String press(String p, int button) {
+            return "dprobe click " + p + " " + button + " 0 PICKUP";
+        }
+
+        void pressNow(String p, int button) throws IOException, InterruptedException {
+            click(p, button, "PICKUP");
+        }
+
+        /** The saved account's frozen entry, which must be the only one. */
+        EscrowFiles.Entry exiting(String p, String what) throws IOException {
+            Disk d = disk(p);
+            problems.expect(d.entries() == 1 && d.sole().state() == EscrowFiles.EXITING,
+                    what + ": the saved account should hold E EXITING: " + d.account());
+            return d.sole();
+        }
+
+        /** The ledger holds exactly one record, the INTENT of {@code entry} (decided, not done). */
+        void expectIntentOnly(String p, EscrowFiles.Entry entry, String what) throws IOException {
+            List<EscrowFiles.Record> records = EscrowFiles.ledgerOf(rig, p);
+            problems.expect(records.size() == 1 && records.get(0).isIntent()
+                            && records.get(0).entryHex().equals(entry.idHex()),
+                    what + ": the ledger should hold the one INTENT of E: " + records);
+        }
+
+        void expectNoRecords(String p, String what) throws IOException {
+            problems.expect(EscrowFiles.ledgerOf(rig, p).isEmpty(), what + ": the ledger should hold no record: "
+                    + EscrowFiles.ledgerOf(rig, p));
+        }
+
+        void expectQuiet(String p, String what) throws IOException {
+            problems.expect(EscrowFiles.quarantined(rig, p).isEmpty(), what + ": a valid ledger was quarantined");
+            problems.expect(!rig.log().readAll().contains("MTR-0101"), what + ": a valid ledger reported MTR-0101");
         }
 
         /** A real move-in; checks the step really happened (the stack is in the window and in the account, not the inventory). */
@@ -328,6 +434,21 @@ public final class EscrowCrashRunner {
                 throw new IllegalStateException("the move-in did not happen: " + snap);
             }
             landing.put(p, landed);
+        }
+
+        /**
+         * A real placement of the player's diamonds into window slot {@code slot} (a pickup from hotbar 0, then a click on
+         * the slot), for the GUIs whose buttons consume one named slot: a shift-click lets the product choose the slot.
+         */
+        void placeIn(String p, int slot) throws IOException, InterruptedException {
+            click(p, 36, "PICKUP");
+            click(p, slot, "PICKUP");
+            Snap snap = inv(p);
+            if (!"DIAMOND*5".equals(snap.window().get(slot)) || snap.window().size() != 1 || snap.count("DIAMOND") != 0
+                    || snap.entries() != 1) {
+                throw new IllegalStateException("the placement did not happen: " + snap);
+            }
+            landing.put(p, slot);
         }
 
         /** The window slot the player's stack landed in (the product picks it; the harness follows it). */
@@ -345,6 +466,13 @@ public final class EscrowCrashRunner {
             problems.expect(!rig.alive(), "the server survived the kill");
         }
 
+        /** As {@link #crash(String, String)}, with a step taken while a gate that parks the IO thread holds the exit half-way. */
+        void crash(String gate, String trigger, CrashRig.WhileParked whileParked)
+                throws IOException, InterruptedException {
+            rig.killAtGate(gate, trigger, whileParked);
+            problems.expect(!rig.alive(), "the server survived the kill");
+        }
+
         /** A kill at a quiescent point: {@code /materione claim} reaches its gate and touches nothing here. */
         void quiet(String p) throws IOException, InterruptedException {
             crash(CLAIM_DONE, "dprobe cmd " + p + " materione claim");
@@ -358,24 +486,6 @@ public final class EscrowCrashRunner {
             PlayerDat dat = rig.savedData(p);
             Object raw = dat.bukkitValues().get("materione:gui_escrow");
             return new Disk(dat, raw instanceof byte[] bytes ? bytes : null);
-        }
-
-        /** The live account's first entry, read from the player's data. */
-        EscrowFiles.Entry liveEntry(String p) throws IOException, InterruptedException {
-            Snap snap = inv(p);
-            if (snap.entries() != 1) {
-                throw new IllegalStateException("expected one live entry: " + snap);
-            }
-            return snap.account().entries().get(0);
-        }
-
-        /** Crafts a tier-2 freeze the missing caller would have made: the live entry becomes EXITING under {@code txn}. */
-        EscrowFiles.Entry freeze(String p, int txn) throws IOException, InterruptedException {
-            EscrowFiles.Account account = inv(p).account();
-            EscrowFiles.Entry frozen = account.entries().get(0).exiting(EscrowFiles.txn(txn));
-            EscrowFiles.Account next = new EscrowFiles.Account(account.gen() + 1, List.of(frozen));
-            rig.probe("adopt", p + " " + EscrowFiles.hex(EscrowFiles.encodeAccount(next)));
-            return frozen;
         }
 
         void appendLedger(String p, byte[]... records) throws IOException {
@@ -678,28 +788,50 @@ public final class EscrowCrashRunner {
             expectReturnedOnce(p, "after the boot");
         }
 
-        // ---- the rows: tier 2 and the ledger (crafted records, real recovery) ------------------------------------------
+        // ---- the rows: tier 2, the real consume exit (#248) ------------------------------------------------------------
 
-        /** The shared start of the exit rows: S' on disk holds E HELD; {@code frozen} also freezes it in the live data first. */
-        private EscrowFiles.Entry heldAndSaved(String p, boolean frozen) throws Exception {
-            seed(p);
-            moveIn(p);
-            EscrowFiles.Entry entry = frozen ? freeze(p, 1) : liveEntry(p);
-            save(p);
-            return entry;
+        /**
+         * K10a: a kill right after step 1 (the entry is frozen EXITING in the live account) on the owner thread, with the
+         * INTENT not even queued. The disk is S' (E HELD): there is no decision, so E comes back.
+         */
+        void k10a() throws Exception {
+            String p = "K10aBot";
+            heldAndSaved(p);
+            crash(EXIT_BEGUN, press(p, PLAIN_BUTTON));
+            expectDiskHeld(p, "disk S'");
+            expectNoRecords(p, "nothing was queued");
+            reboot();
+            expectReturnedOnce(p, "no INTENT, no decision");
         }
 
-        /** K10: the INTENT's append was cut by the kill: not a record (section 5.3), so E comes back. */
-        void k10() throws Exception {
-            String p = "K10Bot";
-            EscrowFiles.Entry e = heldAndSaved(p, true);
-            quiet(p);
-            byte[] intent = EscrowFiles.intent(EscrowFiles.txn(1), e.id(), System.currentTimeMillis());
+        /**
+         * K10b: the ledger writer is stopped just before it writes the INTENT (its IO thread is parked; the server still
+         * ticks), a save lands with E EXITING, and the kill follows: S' holds a frozen entry and the ledger holds nothing.
+         */
+        void k10b() throws Exception {
+            String p = "K10bBot";
+            heldAndSaved(p);
+            crash(LEDGER_BEFORE_APPEND, press(p, PLAIN_BUTTON), () -> save(p));
+            exiting(p, "disk S'");
+            expectNoRecords(p, "before the append");
+            reboot();
+            expectReturnedOnce(p, "a frozen entry with no INTENT is returned");
+        }
+
+        /**
+         * K10c (file state): the kill landed <em>inside</em> the append, so the ledger ends in a partial INTENT. A kill
+         * inside a write cannot be gated without altering the write, so the bytes are the real INTENT of the real exit
+         * (its txn and entry id, read from the saved account), cut short and appended after the kill: a torn tail is not
+         * a record (section 5.3), E comes back, and a read leaves the tail alone for the next writer to cut.
+         */
+        void k10c() throws Exception {
+            String p = "K10cBot";
+            heldAndSaved(p);
+            crash(LEDGER_BEFORE_APPEND, press(p, PLAIN_BUTTON), () -> save(p));
+            EscrowFiles.Entry e = exiting(p, "disk S'");
+            byte[] intent = EscrowFiles.intent(e.txn(), e.id(), System.currentTimeMillis());
             appendLedger(p, EscrowFiles.prefix(intent, 30));
             long before = Files.size(EscrowFiles.ledgerFile(rig, p));
-            Disk d = disk(p);
-            problems.expect(d.entries() == 1 && d.sole().state() == EscrowFiles.EXITING,
-                    "disk S' should hold E EXITING: " + d.account());
             reboot();
             expectReturnedOnce(p, "a torn INTENT is no decision");
             problems.expect(Files.size(EscrowFiles.ledgerFile(rig, p)) == before,
@@ -707,83 +839,92 @@ public final class EscrowCrashRunner {
             problems.expect(EscrowFiles.quarantined(rig, p).isEmpty(), "a torn tail is not corruption");
         }
 
-        /** K11/K12: the INTENT is durable and E is EXITING in the snapshot (step 3 ran or not): recovery drops it, G2. */
+        /**
+         * K11: the INTENT is durable and the entry is EXITING in the snapshot (the writer's IO thread parks right after
+         * the append, so step 3 has not run and a save lands first): recovery drops E, G2, however old the snapshot.
+         */
         void k11() throws Exception {
             String p = "K11Bot";
-            EscrowFiles.Entry e = heldAndSaved(p, true);
-            quiet(p);
-            appendLedger(p, EscrowFiles.intent(EscrowFiles.txn(1), e.id(), System.currentTimeMillis()));
-            Disk d = disk(p);
-            problems.expect(d.entries() == 1 && d.sole().state() == EscrowFiles.EXITING && d.count("minecraft:diamond") == 0,
-                    "disk S' should hold E EXITING and no diamonds: " + d.dat().inventory() + " " + d.account());
+            heldAndSaved(p);
+            crash(LEDGER_AFTER_APPEND, press(p, PLAIN_BUTTON), () -> save(p));
+            EscrowFiles.Entry e = exiting(p, "disk S'");
+            problems.expect(disk(p).count("minecraft:diamond") == 0, "the saved inventory still holds the diamonds");
+            expectIntentOnly(p, e, "the decision is durable");
             reboot();
             expectConsumed(p, "a durable INTENT");
-            problems.expect(EscrowFiles.quarantined(rig, p).isEmpty(), "a valid ledger was quarantined");
-            problems.expect(!rig.log().readAll().contains("MTR-0101"), "a valid ledger reported MTR-0101");
+            expectQuiet(p, "a valid ledger");
         }
 
-        /** K11 with a snapshot that predates E: the stack is still in the inventory; the INTENT finds no entry and does nothing (G3). */
+        /** K11 with a snapshot that predates E: the stack is still in the inventory; the INTENT finds no entry (G3). */
         void k11Rollback() throws Exception {
             String p = "K11rBot";
-            seed(p);
-            moveIn(p);
-            EscrowFiles.Entry e = liveEntry(p); // never saved: the disk is S
-            quiet(p);
-            appendLedger(p, EscrowFiles.intent(EscrowFiles.txn(1), e.id(), System.currentTimeMillis()));
+            seed(p, CONSUME_GUI);
+            placeIn(p, 0); // never saved: the disk is S, with the stack in the inventory
+            crash(LEDGER_AFTER_APPEND, press(p, PLAIN_BUTTON));
             expectDiskInInventory(p, "disk S");
+            problems.expect(EscrowFiles.ledgerOf(rig, p).size() == 1, "the decision should be durable: "
+                    + EscrowFiles.ledgerOf(rig, p));
             reboot();
             expectReturnedOnce(p, "an INTENT for an entry the snapshot never held (a rollback, not a duplicate)");
         }
 
-        /** K13: the INTENT and a snapshot that already lost E (step 3 ran, a save followed): the record is inert. */
+        /** K12: step 3 ran (the owner thread parks right after it), no save since: S' holds E HELD, the INTENT is durable. */
+        void k12() throws Exception {
+            String p = "K12Bot";
+            heldAndSaved(p);
+            EscrowFiles.Entry e = disk(p).sole();
+            crash(EXIT_APPLIED, press(p, PLAIN_BUTTON));
+            expectDiskHeld(p, "disk S'");
+            expectIntentOnly(p, e, "the decision is durable");
+            reboot();
+            expectConsumed(p, "step 3 ran, no save since");
+        }
+
+        /** K13: the consume completed on its own and a save followed: S'' has neither the stack nor E, the INTENT is inert. */
         void k13() throws Exception {
             String p = "K13Bot";
-            seed(p);
-            moveIn(p);
-            EscrowFiles.Entry e = freeze(p, 1);
-            // step 3, crafted: the entry leaves the account (gen + 1) and the slot empties, then a save
-            EscrowFiles.Account gone = new EscrowFiles.Account(inv(p).account().gen() + 1, List.of());
-            rig.probe("adopt", p + " " + EscrowFiles.hex(EscrowFiles.encodeAccount(gone)));
-            rig.probe("win", p + " " + slot(p) + " DIAMOND 0");
+            heldAndSaved(p);
+            EscrowFiles.Entry e = disk(p).sole();
+            pressNow(p, PLAIN_BUTTON);
+            boolean done = awaitInv(p, Duration.ofSeconds(20), s -> s.entries() == 0 && s.window().isEmpty());
+            problems.expect(done, "the consume did not complete: " + inv(p));
             save(p);
             quiet(p);
-            appendLedger(p, EscrowFiles.intent(EscrowFiles.txn(1), e.id(), System.currentTimeMillis()));
             Disk d = disk(p);
-            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0, "disk S'' should hold neither: "
-                    + d.dat().inventory() + " " + d.account());
+            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0,
+                    "disk S'' should hold neither: " + d.dat().inventory() + " " + d.account());
+            expectIntentOnly(p, e, "an inert record");
             reboot();
             expectConsumed(p, "a record whose entry is already gone");
-            problems.expect(!rig.log().readAll().contains("MTR-0101"), "an inert record reported MTR-0101");
+            expectQuiet(p, "an inert record");
         }
 
         /**
-         * K14: the player quits before the ack. E is EXITING, so the close does not return it (no second copy); the
-         * save holds it EXITING. {@code a}: the INTENT lands after the save and recovery drops it. {@code b}: it never
-         * lands, and recovery returns it.
+         * K14a: the player quits after the INTENT is written and before step 3. E is EXITING, so the close does not
+         * return it (no second copy) and the quit's save holds it EXITING; recovery sees the INTENT and drops it.
          */
-        void k14() throws Exception {
-            String a = "K14aBot";
-            String b = "K14bBot";
-            seed(a);
-            moveIn(a);
-            EscrowFiles.Entry ea = freeze(a, 1);
-            seed(b);
-            moveIn(b);
-            freeze(b, 2);
-            rig.probe("leave", a);
-            rig.probe("leave", b);
-            rig.kill();
-            for (String p : List.of(a, b)) {
-                Disk d = disk(p);
-                problems.expect(d.count("minecraft:diamond") == 0, p + ": the close returned a frozen entry's stack: "
-                        + d.dat().inventory());
-                problems.expect(d.entries() == 1 && d.sole().state() == EscrowFiles.EXITING,
-                        p + ": the save should hold E EXITING: " + d.account());
-            }
-            appendLedger(a, EscrowFiles.intent(EscrowFiles.txn(1), ea.id(), System.currentTimeMillis()));
+        void k14a() throws Exception {
+            String p = "K14aBot";
+            heldAndSaved(p);
+            crash(LEDGER_AFTER_APPEND, press(p, PLAIN_BUTTON), () -> rig.probe("leave", p));
+            EscrowFiles.Entry e = exiting(p, "the quit's save");
+            problems.expect(disk(p).count("minecraft:diamond") == 0, "the close returned a frozen entry's stack: "
+                    + disk(p).dat().inventory());
+            expectIntentOnly(p, e, "the decision is durable");
             reboot();
-            expectConsumed(a, "K14a (INTENT after the save)");
-            expectReturnedOnce(b, "K14b (no INTENT ever)");
+            expectConsumed(p, "K14a (INTENT before the quit)");
+        }
+
+        /** K14b: the player quits before the INTENT lands (and it never does): the frozen entry is returned once. */
+        void k14b() throws Exception {
+            String p = "K14bBot";
+            heldAndSaved(p);
+            crash(LEDGER_BEFORE_APPEND, press(p, PLAIN_BUTTON), () -> rig.probe("leave", p));
+            exiting(p, "the quit's save");
+            problems.expect(disk(p).count("minecraft:diamond") == 0, "the close returned a frozen entry's stack");
+            expectNoRecords(p, "the INTENT never landed");
+            reboot();
+            expectReturnedOnce(p, "K14b (no INTENT ever)");
         }
 
         /**
@@ -815,19 +956,192 @@ public final class EscrowCrashRunner {
             expectReturnedOnce(p, "K16: a second crash after a saved recovery");
         }
 
-        /** K17: a valid INTENT and then a torn record: the INTENT counts, the tail is ignored (and left for the next writer). */
+        /**
+         * K17 (file state): a valid INTENT and then a torn record, the partial DONE a kill inside the next append would
+         * leave (cut from a real DONE of the same transaction): the INTENT counts, the tail is ignored and left for the
+         * next writer.
+         */
         void k17() throws Exception {
             String p = "K17Bot";
-            EscrowFiles.Entry e = heldAndSaved(p, true);
-            quiet(p);
-            appendLedger(p, EscrowFiles.intent(EscrowFiles.txn(1), e.id(), System.currentTimeMillis()),
-                    EscrowFiles.prefix(EscrowFiles.done(EscrowFiles.txn(1)), 11));
+            heldAndSaved(p);
+            crash(LEDGER_AFTER_APPEND, press(p, PLAIN_BUTTON), () -> save(p));
+            EscrowFiles.Entry e = exiting(p, "disk S'");
+            expectIntentOnly(p, e, "the decision is durable");
+            Files.write(EscrowFiles.ledgerFile(rig, p), EscrowFiles.prefix(EscrowFiles.done(e.txn()), 11),
+                    java.nio.file.StandardOpenOption.APPEND);
             long before = Files.size(EscrowFiles.ledgerFile(rig, p));
             reboot();
             expectConsumed(p, "an INTENT followed by a torn tail");
             problems.expect(Files.size(EscrowFiles.ledgerFile(rig, p)) == before, "a read rewrote the ledger");
             problems.expect(EscrowFiles.quarantined(rig, p).isEmpty(), "a torn tail was quarantined as corruption");
             problems.expect(!rig.log().readAll().contains("MTR-0101"), "a torn tail reported MTR-0101");
+        }
+
+        /**
+         * KT: the trash slot is a composition. The player shift-clicks a stack into the trash GUI; the flow (the built-in
+         * recipe {@code trash_slot}, expanded) waits a tick and runs {@code custody.consume}; nothing here is trash-specific
+         * engine code. The consume asks for no save (D8: nothing waits on it), is durable through a kill, and the stack
+         * does not come back.
+         */
+        void kTrash() throws Exception {
+            String p = "KTBot";
+            seed(p, TRASH_GUI);
+            long saved = Files.getLastModifiedTime(rig.playerDataFile(p)).toMillis();
+            shiftIn(p);
+            boolean gone = awaitInv(p, Duration.ofSeconds(20),
+                    s -> s.count("DIAMOND") == 0 && s.entries() == 0 && s.window().isEmpty());
+            problems.expect(gone, "the trash did not consume the stack: " + inv(p));
+            problems.expect(rig.log().awaitLine("MATERIONE-GUITRASH-DONE", Duration.ofSeconds(10)) != null,
+                    "the trash flow never reached its end");
+            problems.expect(Files.getLastModifiedTime(rig.playerDataFile(p)).toMillis() == saved,
+                    "a consume with no effect asked for a save (D8)");
+            problems.expect(EscrowFiles.ledgerOf(rig, p).size() == 1 && EscrowFiles.ledgerOf(rig, p).get(0).isIntent(),
+                    "the trash's decision should be one INTENT: " + EscrowFiles.ledgerOf(rig, p));
+            save(p);
+            quiet(p);
+            Disk d = disk(p);
+            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0, "the snapshot after the trash holds the "
+                    + "stack: " + d.dat().inventory() + " " + d.account());
+            reboot();
+            expectConsumed(p, "the trashed stack stays trashed");
+        }
+
+        // ---- the rows: the barrier (K23) -------------------------------------------------------------------------------
+
+        private int count(String text, String marker) {
+            int found = 0;
+            for (int at = text.indexOf(marker); at >= 0; at = text.indexOf(marker, at + 1)) {
+                found++;
+            }
+            return found;
+        }
+
+        /** Makes the platform's save of {@code p} unable to land: the file it renames onto is a non-empty directory. */
+        Path blockSaves(String p) throws IOException {
+            Path old = rig.playerDataFile(p).resolveSibling(rig.playerDataFile(p).getFileName() + "_old");
+            deleteTree(old);
+            Files.createDirectories(old.resolve("blocker"));
+            Files.writeString(old.resolve("blocker").resolve("keep"), "this directory stops the server's player save");
+            return old;
+        }
+
+        void deleteTree(Path path) throws IOException {
+            if (Files.isDirectory(path)) {
+                try (var walk = Files.walk(path)) {
+                    for (Path file : walk.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                        Files.delete(file);
+                    }
+                }
+            } else {
+                Files.deleteIfExists(path);
+            }
+        }
+
+        /** The effect never ran: its marker is in no line of the log. */
+        void expectNoEffect(String what) throws IOException {
+            problems.expect(!rig.log().readAll().contains(PAID_MARKER), what + ": the effect ran");
+        }
+
+        /**
+         * K23a: the barrier's {@code Player.saveData()} returned and the thread stops there, before the read-back that
+         * would acknowledge it. The disk holds the snapshot the barrier's own save wrote (the consume already applied), the
+         * ledger holds the INTENT and no DONE, and the effect has not run. Recovery applies the INTENT: nothing returns.
+         */
+        void k23a() throws Exception {
+            String p = "K23aBot";
+            heldAndSaved(p);
+            EscrowFiles.Entry e = disk(p).sole();
+            crash(BARRIER_SAVED, press(p, PAID_BUTTON));
+            Disk d = disk(p);
+            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0,
+                    "the barrier's save should hold the consume applied: " + d.dat().inventory() + " " + d.account());
+            expectIntentOnly(p, e, "decided, not done");
+            expectNoEffect("killed before the read-back");
+            reboot();
+            expectConsumed(p, "recovery applies the INTENT");
+            expectNoEffect("after the boot");
+        }
+
+        /**
+         * K23b: the read-back finds an older snapshot. The server's player save cannot land (the file it renames onto is a
+         * non-empty directory), so after the barrier's save the file on disk is still S', whose {@code gen} predates the
+         * exit: "not yet", never "assume". The effect has not run when the kill comes, and never does.
+         */
+        void k23b() throws Exception {
+            String p = "K23bBot";
+            heldAndSaved(p);
+            EscrowFiles.Entry e = disk(p).sole();
+            Path blocker = blockSaves(p);
+            pressNow(p, PAID_BUTTON);
+            problems.expect(rig.log().awaitLine("did not confirm a snapshot with the exit yet", Duration.ofSeconds(60)) != null,
+                    "the barrier never reported an older read-back");
+            Snap live = inv(p);
+            problems.expect(live.entries() == 0 && live.window().isEmpty(), "the consume itself should be applied: " + live);
+            expectNoEffect("while the disk is stuck");
+            expectDiskHeld(p, "the disk is still S' (older gen)");
+            expectIntentOnly(p, e, "decided, not done");
+            rig.kill();
+            deleteTree(blocker);
+            reboot();
+            expectConsumed(p, "G2 through an old snapshot");
+            expectNoEffect("the effect never ran, before or after the kill");
+        }
+
+        /**
+         * K23c: the healthy path. The effect's marker appears only after the file on disk holds the consume (read at the
+         * moment the marker appears), exactly once, and the DONE record follows.
+         */
+        void k23c() throws Exception {
+            String p = "K23cBot";
+            heldAndSaved(p);
+            EscrowFiles.Entry e = disk(p).sole();
+            pressNow(p, PAID_BUTTON);
+            problems.expect(rig.log().awaitLine(PAID_MARKER, Duration.ofSeconds(60)) != null, "the effect never ran");
+            Disk d = disk(p);
+            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0,
+                    "the effect ran before the file held the consume: " + d.dat().inventory() + " " + d.account());
+            long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
+            while (System.nanoTime() < deadline && EscrowFiles.ledgerOf(rig, p).size() < 2) {
+                Thread.sleep(200);
+            }
+            List<EscrowFiles.Record> records = EscrowFiles.ledgerOf(rig, p);
+            problems.expect(records.size() == 2 && records.get(0).isIntent() && records.get(1).isDone()
+                            && records.get(1).txnHex().equals(records.get(0).txnHex())
+                            && records.get(0).entryHex().equals(e.idHex()),
+                    "the ledger should hold INTENT then DONE of one exit: " + records);
+            problems.expect(count(rig.log().readAll(), PAID_MARKER) == 1, "the effect ran "
+                    + count(rig.log().readAll(), PAID_MARKER) + " times");
+            rig.kill();
+            reboot();
+            expectConsumed(p, "after the boot");
+            expectNoEffect("the effect is not repeated by recovery");
+        }
+
+        /**
+         * K23d: the disk recovers. While the save cannot land the effect waits (the barrier retries with a growing
+         * delay); once the file can be replaced again the next save lands, the read-back proves it, and the effect runs
+         * once, late.
+         */
+        void k23d() throws Exception {
+            String p = "K23dBot";
+            heldAndSaved(p);
+            Path blocker = blockSaves(p);
+            pressNow(p, PAID_BUTTON);
+            problems.expect(rig.log().awaitLine("did not confirm a snapshot with the exit yet", Duration.ofSeconds(60)) != null,
+                    "the barrier never reported an older read-back");
+            expectNoEffect("while the disk is stuck");
+            deleteTree(blocker);
+            problems.expect(rig.log().awaitLine(PAID_MARKER, Duration.ofSeconds(90)) != null,
+                    "the effect never ran after the disk recovered");
+            Disk d = disk(p);
+            problems.expect(d.count("minecraft:diamond") == 0 && d.entries() == 0,
+                    "the effect ran before the file held the consume: " + d.dat().inventory() + " " + d.account());
+            problems.expect(count(rig.log().readAll(), PAID_MARKER) == 1, "the effect ran "
+                    + count(rig.log().readAll(), PAID_MARKER) + " times");
+            rig.kill();
+            reboot();
+            expectConsumed(p, "after the boot");
+            expectNoEffect("the effect is not repeated by recovery");
         }
 
         /**
@@ -839,7 +1153,8 @@ public final class EscrowCrashRunner {
             String ledgerBad = "K18aBot";
             String crcBad = "K18bBot";
             String newer = "K18cBot";
-            EscrowFiles.Entry e = heldAndSaved(ledgerBad, true);
+            heldAndSaved(ledgerBad);
+            EscrowFiles.Entry e = disk(ledgerBad).sole();
             seed(crcBad);
             moveIn(crcBad);
             byte[] bad = EscrowFiles.encodeAccount(inv(crcBad).account());

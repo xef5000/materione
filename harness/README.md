@@ -179,34 +179,41 @@ node --test harness\protocol\floor-bot.test.mjs
   answer is one `MATERIONE-DPROBE <stage> …` line). Two tests: the save paths (`saveData`, quit, shutdown, autosave) and
   reload (P4), and the death matrix, a window released at `InventoryCloseEvent` versus in `PlayerDeathEvent` under both
   `keepInventory` values (P3). The kill rows of its first version (P2) are `PaperEscrowCrashIT`'s now.
-- `PaperEscrowCrashIT` — the **kill-boundary test** of the crash-safe input slots (row H, #313; rows K1 to K22 of
+- `PaperEscrowCrashIT` — the **kill-boundary test** of the crash-safe input slots (row H, #313; rows K1 to K23 of
   [`gui-input-durability.md`](../docs/architecture/gui-input-durability.md) §5.10). The product's own runtime on a real
-  Paper 1.21.4: the `guilogic:escrow` GUI (a one-row chest, `durable: required`), a fake player that logs in through the
+  Paper 1.21.4: the `guilogic:escrow` GUI (a one-row chest, `durable: required`), the `guilogic:consume` GUI (the same,
+  with two buttons whose flows run `custody.consume`, #248) and `guilogic:trash` (the built-in recipe `trash_slot`), a
+  fake player that logs in through the
   real pre-login preload (the probe fires `AsyncPlayerPreLoginEvent` from a plain thread) and the real join handler and
   plays with real click packets, and a **production crash gate**: `CrashGate` (`plugin/.../escrow/gate/`) names points
   inside the escrow code (`account-written`, `click-applied`, `release-done`, `recovery-before-commit`, `recovery-done`,
-  `death-released`, `claim-done`) and, **only when the server JVM has `-Dmaterione.escrow.gate=<anything>`**, parks the
-  thread that reaches the armed name after logging `MATERIONE-ESCROW-GATE <name>`; without the property the call is one
+  `death-released`, `claim-done`, and for the exit and the barrier `exit-begun`, `exit-applied`, `ledger-before-append`,
+  `ledger-after-append`, `barrier-saved`) and, **only when the server JVM has `-Dmaterione.escrow.gate=<anything>`**, parks
+  the thread that reaches the armed name after logging `MATERIONE-ESCROW-GATE <name>`; without the property the call is one
   constant branch the JIT removes (read once into a `static final`, unit-tested and ban-tested). The rig starts the server
   with the property set to `off` and arms a gate from inside (`dprobe arm`) just before the step that reaches it; the
   harness sees the marker, `destroyForcibly`s the process tree (a `kill -9` at that instant), reads the `.dat` and the
   ledger itself, boots the **same world**, logs the player in again and asserts what it holds (G1 conservation, G2 no
   resurrection, G4 no world write, I6 idempotent recovery). A row that needs no mid-step kill kills at `claim-done`, which
-  `/materione claim` reaches without touching any state. Tier 2 (the consume exit) has no caller before #248, so rows
-  K10 to K14 and K17 craft what the missing caller would have left: an EXITING entry (the live account committed through
-  the player's own `PlayerEscrow` by `dprobe adopt`, then a real save) and ledger records (`EscrowFiles`, the harness's
-  own reader and writer of the two formats, written between the kill and the boot); recovery, the preload, the gate and
-  the refusal are the product's. K3 and K4 (a kill inside the platform's own save) are file states.
+  `/materione claim` reaches without touching any state. **Tier 2 and the barrier are the product end to end since #248:**
+  a click on a button of `guilogic:consume` runs the real flow, so K10 to K14, K17 and K23 kill the real exit between its
+  steps. The two ledger gates park the writer's **IO thread** (the server keeps ticking), so a row can `dprobe save` or
+  `dprobe leave` while the exit is stopped half-way; `exit-begun`, `exit-applied` and `barrier-saved` park the main thread.
+  What is still crafted is a file state a kill *inside a write* would leave (the harness's own reader and writer of the two
+  formats, `EscrowFiles`): K3 and K4 (inside the platform's own save), the torn INTENT of K10c and the torn DONE of K17
+  (cut from the real record), and K23b's disk that cannot save (the `.dat_old` the server renames onto is made a non-empty
+  directory, so the player save does not land and the barrier's read-back finds the older snapshot).
 
   | Run | Rows | Boots | When |
   |---|---|---|---|
-  | `PaperEscrowCrashIT.coreRows` | K1 (killed inside the step), K2, K5, K11/K12, K18 | 6 (about 2 min) | **default** `:harness:integrationTest` |
+  | `PaperEscrowCrashIT.coreRows` | K1 (killed inside the step), K2, K5, K11 (a real consume), K18 | 6 (about 2 min) | **default** `:harness:integrationTest` |
   | `tier1Rows` | K1 (after the step), K6, K7, K8a/b/c | 7 | `-Pharness.inputDurability=true` |
   | `deathAndDisableRows` | K9a to d, K20a/b | 7 | opt-in |
-  | `ledgerRows` | K10, K11 (rolled back, G3), K13, K14, K15/K16, K17 | 10 | opt-in |
+  | `ledgerRows` | K10a/b/c, K11 (rolled back, G3), K12, K13 | 7 | opt-in |
+  | `exitRows` | K14a/b, K15/K16, K17, KT (the trash slot, a composition) | 6 | opt-in |
   | `cursorAndFileStateRows` | K21a/b, K22a/b, K3, K4 | 7 | opt-in |
   | `k19AnAutosaveNeverSeesHalfAClick` | K19, Paper autosave on every tick | 2 | opt-in |
-  | `k23TheBarrier` | K23 | n/a | **disabled**: row B (#311) is built; the K23 gate and rows are still to write |
+  | `k23TheBarrier` | K23a (kill between `saveData()` and the read-back), K23b (older snapshot), K23c (effect after the proof), K23d (disk recovers) | 5 | opt-in |
 
   ```bash
   ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT                                  # the core rows

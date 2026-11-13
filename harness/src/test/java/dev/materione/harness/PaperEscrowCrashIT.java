@@ -2,19 +2,18 @@ package dev.materione.harness;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 
 /**
- * Row H of gui-input-durability.md (#313): the kill-boundary integration test, K1 to K22 of section 5.10, with a real
+ * Row H of gui-input-durability.md (#313): the kill-boundary integration test, K1 to K23 of section 5.10, with a real
  * {@code kill -9} of a real Paper 1.21.4 server running the product's own runtime. See {@link EscrowCrashRunner} for
  * what is real and what is crafted, and {@code harness/README.md} for the run commands.
  *
  * <p>{@link #coreRows} is in the default {@code :harness:integrationTest} run (six boots, about three minutes): K1 killed
- * inside a step, K2, K5, K11/K12 (G2 across a kill) and K18 (fail closed). The other groups are opt-in
- * ({@code -Pharness.inputDurability=true}), about a dozen boots each at most. K23 is not run: it needs row B (#311).
+ * inside a step, K2, K5, K11 (a real consume killed with its INTENT durable: G2) and K18 (fail closed). The other groups are opt-in
+ * ({@code -Pharness.inputDurability=true}), about a dozen boots each at most. K23 (the barrier) is {@link #k23TheBarrier}.
  */
 @Tag("integration")
 class PaperEscrowCrashIT {
@@ -61,10 +60,21 @@ class PaperEscrowCrashIT {
     }
 
     @Test
-    @Disabled("K23, the barrier (tier 3), waits for row B (#311, PR #323, not merged): its gates, the DONE record and the read-back do not exist"
-            + " on this branch. Add a barrier gate to CrashGate.Gates beside the saveData call and a row to EscrowCrashRunner"
-            + " that kills after saveData() and before the read-back confirms")
+    @EnabledIfSystemProperty(named = "harness.inputDurability", matches = "true")
+    void exitRows() {
+        HarnessResult result = new EscrowCrashRunner().exits(HarnessOptions.fromProperties());
+        assertThat(result.ok()).as(result.summary()).isTrue();
+    }
+
+    /**
+     * K23, the barrier (tier 3): an effect-carrying consume never runs its effect before the disk proves a snapshot that
+     * holds the consume: killed between {@code saveData()} and the read-back, a read-back that finds an older snapshot,
+     * the effect after the proof, and after a disk that recovers.
+     */
+    @Test
+    @EnabledIfSystemProperty(named = "harness.inputDurability", matches = "true")
     void k23TheBarrier() {
-        // pending row B
+        HarnessResult result = new EscrowCrashRunner().barrier(HarnessOptions.fromProperties());
+        assertThat(result.ok()).as(result.summary()).isTrue();
     }
 }

@@ -1,5 +1,6 @@
 package dev.materione.plugin.escrow.runtime;
 
+import dev.materione.plugin.escrow.gate.CrashGate;
 import dev.materione.plugin.escrow.io.AppendResult;
 import dev.materione.plugin.escrow.io.EscrowLedgerStore;
 import dev.materione.plugin.escrow.io.ReadBack;
@@ -255,6 +256,7 @@ public final class SaveBarrier {
             log.accept("MATERIONE-ESCROW saving " + owner.id() + " for the barrier failed: " + failed
                     + " (not acknowledged; it will be retried)");
         }
+        CrashGate.at(CrashGate.Gates.BARRIER_SAVED); // test-only, inert in production (K23: the kill between save and read-back)
         readBack(slot, owner, true);
     }
 

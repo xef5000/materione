@@ -97,6 +97,7 @@ public final class EscrowRuntime {
     private final Tier1<ItemStack> tier1;
     private final SaveBarrier barrier;
     private final ExitRunner<ItemStack> exits;
+    private final CustodyConsume<ItemStack> custody;
     private final ConcurrentMap<UUID, PlayerEscrow> players = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Long> reported = new ConcurrentHashMap<>();
     private volatile WindowView windows = WindowView.NONE;
@@ -130,9 +131,11 @@ public final class EscrowRuntime {
             this.barrier = new SaveBarrier(ledger, snapshots, clock, barrierCooldownMillis,
                     BarrierBook.DEFAULT_GIVE_UP_MILLIS, plugin.getLogger()::warning);
             this.exits = new ExitRunner<>(tier1, ledger, barrier);
+            this.custody = new CustodyConsume<>(tier1, exits);
         } else {
             this.barrier = null;
             this.exits = null;
+            this.custody = null;
         }
     }
 
@@ -153,6 +156,31 @@ public final class EscrowRuntime {
      */
     public Optional<ExitRunner<ItemStack>> exits() {
         return Optional.ofNullable(exits);
+    }
+
+    /**
+     * The custody consume primitive for {@code player} (#248; {@link CustodyConsume}): the held stack at window slot
+     * {@code slot} of {@code gui} goes through the tier-2 exit. Call on the player's own thread. A refusal because the
+     * decision could not be recorded ({@link CustodyConsume.Refused}) is told to the player here, so every caller shows
+     * it the same way (§7). Empty when the ledger did not start: the capability then fails and no required slot is
+     * served.
+     */
+    public Optional<CustodyConsume.Started<ItemStack>> consume(Player player, String gui, int slot,
+            CustodyConsume.Reach reach) {
+        if (custody == null) {
+            return Optional.empty();
+        }
+        CustodyConsume.Started<ItemStack> started = custody.consume(owner(player), gui, slot, reach);
+        if (started instanceof CustodyConsume.Declined<ItemStack> declined) {
+            refuse(player, declined.reason());
+        } else if (started instanceof CustodyConsume.Running<ItemStack> running) {
+            running.outcome().thenAccept(outcome -> {
+                if (outcome instanceof CustodyConsume.Refused refused) {
+                    refuse(player, refused.reason()); // completes on the player's own thread: the continuation of step 2
+                }
+            });
+        }
+        return Optional.of(started);
     }
 
     /** The player as the tier-2 and tier-3 runtime needs them: their own thread, live state and save. */

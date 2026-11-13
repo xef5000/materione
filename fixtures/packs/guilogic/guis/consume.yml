@@ -1,0 +1,71 @@
+# The custody consume fixture (#248, gui-input-durability.md row H): a one-row chest whose slots 0 to 6 are a
+# `durable: required` input layer (the player's items go into custody in the same step as every click) and whose last two
+# slots are buttons that consume what slot 0 holds, through the real tier-2 exit:
+#   slot 7  custody.consume {slot: 0}                  the flow goes on once the consume is decided (no save is asked for)
+#   slot 8  custody.consume {slot: 0, await: saved}    the effect (a console marker) runs only once a saved snapshot that
+#                                                      contains the consume is read back from disk (the barrier, tier 3)
+# The kill-boundary IT (harness PaperEscrowCrashIT) drives both with real click packets and kills the server at the
+# production crash gates between the steps; the QA catalog (qa/catalog/guiescrow.mjs) reads the console markers.
+consume:
+  title: Consume
+  container: chest_1
+  player_inventory: free
+  layers:
+    - id: frame
+      type: panel
+      x: 0
+      y: 0
+      width: 176
+      height: 132
+    - id: vault
+      type: slots
+      region: container
+      input: true
+      durable: required
+    - id: plain
+      type: button
+      x: 134
+      y: 18
+      width: 16
+      height: 16
+    - id: paid
+      type: button
+      x: 152
+      y: 18
+      width: 16
+      height: 16
+    - id: heading
+      type: text
+      x: 8
+      y: 6
+      text: "CONSUME"
+      font: smallcaps
+      color: "#404040"
+  behavior:
+    - on: gui.open
+      do:
+        - run_command:
+            command: "say MATERIONE-GUICONSUME-OPEN ${gui.id}"
+            as: console
+    - on: gui.click
+      layer: plain
+      do:
+        - custody.consume: { slot: 0 }
+          else:
+            - run_command:
+                command: "say MATERIONE-GUICONSUME-REFUSED"
+                as: console
+        - run_command:
+            command: "say MATERIONE-GUICONSUME-DONE"
+            as: console
+    - on: gui.click
+      layer: paid
+      do:
+        - custody.consume: { slot: 0, await: saved }
+          else:
+            - run_command:
+                command: "say MATERIONE-GUICONSUME-REFUSED"
+                as: console
+        - run_command:
+            command: "say MATERIONE-GUICONSUME-PAID"
+            as: console

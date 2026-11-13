@@ -161,6 +161,57 @@ public final class EscrowFiles {
         return ByteBuffer.allocate(8 + body.length).putInt(body.length).putInt((int) crc.getValue()).put(body).array();
     }
 
+    /** One valid ledger record as the harness reads it: {@code type} 1 INTENT or 2 DONE; {@code entry} is blank for a DONE. */
+    public record Record(int type, String txnHex, String entryHex) {
+
+        public boolean isIntent() {
+            return type == 1;
+        }
+
+        public boolean isDone() {
+            return type == 2;
+        }
+    }
+
+    /**
+     * The valid records of a ledger file, in order: reading stops at the first record that is torn (cut short, or whose
+     * CRC fails), which is not a record (section 5.3). Empty when the file does not exist or has no complete header.
+     */
+    public static List<Record> readLedger(Path file) throws IOException {
+        if (!Files.exists(file)) {
+            return List.of();
+        }
+        ByteBuffer in = ByteBuffer.wrap(Files.readAllBytes(file));
+        if (in.remaining() < 6 || in.getInt() != 0x4D54524C /* MTRL */ || in.getShort() != 1) {
+            return List.of();
+        }
+        List<Record> out = new ArrayList<>();
+        while (in.remaining() >= 8) {
+            int length = in.getInt();
+            int crc = in.getInt();
+            if (length < 1 || length > in.remaining()) {
+                break;
+            }
+            byte[] body = new byte[length];
+            in.get(body);
+            CRC32 check = new CRC32();
+            check.update(body);
+            if ((int) check.getValue() != crc) {
+                break;
+            }
+            int type = body[0] & 0xFF;
+            String txn = HexFormat.of().formatHex(body, 1, 17);
+            String entry = type == 1 ? HexFormat.of().formatHex(body, 17, 33) : "";
+            out.add(new Record(type, txn, entry));
+        }
+        return out;
+    }
+
+    /** The valid records of a fake player's ledger. */
+    public static List<Record> ledgerOf(CrashRig rig, String player) throws IOException {
+        return readLedger(ledgerFile(rig, player));
+    }
+
     public static byte[] concat(byte[]... parts) {
         int size = 0;
         for (byte[] part : parts) {

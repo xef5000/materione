@@ -1,0 +1,31 @@
+# Trash slot (logic.md §7.5, §36): a composition, not an engine feature (D12). An item put into the input layer is consumed.
+# The layer is a `slots` layer with `input: true` and `durable: required`, so what it holds is in custody, and the only
+# primitive here is custody.consume: gui.slot_change fires before the change lands, so the rule waits one tick and
+# consumes what the slot then holds. The consume is atomic and survives a crash exactly once (gui-input-durability.md §5.4);
+# it asks for no save, because nothing waits on it. If it fails (a busy slot, a server without checkpoint support), the
+# else runs and the item stays the player's.
+name: Trash slot
+description: Consumes whatever the player puts into an input layer. The layer must be a slots layer with input true and durable required. The item is gone for good once it is consumed, and a crash never brings it back or loses it twice.
+params:
+  layer:
+    type: string
+    description: The id of the input layer that is the trash (a slots layer with input true and durable required)
+  message:
+    type: string
+    default: "<gray>Trashed."
+    description: Shown on the actionbar when the item has been consumed
+  refused_message:
+    type: string
+    default: "<red>That could not be trashed."
+    description: Shown on the actionbar when the item could not be consumed (it stays where it is)
+rules:
+  - on: gui.slot_change
+    layer: "{{layer}}"
+    do:
+      - if: "${slot.amount > 0}"
+        then:
+          - wait: 1
+          - custody.consume: { slot: "${slot.index}" }
+            else:
+              - actionbar: "{{refused_message}}"
+          - actionbar: "{{message}}"

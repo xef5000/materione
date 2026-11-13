@@ -138,9 +138,9 @@ final class StepCompiler {
     }
 
     /**
-     * An action step. An action that asks a question ({@link dev.materione.api.logic.ActionType#takesElse()}) always
-     * runs as a {@link RequireStep} around itself, so an unanswered question ends the run; its {@code else:} is what
-     * runs first (logic.md §6.6). Any other action takes no {@code else:}.
+     * An action step. An action that guards what follows it ({@link dev.materione.api.logic.ActionType#takesElse()}: a
+     * question, or a consume an effect depends on) always runs as a {@link RequireStep} around itself, so its failure
+     * ends the run; its {@code else:} is what runs first (logic.md §6.6, §36). Any other action takes no {@code else:}.
      */
     private Step action(Map<String, Object> shape, StepPath path) {
         boolean hasElse = shape.containsKey("else");
@@ -152,15 +152,15 @@ final class StepCompiler {
         Step compiled = actions.compile(action, path);
         if (compiled instanceof ActionStep<?> step && step.type().takesElse()) {
             if (step.chance() < 1) {
-                // a skipped question would let the steps after it run with no answer: the guard is not optional
-                throw unit.structural(path.child(ActionStep.CHANCE_KEY), "a question takes no chance:",
-                        "a question is always asked; put an if around it to decide whether to ask");
+                // a skipped guard would let the steps after it run without what they depend on: it is not optional
+                throw unit.structural(path.child(ActionStep.CHANCE_KEY), "a guarding step takes no chance:",
+                        "a step that guards what follows always runs; put an if around it to decide whether to run it");
             }
             return new RequireStep(path, List.of(step), list(shape.get("else"), path.child("else")), false);
         }
         if (hasElse) {
             throw unit.structural(path.child("else"), "'else' does not belong on this action",
-                    "only an action that asks a question takes an else (prompt)");
+                    "only an action that asks a question or guards what follows takes an else (prompt, custody.consume)");
         }
         return compiled;
     }

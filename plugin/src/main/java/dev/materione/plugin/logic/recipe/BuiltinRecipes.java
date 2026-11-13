@@ -23,7 +23,8 @@ import org.bukkit.plugin.Plugin;
  * through the public {@link LogicApi#recipes()} like an addon's recipe (D5). A resource that does not load is left
  * out with {@code MTR-0085}, and the others register: a broken recipe never stops the server or the logic.
  *
- * <p>The trash slot is not here. It needs the consume-incoming action of #248, which is blocked (logic.md §25).
+ * <p>The trash slot ({@code trash_slot}) is a composition over {@code custody.consume} (#248, logic.md §36): its behavior is
+ * only its YAML.
  */
 public final class BuiltinRecipes {
 
@@ -36,6 +37,7 @@ public final class BuiltinRecipes {
             "paged_player_list",
             "toggle_setting",
             "server_selector",
+            "trash_slot",
             "back_button");
 
     private BuiltinRecipes() {}

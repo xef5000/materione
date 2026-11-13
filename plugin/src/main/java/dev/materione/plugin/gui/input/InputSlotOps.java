@@ -1,11 +1,14 @@
 package dev.materione.plugin.gui.input;
 
+import dev.materione.plugin.escrow.runtime.CustodyConsume;
 import dev.materione.plugin.escrow.runtime.Tier1;
 import dev.materione.plugin.gui.GuiLookup;
 import dev.materione.plugin.gui.GuiMenu;
 import dev.materione.plugin.gui.RuntimeGuis;
 import dev.materione.plugin.gui.session.GuiSession;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.bukkit.NamespacedKey;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
@@ -60,10 +63,9 @@ public final class InputSlotOps implements InputSlotPort {
         switch (op.kind()) {
             case CLEAR -> {
                 if (escrowed) {
-                    // a deletion of an escrowed stack is a tier-2 exit (its decision must outlive a rollback); that
-                    // is #248's consume action, not built yet, so it is refused rather than done unsafely
-                    return Optional.of("clear is not available on a durable: required slot yet (it needs the exit "
-                            + "ledger); take the item, or use durable: best_effort");
+                    // a deletion of an escrowed stack is a tier-2 exit (its decision must outlive a rollback): the same
+                    // consume as custody.consume, started here and not waited for (#248)
+                    return strict.clear(player, menu, slot);
                 }
                 inventory.setItem(slot, null);
             }
@@ -79,9 +81,9 @@ public final class InputSlotOps implements InputSlotPort {
                     return Optional.of("the stack holds at most " + item.getMaxStackSize());
                 }
                 if (escrowed) {
+                    // set_amount 0 deletes the stack: the same tier-2 consume as clear; any other amount is an edit
                     return op.amount() <= 0
-                            ? Optional.of("set_amount 0 deletes the stack, which a durable: required slot does not "
-                                    + "allow yet (it needs the exit ledger)")
+                            ? strict.clear(player, menu, slot)
                             : strict.edit(player, menu, slot, BukkitStacks.withAmount(item, op.amount()));
                 }
                 inventory.setItem(slot, BukkitStacks.withAmount(item, op.amount()));
@@ -120,6 +122,28 @@ public final class InputSlotOps implements InputSlotPort {
         }
         journal.mirror(player); // the window changed: the journal follows it
         return Optional.empty();
+    }
+
+    @Override
+    public CompletionStage<Optional<String>> consume(Player player, GuiSession session, int slot,
+            CustodyConsume.Reach reach) {
+        Optional<Inventory> top = inputInventory(session, slot);
+        if (top.isEmpty()) {
+            return refused("slot " + slot + " is not an input slot of an open GUI");
+        }
+        GuiMenu menu = (GuiMenu) session.window();
+        if (!strict.escrowed(menu, slot)) {
+            return refused("slot " + slot + " is not held in custody: its layer is durable: best_effort (a consume "
+                    + "needs durable: required; gui.slot_item clear deletes from a best_effort layer)");
+        }
+        if (BukkitStacks.view(top.get().getItem(slot)).empty()) {
+            return refused("slot " + slot + " is empty");
+        }
+        return strict.consume(player, menu, slot, reach);
+    }
+
+    private static CompletionStage<Optional<String>> refused(String reason) {
+        return CompletableFuture.completedFuture(Optional.of(reason));
     }
 
     /** The window's inventory, when {@code slot} belongs to its displayed input policy. */

@@ -9,6 +9,21 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **`custody.consume`: the atomic exit of items held in custody, and the trash slot as a composition (#248, D12).** A new logic action
+  `custody.consume: {slot, await}` consumes the stack a `durable: required` input slot holds, atomically, through the crash-safe exit of
+  gui-input-durability.md (the decision is recorded in the ledger before the stack is deleted, so a crash leaves it consumed exactly once or
+  still the player's). The flow continues once the consume is decided and applied; with `await: saved` it continues only after a saved
+  snapshot containing the consume has been read back from disk, so an effect written after it (a payout, a command) can never outlive a
+  rolled-back consume. A failure runs the step's `else:` and ends the run, like `prompt`. `gui.slot_item` `clear` and `set_amount 0` on a
+  `required` layer, refused until now, are the same consume (begun, not waited for); `best_effort` layers behave as before, and
+  `custody.consume` refuses a `best_effort` slot. The **trash slot is not an engine feature**: it is the new built-in recipe `trash_slot`
+  (a rule on `gui.slot_change` that waits a tick and consumes the slot that changed), listed in the Recipes panel. No new diagnostic codes.
+  The kill-boundary integration test now kills the real exit (K10 to K14, K17) and gains K23, the barrier's own rows (a kill between
+  `saveData()` and the read-back, a read-back that finds an older snapshot, the effect after the proof, a disk that recovers); the
+  fixtures `guilogic:consume` and `guilogic:trash` and QA entries `guiescrow.trash-*` and `guiescrow.consume-*` (not blessed) cover the
+  player-visible behavior. `ActionType#takesElse` now means "guards what follows" (a question, or a consume). Nothing is called crash-safe
+  until the rows are green on main.
+
 - **The escrow save barrier and the exit path behind it (gui-input-durability.md §12 row B, #311).** The tier-3 acknowledgment of crash-safe input
   slots: the plugin can now carry an *exit* (a consumed stack, #248's trash and any later effect) through its four steps: freeze the stack,
   record the decision in the ledger, apply the deletion, and then **prove a saved snapshot with the exit is on disk** by asking the server to

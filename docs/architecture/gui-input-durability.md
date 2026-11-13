@@ -6,11 +6,11 @@
 > its crash-boundary proof obligations, its test plan and its implementation rows. It also corrects the durability
 > claims the shipped journal makes (§2).
 >
-> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308), L (the ledger IO, #309), P (the plugin runtime: manual clicks, owed and claim, the death release, the recovery gate, #310), B (the tier-3 barrier and the tier-2 exit path, #311) and H (the kill-boundary IT, K1 to K22 against a real `kill -9`, #313) are built, as recorded in §12; the barrier's crash row K23 is not yet in the IT.** The owner first kept the work
+> **Status: design, answered by the owner on PR #303 (§14); rows M (the pure model, codecs and recovery, #307), R (the probes, #306), S (the `durable:` schema and studio field, #308), L (the ledger IO, #309), P (the plugin runtime: manual clicks, owed and claim, the death release, the recovery gate, #310), B (the tier-3 barrier and the tier-2 exit path, #311), H (the kill-boundary IT, K1 to K23 against a real `kill -9`, #313) and X (the consume action `custody.consume`, #248) are built, as recorded in §12; with row X the tier-2 rows K10 to K14 and K17 and the barrier row K23 run against the real exit, not a crafted one.** The owner first kept the work
 > blocked until the platform acknowledges saves, then ruled that **the tier-3 barrier (`Player.saveData()` plus a file
 > read-back, §5.4) *is* that acknowledgment: the block on #247 and #248 is lifted.** This document is the accepted design
 > to build. What the lift does and does not change: the rows of §12 may now be filed and built, and #248 waits on them
-> (row X), not on an outside ack. Row P (#310) made `durable: required` layers take the escrow path; `best_effort` layers (the default) are the journal of logic.md §25 decision 12, unchanged. **Nothing may be described as crash-safe until rows M, L, P, B and H are green on main:** rows B and H are built, **but H's K23 (the barrier) is not yet written** (§12, *Row H as built*), so a `required` layer is *tracked, recoverable by construction and verified by a kill-boundary run for every tier-1 and recovery row (K1 to K22)* and *not yet verified for the barrier (K23)*, and every word in the product says so.
+> (row X), not on an outside ack. Row P (#310) made `durable: required` layers take the escrow path; `best_effort` layers (the default) are the journal of logic.md §25 decision 12, unchanged. **Nothing may be described as crash-safe until rows M, L, P, B and H are green on main:** all five are built, and every row of the crash-boundary table (K1 to K23, §5.10) now has a test against a real kill (§12, *Row H as built*, *Row X as built*). The condition for the word is *green on main*, which is the owner's gate and not this document's: until it is met a `required` layer is *tracked, recoverable by construction and verified by a kill-boundary run for every row*, and every word in the product says no more than that.
 >
 > **Row R (#306) has run the platform probes P1 to P4 (§11).** All four are settled and the design stands: a fake-connection
 > player works on the 1.21.4 harness (P4), a completed save survives `destroyForcibly` (P2), the death ordering and both
@@ -31,7 +31,7 @@
 > **D12 reading** (architecture §3.1, [`primitives.md`](primitives.md) §4.8, §5.1): the account and the ledger are the **custody**
 > primitive under a GUI-specific name. Input slots are one place custody can sit, and the reserved `HAND_OFF` kind is the atomic
 > transfer between holders. Nothing in this design changes, and no row is reordered: the generalization of the name, the holders
-> and the entry points waits for rows B and H, so that it never weakens a guarantee that is not yet proven.
+> and the entry points waits for rows B and H, so that it never weakens a guarantee that is not yet proven. Row X (#248) ships the exit as a custody-named verb, `custody.consume` (logic.md §36), and the trash slot as a composition over it.
 
 ---
 
@@ -215,7 +215,7 @@ inventory. A snapshot is therefore always (inventory, account) from the same ins
 If encoding fails (a stack that does not serialise, the account over its size cap of 256 KiB or 54 entries, owner-confirmed §14 Q7), the step is not performed:
 the click is cancelled, `MTR-0102`, the player is told (I7).
 
-**Tier 2 — an exit with a durable decision** (consume now; hand-off later). Used by #248:
+**Tier 2 — an exit with a durable decision** (consume now; hand-off later). Used by #248, as the action `custody.consume` (§12 row X; logic.md §36):
 
 ```
 1  owner:  validate every check for the whole move (as #248 states); move the incoming stack into a new
@@ -239,7 +239,7 @@ click sequence number is not the live one; after step 1 only the ledger decides.
 *The one rollback case (G3).* If the snapshot on disk predates step 1, E is not in its account and the stack is still in
 its inventory; recovery finds an `INTENT` for an entry it does not hold and does nothing — the player keeps the item.
 That is a rollback, not a duplicate (no second copy exists), **but** if the consume was paired with an *effect* (a flow
-that pays money after consuming), the effect survived the rollback. #248's trash has no effect. For effect-carrying
+that pays money after consuming), the effect survived the rollback. A plain consume (the trash slot) has no effect. For effect-carrying
 exits, **tier 3**:
 
 **Tier 3 — the barrier, which is the acknowledgment (owner-approved §14 Q4; ruled to be the platform acknowledgment that lifts the block, §14 Q1b; row B).** Before the effect, require proof that a snapshot with `gen ≥ g(E)` is on disk:
@@ -250,7 +250,7 @@ autosave already pays per player, and the only synchronous IO this design asks f
 compare `gen`). The read-back is the acknowledgment the platform does not provide (`saveData` is `void`, F1); a failed
 or stale read-back means "not yet", never "assume". Every tier-2 exit is acknowledged by a read-back (step 4: `DONE`, and the end of its G3 exposure), and an exit that
 carries an *effect* additionally **waits** for it before the effect runs, and **only such an exit asks for a save** (D8's note admits the
-call for no other). #248's trash has no effect, so it neither waits nor requests a save: the player sees the deletion at step 3, and its `DONE`
+call for no other). A plain consume (the trash slot) has no effect, so it neither waits nor requests a save: the player sees the deletion at step 3, and its `DONE`
 follows when a read-back finds a snapshot the server saved by itself (the autosave, a quit, any other plugin's save), polled every 30 s; a
 save that an effect-carrying exit caused acknowledges it too. The exception is narrow: one `Player.saveData()` per player per cooldown, only
 while an exit that carries an effect waits, and never on a tier-1 or recovery path. *(Row B built it this way, §12 decision 1: an earlier
@@ -271,7 +271,7 @@ moves already do; this design extends it to every click that touches an input sl
 | **Drag** | manual: cancel, distribute `getNewItems()` into the input slots, reduce the cursor | A drag touching a non-input window slot stays refused. |
 | **Drop key, Ctrl-drop, creative clone, unknown action** | refused (as today) | A drop is a world write (G4). |
 | **`gui.slot_item` `take`** | tier 1 (entry → inventory; overflow → OWED) | |
-| **`gui.slot_item` `clear`, #248's consume-incoming** | tier 2 | The only consumers. |
+| **`gui.slot_item` `clear` and `set_amount 0`, and `custody.consume` (#248)** | tier 2 (row X) | The only consumers. `clear` and `set_amount 0` begin the exit and do not wait; `custody.consume` waits for the decision, or with `await: saved` for the proof (§5.4). |
 | **`gui.slot_item` `set_amount`/`repair`/`enchant`** | tier 1 (entry updated, `gen++`) | An in-place edit of an escrowed stack. |
 | **Close (player, flow, replaced window)** | tier 1: every HELD entry → inventory; what does not fit → OWED; frozen EXITING entries stay | Nothing is dropped. The player is told how many stacks are owed (`/materione claim`). |
 | **Reload / shape-changing re-open** | tier 1: entries keep ids, slot hints change; entries whose slot stopped being an input are returned | No IO. The in-flight window is replaced in one step. |
@@ -416,12 +416,15 @@ live step 3 or by recovery, and a record applied twice is a no-op because the en
 * **#218 (shipped):** its click policy, `accept:`, `gui.slot_change` before the change, `SlotPolicy`/`Transfers`/
   `InputSlots` stay. What changes is *how a result is applied* (one tier-1 API instead of "let the server apply, mirror
   later") and what is recorded (the account instead of the flat journal). `gui.slot_change` still fires pre-move.
-* **#248 (unblocked by the lift of the block, waits for rows M, L, P, B, H):** its "share the recoverable ownership transaction with the durability follow-up" is §5.4 tier 2;
-  "stage consumption against the incoming amount, effective only after every check for the whole move passes" is step 1
-  (nothing is removed from the source until every check passed, and the removal is the tier-1 step that creates E);
-  "prevent stale/delayed/out-of-context requests and duplicate consumption" is §5.5's stale rule plus the entry-id
-  idempotence of K11–K13; "recovery preserves deliberate deletion" is G2. #248 additionally needs the typed action
-  through the public GUI action SPI and its fixture — unchanged by this design and **not started**.
+* **#248 (built, row X; re-scoped under D12 from "trash slot" to "custody exit primitive"):** its "share the recoverable
+  ownership transaction with the durability follow-up" is §5.4 tier 2, and the action it asked for is `custody.consume`
+  (logic.md §36). "Stage consumption against the incoming amount, effective only after every check for the whole move
+  passes" is step 1: the incoming stack first becomes a HELD entry by an ordinary tier-1 placement (that is where every
+  check of the move lives: `accept:`, `gui.slot_change`, the caps), and the consume freezes that entry, so nothing is
+  removed from the source by the consume itself; "prevent stale/delayed/out-of-context requests and duplicate
+  consumption" is §5.5's stale rule, the frozen entry's *busy* refusal and the entry-id idempotence of K11–K13;
+  "recovery preserves deliberate deletion" is G2. The trash slot is no longer an engine feature: it is a recipe whose
+  flow is a one-tick wait and this action (logic.md §36).
 
 ## 7. Refusal UX
 
@@ -440,7 +443,7 @@ at most once per player per minute. `doctor` lists the capability result and any
 | **Model-based property test** | Random sequences of {move-in, move-out, swap, close, overflow, consume, quit, death, reload} × a **crash at every step boundary** × **every earlier snapshot** as the saved one; the oracle checks G1–G3 after recovery. The seed set is committed; failures print the seed. | this is the executable form of the K table; it also replays K19 against the *old* design as a negative control |
 | **Golden fixtures** | Account v1 and ledger v1 as hex goldens (empty, one HELD, OWED+EXITING, a torn tail, a bad CRC, a newer version, the legacy `gui_inputs`); decode→encode is byte-identical; N−1 accepted, N+1 opaque. The corpus only grows (roadmap rule 2). | `fixtures/escrow/` |
 | **Ban tests** | owner-side half has no `java.io`/`java.nio.file`/`Future#get`; IO half has no Bukkit entity import; no `dropItemNaturally` in the input package; no `mirrorNextTick`. | plugin.md §11 style |
-| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. **R1 is done (#306, §11 P4):** the rig exists (`CrashRig`, the probe plugin's fake-connection player and `dprobe gate`) and `PaperInputDurabilityIT` carries K1, K2, K4 (file state simulated) and K21 as the skeleton, opt-in (`-Pharness.inputDurability=true`). **Row H is built (#313, §12 *Row H as built*):** the stand-in account and `dprobe gate` are gone, the product's account and `CrashGate` replace them, `PaperInputDurabilityIT` keeps only the save-path and death probes, and `PaperEscrowCrashIT` carries K1 to K22 (K23 waits for row B): its core group (K1, K2, K5, K11/K12, K18) is in the default run, the rest opt-in. |
+| **Harness IT (kill boundaries)** | `PaperEscrowCrashIT`: a test-only probe plugin (as `containerProbe`) owns a fake-connection player and a **crash gate** — a named point in the production code that, only when `-Dmaterione.escrow.gate=<name>` is set, logs `MATERIONE-ESCROW-GATE <name>` and parks the thread. The harness sees the marker, `killTree`s the process (it already has it), boots the same workspace, rejoins the player and asserts G1–G3 for K1–K23 (`saveData()` is called from the console at chosen moments to fix the snapshot). | CI, 1.21.4 floor. **R1 is done (#306, §11 P4):** the rig exists (`CrashRig`, the probe plugin's fake-connection player and `dprobe gate`) and `PaperInputDurabilityIT` carries K1, K2, K4 (file state simulated) and K21 as the skeleton, opt-in (`-Pharness.inputDurability=true`). **Row H is built (#313, §12 *Row H as built*):** the stand-in account and `dprobe gate` are gone, the product's account and `CrashGate` replace them, `PaperInputDurabilityIT` keeps only the save-path and death probes, and `PaperEscrowCrashIT` carries K1 to K22: its core group (K1, K2, K5, K11, K18) is in the default run, the rest opt-in. **Row X (#248, §12 *Row X as built*) makes the tier-2 rows K10 to K14 and K17 run against the real exit and adds K23** (the barrier gates, the ledger writer's IO-thread gates, a disk that cannot save). |
 | **Probe loop (local)** | The same boundaries with a real client on 26.1.2 for the ones a fake player cannot show (cursor, UI messages, hotbar swaps). | local only (CLAUDE.md) |
 | **QA catalog** (`qa/catalog/guiescrow.mjs`) | `guiescrow.refused-unsupported` (auto: the layer is inert, message line, `MTR-0100`), `guiescrow.owed-claim` (auto: full inventory, close, `/materione claim`), `guiescrow.recovery-message` (auto: the join line after a runner-side `kill`), `guiescrow.pickup-lifts-to-cursor` (visual: the stack lifts as in vanilla and the account loses it in the same step), `guiescrow.death-release` (auto: `keepInventory` on/off). | blessed on main; kill/restart needs a `probe.mjs` server-restart verb (row Q) |
 | **Perf** | `EscrowPerfTest`: a 27-stack account encode ≤ 200 µs on the owner thread (added to plugin.md §9 by row P); a tier-1 step allocates no IO. | budget enforced in CI |
@@ -479,7 +482,7 @@ named gate, boot again on the same world, read the player's `.dat` from the harn
 
 ```
 ./gradlew :harness:integrationTest --tests dev.materione.harness.PaperInputDurabilityIT -Pharness.inputDurability=true
-./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT -Pharness.inputDurability=true     # row H: the kill rows, K1 to K22
+./gradlew :harness:integrationTest --tests dev.materione.harness.PaperEscrowCrashIT -Pharness.inputDurability=true     # row H: the kill rows, K1 to K23
 ./gradlew :harness:integrationTest --tests dev.materione.harness.FoliaInputDurabilityIT -Pharness.folia=true   # after: npm ci --ignore-scripts, in harness/protocol
 ```
 
@@ -561,7 +564,7 @@ replaced by an older `.dat_old`. **Not settled here, on purpose:** a *live serve
 real file, the real autosave, the real kill), and K23's kill between `saveData()` and the read-back. Both are row H's IT; `SaveBarrier#saveNow`, after `owner.save()` returns and before
 the read-back is started, is the one place its crash gate belongs.
 
-## 12. Implementation rows (rows M, R, S, L, P, B and H built; K23 of row H is still to write; the others proposed)
+## 12. Implementation rows (rows M, R, S, L, P, B, H and X built; Q, T and F proposed)
 
 Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high effort, regular implementation on Haiku.
 
@@ -573,11 +576,11 @@ Model policy (agent-delegation): senior and cross-cutting work on Sonnet at high
 | **L** | Ledger IO | Per-player FIFO async writer on the IO executor, `fsync` option, torn-tail truncation, compaction, quarantine, pre-login preload, ban tests, `MTR-0101`/`MTR-0102`. **Built (#309)**: see *Row L as built* below | M | Sonnet, high |
 | **P** | Plugin runtime | One tier-1 API; every strict click made manual (single-slot, number key, offhand, drag; pickup lifts to the cursor); OWED + `/materione claim`; the `PlayerDeathEvent` release; recovery gate; capability check and refusal UX; `MTR-0100`/`MTR-0103`; `gui_inputs` migration; `EscrowPerfTest`. **Built (#310)**: see *Row P as built* below | M, L | Sonnet, high |
 | **S** | Schema and studio | `durable: required \| best_effort` on `slots` layers: parse, `describe` self-description, lossless round-trip, the studio inspector field and its `webui` spec, goldens; default `best_effort`. | none (lands before P uses it) | Sonnet, high (web UI). **Built (#308)**: see *Row S as built* below |
-| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high. **Built (#313), K23 pending row B**: see *Row H as built* below |
+| **H** | Kill-boundary IT | `PaperEscrowCrashIT` for K1–K23, on the row R rig: it replaces the probe's stand-in account with the product's, `dprobe gate` with the production gate, calls the pre-login preload directly (the fake player fires no login events, §11), and decides which rows join the default run. | R, P | Sonnet, high. **Built (#313); K23 and the real tier-2 rows by row X (#248)**: see *Row H as built* below |
 | **Q** | Close-out | QA catalog `guiescrow.*`, `probe.mjs` restart verb, plugin.md §5/§7 (the `storage/escrow/` ledger row, backed up with `storage/`)/§9, logic.md §6.5/§25 as built, glossary, CHANGELOG. | P, H | Haiku |
 | **B** | Barrier (tier 3, owner-approved; **the acknowledgment**) | `saveData()` rate limit + read-back ack that writes `DONE` and releases effect-carrying exits; the D8 exception's code is this row only; ban-test allowlist for exactly one call site; K23. | L, P | Sonnet, high. **Built (#311)**: see *Row B as built* below |
 | **T** (follow-up) | Admin tooling | `/materione escrow <player>` (list, force-return, force-drop). Out of scope here (§14 Q11). | P | later |
-| **X** | #248 consume-incoming action | Starts when rows M, L, P, B and H are green on main (the block was lifted, §14 Q1b, so no outside acknowledgment is awaited). Not part of this design. | M, L, P, B, H | per #248 |
+| **X** | #248 custody consume action | **Built (#248)**, see *Row X as built* below: the action `custody.consume` (logic.md §36) and the routing of `gui.slot_item clear` and `set_amount 0` through the same exit; the trash slot as a recipe over it; row H's tier-2 rows made real and K23 added. | M, L, P, B, H | Sonnet, high |
 | **F** | Folia platform axis in the harness and the QA suite | **Design note only; not implemented.** The owner approved fetching a Folia jar for P1 (§14 Q9b) and noted the whole QA suite may need to run on Folia. (1) `:harness` gains a platform axis `paper \| folia` beside the existing pin mechanism (`gradle/libs.versions.toml` pin, sha256-verified download, Gradle cache): each existing IT is parameterised, the log-marker contract is unchanged, and `PaperEscrowCrashIT` runs on both. (2) The probe server gains a platform choice (Folia 26.1.2 build 8 exists for the probe pin, §11); the QA runner records the platform in each ledger entry's `env`, so a pass on Paper never counts as a pass on Folia, and `plan` lists due tests per platform. (3) Tests whose steps assume the Bukkit main thread (RCON-driven `give`, `tp`, teleports to an anchor) get a Folia path or a documented skip with a reason. (4) **Row R2's first output is the measured gap list in §12.1** (Folia ships builds for both pins, §11). Its own issue, not folded into #247. | R2 | Sonnet, high |
 
 ### 12.1 Row F's gap list: the Paper integration tests on Folia (measured in row R, #306)
@@ -784,7 +787,7 @@ stacks* in one owner-thread call; a refusal changes neither side. `apply(Delta)`
 | Shift in/out, double-click collect | `SlotMoves`: the existing planners, now building a `Delta` that goes through `StrictInputs.apply` for every layer (for a window with no required slot the writes are the plain ones, as before) |
 | Pickup | the stack lands on the cursor and the entry leaves the account in the same step (G5: nothing guards the cursor) |
 | Drop key, Ctrl-drop, clone, unknown | refused, as before |
-| `gui.slot_item` | `take`: the inventory, or OWED; `set_amount`/`repair`/`enchant`: `Tier1.edit` on a copy of the stack. **`clear` and `set_amount 0` are refused** on a required layer ("needs the exit ledger"): a deletion is a tier-2 exit (#248), and doing it as tier 1 would let a crash resurrect it |
+| `gui.slot_item` | `take`: the inventory, or OWED; `set_amount`/`repair`/`enchant`: `Tier1.edit` on a copy of the stack. **`clear` and `set_amount 0` began as refused** on a required layer ("needs the exit ledger"): a deletion is a tier-2 exit, and doing it as tier 1 would let a crash resurrect it. **Since row X (#248) they are that exit**: the same consume as `custody.consume`, begun and not waited for (§12 *Row X as built*) |
 | Close, session end, replaced window | `StrictInputs.release` from `GuiWindowListener` and `BukkitWindowHost.releaseInputs`: every HELD entry to the inventory, OWED retried first, the rest OWED, the slots cleared. Entries *between windows* are skipped |
 | Re-open, rewrite that changes the input slots | `beginCarry` lifts the old window's escrowed stacks out (they stay HELD, in the account, marked *carrying*), `placeCarried` puts each back at the same slot when it is still escrowed, else returns it to the player (inventory, or OWED); the old window's close, which fires inside `openInventory`, therefore cannot return a carried stack a second time. A window that does not open gets its stacks back (`restoreCarried`) |
 | Death | `PlayerDeathEvent` at `MONITOR` (so `getKeepInventory()` is final): `keepInventory` returns the HELD entries to the inventory (OWED on overflow), otherwise appends them to `getDrops()`; the window's escrowed slots are cleared in the same step, so the `closeContainer(DEATH)` after it returns nothing a second time. A respawn rewrites the live account into the respawned player's data |
@@ -810,13 +813,13 @@ stacks* in one owner-thread call; a refusal changes neither side. `apply(Delta)`
 
 **Tests.** `ClickPlannerTest` (every action), `Tier1ClicksTest` (each click type on a required slot, refusals, a frozen slot, a desync), `Tier1LifecycleTest` (close and overflow, claim, take, edit, carry, death with both `keepInventory` values and a ledger decision, recovery, the gate, idempotence, the legacy adoption, an unreadable account or ledger), `Tier1CrashPropertyTest` (150 seeds x 70 steps of random strict clicks, closes, claims and deaths, with a simulated kill after every step recovered by the real codec and recovery), `EscrowCapabilityTest`, `EscrowPerfTest` (27-stack encode under 200 microseconds; a strict click on a 27-entry account under 1 ms; a nine-slot shift under 2 ms, medians), `EscrowIoBansTest` still holds the runtime (`java.nio.file` moved to `DirectoryProbe`), `EscrowGoldenFixturesTest.accountLegacyAdopted`, `GuiInputSlotsTest` (the compiled input carries `durable`). QA entries `guiescrow.*` (not blessed): `pickup-lifts-to-cursor` (auto and visual), `owed-claim`, `death-release`.
 
-**Left for rows B, H and Q (H is built, see *Row H as built*).** The tier-2 consume exit and the `clear` refusal (X/#248); the barrier (B, built in #311, below); the kill-boundary IT and its swap of the probe's stand-in account for this runtime (H); the QA entries that need the `probe.mjs` restart verb (`guiescrow.refused-unsupported`, `guiescrow.recovery-message`, the legacy migration) and the persistence-table row (Q). `StrictInputs` and `Tier1` are the hooks: tier 2 adds `Exits` calls beside `take`, and row B adds the one `saveData()` call site.
+**Left for rows B, H and Q (H is built, see *Row H as built*).** The tier-2 consume exit and the `clear` refusal (X/#248, built: *Row X as built*); the barrier (B, built in #311, below); the kill-boundary IT and its swap of the probe's stand-in account for this runtime (H); the QA entries that need the `probe.mjs` restart verb (`guiescrow.refused-unsupported`, `guiescrow.recovery-message`, the legacy migration) and the persistence-table row (Q). `StrictInputs` and `Tier1` are the hooks: tier 2 adds `Exits` calls beside `take`, and row B adds the one `saveData()` call site.
 
 ### Row B as built (#311)
 
-The tier-3 barrier and the tier-2 exit path (steps 1 to 4 of §5.4), up to the point where #248's action begins. **Nothing in the product calls
-the entry points yet** (X, #248): a `durable: required` layer still refuses `gui.slot_item clear` and `set_amount 0`. What runs on a live server
-is wiring only: the read-back and the barrier exist, the quit handler tells the barrier, and the plugin's disable closes it.
+The tier-3 barrier and the tier-2 exit path (steps 1 to 4 of §5.4), up to the point where #248's action begins. **At the time of row B nothing in the product called
+the entry points** (that was row X, #248, now built: *Row X as built*): a `durable: required` layer then still refused `gui.slot_item clear` and `set_amount 0`. What ran on a live server
+was wiring only: the read-back and the barrier exist, the quit handler tells the barrier, and the plugin's disable closes it.
 
 **Where.**
 
@@ -873,7 +876,7 @@ autosave (the other half of P6) is a call of `EscrowReadBack#read` through that 
 ### Row H as built (#313)
 
 The kill-boundary integration test: K1 to K22 against a real `kill -9` of a real Paper 1.21.4 server running the product's own
-runtime. **K23 is not written yet: row B (#311) is now built, so it can be**, see *Left for later* below. Run commands, the run table and the harness
+runtime. **Row X (#248) completed it:** K10 to K14 and K17 kill the real tier-2 exit instead of a crafted one, and K23 (the barrier) is written (*Row X as built*, the table below). Run commands, the run table and the harness
 mechanics are in `harness/README.md`; this section records what was decided and what was found.
 
 **What runs.** `PaperEscrowCrashIT` (`EscrowCrashRunner`, `EscrowFiles`, `CrashRig`, the `durabilityProbe` plugin). The server
@@ -908,14 +911,19 @@ only class of the escrow code that parks or sleeps a thread, proven against a pl
 own package because `escrow.runtime` may not block (I4). Row B adds its own gate name beside `saveData()`.
 
 **What is real and what is crafted.** Everything of tier 1 (K1 to K9, K15, K16, K19 to K22) is the product end to end, killed at a
-production gate or at the quiescent `claim-done` gate. Tier 2 has no caller before #248, so for **K10 to K14 and K17** the harness crafts the
-two things the missing caller would have left: an EXITING entry (the real HELD entry of a real click, its state flipped by the
-harness's own account codec and committed through the player's live `PlayerEscrow` by the probe's `dprobe adopt`, which uses the
-product's `AccountCodec`, followed by a real `Player#saveData`), and the ledger records (`EscrowFiles` writes INTENT records
-between the kill and the boot: a second, independent implementation of the §5.3 layout, so the doc's layout and the plugin's are
-checked against each other). The preload, the gate, recovery, the quarantine and the refusal that act on them are the product's.
-**K3 and K4** are file states (a stray half-written temp file; `.dat` removed so `.dat_old` is loaded): the gate cannot sit inside
-`PlayerDataStorage.save`, and no JVM-level hook was added.
+production gate or at the quiescent `claim-done` gate. **Since row X (#248) so is tier 2 and the barrier** (K10 to K14, K17, K23): a real
+click on a button of the `guilogic:consume` GUI runs the real flow `custody.consume`, which freezes the real held entry, appends the
+real INTENT through the real ledger writer, deletes the entry and, for `await: saved`, makes the real barrier call `Player.saveData()`
+and read the file back; the kill lands at the production gates between those steps (`exit-begun`, `ledger-before-append`,
+`ledger-after-append`, `exit-applied`, `barrier-saved`). The two ledger gates park the writer's **IO thread**, so the server keeps
+ticking and a row can save or quit the player while the exit is stopped half-way, which is how a snapshot that holds a frozen entry
+gets onto the disk with the INTENT not yet, or only just, written. The first version of this table crafted the EXITING entry (`dprobe
+adopt`) and the INTENT records; both are gone. What is still a **file state**, because a kill *inside a write* cannot be gated
+without altering the write: **K3 and K4** (a stray half-written temp file; `.dat` removed so `.dat_old` is loaded: the gate cannot sit
+inside `PlayerDataStorage.save`), **K10c** and **K17** (the bytes of the real INTENT, or of a real DONE, cut short and appended after
+the kill, by `EscrowFiles`, a second, independent implementation of the §5.3 layout, so the doc's layout and the plugin's are checked
+against each other), and **K23b**'s disk that cannot save (the `.dat_old` the server renames onto is made a non-empty directory, so the
+server's own save fails and logs, which is exactly what a read-only or full disk does). No JVM-level hook was added.
 
 **The rows.** Every row asserts against the player's `.dat` read by the harness itself and against the rebooted player: **G1**
 conservation (every stack exactly once, inventory or owed), **G2** no resurrection, **G4** no dropped item entity, **I6** idempotent
@@ -932,37 +940,78 @@ recovery.
 | K7 | `tier1Rows` | after a save | OWED on disk with a full inventory, `MTR-0103`, no dropped item before or after, `/materione claim` returns it |
 | K8a/b/c | `tier1Rows` | `release-done` inside a quit; a completed quit; a graceful stop with a window open | each leaves the stack exactly once |
 | K9a to d | `deathAndDisableRows` | `death-released` (both `keepInventory` values); completed deaths | an unsaved death is rolled back; a completed death drops (off) or keeps (on) once, nothing is owed or duplicated |
-| K10 | `ledgerRows` | quiescent + torn INTENT | no decision, E returned; the torn tail is left in place (a read never writes) |
-| K11/K12 | `coreRows` | quiescent + INTENT | E EXITING on disk and a durable INTENT: dropped (G2) |
-| K11 rolled back | `ledgerRows` | quiescent | INTENT for an entry the snapshot never held: the stack stays in the inventory (G3) |
-| K13 | `ledgerRows` | quiescent + INTENT | snapshot already without E: the record is inert |
-| K14a/b | `ledgerRows` | a real quit with E EXITING in the live account | the close does not return a frozen entry (no second copy); INTENT after the save: dropped; none: returned |
-| K15, K16 | `ledgerRows` | `recovery-before-commit`, `recovery-done`, then a saved recovery | recovery changes only memory (the disk is byte-identical after each kill); a drained account returns nothing on the next crash |
-| K17 | `ledgerRows` | quiescent + valid INTENT + torn tail | the INTENT counts, the tail is ignored, no quarantine, no `MTR-0101` |
+| K10a | `ledgerRows` | `exit-begun` (owner thread, after step 1) | no INTENT was even queued; S' holds E HELD; E is returned once |
+| K10b | `ledgerRows` | `ledger-before-append` + a save | the writer is stopped before it writes: S' holds E EXITING, the ledger nothing; no decision, E is returned once |
+| K10c | `ledgerRows` | K10b + the real INTENT cut at 30 bytes appended (file state) | a torn tail is not a record: E returned; the torn tail is left in place (a read never writes) |
+| K11 | `coreRows` | `ledger-after-append` + a save | the INTENT is durable, step 3 has not run, S' holds E EXITING and no diamonds: dropped (G2); no quarantine, no `MTR-0101` |
+| K11 rolled back | `ledgerRows` | `ledger-after-append`, no save | INTENT for an entry the snapshot never held (S has the stack in the inventory): the stack stays (G3) |
+| K12 | `ledgerRows` | `exit-applied` (owner thread, after step 3) | the slot is cleared live, no save since: S' holds E HELD with a durable INTENT: dropped |
+| K13 | `ledgerRows` | a completed consume, a save, `claim-done` | S'' has neither the stack nor E; the INTENT is inert; consumed once, no `MTR-0101` |
+| K14a | `exitRows` | `ledger-after-append` + a real quit | the close does not return a frozen entry (no second copy), the quit's save holds E EXITING, the INTENT was written first: dropped |
+| K14b | `exitRows` | `ledger-before-append` + a real quit | the quit's save holds E EXITING and the INTENT never lands: E is returned once. (The table's "INTENT after the save" is the same recovery input: both orders read the same snapshot and ledger at rejoin) |
+| K15, K16 | `exitRows` | `recovery-before-commit`, `recovery-done`, then a saved recovery | recovery changes only memory (the disk is byte-identical after each kill); a drained account returns nothing on the next crash |
+| K17 | `exitRows` | `ledger-after-append` + a save + the real DONE cut at 11 bytes appended (file state) | the INTENT counts, the tail is ignored and left in place, no quarantine, no `MTR-0101` |
 | K18 | `coreRows` | quiescent | a ledger corrupt before its end (renamed `.corrupt-<ms>`), an account with a bad CRC and one of a newer version: `MTR-0101`, the strict click is refused, nothing returned, and the account value on disk is byte-identical after a save |
 | K19 | `k19AnAutosaveNeverSeesHalfAClick` | none | Paper autosave on every tick, a click every 700 ms: every snapshot read is the state before or after a click, never both stacks or neither |
 | K20a/b | `deathAndDisableRows` | `release-done` inside `onDisable`; a completed disable then a save | released before the save; once |
 | K21a/b | `cursorAndFileStateRows` | after a save; `click-applied` | the stack on the cursor at a save is in no save and is lost (G5, vanilla); unsaved, it is returned (rollback) |
 | K22a/b | `cursorAndFileStateRows` | after a save | a stack lifted onto the cursor is lost (G5); a placement is atomic with the cursor reduction and returned once |
+| K23a | `k23TheBarrier` | `barrier-saved`: right after the barrier's `Player.saveData()`, before the read-back starts | the disk holds the barrier's own snapshot (the consume applied), the ledger the INTENT and no DONE, and the effect's console marker is in no log line; the boot applies the INTENT: the stack is not returned |
+| K23b | `k23TheBarrier` | a stuck disk (the file the server renames onto is a non-empty directory), kill after the barrier logged that its read-back did not confirm | the file is still the older snapshot, the consume is applied live and decided, the effect never ran, before or after the boot; G2 holds through the old snapshot |
+| K23c | `k23TheBarrier` | the healthy path, kill after the effect | the effect's marker appears once, and the file read at that moment already holds the consume; the ledger holds INTENT then DONE of one exit; the boot does not repeat the effect |
+| K23d | `k23TheBarrier` | the disk recovers while the effect waits | the effect runs once, late, after the next save lands and the read-back proves it |
+| KT | `exitRows` | `claim-done` after a completed trash | the trash slot (the `trash_slot` recipe expanded) consumed the stack with no `saveData()` (the `.dat` is untouched until the harness saves), one INTENT in the ledger, and the stack does not come back |
 
-**Which runs are default.** Only `coreRows` (K1 inside the step, K2, K5, K11/K12, K18: six boots) joins the default
-`:harness:integrationTest` run; every boot is 25 to 50 s on the development machine, so the five opt-in groups
-(`-Pharness.inputDurability=true`: 7, 7, 10, 7 and 2 boots) stay out of it. A boot that follows a kill is the check of its row and the
+**Which runs are default.** Only `coreRows` (K1 inside the step, K2, K5, K11, K18: six boots) joins the default
+`:harness:integrationTest` run; every boot is 25 to 50 s on the development machine, so the opt-in groups
+(`-Pharness.inputDurability=true`: 7, 7, 7, 6, 7, 2 and 5 boots) stay out of it. A boot that follows a kill is the check of its row and the
 start of the next, so a group of N rows costs N+1 boots. The workspace is a fresh directory per group and the harness retries a
 boot whose game port another process holds (observed when two harness runs share ports), instead of waiting out the boot timeout.
 
 **Left for later.**
 
-* **K23 (the barrier)** needs row B (#311): `saveData()`, the read-back, `DONE`. `PaperEscrowCrashIT#k23TheBarrier` is `@Disabled` with
-  that reason. When B lands: add a gate name to `CrashGate.Gates` between `saveData()` and the read-back start, a row that kills there
-  (and one where the read-back finds an older `gen`), and assert that an effect-carrying exit's effect never ran and that recovery
-  applies the `INTENT` as K11/K12. The K10 to K14 and K17 crafting should then be replaced by the real tier-2 exit.
 * **Folia (#314).** Not run. The product runs on Folia but the harness player there is a real protocol client (`idle-bot.mjs`), which
   cannot click, and `dprobe` acts from the console's global thread, which Folia refuses for player state. The subset that matters
   there (K1 inside a step, K8 as the quit sequence because a Folia stop has no full save (F15), K9, K15) needs a click-capable
   protocol client and entity-scheduler routing of the probe's per-player calls, as `foliaProbe` shows.
-* **Truncation by the next writer (K17's second half)** is not exercised: no code appends to a ledger before #248, so the test shows
-  that a read leaves the torn tail alone, and `EscrowLedgerFilesTest` shows that the writer cuts it.
+* **Truncation by the next writer (K17's second half)** is not exercised on a real server: the harness reads a torn tail and
+  leaves it, and `EscrowLedgerFilesTest` shows that the writer cuts it. A kill inside the append itself (a real torn record, not the
+  harness's file state of K10c and K17) would need a gate inside `LedgerFiles#append`, which would alter the write it is meant to test.
+
+### Row X as built (#248)
+
+The consume action: the first caller of the tier-2 exit and the tier-3 barrier. Re-scoped by the owner under D12
+([`primitives.md`](primitives.md) §4.8, §5.1): not a "trash slot" feature but the exit verb of custody, and the trash slot a
+composition over it. The action, its guarantees, the universality table and the decisions are in
+[`logic.md`](logic.md) §36; this section records what the durability design gained.
+
+**Where.**
+
+| Package | What |
+|---|---|
+| `escrow.runtime` (owner side, generic over the stack, no Bukkit, no IO, no blocking wait) | `CustodyConsume<T>`: step 1 (`Tier1.freezeSlot`) and the hand-off to `ExitRunner#proceed`, folding the exit's callbacks into one `Outcome` (`Consumed(reach)`, `Refused(reason)`, `Abandoned(why)`); `Reach.DECIDED` completes at step 3, `Reach.SAVED` only at the barrier's acknowledgment and registers the exit as one that carries an effect. `EscrowRuntime#consume` (the Bukkit entry: owner, refusal copy) |
+| `gui.input` | `StrictInputs#consume` and `#clear`, `InputSlotPort#consume` (+ `InputSlotOps`): the GUI side's one door to the primitive; `gui.slot_item clear` and `set_amount 0` on a required slot are `StrictInputs#clear` |
+| `logic.action` | `ConsumeCustodyAction` (`custody.consume`), registered with the GUI actions; `ActionType#takesElse` (and the step compiler's guard) generalised from "asks a question" to "guards what follows" |
+| `escrow.gate` | five new gate names: `exit-begun`, `exit-applied` (owner thread), `ledger-before-append`, `ledger-after-append` (the writer's IO thread, in `EscrowLedgerStore#appendNow`), `barrier-saved` (`SaveBarrier#saveNow`, between `owner.save()` and the read-back start) |
+
+**Decisions.**
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | Which step-1 entry point the consume uses | `Tier1.freezeSlot`: the stack is *already* in custody (a HELD entry made by an ordinary tier-1 placement, where `accept:`, `gui.slot_change` and the caps ran). `Tier1.beginExit` (an incoming stack taken straight from a source) stays built and has no caller yet; it is the shape a hand-off from the cursor would use |
+| 2 | Does `clear` / `set_amount 0` on a required layer route through the consume, or stay refused | **Through it** (one vocabulary, one mechanism, one crash story). They begin the exit and do not wait: `gui.slot_item` is a synchronous action that is not a guard. An immediate refusal (busy, gate shut) is the step's failure; a refusal that comes later (the INTENT could not be recorded: the stack goes back) is told to the player as `MTR-0102`'s actionbar line. `custody.consume` is what a flow uses when a later step depends on the consume. `best_effort` layers keep today's behaviour (the slot is cleared at once, journal) |
+| 3 | `custody.consume` on a `best_effort` slot | **Fails** with the reason ("not held in custody"). A consume an author expects to be atomic, and to gate an effect, must not quietly become a journal deletion; `clear` is the verb there |
+| 4 | Whether a plain consume waits for a save | No (D8): `await: decided` completes at step 3 and requests no `Player.saveData()`; its DONE follows the server's own next save. `await: saved` registers `carriesEffect()` and is the only path that asks for a save, once per cooldown |
+| 5 | Diagnostics | None added. Refusals reuse `MTR-0100` (capability, gate), `MTR-0101` (unreadable state) and `MTR-0102` (could not be recorded); the next free code is still `MTR-0104` |
+| 6 | The crash tests | `PaperEscrowCrashIT` K10 to K14, K17 and K23 now kill the real exit (below); the harness's crafted EXITING entries and INTENT records are gone (the probe's `adopt` command stays, unused; K18 still crafts its corrupt files with `putbytes`) |
+
+**Tests.** `CustodyConsumeTest` (the real ledger store, read-back, barrier and exit runner over a deterministic scheduler: a plain
+consume with no save, an effect released only after the disk proves the snapshot, a stuck disk and the give-up, a stale read-back,
+shutdown, a player who leaves, an empty or busy or shut slot, a ledger that cannot record, and a sweep of every kill boundary
+with and without `await: saved`), `ConsumeCustodyActionTest` (parse, self-description, the guard semantics in a real flow over
+the real GUI runtime), `BuiltinRecipesTest` (the `trash_slot` recipe expands and validates, no trash-specific action), the
+kill-boundary rows of *Row H as built* (K10 to K14, K17, K23, KT), and QA `guiescrow.trash-consumes`, `guiescrow.trash-feedback`, `guiescrow.consume-effect-after-save`,
+`guiescrow.consume-refusal-runs-else` (not blessed).
 
 ## 13. Decisions this design takes
 
