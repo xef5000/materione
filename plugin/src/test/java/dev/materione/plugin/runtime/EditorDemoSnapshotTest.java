@@ -55,6 +55,7 @@ import org.junit.jupiter.api.io.TempDir;
 class EditorDemoSnapshotTest {
 
     static final String GOLDEN = "editor-demo-snapshot.json";
+    static final String CODEMODE_GOLDEN = "../codemode/registry/plugin-current.json";
     static final List<String> PACKS = List.of("sample", "world");
     static final String PLATFORM_VERSION = "1.21.4";
     static final String SCAFFOLD_ID = "demo_scaffold";
@@ -96,6 +97,44 @@ class EditorDemoSnapshotTest {
             GoldenFiles.writeGolden(actual, GOLDEN);
         }
         GoldenFiles.assertMatchesGolden(actual, GOLDEN);
+    }
+
+    /**
+     * The code-mode registry snapshot (codemode.md section 3.1, #337): the {@code authoring.describe} reply of
+     * the same real op set, with the capability list the session blob advertises. The SDK generator's golden
+     * is a function of this file, so the typed surface cannot drift from the registries: a new action,
+     * trigger or content type changes this file here, and the generator's golden test then shows the SDK diff.
+     * Regenerate with {@code -Dmaterione.golden.regen=true}.
+     */
+    @Test
+    void codemodeRegistrySnapshotMatchesGolden() throws IOException {
+        Path root = temp.resolve("server");
+        StorageService.StorageState storage = new StorageService().init(root);
+        for (String pack : PACKS) {
+            copyTree(GoldenFiles.fixturesRoot().resolve("packs").resolve(pack),
+                    storage.contentPacksDir().resolve(pack));
+        }
+        RpcDispatcher dispatcher = realOps(root, storage);
+
+        JsonObject snapshot = new JsonObject();
+        snapshot.addProperty("format", 1);
+        snapshot.addProperty("source",
+                "Recorded from the real authoring.describe op and the session blob's capability list by "
+                        + "EditorDemoSnapshotTest; regenerate with -Dmaterione.golden.regen=true.");
+        JsonArray capabilities = new JsonArray();
+        dev.materione.web.protocol.SessionBlob.CURRENT_CAPABILITIES.forEach(capabilities::add);
+        snapshot.add("capabilities", capabilities);
+        snapshot.add("describe", data(dispatcher, "authoring.describe", new JsonObject()));
+
+        String json = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create()
+                .toJson(sorted(snapshot)) + "\n";
+        Path actual = temp.resolve("codemode-registry.json");
+        Files.writeString(actual, json, StandardCharsets.UTF_8);
+        // fixtures/codemode/ sits beside fixtures/golden/; GoldenFiles resolves names under golden/
+        if (GoldenFiles.regenEnabled()) {
+            GoldenFiles.writeGolden(actual, CODEMODE_GOLDEN);
+        }
+        GoldenFiles.assertMatchesGolden(actual, CODEMODE_GOLDEN);
     }
 
     /** The plugin's own wiring (MaterionePlugin#wireApi), headless. */
