@@ -1305,7 +1305,7 @@ public final class EditorContentOps {
         return array;
     }
 
-    private static List<AuthoringApi.FieldEdit> parseEdits(com.google.gson.JsonElement element) {
+    static List<AuthoringApi.FieldEdit> parseEdits(com.google.gson.JsonElement element) {
         if (element == null || !element.isJsonArray()) {
             throw new IllegalArgumentException("'edits' must be an array");
         }

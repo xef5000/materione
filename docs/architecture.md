@@ -268,7 +268,7 @@ layer in D12 (PR #326, codemode.md C14).
 1. **One more component to build and keep honest:** the SDK generator and core, the sandbox, and a checked mapping from SDK writes
    to editor operations (codemode.md §7). Its tests (golden `.d.ts`, a program corpus, sandbox ban tests) are part of the work.
 2. **The server needs a transaction operation with a dry-run** over the heterogeneous edit list (codemode.md §10). Today's atomic
-   unit, `bulk`, is one pack and 50 documents.
+   unit, `bulk`, is one pack and 50 documents. *(Built in #341: `AuthoringApi.transaction`, api.md §3.3.1; the one-pack and 50-document limits are kept, codemode.md C12.)*
 3. **The type error is the signal for a missing primitive.** A benchmark task that fails on a gap fails visibly; the count of those
    failures measures D12's debt.
 4. **Agent context carries a slice of the SDK, not the catalog**; the checker holds the whole surface and teaches the rest.

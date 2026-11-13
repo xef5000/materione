@@ -2,6 +2,9 @@ package dev.materione.core.authoring;
 
 import dev.materione.api.ApiResult;
 import dev.materione.api.authoring.AuthoringApi;
+import dev.materione.api.authoring.TransactionRequest;
+import dev.materione.api.authoring.TransactionResult;
+import dev.materione.api.content.Allocations;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.gui.GuiAuthoringApi;
 import dev.materione.api.logic.LogicAuthoringApi;
@@ -68,6 +71,10 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private volatile List<String> builtinPackIds = List.of();
     private final Function<AuthoringApi, LogicAuthoringApi> logicFactory;
     private volatile LogicAuthoringApi logicApi;
+    private final Supplier<List<ContentType>> contentTypes;
+    private volatile Supplier<Allocations> previewAllocations;
+    private volatile DocumentStore.WriteObserver commitObserver = (index, write) -> { };
+    private final AuthoringTransactions transactions;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
 
     public AuthoringApiImpl(
@@ -181,6 +188,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
             downstream.afterChange(actor, pack, file);
         };
         this.guiFactory = gui;
+        this.contentTypes = contentTypes;
+        this.transactions = new AuthoringTransactions(this, documents, contentTypes);
     }
 
     @Override
@@ -223,6 +232,51 @@ public final class AuthoringApiImpl implements AuthoringApi {
         List<PackInfo> packs = new ArrayList<>();
         documents.listPacks().forEach(pack -> packs.add(new PackInfo(pack.id())));
         return ApiResult.ok(packs);
+    }
+
+    /**
+     * The allocation table's non-persisting preview, which lets {@link #transaction} run each resource's compile
+     * on a dry run without allocating anything. Without it that stage reports that it did not run. Set once at boot.
+     */
+    public void previewAllocations(Supplier<Allocations> preview) {
+        this.previewAllocations = preview;
+    }
+
+    Supplier<Allocations> previewAllocations() {
+        return previewAllocations;
+    }
+
+    /** The seam fault-injection tests use to fail a transaction's write after a given document. */
+    void commitObserver(DocumentStore.WriteObserver observer) {
+        this.commitObserver = observer == null ? (index, write) -> { } : observer;
+    }
+
+    DocumentStore.WriteObserver commitObserver() {
+        return commitObserver;
+    }
+
+    ResourceSummaryComputer summaryComputer() {
+        return summaryComputer;
+    }
+
+    Path packDirectory(String pack) {
+        return packsRoot.resolve(pack);
+    }
+
+    /** One audit entry for an applied transaction; the transaction id is how it is found again. */
+    void auditTransaction(String actorId, String pack, int documentCount, String transactionId) {
+        audit.record(actorId, "authoring.transaction",
+                pack + " (" + documentCount + " documents, " + transactionId + ")");
+    }
+
+    /** The one reload an applied transaction queues: the whole pack, as a model transaction or a folder move does. */
+    void reloadPack(ActorContext actor, String pack) {
+        reloadHook.afterChange(actor, pack, packsRoot.resolve(pack));
+    }
+
+    @Override
+    public ApiResult<TransactionResult> transaction(ActorContext actor, TransactionRequest request) {
+        return transactions.run(actor, request);
     }
 
     /** Declares the built-in packs (master section 7.3) so the editor can show them read-only. Set once at boot. */
@@ -598,7 +652,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     /** Placeholder child of a freshly seeded template document, removed in the same write. */
     private static final String SEED = "__seed";
 
-    private static String sanitizedId(String resourceId) {
+    static String sanitizedId(String resourceId) {
         if (resourceId == null || !resourceId.matches("[a-z0-9_-]{2,64}")) {
             throw new IllegalArgumentException("id must be 2..64 chars of a-z 0-9 _ -");
         }
@@ -692,37 +746,9 @@ public final class AuthoringApiImpl implements AuthoringApi {
     public ApiResult<DocumentView> detachTemplate(ActorContext actor, DetachTemplateRequest request) {
         try {
             DocumentStore.Document source = documents.read(request.pack(), request.path());
-            var parsedSource = LosslessYaml.parse(source.raw());
-            if (parsedSource.parseError().isPresent()) {
-                throw new IllegalArgumentException(
-                        "cannot detach in a file that does not parse: " + parsedSource.parseError().get());
-            }
-            String root = request.resourceId() != null && !request.resourceId().isBlank()
-                    ? request.resourceId()
-                    : String.valueOf(parsedSource.data().keySet().iterator().next());
-            if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
-                throw new IllegalArgumentException("no resource '" + root + "' in " + request.path());
-            }
-            Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
-            String authored = TemplateResolver.text(definition, "template");
-            if (authored == null) {
-                throw new IllegalArgumentException(root + " is not based on a template");
-            }
-            // Only the chain is resolved: what the resource would inherit if it set nothing.
-            TemplateResolver.Resolution chain = TemplateResolver.resolve(
-                    Map.of("template", authored), namespaceOf(request.pack()),
-                    summaryComputer.resolutionPool().definitions(), isItemDocument(request.path()));
-            if (chain.merged() == null) {
-                throw new IllegalArgumentException("template does not resolve: " + chain.failure());
-            }
-            List<DocumentStore.FieldEdit> edits = new ArrayList<>();
-            for (String key : chain.sources().keySet()) {
-                if (!key.equals("template") && !definition.containsKey(key)) {
-                    edits.add(new DocumentStore.FieldEdit(
-                            List.of(root, key), LosslessYaml.stringKeyedDeep(chain.merged().get(key))));
-                }
-            }
-            edits.add(new DocumentStore.FieldEdit(List.of(root, "template"), null, true));
+            List<DocumentStore.FieldEdit> edits = detachEdits(
+                    request.pack(), request.path(), source.raw(), request.resourceId(),
+                    summaryComputer.resolutionPool().definitions());
             DocumentStore.Document updated = documents.setScalars(
                     request.pack(), request.path(), request.expectedRevision(), edits, actorId(actor));
             audit.record(actorId(actor), "authoring.detachTemplate",
@@ -740,8 +766,52 @@ public final class AuthoringApiImpl implements AuthoringApi {
         }
     }
 
+    /**
+     * The edits that materialise a resource's inherited values and drop its {@code template:} link, computed on
+     * {@code raw} and the template pool and nothing else, so {@link #detachTemplate} and the authoring
+     * transaction share one implementation. Only the chain is resolved: what the resource would inherit if it set
+     * nothing.
+     *
+     * @throws IllegalArgumentException when the file does not parse, the resource is absent or has no template, or
+     *     the chain does not resolve
+     */
+    static List<DocumentStore.FieldEdit> detachEdits(
+            String pack, String path, String raw, String resourceId,
+            Map<String, Map<String, Object>> templatePool) {
+        var parsedSource = LosslessYaml.parse(raw);
+        if (parsedSource.parseError().isPresent()) {
+            throw new IllegalArgumentException(
+                    "cannot detach in a file that does not parse: " + parsedSource.parseError().get());
+        }
+        String root = resourceId != null && !resourceId.isBlank()
+                ? resourceId
+                : String.valueOf(parsedSource.data().keySet().iterator().next());
+        if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
+            throw new IllegalArgumentException("no resource '" + root + "' in " + path);
+        }
+        Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
+        String authored = TemplateResolver.text(definition, "template");
+        if (authored == null) {
+            throw new IllegalArgumentException(root + " is not based on a template");
+        }
+        TemplateResolver.Resolution chain = TemplateResolver.resolve(
+                Map.of("template", authored), namespaceOf(pack), templatePool, isItemDocument(path));
+        if (chain.merged() == null) {
+            throw new IllegalArgumentException("template does not resolve: " + chain.failure());
+        }
+        List<DocumentStore.FieldEdit> edits = new ArrayList<>();
+        for (String key : chain.sources().keySet()) {
+            if (!key.equals("template") && !definition.containsKey(key)) {
+                edits.add(new DocumentStore.FieldEdit(
+                        List.of(root, key), LosslessYaml.stringKeyedDeep(chain.merged().get(key))));
+            }
+        }
+        edits.add(new DocumentStore.FieldEdit(List.of(root, "template"), null, true));
+        return edits;
+    }
+
     /** Items are the only resources that may be based on an item (plugin.md section 3.1). */
-    private static boolean isItemDocument(String path) {
+    static boolean isItemDocument(String path) {
         return path != null && path.startsWith("items/");
     }
 
@@ -754,38 +824,14 @@ public final class AuthoringApiImpl implements AuthoringApi {
                 throw new IllegalArgumentException("choose at least one field to put in the template");
             }
             DocumentStore.Document source = documents.read(request.pack(), request.fromPath());
-            var parsedSource = LosslessYaml.parse(source.raw());
-            if (parsedSource.parseError().isPresent()) {
-                throw new IllegalArgumentException(
-                        "cannot read a file that does not parse: " + parsedSource.parseError().get());
-            }
-            String root = request.resourceId() != null && !request.resourceId().isBlank()
-                    ? request.resourceId()
-                    : String.valueOf(parsedSource.data().keySet().iterator().next());
-            if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
-                throw new IllegalArgumentException("no resource '" + root + "' in " + request.fromPath());
-            }
-            Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
-            if (summaryComputer.templatePool().definitions()
-                    .containsKey(namespaceOf(request.pack()) + ":" + templateId)) {
-                throw new IllegalStateException("template already exists: " + templateId);
-            }
-            List<DocumentStore.FieldEdit> edits = new ArrayList<>();
-            for (String field : fields) {
-                if (!definition.containsKey(field)) {
-                    throw new IllegalArgumentException(root + " does not set '" + field + "'");
-                }
-                edits.add(new DocumentStore.FieldEdit(
-                        List.of(templateId, field), LosslessYaml.stringKeyedDeep(definition.get(field))));
-            }
-            // the base needs one child so the lossless layer has a block mapping to append to
-            edits.add(new DocumentStore.FieldEdit(List.of(templateId, SEED), null, true));
-            String path = "templates/" + templateId + ".yml";
-            String base = "# " + templateId + " — saved from " + request.fromPath()
-                    + " by the Materione editor\n" + templateId + ":\n  " + SEED + ": 0\n";
+            TemplateDocument template = templateDocument(
+                    request.pack(), request.fromPath(), source.raw(), request.resourceId(), templateId, fields,
+                    full -> summaryComputer.templatePool().definitions().containsKey(full));
+            String path = template.path();
             DocumentStore.Document created = documents.applyBatch(
                     request.pack(),
-                    List.of(new DocumentStore.BatchStep(path, DocumentStore.BatchKind.CREATE, 0, base, edits)),
+                    List.of(new DocumentStore.BatchStep(
+                            path, DocumentStore.BatchKind.CREATE, 0, template.base(), template.edits())),
                     false, actorId(actor)).get(0).after();
             audit.record(actorId(actor), "authoring.saveAsTemplate", request.pack() + "/" + path);
             reloadHook.afterChange(actor, request.pack(), documentFile(request.pack(), path));
@@ -797,6 +843,50 @@ public final class AuthoringApiImpl implements AuthoringApi {
         } catch (Exception e) {
             return handlerFailure(e);
         }
+    }
+
+    /** A template document to create: its pack-relative path, the base text and the edits that fill it. */
+    record TemplateDocument(String path, String base, List<DocumentStore.FieldEdit> edits) {}
+
+    /**
+     * The new {@code templates/} document {@link #saveAsTemplate} writes, computed on the source's text alone,
+     * so the call and the authoring transaction share one implementation.
+     *
+     * @param templateExists whether a template with this full id ({@code pack:id}) already exists
+     * @throws IllegalArgumentException when the source does not parse, lacks the resource or a chosen field
+     * @throws IllegalStateException when the template already exists
+     */
+    static TemplateDocument templateDocument(
+            String pack, String fromPath, String raw, String resourceId, String templateId, List<String> fields,
+            java.util.function.Predicate<String> templateExists) {
+        var parsedSource = LosslessYaml.parse(raw);
+        if (parsedSource.parseError().isPresent()) {
+            throw new IllegalArgumentException(
+                    "cannot read a file that does not parse: " + parsedSource.parseError().get());
+        }
+        String root = resourceId != null && !resourceId.isBlank()
+                ? resourceId
+                : String.valueOf(parsedSource.data().keySet().iterator().next());
+        if (!(parsedSource.data().get(root) instanceof Map<?, ?> rawDefinition)) {
+            throw new IllegalArgumentException("no resource '" + root + "' in " + fromPath);
+        }
+        Map<String, Object> definition = LosslessYaml.stringKeyed(rawDefinition);
+        if (templateExists.test(namespaceOf(pack) + ":" + templateId)) {
+            throw new IllegalStateException("template already exists: " + templateId);
+        }
+        List<DocumentStore.FieldEdit> edits = new ArrayList<>();
+        for (String field : fields) {
+            if (!definition.containsKey(field)) {
+                throw new IllegalArgumentException(root + " does not set '" + field + "'");
+            }
+            edits.add(new DocumentStore.FieldEdit(
+                    List.of(templateId, field), LosslessYaml.stringKeyedDeep(definition.get(field))));
+        }
+        // the base needs one child so the lossless layer has a block mapping to append to
+        edits.add(new DocumentStore.FieldEdit(List.of(templateId, SEED), null, true));
+        String base = "# " + templateId + " — saved from " + fromPath
+                + " by the Materione editor\n" + templateId + ":\n  " + SEED + ": 0\n";
+        return new TemplateDocument("templates/" + templateId + ".yml", base, edits);
     }
 
     @Override
@@ -918,16 +1008,33 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * unknown fields survive the copy (§5.6).
      */
     private String rekeyedCopy(String pack, String fromPath, String newId) throws java.io.IOException {
-        DocumentStore.Document source = documents.read(pack, fromPath);
-        var parsedSource = LosslessYaml.parse(source.raw());
+        return rekeyedCopy(documents.read(pack, fromPath).raw(), newId);
+    }
+
+    /** {@link #rekeyedCopy(String, String, String)} on text already in hand: the authoring transaction's copy. */
+    static String rekeyedCopy(String raw, String newId) {
+        var parsedSource = LosslessYaml.parse(raw);
         if (parsedSource.parseError().isPresent()) {
             throw new IllegalArgumentException(
                     "cannot copy a file that does not parse: " + parsedSource.parseError().get());
         }
         String sourceId = String.valueOf(parsedSource.data().keySet().iterator().next());
-        return source.raw().replaceFirst(
+        return raw.replaceFirst(
                 "(?m)^" + Pattern.quote(sourceId) + ":",
                 java.util.regex.Matcher.quoteReplacement(newId + ":"));
+    }
+
+    /**
+     * The text of a new document of the type {@code path} lies in: the type's scaffold, with the display name set
+     * when the scaffold has one. {@code bulk}'s {@code CREATE} and the authoring transaction share it.
+     */
+    static String newDocumentText(String path, String resourceId, String displayNameOrNull) {
+        String scaffold = Scaffolds.forPath(path, resourceId);
+        String name = displayNameOrNull == null || displayNameOrNull.isBlank()
+                ? null : displayName(displayNameOrNull);
+        return name != null && scaffold.contains("display_name:")
+                ? LosslessYaml.parse(scaffold).withScalar(name, resourceId, "display_name").save()
+                : scaffold;
     }
 
     @Override
@@ -980,13 +1087,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
                     case CREATE -> {
                         String type = op.type() == null ? "items" : op.type();
                         String path = documentPath(type, op.folder(), op.resourceId());
-                        String scaffold = Scaffolds.forPath(path, op.resourceId());
-                        String name = op.displayName() == null || op.displayName().isBlank()
-                                ? null : displayName(op.displayName());
-                        String content = name != null && scaffold.contains("display_name:")
-                                ? LosslessYaml.parse(scaffold)
-                                        .withScalar(name, op.resourceId(), "display_name").save()
-                                : scaffold;
+                        String content = newDocumentText(path, op.resourceId(), op.displayName());
                         steps.add(new DocumentStore.BatchStep(
                                 path, DocumentStore.BatchKind.CREATE, 0, content, edits));
                     }
@@ -1209,7 +1310,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     }
 
     /** The namespace short template references resolve against: the pack's own id. */
-    private static String namespaceOf(String pack) {
+    static String namespaceOf(String pack) {
         return pack;
     }
 
@@ -1219,7 +1320,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * normalized at every depth so the editor sees the key the author wrote.
      */
     @SuppressWarnings("unchecked")
-    private static Map<String, Object> parsed(String raw) {
+    static Map<String, Object> parsed(String raw) {
         try {
             var document = LosslessYaml.parse(raw);
             return document.parseError().isPresent()
@@ -1264,7 +1365,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * the folder the author is browsing. Both are validated here so a hostile
      * caller cannot smuggle a path outside the type's directory.
      */
-    private static String documentPath(String type, String folder, String id) {
+    static String documentPath(String type, String folder, String id) {
         if (!Scaffolds.SCAFFOLD_TYPES.contains(type)) {
             throw new IllegalArgumentException(
                     "unknown content type '" + type + "' — expected one of "
@@ -1292,7 +1393,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
     }
 
     /** Display names are trimmed and length-checked exactly like the editor op. */
-    private static String displayName(String raw) {
+    static String displayName(String raw) {
         String name = raw == null ? "" : raw.trim();
         if (name.isEmpty() || name.length() > 128) {
             throw new IllegalArgumentException("display name must be 1..128 characters");
@@ -1305,7 +1406,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
         return String.valueOf(LosslessYaml.parse(content).data().keySet().iterator().next());
     }
 
-    private static String actorId(ActorContext actor) {
+    static String actorId(ActorContext actor) {
         return Objects.requireNonNull(actor, "actor").actorId();
     }
 
@@ -1323,7 +1424,7 @@ public final class AuthoringApiImpl implements AuthoringApi {
      * directory, or null. It scans the documents the pipeline scans ({@link PackLayout}), so a
      * refusal here and an MTR-0056 at parse time can never disagree about what is a duplicate.
      */
-    private String declaredElsewhere(String pack, String contentDir, String path, String id) {
+    String declaredElsewhere(String pack, String contentDir, String path, String id) {
         Path packDir = packsRoot.resolve(pack);
         if (id == null || !Files.isDirectory(packDir)) {
             return null;

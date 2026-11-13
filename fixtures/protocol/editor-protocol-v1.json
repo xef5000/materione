@@ -80,7 +80,7 @@
   },
   "sessionBlob": {
     "envelope": {
-      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSMcld4-lmPNbLCfGWj3tGq2wfFLG5rBaAnrQXtJqczNZdqvE8E4rsoA4igFwvqr1aV6Q1YWYmQBos8BrrKPbxeffhWh2gI9pWeTnWMMrfu6zCwg1Go7g4puk_zT6ImNQmDQ3pjEf34uEBHkLOwJc0FtL6CAw3zNALjBVv7PDRsgNsxQPoK-CERUnLn4tF038cnkP1WGoFxgQ3-H7f4pG5ZbElbb2kxFOnHk4MbuYtqCpYKkChEf_xkaVAgpzAynG5R8DvmRVtosGlBDOaahvQ6MV7G4osBlrZq8Zn5T_V7eaPT3SW5zTJMQ990bZorKeRnT4ysg0t-Nqm6ZYVQrzv9aytdKC6Q0vX8LN_Y-lDL_k7nZ7U",
+      "ct": "gkRtINEiSuWbTQNcjCGC9MU56YPJ4lOifToUTVm7bMttO1WhIJYzLVeyiDDVY5disErchS7o2avDyv5DZiq-CbWGRTBbYLRIpBwRG_b8_HYkmpKWpBwq-TLZGtn9hOEqkL4hwgEIuYJ0uso1XxFTHW-YnjX5JVlItLRlkgocFrUWcDeeVnYU_VSPBzhgwVbkL4vrQmWj3tGs5Qj3KWteAeghkxn3I4kjapZP5UgB4qA4FZijCibQoEy88gVHXrePAaEoK_jiA41bbqdW3Xs2sIa1cDuOCqev_xiOuVGH6gItuhPzU6IDHBqGaUd9K8fCp0VYvqqJb8kfsZOGDDPzTxnjO0TyPDNJhd1LKL8ywikGQUzeu9ZKw5cPkIZNIqR9gzWaeJnQnzpfRHAsclguJvD2zZteqtMwE6Ehojt3YNVcUk0Zvik1kGtj7RnHQ04LjF9FUYOqvtZQASiwo7kftM1__PKBfvdRY7jB-22RzjJKc_5aGvVRUqRLDKD57gRpYJOnPMgSoC3odCxdbxcp7Nn0EWGG7qMOpbee4Xv-41dybR1inpqV5bhDrWE",
       "nonce": "QEBAQEBAQEBAQEBA",
       "sess": "AAECAwQFBgcICQoLDA0ODw",
       "v": 1
@@ -89,6 +89,7 @@
       "capabilities": [
         "assets",
         "blocks",
+        "codemode",
         "delivery",
         "furniture",
         "glyphs",

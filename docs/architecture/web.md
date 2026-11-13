@@ -370,6 +370,8 @@ verdict) and `gui.customizeItem` (Customize) only when the blob advertises `gui`
 either from `authoring.bulk` any more. Payload shapes live in `GuiAuthoringOps` and the golden
 `fixtures/protocol/editor-gui-v1.json`.
 
+*As built (code-mode transaction, #341):* the `codemode` capability (listed in `SessionBlob.CURRENT_CAPABILITIES`, mirrored in the SPA's list) gates one op, `authoring.transaction`, a translator over `AuthoringApi.transaction` (api.md §3.3.1, codemode.md §10): `{pack, dryRun, operations}`, `dryRun` mandatory, the reply `{accepted, applied, dryRun, transactionId, documents, diagnostics, stages}` with each diagnostic carrying the `operation` index. A refused list is a success frame; only a malformed request is an error frame. Listed in editor-op-gates.json; frames pinned in `fixtures/protocol/editor-codemode-v1.json`. The editor does not call it yet.
+
 *As built (logic authoring, #221):* the `logic` capability (listed in `SessionBlob.CURRENT_CAPABILITIES`) gates five
 ops, each a translator over `AuthoringApi.logic()` (api.md §3.12, logic.md §19) and listed in editor-op-gates.json:
 `logic.vocabulary` (the behavior vocabulary), `logic.get` (`{pack, path}`, the typed rules and flows),

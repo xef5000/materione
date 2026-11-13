@@ -150,6 +150,7 @@ Describes every operation that reads or mutates content packs, folders, document
 | `queryGraph(GraphQuery)` | Inspect content graph edges ("where is `mystuff:ruby` used?", dead content, broken refs). | `ContentGraph` (new exposure) |
 | `findReferences(ReferenceQuery)` | Typed, bounded "where is this used?" for an asset (`ASSET`, pack-relative path) or a resource (`RESOURCE`, id): every authored scalar in every pack that equals one of the target's spellings (bare inside its own pack, `pack:`-qualified anywhere), each with its field path. The `ReferenceCoverage` block reports documents scanned, unreadable documents, truncation (200 hits / 32 MiB read), a `complete` flag and what the query never reads (asset files, template-built values). It reads files, not the last pipeline run's graph, so it sees edits made since. | `ReferenceScanner` (`authoring.references`) |
 | `bulk(actor, BulkRequest)` | Revision-checked **all-or-none** authoring across up to 50 documents of one pack: `SET` (patch an existing document at its `expectedRevision`), `CREATE` (scaffold + initial edits) and `DUPLICATE` (lossless re-keyed copy + edits). Every operation is validated and patched in memory under the store lock first; only then are bytes written, and an I/O failure part-way restores every touched file and journal from checkpoints. `dryRun` returns the per-document impact (`before`/`after` per edited field) and writes nothing; a `SET` that changes nothing is reported `unchanged` and skipped. One audit entry, one reload per document. | `DocumentStore.applyBatch` (`authoring.bulk`) |
+| `transaction(actor, TransactionRequest)` | **One transaction over an ordered, mixed edit list** on one pack, at most 50 documents: `create`, `duplicate`, `setFields`, `move`, `delete`, `detachTemplate`, `saveAsTemplate`, `logicEdit` and `guiEdit`, where a later operation may address a document an earlier one creates. Applied in memory under the store lock, validated, and either reported (`dryRun`: the diagnostics, each with the operation that caused it, and the resulting documents; nothing written, no reload) or written all-or-none with one audit entry and one reload. Each operation is checked for `materione.edit.<pack>`, and a built-in pack is read-only. Design and limits: §3.3.1. | `AuthoringTransactions` over `DocumentStore.patched` and `DocumentStore.commit` (`authoring.transaction`, capability `codemode`) |
 | `subscribeChanges(Consumer<DocumentChangeEvent>)` | Subscribe to external or internal document changes (file watcher + API saves). | `PackWatcher` |
 
 The web Content catalog consumes a read-only `authoring.summaries` RPC, filtered by pack and
@@ -179,6 +180,119 @@ Exceeding the aggregate budget returns `MTR-0051`, not a partial
 page; that refusal is cached with the current projection until invalidation or
 replacement rather than rebuilding on every page request. This is a summary-read
 limit, not a content-write quota.
+
+### 3.3.1 `transaction`: one list, one transaction (codemode.md §10 items 1, 2 and 7; #341)
+
+Code mode (D13) turns one agent program into one ordered list of authoring operations that must be validated and applied as
+**one** transaction. `bulk` is all-or-none, but only for the resource documents of one pack (`SET`, `CREATE`, `DUPLICATE`); a logic
+edit (`LogicEdit`) and a GUI edit (`GuiEdit`) are single-document writes at one revision each; and nothing lets an operation
+address a document an earlier one creates. `transaction` is the one call over all of them. `bulk`, `logic().edit` and
+`gui().edit` keep their behavior and their callers.
+
+**Request.** `TransactionRequest(pack, operations, dryRun)`: one pack (decision C12), at most 200 operations, at most
+256 edits per operation, and at most **50 distinct documents** touched (created, changed, moved or deleted; a document that is
+only read, such as the source of a copy, does not count). The operations are a sealed `TransactionOperation`; each reuses the edit
+vocabulary of the single-document call it names, and none is a second implementation of an edit:
+
+| Operation | Fields | Same edit as |
+|---|---|---|
+| `Create` | `type` (default `items`), `folder`, `resourceId`, `displayName`, `edits` | `bulk` `CREATE` (the type's scaffold, then the field edits) |
+| `Duplicate` | `fromPath`, `expectedRevision?`, `folder`, `resourceId`, `edits` | `bulk` `DUPLICATE` (lossless re-keyed copy) |
+| `SetFields` | `path`, `expectedRevision?`, `edits` | `setFields` (`FieldEdit`, removals included) |
+| `Move` | `fromPath`, `expectedRevision?`, `toPath` | `moveDocument` (the target's journal records `move-from:`) |
+| `Delete` | `path`, `expectedRevision?` | `deleteDocument` |
+| `DetachTemplate` | `path`, `expectedRevision?`, `resourceId` | `detachTemplate` |
+| `SaveAsTemplate` | `fromPath`, `expectedRevision?`, `resourceId`, `templateId`, `fields` | `saveAsTemplate` |
+| `EditLogic` | `path`, `expectedRevision?`, `edits` (`LogicEdit`) | `logic().edit` |
+| `EditGui` | `path`, `expectedRevision?`, `edits` (`GuiEdit`) | `gui().edit`, without binaries |
+
+**How an edit applies to a document that is only in memory.** The list runs against a *working set*: each document it touches is
+read once (under the store lock) and held as text, and every operation edits that text. Field edits go through
+`DocumentStore.patched`, the lossless patch `applyBatch` itself now calls, so comments, ordering and unknown fields survive
+(master §5.6) and an untouched document is never rewritten. Logic and GUI edits need the document's parsed tree and answer the
+field edits that take it to the edited state; they do that through a new seam on each surface, `LogicAuthoringApi.stage` and
+`GuiAuthoringApi.stage` (§3.9, §3.12), which take the parsed tree instead of reading the store. `edit` on each surface is now
+`read, check revision, stage, setFields`, with the same refusals and the same field edits as before. `detachTemplate`,
+`saveAsTemplate`, the create scaffold and the re-keyed copy are likewise pure functions of the text and the template pool that
+`AuthoringApiImpl` shares between the single call and the transaction. The template pool a detach or a save resolves against is the
+stored one with the list's own templates and items laid over it (and what the list deleted or moved away taken out), so a list may
+save a template, create an item that links it and detach it.
+
+**Addressing and revisions.** A path names a document as it is *after the operations before it*: a document created, copied or
+moved earlier is addressable by a later operation, and a path deleted or moved away earlier is not (a later `Create` or `Move`
+cannot put a document back at it in the same list: it is refused). `expectedRevision` is the revision the author read:
+
+- for a document that exists on disk it is **required** the first time an operation names it, and it is always the *stored*
+  revision (the author never saw an in-transaction one); a later operation on the same document may pass `null`, and a number it
+  passes must still be the stored one;
+- a stale value is `MTR-0034` for that document and **refuses the whole list**;
+- for a document the list itself creates it is ignored (`null` is the normal value);
+- for a source that is only read (`Duplicate`, `SaveAsTemplate`) it is optional, and checked when given, so that what was copied is
+  what was reviewed.
+
+Every document gets **one** revision however many operations touched it, as in `applyBatch`: a created document is revision 1, a
+changed one its stored revision plus one, a deleted one a `delete` entry at stored plus one, the target of a move revision 1 with
+the `move-from:` lineage (and the source a `delete` entry), a document the operations left byte-identical keeps its revision and is
+not written, and a document created and removed within the list is never written and is not in the result.
+
+**Order and failure.** Operations apply strictly in order. The checks that need no document run first and report *all* their
+findings at once: the request's shape and limits, and permissions (below). Then planning stops at the **first** operation that
+cannot apply, because later ones may depend on it: that operation's refusal is reported with its index, no documents are
+returned, and nothing is written. Refusal codes are the ones the single calls use: `MTR-0008` (a bad request, an edit the lossless
+layer or the surface refuses), `MTR-0009` (no such document or pack), `MTR-0034` (stale), `MTR-0056` (an id already declared in the
+type, counting the documents of the list), `MTR-0011` (an I/O or handler failure; the apply is rolled back). No new code is allocated.
+
+**Permissions.** The operations are all in one pack, so one node decides: each operation is checked for `materione.edit.<pack>`
+(master §9.2) on the actor, and a built-in pack (master §7.3) is read-only for everyone. A refusal is **one diagnostic per
+operation**, `MTR-0055` for a missing node and `MTR-0095` for a built-in pack, reported together; a dry run asks the same question
+as an apply. (The editor session's actor carries `node -> true` today, so for it only the built-in refusal bites until the actor is
+tightened; the existing single-document calls do not check `materione.edit.<pack>` at all.)
+
+**Dry run and apply.** Both run the same path under one hold of the store lock: plan, validate, and, only for an apply that was
+accepted, `DocumentStore.commit`. `commit` re-checks revisions and absences, checkpoints every touched file and journal, writes,
+and on any failure restores every file and journal and removes the directories it created, so nothing partial is left. A dry run
+writes nothing and queues no reload. Its only possible effect is the one every read has: a document hand-edited since its last
+journaled state gets an `external` journal baseline when it is read, because the revision a dry run reports must be the real
+one. An apply then records one audit entry (`authoring.transaction`, naming the pack, the document count and the **transaction
+id**) and queues **one** reload of the pack, after the lock is released. The reload is pack-wide, as for a model transaction or a
+folder move, because a list may delete and move documents, which a single-file reload scope cannot express. The audit entry's
+origin and program text, and the revert by transaction id, are #344.
+
+**Validation: which stages run.** The result is checked with the stages of master §5.4 that are reachable on an in-memory result
+today, for each document the list writes (created, changed or moved; not unchanged, not deleted). The report names, per stage,
+whether it ran (`TransactionResult.stages`), so a clean result is never read as more than it checked:
+
+| Stage | Runs | What it covers |
+|---|---|---|
+| `syntax` | always | Every resulting document parses as lossless YAML (an edit that would break it is refused when it applies). |
+| `schema` | when content types are wired (the plugin: always) | Each resource through its content type's own `parse` and `diagnose` (`ResourceCompiler`), against the stored templates and the list's own. |
+| `build` | when the allocation preview is wired (the plugin: `AllocationTable.preview()`) | Each resource through its content type's `compile` into an emitter that drops every file, on the non-persisting preview, so an exhausted codepoint block or a rejected build is found without allocating. |
+| `behavior` | when the behavior engine is wired | The flow compiler (`LogicAuthoringApi.validate`) over the `behavior:` and `flows:` of resources under `items/`, `blocks/`, `furnitures/`. |
+| `gui` | when the GUI compiler is wired | `GuiAuthoringApi.validate` over each GUI the list writes: the pack compiler's own parse, diagnose and compile, the `open:` block, and the GUI's rules with the checker the pipeline compiles with. |
+| `references` | **not run** | Cross-resource reference resolution (master §5.4 level 3, `ReferenceValidator`) needs the parsed pack set; it runs in the reload after an apply. A reference broken by a deleted or renamed document is not found by a dry run: use `findReferences` and `queryGraph` first (codemode.md §5.6, impact). |
+| `platform` | **not run** | The platform gate (D10) and the pack-wide allocation run in the reload after an apply. |
+
+Diagnostics keep their own codes and severities and each carries the zero-based index of the operation that caused it; one found
+in a document's final state is attributed to the **last operation that touched the document** (the operation after which it
+reached the state that failed), and `-1` is a problem of the list as a whole. An `ERROR` makes the list not accepted: a dry run
+reports it, an apply refuses and writes nothing. A warning is reported and never refuses.
+
+**Result.** `TransactionResult(accepted, applied, dryRun, transactionId, documents, diagnostics, stages)`; each document is
+`TransactionDocument(path, kind, previousRevision, revision, text, movedFrom, operations)` with `kind` one of `CREATED`, `CHANGED`,
+`UNCHANGED`, `DELETED`, `MOVED`, `revision` the revision it has (a dry run: would get), `text` the resulting text (null when
+deleted) and `operations` the indexes that touched it. The report is returned even when the list is refused, because the
+per-operation diagnostics are the answer: `ApiResult.ok()` is `accepted`, and the value is present either way. A dry run's
+documents are exactly what an apply of the same list writes (a test pins it).
+
+**Wire.** `authoring.transaction` (web `TransactionOps`, a translator over this call, R9) takes `{pack, dryRun, operations}` with
+`kind` one of `create`, `duplicate`, `setFields`, `move`, `delete`, `detachTemplate`, `saveAsTemplate`, `logicEdit`, `guiEdit` and
+the edit shapes of `authoring.bulk`, `logic.edit` and `gui.edit`. `dryRun` must be sent explicitly (a request that loses the
+flag must not become a write). A refused list is a *success* frame carrying `accepted: false` and the diagnostics; only a
+malformed request is an error frame. The op is additive and gated on the session capability `codemode`
+(`fixtures/protocol/editor-op-gates.json`, frames in `fixtures/protocol/editor-codemode-v1.json`); an older editor never calls it.
+
+**Not in a transaction:** binaries (a paint layer's PNG still goes through `gui().edit`), pack and folder operations, raw
+`putDocument` (D13: the SDK has no raw write), and `customizeItem` (which is a `Create` and an `EditGui` in one list).
 
 ### 3.4 `AssetApi` (`dev.materione.api.assets`)
 
@@ -266,6 +380,7 @@ resource; the API works on that GUI (a file that holds several is refused).
 | `components()` | The `gui-components` registry: id, render target, self-description, owner. Read on each call. | `RegistryView` |
 | `get(pack, path)` | The GUI as a typed view: `title`, `rows`, its mapping layers (id, type, name, visible, locked, opacity, parameters) and the file's `revision`. | `getDocument` |
 | `edit(actor, GuiEditRequest)` | Applies `AddLayer`, `PatchLayer`, `RemoveLayers`, `ReorderLayers` and `SetScreen` in order, all or none, at `expectedRevision`; binaries (paint PNGs) ride in the same transaction. Warnings for layers the compiler will skip come back on the successful result. | `setFields` (one revision, one audit, one reload) |
+| `stage(pack, path, document, edits)` | The field edits that take an in-memory copy of a GUI's parsed tree to the state `edits` describe, with the same refusals as `edit`: no store read, no revision check, no binaries, no write. `edit` is `read, check revision, stage, setFields`; `AuthoringApi.transaction` stages a GUI edit this way against a document an earlier operation created (§3.3.1). | the layer-edit function `edit` uses |
 | `customizeItem(actor, CustomizeItemRequest)` | Gives an item layer its own item at `items/gui/<gui-path>/<id>.yml` and points the layer's `item:` at it; a Materione base is linked (`template: <base>`, plugin.md §3.1), a vanilla base becomes `material:`. The naming, collision and refusal rules live here (gui.md §10 #2, #203). | `bulk` (one transaction, the GUI revision checked) |
 | `render(GuiRenderRequest)` | Background PNG (the bytes the pack ships), canvas size, each layer's target, compiled rank and skip reason, and the compile's diagnostics. Source: a saved file, unsaved YAML, or an unsaved typed draft with optional draft PNGs. Pure. | the pack compiler's steps, with a non-persisting allocation view |
 | `validate(GuiValidateRequest)` | The diagnostics the compile would emit for the same source (MTR-0052 per skipped layer, parse failures, background exhaustion). Pure. | the same steps as `render` |
@@ -354,6 +469,7 @@ gui, item, block and furniture, one resource per file. Paths are step paths (`be
 |---|---|---|
 | `get(pack, path)` | The resource's rules and named flows as a `LogicView`: each rule's `on:`, options, `if:`, node position and steps; each step's `kind`, `value`, `options`, node and `branches`. Never writes. | `getDocument` |
 | `edit(actor, LogicEditRequest)` | Applies a list of `LogicEdit`s in order, all or none, at `expectedRevision`. Returns the view after the edits, with the compiler's problems as warnings. An edit that changes nothing writes nothing. | `setFields` (one revision, one audit, one reload) |
+| `stage(pack, path, document, edits)` | The field edits that take an in-memory copy of a resource's parsed tree to the state a `LogicEdit` list describes, with the same refusals as `edit` (the step path as the diagnostic's target): no store read, no revision check, no write. `edit` is `read, check revision, stage, setFields`; `AuthoringApi.transaction` stages a logic edit this way (§3.3.1). | the `LogicEditor` `edit` uses |
 | `validate(LogicDraft)` | The step-path diagnostics the real `FlowCompiler` reports for an unsaved draft, with an optional `trigger` that stands in for a rule's missing `on:`. Never writes. | the compiler and the registries' lookup |
 | `instantiate(InstantiateRequest)` | Expands a recipe into ordinary rules (logic.md §30): checks and types the parameters (`MTR-0086`), runs the recipe's expansion, compiles the result with the flow compiler and refuses one that does not validate (`MTR-0087`), and returns the rules with any availability warnings (`MTR-0088`). An unknown recipe is refused as `MTR-0008`. Never writes: the caller inserts the rules through `edit`. | the recipe registry (`recipes()`) and the compiler |
 

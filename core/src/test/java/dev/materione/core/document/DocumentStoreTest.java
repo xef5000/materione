@@ -241,6 +241,50 @@ class DocumentStoreTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void commitWritesOneJournalEntryPerDocumentAndRefusesAStaleRevisionBeforeAnyWrite() throws IOException {
+        DocumentStore store = store();
+        store.createPack("demo", "test");
+        store.write("demo", "items/a.yml", 0, "a:\n  material: STICK\n", "tester");
+        store.write("demo", "items/b.yml", 0, "b:\n  material: STICK\n", "tester");
+
+        assertThatThrownBy(() -> store.commit("demo", java.util.List.of(
+                new DocumentStore.PlannedWrite("items/new.yml", DocumentStore.WriteKind.CREATE, 0,
+                        "new:\n  material: BONE\n", null),
+                new DocumentStore.PlannedWrite("items/a.yml", DocumentStore.WriteKind.SET, 5,
+                        "a:\n  material: BONE\n", null)), "tester"))
+                .isInstanceOf(DocumentConflictException.class)
+                .hasMessageContaining("items/a.yml");
+        assertThat(packsPath("demo/items/new.yml")).doesNotExist();
+        assertThat(store.read("demo", "items/a.yml").raw()).isEqualTo("a:\n  material: STICK\n");
+
+        java.util.List<DocumentStore.CommitOutcome> done = store.commit("demo", java.util.List.of(
+                new DocumentStore.PlannedWrite("items/new.yml", DocumentStore.WriteKind.CREATE, 0,
+                        "new:\n  material: BONE\n", "items/b.yml"),
+                new DocumentStore.PlannedWrite("items/a.yml", DocumentStore.WriteKind.SET, 1,
+                        "a:\n  material: BONE\n", null),
+                new DocumentStore.PlannedWrite("items/b.yml", DocumentStore.WriteKind.DELETE, 1, null, null)),
+                "tester");
+
+        assertThat(done).extracting(DocumentStore.CommitOutcome::revision).containsExactly(1, 2, 2);
+        assertThat(store.history("demo", "items/new.yml", 5)).extracting(DocumentStore.Revision::action)
+                .containsExactly("move-from:items/b.yml");
+        assertThat(store.history("demo", "items/b.yml", 5)).extracting(DocumentStore.Revision::action)
+                .containsExactly("write", "delete");
+        assertThat(packsPath("demo/items/b.yml")).doesNotExist();
+    }
+
+    @Test
+    void patchedIsTheLosslessEditApplyBatchUses() {
+        String patched = DocumentStore.patched("items/a.yml", "# keep\na:\n  material: STICK # inline\n  texture: gem\n",
+                java.util.List.of(new DocumentStore.FieldEdit(java.util.List.of("a", "texture"), "ruby"),
+                        new DocumentStore.FieldEdit(java.util.List.of("a", "material"), null, true)));
+
+        assertThat(patched).isEqualTo("# keep\na:\n  texture: ruby\n");
+        assertThatThrownBy(() -> DocumentStore.patched("items/a.yml", "a: [unclosed\n", java.util.List.of()))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("items/a.yml");
+    }
+
     private Path packsPath(String relative) {
         return temp.resolve("packs").resolve(relative);
     }

@@ -714,6 +714,8 @@ public final class MaterionePlugin extends JavaPlugin {
                 // the logic surface (logic.md §8): the same lookup the pipeline compiles rules with
                 base -> new dev.materione.behavior.logic.authoring.LogicAuthoringApiImpl(base, logicLookup));
         authoringApi.builtinPackIds(builtinPacks.ids());
+        // a transaction's dry run compiles each resource on the allocation table's non-persisting preview
+        authoringApi.previewAllocations(() -> pipeline.allocation().preview());
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);

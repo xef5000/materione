@@ -699,6 +699,40 @@ public final class DocumentStore {
         }
     }
 
+    /**
+     * The in-memory patch every multi-document write shares ({@link #applyBatch} and the authoring
+     * transaction): the edits go through the lossless layer in order, and the result must still parse.
+     * Comments, ordering and untouched formatting survive (master section 5.6). Nothing is read or written.
+     *
+     * @param path the document's pack-relative path, used only to name it in a refusal
+     * @param start the document's current text
+     * @return the patched text
+     * @throws IllegalStateException when {@code start} does not parse
+     * @throws IllegalArgumentException when an edit cannot be made losslessly or breaks the YAML
+     */
+    public static String patched(String path, String start, List<FieldEdit> edits) {
+        LosslessYamlDocument document = LosslessYaml.parse(start);
+        if (document.parseError().isPresent()) {
+            throw new IllegalStateException(path + " does not parse: " + document.parseError().get());
+        }
+        try {
+            for (FieldEdit edit : edits) {
+                String[] field = edit.field().toArray(String[]::new);
+                document = edit.remove()
+                        ? document.withoutNode(field)
+                        : document.withNode(edit.value(), field);
+            }
+        } catch (UnsupportedOperationException e) {
+            throw new IllegalArgumentException(path + ": " + e.getMessage());
+        }
+        String updated = document.save();
+        Optional<String> parseError = LosslessYaml.parse(updated).parseError();
+        if (parseError.isPresent()) {
+            throw new IllegalArgumentException(path + ": invalid YAML: " + parseError.get());
+        }
+        return updated;
+    }
+
     /** What one {@link BatchStep} does: patch an existing document or create a new one. */
     public enum BatchKind {
         SET,
@@ -757,26 +791,7 @@ public final class DocumentStore {
                     throw new IllegalStateException("document already exists: " + step.path());
                 }
                 String start = current != null ? current : Objects.requireNonNull(step.base(), "base");
-                LosslessYamlDocument document = LosslessYaml.parse(start);
-                if (document.parseError().isPresent()) {
-                    throw new IllegalStateException(step.path() + " does not parse: "
-                            + document.parseError().get());
-                }
-                try {
-                    for (FieldEdit edit : step.edits()) {
-                        String[] field = edit.field().toArray(String[]::new);
-                        document = edit.remove()
-                                ? document.withoutNode(field)
-                                : document.withNode(edit.value(), field);
-                    }
-                } catch (UnsupportedOperationException e) {
-                    throw new IllegalArgumentException(step.path() + ": " + e.getMessage());
-                }
-                String updated = document.save();
-                Optional<String> parseError = LosslessYaml.parse(updated).parseError();
-                if (parseError.isPresent()) {
-                    throw new IllegalArgumentException(step.path() + ": invalid YAML: " + parseError.get());
-                }
+                String updated = patched(step.path(), start, step.edits());
                 before.add(current);
                 after.add(updated);
             }
@@ -820,6 +835,202 @@ public final class DocumentStore {
                 throw failure;
             }
             return outcomes;
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // the authoring transaction's seams (api.md section 3.3, codemode.md section 10)
+
+    /** A body that runs while the store lock is held; see {@link #underLock}. */
+    @FunctionalInterface
+    public interface LockedAction<T> {
+        T run() throws IOException;
+    }
+
+    /**
+     * Runs {@code action} holding the store lock, so that a plan computed in memory and the write that
+     * follows it see the same files and journals. The lock is reentrant: the store's own reads inside
+     * {@code action} are fine.
+     */
+    public <T> T underLock(LockedAction<T> action) throws IOException {
+        synchronized (lock) {
+            return action.run();
+        }
+    }
+
+    /** {@link #read} that answers empty for a document that does not exist. */
+    public Optional<Document> readIfPresent(String pack, String path) throws IOException {
+        try {
+            return Optional.of(read(pack, path));
+        } catch (java.nio.file.NoSuchFileException absent) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Checks a pack-relative document path with the rules every write applies (a safe pack id, no
+     * traversal, an editable location) without touching the disk.
+     *
+     * @throws IllegalArgumentException when the path or pack is refused
+     */
+    public void requireDocumentPath(String pack, String path) {
+        resolve(pack, path);
+    }
+
+    /** What {@link #commit} does to one document. */
+    public enum WriteKind {
+        /** Writes a document that must not exist yet; its journal opens at revision 1. */
+        CREATE,
+        /** Replaces an existing document at {@code expectedRevision}. */
+        SET,
+        /** Deletes an existing document at {@code expectedRevision}; the journal keeps the history. */
+        DELETE
+    }
+
+    /**
+     * One document of a {@link #commit}. {@code text} is the final text ({@code null} for a
+     * {@link WriteKind#DELETE}); {@code movedFrom}, for a {@code CREATE}, names the document this one was
+     * moved from, so the journal opens with the same {@code move-from:} lineage {@link #move} records.
+     */
+    public record PlannedWrite(String path, WriteKind kind, int expectedRevision, String text, String movedFrom) {}
+
+    /** What {@link #commit} wrote: the revision the document has now and the hash of its text (null for a delete). */
+    public record CommitOutcome(String path, WriteKind kind, int revision, String sha256) {}
+
+    /** Called after each document is written; a throw is a failure to roll back from. The seam fault-injection tests use. */
+    @FunctionalInterface
+    public interface WriteObserver {
+        void afterWrite(int index, PlannedWrite write) throws IOException;
+    }
+
+    /** {@link #commit(String, List, String, WriteObserver)} with no observer. */
+    public List<CommitOutcome> commit(String pack, List<PlannedWrite> writes, String actor) throws IOException {
+        return commit(pack, writes, actor, (index, write) -> { });
+    }
+
+    /**
+     * All-or-none write of a planned set of documents, the write half of the authoring transaction
+     * ({@code AuthoringApi.transaction}). The caller computed every final text in memory, usually inside
+     * {@link #underLock}; this method re-checks what could have moved (existing documents at their expected
+     * revision, new documents absent), checkpoints every touched file and journal, writes, and on any failure
+     * restores every file and journal and removes the directories it created, so nothing partial is left.
+     * Each document gets exactly one journal entry, whatever the transaction did to it.
+     *
+     * @throws DocumentConflictException when an existing document is no longer at its expected revision
+     */
+    public List<CommitOutcome> commit(
+            String pack, List<PlannedWrite> writes, String actor, WriteObserver observer) throws IOException {
+        if (writes.isEmpty()) {
+            throw new IllegalArgumentException("no documents to write");
+        }
+        synchronized (lock) {
+            List<String> paths = new ArrayList<>();
+            for (PlannedWrite write : writes) {
+                if (paths.contains(write.path())) {
+                    throw new IllegalArgumentException("the same document appears twice: " + write.path());
+                }
+                paths.add(write.path());
+                Path file = resolve(pack, write.path());
+                if (write.kind() == WriteKind.CREATE) {
+                    if (Files.exists(file)) {
+                        throw new IllegalStateException("document already exists: " + write.path());
+                    }
+                } else {
+                    if (!Files.isRegularFile(file)) {
+                        throw new java.nio.file.NoSuchFileException(write.path());
+                    }
+                    try {
+                        assertExpectedRevision(pack, write.path(), write.expectedRevision());
+                    } catch (DocumentConflictException conflict) {
+                        throw new DocumentConflictException(
+                                write.path() + ": " + conflict.getMessage(),
+                                conflict.expectedRevision(), conflict.currentRevision());
+                    }
+                }
+                if (write.kind() != WriteKind.DELETE) {
+                    Optional<String> parseError = LosslessYaml.parse(
+                            Objects.requireNonNull(write.text(), "text")).parseError();
+                    if (parseError.isPresent()) {
+                        throw new IllegalArgumentException(write.path() + ": invalid YAML: " + parseError.get());
+                    }
+                }
+            }
+            List<Checkpoint> checkpoints = new ArrayList<>();
+            java.util.Set<Path> createdDirectories = new java.util.LinkedHashSet<>();
+            for (PlannedWrite write : writes) {
+                checkpoints.add(checkpoint(pack, write.path()));
+                missingAncestors(resolve(pack, write.path()), packsRoot, createdDirectories);
+                missingAncestors(journalFor(pack, write.path()), revisionsDir, createdDirectories);
+            }
+            List<CommitOutcome> outcomes = new ArrayList<>();
+            try {
+                for (int i = 0; i < writes.size(); i++) {
+                    PlannedWrite write = writes.get(i);
+                    Path file = resolve(pack, write.path());
+                    long now = System.currentTimeMillis();
+                    switch (write.kind()) {
+                        case CREATE -> {
+                            byte[] bytes = write.text().getBytes(StandardCharsets.UTF_8);
+                            Files.createDirectories(file.getParent());
+                            Files.write(file, bytes);
+                            String hash = Documents.sha256(bytes);
+                            appendRevision(pack, write.path(), new Revision(1, now, actor,
+                                    write.movedFrom() != null ? "move-from:" + write.movedFrom() : "create", hash));
+                            trimJournal(pack, write.path());
+                            outcomes.add(new CommitOutcome(write.path(), write.kind(), 1, hash));
+                        }
+                        case SET -> {
+                            byte[] bytes = write.text().getBytes(StandardCharsets.UTF_8);
+                            Files.write(file, bytes);
+                            String hash = Documents.sha256(bytes);
+                            int revision = currentRevision(pack, write.path()) + 1;
+                            appendRevision(pack, write.path(),
+                                    new Revision(revision, now, actor, "set-scalar", hash));
+                            trimJournal(pack, write.path());
+                            outcomes.add(new CommitOutcome(write.path(), write.kind(), revision, hash));
+                        }
+                        case DELETE -> {
+                            Files.deleteIfExists(file);
+                            int revision = currentRevision(pack, write.path()) + 1;
+                            appendRevision(pack, write.path(), new Revision(revision, now, actor, "delete", null));
+                            outcomes.add(new CommitOutcome(write.path(), write.kind(), revision, null));
+                        }
+                    }
+                    observer.afterWrite(i, write);
+                }
+            } catch (IOException | RuntimeException failure) {
+                for (Checkpoint checkpoint : checkpoints) {
+                    try {
+                        restore(checkpoint);
+                    } catch (IOException | RuntimeException ignored) {
+                        // best effort: keep restoring the remaining files
+                    }
+                }
+                removeEmptyDirectories(createdDirectories);
+                throw failure;
+            }
+            return outcomes;
+        }
+    }
+
+    /** The directories above {@code file}, up to (not including) {@code root}, that do not exist yet. */
+    private static void missingAncestors(Path file, Path root, java.util.Set<Path> out) {
+        for (Path dir = file.getParent(); dir != null && dir.startsWith(root) && !dir.equals(root)
+                && !Files.exists(dir); dir = dir.getParent()) {
+            out.add(dir);
+        }
+    }
+
+    /** Removes the directories a failed commit created, deepest first, when nothing else lives in them. */
+    private static void removeEmptyDirectories(java.util.Set<Path> directories) {
+        List<Path> deepestFirst = new ArrayList<>(directories);
+        deepestFirst.sort((a, b) -> Integer.compare(b.getNameCount(), a.getNameCount()));
+        for (Path directory : deepestFirst) {
+            try {
+                Files.deleteIfExists(directory);
+            } catch (IOException | RuntimeException notEmpty) {
+                // something else lives there now: leave it
+            }
         }
     }
 
