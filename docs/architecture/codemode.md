@@ -401,7 +401,9 @@ and **the resulting documents**, from which the editor draws the diff. A dry run
 criterion of #320).
 
 This stage is the authority. A program can type-check and run and still be refused here: a reference that does not resolve after
-the edits are combined, a flow the compiler rejects, a note-block state that cannot be allocated, a stage into a built-in pack
+the edits are combined (both a reference *from* a document the list wrote, and one *to* a document the list deleted or whose id it
+removed, from an untouched resource of this pack or of another; a document a later operation creates satisfies an earlier
+reference; #357), a flow the compiler rejects, a note-block state that cannot be allocated, a stage into a built-in pack
 (read-only, master §7.3), an operation the actor's permissions do not allow (the dry run checks each operation's node:
 `materione.edit.<pack>`, master §9.2).
 
@@ -685,13 +687,13 @@ what sits *behind* the existing protocol. Each needs its own design and issue be
 | Order and failure | Strictly in order; shape, limits and permissions are reported together first; then planning stops at the first operation that cannot apply, with its index. All-or-none write with checkpoints, rolled back (files, journals, created directories) on any failure. |
 | Permissions (item 2) | `materione.edit.<pack>` per operation and built-in packs read-only: one diagnostic per refused operation (`MTR-0055`, `MTR-0095`). |
 | Dry run | Same path under the store lock; writes nothing, queues no reload, returns diagnostics tagged with the operation index and the resulting documents with their would-be revisions. An apply writes exactly those documents, with one audit entry (it names the transaction id) and one pack reload. |
-| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:`; the GUI compile. **Not run: cross-resource references and the platform gate**, which need the parsed pack set and run in the reload after an apply. The report lists each stage and whether it ran. |
+| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:`; the GUI compile; **references** (#357: `ReferenceValidator` over the staged pack and the other packs as stored, both directions, only the findings the list adds for untouched resources; see api.md §3.3.1). **Not run: the platform gate (D10), which needs the live server, and the pack-wide allocation (the build stage allocates the list's own resources on a copy of the real table; the final table is the reload's, so no further allocation preview is built).** What `ReferenceValidator` does not cover is not covered here either: it checks `template`, `model`, `texture`, recipe, drop, placement, evolution, glyph-alias, jukebox and asset-source references, and a GUI's references to items are not among them (the `gui` stage reports what the GUI compile reports; whether the pipeline should resolve them at level 3 is a separate question). The report lists each stage and whether it ran. |
 | Wire and capability (item 7) | `authoring.transaction`, gated on the new session capability `codemode` (`editor-op-gates.json`, golden frames in `editor-codemode-v1.json`). Additive: an older editor never calls it. |
 
 Still open in §10: item 3 (revert by transaction id: the id is in the audit entry, the revert is #344), item 4 (the audit's
 `origin`, approval mode and program text, #344), item 5 (trace and variable reads, #345), item 6 (the preset view).
 Two limits worth knowing for the SDK: a transaction carries no binaries (a paint layer's PNG still goes through `gui().edit`),
-and a dry run cannot see a reference broken by a deletion (use `findReferences` first, §5.6).
+and `findReferences` (§5.6) remains the way to *show* impact before a list is written: the dry run now *refuses* a list that breaks a reference the pipeline checks, but it does not list every use of a resource (a GUI's item reference, for one, is not a pipeline reference).
 
 ---
 
