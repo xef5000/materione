@@ -441,7 +441,15 @@ expansion (parity long tail, then scale), and M8 is very late, so this slice com
 - The benchmark runs twice, with typed code mode and with a tool-per-operation baseline, and counts tasks that fail on a missing
   primitive (codemode.md §11).
 
-**Exit:** #320's acceptance criteria, shown by the benchmark. Not scheduled; it needs the M6 close-out and a scope pass first.
+**Scope pass (2026-11, [`architecture/agent-benchmark.md`](architecture/agent-benchmark.md)).** The benchmark was run on paper: 29
+tasks, 10 pass on today's registries, and the failures name 13 missing primitives. Its ranking proposes the slice's primitive
+work as ranks 1 to 7 (#327 rules without a host and the entity and player triggers, #328 a clock, #329 entity and world verbs,
+#330 commands as content, #331 target addressing, #332 timers, #333 stack-held state), which is what #320's own example needs
+plus the cheap, broad ones; custody transfer, views over state and `/trade` stay after the slice (#334 to #336). The agent
+surface is sequenced as #337 to #349 (agent-benchmark.md §7). Open with the owner: the model provider (#351), the "no separate
+logic DSL" recommendation (#338), content tests (#350). Progress is tracked on the board under milestone **M6.5**, not here.
+
+**Exit:** #320's acceptance criteria, shown by the benchmark. It needs the M6 close-out first.
 
 ## M7 — Parity close-out (the long tail)
 
