@@ -58,11 +58,13 @@ public record Rule(
     }
 
     /**
-     * The run an {@code on_cooldown} flow starts as: the same identity and path, with the cooldown branch as its body.
-     * The engine starts it with a context that holds {@code cooldown.remaining}.
+     * The run an {@code on_cooldown} flow starts as: the same identity, with the cooldown branch as its body. Its path
+     * is {@code <rule path>.on_cooldown}, so the trace's run-level entries (RUN_STARTED, RUN_ENDED, which carry the
+     * run's rule path) say the branch ran, not the rule's normal flow. The engine starts it with a context that holds
+     * {@code cooldown.remaining}.
      */
     public Rule cooldownRule() {
-        return new Rule(owner, id, on, condition, onCooldown, options, filters, path);
+        return new Rule(owner, id, on, condition, onCooldown, options, filters, path.child(RuleOptions.ON_COOLDOWN));
     }
 
     /** The rule's stable identity ({@code <owner>#<name>}) for logs and cooldown keys. */

@@ -345,6 +345,34 @@ class RuleEngineTest {
     }
 
     @Test
+    void aBlockedRuleTracesItsOnCooldownRunUnderItsOwnPathNotTheNormalOne() {
+        long[] now = {3_000_000L};
+        var interpreter = new FlowInterpreter(scheduler, RunBudget.DEFAULT, diagnostics::add);
+        var trace = new ArrayList<dev.materione.behavior.run.TraceEvent>();
+        interpreter.traceTo(trace::add);
+        var timed = new RuleEngine(interpreter, new CooldownStore(), () -> now[0]);
+        Map<String, Object> throttled = rule("click:right", List.of(), List.of(action("a", "x")));
+        throttled.put("cooldown", 60_000);
+        throttled.put("on_cooldown", List.of(action("b", "blocked")));
+        List<Rule> rules = rules(throttled);
+        var root = Map.<String, Object>of("player", Map.of("uuid", "u1"));
+
+        timed.fire(rules, event("click", "right", root));
+        timed.fire(rules, event("click", "right", root));
+
+        var runs = trace.stream()
+                .filter(event -> event.type() == dev.materione.behavior.run.TraceEvent.Type.RUN_STARTED
+                        || event.type() == dev.materione.behavior.run.TraceEvent.Type.RUN_ENDED)
+                .map(event -> event.type() + " " + event.path())
+                .toList();
+        assertThat(runs).containsExactly(
+                "RUN_STARTED behavior.0", "RUN_ENDED behavior.0",
+                "RUN_STARTED behavior.0.on_cooldown", "RUN_ENDED behavior.0.on_cooldown");
+        assertThat(trace).as("the step inside the branch keeps its own path")
+                .anyMatch(event -> event.path().toString().equals("behavior.0.on_cooldown.0"));
+    }
+
+    @Test
     void aBlockedRuleWithoutOnCooldownStaysSilentAsBefore() {
         Map<String, Object> throttled = rule("click", List.of(), List.of(action("a", "x")));
         throttled.put("cooldown", 60_000);

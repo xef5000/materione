@@ -407,6 +407,73 @@ export default [
   }),
 
   test({
+    id: 'logic.cooldown-on-cooldown-remaining',
+    title: 'probe:probe_cooldown: the first right-click prints "CHECK cooldown-fired"; a second one inside the 60 s cooldown prints "CHECK cooldown-wait" with the whole seconds left (59 or 60, rounded up)',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/BuiltinLogic.java',
+      'behavior/src/main/java/dev/materione/behavior/runtime/RuleEngine.java',
+      'behavior/src/main/java/dev/materione/behavior/runtime/CooldownStore.java',
+      'behavior/src/main/java/dev/materione/behavior/rule/Rule.java',
+      'behavior/src/main/java/dev/materione/behavior/flow/RuleCompiler.java',
+      'fixtures/packs/probe/items/probe_cooldown.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_cooldown');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK cooldown-fired/);
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK cooldown-wait (59|60)\b/);
+    },
+  }),
+
+  test({
+    id: 'logic.clock-functions',
+    title: 'probe:probe_clock right-click prints "CHECK fmt 3m 20s" (format_duration(200)), "CHECK now-after-2023" and "CHECK today-after-day-20000"',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/function/NowFunction.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/TodayFunction.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/function/FormatDurationFunction.java',
+      'fixtures/packs/probe/items/probe_clock.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_clock');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK fmt 3m 20s/);
+      await ctx.waitForChat(/CHECK now-after-2023/);
+      await ctx.waitForChat(/CHECK today-after-day-20000/);
+    },
+  }),
+
+  test({
+    id: 'logic.cooldown-gate-blocks-second-use',
+    title: 'probe:probe_gate: after the stored second is reset to 0, the first right-click prints "CHECK gate-open" and a second one, inside 86400 seconds, prints "CHECK gate-wait"',
+    mode: 'auto',
+    covers: [
+      'plugin/src/main/java/dev/materione/plugin/logic/condition/VarCondition.java',
+      'plugin/src/main/java/dev/materione/plugin/logic/action/SetVarAction.java',
+      'plugin/src/main/resources/recipes/cooldown_gate.yml',
+      'fixtures/packs/probe/items/probe_gate.yml',
+      'fixtures/packs/probe/variables/probe.yml',
+    ],
+    dependsOn: ['commands.give-basic'],
+    timeoutMs: 120_000,
+    steps: async (ctx) => {
+      await holdProbe(ctx, 'probe:probe_gate');
+      await ctx.rcon('materione var set Probe probe:probe_last_use 0');
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK gate-open/);
+      ctx.expect(await useInAir(ctx)).toBe('used-air');
+      await ctx.waitForChat(/CHECK gate-wait/);
+    },
+  }),
+
+  test({
     id: 'logic.providers-unavailable-without-vault',
     title: 'with no Vault and no transfer host, reload reports materione:money and the money and connect actions unavailable',
     mode: 'auto',

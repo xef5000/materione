@@ -1,0 +1,6 @@
+# Declared persistent variable for the cooldown_gate probe (qa logic.cooldown-gate-blocks-second-use). A declaration only.
+probe_last_use:
+  scope: player
+  type: number
+  default: 0
+  description: "QA probe: epoch second of the last use of probe_gate"

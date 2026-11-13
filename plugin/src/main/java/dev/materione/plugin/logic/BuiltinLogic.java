@@ -142,7 +142,12 @@ public final class BuiltinLogic {
                 new PromptAction(api.inputMethods(), prompts.service()));
     }
 
-    /** The built-in expression functions (logic.md §4.2): pure, typed, and callable from any expression. */
+    /**
+     * The built-in expression functions (logic.md §4.2): typed, and callable from any expression. Most are pure
+     * functions of their arguments. Not pure: {@code random} (a random source) and the clock functions {@code now} and
+     * {@code today}, which read the clock each time a call runs. None is folded at parse time, so a clock is read only
+     * when an expression is evaluated, never when a rule loads.
+     */
     public static List<ExpressionFunction> functions() {
         return functions(Clock.systemDefaultZone());
     }

@@ -4,7 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 import dev.materione.api.logic.ExpressionFunction;
+import dev.materione.api.logic.FunctionDescription;
 import dev.materione.api.logic.LogicContext;
+import dev.materione.behavior.expr.Expression;
+import dev.materione.behavior.expr.ExpressionParser;
+import dev.materione.behavior.expr.FunctionResolver;
 import dev.materione.behavior.logic.MapLogicContext;
 import dev.materione.plugin.logic.BuiltinLogic;
 import java.time.Clock;
@@ -13,6 +17,7 @@ import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 /** The clock functions (logic.md §15): now(), today() and format_duration(), driven by a fake clock. */
@@ -102,6 +107,36 @@ class ClockFunctionsTest {
                 .map(ExpressionFunction::id).toList();
 
         assertThat(ids).contains("now", "today", "format_duration");
+    }
+
+    /** The parser binds a call and never runs it: no constant folding, so now() is read only when evaluated. */
+    @Test
+    void aClockCallIsNotEvaluatedWhenAnExpressionIsParsed() {
+        var calls = new int[1];
+        ExpressionFunction counting = new ExpressionFunction() {
+            @Override
+            public String id() {
+                return "now";
+            }
+
+            @Override
+            public FunctionDescription describe() {
+                return new NowFunction().describe();
+            }
+
+            @Override
+            public Object call(List<Object> arguments, LogicContext context) {
+                calls[0]++;
+                return 1.0;
+            }
+        };
+        FunctionResolver resolver = name -> name.equals("now") ? Optional.of(counting) : Optional.empty();
+
+        Expression parsed = ExpressionParser.parse("now() - 60 >= 0", resolver);
+
+        assertThat(calls[0]).as("parsing binds the call and runs nothing").isZero();
+        assertThat(parsed.eval(new MapLogicContext(Map.of()).evaluation())).isEqualTo(Boolean.FALSE);
+        assertThat(calls[0]).as("evaluation is what reads the clock").isEqualTo(1);
     }
 
     @Test
