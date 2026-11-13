@@ -1,0 +1,10 @@
+{
+  "task": "T05",
+  "title": "Healing wand",
+  "registry": "plugin-current",
+  "result": "fail",
+  "note": "The rule option on_cooldown exists on the server but is described as a raw value, so the surface types it JsonValue and a list of steps is rejected. A step-list parameter kind in self-description (#355) turns this into a pass.",
+  "diagnostics": [
+    { "code": 2322, "messageContains": ["ActionStep", "JsonValue"] }
+  ]
+}

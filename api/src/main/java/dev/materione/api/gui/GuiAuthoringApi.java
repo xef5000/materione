@@ -5,6 +5,7 @@ import dev.materione.api.NamespacedId;
 import dev.materione.api.auth.ActorContext;
 import dev.materione.api.authoring.AuthoringApi;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import dev.materione.api.registry.SelfDescription;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -50,6 +51,21 @@ public interface GuiAuthoringApi {
      * the successful result.
      */
     ApiResult<GuiDocumentView> edit(ActorContext actor, GuiEditRequest request);
+
+    /**
+     * Applies {@code edits} in order to an in-memory copy of one GUI file's parsed tree and answers the field
+     * edits that take the file there: the same refusals and the same edits {@link #edit} makes, with no read
+     * of the store, no revision check, no binaries and no write. This is how {@code AuthoringApi.transaction}
+     * applies a GUI edit to a document an earlier operation created or changed (codemode.md section 10). An
+     * empty list means the edits change nothing.
+     *
+     * @param document the file's parsed tree, as {@code DocumentView.parsed()} carries it
+     */
+    default ApiResult<List<AuthoringApi.FieldEdit>> stage(
+            String pack, String path, Map<String, Object> document, List<GuiEdit> edits) {
+        return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                "GUI staging is not available in this build"));
+    }
 
     /**
      * Gives an item layer its own item at {@code items/gui/<gui-path>/<id>.yml} and points the

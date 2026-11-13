@@ -19,8 +19,8 @@ import java.util.Set;
  */
 final class LogicViews {
 
-    /** The keys of a rule that are not trigger filters or options. */
-    private static final Set<String> RULE_SHAPE = Set.of("on", "do", "if", "node");
+    /** The keys of a rule that are not trigger filters or options (on_cooldown holds steps, as do does). */
+    private static final Set<String> RULE_SHAPE = Set.of("on", "do", "if", "node", "on_cooldown");
 
     private LogicViews() {}
 

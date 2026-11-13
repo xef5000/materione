@@ -2241,6 +2241,30 @@
           "variadic": false
         },
         {
+          "description": "A short duration from a number of seconds: 1d 2h, 3m 20s or 45s. Fractions round up, zero or less is 0s, and only the two largest non-zero units are shown.",
+          "displayName": "Format duration",
+          "id": "format_duration",
+          "maxArguments": 1,
+          "minArguments": 1,
+          "parameters": [
+            {
+              "advanced": false,
+              "description": "The duration in seconds",
+              "id": "seconds",
+              "label": "Seconds",
+              "order": 0,
+              "required": true,
+              "section": "general",
+              "type": "decimal",
+              "uiHint": "number"
+            }
+          ],
+          "registeredBy": "materione",
+          "returns": "string",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
           "description": "Formats the number with thousands separators and a fixed number of decimal places (0 to 10), for example 1234.5 with 2 places is 1,234.50.",
           "displayName": "Format number",
           "id": "format_number",
@@ -2456,6 +2480,18 @@
           "variadic": true
         },
         {
+          "description": "The current time in whole epoch seconds (seconds since 1970-01-01 UTC, rounded down). It is not pure: the same call gives a later value each time it runs. Subtract a stored time from it to get the seconds that have passed.",
+          "displayName": "Now",
+          "id": "now",
+          "maxArguments": 0,
+          "minArguments": 0,
+          "parameters": [],
+          "registeredBy": "materione",
+          "returns": "integer",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
           "description": "The value as a number: a number as is, or text that reads as one. Null otherwise, including for booleans and for infinity.",
           "displayName": "Number",
           "id": "number",
@@ -2582,6 +2618,18 @@
           ],
           "registeredBy": "materione",
           "returns": "boolean",
+          "sinceVersion": "2.0.0",
+          "variadic": false
+        },
+        {
+          "description": "The server's local day number: the whole days since 1970-01-01 in the server's time zone. It is the same for the whole local day and changes at local midnight. It is not pure: it reads the clock.",
+          "displayName": "Today",
+          "id": "today",
+          "maxArguments": 0,
+          "minArguments": 0,
+          "parameters": [],
+          "registeredBy": "materione",
+          "returns": "integer",
           "sinceVersion": "2.0.0",
           "variadic": false
         },
@@ -3221,6 +3269,50 @@
           "registeredBy": "materione"
         },
         {
+          "description": "Lets the player through once every given number of seconds, per player, and survives a restart. The variable must already be declared as a player number in a variables file of its pack.",
+          "displayName": "Cooldown gate",
+          "id": "cooldown_gate",
+          "params": [
+            {
+              "default": "gui.click",
+              "description": "The event that is gated, such as gui.click or click:right",
+              "name": "on",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "default": "",
+              "description": "The layer the event must come from (a gui.click layer); blank for any",
+              "name": "layer",
+              "required": false,
+              "type": "string"
+            },
+            {
+              "description": "The declared player number that holds the epoch second of the last use, as pack:key",
+              "name": "variable",
+              "required": true,
+              "scope": "player",
+              "type": "variable",
+              "valueType": "number"
+            },
+            {
+              "description": "How many seconds must pass between two uses",
+              "min": 1.0,
+              "name": "seconds",
+              "required": true,
+              "type": "integer"
+            },
+            {
+              "default": "<red>You have to wait before doing that again.",
+              "description": "Shown to the player while the cooldown is still running",
+              "name": "message",
+              "required": false,
+              "type": "string"
+            }
+          ],
+          "registeredBy": "materione"
+        },
+        {
           "description": "Adds previous and next buttons that page a list layer. The list layer is placed in the GUI with type list; this recipe writes the buttons' rules.",
           "displayName": "Paged player list",
           "id": "paged_player_list",
@@ -3445,6 +3537,17 @@
           "section": "general",
           "type": "enum",
           "uiHint": "select"
+        },
+        {
+          "advanced": true,
+          "description": "Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the whole seconds left, rounded up",
+          "id": "on_cooldown",
+          "label": "On Cooldown",
+          "order": 0,
+          "required": false,
+          "section": "general",
+          "type": "raw",
+          "uiHint": "advanced"
         }
       ],
       "steps": [

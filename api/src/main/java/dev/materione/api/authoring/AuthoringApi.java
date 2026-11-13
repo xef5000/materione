@@ -196,6 +196,23 @@ public interface AuthoringApi {
     ApiResult<BulkResult> bulk(ActorContext actor, BulkRequest request);
 
     /**
+     * One transaction over an ordered, mixed edit list ({@code authoring.transaction}, codemode.md section 10):
+     * create, duplicate, field patches, move, delete, detach and save-as-template, logic edits and GUI edits, on
+     * the documents of one pack, up to {@link TransactionRequest#MAX_DOCUMENTS} of them. An operation may address
+     * a document an earlier one created. The list is applied in memory under the store lock and the result is
+     * validated; with {@code dryRun} that is all that happens (nothing is written, no reload is queued), and
+     * otherwise the documents are written all-or-none, one audit entry, one reload.
+     *
+     * <p>Each operation is checked for {@code materione.edit.<pack>} and a built-in pack is read-only; a refusal
+     * is a diagnostic, not a throw. The report is returned even when the list is refused (see
+     * {@link TransactionResult}). The default implementation reports the operation as unavailable.
+     */
+    default ApiResult<TransactionResult> transaction(ActorContext actor, TransactionRequest request) {
+        return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                "authoring transactions are not available in this build"));
+    }
+
+    /**
      * Document change feed — external edits (file watcher) and API saves
      * alike. Returns an {@link AutoCloseable} subscription handle.
      */

@@ -1,0 +1,39 @@
+{
+  "recipe": "cooldown_gate",
+  "params": {
+    "on": "gui.click",
+    "layer": "kit",
+    "variable": "sample:last_use",
+    "seconds": 86400,
+    "message": "<red>Come back tomorrow."
+  },
+  "rules": [
+    {
+      "on": "gui.click",
+      "layer": "kit",
+      "do": [
+        {
+          "if": {
+            "var": {
+              "var": "sample:last_use",
+              "op": ">",
+              "value": "${now() - 86400}"
+            }
+          },
+          "then": [
+            {
+              "message": "<red>Come back tomorrow."
+            },
+            "stop"
+          ]
+        },
+        {
+          "set_var": {
+            "var": "sample:last_use",
+            "value": "${now()}"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -52,6 +52,14 @@ public final class BehaviorEvent implements Cancellation {
         return context;
     }
 
+    /**
+     * The event's context with one more top-level variable (logic.md §16: {@code cooldown.remaining} for an
+     * {@code on_cooldown} run). The event's own context is not changed.
+     */
+    public LogicContext contextWithRoot(String key, Object value) {
+        return context.withRoot(key, value);
+    }
+
     /** The same variable tree as the expression engine sees it (rule conditions evaluate against it). */
     public EvaluationContext evaluation() {
         return context.evaluation();

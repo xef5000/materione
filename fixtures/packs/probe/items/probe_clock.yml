@@ -1,0 +1,15 @@
+# Logic clock probe (qa logic.clock-functions): one right-click reports the clock functions through chat. format_duration(200)
+# is "3m 20s"; now() is after 2023 and today() is after day 20000 (the local day number, logic.md section 15).
+probe_clock:
+  material: COMPASS
+  display_name: "Clock Probe"
+  behavior:
+    - on: click:right
+      do:
+        - chat: "CHECK fmt ${format_duration(200)}"
+        - if: "${now() > 1700000000}"
+          then:
+            - chat: "CHECK now-after-2023"
+        - if: "${today() > 20000}"
+          then:
+            - chat: "CHECK today-after-day-20000"

@@ -1,0 +1,17 @@
+# Logic cooldown_gate probe (qa logic.cooldown-gate-blocks-second-use): the cooldown_gate recipe's expansion, written out by
+# hand for the probe pack (a recipe is instantiated by the studio into a file, not referenced by a pack). The stored
+# epoch second is the probe's declared player number probe:probe_last_use (variables/probe.yml). The first right-click
+# opens the gate and stores now(); a second right-click inside 86400 seconds stops after its message.
+probe_gate:
+  material: COMPASS
+  display_name: "Gate Probe"
+  behavior:
+    - on: click:right
+      do:
+        - if:
+            var: {var: "probe:probe_last_use", op: ">", value: "${now() - 86400}"}
+          then:
+            - chat: "CHECK gate-wait"
+            - stop
+        - set_var: {var: "probe:probe_last_use", value: "${now()}"}
+        - chat: "CHECK gate-open"

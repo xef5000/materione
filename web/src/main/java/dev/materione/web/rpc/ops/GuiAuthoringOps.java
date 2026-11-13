@@ -167,7 +167,7 @@ public final class GuiAuthoringOps {
     // requests
 
     /** A GUI edit's wire shape: {@code {op: addLayer|patchLayer|removeLayers|reorderLayers|setScreen, ...}}. */
-    private static GuiEdit editOf(JsonObject edit) {
+    static GuiEdit editOf(JsonObject edit) {
         String op = EditorContentOps.requiredString(edit, "op");
         return switch (op) {
             case "addLayer" -> new AddLayer(

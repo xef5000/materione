@@ -169,7 +169,7 @@ function paramDoc(param: SurfaceParam): string[] {
   else if (param.min !== undefined) lines.push(`Minimum: ${param.min}${param.unit ? ` ${param.unit}` : ''}.`);
   else if (param.max !== undefined) lines.push(`Maximum: ${param.max}${param.unit ? ` ${param.unit}` : ''}.`);
   else if (param.unit) lines.push(`Unit: ${param.unit}.`);
-  if (param.default !== undefined) lines.push(`@defaultValue ${param.default}`);
+  if (param.default !== undefined && param.default !== '') lines.push(`@defaultValue ${param.default}`);
   if (param.example !== undefined) lines.push(`@example ${param.example}`);
   return lines.flatMap((line) => (line === undefined ? [] : [line]));
 }
@@ -663,7 +663,7 @@ function functions(ctx: Context): string[] {
     const result = scalarType(fn.returns);
     let args: string;
     if (fn.parameters.length === 0) {
-      args = '...args: ExprArg<unknown>[]';
+      args = fn.maxArguments === 0 ? '' : '...args: ExprArg<unknown>[]';
     } else {
       args = fn.parameters
         .map((param, index) => {
@@ -713,7 +713,7 @@ function recipes(ctx: Context): string[] {
         param.max !== undefined ? `Maximum: ${param.max}.` : undefined;
       const variableLine = param.scope !== undefined ? `The variable's scope is ${param.scope}${param.valueType ? ` and its value type ${param.valueType}` : ''}.` : undefined;
       return [
-        ...doc([sentence(param.description), rangeLine, variableLine, param.default !== undefined ? `@defaultValue ${String(param.default)}` : undefined], 1),
+        ...doc([sentence(param.description), rangeLine, variableLine, param.default !== undefined && String(param.default) !== '' ? `@defaultValue ${String(param.default)}` : undefined], 1),
         `  ${key(param.name)}${param.required ? '' : '?'}: ${recipeParamType(param.type, ctx)};`,
       ];
     });

@@ -66,6 +66,7 @@ import dev.materione.plugin.logic.support.ItemCatalog;
 import dev.materione.plugin.logic.support.OpenGuis;
 import dev.materione.plugin.logic.support.SlotPeek;
 import dev.materione.plugin.gui.input.StackView;
+import java.time.Clock;
 import java.util.ArrayList;
 import dev.materione.plugin.logic.function.AbsFunction;
 import dev.materione.plugin.logic.function.CeilFunction;
@@ -73,7 +74,10 @@ import dev.materione.plugin.logic.function.ContainsFunction;
 import dev.materione.plugin.logic.function.EndsWithFunction;
 import dev.materione.plugin.logic.function.EqualsIgnoreCaseFunction;
 import dev.materione.plugin.logic.function.FloorFunction;
+import dev.materione.plugin.logic.function.FormatDurationFunction;
 import dev.materione.plugin.logic.function.FormatNumberFunction;
+import dev.materione.plugin.logic.function.NowFunction;
+import dev.materione.plugin.logic.function.TodayFunction;
 import dev.materione.plugin.logic.function.IsNumberFunction;
 import dev.materione.plugin.logic.function.IsPlayerFunction;
 import dev.materione.plugin.logic.function.LengthFunction;
@@ -138,8 +142,21 @@ public final class BuiltinLogic {
                 new PromptAction(api.inputMethods(), prompts.service()));
     }
 
-    /** The built-in expression functions (logic.md §4.2): pure, typed, and callable from any expression. */
+    /**
+     * The built-in expression functions (logic.md §4.2): typed, and callable from any expression. Most are pure
+     * functions of their arguments. Not pure: {@code random} (a random source) and the clock functions {@code now} and
+     * {@code today}, which read the clock each time a call runs. None is folded at parse time, so a clock is read only
+     * when an expression is evaluated, never when a rule loads.
+     */
     public static List<ExpressionFunction> functions() {
+        return functions(Clock.systemDefaultZone());
+    }
+
+    /**
+     * The built-in functions, with the clock the clock functions ({@code now()}, {@code today()}) read (logic.md §15).
+     * The plugin passes the system clock through {@link #functions()}; a test passes a fixed one.
+     */
+    public static List<ExpressionFunction> functions(Clock clock) {
         return List.of(
                 new ContainsFunction(),
                 new EqualsIgnoreCaseFunction(),
@@ -160,7 +177,10 @@ public final class BuiltinLogic {
                 new MaxFunction(),
                 new AbsFunction(),
                 new RandomFunction(),
-                new FormatNumberFunction());
+                new FormatNumberFunction(),
+                new NowFunction(clock),
+                new TodayFunction(clock),
+                new FormatDurationFunction());
     }
 
     /**

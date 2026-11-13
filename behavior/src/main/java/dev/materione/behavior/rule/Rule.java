@@ -24,6 +24,8 @@ import java.util.Optional;
  * @param filters the keys the rule set on its trigger ({@code layer}, {@code click}, {@code every}),
  *        as the trigger's description declares them; empty for a trigger with none
  * @param path where the rule was written, e.g. {@code behavior.2}
+ * @param onCooldown the flow that runs when the rule matched but its cooldown blocked it (logic.md §16); empty when
+ *        the rule has none, and then a blocked rule stays silent
  */
 public record Rule(
         NamespacedId owner,
@@ -33,11 +35,36 @@ public record Rule(
         List<Step> steps,
         RuleOptions options,
         RuleFilters filters,
-        StepPath path) {
+        StepPath path,
+        List<Step> onCooldown) {
 
     public Rule {
         steps = List.copyOf(steps);
         filters = filters == null ? RuleFilters.none() : filters;
+        onCooldown = onCooldown == null ? List.of() : List.copyOf(onCooldown);
+    }
+
+    /** A rule with no {@code on_cooldown} flow. */
+    public Rule(
+            NamespacedId owner,
+            String id,
+            EventSelector on,
+            Condition condition,
+            List<Step> steps,
+            RuleOptions options,
+            RuleFilters filters,
+            StepPath path) {
+        this(owner, id, on, condition, steps, options, filters, path, List.of());
+    }
+
+    /**
+     * The run an {@code on_cooldown} flow starts as: the same identity, with the cooldown branch as its body. Its path
+     * is {@code <rule path>.on_cooldown}, so the trace's run-level entries (RUN_STARTED, RUN_ENDED, which carry the
+     * run's rule path) say the branch ran, not the rule's normal flow. The engine starts it with a context that holds
+     * {@code cooldown.remaining}.
+     */
+    public Rule cooldownRule() {
+        return new Rule(owner, id, on, condition, onCooldown, options, filters, path.child(RuleOptions.ON_COOLDOWN));
     }
 
     /** The rule's stable identity ({@code <owner>#<name>}) for logs and cooldown keys. */

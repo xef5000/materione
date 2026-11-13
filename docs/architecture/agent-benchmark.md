@@ -690,10 +690,12 @@ and is tested by the harness as today; it appears in the SDK by itself when the 
 ## 8. Not verified
 
 - **Almost nothing was compiled.** The verdicts are a reading of the registries, not a checker's output. #349 replaces this section.
-  Since #337 four programs are compiled by the real TypeScript checker (`webui/test/codemode-compile.spec.ts`) against the recorded
-  registry of today's plugin (`fixtures/codemode/registry/plugin-current.json`): T08, T11 and T25 type-check cleanly and T27 fails with
-  TS2339 on `commands`, in the spellings the generated surface really has (they differ from the paper ones: S10), kept in
-  `fixtures/codemode/corpus/`. The other 25 programs are still on paper. The step shapes of §3 were corrected to the engine's
+  Since #337 six programs are compiled by the real TypeScript checker (`webui/test/codemode-compile.spec.ts`) against the recorded
+  registry of today's plugin (`fixtures/codemode/registry/plugin-current.json`, which includes the clock): T04 (its daily kit, with
+  `now()`), T08, T11 and T25 type-check cleanly, T27 fails with TS2339 on `commands`, and T05 fails with TS2322 because `on_cooldown`
+  is a `raw` rule option in self-description (a step list is not a JSON value to the type surface: #355). They are in the spellings
+  the generated surface really has (they differ from the paper ones: S10), kept in `fixtures/codemode/corpus/`. The other 23
+  programs are still on paper. The step shapes of §3 were corrected to the engine's
   grammar (logic.md §2.2, `StepCompiler`): `require` takes steps, a condition guards with `if` and `stop`.
 - Parameter names in the programs (`amplifier`, `seconds`, `points`, `detail`) are illustrative; the real ones are the
   registries'. A verdict depends on a member *existing*, not on its spelling.

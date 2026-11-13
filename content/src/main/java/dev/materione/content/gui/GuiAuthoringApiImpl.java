@@ -244,6 +244,61 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         if (subject.revision() != request.expectedRevision()) {
             return conflict(subject.path(), subject.revision(), request.expectedRevision());
         }
+        ApiResult<List<FieldEdit>> planned = plan(subject, request.edits());
+        if (!planned.ok()) {
+            return ApiResult.fail(planned.diagnostics());
+        }
+        List<FieldEdit> fields = planned.value();
+        if (fields.isEmpty() && request.assets().isEmpty()) {
+            return ApiResult.ok(view(subject)); // nothing to change: no revision, no write
+        }
+        DocumentView written;
+        try {
+            ApiResult<DocumentView> saved = authoring.setFields(actor, new SetFieldsRequest(
+                    request.pack(), request.path(), request.expectedRevision(), fields, request.assets()));
+            if (!saved.ok()) {
+                return ApiResult.fail(saved.diagnostics());
+            }
+            written = saved.value();
+        } catch (RuntimeException failure) {
+            return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                    failure.getMessage() != null ? failure.getMessage() : failure.toString()));
+        }
+        ApiResult<Subject> after = parseSaved(request.pack(), request.path(), written);
+        if (!after.ok()) {
+            return ApiResult.fail(after.diagnostics());
+        }
+        ApiResult<Map<String, Map<String, Object>>> pool = templatePool(after.value());
+        List<Diagnostic> compiled = pool.ok()
+                ? check(after.value(), new PackTextures(request.pack(), packsRoot.resolve(request.pack())), pool.value())
+                        .diagnostics()
+                : List.of();
+        return ApiResult.ok(view(after.value()), withLogicAndOpen(after.value(), compiled));
+    }
+
+    @Override
+    public ApiResult<List<FieldEdit>> stage(
+            String pack, String path, Map<String, Object> document, List<GuiEdit> edits) {
+        if (path == null || !path.startsWith("guis/")) {
+            return badRequest("'" + path + "' is not a GUI document (GUI files live under guis/)");
+        }
+        if (document == null) {
+            return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_PARSE_FAILED,
+                    "document " + path + " does not parse as YAML"));
+        }
+        ApiResult<Subject> subject = singleGui(document, pack, path, 0);
+        if (!subject.ok()) {
+            return ApiResult.fail(subject.diagnostics());
+        }
+        return plan(subject.value(), edits);
+    }
+
+    /**
+     * The edits applied to a working copy of the GUI, in order: the field edits that take the file there, or the
+     * refusal of the first edit that cannot apply. The one place a GUI edit list is applied, for {@link #edit} and
+     * for {@link #stage} alike.
+     */
+    private ApiResult<List<FieldEdit>> plan(Subject subject, List<GuiEdit> edits) {
         ApiResult<List<Map<String, Object>>> layers = mappingLayers(subject);
         if (!layers.ok()) {
             return ApiResult.fail(layers.diagnostics());
@@ -255,13 +310,13 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
         }
         GuiLayerEdits.Result next;
         try {
-            next = new GuiLayerEdits(this::knownComponent).apply(title, container, layers.value(), request.edits());
+            next = new GuiLayerEdits(this::knownComponent).apply(title, container, layers.value(), edits);
         } catch (IllegalArgumentException refused) {
             return badRequest(refused.getMessage());
         }
         Object openBefore = subject.definition().get("open");
         Object openAfter = openBefore;
-        for (GuiEdit edit : request.edits()) {
+        for (GuiEdit edit : edits) {
             if (edit instanceof SetOpen set) {
                 if (set.open() == null) {
                     openAfter = null;
@@ -292,31 +347,7 @@ public final class GuiAuthoringApiImpl implements GuiAuthoringApi {
                     ? FieldEdit.removal(List.of(key, "open"))
                     : new FieldEdit(List.of(key, "open"), openAfter));
         }
-        if (fields.isEmpty() && request.assets().isEmpty()) {
-            return ApiResult.ok(view(subject)); // nothing to change: no revision, no write
-        }
-        DocumentView written;
-        try {
-            ApiResult<DocumentView> saved = authoring.setFields(actor, new SetFieldsRequest(
-                    request.pack(), request.path(), request.expectedRevision(), fields, request.assets()));
-            if (!saved.ok()) {
-                return ApiResult.fail(saved.diagnostics());
-            }
-            written = saved.value();
-        } catch (RuntimeException failure) {
-            return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
-                    failure.getMessage() != null ? failure.getMessage() : failure.toString()));
-        }
-        ApiResult<Subject> after = parseSaved(request.pack(), request.path(), written);
-        if (!after.ok()) {
-            return ApiResult.fail(after.diagnostics());
-        }
-        ApiResult<Map<String, Map<String, Object>>> pool = templatePool(after.value());
-        List<Diagnostic> compiled = pool.ok()
-                ? check(after.value(), new PackTextures(request.pack(), packsRoot.resolve(request.pack())), pool.value())
-                        .diagnostics()
-                : List.of();
-        return ApiResult.ok(view(after.value()), withLogicAndOpen(after.value(), compiled));
+        return ApiResult.ok(fields);
     }
 
     @Override

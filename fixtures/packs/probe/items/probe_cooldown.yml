@@ -1,0 +1,13 @@
+# Logic cooldown probe (qa logic.cooldown-on-cooldown-remaining, logic.cooldown-gate-blocks-second-use's sibling): the first
+# right-click passes the rule's 60 second cooldown and says so in chat. A second right-click inside the window is blocked, and
+# its on_cooldown branch reports cooldown.remaining, the whole seconds left, rounded up (logic.md section 16).
+probe_cooldown:
+  material: COMPASS
+  display_name: "Cooldown Probe"
+  behavior:
+    - on: click:right
+      cooldown: 60000
+      do:
+        - chat: "CHECK cooldown-fired"
+      on_cooldown:
+        - chat: "CHECK cooldown-wait ${cooldown.remaining}"

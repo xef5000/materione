@@ -22,6 +22,7 @@ interface Expectation {
   title: string;
   registry: string;
   result: 'pass' | 'fail';
+  note?: string;
   diagnostics?: { code: number; messageContains?: string[] }[];
 }
 
@@ -103,7 +104,10 @@ describe('rules are typed from their trigger (benchmark S1, S7)', () => {
 
   it('types expression functions, and a function the server lacks is a type error', () => {
     expect(codes(`const e = m.expr\`\${m.fn.max(1, 2, 3)} + \${m.fn.round(2.5)}\`;`)).toEqual([]);
-    expect(codes('const e = m.fn.now();')).toContain(2339);
+    expect(codes('const e = m.fn.sqrt(4);')).toContain(2339);
+    // the clock functions take no argument: now() is typed as a call with none
+    expect(codes('const e = m.expr`${m.fn.now()} - 5`;')).toEqual([]);
+    expect(codes('const e = m.fn.now(1);')).toContain(2554);
   });
 
   it('rejects a rule option the registry does not list, accepts one it does', () => {
