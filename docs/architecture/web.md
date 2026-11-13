@@ -1,7 +1,7 @@
 # Web & Cloud Architecture — Technical
 
 > **Traceability.** Implements D11 (outbound-only connectivity) and constraint #3 (free & open,
-> self-hostable) from [`architecture.md`](../architecture.md). Companions:
+> self-hostable) from [`architecture.md`](../architecture.md); §6.4 carries D13 (code mode). Companions:
 > [`plugin.md`](plugin.md) · [`runtime-systems.md`](runtime-systems.md).
 >
 > **Scope:** the Cloudflare Workers serverless ecosystem (editor SPA + relay services + project
@@ -1348,6 +1348,24 @@ out, the picker stagger, the flip-free large list, the fade-in of a thumbnail wi
 sized. QA entries `editor.motion-*` in `qa/catalog/editor.mjs` cover the same interactions with
 screenshots for eyes review.
 
+### 6.4 The agent chatbot and code mode (D13; design only)
+
+*Not built.* The chatbot fixed on the cloud editor's page (master §14.8) is an ordinary editor client of the protocol in §4: the
+same handshake, the same in-game-approved session, the same permission nodes, no new endpoint and no new token scope. It
+changes the SPA, not the relay. Its tool runs a TypeScript program against an SDK generated from the connected plugin's
+registries, in a sandbox in the page, and the program's only effect is the editor operations of §4.2, staged and applied
+as one transaction; a change to existing content waits for the owner's approval, once per object per session (master §3.2,
+[`codemode.md`](codemode.md) §5.6). Consequences for this document:
+
+- **The SDK's operation table is subject to the release compatibility gate** (§6, *Versioning*): `editor-compat.mjs` scans it
+  like the editor's own calls, and an operation newer than a release is gated on a capability the SDK checks (codemode.md §7).
+- **The sandbox and the TypeScript checker are static assets** of the editor build (free, unlimited, §3.3), like the pinned
+  Blockbench; nothing runs on a Worker (codemode.md §4.5).
+- **Reads a program makes are editor traffic** over the encrypted channel and count against the same relay quotas (§3.3); the
+  sandbox's read budget (codemode.md §4.2) keeps one program from spending a session's allowance.
+- **The sandbox is not the Blockbench iframe.** Blockbench is our pinned code in a same-origin iframe; a program is hostile
+  code, so it runs in an opaque-origin sandbox that cannot reach the editor's origin, key or channel (codemode.md §4.3).
+
 ---
 
 ## 7. Project website (deferred)
@@ -1413,6 +1431,8 @@ in CI.
 | Editor opened against an unreachable / wrong direct endpoint | Direct is chosen only after a browser-side Ed25519 proof bound to the session id and a fresh challenge (§4.4); any other outcome stays on the relay |
 | Probe used as a signing oracle | Answered on direct sockets only, ≤ 1 per socket, only for an unclaimed session, domain-separated signed text (§4.4) |
 | Compromised `materione.com` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
+| Model-written code (code mode, D13) escapes its sandbox in the editor page | No ambient authority (only the SDK object); an opaque-origin sandbox with no network, storage or DOM; limits on CPU, memory, reads and output; the program's writes are *staged*, never performed; the server dry run decides validity; existing content changes only with the owner's per-object grant, held outside the sandbox (codemode.md §4, §5.6) |
+| Prompt injection through content the agent reads (an item's lore, a pack's names) | Reads are data to the program; its only effect is staged operations; the dry-run and the human review of the diff stand between any instruction and the files; permissions are the owner's session's, never widened (codemode.md §4.5) |
 | Abuse of the shared free instance | Rate-limiter binding per IP, envelope-only store, hard quotas below free-tier ceilings; the free plan's hard stops mean abuse causes 429s and availability loss — never billing (§3.3) |
 | Abuse of free store as file host | Envelope-only content type, size caps, TTLs, per-IP limits, content-addressed dedup keeps honest traffic cheap (§3, §4.3) |
 | Traffic analysis by the relay | Accepted, documented residual: sizes/timing/metadata are visible; contents are not (§5.4) |

@@ -6,7 +6,7 @@
 > contributor can see where their work lands, and nothing lands half-built waiting for a
 > later milestone.
 >
-> **Rule:** every milestone respects the load-bearing decisions D1–D12 from day one (files
+> **Rule:** every milestone respects the load-bearing decisions D1–D13 from day one (files
 > canonical, one pipeline, registries, fail-soft). Milestones add *capability*, never
 > re-architecture. If a milestone seems to require breaking a decision, the milestone is
 > wrong — stop and amend the architecture doc first.
@@ -426,9 +426,20 @@ expansion (parity long tail, then scale), and M8 is very late, so this slice com
   operations over the existing editor protocol, generated from registry self-description (D5). No new endpoint, no new token scope,
   the relay stays untrusted (architecture §14.8). Who runs and pays for the model is an open owner question under the Cloudflare cost
   guardrails.
+- **Code mode (D13, architecture §3.2, [`architecture/codemode.md`](architecture/codemode.md)):** the agent's one tool runs a
+  TypeScript program against an **SDK generated from the registries** (read API, staged write operations, typed handles, presets
+  and addon primitives), in a **browser sandbox** in the editor page; the program's only effect is the editor's own authoring
+  operations, never stored and never run on the server. Scope: the SDK generator and core in the editor build; the sandbox
+  (QuickJS in WebAssembly in an opaque-origin iframe, architecture §14.10); the per-object approval grants (codemode.md §5.6); the type-check before run; the server's **transaction operation with a
+  dry-run** over the heterogeneous edit list, per-operation permission checks, transaction-level revert and the audit `origin`
+  (codemode.md §10); the review surface (summary, diff, impact, approve); the compatibility-gate extension for the SDK's
+  operation table (codemode.md §7); golden SDK output, a program corpus and sandbox ban tests (codemode.md §11).
 - The primitives the audit proposes that the slice needs, and the presets over them (architecture §3.1, primitives.md §5, §7),
   chosen by the benchmark of #320 (20 to 30 realistic feature tasks), not by completeness.
-- Validate and dry-run without side effects, a readable diff before apply, transactional apply with rollback (#320's flow).
+- Validate and dry-run without side effects, a readable diff before apply, transactional apply with rollback (#320's flow): in code
+  mode, the type-check, the sandboxed run, the server dry-run and the human-approved apply of codemode.md §5.
+- The benchmark runs twice, with typed code mode and with a tool-per-operation baseline, and counts tasks that fail on a missing
+  primitive (codemode.md §11).
 
 **Exit:** #320's acceptance criteria, shown by the benchmark. Not scheduled; it needs the M6 close-out and a scope pass first.
 
