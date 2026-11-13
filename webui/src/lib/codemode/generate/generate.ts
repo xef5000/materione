@@ -178,10 +178,11 @@ function entryDoc(entry: SurfaceEntry, extra: readonly (string | undefined)[] = 
   return [
     sentence(entry.description) ?? sentence(entry.displayName),
     entry.activation ? `Activation: ${sentence(entry.activation)}` : undefined,
+    // a fact about the server recorded, not a deprecation: a missing provider is a configuration, not a verdict
+    unavailable === undefined ? undefined : `Unavailable on the connected server: ${sentence(unavailable)}`,
     ...extra,
     entry.sinceVersion ? `@since ${entry.sinceVersion}` : undefined,
     entry.registeredBy ? `@registeredBy ${entry.registeredBy}` : undefined,
-    unavailable === undefined ? undefined : `@deprecated Unavailable on the connected server: ${oneLine(unavailable)}`,
   ];
 }
 

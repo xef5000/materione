@@ -1,4 +1,5 @@
 // T08 Shop (agent-benchmark.md section 3): /shop with buy (left click) and sell (right click) for coins.
+// The paywall shape of the engine (logic.md 2.2): `require` runs STEPS until one fails, then runs `else` and stops.
 const p = m.pack("bench");
 const stock = [
   { id: "diamond", buy: 250, sell: 100 },
@@ -16,19 +17,21 @@ const shop = p.guis.create("shop", {
 for (const s of stock) {
   shop.rules.add(m.triggers.guiClick({ layer: `buy_${s.id}`, click: "left" }), () => ({
     do: [
-      m.steps.require([m.conditions.hasItemSpace(1), m.conditions.hasMoney(s.buy)], {
-        else: [m.actions.message("<red>Not enough coins or space.")],
+      // a condition guards with `if`; no room ends the run before any coin is taken
+      m.steps.if(m.conditions.hasItemSpace(1), {
+        else: [m.actions.message("<red>Your inventory is full."), m.steps.stop()],
       }),
-      m.actions.takeMoney(s.buy),
-      m.actions.giveItem({ item: `minecraft:${s.id}`, amount: 1 }),
+      // take the coins, then give the item: if the take fails nothing is given
+      m.steps.require([m.actions.takeMoney(s.buy), m.actions.giveItem({ item: `minecraft:${s.id}`, amount: 1 })], {
+        else: [m.actions.message("<red>Not enough coins.")],
+      }),
     ],
   }));
   shop.rules.add(m.triggers.guiClick({ layer: `buy_${s.id}`, click: "right" }), () => ({
     do: [
-      m.steps.require([m.conditions.hasItem({ item: `minecraft:${s.id}`, amount: 1 })], {
+      m.steps.require([m.actions.takeItem({ item: `minecraft:${s.id}`, amount: 1 })], {
         else: [m.actions.message("<red>You have none to sell.")],
       }),
-      m.actions.takeItem({ item: `minecraft:${s.id}`, amount: 1 }),
       m.actions.giveMoney(s.sell),
     ],
   }));

@@ -322,7 +322,7 @@ of its catalog, named by the camel-cased local part of its id (`run_command` is 
 `materione:backpack` is `backpack`). Two entries whose local parts collide are told apart by their namespaces
 (`exampleGreet`, `otherGreet`); an id without a namespace is never renamed. The registry id is always in the return type
 (`ActionStep<"gui.open">`) and the TSDoc carries `@since`, `@registeredBy`, `@category` and, for an entry the server reports
-unavailable (a provider that is not installed), `@deprecated Unavailable on the connected server: <reason>`. A registry's ids are
+unavailable (a provider that is not installed), a plain line `Unavailable on the connected server: <reason>` (not `@deprecated`: a missing provider is a configuration of the recorded server, not a verdict on the entry). A registry's ids are
 also exported as literal unions (`ActionId`, `TriggerId`, `RefKind`, `Capability`, ...).
 
 **A builder is called with its parameters, or with the one bare value the registry's `shorthand` names.**
@@ -356,11 +356,11 @@ check's and the server's (§13).
 `Expr<string>` or `Expr<boolean>`. A function the server lacks (`m.fn.now()`) is TS2339, the same as every other gap.
 
 **Where the generated surface stops.** A registry the wire does not carry produces nothing, and this is the list of what that
-leaves out today: presets (D12 layer 2: there is no preset registry yet); currencies and economy providers (a `currency` is a
+leaves out today (issue #355 tracks the self-description additions): presets (D12 layer 2: there is no preset registry yet); currencies and economy providers (a `currency` is a
 content type, so it is a collection, but there is no provider registry; an unavailable `give_money` shows through `available`);
 which action and condition parameters accept an `Expr` (every scalar is typed as its literal); that a trigger filter accepts a list;
 `supersededBy` (S5); the parameters of the structural steps (`if`, `require`, `choose`, `wait`, `call`), which `core.d.ts` types by
-hand because they are the flow model and not registry entries; and the GUI layer rules (a layer's behavior is the GUI's own
+hand because they are the flow model and not registry entries (`StepBuilders` follows logic.md §2.2 and the engine's step compiler: `require` takes steps, `if` takes a condition and a `then` or `else`; **this hand-typing is temporary until #355** puts the step grammar in self-description, after which the generator emits it); and the GUI layer rules (a layer's behavior is the GUI's own
 `gui.click` rules filtered by `layer`, so that is how a shop button is written). None of this needed a server change, and none was
 made.
 

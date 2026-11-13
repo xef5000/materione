@@ -114,6 +114,32 @@ describe('rules are typed from their trigger (benchmark S1, S7)', () => {
   });
 });
 
+describe('the structural steps follow the engine grammar (logic.md section 2.2)', () => {
+  const pack = 'const p = m.pack("t");\nconst sword = p.items.create("s", { material: "DIAMOND_SWORD" });\n';
+  const rule = (body: string): string => `${pack}sword.rules.add(m.triggers.click(), () => ({ do: [${body}] }));`;
+
+  it('takes steps in a require, and a condition there is an error', () => {
+    expect(codes(rule('m.steps.require([m.actions.takeMoney(5), m.actions.giveItem("DIAMOND")], { else: [m.actions.message("no")] })'))).toEqual([]);
+    expect(codes(rule('m.steps.require([m.conditions.hasMoney(5)], { else: [] })')).length).toBeGreaterThan(0);
+    expect(codes(rule('m.steps.require([m.expr`1 > 0`])')).length).toBeGreaterThan(0);
+    expect(codes(rule('m.steps.require(m.conditions.hasMoney(5))')).length).toBeGreaterThan(0);
+  });
+
+  it('guards with a condition in an if, which needs a branch', () => {
+    expect(codes(rule('m.steps.if(m.conditions.hasItemSpace(1), { else: [m.steps.stop()] })'))).toEqual([]);
+    expect(codes(rule('m.steps.if(m.conditions.hasItemSpace(1), { then: [m.actions.cancel()] })'))).toEqual([]);
+    expect(codes(rule('m.steps.if(m.conditions.hasItemSpace(1), {})')).length).toBeGreaterThan(0);
+    expect(codes(rule('m.steps.if(m.actions.cancel(), { then: [] })')).length).toBeGreaterThan(0);
+  });
+
+  it('types choose, wait, stop and call as the engine reads them', () => {
+    expect(codes(rule('m.steps.choose([{ if: m.expr`1 > 0`, then: [m.actions.cancel()] }], [m.steps.stop({ cancel: true })])'))).toEqual([]);
+    expect(codes(rule('m.steps.choose([])')).length).toBeGreaterThan(0);
+    expect(codes(rule('m.steps.wait(20), m.steps.call("purchase", { price: 250 })'))).toEqual([]);
+    expect(codes(rule('m.steps.stop({ cancel: "yes" })')).length).toBeGreaterThan(0);
+  });
+});
+
 describe('references and fields are checked', () => {
   const pack = 'const p = m.pack("t");\n';
 

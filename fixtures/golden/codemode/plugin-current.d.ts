@@ -2613,9 +2613,9 @@ interface ActionCatalog {
   chat(params: ChatActionParams | string, options?: ActionOptions): ActionStep<"chat">;
   /**
    * Sends the player to another server; a proxy takes the name, the transfer packet uses its configured host.
+   * Unavailable on the connected server: No server transfer is configured (set transfer_host, or install a proxy channel)
    * @since 2.0.0
    * @registeredBy materione
-   * @deprecated Unavailable on the connected server: No server transfer is configured (set transfer_host, or install a proxy channel)
    * @category server
    */
   connect(params: ConnectActionParams | string, options?: ActionOptions): ActionStep<"connect">;
@@ -2643,9 +2643,9 @@ interface ActionCatalog {
   giveItem(params: GiveItemActionParams | string | Ref<"item">, options?: ActionOptions): ActionStep<"give_item">;
   /**
    * Adds money to the player's balance of a currency (the default currency unless one is named)
+   * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
    * @since 2.0.0
    * @registeredBy materione
-   * @deprecated Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used
    * @category economy
    */
   giveMoney(params: GiveMoneyActionParams | number, options?: ActionOptions): ActionStep<"give_money">;
@@ -2764,9 +2764,9 @@ interface ActionCatalog {
   takeItem(params: TakeItemActionParams | string | Ref<"item">, options?: ActionOptions): ActionStep<"take_item">;
   /**
    * Removes money from the player's balance of a currency; fails when the balance is too low.
+   * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
    * @since 2.0.0
    * @registeredBy materione
-   * @deprecated Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used
    * @category economy
    */
   takeMoney(params: TakeMoneyActionParams | number, options?: ActionOptions): ActionStep<"take_money">;
@@ -2946,9 +2946,9 @@ interface ConditionCatalog {
   hasItemSpace(params?: HasItemSpaceConditionParams | number): Condition<"has_item_space">;
   /**
    * True when the player's balance of a currency is at least the amount.
+   * Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used.
    * @since 2.0.0
    * @registeredBy materione
-   * @deprecated Unavailable on the connected server: the vault integration is not installed, so materione:money cannot be used
    * @category economy
    */
   hasMoney(params: HasMoneyConditionParams | number): Condition<"has_money">;

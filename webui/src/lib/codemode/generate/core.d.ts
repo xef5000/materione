@@ -150,14 +150,38 @@ interface RuleSet<H extends string> {
   instantiate(recipe: RecipeInstance): RuleHandle;
 }
 
-/** The structural steps of the flow model (logic.md section 4); their parameters are not registry data. */
+/**
+ * The structural steps of the flow model, typed by hand from logic.md section 2.2 and the engine's step compiler
+ * (`StepCompiler`): they are engine-owned and closed, not registry entries, and self-description does not carry
+ * their grammar. TEMPORARY: issue 355 puts the step grammar in self-description, and this interface is then generated.
+ */
 interface StepBuilders {
-  if(condition: Condition | Expr<boolean>, then: readonly Step[], otherwise?: readonly Step[]): Step;
-  require(conditions: Condition | Expr<boolean> | readonly (Condition | Expr<boolean> | ActionStep)[], options?: { readonly else?: readonly Step[] }): Step;
+  /** A branch on a condition; at least one of `then` and `else` is required. Execution continues after it. */
+  if(
+    condition: Condition | Expr<boolean>,
+    branches:
+      | { readonly then: readonly Step[]; readonly else?: readonly Step[] }
+      | { readonly then?: readonly Step[]; readonly else: readonly Step[] },
+  ): Step;
+  /**
+   * Runs the **steps** in order until one fails; on a failure it runs `else` and stops the flow (the atomic
+   * paywall: a take, then a give). It takes steps, not conditions: guard with `if` and `stop` for a condition.
+   */
+  require(steps: readonly Step[], options?: { readonly else?: readonly Step[] }): Step;
+  /** Suspends the run for whole `ticks` (0 to 1,728,000, one day). */
   wait(ticks: number): Step;
-  stop(): Step;
-  choose(branches: readonly { readonly if: Condition | Expr<boolean>; readonly then: readonly Step[] }[], otherwise?: readonly Step[]): Step;
-  call(flow: string): Step;
+  /** Ends this run; `cancel` also cancels the underlying game event. */
+  stop(options?: { readonly cancel?: boolean; readonly cancel_session_runs?: boolean }): Step;
+  /** The first branch whose condition holds runs; `otherwise` is the step's own `else`. At least one branch. */
+  choose(
+    branches: readonly [
+      { readonly if: Condition | Expr<boolean>; readonly then: readonly Step[] },
+      ...{ readonly if: Condition | Expr<boolean>; readonly then: readonly Step[] }[],
+    ],
+    otherwise?: readonly Step[],
+  ): Step;
+  /** Runs a named flow of the same resource inline; `args` arrive as `args.*` in the flow. */
+  call(flow: string, args?: { readonly [name: string]: JsonValue }): Step;
 }
 
 // ---- extension points: the generated surface merges its members into these -------------------------
