@@ -62,6 +62,7 @@ describe('the text of the sections', () => {
     });
     let seen = 0;
     for (const file of [...files(join(root, 'fixtures')), ...files(fileURLToPath(new URL('./fixtures/logic', import.meta.url)))]) {
+      if (file.endsWith('bad-behavior.yml')) continue; // a fault fixture: its behavior: is not a list on purpose (#327)
       let parsed: unknown;
       try {
         parsed = parse(readFileSync(file, 'utf8'));

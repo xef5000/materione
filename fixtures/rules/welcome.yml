@@ -1,0 +1,27 @@
+# Golden rule document (#327, logic.md section 37): comments, blank lines, flow style, an unknown key at each level
+# and a named flow are all part of the lossless round-trip contract. Load then save must give these exact bytes.
+welcome:
+  description: "Greet players, and count a quest kill"
+  sidecar_note: kept as written    # a key this version does not know survives
+  behavior:
+    # the greeting: first joins get the kit
+    - on: player.join
+      id: greet
+      do:
+        - if: "${player.first_join}"
+          then:
+            - call: starter_kit
+          else:
+            - message: "<gray>Welcome back, ${player.name}"
+
+    - on: entity.kill   # no host: the world fires it
+      type: [zombie, husk]
+      node: {x: 120, y: 40}
+      future_option: 7
+      do:
+        - set_var: {var: tally, value: "${vars.tally + 1}"}
+
+  flows:
+    starter_kit:
+      - give_item: {item: "minecraft:bread", amount: 8}
+      - broadcast: "<yellow>${player.name} joined for the first time!"

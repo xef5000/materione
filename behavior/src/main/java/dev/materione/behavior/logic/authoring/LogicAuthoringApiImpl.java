@@ -34,8 +34,13 @@ import java.util.Objects;
  */
 public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
 
-    /** The folders whose documents hold a resource with {@code behavior:} (gui.md §2, items, blocks, furniture). */
-    private static final List<String> RESOURCE_FOLDERS = List.of("items/", "blocks/", "furniture/", "guis/");
+    /**
+     * The folders whose documents hold a resource with {@code behavior:} (gui.md §2, items, blocks, furniture, and the
+     * host-less rule documents of logic.md §37). The furniture folder is {@code furnitures/}, as the pack layout names it.
+     */
+    private static final List<String> RESOURCE_FOLDERS =
+            List.of("items/", "blocks/", "furnitures/", "guis/", "rules/");
+    private static final String FOLDER_HINT = "items/, blocks/, furnitures/, guis/ or rules/";
 
     private final AuthoringApi authoring;
     private final LogicLookup lookup;
@@ -159,7 +164,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
     private ApiResult<Loaded> load(String pack, String path) {
         if (path == null || RESOURCE_FOLDERS.stream().noneMatch(path::startsWith)) {
             return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_SCHEMA_INVALID,
-                    "'" + path + "' is not a document that holds logic (items/, blocks/, furniture/ or guis/)"));
+                    "'" + path + "' is not a document that holds logic (" + FOLDER_HINT + ")"));
         }
         ApiResult<DocumentView> document = authoring.getDocument(pack, path);
         if (!document.ok()) {
@@ -172,7 +177,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
     private static ApiResult<Loaded> inMemory(String pack, String path, Map<String, Object> tree) {
         if (path == null || RESOURCE_FOLDERS.stream().noneMatch(path::startsWith)) {
             return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_SCHEMA_INVALID,
-                    "'" + path + "' is not a document that holds logic (items/, blocks/, furniture/ or guis/)"));
+                    "'" + path + "' is not a document that holds logic (" + FOLDER_HINT + ")"));
         }
         return fromTree(pack, path, tree, 0);
     }

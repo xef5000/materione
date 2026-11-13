@@ -9,6 +9,15 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **Rules without a host, and the world triggers (#327, D12).** A new content type, `rule` (`rules/*.yml`), holds a `behavior:` list and `flows:`
+  with the exact shape of an item's, owned by no item, block, furniture or GUI; the same compiler, interpreter, trace and `LogicEdit` edit it. Seven
+  new triggers, registered with self-description (filters, context, hosts, cancellability) so the editor and the code-mode SDK need no hand-written
+  schema: `entity.hit` (filters `type`, `cause`; cancellable), `entity.kill` (`type`), `player.hurt` (`cause`; cancellable), `player.join`
+  (`player.first_join`), `player.quit`, `player.respawn` and `player.death`. The first three are also fired for an item's rules, for the item in the
+  main hand (and each armor piece worn, for `player.hurt`). A trigger no rule answers costs one set lookup per event (`WorldEventGateTest`, plugin.md
+  section 9). `logic.get` and `logic.edit` now address `rules/` and `furnitures/` documents (the folder list had said `furniture/`). No existing
+  file changes meaning. See logic.md section 37.
+
 - **`AuthoringApi.transaction`: one transaction over a mixed edit list, with a dry run and per-operation permissions (#341, D13).** An ordered list of
   `create`, `duplicate`, `setFields`, `move`, `delete`, `detachTemplate`, `saveAsTemplate`, `logicEdit` and `guiEdit` operations on one pack (at most 50
   documents) is applied in memory under the store lock, where a later operation may address a document an earlier one creates, validated, and either

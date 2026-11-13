@@ -1,0 +1,56 @@
+# World-event rules with no host (logic.md section 37). Each rule says what fired, through the console for the
+# headless harness and through chat for the QA client. A zombie kill counts toward a quest held in a player variable:
+# the same shape as benchmark task T06, written as content.
+world:
+  description: "QA and harness: one rule per world trigger"
+  behavior:
+    # a kill counts; the second one finishes the quest
+    - id: count_zombie_kills
+      on: entity.kill
+      type: zombie
+      do:
+        - set_var: {var: "worldrules:zombie_kills", op: add, value: 1}
+        - run_command: "say MATERIONE-WORLDRULES-KILL ${target.type} killer=${player.name} is_player=${target.is_player}"
+        - chat: "CHECK kill ${target.type} is_player=${target.is_player}"
+        - if:
+            var: {var: "worldrules:zombie_kills", op: ">=", value: 2}
+          then:
+            - run_command: "say MATERIONE-WORLDRULES-QUEST-DONE ${player.name}"
+            - chat: "CHECK quest-done"
+    # a hit carries the struck entity and the damage; the filter limits it to melee on zombies
+    - id: hit_zombie
+      on: entity.hit
+      type: [zombie]
+      cause: entity_attack
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-HIT ${target.type} cause=${damage.cause} amount=${damage.amount}"
+        - chat: "CHECK hit ${target.type} cause=${damage.cause}"
+    # the second filter is a different entity: a husk is hit but this rule does not answer it
+    - id: hit_husk_cancelled
+      on: entity.hit
+      type: husk
+      do:
+        - cancel
+        - run_command: "say MATERIONE-WORLDRULES-HUSK-CANCELLED"
+    - id: greet
+      on: player.join
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-JOIN ${player.name} first=${player.first_join}"
+        - chat: "CHECK join first=${player.first_join}"
+    - id: farewell
+      on: player.quit
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-QUIT ${player.name}"
+    - id: died
+      on: player.death
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-DEATH ${player.name} cause=${damage.cause}"
+    - id: back
+      on: player.respawn
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-RESPAWN ${player.name}"
+    - id: ouch
+      on: player.hurt
+      cause: fall
+      do:
+        - run_command: "say MATERIONE-WORLDRULES-HURT ${player.name} cause=${damage.cause}"

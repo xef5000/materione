@@ -163,7 +163,7 @@ public final class BehaviorService {
     }
 
     /** Rules attached to the stack's Materione identity, resolved at event entry. */
-    private List<dev.materione.behavior.rule.Rule> rulesFor(ItemStack stack) {
+    List<dev.materione.behavior.rule.Rule> rulesFor(ItemStack stack) {
         Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);
         if (identity.isEmpty()) {
             return List.of();
@@ -180,9 +180,20 @@ public final class BehaviorService {
      * mutable namespace ({@code set_var} writes there).
      */
     private MapLogicContext buildContext(Player player, ItemStack stack) {
+        var root = baseRoot(player, player.getLocation());
+        root.put("item", itemContext(stack));
+        return logicContext(root, player);
+    }
+
+    /**
+     * The tree every player-subject event shares: {@code player}, {@code location}, {@code world}, {@code server}
+     * and a fresh {@code vars}. {@code location} is where the event happened, which is not always where the
+     * player is (the entity that was hit). The world-event bridge adds its own roots to it (logic.md §37).
+     */
+    Map<String, Object> baseRoot(Player player, Location location) {
         var root = new LinkedHashMap<String, Object>();
-        Location location = player.getLocation();
         World world = location.getWorld();
+        Location where = player.getLocation();
 
         var playerVars = new LinkedHashMap<String, Object>();
         playerVars.put("name", player.getName());
@@ -192,11 +203,11 @@ public final class BehaviorService {
         playerVars.put("gamemode", player.getGameMode().name().toLowerCase(java.util.Locale.ROOT));
         playerVars.put("sneaking", player.isSneaking());
         playerVars.put("op", player.isOp());
-        playerVars.put("x", round(location.getX()));
-        playerVars.put("y", round(location.getY()));
-        playerVars.put("z", round(location.getZ()));
-        playerVars.put("yaw", round(location.getYaw()));
-        playerVars.put("pitch", round(location.getPitch()));
+        playerVars.put("x", round(where.getX()));
+        playerVars.put("y", round(where.getY()));
+        playerVars.put("z", round(where.getZ()));
+        playerVars.put("yaw", round(where.getYaw()));
+        playerVars.put("pitch", round(where.getPitch()));
         root.put("player", playerVars);
 
         var locationVars = new LinkedHashMap<String, Object>();
@@ -211,22 +222,20 @@ public final class BehaviorService {
         worldVars.put("time", world == null ? 0L : world.getTime());
         root.put("world", worldVars);
 
-        root.put("item", itemContext(stack));
-
         var serverVars = new LinkedHashMap<String, Object>();
         serverVars.put("online", Bukkit.getOnlinePlayers().size());
         serverVars.put("max", Bukkit.getMaxPlayers());
         root.put("server", serverVars);
 
         root.put("vars", new LinkedHashMap<String, Object>());
-        return logicContext(root, player);
+        return root;
     }
 
     /**
      * The run's context: the variable tree plus what only the platform can supply, the player
      * facet and PlaceholderAPI resolution for that player.
      */
-    private MapLogicContext logicContext(Map<String, Object> root, Player player) {
+    MapLogicContext logicContext(Map<String, Object> root, Player player) {
         return new MapLogicContext(root)
                 .with(Facets.PLAYER, player)
                 .withPlaceholders(text -> PlaceholderResolver.apply(player, text))
@@ -235,7 +244,7 @@ public final class BehaviorService {
                         : variables.bind(player == null ? null : player.getUniqueId()));
     }
 
-    private static Map<String, Object> itemContext(ItemStack stack) {
+    static Map<String, Object> itemContext(ItemStack stack) {
         var itemVars = new LinkedHashMap<String, Object>();
         Optional<NamespacedId> identity = MaterioneStacks.identityOf(stack);
         itemVars.put("id", identity.map(NamespacedId::toString).orElse(""));

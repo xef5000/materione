@@ -814,6 +814,12 @@ public final class MaterionePlugin extends JavaPlugin {
         // at event entry, so the listener registers once and never churns
         behavior = new BehaviorService(logic.engine(), pipeline.runtime(), variables);
         getServer().getPluginManager().registerEvents(new ItemBehaviorListener(behavior, diagnostics), this);
+        // the world events (logic.md section 37): entity hit and kill, player hurt, join, quit, death, respawn;
+        // a trigger no rule answers costs one set lookup per event
+        getServer().getPluginManager().registerEvents(new dev.materione.plugin.runtime.behavior.WorldEventListener(
+                new dev.materione.plugin.runtime.behavior.WorldEvents(
+                        behavior, () -> pipeline.runtime().registries(), logic.engine()),
+                diagnostics), this);
         // custom-block world runtime (runtime-systems §4): placement index is
         // disposable generated state — rebuilt from chunk scans if lost
         placements = dev.materione.core.storage.PlacementIndex.load(

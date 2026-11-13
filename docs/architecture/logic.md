@@ -331,6 +331,8 @@ table becomes the built-in trigger registrations. `describe()` declares:
 - the **context schema** (§2.6);
 - whether the trigger is **cancellable** (`gui.opening` is; `gui.close` is not).
 
+A trigger may name the hosts that fire it in `firedBy` (`item`, `block`, `furniture`, `gui`, and since #327 `rule`, a document that holds rules and no resource). The seven world triggers (§37) are the first to be fired by a world event with no host in the way.
+
 ### 4.4 Item sources
 
 > **As built (#216).** The SPI is `dev.materione.api.logic.ItemSource`, registered through
@@ -3739,3 +3741,153 @@ cursor): the trash is placed first, then consumed.
 editor demo snapshot golden, and `PaperEscrowCrashIT` (`gui-input-durability.md` §12, *Row H as built*: K10 to K14, K17, K23 and KT against a real
 `kill -9`). QA `guiescrow.trash-consumes`, `.trash-feedback`, `.consume-effect-after-save`, `.consume-refusal-runs-else` (**not blessed**:
 blessing runs happen on main).
+
+---
+
+## 37. Decisions taken in #327 (rules without a host, and the world triggers)
+
+#327 is the first issue of M6.5 ([`agent-benchmark.md`](agent-benchmark.md) §4.2, rank 1) and a primitive under D12
+([`architecture.md`](../architecture.md) §3.1, [`primitives.md`](primitives.md) §4.1, §4.3, §5.5): until it, every rule lived in an item, block,
+furniture or GUI, `damage` was durability damage, and nothing fired on a hit, a kill, a join or a quit. It adds one content type and
+seven triggers, and nothing named for a use case. The code is in `content.rules` (`RuleType`, `RuleDefinition`), `plugin.logic.trigger`
+(`WorldTriggers`), `plugin.runtime.behavior` (`WorldEventListener`, `WorldEvents`, `WorldRules`, `RuleDocuments`) and
+`platform.entity` (`EntityPalette`); the fixtures are `fixtures/packs/worldrules/`, `fixtures/rules/` and the golden `editor-demo-snapshot.json`.
+Each decision is reversible by the owner.
+
+**The document.** `rules/*.yml`, content type `rule`, one resource per top-level key like every type:
+
+```yaml
+quest_zombies:
+  description: Two zombie kills finish the quest        # optional, for the people who edit it
+  behavior:
+    - on: entity.kill
+      type: zombie                                      # a trigger filter (§4.3)
+      do:
+        - set_var: {var: "quest:zombie_kills", op: add, value: 1}
+        - if:
+            var: {var: "quest:zombie_kills", op: ">=", value: 2}
+          then:
+            - give_item: {item: "quest:zombie_trophy", amount: 1}
+  flows: {}                                             # named flows, callable from this document's rules
+```
+
+1. **The shape is a host's shape, so one tool edits all of them.** `behavior:` and `flows:` are exactly what an item holds (§2.1, §2.4): the
+   same compiler (`FlowCompiler`), interpreter, trace and `LogicEdit` vocabulary, with the same `on`, filters, `if`, `do`, `id`, `cooldown`,
+   `charges`, `per` and `on_cooldown`, and per-action `chance:` and `delay:`. There is no rule-level `chance`: it is an action's option
+   (the benchmark's first draft of T15 and T24 had that slip, `agent-benchmark.md` T15). The document adds only `description:`. It is a
+   behavior *host* and nothing more: it declares no appearance, produces no pack output (`compile` emits nothing) and allocates nothing.
+2. **One schema source.** `RuleType.describe()` is the self-description (`description`, `behavior` with the `behavior-rules` widget,
+   `flows` as an advanced field). The studio's generic form, `authoring.describe`, the scaffold test and the code-mode SDK generator read it;
+   nothing about rule documents is hand-written elsewhere. `behavior` is declared once for every host that wants it
+   (`LogicSchemas.behavior(description)`).
+3. **The directory is `rules/`; the type is `rule`.** The pipeline derives the type by stripping the trailing "s" (`ParseStage`), as for
+   `items/`. `PackLayout.CONTENT_DIRS`, both scaffold tables (core and web, which a test pins byte for byte) and the authoring transaction's
+   "has logic" list name it. The scaffold is a complete, running rule on `player.join`.
+4. **What is a rule document, and what quarantines.** `behavior:` must be a list and `flows:` a mapping; anything else parses to nothing and
+   the document is reported with `MTR-0008` and left out of the live shadow, its pack unaffected. Inside a good document, a bad rule
+   is the compiler's business: it is skipped alone with `MTR-0021` (an unknown `on:`, a filter the trigger's schema rejects, an unknown
+   entity type or damage cause) and its siblings load. A rule whose trigger no rule document fires (a `click`) loads and is reported as
+   never running, the warning a GUI gives for the same mistake. No diagnostic code was added ([`plugin.md`](plugin.md) §5). The "never
+   runs" warning is raised when the shadow is built, where the host is known; the offline dry run (`logic.validate`, an authoring
+   transaction) reports the compiler's problems and not this one, because a draft carries no host.
+5. **The subject of a host-less run is the player the trigger names.** The run belongs to that player (cooldowns are per player by
+   default, a `cancelPlayer` on quit ends its parked runs, the player facet and PlaceholderAPI resolve for them). `player.*`, `server.*`,
+   `world.*`, `location.*` and `vars` are in every trigger's context, built by the same code the item bridge uses (`BehaviorService.baseRoot`).
+   `location.*` is where the event happened (the entity that was hit or died), which is not always where the player stands. A trigger
+   with no player (an entity killed by a mob, an explosion) fires nothing: there is no subject to run for. Target addressing
+   (an action on the struck entity, #331) is a different primitive and is not here.
+6. **`item.*`.** On `entity.hit`, `entity.kill` and `player.hurt`, `item.*` describes the item the rule runs for: the item that hosts the
+   rule, or, in a rule document, the item in the player's main hand. A rule document can therefore ask `item.material == "diamond_sword"`
+   without being an item.
+
+**The triggers.** Registered through `api.logic().triggers()` like the built-ins, by `WorldTriggers`, so the compiler checks `${...}` paths
+against these schemas and the editor autocompletes from them (§2.6). Every trigger also guarantees `player.name/uuid/gamemode/sneaking/op/
+health/level/x/y/z`, `location.x/y/z/world`, `world.name/time`, `server.online/max` and `vars.*`.
+
+| Trigger | Fires when | Filters | Context added | Hosts | Cancellable |
+|---|---|---|---|---|---|
+| `entity.hit` | a player damages an entity, in melee or with a projectile they shot | `type`, `cause` | `target.type/uuid/health/is_player`, `damage.amount/final/cause`, `item.*` | item (main hand), rule | yes |
+| `entity.kill` | an entity dies and a player is its killer | `type` | `target.type/uuid/is_player`, `item.*` | item (main hand), rule | no |
+| `player.hurt` | a player takes damage | `cause` | `damage.amount/final/cause`, `source.type`, `item.*` | item (main hand, each armor piece), rule | yes |
+| `player.join` | a player joins | none | `player.first_join` | rule | no |
+| `player.quit` | a player leaves | none | none | rule | no |
+| `player.respawn` | a player respawns | none | none | rule | no |
+| `player.death` | a player dies | none | `damage.cause` | rule | no |
+
+7. **Filters.** `type` is an entity type key without namespace (`zombie`, `cave_spider`), `cause` a damage cause (`entity_attack`,
+   `projectile`, `fall`); each takes a value or a list and is an enum filter, so an unknown value is `MTR-0021` at the key and skips the rule
+   rather than loading it on every entity. The palettes come from the running server (`EntityPalette`: the entity registry, the Bukkit damage
+   causes), the way item materials come from the platform. Where no server registry exists (a headless unit test) the `type` filter accepts any
+   name rather than none; the harness and the plugin always have one.
+8. **`damage.amount` and `damage.final`.** `amount` is what the attacker dealt before armor and effects; `final` is the event's final damage
+   at the moment the rule runs, after other plugins that ran earlier have changed it. `target.health` is before the damage lands. A kill
+   carries no health, because the entity has none left.
+9. **Item hosts, order and cancellation.** An item's `entity.hit`/`entity.kill` rules fire for the item in the main hand, as `break` does
+   today; `player.hurt` fires for the main hand and each armor piece worn that has Materione identity (the `item.*` of each is its own).
+   Item rules run first, in hand-then-armor order, then rule documents' in pack and document order. Each run is one `BehaviorEvent` with its
+   own cancel flag; for a cancellable trigger the dispatch is a synchronous pre-event (reads that would need another thread fail closed, as
+   for `break`), and a `cancel` from any run cancels the Bukkit event after that run. Later runs still happen, so a rule document
+   sees the event an earlier item rule cancelled, and may cancel it again. A `cancel` on a trigger that cannot be cancelled is accepted and
+   ignored (`Cancellation`).
+10. **Firing sites, ordering and threads.** `WorldEventListener` is static wiring (`EntityDamageByEntityEvent`, `EntityDamageEvent`,
+    `EntityDeathEvent`, `PlayerJoinEvent`, `PlayerQuitEvent`, `PlayerDeathEvent`, `PlayerRespawnEvent`), registered once; rules are read from
+    the live shadow at event entry, so a reload needs no listener churn. Handlers run at HIGH with `ignoreCancelled`, so protection plugins
+    decide first and an event they cancelled fires nothing; `player.quit` runs at LOW so a quit rule starts before the logic service ends the
+    player's parked runs (a step after a `wait` in a quit rule does not run: the player is gone). On Folia the damage and death events fire on
+    the *victim's* region and a player in another region cannot be read from it, so the event fires nothing for that player (a fight inside one
+    region, the common case, is unaffected); `Bukkit.isOwnedByCurrentRegion` is the check, always true on Paper. Every world mutation a rule
+    makes goes through the actions and the thread gateway as before (D8); the listener only reads and dispatches.
+11. **Budgets: a trigger nobody answers costs a set lookup.** The `WorldRules` registry view holds the rule documents by trigger and
+    the set of triggers any item answers. Each handler's first line is `WorldEvents.subscribes(trigger)`: one view lookup and one set lookup,
+    measured at a few nanoseconds per event against a budget of 250 ns (`WorldEventGateTest`, [`plugin.md`](plugin.md) §9). The work after it is
+    staged, each step paid only if the one before found a reason: the rules whose trigger and filters match the event's facts (a cheap string
+    compare), then the stacks (a persistent-data read, only when some item has a rule on the trigger), then the context tree. A server whose
+    only rule is `entity.kill` of zombies builds no context for the death of a cow
+    (`anEventThatNoRuleFiltersInReadsNothingFromTheWorld`).
+12. **The editor.** `logic.get` and `logic.edit` accept `rules/` documents (and `furnitures/`: the folder list said `furniture/`, which the pack
+    layout does not use, so furniture logic had been unaddressable through this API); every `LogicEdit` applies to a rule document and an
+    edit that adds the first rule creates `behavior:`. The studio's generic form edits a rule document through the `behavior-rules` widget, whose
+    event list is `firedBy` filtered to `rule`, so the seven triggers are offered and an item-only trigger is called out. The *graph* Logic tab is
+    bound to the GUI studio's document state today (`LogicCanvasState` takes a `GuiStudioState`) and does not open a rule document: that is a
+    follow-up, not built here (below).
+
+**The universality tests (master §3.1), for the content type and the triggers.**
+
+| Test | How it passes |
+|---|---|
+| U1 name | `rule` names what the document is (rules), `entity.kill` and `player.join` name what fires. None names a quest, a drop, a boss or a welcome: T06, T10 and T15 are compositions of them |
+| U2 generality | `entity.*` works for any entity type (the `type` filter is optional) and any player; a rule document is hosted by nothing, so it works for any pack; an item hosts the same triggers with the same context |
+| U3 composition | every action and condition composes with them, proved by `worldrules` (a variable counted by `set_var`, read by a `var` condition, `give_item`, `cancel`, `run_command`) with no Java; the benchmark tasks T06, T10 and T15 are YAML only |
+| U4 self-description | a content type and seven triggers in registries, with typed filters, context and hosts, in `logic.vocabulary` and `authoring.describe`; no hand-written schema anywhere else |
+| U5 safety | a rule document validates offline like any host's (`logic.validate`, a transaction's dry run), a bad rule is skipped with a code, the handlers never throw into the server (a bridge failure is a diagnostic and the event carries on), and the harness proves it on Paper |
+
+**Deviations from the issue's sketch, and what was decided.**
+
+| Sketch | As built | Why |
+|---|---|---|
+| `player.join` and `player.quit` share a row whose context is `player.first_join` | `player.first_join` on `player.join` only | The flag is only meaningful on a join (at a quit the player has always played before), so `player.quit` has no context of its own. The sketch's six rows are seven triggers, all built. |
+| `player.respawn` carries `damage.cause` | It does not; `player.death` does | The cause of a death is known when the player dies. Carrying it to the respawn needs per-player state kept across the death screen for a variable nobody needed; a rule that wants it on respawn writes it in a `player.death` rule with `set_var`. |
+| Item hosts "worn or held" for `player.hurt`; held for `entity.hit` and `entity.kill` | As sketched | Held is the main hand only; the off hand fires nothing (as for `click`). |
+| A `chance` among a rule's keys | Not added | `chance` is an action option and composes with these triggers. A rule-level option would be a second way to say it. |
+| "the Logic tab opens it" | The generic Studio form opens it; the graph tab does not | See decision 12. |
+
+**Not built, on purpose.** `emit`, the `custom` trigger and a cross-resource `call` (no benchmark task needed them, [`agent-benchmark.md`](agent-benchmark.md)
+§4.1); a timer (#332, which rides this unit); a command-run or chat trigger; block and furniture hosts for the combat triggers (a block has no
+holder in a fight); the graph Logic tab for non-GUI documents.
+
+**Verification.** `RuleTypeTest` (schema, parse, the lossless round-trip of `fixtures/rules/` byte for byte, the fault fixtures), `RuleDocumentsTest`
+(the golden and the broken documents through the real compiler and trigger registry, the misfire warning, the context-path check, the view's index),
+`WorldTriggersTest` (the table above as assertions), `WorldRulesPipelineTest` (files to the live shadow with no diagnostics, an item beside a document),
+`WorldEventGateTest` (the gate, the staged reads, the budget), `LogicAuthoringApiTest` (a rule document through `get` and `edit`),
+`ScaffoldSchemaConsistencyTest`, the editor demo snapshot golden, and `PaperWorldEventsIT` on Paper 1.21.4 (a join greets, a hit on a document and
+on an item, two kills finish a quest held in a player variable, a cancelled hit leaves the husk at full health, hurt, death, respawn and quit). QA
+`worldrules.entity-kill-counts`, `.entity-hit-document-and-item`, `.entity-hit-cancel`, `.entity-filter-excludes-other-types`,
+`.player-join-greets`, `.player-death-and-respawn` (**not run and not blessed**: they need the local 26.x probe, and blessing runs happen on main).
+
+**Owner questions.** (1) *Folia, a hit across regions:* the event fires nothing when the attacker is in another region than the victim,
+because their inventory and variables belong to their own thread. A cross-region hit needs a hop to the attacker's region and then the
+dispatch, which changes the cancel semantics of `entity.hit` (a cancel must be decided before the event returns); it is not built and the
+choice between "hop and lose cancel" and "stay as is" is the owner's. (2) *The graph Logic tab for non-GUI hosts:* opening a rule document, or an
+item's rules, in the node editor needs `LogicCanvasState` to stop assuming a GUI document. The form editor covers rule documents meanwhile.
+(3) *Kills by something other than a player* (a mob kills a mob, a trap kills a zombie) fire no trigger, because a run needs a subject; a
+subject-less run is a different primitive (a `world`-scoped run) and is not proposed here.

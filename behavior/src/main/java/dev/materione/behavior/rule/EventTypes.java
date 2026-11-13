@@ -29,5 +29,14 @@ public final class EventTypes {
     public static final String DIALOG_SUBMIT = "dialog.submit";
     public static final String CUSTOM = "custom";
 
+    // world events (logic.md §37): fired for item rules and for rule documents
+    public static final String ENTITY_HIT = "entity.hit";
+    public static final String ENTITY_KILL = "entity.kill";
+    public static final String PLAYER_HURT = "player.hurt";
+    public static final String PLAYER_JOIN = "player.join";
+    public static final String PLAYER_QUIT = "player.quit";
+    public static final String PLAYER_RESPAWN = "player.respawn";
+    public static final String PLAYER_DEATH = "player.death";
+
     private EventTypes() {}
 }

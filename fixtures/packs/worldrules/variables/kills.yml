@@ -1,0 +1,6 @@
+# Declared player number for the quest-shaped rule (qa worldrules.entity-kill-counts): the quest is data, not code.
+zombie_kills:
+  scope: player
+  type: number
+  default: 0
+  description: "QA: zombies this player has killed"

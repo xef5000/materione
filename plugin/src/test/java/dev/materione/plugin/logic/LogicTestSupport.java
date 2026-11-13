@@ -49,6 +49,18 @@ public final class LogicTestSupport {
         return service;
     }
 
+    /**
+     * As {@link #withBuiltIns(RegistryService)}, with the entity types the world triggers' {@code type} filter accepts
+     * (a headless test has no server registry to read them from, logic.md section 37).
+     */
+    public static LogicService withBuiltIns(RegistryService registries, java.util.List<String> entityTypes) {
+        LogicService service = newService(registries);
+        BuiltinLogic.register(service, owner("materione"), dev.materione.plugin.logic.support.ItemCatalog.none(),
+                new dev.materione.plugin.gui.GuiBridge(), dev.materione.plugin.logic.currency.CurrencyReads.paper(),
+                entityTypes);
+        return service;
+    }
+
     /** Registers only the built-in triggers (for tests that bring their own actions). */
     public static void registerTriggers(LogicService service) {
         Plugin owner = owner("materione");
