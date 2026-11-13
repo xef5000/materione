@@ -70,7 +70,8 @@ feature-shaped on that axis.
 
 And the **benchmark** that makes the tests concrete: a feature such as `/trade <player>` with a custom two-player UI must be
 buildable from content alone, through MCP, with no new engine code (§3). When an agent or an author needs engine code, the
-missing piece is a primitive, and that is the issue to file. #320's 20 to 30 benchmark tasks double as D12's regression suite.
+missing piece is a primitive, and that is the issue to file. #320's 20 to 30 benchmark tasks double as D12's regression suite;
+they are written out, with the gaps ranked by the tasks each unblocks, in [`agent-benchmark.md`](agent-benchmark.md).
 
 ### 2.3 The four classes
 

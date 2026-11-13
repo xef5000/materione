@@ -688,7 +688,8 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
   kept by tests, not by review goodwill.
 - **Server tests.** Dry run mutates nothing (a property test over the store); the transaction is all-or-none with fault
   injection at each document; revert restores prior revisions; a stale revision is `MTR-0034` for the transaction.
-- **The benchmark is the evaluation (#320).** The 20 to 30 tasks are run twice: with typed code mode, and with a
+- **The benchmark is the evaluation (#320).** The tasks, their programs and the paper run are in
+  [`agent-benchmark.md`](agent-benchmark.md); #349 moves them into CI. The tasks are run twice: with typed code mode, and with a
   tool-per-operation baseline built on the same operations. Measured: first-attempt success, fix iterations, human
   interventions, tokens and steps, regressions after follow-up changes, and **the count of tasks that fail on a missing
   primitive**. That second run is what turns §2.4's borrowed evidence into this project's own.
