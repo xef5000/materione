@@ -313,6 +313,20 @@ Enforced by the host, with the numbers decided at implementation and fixed by fi
 | Size of logs and of the return value | Bounds what reaches the model, and what could leave the page (§4.5); large results are summarized in the program, not dumped, which is the practice of the code-only agent (§2.4) |
 | Determinism | `Date` and `Math.random` are fixed or seeded, so the same program against the same state yields the same operation list. A result an author can reproduce is a result a reviewer can trust |
 
+**Proposed numbers (spike #340, to be fixed by fixtures in #343).** Measured typical cost of a staging program is a fraction of a
+millisecond of engine CPU (§4.3, measured), so every number below is generous by two to three orders of magnitude and exists to
+bound a runaway, not to ration a good program:
+
+| Limit | Proposed | Notes from the spike |
+|---|---|---|
+| CPU deadline | **1000 ms** of *engine* time, counted only while guest code runs (waiting on a host read does not count) | The interrupt handler fires on `while(true)`, on a loop that swallows the interrupt error, and on a promise ping-pong; each ended within 4 ms of a 250 ms deadline |
+| Wall-clock backstop | **10 s** per run and **5 s** per read, enforced by the host, which then destroys the frame | The backstop is the only defence against an engine that never answers; tested at 400 ms |
+| Memory | **64 MiB hard cap on the engine's `WebAssembly.Memory`** (`maximum` pages), *not* QuickJS's `setMemoryLimit` | `setMemoryLimit` does not bound array or string storage: 22,000 arrays of 80 KB (1.7 GB) were allocated under a 16 MB limit. A capped `WebAssembly.Memory` ends the same program in about 40 ms with `out of memory`, and the module stays usable |
+| Native stack | **256 KiB** QuickJS stack (about 1,300 frames of simple recursion) | 512 KiB overflows the browser's *native* wasm stack first: a `RangeError` out of wasm that poisons the instance. 256 KiB raised QuickJS's own `stack overflow` |
+| Read calls / bytes | **100** calls, **2 MiB** of answers per run | Counted by the engine wrapper and re-checked by the host |
+| Staged operations / bytes | **200** operations (and at most the transaction's document cap, §5.4), **256 KiB** | A stage past the cap marks the run failed even when the program catches the error; no operations are returned |
+| Logs / return value | **16 KiB** / **64 KiB** | Same: exceeding either fails the run and returns no operations |
+
 ### 4.3 Options
 
 All options run in the browser. Server-side options appear only to be excluded.
@@ -332,6 +346,119 @@ construction** (the program sees only what the host injects, rather than the bro
 are part of the engine** rather than of the browser, and a boundary in depth (engine, then origin). B is the fallback. The
 type checker (§5.1) is a different component: it only *parses* untrusted text and never executes it, so it runs in an ordinary
 Worker of the editor.
+
+**Measured (spike #340; harness in `webui/spike/codemode/`, run with `npm run spike:codemode`; Chromium only, localhost
+static server, no cache headers, so network time is near zero; not part of the editor build or CI).** Verdict: **go on option A**,
+with the amendments below. Nothing here forces fallback B.
+
+*The build.* `quickjs-emscripten-core` 0.32.0 with `@jitl/quickjs-wasmfile-release-sync` 0.32.0: Fabrice Bellard's QuickJS
+(vendored 2025-09-13), compiled by `quickjs-emscripten`, **MIT** (the wrapper, the FFI types and the vendored engine alike).
+Sync build, not asyncify: async host calls need no asyncify, because the host function returns a guest promise
+(`context.newPromise()`) that the host resolves when the channel answers, then pumps `executePendingJobs()`. The asyncify wasm
+is 2.0x larger (1.03 MB against 0.50 MB raw) and was not needed. Guest `m.read` costs **about 0.1 ms per call** across the
+channel (50 sequential reads in 4 ms, 50 in `Promise.all` in 2 ms); the cost of a read in production is the relay round trip, not
+the embedding.
+
+| Asset | Raw | gzip | brotli |
+|---|---|---|---|
+| `quickjs.wasm` | 503,134 B | 234,043 B | 199,016 B |
+| engine + wrapper JS (`engine-worker.js`) | 58,577 B | 17,006 B | 15,260 B |
+| **Sandbox total (what code mode adds to a first run)** | ~562 KB | **~251 KB** | ~214 KB |
+| TypeScript checker Worker, with `lib.es5`..`es2022` d.ts, no DOM (`tsworker.js`) | 4,085,391 B | 1,075,236 B | 827,085 B |
+
+Both are static assets, loaded **lazily on the first agent use**, never at editor start (the SPA bundle is unchanged: the spike
+adds nothing to `npm run build`). The TypeScript Worker is the heavy one: about 0.54 MB of its raw size is the lib `.d.ts` files;
+a hand-trimmed lib (`Array`, `Promise`, `Map`, `Set`, `JSON`, `Math`, `String`, `Number`) would cut it by roughly that much, at
+the price of maintaining a second lib; not done.
+
+*Timing (Chromium, localhost; medians of 8 to 30 runs; the full table is the harness's `measurements.json`).*
+
+| What | Engine in a blob Worker inside the iframe | Engine on the iframe's main thread |
+|---|---|---|
+| Sandbox cold start (iframe load + engine init, files cached) | 16.4 ms (first ever 19 ms) | 8.4 ms (first ever 32 ms) |
+| of which engine instantiate (compile + start) | 2.1 ms | 1.4 ms |
+| Per-run overhead, trivial program (setup, run, answer; excludes TS transpile) | **0.5 ms** engine, 1.3 ms total with transpile | 0.7 ms engine, 1.9 ms total |
+| `while(true)` with a 250 ms deadline: editor page frozen for | **11 ms** | **260 ms** |
+| Unbounded allocation to the 32 MiB cap: time / editor frozen for | 45 ms / 12 ms | 40 ms / 41 ms |
+
+| TypeScript checker (Worker of the editor's origin) | Time |
+|---|---|
+| Worker cold start (spawn, parse the 4 MB bundle) | 170 ms |
+| First transpile / first check, 25-line program against a **200-member, 25 KB `.d.ts`** | 37 ms / 83 ms (includes parsing the lib files) |
+| Warm transpile / warm check, the same | 2.2 ms / 4.5 ms (lib and SDK `SourceFile`s cached; the `.d.ts` changed only per SDK version) |
+| Diagnostics | line, column and TS code, with `Did you mean 'ns9'?` suggestions: the §6 error channel works as designed |
+
+*The headline finding, and an amendment to D13's wording.* In Chromium an opaque-origin sandboxed iframe **shares the editor's main
+thread** with the page: a CPU-bound guest in the iframe froze the editor for the entire deadline (260 ms of a 250 ms limit). The
+interrupt bounds the freeze but does not remove it, so "the editor stays responsive" (#343's exit criterion) **fails with the
+engine on the iframe's main thread** and **passes with the engine in a Worker that the iframe spawns from a `blob:` URL** (11 ms
+of lag). A blob Worker created by an opaque-origin frame **inherits the opaque origin** (`self.origin === 'null'`) **and the
+frame's CSP**: the probe inside it could not `fetch`, XHR, open a WebSocket, `importScripts`, `import()`, spawn a nested Worker
+or touch the editor's IndexedDB, and a message it posted on a `BroadcastChannel` the editor listens on never arrived. **Proposed
+amendment (for the owner; master §3.2 is not edited here):** read D13's "in a sandboxed opaque-origin iframe" as "the iframe
+document spawns the engine in a Worker", which is still inside the iframe, and make that the production shape (#343). The
+host-side wall-clock backstop and `frame.remove()` kill the whole thing.
+
+*What the spike found that would have bitten #343.*
+
+1. **QuickJS's memory limit is not a memory cap.** Use a `WebAssembly.Memory` with a `maximum` (§4.2).
+2. **The native stack, not QuickJS's, can overflow first.** A 512 KiB QuickJS stack made the wasm itself throw a host
+   `RangeError`; the instance is then unusable. The engine wrapper reports `poisoned` and the host discards the frame. The same
+   flag covers a program that retains memory in a global and makes QuickJS's leak assertion abort the module on dispose.
+3. **`fetch` of the wasm cannot work under `connect-src 'none'`**, and a fetch from an opaque origin needs CORS headers on the
+   asset anyway. The host fetches the wasm (and, for the Worker, the engine's source text) and **transfers the bytes into the
+   frame** with the `init` message; the frame never fetches. This also makes the frame correct on any static host with no
+   header configuration.
+4. **`targetOrigin` must be `'*'`** for the first message to an opaque-origin frame (it has no nameable origin). The frame
+   accepts exactly one `init`, checks `e.source === window.parent`, and from then on everything travels on a private
+   `MessageChannel` port that the host transferred with it; the host never accepts a window `message` from the frame.
+5. **`location.origin` inside the frame reports the URL's origin, not the security origin.** Test with `window.origin`, which is
+   `"null"` for an opaque origin.
+6. **The sandbox attribute alone does not stop the network.** Without the CSP, code in the frame reached the server with
+   `fetch(..., { mode: 'no-cors' })` (the server's hit log recorded it), and could `eval`, `import()` a `data:` URL and inject a
+   `<script>`. It *did*
+   stop every read of the editor (parent DOM, storage, cookies, IndexedDB, top navigation, `window.open`). So the CSP is
+   load-bearing, and the origin boundary holds by itself.
+7. **`script-src 'self'` is too wide.** `'self'` is the URL's origin, so a `'self'` frame could still `importScripts` and `import()`
+   any URL on the editor's own static host. The sandbox documents carry their one script **inline** and name its **sha256**
+   (`script-src 'sha256-...' 'wasm-unsafe-eval'`): then no URL is a script source at all. The hash is computed at build time.
+8. **Guest globals** are exactly QuickJS's intrinsics (`Object`, `Array`, `Promise`, `Proxy`, `Reflect`, `Date`, `Math`, `JSON`,
+   typed arrays, `Map`/`Set`/`Weak*`, `eval`, `Function`, `globalThis`, ...). There is no `fetch`, `XMLHttpRequest`,
+   `WebSocket`, `window`, `document`, `parent`, `localStorage`, `indexedDB`, timer, `queueMicrotask`, `console`, `postMessage`,
+   `import()` (it rejects), `WebAssembly`, `Atomics` or `performance`. `m` is passed as an argument, not a global.
+   `Function('return this')()` and `m.constructor.constructor(...)` reach nothing. `eval` and `Function` exist *inside* the engine
+   and are harmless there; #343 may delete them as a defence in depth. `SharedArrayBuffer` exists as a type but `Atomics` does not.
+9. **Determinism** works as designed: a prelude replaces `Date` (fixed instant, `Date()` and `new Date()` agree, `instanceof`
+   holds) and `Math.random` (mulberry32, seeded); two fresh sandboxes and a rerun in the same one gave identical results.
+10. **A staged operation's line** comes from the guest's own `new Error().stack` at `m.stage` time, mapped back through the
+    TypeScript source map (a small VLQ decoder, 30 lines); a thrown error's line is mapped the same way. The program is wrapped
+    so that its first line stays on the wrapper's line 1, so a TS diagnostic line is the program's line with no offset.
+
+*CSP and hosting.* The frame document needs, and can carry as a `<meta http-equiv="Content-Security-Policy">` with **no header
+change on either host**: `default-src 'none'; script-src 'sha256-<hash of the inline script>' 'wasm-unsafe-eval'; connect-src
+'none'; worker-src blob:; frame-src 'none'; img-src 'none'; style-src 'none'; font-src 'none'; media-src 'none'; object-src
+'none'; base-uri 'none'; form-action 'none'` (`worker-src blob:` only if the engine runs in a Worker, which is the recommendation).
+The embedding page sets `sandbox="allow-scripts"` and never `allow-same-origin`. The relay-served editor (a Workers static-assets
+deployment, `public/_headers`) and the plugin-served editor (`EditorListener.serveStatic`, which already maps `.html`, `.js` and
+`.wasm` to content types and sends no CSP of its own) both just serve the files; the plugin's path filter
+(`[A-Za-z0-9_./-]+`) accepts the file names used. `sandbox.html`, the wasm, and the engine source must therefore be part of the
+SPA build output (Vite `public/`, the same artifact in both hosts). Two optional hardenings, neither needed: a
+`Content-Security-Policy` *header* on `sandbox.html` (the relay's `_headers` could carry it) would apply before any parsing, and
+`frame-ancestors 'self'` would stop the document being framed elsewhere. **Proposed (not applied):** none required; if the owner
+wants the header variant, the relay's `public/_headers` gains one `/sandbox.html` block, a static-asset change with cost model
+**no change** (no Worker invocation, no new endpoint, free static-asset requests). A parent-page CSP, if one is ever added,
+needs `frame-src 'self'` and nothing for `blob:` (the blob Worker belongs to the frame's CSP, not the parent's).
+
+*Licence.* QuickJS and every wrapper package are MIT; TypeScript is Apache-2.0 (the repository's own licence is Apache-2.0, which
+is also the licence of the code that would ship the checker). Shipping either in the editor adds an attribution line to the
+third-party notices (`NOTICE`); no GPL component is involved, so the open licence question (master §14) is not affected.
+The spike's three new packages are `devDependencies` of `webui` and are not in the production bundle.
+
+*Go or no-go.* **Go on A**, as amended: engine in a blob Worker spawned by the opaque-origin iframe; memory capped through
+`WebAssembly.Memory`; stack at 256 KiB; the wasm and engine source passed in as bytes; inline script with a hash CSP; a
+wall-clock backstop that destroys the frame; a `poisoned` flag that makes the host discard a frame that aborted. The cost is about
+**251 KB gzip of static assets plus about 1.1 MB gzip for the checker, both lazy**, **16 ms** to a ready sandbox, **about 1 ms**
+per run, **0.1 ms** per host read. Fallback B (§4.3) is not needed.
 
 ### 4.4 The host channel
 
@@ -741,10 +868,18 @@ sections cited. One question stays open.
 
 - The numbers of §2.4 are as the fetched pages report them: the arXiv page through a mirror, and the daily.dev page is a
   summary of an article that was not read. None was cross-checked against the full papers or the original article.
-- Embedding details of QuickJS-in-WASM (the async host-call path, interrupt and memory limit APIs, bundle size), the behavior of
-  workers created from a sandboxed opaque-origin iframe across browsers, and the TypeScript checker's size and cold-start time
-  in a browser Worker were **not tested** in this design; the owner chose A and the in-page Worker (C7, C9), and a spike must
-  measure them before code.
+- *Resolved by #340 (§4.3, "Measured"):* the embedding (promise-returning host function, interrupt handler, hard memory cap
+  through `WebAssembly.Memory`), the bundle sizes, the engine in a blob Worker spawned by an opaque-origin iframe, and the
+  TypeScript checker's size, cold start and check time were **measured in Chromium** (Playwright 1.64.1's build, localhost, one
+  machine, Windows 11). **Still not tested:** Firefox and WebKit (the repository's Playwright config has Chromium only, and
+  installing the other browsers was out of scope), so in those browsers the following are open: a `blob:` Worker spawned from
+  an opaque-origin frame (Safari has historically been the strict one), the native wasm stack depth that decides whether the
+  256 KiB QuickJS stack is safe, `WebAssembly.Memory` `maximum` behaviour, and `transfer` of an `ArrayBuffer` plus a
+  `MessagePort` in one `postMessage` to a `'*'` target. Also untested: whether the frame is in the editor's renderer process on
+  other browsers (the measured freeze shows it shares the thread in Chromium), phones, real network latency to the relay for
+  reads, and realistic program sizes (the #320 benchmark programs were not run; the 25-line program is synthetic, the `.d.ts` is a
+  200-member stand-in, not #337's golden). The proposed limits of §4.2 are therefore floors to be raised by #343's fixtures, not
+  ceilings.
 - Which reads exist on the editor wire today (traces, runtime variables) was read from `api.md` and `web.md`, not from the
   code (§10 item 5).
 - The generated type surface for polymorphic entries (an action step as a discriminated union) and for the logic expression
