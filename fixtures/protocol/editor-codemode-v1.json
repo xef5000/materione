@@ -1,0 +1,550 @@
+{
+  "apply": {
+    "request": {
+      "id": "t-2",
+      "op": "authoring.transaction",
+      "payload": {
+        "dryRun": false,
+        "operations": [
+          {
+            "edits": [
+              {
+                "field": [
+                  "ruby_blade",
+                  "texture"
+                ],
+                "value": "ruby"
+              }
+            ],
+            "id": "ruby_blade",
+            "kind": "create",
+            "name": "Ruby Blade",
+            "type": "items"
+          },
+          {
+            "id": "shop",
+            "kind": "create",
+            "name": "Shop",
+            "type": "guis"
+          },
+          {
+            "edits": [
+              {
+                "op": "setScreen",
+                "title": "Shop"
+              },
+              {
+                "id": "frame",
+                "index": 0,
+                "op": "addLayer",
+                "params": {
+                  "height": 132,
+                  "width": 176,
+                  "x": 0,
+                  "y": 0
+                },
+                "type": "panel"
+              }
+            ],
+            "kind": "guiEdit",
+            "path": "guis/shop.yml"
+          },
+          {
+            "edits": [
+              {
+                "index": 0,
+                "op": "addRule",
+                "rule": {
+                  "do": [
+                    {
+                      "give": "gem"
+                    }
+                  ],
+                  "on": "click"
+                }
+              }
+            ],
+            "kind": "logicEdit",
+            "path": "items/ruby_blade.yml"
+          },
+          {
+            "edits": [
+              {
+                "index": 0,
+                "op": "addRule",
+                "rule": {
+                  "do": [
+                    {
+                      "give": "coin"
+                    }
+                  ],
+                  "on": "click"
+                }
+              }
+            ],
+            "kind": "logicEdit",
+            "path": "guis/shop.yml"
+          },
+          {
+            "edits": [
+              {
+                "field": [
+                  "sword",
+                  "texture"
+                ],
+                "value": "steel"
+              }
+            ],
+            "kind": "setFields",
+            "path": "items/sword.yml",
+            "rev": 1
+          }
+        ],
+        "pack": "demo"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": true,
+        "applied": true,
+        "diagnostics": [],
+        "documents": [
+          {
+            "kind": "created",
+            "operations": [
+              0,
+              3
+            ],
+            "path": "items/ruby_blade.yml",
+            "rev": 1,
+            "text": "# ruby_blade — created by the Materione editor\nruby_blade:\n  material: STICK\n  display_name: Ruby Blade\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n  texture: ruby\n  behavior:\n    - on: click\n      do:\n        - give: gem\n"
+          },
+          {
+            "kind": "created",
+            "operations": [
+              1,
+              2,
+              4
+            ],
+            "path": "guis/shop.yml",
+            "rev": 1,
+            "text": "# shop — created by the Materione editor\nshop:\n  title: \"Shop\"\n  container: chest_3\n  layers:\n    - id: frame\n      type: panel\n      x: 0\n      y: 0\n      width: 176\n      height: 132\n  behavior:\n    - on: click\n      do:\n        - give: coin\n"
+          },
+          {
+            "kind": "changed",
+            "operations": [
+              5
+            ],
+            "path": "items/sword.yml",
+            "previousRevision": 1,
+            "rev": 2,
+            "text": "# the shop's best seller\nsword:\n  display_name: Sword\n  material: IRON_SWORD # base\n  texture: steel\n"
+          }
+        ],
+        "dryRun": false,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "every resulting document parses as lossless YAML (an edit that would break it is refused)",
+            "ran": true
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "the flow compiler over every rule and flow of the resulting resources",
+            "ran": true
+          },
+          {
+            "id": "gui",
+            "note": "the GUI compile, its open: block and its rules, as gui.validate reports them",
+            "ran": true
+          },
+          {
+            "id": "references",
+            "note": "not run: master 5.4 level 3 needs the parsed pack set, and runs in the reload after an apply",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) and the pack-wide allocation run in the reload after an apply",
+            "ran": false
+          }
+        ],
+        "transactionId": "tx-fixture"
+      },
+      "id": "t-2",
+      "ok": true,
+      "op": "authoring.transaction"
+    }
+  },
+  "dryRun": {
+    "request": {
+      "id": "t-1",
+      "op": "authoring.transaction",
+      "payload": {
+        "dryRun": true,
+        "operations": [
+          {
+            "edits": [
+              {
+                "field": [
+                  "ruby_blade",
+                  "texture"
+                ],
+                "value": "ruby"
+              }
+            ],
+            "id": "ruby_blade",
+            "kind": "create",
+            "name": "Ruby Blade",
+            "type": "items"
+          },
+          {
+            "id": "shop",
+            "kind": "create",
+            "name": "Shop",
+            "type": "guis"
+          },
+          {
+            "edits": [
+              {
+                "op": "setScreen",
+                "title": "Shop"
+              },
+              {
+                "id": "frame",
+                "index": 0,
+                "op": "addLayer",
+                "params": {
+                  "height": 132,
+                  "width": 176,
+                  "x": 0,
+                  "y": 0
+                },
+                "type": "panel"
+              }
+            ],
+            "kind": "guiEdit",
+            "path": "guis/shop.yml"
+          },
+          {
+            "edits": [
+              {
+                "index": 0,
+                "op": "addRule",
+                "rule": {
+                  "do": [
+                    {
+                      "give": "gem"
+                    }
+                  ],
+                  "on": "click"
+                }
+              }
+            ],
+            "kind": "logicEdit",
+            "path": "items/ruby_blade.yml"
+          },
+          {
+            "edits": [
+              {
+                "index": 0,
+                "op": "addRule",
+                "rule": {
+                  "do": [
+                    {
+                      "give": "coin"
+                    }
+                  ],
+                  "on": "click"
+                }
+              }
+            ],
+            "kind": "logicEdit",
+            "path": "guis/shop.yml"
+          },
+          {
+            "edits": [
+              {
+                "field": [
+                  "sword",
+                  "texture"
+                ],
+                "value": "steel"
+              }
+            ],
+            "kind": "setFields",
+            "path": "items/sword.yml",
+            "rev": 1
+          }
+        ],
+        "pack": "demo"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": true,
+        "applied": false,
+        "diagnostics": [],
+        "documents": [
+          {
+            "kind": "created",
+            "operations": [
+              0,
+              3
+            ],
+            "path": "items/ruby_blade.yml",
+            "rev": 1,
+            "text": "# ruby_blade — created by the Materione editor\nruby_blade:\n  material: STICK\n  display_name: Ruby Blade\n  # texture: <path under assets/textures/> — pick one in the form\n  # mechanics:\n  #   - durability: {max: 500}\n  texture: ruby\n  behavior:\n    - on: click\n      do:\n        - give: gem\n"
+          },
+          {
+            "kind": "created",
+            "operations": [
+              1,
+              2,
+              4
+            ],
+            "path": "guis/shop.yml",
+            "rev": 1,
+            "text": "# shop — created by the Materione editor\nshop:\n  title: \"Shop\"\n  container: chest_3\n  layers:\n    - id: frame\n      type: panel\n      x: 0\n      y: 0\n      width: 176\n      height: 132\n  behavior:\n    - on: click\n      do:\n        - give: coin\n"
+          },
+          {
+            "kind": "changed",
+            "operations": [
+              5
+            ],
+            "path": "items/sword.yml",
+            "previousRevision": 1,
+            "rev": 2,
+            "text": "# the shop's best seller\nsword:\n  display_name: Sword\n  material: IRON_SWORD # base\n  texture: steel\n"
+          }
+        ],
+        "dryRun": true,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "every resulting document parses as lossless YAML (an edit that would break it is refused)",
+            "ran": true
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "the flow compiler over every rule and flow of the resulting resources",
+            "ran": true
+          },
+          {
+            "id": "gui",
+            "note": "the GUI compile, its open: block and its rules, as gui.validate reports them",
+            "ran": true
+          },
+          {
+            "id": "references",
+            "note": "not run: master 5.4 level 3 needs the parsed pack set, and runs in the reload after an apply",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) and the pack-wide allocation run in the reload after an apply",
+            "ran": false
+          }
+        ]
+      },
+      "id": "t-1",
+      "ok": true,
+      "op": "authoring.transaction"
+    }
+  },
+  "meta": {
+    "file": "editor-codemode-v1.json",
+    "name": "materione authoring.transaction frames",
+    "note": "transactionId is random in a real reply; the fixture pins it to tx-fixture",
+    "version": 1
+  },
+  "refused": {
+    "request": {
+      "id": "t-4",
+      "op": "authoring.transaction",
+      "payload": {
+        "dryRun": true,
+        "operations": [
+          {
+            "id": "vault",
+            "kind": "create",
+            "name": "Vault",
+            "type": "guis"
+          },
+          {
+            "edits": [
+              {
+                "id": "frame",
+                "index": 0,
+                "op": "addLayer",
+                "type": "nosuchcomponent"
+              }
+            ],
+            "kind": "guiEdit",
+            "path": "guis/vault.yml"
+          }
+        ],
+        "pack": "demo"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": false,
+        "applied": false,
+        "diagnostics": [
+          {
+            "code": "MTR-0008",
+            "message": "unknown component 'nosuchcomponent'",
+            "operation": 1,
+            "severity": "error"
+          }
+        ],
+        "documents": [],
+        "dryRun": true,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "the list was refused before any document was planned",
+            "ran": false
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "not run: no behavior engine is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: master 5.4 level 3 needs the parsed pack set, and runs in the reload after an apply",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) and the pack-wide allocation run in the reload after an apply",
+            "ran": false
+          }
+        ]
+      },
+      "id": "t-4",
+      "ok": true,
+      "op": "authoring.transaction"
+    }
+  },
+  "stale": {
+    "request": {
+      "id": "t-3",
+      "op": "authoring.transaction",
+      "payload": {
+        "dryRun": true,
+        "operations": [
+          {
+            "edits": [
+              {
+                "field": [
+                  "sword",
+                  "texture"
+                ],
+                "value": "gold"
+              }
+            ],
+            "kind": "setFields",
+            "path": "items/sword.yml",
+            "rev": 1
+          }
+        ],
+        "pack": "demo"
+      }
+    },
+    "response": {
+      "data": {
+        "accepted": false,
+        "applied": false,
+        "diagnostics": [
+          {
+            "code": "MTR-0034",
+            "hint": "reload the affected documents and write the list again against the new state",
+            "message": "items/sword.yml: document changed elsewhere: expected rev 1, current rev 2",
+            "operation": 0,
+            "severity": "error"
+          }
+        ],
+        "documents": [],
+        "dryRun": true,
+        "stages": [
+          {
+            "id": "syntax",
+            "note": "the list was refused before any document was planned",
+            "ran": false
+          },
+          {
+            "id": "schema",
+            "note": "not run: no content types are wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "build",
+            "note": "not run: no allocation preview is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "behavior",
+            "note": "not run: no behavior engine is wired, or the list was refused",
+            "ran": false
+          },
+          {
+            "id": "gui",
+            "note": "not run: no GUI compiler is wired, or no GUI is in the result",
+            "ran": false
+          },
+          {
+            "id": "references",
+            "note": "not run: master 5.4 level 3 needs the parsed pack set, and runs in the reload after an apply",
+            "ran": false
+          },
+          {
+            "id": "platform",
+            "note": "not run: the platform gate (D10) and the pack-wide allocation run in the reload after an apply",
+            "ran": false
+          }
+        ]
+      },
+      "id": "t-3",
+      "ok": true,
+      "op": "authoring.transaction"
+    }
+  }
+}

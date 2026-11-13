@@ -76,16 +76,11 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
                     before.path() + " is at revision " + before.revision() + ", not " + request.expectedRevision(),
                     null, null, "re-read the logic and re-apply your change")));
         }
-        Map<String, Object> working = copyOf(before.resource());
-        var editor = new LogicEditor(working, lookup);
-        try {
-            for (LogicEdit edit : request.edits()) {
-                editor.apply(edit);
-            }
-        } catch (LogicRefusal refused) {
-            return ApiResult.fail(refused.diagnostic(NamespacedId.of(before.pack(), before.resourceId())));
+        ApiResult<List<FieldEdit>> planned = plan(before, request.edits());
+        if (!planned.ok()) {
+            return ApiResult.fail(planned.diagnostics());
         }
-        List<FieldEdit> fields = changedFields(before, working);
+        List<FieldEdit> fields = planned.value();
         if (fields.isEmpty()) {
             return ApiResult.ok(view(before), compileProblems(before.pack(), before.resourceId(), before.resource()));
         }
@@ -106,6 +101,34 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
         }
         Loaded now = after.value();
         return ApiResult.ok(view(now), compileProblems(now.pack(), now.resourceId(), now.resource()));
+    }
+
+    @Override
+    public ApiResult<List<FieldEdit>> stage(
+            String pack, String path, Map<String, Object> document, List<LogicEdit> edits) {
+        ApiResult<Loaded> loaded = inMemory(pack, path, document);
+        if (!loaded.ok()) {
+            return ApiResult.fail(loaded.diagnostics());
+        }
+        return plan(loaded.value(), edits);
+    }
+
+    /**
+     * The edits applied to a copy of the resource, in order: the field edits that take the file there, or the
+     * refusal of the first edit that cannot apply. The one place an edit list is applied, for {@link #edit} and
+     * for {@link #stage} alike.
+     */
+    private ApiResult<List<FieldEdit>> plan(Loaded before, List<LogicEdit> edits) {
+        Map<String, Object> working = copyOf(before.resource());
+        var editor = new LogicEditor(working, lookup);
+        try {
+            for (LogicEdit edit : edits) {
+                editor.apply(edit);
+            }
+        } catch (LogicRefusal refused) {
+            return ApiResult.fail(refused.diagnostic(NamespacedId.of(before.pack(), before.resourceId())));
+        }
+        return ApiResult.ok(changedFields(before, working));
     }
 
     @Override
@@ -145,15 +168,28 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
         return fromDocument(pack, path, document.value());
     }
 
+    /** A file's parsed tree held in memory (the caller owns its revision), when it is a document this surface addresses. */
+    private static ApiResult<Loaded> inMemory(String pack, String path, Map<String, Object> tree) {
+        if (path == null || RESOURCE_FOLDERS.stream().noneMatch(path::startsWith)) {
+            return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_SCHEMA_INVALID,
+                    "'" + path + "' is not a document that holds logic (items/, blocks/, furniture/ or guis/)"));
+        }
+        return fromTree(pack, path, tree, 0);
+    }
+
     private static ApiResult<Loaded> fromDocument(String pack, String path, DocumentView document) {
-        if (document.parsed() == null) {
+        return fromTree(pack, path, document.parsed(), document.revision());
+    }
+
+    private static ApiResult<Loaded> fromTree(String pack, String path, Map<String, Object> tree, int revision) {
+        if (tree == null) {
             return ApiResult.fail(Diagnostic.error(DiagnosticCodes.CONTENT_PARSE_FAILED,
                     "document " + path + " does not parse as YAML"));
         }
         String resourceId = null;
         Map<String, Object> resource = null;
         int count = 0;
-        for (Map.Entry<String, Object> entry : document.parsed().entrySet()) {
+        for (Map.Entry<String, Object> entry : tree.entrySet()) {
             if (entry.getValue() instanceof Map<?, ?> mapping) {
                 count++;
                 resourceId = entry.getKey();
@@ -165,7 +201,7 @@ public final class LogicAuthoringApiImpl implements LogicAuthoringApi {
                     ? "the document holds no resource" : "the document holds " + count
                     + " resources; the logic API works on one resource per file"));
         }
-        return ApiResult.ok(new Loaded(pack, path, resourceId, document.revision(), resource));
+        return ApiResult.ok(new Loaded(pack, path, resourceId, revision, resource));
     }
 
     private static LogicView view(Loaded loaded) {

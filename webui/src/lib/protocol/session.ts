@@ -90,6 +90,7 @@ export function negotiateProtocolVersion(blob: {
 export const CURRENT_CAPABILITIES = [
   'assets',
   'blocks',
+  'codemode',
   'delivery',
   'furniture',
   'glyphs',

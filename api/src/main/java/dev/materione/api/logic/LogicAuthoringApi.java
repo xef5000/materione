@@ -2,7 +2,9 @@ package dev.materione.api.logic;
 
 import dev.materione.api.ApiResult;
 import dev.materione.api.auth.ActorContext;
+import dev.materione.api.authoring.AuthoringApi.FieldEdit;
 import dev.materione.api.diagnostics.Diagnostic;
+import dev.materione.api.diagnostics.DiagnosticCodes;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,6 +40,21 @@ public interface LogicAuthoringApi {
      * typed view after the edits, with the compiler's diagnostics as warnings.
      */
     ApiResult<LogicView> edit(ActorContext actor, LogicEditRequest request);
+
+    /**
+     * Applies {@code edits} in order to an in-memory copy of one file's parsed tree and answers the field edits
+     * that take the file there: the same refusals and the same edits {@link #edit} makes, with no read of the
+     * store, no revision check and no write. This is how {@code AuthoringApi.transaction} applies a logic edit
+     * to a document an earlier operation created or changed (codemode.md section 10); a refused edit is a
+     * failure whose diagnostic names the step path. An empty list means the edits change nothing.
+     *
+     * @param document the file's parsed tree, as {@code DocumentView.parsed()} carries it
+     */
+    default ApiResult<List<FieldEdit>> stage(
+            String pack, String path, Map<String, Object> document, List<LogicEdit> edits) {
+        return ApiResult.fail(Diagnostic.error(DiagnosticCodes.PIPELINE_STAGE_FAILED,
+                "logic staging is not available in this build"));
+    }
 
     /**
      * The step-path diagnostics the real compiler reports for an unsaved draft. Nothing is written.

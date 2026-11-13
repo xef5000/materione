@@ -10,7 +10,7 @@
 >
 > **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
 > (2026-11-12, §12). The model provider is the one question still open (§12, master §14.8). Lines still marked "recommended"
-> are this document's proposal on details the owner did not rule on. Nothing here is built. Code in this document is **shape, not syntax**: names are illustrative, and the
+> are this document's proposal on details the owner did not rule on. Of the server work in §10, items 1, 2 and 7 are built (#341); the SDK, the sandbox and the rest of §10 are not. Code in this document is **shape, not syntax**: names are illustrative, and the
 > SDK is generated, so its real spelling comes from the registries it is generated from (§3.1).
 >
 > **Traceability.**
@@ -673,6 +673,26 @@ what sits *behind* the existing protocol. Each needs its own design and issue be
 | 6 | **A read-only expanded view of a preset** (master §14.7(iv)). | §3.5 | Open. |
 | 7 | **A capability** advertising the above. | §7 | The capability list exists (web.md §4.1). |
 
+**As built: items 1, 2 and 7 (#341, track A1).** `AuthoringApi.transaction(actor, TransactionRequest)` exists and is specified in
+[`api.md`](api.md) §3.3.1; the table above keeps the state *before* it. What the design settled, in brief:
+
+| Question | As built |
+|---|---|
+| Request | `TransactionRequest(pack, operations, dryRun)`: one pack, at most 200 operations, at most 50 distinct documents touched (C12). Operations: `Create`, `Duplicate`, `SetFields`, `Move`, `Delete`, `DetachTemplate`, `SaveAsTemplate`, `EditLogic`, `EditGui`, each the edit vocabulary of the single-document call of that name. |
+| Typed edits on an in-memory document | The list runs on a working set of document texts. Field edits use `DocumentStore.patched`, the lossless patch `applyBatch` calls too. `LogicEdit` and `GuiEdit` go through a new `stage(pack, path, tree, edits)` on each authoring surface, which returns the field edits and reads no store; `logic().edit` and `gui().edit` are now `read, check revision, stage, setFields`. |
+| A later operation addressing a created document | A path names a document as it is after the operations before it. A created, copied or moved document is addressable; a path deleted or moved away is not. Templates and items the list creates are visible to a later `DetachTemplate` or `SaveAsTemplate`. |
+| Revisions | `expectedRevision` is the stored revision, required the first time an existing document is named, ignored for a created one; stale is `MTR-0034` and refuses the list. One revision per document: created 1, changed stored plus one, a delete entry, a move target 1 with `move-from:` lineage. |
+| Order and failure | Strictly in order; shape, limits and permissions are reported together first; then planning stops at the first operation that cannot apply, with its index. All-or-none write with checkpoints, rolled back (files, journals, created directories) on any failure. |
+| Permissions (item 2) | `materione.edit.<pack>` per operation and built-in packs read-only: one diagnostic per refused operation (`MTR-0055`, `MTR-0095`). |
+| Dry run | Same path under the store lock; writes nothing, queues no reload, returns diagnostics tagged with the operation index and the resulting documents with their would-be revisions. An apply writes exactly those documents, with one audit entry (it names the transaction id) and one pack reload. |
+| Validation stages | Run: syntax; schema and build per resource through the registered content types and the allocation preview; the flow compiler for `behavior:` and `flows:`; the GUI compile. **Not run: cross-resource references and the platform gate**, which need the parsed pack set and run in the reload after an apply. The report lists each stage and whether it ran. |
+| Wire and capability (item 7) | `authoring.transaction`, gated on the new session capability `codemode` (`editor-op-gates.json`, golden frames in `editor-codemode-v1.json`). Additive: an older editor never calls it. |
+
+Still open in §10: item 3 (revert by transaction id: the id is in the audit entry, the revert is #344), item 4 (the audit's
+`origin`, approval mode and program text, #344), item 5 (trace and variable reads, #345), item 6 (the preset view).
+Two limits worth knowing for the SDK: a transaction carries no binaries (a paint layer's PNG still goes through `gui().edit`),
+and a dry run cannot see a reference broken by a deletion (use `findReferences` first, §5.6).
+
 ---
 
 ## 11. How it is proven
@@ -729,5 +749,6 @@ sections cited. One question stays open.
 - The generated type surface for polymorphic entries (an action step as a discriminated union) and for the logic expression
   language (`m.expr`) is a direction; how well TypeScript can type-check an embedded expression string, versus checking it at
   stage time, is a design question of the generator.
-- Whether the current `LogicEdit`/`GuiEdit` vocabularies and `bulk` can be driven from one in-memory transaction without
-  reworking their revision handling was not checked against the code.
+- *Resolved by #341:* the `LogicEdit` and `GuiEdit` vocabularies could be driven from one in-memory transaction without
+  reworking their revision handling: each surface got a `stage` method that applies the edits to a parsed tree, and its `edit`
+  keeps its own revision check (§10, as built). `bulk` is untouched.

@@ -251,6 +251,8 @@ public final class EditorTransportService {
                 () -> diagnostics.recent(100), actorFor, this::behaviorVocabulary, this::guiComponents,
                 this::guiContainers);
         dev.materione.web.rpc.ops.GuiAuthoringOps.register(dispatcher, api.authoring().gui(), actorFor);
+        // code mode (codemode.md section 10): one transaction over a mixed edit list, gated on the codemode capability
+        dev.materione.web.rpc.ops.TransactionOps.register(dispatcher, api.authoring(), actorFor);
         dev.materione.web.rpc.ops.LogicAuthoringOps.register(
                 dispatcher, api.authoring().logic(), actorFor, this::behaviorVocabulary);
         // the live trace (logic.md §32): frames go to the editor session that subscribed, nobody else
