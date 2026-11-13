@@ -68,7 +68,8 @@ updates ride the same PR; close the issue via the PR.
   and resolved by the one pipeline; its logic is not copied into the author's files, and it does nothing a person could not
   write by hand. A backpack is a preset, not an engine behavior.
 - **Code mode (D13).** An agent changes Materione by running a TypeScript program against the generated SDK in a sandbox in the
-  cloud editor's page; the program's only effect is staged authoring operations, applied only after a human reviews the diff.
+  cloud editor's page; the program's only effect is staged authoring operations; changing or deleting existing content waits for the owner's approval
+  (once per object per session).
   **Code is never stored content and never runs on the server**: no runtime scripting, no raw file writes from the SDK, no
   agent-callable apply, no new endpoint, no Cloudflare compute for it (architecture §3.2,
   [`docs/architecture/codemode.md`](docs/architecture/codemode.md)).

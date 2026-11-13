@@ -430,7 +430,7 @@ expansion (parity long tail, then scale), and M8 is very late, so this slice com
   TypeScript program against an **SDK generated from the registries** (read API, staged write operations, typed handles, presets
   and addon primitives), in a **browser sandbox** in the editor page; the program's only effect is the editor's own authoring
   operations, never stored and never run on the server. Scope: the SDK generator and core in the editor build; the sandbox
-  (technology per the owner's answer, architecture §14.10); the type-check before run; the server's **transaction operation with a
+  (QuickJS in WebAssembly in an opaque-origin iframe, architecture §14.10); the per-object approval grants (codemode.md §5.6); the type-check before run; the server's **transaction operation with a
   dry-run** over the heterogeneous edit list, per-operation permission checks, transaction-level revert and the audit `origin`
   (codemode.md §10); the review surface (summary, diff, impact, approve); the compatibility-gate extension for the SDK's
   operation table (codemode.md §7); golden SDK output, a program corpus and sandbox ban tests (codemode.md §11).

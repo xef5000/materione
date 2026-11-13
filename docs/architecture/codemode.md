@@ -6,11 +6,11 @@
 > way and not as raw YAML or as many tools (§2), the SDK (§3), the sandbox and where it runs (§4), the execution model from
 > program to applied change (§5), how errors reach the agent (§6), how the SDK is versioned against the plugin and the editor
 > (§7), what is explicitly out (§8), a worked example (§9), what the server must add (§10), how it is proven (§11), and the
-> questions left to the owner (§12).
+> the owner's answers to its questions (§12).
 >
-> **Status.** **Design, docs only (#320).** The six decisions of §1 are the owner's. The numbering as D13, the sandbox
-> recommendation (§4.3), the one-pack rule (§5.4) and every "recommended" line are this document's proposal and are flagged
-> where they occur. Nothing here is built. Code in this document is **shape, not syntax**: names are illustrative, and the
+> **Status.** **Design, docs only (#320).** The decisions of §1 are the owner's: C1 to C6 on #320, C7 to C14 on PR #326
+> (2026-11-12, §12). The model provider is the one question still open (§12, master §14.8). Lines still marked "recommended"
+> are this document's proposal on details the owner did not rule on. Nothing here is built. Code in this document is **shape, not syntax**: names are illustrative, and the
 > SDK is generated, so its real spelling comes from the registries it is generated from (§3.1).
 >
 > **Traceability.**
@@ -43,8 +43,17 @@ for the rest of the document.
 | **C4** | **TypeScript, not Java.** Java would need heavy sandboxing. | §2.5 |
 | **C5** | **Context from PR #322 stands.** The agent surface is a chatbot inside the cloud editor (`editor.materione.com`) that uses the existing editor protocol as an ordinary editor client. No new endpoint. Relays stay untrusted. | §4, master §14.8 |
 | **C6** | **Java remains for addons.** Addons add *primitives* (D12), not features. A primitive an addon registers is usable by an agent with no SDK code (§3.6). | §3.6 |
+| **C7** | **The sandbox is QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe**, with a Worker in a sandboxed iframe as the fallback. | §4.3 |
+| **C8** | **The SDK is not published for now.** Local or external agents are not a priority; no trust model for them is designed. | §8 |
+| **C9** | **The type-check runs in the editor page, in a Worker**, with the TypeScript checker as a static asset. | §5.1 |
+| **C10** | **The agent is trusted for the most part.** A session may create new content without approval. Changing or deleting **existing** content needs the owner's approval the first time for each object; once approved, later changes to that object in the same session need no new approval. | §5.6 |
+| **C11** | **Permission is asked once.** One approval covers every existing object a plan names, across the programs of that plan; the owner is not asked again at each step. | §5.5, §5.6 |
+| **C12** | **The one-pack rule and the 50-document cap stay for now**, open to lifting later if they become a problem. | §5.4 |
+| **C13** | **The program text is kept** (size-bounded) in the audit, not only its digest. | §5.6, §10 |
+| **C14** | **Code mode is D13**, a decision of its own, not a layer of D12. | master §3.2 |
 
-What this document proposes on top of those, for the owner to accept or change, is marked **Recommended** and collected in §12.
+C1 to C6 were decided on #320; C7 to C14 are the owner's answers on PR #326 to the questions of the first draft (§12). What this
+document still proposes on details the owner did not rule on is marked **Recommended**.
 
 ---
 
@@ -310,14 +319,14 @@ All options run in the browser. Server-side options appear only to be excluded.
 
 | Option | Isolation | CPU and memory control | Cost to us | Verdict |
 |---|---|---|---|---|
-| **A. A WebAssembly JavaScript engine (QuickJS compiled to WASM), inside a sandboxed iframe** (`sandbox="allow-scripts"` with no `allow-same-origin`, so an opaque origin; a CSP with `connect-src 'none'`) | **Strongest.** The engine is a separate interpreter with no globals but those the host injects; the iframe adds an origin boundary, so even an engine bug lands in an origin with nothing in it. | An interrupt handler and a memory limit are part of the engine's embedding interface; the host can also destroy the iframe. | A small WASM asset, served as a static asset (free, unlimited; web.md §3.3). Slower than native JS, which does not matter for programs that stage edits. Async host calls need the engine's async embedding. | **Recommended.** |
+| **A. A WebAssembly JavaScript engine (QuickJS compiled to WASM), inside a sandboxed iframe** (`sandbox="allow-scripts"` with no `allow-same-origin`, so an opaque origin; a CSP with `connect-src 'none'`) | **Strongest.** The engine is a separate interpreter with no globals but those the host injects; the iframe adds an origin boundary, so even an engine bug lands in an origin with nothing in it. | An interrupt handler and a memory limit are part of the engine's embedding interface; the host can also destroy the iframe. | A small WASM asset, served as a static asset (free, unlimited; web.md §3.3). Slower than native JS, which does not matter for programs that stage edits. Async host calls need the engine's async embedding. | **Chosen (C7).** |
 | **B. A Web Worker in a sandboxed iframe, running the browser's native JavaScript** | Good. No DOM in a worker; the iframe's opaque origin and CSP remove network and storage. But the worker's global scope still carries ambient browser APIs that must be removed or blocked one by one, so isolation depends on a deny list. | CPU: `terminate()`. Memory: not capped by the platform. | None. Fastest. | A fallback if A's embedding proves too costly. Weaker by construction: a deny list can miss an API a later browser adds. |
 | **C. A plain Worker or `new Function` in the editor's own origin** | Weak. Same origin as the signing key, storage and channel. | `terminate()` only. | None. | **Rejected.** |
 | **D. The Blockbench pattern: a same-origin iframe with a postMessage bridge** (web.md §6) | Adequate for *our* code, which is why Blockbench uses it; it is not a boundary against hostile code. | None. | None. | **Rejected** for untrusted code. Its bridge discipline (exact origin check, allowlisted, payload-capped messages) is reused for the host channel in A. |
 | **E. Execution on Cloudflare** (a Worker, a dynamic isolate, a container) | Strong. | Platform-enforced. | **Per-invocation compute on an account with no spend cap.** | **Excluded** by decision and by guardrail (§4.5). |
 | **F. Execution on the game server** (GraalJS, a JVM-embedded engine) | Needs a JVM sandbox the platform no longer provides (§2.5). | Hard. | Plugin weight; threading rules (D8). | **Excluded** (C2, C4). |
 
-**Recommendation (for the owner, §12.1): A.** QuickJS compiled to WebAssembly, in a sandboxed opaque-origin iframe, driven from
+**Decided (owner, C7): A.** QuickJS compiled to WebAssembly, in a sandboxed opaque-origin iframe, driven from
 the editor by a postMessage host channel with the discipline of the Blockbench bridge. Reasons: **no ambient authority by
 construction** (the program sees only what the host injects, rather than the browser minus a deny list), **resource limits that
 are part of the engine** rather than of the browser, and a boundary in depth (engine, then origin). B is the fallback. The
@@ -340,7 +349,7 @@ make**, so the sandbox cannot make the editor send an operation the SDK's table 
 - **No Cloudflare compute.** Nothing in this design is a Worker invocation, a D1 query beyond editor traffic, Workers AI, a
   queue or a container. The WASM engine and the TypeScript checker are static assets (web.md §3.3: free and unlimited). A PR
   that implements this states its cost model per the guardrails, and it should read "no change".
-- **The model call is the one thing that leaves the page**, and it is not decided here (§12.2). Whatever the owner chooses, two
+- **The model call is the one thing that leaves the page**, and it is not decided here (§12, question 2; master §14.8). Whatever the owner chooses, two
   facts bind it: a call that leaves the browser is a place where content leaves the end-to-end boundary of master §9.2 (code
   mode narrows what leaves, §3.2 rule 3, but does not remove it), and any cloud-side LLM call or billing is bound by the cost
   guardrails (Workers AI is off-limits, no plan purchases, no public endpoint without rate limits).
@@ -399,25 +408,45 @@ the edits are combined, a flow the compiler rejects, a note-block state that can
 ### 5.4 One program, one transaction
 
 The atomic unit today is `authoring.bulk` (api.md §3.3): all-or-none, revision-checked, up to 50 documents **of one pack**. The
-behavior and GUI edits each write one document at one revision. **Recommended:** a program may write to **one pack**, and
+behavior and GUI edits each write one document at one revision. **Decided (C12):** a program may write to **one pack**, and
 touches at most the transaction's cap of documents; it may read any pack and reference any pack's resources. Staging into a
 second pack is a diagnostic ("this change needs two packs; split it into two programs"). This follows from what the server can
-guarantee atomically today; lifting it is a server change (§10, §12.7), not an SDK change. The server needs one transaction
+guarantee atomically today; lifting it is a server change (§10), not an SDK change. **The owner keeps both limits for now (C12)**
+and is open to lifting them later if they become a problem. The server needs one transaction
 operation that takes the *whole* heterogeneous list, which is §10 item 1.
 
 ### 5.5 Programs are one-shot: iterating and building on prior work
 
-- A **proposal replaces the previous one.** It is not stacked. The agent fixes a refused proposal by writing a corrected whole
-  program against the stored state, which is why a program is short (tens of lines): it describes a change, not a repair.
+- A **refused proposal is replaced, not patched.** The agent fixes it by writing a corrected whole program against the stored
+  state, which is why a program is short (tens of lines): it describes a change, not a repair.
 - **Building on an applied change** is a new program that reads the state the apply produced. A multi-step plan ("first the
-  item, then its GUI") is several programs, each reviewed and applied. Whether several proposals may be stacked in one review
-  is §12.6.
+  item, then its GUI") is several programs, each applied in turn (§5.6). **The owner is asked once for the plan (C11)**, not at
+  each program: the agent declares the existing objects the plan will change or delete, the owner approves that set once, and
+  every program of the plan that stays inside it applies without a new prompt. A program that reaches an object outside the set
+  stops and asks for that object (§5.6).
 - **Nothing is carried between programs except the stored files.** No variables, no module, no cache. That is C2 made concrete,
   and it is why SDK changes cost nothing durable (§7).
 
 ### 5.6 Review, then apply
 
-The proposal is shown to the owner **in the editor**, not in the chat transcript alone (the flow of #320, step 6):
+**The agent is trusted for the most part (C10).** Whether a proposal applies on its own or waits for the owner depends only on
+**what it touches**, after the dry run (§5.3) is clean:
+
+| A proposal that... | Applies |
+|---|---|
+| only **creates** content, or changes content this session created | **without approval**; shown in the session's change log, with revert |
+| changes or deletes an **existing** object the owner has **already approved** in this session | **without approval** (the grant holds for the session) |
+| changes or deletes an **existing** object **not yet approved** | **after the owner approves that object**; the grant then covers every later change to it in the session |
+| has an error diagnostic in its dry run | **never**; the diagnostics go back to the agent (§6) |
+
+*Existing* means present in the stored files when the session started and not created by the session since. A grant is per
+object (one document or resource), per session, and is held by the editor host, outside the sandbox: the SDK has no call that
+reads, asks for or grants one. Permission is asked **once** (C11): a plan's approval prompt lists every existing object the plan
+declares, the owner approves the set, and the programs of the plan apply in turn without asking again. A dry-run failure, a
+stale revision or an object outside the set brings the plan back to the owner only for what is new.
+
+When a proposal needs approval, it is shown to the owner **in the editor**, not in the chat transcript alone (the flow of #320,
+step 6); a proposal that applies on its own is shown the same way in the change log, after the fact:
 
 | Shown | From |
 |---|---|
@@ -427,21 +456,24 @@ The proposal is shown to the owner **in the editor**, not in the chat transcript
 | Diagnostics: errors block, warnings are shown | the dry run |
 | The program text, collapsed, as the witness of how the list was produced | the proposal |
 
-**The owner approves with a button the model cannot press.** The SDK has no apply, the chat tool has no apply parameter, and the
-approval is a UI event. On approval the editor sends the **same operation list** (not the program) as a single transaction with
-each document's `expectedRevision` from the dry run, so what was approved is what is applied (D6, master §6.4):
+**The owner grants with a button the model cannot press.** The SDK has no apply and no grant, the chat tool has no apply or grant
+parameter, and the approval is a UI event in the editor host. On apply, approved or not, the editor sends the **same operation
+list** (not the program) as a single transaction with each document's `expectedRevision` from the dry run, so what was checked is
+what is applied (D6, master §6.4):
 
 - It is **transactional**: all-or-none under the store lock; a failure leaves no partial files, and the pipeline's shadow-swap
   rolls back an apply that fails to load (master §6.4).
 - It is **audited**: the audit entry carries the session's actor (the same permissions, no new actor kind, no new scope), plus
-  an `origin` tag `code-mode` and the program's digest. Recommended; §10 item 4.
+  an `origin` tag `code-mode`, whether the apply was granted by the owner or ran without approval (C10), and **the program text**,
+  size-bounded, with its digest (C13); §10 item 4.
 - It is **reversible**: a transaction identifier lets one request restore each touched document's prior revision from the
   revision journal (§10 item 3), as a new revision, not by deleting history.
 - **A stale revision** (a human edited a file between dry run and apply) is `MTR-0034` for that document and the whole
   transaction is refused. The agent is told, writes the program again against the new state, and the owner reviews again. This is
   **rebase by re-running**, which is only cheap because the program is short, one-shot and deterministic (§4.2).
 
-Whether some proposals may skip human review is a question for the owner (§12.5). **Recommended default: never.**
+The grant is the owner's protection, not the transaction's: every apply, granted or not, is transactional, audited and
+reversible as above.
 
 ---
 
@@ -497,11 +529,11 @@ still type-check the benchmark corpus against every supported jar's recorded reg
 | **Arbitrary JavaScript on the server** in any form: an eval action, a scripting mechanic, a "custom code" field. | C2. A hole here recreates the thing Materione replaces. |
 | **Raw file writes.** No SDK path writes YAML text, writes a path, or reaches an unlisted key. | Lossless round-trip (§5.6), the schema as the only schema, and the revision guard. The raw `putDocument` stays the editor's T4 tool. |
 | **Code as the stored source of a feature.** No `program.ts` in a pack, no regeneration of files from code. | D1: files are canonical, and a code source would be a second truth. Programs are one-shot (C2). |
-| **A program that applies itself**, or a chat tool that applies. | D6 and the review step of #320: the human approves a diff (§5.6). |
+| **A program that grants itself approval**, or a chat tool that grants or applies outside the rules of §5.6. | D6 and C10: whether a change to existing content applies is decided by the owner's grant, a UI event the model cannot trigger (§5.6). |
 | **Network, storage or DOM access from a program**, and reading anything outside the SDK. | §4.1. |
 | **Execution on Cloudflare or on the game server.** | §4.3 E and F; the guardrails (`CLAUDE.md`). |
 | **Asset generation and binary uploads from a program** in this design. | Binary assets are a separate, non-atomic write (web.md §6: an asset copy is an ordinary write made before the bulk call); #320 lists asset generation as open. A program may *reference* assets the owner has uploaded. |
-| **A standalone MCP server for external agents.** | Master §14.8: not part of the decision. §12.3 asks whether the SDK is published later. |
+| **A standalone MCP server for external agents**, and publishing the SDK for them. | Master §14.8: not part of the decision. C8: not a priority, not published for now. |
 | **Anything that relaxes D1 to D12.** | A program is a producer of the editor's operations, nothing more. |
 
 ---
@@ -636,7 +668,7 @@ what sits *behind* the existing protocol. Each needs its own design and issue be
 | 1 | **A transaction operation over a heterogeneous list, with a dry-run mode.** It takes the staged list (resource, behavior and GUI edits), applies it in memory under the store lock, runs validation, and returns diagnostics plus the resulting documents; without `dryRun` it writes all-or-none and enqueues one reload. | §5.3, §5.4: one program is one transaction. | `bulk` is all-or-none for resource documents of one pack (50 max). `validateDraft` is a draft check. Logic and GUI edits are single-document writes (`LogicEdit`, `GuiEdit`). There is no list that spans them with a dry run. |
 | 2 | **Permission checks per operation** in that transaction, with a diagnostic per refusal. | §5.3 | Each operation checks its own node today. |
 | 3 | **Transaction-level revert** by identifier, over the revision journal. | §5.6: "reversible" (#320 acceptance) | Per-document `getHistory` exists. |
-| 4 | **An additive `origin` and `digest` in the audit entry.** | §5.6 | The audit has `actor`. |
+| 4 | **An additive `origin`, approval mode (granted or not needed, C10), program text (size-bounded, C13) and `digest` in the audit entry.** | §5.6 | The audit has `actor`. |
 | 5 | **Read operations on the wire** for traces and runtime variable reads, with their own permission nodes. | §3.2: debugging is #320 step 8 | `LogicApi.traces()` and `variables()` are API methods; the wire exposure is not verified here (§13). |
 | 6 | **A read-only expanded view of a preset** (master §14.7(iv)). | §3.5 | Open. |
 | 7 | **A capability** advertising the above. | §7 | The capability list exists (web.md §4.1). |
@@ -665,39 +697,22 @@ Under the project's rules (roadmap rule 2, the golden-file rule, `qa/README.md`)
 
 ---
 
-## 12. Open questions for the owner
+## 12. The owner's answers (2026-11-12)
 
-Not decided here. Each has a recommendation where this document has one.
+The owner answered the nine questions of the first draft on PR #326. They are recorded in §1 (C7 to C14) and applied in the
+sections cited. One question stays open.
 
-1. **Sandbox technology.** Recommended: **A** (QuickJS compiled to WASM in a sandboxed opaque-origin iframe, §4.3), fallback B.
-   The questions behind it: is a WASM asset of a few hundred kilobytes acceptable in the editor's static assets, and is the
-   async host-call embedding of the engine acceptable, or would B's weaker, deny-list isolation be preferred for simplicity?
-2. **Model provider and billing.** Unchanged from master §14.8 and still open. Constraints that bind any answer: the
-   cost guardrails; a model call is where content leaves the end-to-end boundary; and the likely options are a key supplied by
-   the user in the browser (no project cost, no cloud-side call, the call leaves the page directly) or a project-run proxy
-   (cost, rate limits and a new public endpoint, all of which the guardrails make hard). Code mode lowers tokens per task by
-   the research's account (§2.4) but this has not been measured here.
-3. **Publishing the SDK for local or external agents later.** The core is DOM-free and the sandbox is a separate component so
-   that the door stays open: the same SDK could run in a Node harness against a direct-mode session. That is a new trust model
-   (an agent outside the browser needs its own handshake and approval) and is the "standalone MCP server" master §14.8 left out
-   of the decision. Decide whether it is a goal, so the package boundary is drawn once.
-4. **Where the type-check runs.** Recommended: **in the editor page, in a Worker**, with the TypeScript checker loaded as a
-   static asset when the chatbot is first opened (no server cost, no round trip, full `.d.ts` locally). The alternatives are a
-   stripped-types-only run (cheaper, loses the feedback loop this design is built on) or a checker running anywhere that
-   costs compute. The size of the checker asset is the real trade.
-5. **Autonomy.** Recommended: **human approval before every apply, always** (§5.6). Should an owner be able to enable
-   auto-apply for a proposal whose dry run is clean and whose impact is empty? It would be an owner setting, never an agent
-   one.
-6. **Stacked proposals.** Should several programs be reviewable as one plan (an overlay across proposals) or is "one program,
-   one review, one apply" (§5.5) the rule? Stacking needs the dry run to accept a prior unapplied list as its base.
-7. **The one-pack rule and the 50-document cap** (§5.4): lift them in the server transaction, or keep them as a forcing function
-   for small proposals?
-8. **Program retention.** Is the program's digest in the audit enough, or should its text be kept (size-bounded) so an owner
-   can read what produced a change months later? Keeping it makes the audit larger and starts to look like a second record of
-   what the files already say (D1).
-9. **D13 or an amendment to D12.** This document recommends a new decision (§3.2 of the master) because it binds a different
-   thing (how agents author, and a ban on stored or runtime code) from D12 (what the engine ships). If the owner prefers it
-   folded into D12, §3.2 moves under §3.1 as a third layer and the count stays at twelve.
+| # | Question | Answer | Lands in |
+|---|---|---|---|
+| 1 | Sandbox technology | **A**: QuickJS compiled to WebAssembly in a sandboxed opaque-origin iframe; B (a Worker in a sandboxed iframe) is the fallback. | C7, §4.3 |
+| 2 | Model provider and billing | **Still open.** The specific model is to be decided. Every answer stays bound by the cost guardrails and by the end-to-end boundary (a model call is where content leaves the page, master §14.8). | master §14.8 |
+| 3 | Publishing the SDK for local or external agents | **Not a priority; not published for now.** The core stays DOM-free so the door is not closed, but no package boundary, trust model or handshake for an outside agent is designed or built. | C8, §8 |
+| 4 | Where the type-check runs | **In the editor page, in a Worker**, with the TypeScript checker as a static asset. | C9, §5.1 |
+| 5 | Autonomy | **The agent is trusted for the most part.** Creating new content needs no approval. Changing or deleting existing content needs the owner's approval **once per object**: after the first approval, later changes to that object in the session apply without asking again. | C10, §5.6 |
+| 6 | Stacked proposals | **Ask once.** Asking for permission at every step is the annoyance to avoid: one approval covers every existing object a plan names, across the programs of that plan. | C11, §5.5, §5.6 |
+| 7 | The one-pack rule and the 50-document cap | **Kept for now**, open to lifting later if they become a problem. | C12, §5.4 |
+| 8 | Program retention | **Keep the program text** (size-bounded) in the audit, not only a digest. | C13, §5.6, §10 |
+| 9 | D13 or an amendment to D12 | **D13**, a decision of its own. | C14, master §3.2 |
 
 ---
 
@@ -707,7 +722,8 @@ Not decided here. Each has a recommendation where this document has one.
   summary of an article that was not read. None was cross-checked against the full papers or the original article.
 - Embedding details of QuickJS-in-WASM (the async host-call path, interrupt and memory limit APIs, bundle size), the behavior of
   workers created from a sandboxed opaque-origin iframe across browsers, and the TypeScript checker's size and cold-start time
-  in a browser Worker were **not tested** in this design; §4.3 and §12.4 are recommendations until a spike measures them.
+  in a browser Worker were **not tested** in this design; the owner chose A and the in-page Worker (C7, C9), and a spike must
+  measure them before code.
 - Which reads exist on the editor wire today (traces, runtime variables) was read from `api.md` and `web.md`, not from the
   code (§10 item 5).
 - The generated type surface for polymorphic entries (an action step as a discriminated union) and for the logic expression

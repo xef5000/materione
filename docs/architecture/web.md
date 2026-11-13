@@ -1354,7 +1354,8 @@ screenshots for eyes review.
 same handshake, the same in-game-approved session, the same permission nodes, no new endpoint and no new token scope. It
 changes the SPA, not the relay. Its tool runs a TypeScript program against an SDK generated from the connected plugin's
 registries, in a sandbox in the page, and the program's only effect is the editor operations of §4.2, staged and applied
-only after the owner approves a diff (master §3.2, [`codemode.md`](codemode.md)). Consequences for this document:
+as one transaction; a change to existing content waits for the owner's approval, once per object per session (master §3.2,
+[`codemode.md`](codemode.md) §5.6). Consequences for this document:
 
 - **The SDK's operation table is subject to the release compatibility gate** (§6, *Versioning*): `editor-compat.mjs` scans it
   like the editor's own calls, and an operation newer than a release is gated on a capability the SDK checks (codemode.md §7).
@@ -1430,7 +1431,7 @@ in CI.
 | Editor opened against an unreachable / wrong direct endpoint | Direct is chosen only after a browser-side Ed25519 proof bound to the session id and a fresh challenge (§4.4); any other outcome stays on the relay |
 | Probe used as a signing oracle | Answered on direct sockets only, ≤ 1 per socket, only for an unclaimed session, domain-separated signed text (§4.4) |
 | Compromised `materione.com` hosting (worst case) | Authenticity still holds (signatures verified plugin-side regardless of transport); confidentiality holds (keys never transit the cloud); worst case = denial, not intrusion |
-| Model-written code (code mode, D13) escapes its sandbox in the editor page | No ambient authority (only the SDK object); an opaque-origin sandbox with no network, storage or DOM; limits on CPU, memory, reads and output; the program's writes are *staged*, never performed, and nothing applies without the owner approving the diff (codemode.md §4, §5.6) |
+| Model-written code (code mode, D13) escapes its sandbox in the editor page | No ambient authority (only the SDK object); an opaque-origin sandbox with no network, storage or DOM; limits on CPU, memory, reads and output; the program's writes are *staged*, never performed; the server dry run decides validity; existing content changes only with the owner's per-object grant, held outside the sandbox (codemode.md §4, §5.6) |
 | Prompt injection through content the agent reads (an item's lore, a pack's names) | Reads are data to the program; its only effect is staged operations; the dry-run and the human review of the diff stand between any instruction and the files; permissions are the owner's session's, never widened (codemode.md §4.5) |
 | Abuse of the shared free instance | Rate-limiter binding per IP, envelope-only store, hard quotas below free-tier ceilings; the free plan's hard stops mean abuse causes 429s and availability loss — never billing (§3.3) |
 | Abuse of free store as file host | Envelope-only content type, size caps, TTLs, per-IP limits, content-addressed dedup keeps honest traffic cheap (§3, §4.3) |
