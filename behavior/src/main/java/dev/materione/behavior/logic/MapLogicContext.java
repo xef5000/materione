@@ -55,6 +55,20 @@ public final class MapLogicContext implements LogicContext, EvaluationAware {
         return this;
     }
 
+    /**
+     * A copy of this context with one more top-level variable, such as {@code cooldown} for an {@code on_cooldown} run
+     * (logic.md §16). The copy has its own root and facets, so the variable is visible to that run only and this
+     * context is unchanged. As between the rules one event fires, the {@code vars} locals are shared.
+     */
+    public MapLogicContext withRoot(String key, Object value) {
+        var copy = new MapLogicContext(root);
+        copy.root.put(key, value);
+        copy.facets.putAll(facets);
+        copy.placeholders = placeholders;
+        copy.variables = variables;
+        return copy;
+    }
+
     /** Sets how {@code %token%}s are resolved; the default leaves text untouched. */
     public MapLogicContext withPlaceholders(UnaryOperator<String> resolver) {
         this.placeholders = resolver == null ? UnaryOperator.identity() : resolver;

@@ -23,7 +23,12 @@ public final class RuleParser {
                     "How many times the rule can fire in total", List.of()),
             option("per", ParameterType.ENUM, RuleOptions.PER_PLAYER,
                     "Whether cooldown and charges count per player or for the whole server",
-                    List.of(RuleOptions.PER_PLAYER, RuleOptions.PER_GLOBAL)));
+                    List.of(RuleOptions.PER_PLAYER, RuleOptions.PER_GLOBAL)),
+            // a list of steps, edited as JSON by the studio (raw): cooldown.remaining holds the whole seconds left
+            option(RuleOptions.ON_COOLDOWN, ParameterType.RAW, null,
+                    "Steps that run when the rule matched but its cooldown blocked it; cooldown.remaining is the "
+                            + "whole seconds left, rounded up",
+                    List.of()));
 
     /** Self-description of the universal action keys. */
     public static final List<ParameterSchema> ACTION_OPTIONS = List.of(

@@ -38,7 +38,8 @@ public final class BuiltinRecipes {
             "toggle_setting",
             "server_selector",
             "trash_slot",
-            "back_button");
+            "back_button",
+            "cooldown_gate");
 
     private BuiltinRecipes() {}
 

@@ -1191,6 +1191,25 @@ Each is reversible by the owner.
     and function tests here. The catalog entry arrives with the first condition or flow that makes
     a call visible to a player (L4).
 
+**As built in #328 (the clock: three more functions)**
+
+17. **Three clock functions, through the same registry.** `now()`, `today()` and `format_duration(seconds)` are one class
+    each in `plugin.logic.function`, registered by `BuiltinLogic.functions(Clock)`. The built-in set is now twenty-three
+    (the twenty above plus these three; the money pair of §18 is separate, as before). There was no engine clock to reuse:
+    the rule gate and `CooldownStore` read `System.currentTimeMillis` directly. The injection point is therefore the
+    function's constructor, a `java.time.Clock`; `BuiltinLogic.functions()` passes the system clock in the server's default
+    zone, and a test passes a fixed one. Item 20 gives the rule gate the same kind of clock for its own tests.
+
+| Function | Value | Notes |
+|---|---|---|
+| `now()` | whole epoch seconds (`floor(millis / 1000)`), a number | Takes no arguments. Not pure: the same call gives a later value each time it runs. |
+| `today()` | the local day number, whole days since 1970-01-01 in the clock's zone, a number | The server's default zone. The value is the same for the whole local day and changes at local midnight. |
+| `format_duration(seconds)` | text, or `null` for a non-number | Fixed format: fractions round **up** to whole seconds, so a running wait never reads `0s`; zero or less is `0s`; units `d`, `h`, `m`, `s`; the output names the **two largest non-zero units**, descending, one space apart. `93784` is `1d 2h`, `90061` is `1d 1h`, `200` is `3m 20s`, `45` is `45s`, `3600` is `1h`. |
+
+A clock function is evaluated only when its call runs. Parsing and binding a rule read no clock, so nothing time-dependent
+is baked in at load (a test asserts that describing the function reads nothing). Every clock function returns `null` or a
+value for any argument and never throws (test `noBadArgumentThrows`).
+
 ---
 
 ## 16. Decisions taken in #208 (L2: flows and the resumable interpreter)
@@ -1352,6 +1371,34 @@ knows them. Start a click's run with `BehaviorEvent.withCancelKey(session)` and 
 "close ends the waits" with `stop: {cancel_session_runs: true}` and the default stays "runs belong to the
 player". GUI actions in a run whose session ended should return `FAILED("no open gui")` (§5.2). A GUI action
 that must run on the player's thread declares `PLAYER_REGION` (or overrides `threading(P)`).
+
+**As built in #328 (`on_cooldown` and `cooldown.remaining`)**
+
+These extend the rule shell of this section; a rule without them behaves exactly as before.
+
+17. **The option.** `on_cooldown: [steps]` is a flow that runs when the rule matched (its event and trigger filters) but its
+    cooldown blocked it. Its steps compile in their own unit, whose variable roots are the trigger's roots plus `cooldown`,
+    so `${cooldown.remaining}` is checked there and nowhere else. `RuleOptions.ON_COOLDOWN` is the key. It is described in
+    `RuleParser.RULE_OPTIONS` as a `raw` parameter, so the studio shows it as JSON and never as a text field that would
+    flatten its steps.
+18. **The variable.** `cooldown.remaining` is the whole seconds left in the rule's window, rounded **up** (1 ms left is
+    `1`). It is a number. It exists only inside an `on_cooldown` run; the rule's own steps do not see it.
+19. **The gate.** `RuleEngine` asks `CooldownStore.tryFireRemaining`, which returns `0` when the rule may fire (and records the
+    window, as `tryFire` did) or the milliseconds still open. When it is `0`, the path is exactly the one before: charges,
+    the rule's `if:`, then its `do:`. When it is positive and the rule has no `on_cooldown`, the rule stays silent, as before.
+    When it is positive and the rule has one, the rule's `if:` is evaluated as usual, the charges are **not** spent, and if
+    the condition holds the `on_cooldown` flow runs as a run of the same rule identity and path, with `cooldown.remaining`
+    in a context of its own (`MapLogicContext.withRoot`; the event's context is unchanged).
+20. **The clock.** `RuleEngine` takes a `LongSupplier` of epoch milliseconds, defaulting to `System::currentTimeMillis`, so
+    tests advance the window without sleeping. Nothing else about timing changes.
+21. **Editing.** `on_cooldown` is a step list, so it is protected like `do`: `patchRule` refuses it and the edit is made
+    through the step operations. It is not an option in the rule view (`LogicViews`), and an edit to any other key leaves it
+    byte for byte as written (test `anOnCooldownBranchLoadsAndSurvivesOtherEditsByteForByte`).
+22. **Not in this change.** The node canvas does not draw the `on_cooldown` steps (they are reachable as JSON in the
+    inspector). The cooldown itself is still in memory and resets on a restart, as before: a restart-proof cooldown is the
+    `cooldown_gate` recipe of §30, which is a variable and the clock, not this option.
+
+---
 
 ## 17. Decisions taken in #212 (L6: built-in player, world and server actions)
 
@@ -2999,6 +3046,7 @@ template form is `api.logic.RecipeTemplate`, the expansion is `behavior.logic.re
    | `toggle_setting` | `gui.click` on `layer` | `set_var … toggle`; `if` the variable is `true`, a message; `gui.refresh` | `layer`, `variable` (a declared player boolean), `on_message`, `off_message` |
    | `server_selector` | `gui.click` on `layer` | a message, then `connect` to `server` | `layer`, `server` |
    | `back_button` | `gui.click` on `layer` | `gui.back` | `layer` |
+   | `cooldown_gate` (#328) | `on` (default `gui.click`), on `layer` (blank: any) | a `var` condition `variable > now() - seconds` then a message and `stop`; `set_var variable = now()` | `on`, `layer`, `variable` (a declared player number), `seconds` (≥ 1), `message` |
 
 10. **Trash slot: blocked on #248, not shipped.** *(Superseded by §36: #248 shipped `custody.consume` and the trash slot is the
     built-in recipe `trash_slot`, a composition over it. What follows is the analysis that made it wait.)* §25 decision 12 stands (the durability block itself was lifted on PR #303;
@@ -3053,6 +3101,25 @@ a loader, not only through the `Recipe` interface.
 
 
 ---
+
+**As built in #328 (the `cooldown_gate` recipe)**
+
+23. **A persistent cooldown is a composition.** `cooldown_gate` is a recipe YAML in `plugin/src/main/resources/recipes/`
+    (in `BuiltinRecipes.IDS`). It expands to one rule. The rule's `do:` reads a declared player number (the epoch second
+    of the last use) with a `var` condition: `var > now() - seconds` holds while the cooldown runs, and then the run
+    `stop`s after the message. Otherwise a `set_var` writes `now()`. Nothing is stored by the engine: the number is a
+    player variable like any other, so it survives a restart (`cooldown_gate` is the answer to the restart-proof case that
+    `on_cooldown` of §16 is not).
+24. **Parameters.** `variable` (a declared player number, `scope: player`, `value_type: number`, as `pack:key`), `seconds`
+    (an integer of at least 1), `message` (default "You have to wait before doing that again."). Two more parameters are
+    needed because a recipe expands to rules, and a rule has a trigger: `on` (default `gui.click`) and `layer` (default
+    blank, which the template drops, so the rule has no layer filter). The brief named three parameters; these two are the
+    addition, and the reason is the rule shape of §4.6.
+25. **The remaining time is not shown.** The brief asked for the message to give the time left through `format_duration`.
+    It cannot be done in this recipe: an expression reads a declared variable only by its dotted path
+    (`vars.player.<pack>.<key>`, §3.3), and the recipe has the variable as one `pack:key` text, which a template cannot
+    split. The message is the author's text. The follow-up is a two-part variable parameter or a typed variable reference
+    in templates; `format_duration` then gives the wait as `format_duration(seconds - (now() - vars.player...))`.
 
 ## 31. Decisions taken in #224 (W2: the node inspector)
 

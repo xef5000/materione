@@ -133,6 +133,39 @@ class LogicAuthoringApiTest {
     // rules
 
     @Test
+    void anOnCooldownBranchLoadsAndSurvivesOtherEditsByteForByte() {
+        String onCooldown = """
+                  on_cooldown:
+                    - message: "Wait a moment."
+                      node: {x: 3, y: 4}
+                """;
+        String bow = """
+                bow:
+                  display_name: Bow
+                  behavior:
+                    - on: click:right
+                      cooldown: 500
+                      do:
+                        - give: one
+                """ + onCooldown;
+        authoring.createDocument(actor, new CreateDocumentRequest(PACK, "items/bow.yml", "bow", "Bow", bow));
+        var bowPath = "items/bow.yml";
+
+        ApiResult<LogicView> patched = logic.edit(actor, new LogicEditRequest(PACK, bowPath,
+                authoring.getDocument(PACK, bowPath).value().revision(),
+                List.of(new LogicEdit.PatchRule(0, Map.of("cooldown", 250), List.of()))));
+
+        assertThat(patched.ok()).isTrue();
+        assertThat(authoring.getDocument(PACK, bowPath).value().raw()).contains(onCooldown)
+                .contains("cooldown: 250");
+        assertThat(patched.value().rules().get(0).options()).doesNotContainKey("on_cooldown");
+        assertThat(logic.edit(actor, new LogicEditRequest(PACK, bowPath,
+                authoring.getDocument(PACK, bowPath).value().revision(),
+                List.of(new LogicEdit.PatchRule(0, Map.of("on_cooldown", List.of()), List.of())))).ok())
+                .as("the cooldown branch is edited as steps, never patched as a value").isFalse();
+    }
+
+    @Test
     void addRuleInsertsARuleAtItsIndex() {
         var rule = Map.<String, Object>of("on", "click", "do", List.of(Map.of("message", "hi")));
         ApiResult<LogicView> result = edit(new LogicEdit.AddRule(0, rule));

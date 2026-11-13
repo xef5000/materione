@@ -66,18 +66,38 @@ final class RuleCompiler {
             if (body.isEmpty()) {
                 throw emptyBody(unit, rule.get("do"), path.child("do"));
             }
-            if (steps.deepestCall() > CallStep.MAX_DEPTH) {
+            // the cooldown branch compiles in its own unit, which also reads cooldown.* (logic.md §16)
+            var cooldown = new StepCompiler(cooldownUnit(id, selector.get()), flows);
+            List<Step> onCooldown = rule.get(RuleOptions.ON_COOLDOWN) == null
+                    ? List.of()
+                    : cooldown.list(rule.get(RuleOptions.ON_COOLDOWN), path.child(RuleOptions.ON_COOLDOWN));
+            int deepest = Math.max(steps.deepestCall(), cooldown.deepestCall());
+            if (deepest > CallStep.MAX_DEPTH) {
                 unit.problem(DiagnosticCodes.FLOW_CALL_INVALID, Severity.ERROR, path.child("do"),
-                        "calls nest " + steps.deepestCall() + " deep, past the limit of " + CallStep.MAX_DEPTH,
+                        "calls nest " + deepest + " deep, past the limit of " + CallStep.MAX_DEPTH,
                         "flatten the chain of calls; the rule was skipped");
                 throw Skip.unit();
             }
             RuleOptions options = options(rule, unit, path);
             RuleFilters filters = TriggerFilters.read(rule, context.lookup.trigger(selector.get().type()), unit, path);
-            return Optional.of(new Rule(context.owner, id, selector.get(), condition, body, options, filters, path));
+            return Optional.of(new Rule(context.owner, id, selector.get(), condition, body, options, filters, path,
+                    onCooldown));
         } catch (Skip skip) {
             return Optional.empty();
         }
+    }
+
+    /**
+     * The unit an {@code on_cooldown} flow compiles in: the trigger's roots plus {@code cooldown}, which only this
+     * branch's run provides. Unchecked (null roots) when the trigger declares no schema, as for the rule's own steps.
+     */
+    private CompileUnit cooldownUnit(String id, EventSelector selector) {
+        Set<String> roots = rootsOf(context.lookup, selector);
+        if (roots != null) {
+            roots = new HashSet<>(roots);
+            roots.add(RuleOptions.COOLDOWN_ROOT);
+        }
+        return new CompileUnit(context, "rule '" + id + "'", roots, "the '" + selector.type() + "' trigger provides");
     }
 
     private Skip emptyBody(CompileUnit unit, Object declared, StepPath path) {

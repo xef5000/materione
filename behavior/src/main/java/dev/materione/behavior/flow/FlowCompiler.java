@@ -233,6 +233,9 @@ public final class FlowCompiler {
         union.add("args");
         boolean any = false;
         for (Object entry : entries) {
+            if (entry instanceof Map<?, ?> raw && raw.get(RuleOptions.ON_COOLDOWN) != null) {
+                union.add(RuleOptions.COOLDOWN_ROOT); // a flow called from an on_cooldown branch may read cooldown.*
+            }
             if (!(entry instanceof Map<?, ?> raw) || !(raw.get("on") instanceof String on) || on.isBlank()) {
                 continue;
             }

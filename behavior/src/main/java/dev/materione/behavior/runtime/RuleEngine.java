@@ -10,7 +10,9 @@ import dev.materione.api.logic.ReadUnavailableException;
 import dev.materione.api.logic.ReadRetiredException;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 import java.util.concurrent.CompletionException;
+import java.util.function.LongSupplier;
 
 /**
  * The ECA engine's rule gate (runtime-systems §2, D4): matches a fired event against rules, gates
@@ -31,10 +33,17 @@ public final class RuleEngine {
 
     private final FlowInterpreter interpreter;
     private final CooldownStore cooldowns;
+    private final LongSupplier clock;
 
     public RuleEngine(FlowInterpreter interpreter, CooldownStore cooldowns) {
+        this(interpreter, cooldowns, System::currentTimeMillis);
+    }
+
+    /** @param clock epoch milliseconds the cooldown windows are read against; injectable for tests */
+    public RuleEngine(FlowInterpreter interpreter, CooldownStore cooldowns, LongSupplier clock) {
         this.interpreter = interpreter;
         this.cooldowns = cooldowns;
+        this.clock = clock;
     }
 
     /** The interpreter this engine feeds (cancellation, trace sink, budgets). */
@@ -51,7 +60,7 @@ public final class RuleEngine {
         rules.forEach(ordered::add);
         var gate = interpreter.gateReads(ownerOf(event), event::synchronousPreEventOpen);
         try {
-            fireNext(ordered, 0, System.currentTimeMillis(), event, gate);
+            fireNext(ordered, 0, clock.getAsLong(), event, gate);
         } finally {
             event.closePreEvent();
         }
@@ -69,10 +78,13 @@ public final class RuleEngine {
                 continue;
             }
             String throttleKey = throttleKey(rule, event);
-            if (!cooldowns.tryFire(throttleKey, now, rule.options().cooldownMs())) {
-                continue;
-            }
-            if (!cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges())) {
+            // 0 when the rule may fire; otherwise the cooldown blocked it and only its on_cooldown flow may run
+            long blockedMs = cooldowns.tryFireRemaining(throttleKey, now, rule.options().cooldownMs());
+            if (blockedMs > 0) {
+                if (rule.onCooldown().isEmpty()) {
+                    continue;
+                }
+            } else if (!cooldowns.trySpendCharge(throttleKey + ":charges", rule.options().charges())) {
                 continue;
             }
             var result = ResumableConditions.test(rule.condition(), event.context(), gate.executor())
@@ -102,7 +114,7 @@ public final class RuleEngine {
                         return;
                     }
                     if (conditionResult(rule, event, holds, failure)) {
-                        gate.start(rule, event.context());
+                        start(rule, event, gate, blockedMs);
                     }
                     fireNext(rules, next, now, event, gate);
                 });
@@ -125,9 +137,24 @@ public final class RuleEngine {
                 continue;
             }
 
-            gate.start(rule, event.context());
+            start(rule, event, gate, blockedMs);
         }
         gate.close();
+    }
+
+    /**
+     * Starts the rule's run. When its cooldown blocked it ({@code blockedMs > 0}), the run is its {@code on_cooldown}
+     * flow, with {@code cooldown.remaining} set to the whole seconds left, rounded up (logic.md §16). Otherwise it is
+     * the rule's own flow, exactly as before.
+     */
+    private static void start(Rule rule, BehaviorEvent event, FlowInterpreter.GateReads gate, long blockedMs) {
+        if (blockedMs <= 0) {
+            gate.start(rule, event.context());
+            return;
+        }
+        long seconds = (blockedMs + 999L) / 1000L;
+        gate.start(rule.cooldownRule(), event.contextWithRoot(RuleOptions.COOLDOWN_ROOT,
+                Map.of(RuleOptions.REMAINING, (double) seconds)));
     }
 
     private static boolean retired(Throwable failure) {

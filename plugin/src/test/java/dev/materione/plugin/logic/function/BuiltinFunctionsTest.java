@@ -339,11 +339,12 @@ class BuiltinFunctionsTest {
     }
 
     @Test
-    void theBuiltInSetIsTheTwentyTheDesignNames() {
+    void theBuiltInSetIsTheTwentyTheDesignNamesPlusTheThreeClockFunctions() {
         assertThat(BuiltinLogic.functions().stream().map(ExpressionFunction::id).collect(Collectors.toSet()))
                 .containsExactlyInAnyOrder(
                         "contains", "equals_ignore_case", "starts_with", "ends_with", "matches", "length",
                         "lower", "upper", "trim", "is_number", "is_player", "number", "round", "floor", "ceil",
-                        "min", "max", "abs", "random", "format_number");
+                        "min", "max", "abs", "random", "format_number",
+                        "now", "today", "format_duration");
     }
 }

@@ -19,9 +19,9 @@ const recipes = vocabulary.recipes;
 const pay = recipes.get('pay_to_receive')!;
 
 describe('reading the registry', () => {
-  it('lists the nine v1 recipes the plugin registers (the trash slot since #248), with their typed parameters', () => {
+  it('lists the ten recipes the plugin registers (the trash slot since #248, the cooldown gate since #328), with their typed parameters', () => {
     expect([...recipes.keys()].sort()).toEqual([
-      'back_button', 'close_button', 'confirm_dialog', 'paged_player_list', 'pay_to_receive', 'server_selector', 'toggle_setting', 'trash_slot', 'welcome_message',
+      'back_button', 'close_button', 'confirm_dialog', 'cooldown_gate', 'paged_player_list', 'pay_to_receive', 'server_selector', 'toggle_setting', 'trash_slot', 'welcome_message',
     ]);
     expect(recipes.get('trash_slot')!.params.map((param) => param.name)).toEqual(['layer', 'message', 'refused_message']); // a composition over custody.consume (logic.md section 36)
     expect(pay.displayName).toBe('Pay to receive');
