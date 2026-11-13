@@ -1,0 +1,9 @@
+{
+  "task": "T27",
+  "title": "/discord",
+  "registry": "plugin-current",
+  "result": "fail",
+  "diagnostics": [
+    { "code": 2339, "messageContains": ["commands", "PackWriter"] }
+  ]
+}
