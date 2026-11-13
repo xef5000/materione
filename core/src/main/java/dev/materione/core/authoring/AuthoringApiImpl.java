@@ -73,6 +73,8 @@ public final class AuthoringApiImpl implements AuthoringApi {
     private volatile LogicAuthoringApi logicApi;
     private final Supplier<List<ContentType>> contentTypes;
     private volatile Supplier<Allocations> previewAllocations;
+    private volatile Supplier<dev.materione.core.pipeline.ParsedContent> parsedContent;
+    private final StagedReferences.DocumentCache referenceCache = new StagedReferences.DocumentCache();
     private volatile DocumentStore.WriteObserver commitObserver = (index, write) -> { };
     private final AuthoringTransactions transactions;
     private final List<Consumer<DocumentChangeEvent>> changeListeners = new CopyOnWriteArrayList<>();
@@ -244,6 +246,22 @@ public final class AuthoringApiImpl implements AuthoringApi {
 
     Supplier<Allocations> previewAllocations() {
         return previewAllocations;
+    }
+
+    /**
+     * The last pipeline run's parse (packs, asset index), which lets {@link #transaction} resolve references into the
+     * packs it does not write. Without it that stage reports that it did not run. Set once at boot.
+     */
+    public void parsedContent(Supplier<dev.materione.core.pipeline.ParsedContent> parsed) {
+        this.parsedContent = parsed;
+    }
+
+    Supplier<dev.materione.core.pipeline.ParsedContent> parsedContent() {
+        return parsedContent;
+    }
+
+    StagedReferences.DocumentCache referenceCache() {
+        return referenceCache;
     }
 
     /** The seam fault-injection tests use to fail a transaction's write after a given document. */

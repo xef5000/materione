@@ -338,48 +338,10 @@ public final class ParseStage {
         return document;
     }
 
-    /** Asset kinds whose files are referenced relative to the kind dir (vanilla convention). */
-    private static final List<String> ASSET_KIND_DIRS = List.of("textures", "models", "fonts", "sounds");
-
-    /** Records assets (textures, models, …) for pure reference validation (R6). */
+    /** Records assets (textures, models, ...) for pure reference validation (R6). */
     private void indexAssets(PipelineContext context, Path packDir, String packId) {
-        Path assets = packDir.resolve("assets");
-        if (!Files.isDirectory(assets)) {
-            return;
-        }
-        try (var walk = Files.walk(assets)) {
-            walk.filter(Files::isRegularFile).forEach(file -> {
-                Path relativePath = assets.relativize(file);
-                // model/texture ids are relative to their kind directory
-                // (models/ruby_sword_model.json → <pack>:ruby_sword_model)
-                Path base = relativePath;
-                if (relativePath.getNameCount() > 1) {
-                    String first = relativePath.getName(0).toString();
-                    if (ASSET_KIND_DIRS.contains(first)) {
-                        base = relativePath.subpath(1, relativePath.getNameCount());
-                    }
-                }
-                String relative = base.toString().replace('\\', '/');
-                int dot = relative.lastIndexOf('.');
-                String extension = dot > 0 ? relative.substring(dot + 1) : "";
-                if (dot > 0) {
-                    relative = relative.substring(0, dot);
-                }
-                try {
-                    context.knownAssets().add(NamespacedId.of(packId, relative));
-                } catch (IllegalArgumentException ignored) {
-                    // asset names outside the id grammar surface as unresolved
-                    // references at validation, not as index failures here
-                }
-                // painting textures carry their pixel size to the validator —
-                // read here (the IO layer) so validation stays pure (R6)
-                if ("png".equals(extension) && relative.startsWith("painting/")) {
-                    int[] size = pngSize(file);
-                    if (size != null) {
-                        context.recordPaintingSize(packId + ":" + relative, size[0], size[1]);
-                    }
-                }
-            });
+        try {
+            PackAssets.index(packDir, packId, context.knownAssets(), context.paintingSizes());
         } catch (IOException e) {
             context.diagnostics().publish(new Diagnostic(
                     DiagnosticCodes.PIPELINE_STAGE_FAILED, Severity.ERROR,
@@ -388,44 +350,9 @@ public final class ParseStage {
         }
     }
 
-    /**
-     * The pixel size of a PNG, straight from its IHDR header (bytes 16..24):
-     * big-endian width then height. Null when the file is not a readable
-     * PNG — validation then skips the size check rather than guessing.
-     */
-    private static int[] pngSize(Path file) {
-        byte[] header = new byte[24];
-        int read = 0;
-        try (var in = Files.newInputStream(file)) {
-            while (read < header.length) {
-                int n = in.read(header, read, header.length - read);
-                if (n < 0) {
-                    return null;
-                }
-                read += n;
-            }
-        } catch (IOException e) {
-            return null;
-        }
-        for (int i = 0; i < 8; i++) {
-            if (header[i] != PNG_SIGNATURE[i]) {
-                return null;
-            }
-        }
-        int width = ((header[16] & 0xFF) << 24) | ((header[17] & 0xFF) << 16)
-                | ((header[18] & 0xFF) << 8) | (header[19] & 0xFF);
-        int height = ((header[20] & 0xFF) << 24) | ((header[21] & 0xFF) << 16)
-                | ((header[22] & 0xFF) << 8) | (header[23] & 0xFF);
-        return new int[] {width, height};
-    }
-
-    private static final byte[] PNG_SIGNATURE = {
-            (byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'};
-
     private void parseDir(
             PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
         Path dirPath = packDir.resolve(dir);
-        String contentType = "currencies".equals(dir) ? "currency" : dir.substring(0, dir.length() - 1);
         // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
         // reported and skipped, its siblings still parse
         var yamls = PackLayout.contentDocuments(packDir, dir, failure -> context.diagnostics().publish(
@@ -435,29 +362,21 @@ public final class ParseStage {
                         null, null, "check file permissions")));
         for (Path file : yamls) {
             var document = documentOf(context, file);
-            if (document.parseError().isPresent()) {
-                continue;
-            }
-            // one file, one content type, many keyed resources (§7.2)
-            for (var entry : document.data().entrySet()) {
-                if (!(entry.getValue() instanceof java.util.Map)) {
-                    continue;
-                }
-                out.add(new ContentResource(
-                        NamespacedId.of(packId, entry.getKey()),
-                        contentType,
-                        file,
-                        document));
+            // one file, one content type, many keyed resources (§7.2): the one rule, shared with the dry run
+            var declared = PackResources.declared(packId, dir, file, document);
+            out.addAll(declared.resources());
+            for (String key : declared.malformedKeys()) {
+                context.diagnostics().publish(new Diagnostic(
+                        DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
+                        "'" + key + "' in " + file.getFileName() + " is not a valid resource id and is skipped",
+                        null, new SourceLocation(file.toString(), 1, 1),
+                        "use lowercase letters, digits and _ - . / in a resource key"));
             }
         }
     }
 
     private static String readFile(Path file) {
-        try {
-            return Files.readString(file);
-        } catch (IOException e) {
-            return "";
-        }
+        return PackResources.readOrEmpty(file);
     }
 
     private static String stripExtension(String name) {

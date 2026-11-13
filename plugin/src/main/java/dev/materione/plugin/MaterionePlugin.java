@@ -716,6 +716,8 @@ public final class MaterionePlugin extends JavaPlugin {
         authoringApi.builtinPackIds(builtinPacks.ids());
         // a transaction's dry run compiles each resource on the allocation table's non-persisting preview
         authoringApi.previewAllocations(() -> pipeline.allocation().preview());
+        // ... and resolves references over the staged pack against the last parse of every other pack
+        authoringApi.parsedContent(() -> pipeline.runner().lastParsed());
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);
