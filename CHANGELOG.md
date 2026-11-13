@@ -9,6 +9,13 @@ releases may change file formats, settings and the public API.
 
 ### Added
 
+- **`AuthoringApi.transaction`: one transaction over a mixed edit list, with a dry run and per-operation permissions (#341, D13).** An ordered list of
+  `create`, `duplicate`, `setFields`, `move`, `delete`, `detachTemplate`, `saveAsTemplate`, `logicEdit` and `guiEdit` operations on one pack (at most 50
+  documents) is applied in memory under the store lock, where a later operation may address a document an earlier one creates, validated, and either
+  reported (a dry run returns the diagnostics, each tagged with the operation that caused it, and the resulting documents; nothing is written) or written
+  all-or-none with one audit entry and one reload. New wire op `authoring.transaction`, gated on the new `codemode` capability; older editors are unaffected.
+  `logic().edit` and `gui().edit` behave as before and now share a `stage` method with the transaction. See api.md section 3.3.1.
+
 - **`custody.consume`: the atomic exit of items held in custody, and the trash slot as a composition (#248, D12).** A new logic action
   `custody.consume: {slot, await}` consumes the stack a `durable: required` input slot holds, atomically, through the crash-safe exit of
   gui-input-durability.md (the decision is recorded in the ledger before the stack is deleted, so a crash leaves it consumed exactly once or
