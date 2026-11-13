@@ -9,6 +9,7 @@ import dev.materione.core.pipeline.ContentPack;
 import dev.materione.core.pipeline.ContentResource;
 import dev.materione.core.pipeline.PackAssets;
 import dev.materione.core.pipeline.PackLayout;
+import dev.materione.core.pipeline.PackResources;
 import dev.materione.core.pipeline.ParsedContent;
 import dev.materione.core.pipeline.validate.ReferenceValidator;
 import dev.materione.core.pipeline.validate.ValidationEnvironment;
@@ -33,20 +34,19 @@ import java.util.Set;
  * last pipeline run's parse ({@link ParsedContent}), so a reference into another pack resolves against that pack's
  * stored state (the one-pack rule limits writes, not reads).
  *
- * <h2>Scope, and why it is complete</h2>
- * A resource's validation result is a function of its own definition and of what its reference strings name (the
- * resources and assets they resolve to, and, for a {@code template:} chain, the definitions along the chain). So it
- * can change in the transaction only when
- * <ol>
- *   <li>the resource is in a document the list touched (its definition is new), or
- *   <li>a resource a touched document declared, before or after the list, is one it names (directly, or through
- *       another resource of this set: a template chain, a block's item).
- * </ol>
- * Set 1 is validated in full. Set 2 is found by a name index over the untouched resources, followed transitively,
- * and validated before and after: only the findings the list <em>adds</em> are reported, so a resource that was
- * already broken is not charged to a list that did not break it. Everything else is, by the argument above,
- * unchanged and is not read again. The cost is one linear pass over the untouched definitions' strings, not a
- * validation of the pack.
+ * <h2>Scope</h2>
+ * Resources in documents the list touched are validated in full. Of the untouched ones, those that name an id a
+ * touched document declared (before or after the list) are found by a name index over their string values reduced to
+ * the part after the last colon, followed transitively, and validated before and after; only the findings the list
+ * <em>adds</em> are reported, so a resource that was already broken is not charged to a list that did not break it.
+ * The rest are not read again.
+ *
+ * <p>That the index misses nothing is a tested property, not an argument:
+ * {@code StagedReferencesDifferentialTest} holds this check equal, over random edit lists, to {@link #checkEverything}
+ * (every untouched resource of every pack, before and after, no index) on a fixture that exercises every reference
+ * form {@code ReferenceValidator} resolves. The index assumes each reference is a whole string value; a new reference
+ * form in the validator (a map key, an id inside a longer string) must be added to that fixture, where a miss
+ * fails the test.
  */
 final class StagedReferences {
 
@@ -78,7 +78,7 @@ final class StagedReferences {
             if (entry != null && entry.size() == attributes.size() && entry.modified() == modified) {
                 return entry;
             }
-            String text = java.nio.file.Files.readString(file);
+            String text = PackResources.readOrEmpty(file);
             LosslessYamlDocument parsed = lastRun.get(file.toAbsolutePath().normalize());
             if (parsed == null || !parsed.save().equals(text)) {
                 parsed = LosslessYaml.parse(text);
@@ -128,22 +128,16 @@ final class StagedReferences {
                 try {
                     DocumentCache.Entry entry = cache.get(previous, lastRun, file);
                     walked.put(file, entry);
-                    LosslessYamlDocument document = entry.document();
-                    if (document.parseError().isPresent()) {
-                        continue;
-                    }
                     String path = packDirectory.relativize(file).toString().replace('\\', '/');
-                    for (String key : document.data().keySet()) {
-                        ContentResource resource = resourceOf(directory, path, key, document);
-                        if (resource != null) {
-                            stored.add(resource);
-                            if (!byPath.containsKey(path)) {
-                                result.add(resource);
-                            }
+                    for (ContentResource resource
+                            : PackResources.declared(pack, directory, file, entry.document()).resources()) {
+                        stored.add(resource);
+                        if (!byPath.containsKey(path)) {
+                            result.add(resource);
                         }
                     }
                 } catch (IOException unreadable) {
-                    // the parse stage reads an unreadable file as empty: it declares nothing
+                    // not even a stat: the file declares nothing
                 }
             }
         }
@@ -151,6 +145,18 @@ final class StagedReferences {
     }
 
     Outcome check(List<StagedDocument> staged) throws IOException {
+        return check(staged, false);
+    }
+
+    /**
+     * The oracle for the scope claim: every untouched resource of every pack is validated before and after, with no
+     * index deciding which ones matter. {@code StagedReferencesDifferentialTest} holds {@link #check} equal to it.
+     */
+    Outcome checkEverything(List<StagedDocument> staged) throws IOException {
+        return check(staged, true);
+    }
+
+    private Outcome check(List<StagedDocument> staged, boolean everything) throws IOException {
         Map<String, StagedDocument> byPath = new LinkedHashMap<>();
         staged.forEach(document -> byPath.put(document.path(), document));
 
@@ -216,7 +222,9 @@ final class StagedReferences {
                 }
             }
         }
-        List<ContentResource> impacted = impacted(view, result, touchedResources, pack, changedBy.keySet());
+        List<ContentResource> impacted = everything
+                ? untouched(view, result, touchedResources, pack)
+                : impacted(view, result, touchedResources, pack, changedBy.keySet());
         if (!impacted.isEmpty()) {
             ValidationEnvironment before = environment(view, manifestSource, stored, assets, sizes);
             Set<String> existing = new HashSet<>();
@@ -254,6 +262,18 @@ final class StagedReferences {
     }
 
     /** The untouched resources that name an id the list changed, directly or through another such resource. */
+    private static List<ContentResource> untouched(
+            ParsedContent view, List<ContentResource> ownResult, Set<ContentResource> touched, String pack) {
+        List<ContentResource> all = new ArrayList<>();
+        for (ContentPack other : view.packs()) {
+            if (!other.id().equals(pack)) {
+                all.addAll(other.resources());
+            }
+        }
+        ownResult.stream().filter(resource -> !touched.contains(resource)).forEach(all::add);
+        return all;
+    }
+
     private static List<ContentResource> impacted(
             ParsedContent view, List<ContentResource> ownResult, Set<ContentResource> touched, String pack,
             Set<String> changed) {
@@ -335,7 +355,7 @@ final class StagedReferences {
     }
 
     /** The operation that changed the id a new finding names; the first changed id when none is named. */
-    private static int causeOf(Diagnostic diagnostic, Map<String, Integer> changedBy) {
+    static int causeOf(Diagnostic diagnostic, Map<String, Integer> changedBy) {
         String message = diagnostic.message();
         for (Map.Entry<String, Integer> entry : changedBy.entrySet()) {
             if (message.contains("'" + entry.getKey() + "'") || message.contains(":" + entry.getKey() + "'")
@@ -354,32 +374,13 @@ final class StagedReferences {
     // ------------------------------------------------------------------
     // parsing, as the parse stage does it
 
+    /** The resources a staged text declares, by {@link PackResources#declared}: the rule the parse stage applies. */
     private List<ContentResource> resourcesOf(String path, String text) {
-        LosslessYamlDocument document = LosslessYaml.parse(text);
-        List<ContentResource> out = new ArrayList<>();
-        if (document.parseError().isPresent() || !path.contains("/")) {
-            return out;
+        int slash = path.indexOf('/');
+        if (slash < 0 || !PackLayout.CONTENT_DIRS.contains(path.substring(0, slash))) {
+            return List.of();
         }
-        String directory = path.substring(0, path.indexOf('/'));
-        for (String key : document.data().keySet()) {
-            ContentResource resource = resourceOf(directory, path, key, document);
-            if (resource != null) {
-                out.add(resource);
-            }
-        }
-        return out;
-    }
-
-    /** One keyed resource of a document; null when the key is not a mapping, not a valid id, or not in a content directory. */
-    private ContentResource resourceOf(String directory, String path, String key, LosslessYamlDocument document) {
-        if (!PackLayout.CONTENT_DIRS.contains(directory) || !(document.data().get(key) instanceof Map<?, ?>)) {
-            return null;
-        }
-        String type = "currencies".equals(directory) ? "currency" : directory.substring(0, directory.length() - 1);
-        try {
-            return new ContentResource(NamespacedId.of(pack, key), type, packDirectory.resolve(path), document);
-        } catch (IllegalArgumentException malformed) {
-            return null;
-        }
+        return PackResources.declared(pack, path.substring(0, slash), packDirectory.resolve(path),
+                LosslessYaml.parse(text)).resources();
     }
 }

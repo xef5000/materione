@@ -151,6 +151,48 @@ class AuthoringTransactionReferencesTest {
     }
 
     @Test
+    void aReferenceThatIsNotEvenAnIdIsRefusedWithoutWritingAnything() throws Exception {
+        List<String> before = snapshot();
+        TransactionResult dry = run(true, new SetFields("recipes/r.yml", 1, List.of(set("r", "result", "Alpha Sword"))))
+                .value();
+
+        assertThat(dry.accepted()).as(String.valueOf(dry.diagnostics())).isFalse();
+        assertThat(dry.diagnostics()).isNotEmpty();
+        assertThat(snapshot()).isEqualTo(before);
+    }
+
+    @Test
+    void anUntouchedFindingIsAttributedToTheOperationThatChangedTheIdItsMessageNames() throws Exception {
+        seed("blocks/b.yml", "b:\n  material: STONE\n  drops:\n    - alpha\n");
+        reloads.clear();
+        TransactionResult dry = refusedBoth(
+                new SetFields("items/beta.yml", 1, List.of(set("beta", "material", "BONE"))),
+                new Delete("items/alpha.yml", 1));
+
+        List<OperationDiagnostic> block = unresolved(dry).stream()
+                .filter(found -> found.diagnostic().message().contains("block demo:b")).toList();
+        assertThat(block).hasSize(1);
+        assertThat(block.get(0).operation()).isEqualTo(1);
+    }
+
+    @Test
+    void attributionFallsBackToTheFirstChangedIdWhenTheMessageNamesNone() {
+        Map<String, Integer> changedBy = new java.util.LinkedHashMap<>();
+        changedBy.put("alpha", 3);
+        changedBy.put("beta", 5);
+
+        assertThat(StagedReferences.causeOf(
+                dev.materione.api.diagnostics.Diagnostic.error(DiagnosticCodes.UNRESOLVED_REFERENCE, "unresolved 'beta'"),
+                changedBy)).as("the named id wins over the first").isEqualTo(5);
+        assertThat(StagedReferences.causeOf(
+                dev.materione.api.diagnostics.Diagnostic.error(DiagnosticCodes.UNRESOLVED_REFERENCE, "something else"),
+                changedBy)).as("none named: the first changed id").isEqualTo(3);
+        assertThat(StagedReferences.causeOf(
+                dev.materione.api.diagnostics.Diagnostic.error(DiagnosticCodes.UNRESOLVED_REFERENCE, "x"), Map.of()))
+                .as("nothing changed: unattributed").isEqualTo(-1);
+    }
+
+    @Test
     void aMistypedTemplateOnAnEditedItemIsCaught() throws Exception {
         TransactionResult dry = refusedBoth(
                 new SetFields("items/child.yml", 1, List.of(set("child", "template", "bsae"))));

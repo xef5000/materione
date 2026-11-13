@@ -353,7 +353,6 @@ public final class ParseStage {
     private void parseDir(
             PipelineContext context, Path packDir, String packId, String dir, List<ContentResource> out) {
         Path dirPath = packDir.resolve(dir);
-        String contentType = "currencies".equals(dir) ? "currency" : dir.substring(0, dir.length() - 1);
         // recursive, sorted discovery (plugin.md §4.2); an unlistable subfolder is
         // reported and skipped, its siblings still parse
         var yamls = PackLayout.contentDocuments(packDir, dir, failure -> context.diagnostics().publish(
@@ -363,29 +362,21 @@ public final class ParseStage {
                         null, null, "check file permissions")));
         for (Path file : yamls) {
             var document = documentOf(context, file);
-            if (document.parseError().isPresent()) {
-                continue;
-            }
-            // one file, one content type, many keyed resources (§7.2)
-            for (var entry : document.data().entrySet()) {
-                if (!(entry.getValue() instanceof java.util.Map)) {
-                    continue;
-                }
-                out.add(new ContentResource(
-                        NamespacedId.of(packId, entry.getKey()),
-                        contentType,
-                        file,
-                        document));
+            // one file, one content type, many keyed resources (§7.2): the one rule, shared with the dry run
+            var declared = PackResources.declared(packId, dir, file, document);
+            out.addAll(declared.resources());
+            for (String key : declared.malformedKeys()) {
+                context.diagnostics().publish(new Diagnostic(
+                        DiagnosticCodes.CONTENT_SCHEMA_INVALID, Severity.ERROR,
+                        "'" + key + "' in " + file.getFileName() + " is not a valid resource id and is skipped",
+                        null, new SourceLocation(file.toString(), 1, 1),
+                        "use lowercase letters, digits and _ - . / in a resource key"));
             }
         }
     }
 
     private static String readFile(Path file) {
-        try {
-            return Files.readString(file);
-        } catch (IOException e) {
-            return "";
-        }
+        return PackResources.readOrEmpty(file);
     }
 
     private static String stripExtension(String name) {
