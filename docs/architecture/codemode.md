@@ -415,6 +415,28 @@ pure functions of the surface document, with no read. Reads see the stored state
 addressed by itself, and `m.read.get` of one is refused. A read is cached for the run by its op and payload, so a loop that asks
 twice asks once. What has no op yet (traces, runtime variables, the graph, a source excerpt) is not exposed (benchmark S16).
 
+**Reads at call time, and what could be deferred** (input to the sync-versus-async decision of #343; the spike, #340, measured
+async host calls on the plain sync QuickJS build, so a synchronous `read` costs the asyncify build or a pre-fetch). Every
+member below calls `HostPort.read` before it returns, today. The column that matters is whether the *program* needs the answer
+or only the *list* does: a member whose answer only fills a field of a staged operation (a path, a revision, an index, an
+expansion) can be recorded symbolically and resolved by the host when the list is sealed, with the program-facing API
+synchronous and no mid-run read.
+
+| Member | Read | Why the core wants the answer before returning | Defer to seal, or leave to the dry run? |
+|---|---|---|---|
+| first stage into a pack (`create`, `m.edit`, ...) | `browse.packs` | To fail early with SDK-0008 (no such pack, built-in pack) and name the nearest packs. Nothing else uses it. | **Yes.** The host checks the pack when it seals the list, for the same diagnostics; the dry run already refuses a built-in pack (`MTR-0095`) and a pack that does not exist. |
+| `m.ref.<type>("pack:id")` | `authoring.summaries` (1 to 2) | Existence, with the nearest ids on failure (SDK-0007), and the stored path for a later `m.edit`. The value returned is only a `Ref`; no program branches on it. | **Yes**, as a value: return the `Ref` unresolved and let the host resolve it at seal, or leave existence to the dry run's references stage, which validates ids server-side since #360 (the nearest-ids hint is then the host's to add). A program cannot use existence as a condition, because the member throws or returns. |
+| `m.edit(ref)` and every later `set`, `unset`, `delete`, `duplicate`, `detachTemplate`, `saveAsTemplate`, `rules.add` on a stored resource | `browse.get` (once per document) | The operation's `path` (from the summaries read) and `rev` (the stored revision), and for `rules.add` the document's current rule count, which is the operation's `index`. | **Yes, all three.** The staged operation carries the `Ref` in place of `path` and `rev`, and `rules.add` carries a position among the program's own adds; the host fills `path`, `rev` and `index = stored count + position` when it seals the list. The sealed list is byte-identical to today's. (An `index` the server treats as "append" would remove the third need; that is a server change.) |
+| `rules.instantiate(recipe)` | `logic.instantiate` | The expansion (the rules) to stage as one `addRule` each. The program never sees the expansion, only a rule handle. | **Yes.** Stage a symbolic instantiate; the host expands it at seal. A refused recipe is reported then, with the same SDK-0010. |
+| `m.ref.asset(path)` | `assets.list`, at `finish` | Existence (SDK-0011). | **Already deferred.** |
+| `m.read.packs`, `resources`, `get`, `references`, `history`, `diagnostics` | one op each | The program consumes the answer: it lists, filters, branches, returns a summary. | **No.** This is the only reason a program needs a mid-run answer. These are the members that must be async (`await m.read.get(...)`, a type change), or served from a pre-fetched snapshot that cannot answer an arbitrary query. |
+| `m.docs.type`, `m.docs.search`, `m.hasCapability`, every builder | none | A pure function of the surface document. | n/a |
+
+So the staging half of the API (everything that writes) can be synchronous with **no** mid-run read, by recording what it
+cannot answer and sealing; only `m.read.*` needs the program to wait for the host. If the owner takes that route, the work is:
+a seal step in the core (`session.seal(resolver)`, which takes the resolved paths, revisions and counts and returns the list),
+`await` in the types of `m.read.*`, and the host's resolver in #343.
+
 **Values.** A step, condition, mechanic entry, GUI layer, source, expression, context value, trigger and reference is a frozen
 object the core builds and records in a private `WeakMap`; the program cannot forge one, and anything it writes by hand is plain
 data. A reference serializes as its `pack:id`, an expression as `${...}`, a context value as its path (interpolated into an
@@ -450,9 +472,14 @@ is `{ folder? }` (the transaction has no file parameter, benchmark S13); `Resour
 `ContentTypeFields` and `ContentTypeHandles` maps those are typed from, and leaves `PackWriter` and `rules` out of a surface whose
 jar lacks the `codemode` or `logic` capability (§7), which the core leaves off at run time by the same function.
 
-**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check are executed and their lists recorded as
-goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a `<task>.world.json` beside it that the fake port answers from, T11's asset list today), each checked against the wire shape read from the plugin's own parser
-(`TransactionOps.operationOf`), every kind of operation, every error. `codemode-core-drift.spec.ts`: the declarations and the
+**How it is proven.** `codemode-core.spec.ts`: the corpus programs that type-check (T04, T08, T11, T16, T25, T29) are executed and
+their lists recorded as goldens (`fixtures/golden/codemode/ops/`; a program that needs stored state or assets has a
+`<task>.world.json` beside it that the fake port answers from), every kind of operation, every error.
+**`CodemodeReplayTest` (JVM, `plugin` module) replays every golden through the real `authoring.transaction` with `dryRun=true`**
+over the real registries and the fixture packs, and pins which stages ran, the diagnostics and the documents beside it
+(`fixtures/golden/codemode/replay/`): the same fixtures test both sides, so a list the core stages and the server refuses fails
+there. A golden whose replay reports a problem stays in the corpus with its diagnostic pinned and a `replay.note` in its
+`expect.json` naming what flips it (T04: #355, #378; T11: #355; T16: #355 and benchmark S18). `codemode-core-drift.spec.ts`: the declarations and the
 bundled core are walked with the TypeScript checker and compared member by member (`m`, each catalog, the pack writer, each
 collection, each handle, each rule set) over both recorded registries, a jar without each capability, and a jar that predates the
 capability list. `codemode-core-bans.spec.ts`: the core holds no registry id as a literal (the generator's ban, applied here),

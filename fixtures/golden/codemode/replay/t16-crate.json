@@ -1,0 +1,66 @@
+{
+  "golden": "t16-crate",
+  "accepted": false,
+  "applied": false,
+  "stages": [
+    {
+      "id": "syntax",
+      "ran": true
+    },
+    {
+      "id": "schema",
+      "ran": true
+    },
+    {
+      "id": "build",
+      "ran": true
+    },
+    {
+      "id": "behavior",
+      "ran": true
+    },
+    {
+      "id": "gui",
+      "ran": false
+    },
+    {
+      "id": "references",
+      "ran": true
+    },
+    {
+      "id": "platform",
+      "ran": false
+    }
+  ],
+  "diagnostics": [
+    {
+      "operation": 2,
+      "code": "MTR-0009",
+      "severity": "error",
+      "message": "unresolved model 'models/crate.json'"
+    },
+    {
+      "operation": 2,
+      "code": "MTR-0009",
+      "severity": "error",
+      "message": "unresolved texture 'block/crate'"
+    }
+  ],
+  "documents": [
+    {
+      "path": "items/crate_key.yml",
+      "kind": "created",
+      "operations": [
+        0
+      ]
+    },
+    {
+      "path": "furnitures/crate.yml",
+      "kind": "created",
+      "operations": [
+        1,
+        2
+      ]
+    }
+  ]
+}
