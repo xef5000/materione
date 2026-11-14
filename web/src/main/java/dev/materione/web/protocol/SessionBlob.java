@@ -44,8 +44,8 @@ public record SessionBlob(
      * ({@code runtime.openGui}, {@code runtime.previewTarget}), all gated in editor-op-gates.json.
      * {@code logic} covers the logic authoring ops ({@code logic.vocabulary}, {@code logic.get},
      * {@code logic.edit}, {@code logic.validate}, {@code logic.instantiate}), gated the same way (logic.md §8).
-     * {@code codemode} covers the one transaction over a mixed edit list ({@code authoring.transaction}),
-     * gated the same way (codemode.md §10).
+     * {@code codemode} covers the one transaction over a mixed edit list ({@code authoring.transaction}) and its
+     * revert by id ({@code authoring.revertTransaction}), gated the same way (codemode.md §10).
      * Keep sorted: the list rides into the golden fixture byte-for-byte.
      */
     public static final List<String> CURRENT_CAPABILITIES = List.of(

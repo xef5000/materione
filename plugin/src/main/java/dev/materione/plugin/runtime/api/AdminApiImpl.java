@@ -253,7 +253,8 @@ public final class AdminApiImpl implements AdminApi {
             return out;
         }
         for (AuditLog.Entry entry : audit.recent(limit)) {
-            out.add(new AuditEntry(entry.ts(), entry.actor(), entry.op(), entry.target()));
+            out.add(new AuditEntry(entry.ts(), entry.actor(), entry.op(), entry.target(), entry.origin(),
+                    entry.approval(), entry.transaction(), entry.program(), entry.digest(), entry.programLength()));
         }
         return out;
     }

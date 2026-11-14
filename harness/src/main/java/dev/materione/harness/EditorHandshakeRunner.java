@@ -336,6 +336,100 @@ public final class EditorHandshakeRunner {
                 }
             }
 
+            // Code mode (#344, codemode.md section 10): one transaction over the wire (a created item and a patch
+            // of an existing one), then its revert by id. The store comes back byte for byte, every touched
+            // document gained exactly two revisions, and the audit names both entries with their origin.
+            java.nio.file.Path samplePack = workspace.pluginsDir
+                    .resolve("Materione").resolve("content").resolve("packs").resolve("sample");
+            java.nio.file.Path txItem = samplePack.resolve("items").resolve("harness_tx.yml");
+            java.nio.file.Path gemFile = samplePack.resolve("items").resolve("harness_tx_base.yml");
+            // an existing document the transaction will change (a valid one: the other items of the run carry
+            // textures the harness has since renamed, and a transaction refuses a document that does not validate)
+            Wire.Response gemNow = browser.call("edit.create", object(
+                    "pack", "sample", "path", "items/harness_tx_base.yml", "id", "harness_tx_base"));
+            if (!gemNow.ok()) {
+                problems.add("edit.create (harness_tx_base) before the transaction failed: " + gemNow.error());
+            } else {
+                String gemBytes = java.nio.file.Files.readString(gemFile);
+                int gemRevision = gemNow.data().getAsJsonObject().get("rev").getAsInt();
+                int gemEntriesBefore = journalEntries(browser, "items/harness_tx_base.yml");
+                JsonObject txRequest = com.google.gson.JsonParser.parseString("{\"pack\":\"sample\",\"dryRun\":false,"
+                        + "\"origin\":\"code-mode\",\"approval\":\"granted\","
+                        + "\"program\":\"export default (m) => { m.create(); }\",\"operations\":["
+                        + "{\"kind\":\"create\",\"type\":\"items\",\"id\":\"harness_tx\",\"name\":\"Harness Tx\"},"
+                        + "{\"kind\":\"setFields\",\"path\":\"items/harness_tx_base.yml\",\"rev\":" + gemRevision + ","
+                        + "\"edits\":[{\"field\":[\"harness_tx_base\",\"display_name\"],\"value\":\"Base Two\"}]}]}")
+                        .getAsJsonObject();
+                Wire.Response tx = browser.call("authoring.transaction", txRequest);
+                String txId = tx.ok() && tx.data().getAsJsonObject().get("applied").getAsBoolean()
+                        ? tx.data().getAsJsonObject().get("transactionId").getAsString() : null;
+                if (txId == null) {
+                    problems.add("authoring.transaction did not apply: " + (tx.ok() ? tx.data() : tx.error()));
+                } else {
+                    if (!tx.data().getAsJsonObject().get("revertible").getAsBoolean()) {
+                        problems.add("the transaction is not revertible: " + tx.data());
+                    }
+                    if (!java.nio.file.Files.isRegularFile(txItem)
+                            || !java.nio.file.Files.readString(gemFile).contains("Base Two")) {
+                        problems.add("the transaction's files are not on disk");
+                    }
+                    if (browser.awaitPush("push.reload", 20, TimeUnit.SECONDS) == null) {
+                        problems.add("no push.reload after the transaction");
+                    }
+                    Wire.Response dryRevert = browser.call("authoring.revertTransaction",
+                            com.google.gson.JsonParser.parseString("{\"transactionId\":\"" + txId + "\",\"dryRun\":true}")
+                                    .getAsJsonObject());
+                    if (!dryRevert.ok() || !dryRevert.data().getAsJsonObject().get("accepted").getAsBoolean()
+                            || dryRevert.data().getAsJsonObject().get("applied").getAsBoolean()) {
+                        problems.add("the revert dry run failed: " + (dryRevert.ok() ? dryRevert.data() : dryRevert.error()));
+                    } else if (!java.nio.file.Files.isRegularFile(txItem)) {
+                        problems.add("the revert dry run wrote");
+                    }
+                    Wire.Response revert = browser.call("authoring.revertTransaction",
+                            com.google.gson.JsonParser.parseString("{\"transactionId\":\"" + txId + "\",\"dryRun\":false}")
+                                    .getAsJsonObject());
+                    if (!revert.ok() || !revert.data().getAsJsonObject().get("applied").getAsBoolean()) {
+                        problems.add("authoring.revertTransaction did not apply: "
+                                + (revert.ok() ? revert.data() : revert.error()));
+                    } else {
+                        if (java.nio.file.Files.exists(txItem)) {
+                            problems.add("the revert left the created item on disk");
+                        }
+                        if (!gemBytes.equals(java.nio.file.Files.readString(gemFile))) {
+                            problems.add("the revert did not restore harness_tx_base.yml byte for byte");
+                        }
+                        int gemEntriesAfter = journalEntries(browser, "items/harness_tx_base.yml");
+                        if (gemEntriesAfter != gemEntriesBefore + 2) {
+                            problems.add("harness_tx_base.yml gained " + (gemEntriesAfter - gemEntriesBefore)
+                                    + " journal entries across a transaction and its revert, not 2");
+                        }
+                        if (browser.awaitPush("push.reload", 20, TimeUnit.SECONDS) == null) {
+                            problems.add("no push.reload after the revert");
+                        }
+                        Wire.Response baseNow = browser.call("browse.get", object(
+                                "pack", "sample", "path", "items/harness_tx_base.yml"));
+                        if (baseNow.ok()) {
+                            browser.call("edit.delete", object(
+                                    "pack", "sample", "path", "items/harness_tx_base.yml",
+                                    "rev", baseNow.data().getAsJsonObject().get("rev").getAsString()));
+                        }
+                        Wire.Response codeModeAudit = browser.call("admin.audit.recent", object("limit", "100"));
+                        String codeModeText = codeModeAudit.ok() ? codeModeAudit.data().toString() : "";
+                        if (!codeModeText.contains("\"op\":\"authoring.transaction\"")
+                                || !codeModeText.contains("\"origin\":\"code-mode\"")
+                                || !codeModeText.contains("\"approval\":\"granted\"")
+                                || !codeModeText.contains("\"digest\":\"sha256:")
+                                || !codeModeText.contains("\"program\":\"export default")) {
+                            problems.add("the audit lacks the transaction's origin, approval, program or digest");
+                        }
+                        if (!codeModeText.contains("\"op\":\"authoring.revertTransaction\"")
+                                || !codeModeText.contains("\"origin\":\"editor\"")) {
+                            problems.add("the audit lacks the revert entry with its origin");
+                        }
+                    }
+                }
+            }
+
             // The audit trail saw all of it.
             Wire.Response audit = browser.call("admin.audit.recent", object("limit", "100"));
             String auditText = audit.ok() ? audit.data().toString() : "";
@@ -450,6 +544,21 @@ public final class EditorHandshakeRunner {
     private static HarnessResult failure(List<String> problems, int exit, ServerWorkspace workspace) {
         return new HarnessResult(false, problems, exit,
                 workspace == null ? null : workspace.root, List.of());
+    }
+
+    /** How many journal entries a document has (browse.history), for the two-more-revisions check. */
+    private static int journalEntries(EditorBrowser.BrowserClient browser, String path) throws Exception {
+        Wire.Response history = browser.call("browse.history", object(
+                "pack", "sample", "path", path, "limit", "50"));
+        if (!history.ok()) {
+            return -1;
+        }
+        var matcher = java.util.regex.Pattern.compile("\"action\"").matcher(history.data().toString());
+        int count = 0;
+        while (matcher.find()) {
+            count++;
+        }
+        return count;
     }
 
     /** UTF-8 text as the base64 payload assets.put expects. */

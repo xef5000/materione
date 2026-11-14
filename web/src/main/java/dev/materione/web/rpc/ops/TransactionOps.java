@@ -23,10 +23,11 @@ import java.util.Locale;
 import java.util.function.Function;
 
 /**
- * The code-mode transaction op (codemode.md section 10): {@code authoring.transaction}. A pure JSON translator
- * over {@link AuthoringApi#transaction} (R9): it reads the operation list, makes one API call and writes the
- * report. The op is additive and gated on the {@code codemode} session capability
- * ({@code fixtures/protocol/editor-op-gates.json}), so an editor that does not know it is unaffected.
+ * The code-mode transaction ops (codemode.md section 10): {@code authoring.transaction} and
+ * {@code authoring.revertTransaction}. Pure JSON translators
+ * over {@link AuthoringApi#transaction} and {@link AuthoringApi#revertTransaction} (R9): each reads its request,
+ * makes one API call and writes the report. Both ops are additive and gated on the {@code codemode} session
+ * capability ({@code fixtures/protocol/editor-op-gates.json}), so an editor that does not know them is unaffected.
  *
  * <p>Unlike most ops, a refused list is a <em>success</em> frame: the per-operation diagnostics and the stage
  * report are the answer, and the first-diagnostic error frame would lose them. {@code accepted} says whether the
@@ -37,7 +38,7 @@ public final class TransactionOps {
     private TransactionOps() {}
 
     /**
-     * Registers {@code authoring.transaction}.
+     * Registers {@code authoring.transaction} and {@code authoring.revertTransaction}.
      *
      * @param actorFor maps an op's audit attribution to the acting {@link ActorContext}
      */
@@ -51,10 +52,36 @@ public final class TransactionOps {
                     // no default: a request that forgets the flag must not turn into a write
                     throw new IllegalArgumentException("'dryRun' must be true or false");
                 }
+                // the audit context (C10, C13): where the list came from, whether the owner granted it, the program
                 TransactionRequest parsed = new TransactionRequest(
-                        EditorContentOps.requiredString(body, "pack"), operationsOf(body), dryRun.getAsBoolean());
+                        EditorContentOps.requiredString(body, "pack"), operationsOf(body), dryRun.getAsBoolean(),
+                        EditorContentOps.optionalString(body, "origin"),
+                        EditorContentOps.optionalString(body, "approval"),
+                        EditorContentOps.optionalString(body, "program"));
                 ApiResult<TransactionResult> result =
                         authoring.transaction(actorFor.apply(EditorContentOps.actorOf(request)), parsed);
+                if (result.value() == null) {
+                    return EditorContentOps.error(request, result.diagnostics(), null, null);
+                }
+                return Wire.Response.success(request, resultJson(result.value()));
+            } catch (IllegalArgumentException e) {
+                return EditorContentOps.badRequest(request, e.getMessage());
+            } catch (Exception e) {
+                return EditorContentOps.failure(request, e);
+            }
+        });
+
+        // the revert of an applied transaction by its id: the same report, dryRun mandatory as above
+        dispatcher.register("authoring.revertTransaction", request -> {
+            JsonObject body = request.payload();
+            try {
+                JsonElement dryRun = body.get("dryRun");
+                if (dryRun == null || !dryRun.isJsonPrimitive() || !dryRun.getAsJsonPrimitive().isBoolean()) {
+                    throw new IllegalArgumentException("'dryRun' must be true or false");
+                }
+                ApiResult<TransactionResult> result = authoring.revertTransaction(
+                        actorFor.apply(EditorContentOps.actorOf(request)),
+                        EditorContentOps.requiredString(body, "transactionId"), dryRun.getAsBoolean());
                 if (result.value() == null) {
                     return EditorContentOps.error(request, result.diagnostics(), null, null);
                 }
@@ -208,7 +235,15 @@ public final class TransactionOps {
             stages.add(json);
         }
         payload.add("stages", stages);
+        // additive (#344): whether an apply can be reverted, why not, and what a revert undid
+        payload.addProperty("revertible", result.revertible());
+        payload.add("revertNote", stringOrNull(result.revertNote()));
+        payload.add("revertOf", stringOrNull(result.revertOf()));
         return payload;
+    }
+
+    private static JsonElement stringOrNull(String value) {
+        return value == null ? JsonNull.INSTANCE : new com.google.gson.JsonPrimitive(value);
     }
 
     private static JsonElement numberOrNull(Integer value) {

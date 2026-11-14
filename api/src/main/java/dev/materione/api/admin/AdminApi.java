@@ -92,7 +92,27 @@ public interface AdminApi {
     record SettingsView(String content, String sha256, java.util.Map<String, Object> parsed) {}
 
     /** One audit log entry. */
-    record AuditEntry(String timestamp, String actor, String operation, String target) {}
+    record AuditEntry(
+            String timestamp,
+            String actor,
+            String operation,
+            String target,
+            String origin,
+            String approval,
+            String transaction,
+            String program,
+            String digest,
+            Integer programLength) {
+
+        public AuditEntry {
+            origin = origin == null ? "editor" : origin;
+        }
+
+        /** An entry without the code-mode context (origin {@code editor}). */
+        public AuditEntry(String timestamp, String actor, String operation, String target) {
+            this(timestamp, actor, operation, target, null, null, null, null, null, null);
+        }
+    }
 
     /** The editor transport control surface. */
     interface EditorSessionControl {

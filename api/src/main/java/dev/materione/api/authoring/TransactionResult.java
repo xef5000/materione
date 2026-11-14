@@ -19,6 +19,10 @@ import java.util.List;
  * @param diagnostics every diagnostic, each with the operation that caused it
  * @param stages which validation stages ran on the result and which did not, so a clean report is never
  *     read as more than it checked
+ * @param revertible for an apply: whether {@link AuthoringApi#revertTransaction} can restore it (its before-images
+ *     were kept); false for a dry run or a refusal
+ * @param revertNote when an applied transaction is not revertible, why (the retention rule, codemode.md section 10)
+ * @param revertOf for a revert, the id of the transaction it undoes; null otherwise
  */
 public record TransactionResult(
         boolean accepted,
@@ -27,7 +31,22 @@ public record TransactionResult(
         String transactionId,
         List<TransactionDocument> documents,
         List<OperationDiagnostic> diagnostics,
-        List<Stage> stages) {
+        List<Stage> stages,
+        boolean revertible,
+        String revertNote,
+        String revertOf) {
+
+    /** A report with no revert information (a dry run, a refusal). */
+    public TransactionResult(
+            boolean accepted,
+            boolean applied,
+            boolean dryRun,
+            String transactionId,
+            List<TransactionDocument> documents,
+            List<OperationDiagnostic> diagnostics,
+            List<Stage> stages) {
+        this(accepted, applied, dryRun, transactionId, documents, diagnostics, stages, false, null, null);
+    }
 
     public TransactionResult {
         documents = documents == null ? List.of() : List.copyOf(documents);

@@ -718,6 +718,8 @@ public final class MaterionePlugin extends JavaPlugin {
         authoringApi.previewAllocations(() -> pipeline.allocation().preview());
         // ... and resolves references over the staged pack against the last parse of every other pack
         authoringApi.parsedContent(() -> pipeline.runner().lastParsed());
+        // ... and keeps the before-images of every applied transaction (bounded), so one can be reverted by its id
+        authoringApi.transactionJournal(storage.storageDir().resolve("transactions"));
         AssetApiImpl assetApi = new AssetApiImpl(assetStore, packsRoot, previewReload);
         DeliveryApiImpl deliveryApi = new DeliveryApiImpl(delivery);
         // the GUI runtime: sessions, the one open path, click routing and the live refresh (logic.md §6);

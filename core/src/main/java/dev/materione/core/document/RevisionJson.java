@@ -8,7 +8,8 @@ import java.util.Map;
  * {@code core} must stay embeddable without server-provided libraries (the
  * same reason the lossless YAML layer loads SnakeYAML reflectively); the
  * shape is fixed and flat, so five regexes beat a dependency:
- * {@code {"rev":7,"ts":169…,"actor":"…","action":"…","sha":"…"|"null"}}.
+ * {@code {"rev":7,"ts":169…,"actor":"…","action":"…","sha":"…"|"null"[,"tx":"…"]}}; the optional {@code tx} is
+ * the authoring transaction that wrote the entry (older lines have none).
  */
 final class RevisionJson {
 
@@ -20,6 +21,7 @@ final class RevisionJson {
                 + ",\"actor\":" + quote(revision.actor())
                 + ",\"action\":" + quote(revision.action())
                 + ",\"sha\":" + (revision.sha256() == null ? "null" : quote(revision.sha256()))
+                + (revision.transaction() == null ? "" : ",\"tx\":" + quote(revision.transaction()))
                 + "}";
     }
 
@@ -35,6 +37,8 @@ final class RevisionJson {
                 || !field(trimmed, "sha", fields)) {
             return null;
         }
+        // added later and optional: an older line has none (the transaction that wrote the entry, #344)
+        field(trimmed, "tx", fields);
         return fields;
     }
 
