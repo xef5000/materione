@@ -37,7 +37,7 @@ export function stateInfo(proposal: Pick<Proposal, 'state' | 'needs' | 'needsPro
     case 'reverted':
       return { label: 'Reverted', tone: 'neutral', explanation: 'You reverted it: each document went back to the text it had before.' };
     case 'refused':
-      return { label: 'Refused', tone: 'error', explanation: 'The dry run refused it, so nothing was written. The agent has to write a new program; there is nothing here to force.' };
+      return { label: 'Refused', tone: 'error', explanation: 'The dry run refused it, so nothing was written. The agent has to write a new program; this one cannot be applied.' };
     case 'stale':
       return { label: 'Out of date', tone: 'warn', explanation: 'A document changed after the program read it. Nothing was written. Ask the agent to run the program again against the current files.' };
     case 'failed':
