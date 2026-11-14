@@ -33,6 +33,11 @@ export interface ReportDocument {
   kind: unknown;
   /** The indexes of the operations that touched it. */
   operations?: unknown;
+  /** The resulting text (null for a deleted document), the revision it gets and the stored one it replaces. The review shows them; classification ignores them. */
+  text?: unknown;
+  rev?: unknown;
+  previousRevision?: unknown;
+  movedFrom?: unknown;
 }
 
 export type Effect = 'new' | 'existing' | 'unknown';

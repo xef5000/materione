@@ -17,7 +17,7 @@
  * patched or forced.
  */
 import type { ProgramResult, SourcePosition, StagedOperation } from '../core/types';
-import { classify, type Classification } from './classify';
+import { classify, type Classification, type ReportDocument } from './classify';
 import { decide, GestureError, GrantSet, spendGesture, type ApprovalGesture } from './grants';
 import { isObjectId, objectId, type ObjectId } from './objects';
 import { MalformedReport, type ReportDiagnostic, type TransactionReport, type TransactionTransport } from './transport';
@@ -81,6 +81,37 @@ export interface Proposal {
   /** The transaction of the revert, once reverted. */
   readonly revertedBy: string | null;
   readonly appliedAt: number | null;
+  /**
+   * The stored text of each document the proposal changes or deletes, read once after a clean dry run and before any
+   * apply (null: nothing stored; a path absent from the map: the text could not be read, so no diff can be drawn).
+   */
+  readonly before: Readonly<Record<string, string | null>>;
+}
+
+/** A document a transaction wrote, as its report gave it: the review draws the diff from `text` (null once deleted). */
+export interface AppliedDocument {
+  path: string;
+  kind: string;
+  text: string | null;
+  revision: number | null;
+}
+
+/** What a revert would do, from its dry run: nothing is written to learn it. */
+export interface RevertPreview {
+  transactionId: string;
+  /** False when the server refused the revert (each reason is in `problems`). */
+  accepted: boolean;
+  /** The documents the revert would restore, with the text each would have after it. */
+  documents: readonly AppliedDocument[];
+  problems: readonly Problem[];
+}
+
+/** The outcome of a revert the owner confirmed. */
+export interface RevertOutcome {
+  reverted: boolean;
+  /** The revert's own transaction, once reverted. */
+  transactionId: string | null;
+  problems: readonly Problem[];
 }
 
 /** An entry of the session's change log (5.6): what applied, by which program, and whether it can still be reverted. */
@@ -91,7 +122,9 @@ export interface ChangeLogEntry {
   readonly summary: string | null;
   readonly program: string;
   readonly approval: 'not_needed' | 'granted';
-  readonly documents: readonly { path: string; kind: string }[];
+  readonly documents: readonly AppliedDocument[];
+  /** The stored text each changed or deleted document had before (see `Proposal.before`). */
+  readonly before: Readonly<Record<string, string | null>>;
   readonly revertible: boolean;
   readonly revertNote: string | null;
   readonly revertedBy: string | null;
@@ -146,9 +179,14 @@ export interface AgentPort {
 /** The part of a `ProgramResult` the lifecycle reads. Everything else a program or a model produced is not an input. */
 export type ProposalInput = Pick<ProgramResult, 'ok' | 'pack' | 'operations' | 'sources' | 'diagnostics' | 'summary'>;
 
+/** A read of a stored document (the editor's `browse.get`), used only to show what a change replaces. */
+export type DocumentReader = (pack: string, path: string) => Promise<{ text: string; revision: number } | null>;
+
 export interface StoreOptions {
   transport: TransactionTransport;
   now?: () => number;
+  /** Reads the stored text of a document the dry run reports as changed or deleted, so the review can draw its diff. Optional. */
+  readDocument?: DocumentReader;
 }
 
 const MAX_PLAN_OBJECTS = 500;
@@ -174,12 +212,28 @@ interface Entry {
   revertedBy: string | null;
   appliedAt: number | null;
   approval: 'not_needed' | 'granted';
-  appliedDocuments: { path: string; kind: string }[];
+  appliedDocuments: AppliedDocument[];
+  before: Record<string, string | null>;
   revertProblems: Problem[];
 }
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function appliedOf(report: TransactionReport): AppliedDocument[] {
+  return report.documents.flatMap((document) =>
+    typeof document.path === 'string'
+      ? [
+          {
+            path: document.path,
+            kind: String(document.kind),
+            text: typeof document.text === 'string' ? document.text : null,
+            revision: typeof document.rev === 'number' ? document.rev : null,
+          },
+        ]
+      : [],
+  );
 }
 
 function deepFreeze<T>(value: T): T {
@@ -196,6 +250,7 @@ export class ProposalStore {
 
   private readonly transport: TransactionTransport;
   private readonly now: () => number;
+  private readonly readDocument: DocumentReader | null;
   private grants = new GrantSet();
   private readonly sessionCreated = new Set<string>();
   private readonly entries: Entry[] = [];
@@ -208,6 +263,7 @@ export class ProposalStore {
   constructor(options: StoreOptions) {
     this.transport = options.transport;
     this.now = options.now ?? Date.now;
+    this.readDocument = options.readDocument ?? null;
     this.agent = Object.freeze({
       propose: (result: ProposalInput, opts: ProposeOptions) => this.propose(result, opts),
       declarePlan: (declaration: { title?: string; objects: readonly string[] }) => this.declarePlan(declaration),
@@ -341,11 +397,71 @@ export class ProposalStore {
    */
   async revert(id: string, gesture: ApprovalGesture): Promise<Proposal | undefined> {
     if (this.disposed) throw new Error('the session has ended');
-    if (!spendGesture(gesture)) throw new GestureError('a revert needs a live user gesture');
+    this.spendForRevert(gesture);
     const entry = this.entries.find((candidate) => candidate.id === id);
     if (entry === undefined) return undefined;
     await this.enqueue(() => this.revertNow(entry)).catch(() => undefined);
     return this.view(entry);
+  }
+
+  /**
+   * What a revert of a transaction would do, from the server's dry run of `authoring.revertTransaction`: the documents it
+   * would restore with the text each would have, or the reasons it is refused (MTR-0034 per document that moved on,
+   * MTR-0104 when the record is gone, a restored state that does not validate). Writes nothing and needs no gesture; the
+   * confirmation that follows it does. Works for a transaction of this session and for one the audit lists (any session
+   * with edit rights may revert, codemode.md section 12.2).
+   */
+  async previewRevert(transactionId: string): Promise<RevertPreview> {
+    if (this.disposed) throw new Error('the session has ended');
+    return this.enqueue(async () => {
+      try {
+        const dry = await this.transport.revert({ transactionId, dryRun: true });
+        const problems = this.problemsOf({ sources: [] }, dry.diagnostics, 'revert');
+        const blocking = dry.diagnostics.some((found) => found.severity === 'error' && found.preexisting !== true);
+        const accepted = dry.accepted && !blocking && dry.dryRun === true && !dry.applied;
+        if (!accepted && problems.every((problem) => problem.severity !== 'error')) {
+          problems.push({ phase: 'revert', severity: 'error', message: 'the dry run of the revert did not accept it' });
+        }
+        return { transactionId, accepted, documents: appliedOf(dry), problems };
+      } catch (error) {
+        return { transactionId, accepted: false, documents: [], problems: [this.failureProblem('revert', error)] };
+      }
+    });
+  }
+
+  /**
+   * Reverts a transaction by its id, from a click: the dry run again, then the apply, both refused with the server's
+   * diagnostics when something moved on. For a transaction this session applied it is the same as `revert` (its log entry
+   * is updated); for one only the audit knows, `pack` (the audit's target names it) lets waiting proposals over the
+   * restored documents be marked stale. The agent port has no way to call it.
+   */
+  async revertTransaction(transactionId: string, gesture: ApprovalGesture, pack: string | null = null): Promise<RevertOutcome> {
+    if (this.disposed) throw new Error('the session has ended');
+    this.spendForRevert(gesture);
+    const entry = this.entries.find((candidate) => candidate.transactionId === transactionId);
+    if (entry !== undefined) {
+      await this.enqueue(() => this.revertNow(entry)).catch(() => undefined);
+      return { reverted: entry.state === 'reverted', transactionId: entry.revertedBy, problems: entry.revertProblems };
+    }
+    return this.enqueue(async () => {
+      try {
+        const dry = await this.transport.revert({ transactionId, dryRun: true });
+        const blocking = dry.diagnostics.some((found) => found.severity === 'error' && found.preexisting !== true);
+        if (!dry.accepted || blocking) return { reverted: false, transactionId: null, problems: this.refusalOf(dry, 'the dry run of the revert did not accept it') };
+        const done = await this.transport.revert({ transactionId, dryRun: false });
+        if (!done.accepted || !done.applied) return { reverted: false, transactionId: null, problems: this.refusalOf(done, 'the server did not apply the revert') };
+        this.afterWrite(pack, done, transactionId, false);
+        this.changed();
+        return { reverted: true, transactionId: done.transactionId, problems: [] };
+      } catch (error) {
+        return { reverted: false, transactionId: null, problems: [this.failureProblem('revert', error)] };
+      }
+    });
+  }
+
+  /** The one spend of a gesture for a revert (approve's spend is inside GrantSet.grant). */
+  private spendForRevert(gesture: ApprovalGesture): void {
+    if (!spendGesture(gesture)) throw new GestureError('a revert needs a live user gesture');
   }
 
   /** The session ends: nothing is kept, nothing more is sent. */
@@ -398,6 +514,7 @@ export class ProposalStore {
       appliedAt: null,
       approval: 'not_needed',
       appliedDocuments: [],
+      before: {},
       revertProblems: [],
     };
     this.entries.push(entry);
@@ -468,6 +585,10 @@ export class ProposalStore {
     entry.classification = deepFreeze(
       classify({ pack: entry.pack, operations: entry.operations, documents: report.documents, sessionCreated: this.sessionCreated }),
     );
+    // What each changed or deleted document says now, read before any apply can replace it. A read that fails leaves that
+    // document without a "before" (the review says so); it never blocks the proposal and is never an input to the policy.
+    entry.before = await this.readBefore(entry.pack, report.documents);
+    if (entry.state !== 'checking') return;
     entry.state = 'waiting';
     this.changed();
     if (entry.autoApply) await this.send(entry);
@@ -518,11 +639,43 @@ export class ProposalStore {
     entry.revertible = report.revertible && report.transactionId !== null;
     entry.revertNote = report.revertNote;
     entry.appliedAt = this.now();
-    entry.appliedDocuments = report.documents.flatMap((document) =>
-      typeof document.path === 'string' ? [{ path: document.path, kind: String(document.kind) }] : [],
-    );
-    this.afterWrite(entry, report, entry.id);
+    entry.appliedDocuments = appliedOf(report);
+    this.afterWrite(entry.pack, report, entry.id, true);
     this.changed();
+  }
+
+  /** The reasons a revert reply refused, or a plain sentence when the server gave none. */
+  private refusalOf(report: TransactionReport, fallback: string, entry: Pick<Entry, 'sources'> = { sources: [] }): Problem[] {
+    const problems = this.problemsOf(entry, report.diagnostics, 'revert');
+    return problems.length === 0 ? [{ phase: 'revert', severity: 'error', message: fallback }] : problems;
+  }
+
+  private failureProblem(phase: ProblemPhase, error: unknown): Problem {
+    const code = typeof (error as { code?: unknown })?.code === 'string' ? (error as { code: string }).code : undefined;
+    return { phase, code, severity: 'error', message: error instanceof Error ? error.message : String(error) };
+  }
+
+  /** The stored text of every document a clean dry run reports as changed or deleted; one that cannot be read is left out. */
+  private async readBefore(pack: string, documents: readonly ReportDocument[]): Promise<Record<string, string | null>> {
+    const before: Record<string, string | null> = {};
+    for (const document of documents) {
+      if (typeof document.path !== 'string') continue;
+      if (document.kind === 'created') {
+        before[document.path] = null;
+        continue;
+      }
+      if (this.readDocument === null) continue;
+      try {
+        const stored = await this.readDocument(pack, document.path);
+        // A document that is no longer the revision the dry run saw is not what the apply would replace: no diff over it.
+        if (stored === null) continue;
+        if (typeof document.previousRevision === 'number' && stored.revision !== document.previousRevision) continue;
+        before[document.path] = stored.text;
+      } catch {
+        // fail soft: the review says the before-text is unavailable
+      }
+    }
+    return before;
   }
 
   private async revertNow(entry: Entry): Promise<void> {
@@ -539,45 +692,48 @@ export class ProposalStore {
       const dry = await this.transport.revert({ transactionId, dryRun: true });
       const blocking = dry.diagnostics.some((found) => found.severity === 'error' && found.preexisting !== true);
       if (!dry.accepted || blocking) {
-        entry.revertProblems = this.problemsOf(entry, dry.diagnostics, 'revert');
-        if (entry.revertProblems.length === 0) {
-          entry.revertProblems = [{ phase: 'revert', severity: 'error', message: 'the dry run of the revert did not accept it' }];
-        }
+        entry.revertProblems = this.refusalOf(dry, 'the dry run of the revert did not accept it', entry);
         this.changed();
         return;
       }
       const done = await this.transport.revert({ transactionId, dryRun: false });
       if (!done.accepted || !done.applied) {
-        entry.revertProblems = this.problemsOf(entry, done.diagnostics, 'revert');
-        if (entry.revertProblems.length === 0) {
-          entry.revertProblems = [{ phase: 'revert', severity: 'error', message: 'the server did not apply the revert' }];
-        }
+        entry.revertProblems = this.refusalOf(done, 'the server did not apply the revert', entry);
         this.changed();
         return;
       }
       entry.revertProblems = [];
       entry.revertedBy = done.transactionId;
       entry.state = 'reverted';
-      this.afterWrite(entry, done, entry.id);
+      this.afterWrite(entry.pack, done, entry.id, true);
       this.changed();
     } catch (error) {
-      entry.revertProblems = [{ phase: 'revert', severity: 'error', message: error instanceof Error ? error.message : String(error) }];
+      entry.revertProblems = [this.failureProblem('revert', error)];
       this.changed();
     }
   }
 
   /** After a write: what the session created is never "existing"; waiting proposals over what changed are stale. */
-  private afterWrite(written: Entry, report: TransactionReport, source: string): void {
+  private afterWrite(pack: string | null, report: TransactionReport, source: string, own: boolean): void {
     const changed = new Set<string>();
     for (const document of report.documents) {
-      const id = objectId(written.pack, document.path);
+      if (typeof document.path !== 'string') continue;
+      if (pack === null) {
+        // a revert the audit named without a pack: any pack's object at that path is treated as changed (the conservative side)
+        for (const other of this.entries) {
+          const id = objectId(other.pack, document.path);
+          if (id !== null) changed.add(id);
+        }
+        continue;
+      }
+      const id = objectId(pack, document.path);
       if (id === null) continue;
       changed.add(id);
-      if (document.kind === 'created' && report.revertOf === null) this.sessionCreated.add(id);
+      if (own && document.kind === 'created' && report.revertOf === null) this.sessionCreated.add(id);
     }
     for (const other of this.entries) {
       if (other.id === source || other.state !== 'waiting' || other.classification === null) continue;
-      if (other.pack !== written.pack) continue;
+      if (pack !== null && other.pack !== pack) continue;
       const touched = [...other.classification.existing, ...other.classification.created];
       if (touched.some((id) => changed.has(id))) {
         other.problems.push({
@@ -622,7 +778,7 @@ export class ProposalStore {
     this.changed();
   }
 
-  private problemsOf(entry: Entry, diagnostics: readonly ReportDiagnostic[], phase: ProblemPhase): Problem[] {
+  private problemsOf(entry: Pick<Entry, 'sources'>, diagnostics: readonly ReportDiagnostic[], phase: ProblemPhase): Problem[] {
     return diagnostics.map((found) => {
       const index = found.operation !== undefined && found.operation >= 0 ? found.operation : undefined;
       const preexisting = found.preexisting === true;
@@ -656,6 +812,7 @@ export class ProposalStore {
       program: entry.program,
       approval: entry.approval,
       documents: entry.appliedDocuments,
+      before: entry.before,
       revertible: entry.revertible && entry.state === 'applied',
       revertNote: entry.revertNote,
       revertedBy: entry.revertedBy,
@@ -684,6 +841,7 @@ export class ProposalStore {
       revertNote: entry.revertNote,
       revertedBy: entry.revertedBy,
       appliedAt: entry.appliedAt,
+      before: entry.before,
     });
   }
 }

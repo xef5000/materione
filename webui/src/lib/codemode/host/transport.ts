@@ -86,7 +86,15 @@ export function parseReport(data: unknown): TransactionReport {
     transactionId: text(body.transactionId),
     documents: documents.map((entry) => {
       const document = record(entry, 'a document');
-      return { path: document.path, kind: document.kind, operations: document.operations };
+      return {
+        path: document.path,
+        kind: document.kind,
+        operations: document.operations,
+        text: typeof document.text === 'string' ? document.text : null,
+        rev: typeof document.rev === 'number' ? document.rev : null,
+        previousRevision: typeof document.previousRevision === 'number' ? document.previousRevision : null,
+        movedFrom: typeof document.movedFrom === 'string' ? document.movedFrom : null,
+      };
     }),
     diagnostics: diagnostics.map((entry) => {
       const found = record(entry, 'a diagnostic');
